@@ -4,6 +4,7 @@
 class MediaWeb {
     constructor() {
         this.dataPath = localStorage.getItem('dataPath') || '';
+        this.api = this.dataPath ? new FileIOAPI(this.dataPath) : null;
         this.media = [];
         this.pages = [];
         this.tags = [];
@@ -173,6 +174,7 @@ class MediaWeb {
         if (path !== null) {
             this.dataPath = path || localStorage.getItem('dataPath') || '';
             localStorage.setItem('dataPath', this.dataPath);
+            this.api = new FileIOAPI(this.dataPath);
             await this.initializeDataDirectory();
             await this.loadData();
             this.loadDataPath();
@@ -189,11 +191,9 @@ class MediaWeb {
     }
 
     async initializeDataDirectory() {
-        if (!this.dataPath) return;
+        if (!this.api) return;
         try {
-            // Create the directory structure locally
-            const structure = ['media', 'meta', 'pages'];
-            // In a real Tauri app, this would use the backend command
+            await this.api.initializeDataDir();
             console.log('Initialized data directory:', this.dataPath);
         } catch (err) {
             console.error('Failed to initialize data directory:', err);
@@ -201,29 +201,35 @@ class MediaWeb {
     }
 
     async loadData() {
-        if (!this.dataPath) return;
+        if (!this.api) return;
         
-        // Simulate loading from backend (Tauri commands would go here)
-        // For demo purposes, we'll use localStorage
-        const stored = localStorage.getItem('mediaweb_media');
-        this.media = stored ? JSON.parse(stored) : [];
-        
-        const storedPages = localStorage.getItem('mediaweb_pages');
-        this.pages = storedPages ? JSON.parse(storedPages) : [];
-        
-        const storedTags = localStorage.getItem('mediaweb_tags');
-        this.tags = storedTags ? JSON.parse(storedTags) : [];
+        try {
+            this.media = await this.api.getMediaList();
+            this.pages = await this.api.getPages();
+            this.tags = await this.api.getTags();
+        } catch (err) {
+            console.error('Failed to load data:', err);
+            this.media = [];
+            this.pages = [];
+            this.tags = [];
+        }
 
         this.renderMediaGrid();
         this.renderTagFilter();
     }
 
     async handleFileUpload(e) {
+        if (!this.api) {
+            alert('Please set a data path first.');
+            return;
+        }
+
         const files = Array.from(e.target.files);
         
         for (const file of files) {
+            const mediaId = this.generateIdFromFilename(file.name);
             const media = {
-                id: this.generateIdFromFilename(file.name),
+                id: mediaId,
                 filename: file.name,
                 media_type: file.type.startsWith('image') ? 'image' : 'video',
                 size: file.size,
@@ -231,18 +237,31 @@ class MediaWeb {
                 modified: new Date().toISOString()
             };
 
-            this.media.push(media);
-            
-            // Store in localStorage for demo
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                const dataUrl = evt.target.result;
-                localStorage.setItem(`mediaweb_file_${media.id}`, dataUrl);
-            };
-            reader.readAsDataURL(file);
+            try {
+                // Store file data in localStorage (for demo; real app would handle binary storage)
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const dataUrl = evt.target.result;
+                    localStorage.setItem(`mediaweb_file_${mediaId}`, dataUrl);
+                };
+                reader.readAsDataURL(file);
+
+                // Create metadata entry
+                await this.api.updateMediaMetadata(mediaId, {
+                    tags: [],
+                    title: '',
+                    caption: '',
+                    created: new Date().toISOString(),
+                    modified: new Date().toISOString()
+                });
+
+                this.media.push(media);
+            } catch (err) {
+                console.error(`Failed to upload ${file.name}:`, err);
+            }
         }
 
-        this.saveToDisk();
+        await this.loadData();
         this.renderMediaGrid();
         
         // Reset input

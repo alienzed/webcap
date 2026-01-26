@@ -1,0 +1,70 @@
+{
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devPath": "../frontend",
+    "frontendDist": "../frontend",
+    "productName": "MediaWeb",
+    "withGlobalTauri": false
+  },
+  "app": {
+    "windows": [
+      {
+        "fullscreen": false,
+        "height": 900,
+        "resizable": true,
+        "title": "MediaWeb - Local-First Media CMS",
+        "width": 1400
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "fs": {
+        "all": true,
+        "readFile": true,
+        "writeFile": true,
+        "readDir": true,
+        "createDir": true,
+        "removeDir": true,
+        "removeFile": true,
+        "renameFile": true,
+        "copyFile": true,
+        "exists": true,
+        "metadata": true
+      },
+      "path": {
+        "all": true
+      },
+      "shell": {
+        "all": false,
+        "open": true
+      }
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "MediaWeb",
+        "url": "index.html",
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.mediaweb.app",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ]
+    }
+  }
+}

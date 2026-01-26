@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaWeb - Local-First Media CMS</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Logo: Gradient circle with frame inside -->
+                    <defs>
+                        <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#FF8C42;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#6B7280;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <circle cx="50" cy="50" r="48" fill="url(#logoGradient)" opacity="0.2"/>
+                    <rect x="20" y="20" width="60" height="60" fill="none" stroke="url(#logoGradient)" stroke-width="2"/>
+                    <circle cx="35" cy="35" r="4" fill="url(#logoGradient)"/>
+                    <path d="M20 80 L35 50 L55 65 L80 30" fill="none" stroke="url(#logoGradient)" stroke-width="2"/>
+                </svg>
+                <span class="logo-text">MediaWeb</span>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#media" class="nav-item active" data-section="media">
+                    <span class="nav-icon">🖼️</span>
+                    <span>Media</span>
+                </a>
+                <a href="#pages" class="nav-item" data-section="pages">
+                    <span class="nav-icon">📄</span>
+                    <span>Pages</span>
+                </a>
+                <a href="#settings" class="nav-item" data-section="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="btn-icon" id="btnAbout" title="About">
+                    ℹ️
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Media Section -->
+            <section id="media" class="section active">
+                <div class="section-header">
+                    <h1>Media Library</h1>
+                    <div class="header-actions">
+                        <input type="file" id="fileInput" multiple accept="image/*,video/*" hidden>
+                        <button class="btn btn-primary" id="btnUpload">+ Add Media</button>
+                    </div>
+                </div>
+
+                <div class="filters">
+                    <input type="search" id="searchMedia" class="search-input" placeholder="Search by title or caption...">
+                    <div class="tag-filter">
+                        <label>Filter by tags:</label>
+                        <div id="tagList" class="tag-list"></div>
+                    </div>
+                </div>
+
+                <div id="mediaGrid" class="media-grid">
+                    <!-- Media items loaded here -->
+                </div>
+            </section>
+
+            <!-- Pages Section -->
+            <section id="pages" class="section">
+                <div class="section-header">
+                    <h1>Pages</h1>
+                    <button class="btn btn-primary" id="btnNewPage">+ New Page</button>
+                </div>
+
+                <div id="pagesList" class="pages-list">
+                    <!-- Pages loaded here -->
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings" class="section">
+                <div class="section-header">
+                    <h1>Settings</h1>
+                </div>
+
+                <div class="settings-panel">
+                    <div class="setting-item">
+                        <label>Data Directory</label>
+                        <div class="data-path">
+                            <span id="dataPathDisplay">Not set</span>
+                            <button class="btn btn-secondary" id="btnSelectDataPath">Choose</button>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <label>Database Info</label>
+                        <div class="info-box">
+                            <p>Total Media: <span id="infoMediaCount">0</span></p>
+                            <p>Total Pages: <span id="infoPagesCount">0</span></p>
+                            <p>Total Tags: <span id="infoTagsCount">0</span></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal: Media Editor -->
+    <div id="mediaEditorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Media Editor</h2>
+                <button class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="editor-preview">
+                    <div id="mediaPreview" class="media-preview"></div>
+                </div>
+                <div class="editor-form">
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" id="mediaTitle" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label>Caption</label>
+                        <textarea id="mediaCaption" class="form-input" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Tags</label>
+                        <div id="mediaTagsContainer" class="tags-input"></div>
+                        <input type="text" id="mediaTagInput" class="form-input" placeholder="Add a tag...">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnCloseEditor">Cancel</button>
+                <button class="btn btn-primary" id="btnSaveMedia">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Page Editor -->
+    <div id="pageEditorModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Page Editor</h2>
+                <button class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="page-editor">
+                    <div class="editor-sidebar">
+                        <div class="form-group">
+                            <label>Page Title</label>
+                            <input type="text" id="pageTitle" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>URL Slug</label>
+                            <input type="text" id="pageSlug" class="form-input">
+                        </div>
+                        <button class="btn btn-secondary" id="btnAddSection">+ Add Section</button>
+                    </div>
+                    <div class="editor-canvas">
+                        <div id="pageCanvas" class="page-canvas">
+                            <!-- Sections added here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnClosePageEditor">Cancel</button>
+                <button class="btn btn-primary" id="btnSavePage">Save Page</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

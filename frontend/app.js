@@ -4,7 +4,7 @@
 class MediaWeb {
     constructor() {
         this.dataPath = localStorage.getItem('dataPath') || '';
-        this.api = this.dataPath ? new FileIOAPI(this.dataPath) : null;
+        this.api = null;
         this.media = [];
         this.pages = [];
         this.tags = [];
@@ -14,9 +14,30 @@ class MediaWeb {
 
     async init() {
         this.setupEventListeners();
+        await this.ensureDataPath();
         this.loadDataPath();
         if (this.dataPath) {
             await this.loadData();
+        }
+    }
+
+    async ensureDataPath() {
+        if (!this.dataPath) {
+            // Get the platform-specific default path from Tauri
+            // On Windows: C:\Users\{user}\AppData\Local\mediaweb
+            // On macOS: ~/Library/Application Support/mediaweb
+            // On Linux: ~/.local/share/mediaweb
+            this.dataPath = await window.__TAURI__.invoke('get_default_data_path');
+            console.log('Using default data path:', this.dataPath);
+            localStorage.setItem('dataPath', this.dataPath);
+        }
+        if (this.dataPath) {
+            this.api = new FileIOAPI(this.dataPath);
+            try {
+                await this.initializeDataDirectory();
+            } catch (err) {
+                console.error('Failed to initialize data directory:', err);
+            }
         }
     }
 
@@ -168,16 +189,22 @@ class MediaWeb {
     }
 
     async selectDataPath() {
-        // In a real Tauri app, this would open a directory dialog
-        // For now, we'll use localStorage
-        const path = prompt('Enter your data directory path (or leave empty for ~/mediaweb):', this.dataPath);
-        if (path !== null) {
-            this.dataPath = path || localStorage.getItem('dataPath') || '';
-            localStorage.setItem('dataPath', this.dataPath);
-            this.api = new FileIOAPI(this.dataPath);
-            await this.initializeDataDirectory();
-            await this.loadData();
-            this.loadDataPath();
+        try {
+            const selected = await window.__TAURI__.dialog.open({
+                directory: true,
+                multiple: false,
+                defaultPath: this.dataPath || undefined
+            });
+            if (selected) {
+                this.dataPath = selected;
+                localStorage.setItem('dataPath', this.dataPath);
+                this.api = new FileIOAPI(this.dataPath);
+                await this.initializeDataDirectory();
+                await this.loadData();
+                this.loadDataPath();
+            }
+        } catch (err) {
+            console.error('Failed to select data path:', err);
         }
     }
 
@@ -225,6 +252,7 @@ class MediaWeb {
         }
 
         const files = Array.from(e.target.files);
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
         
         for (const file of files) {
             const mediaId = this.generateIdFromFilename(file.name);
@@ -232,25 +260,30 @@ class MediaWeb {
                 id: mediaId,
                 filename: file.name,
                 media_type: file.type.startsWith('image') ? 'image' : 'video',
+                date: today,
                 size: file.size,
                 created: new Date().toISOString(),
                 modified: new Date().toISOString()
             };
 
             try {
-                // Store file data in localStorage (for demo; real app would handle binary storage)
+                // Read file as base64
                 const reader = new FileReader();
-                reader.onload = (evt) => {
-                    const dataUrl = evt.target.result;
-                    localStorage.setItem(`mediaweb_file_${mediaId}`, dataUrl);
-                };
-                reader.readAsDataURL(file);
+                const base64Data = await new Promise((resolve, reject) => {
+                    reader.onload = (evt) => resolve(evt.target.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+
+                // Write actual file to disk in date-based directory
+                await this.api.writeBinary(`media/${today}/${file.name}`, base64Data);
 
                 // Create metadata entry
                 await this.api.updateMediaMetadata(mediaId, {
                     tags: [],
                     title: '',
                     caption: '',
+                    date: today,
                     created: new Date().toISOString(),
                     modified: new Date().toISOString()
                 });
@@ -258,6 +291,7 @@ class MediaWeb {
                 this.media.push(media);
             } catch (err) {
                 console.error(`Failed to upload ${file.name}:`, err);
+                alert(`Failed to upload ${file.name}: ${err}`);
             }
         }
 
@@ -286,13 +320,18 @@ class MediaWeb {
             const item = document.createElement('div');
             item.className = 'media-item';
             
-            const fileData = localStorage.getItem(`mediaweb_file_${media.id}`);
+            // Construct file path based on date
+            const filePath = media.date 
+                ? `${this.api.basePath}/media/${media.date}/${media.filename}`
+                : `${this.api.basePath}/media/${media.filename}`;
+            
             let thumbnail = '📹';
             
-            if (media.media_type === 'image' && fileData) {
-                thumbnail = `<img src="${fileData}" alt="${media.filename}">`;
-            } else if (media.media_type === 'image') {
-                thumbnail = '🖼️';
+            if (media.media_type === 'image') {
+                // Use file:// protocol to load from disk
+                thumbnail = `<img src="file:///${filePath.replace(/\\/g, '/')}" alt="${media.filename}">`;
+            } else if (media.media_type === 'video') {
+                thumbnail = '🎬';
             }
 
             const metadata = this.getMediaMetadata(media.id);

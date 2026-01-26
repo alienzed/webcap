@@ -52,6 +52,10 @@ class FileIOAPI {
         return await this.invoke('write', relPath, data);
     }
 
+    async writeBinary(relPath, base64Data) {
+        return await this.invoke('write_binary', relPath, base64Data);
+    }
+
     async listDir(relPath) {
         return await this.invoke('list', relPath);
     }
@@ -62,13 +66,38 @@ class FileIOAPI {
         try {
             const entries = await this.listDir('media');
             const mediaList = [];
+            
+            // Scan all date subdirectories and files
             for (const entry of entries) {
-                if (!entry.is_dir) {
+                if (entry.is_dir) {
+                    // This is a date directory (e.g., 2026-01-26)
+                    try {
+                        const dateEntries = await this.listDir(`media/${entry.name}`);
+                        for (const file of dateEntries) {
+                            if (!file.is_dir) {
+                                const media = {
+                                    id: this._idFromFilename(file.name),
+                                    filename: file.name,
+                                    media_type: this._detectMediaType(file.name),
+                                    date: entry.name,
+                                    size: 0,
+                                    created: new Date().toISOString(),
+                                    modified: new Date().toISOString()
+                                };
+                                mediaList.push(media);
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`Failed to read date directory ${entry.name}:`, e);
+                    }
+                } else {
+                    // Legacy file directly in /media (no date subdirectory)
                     const media = {
                         id: this._idFromFilename(entry.name),
                         filename: entry.name,
                         media_type: this._detectMediaType(entry.name),
-                        size: 0, // not available from list
+                        date: null,
+                        size: 0,
                         created: new Date().toISOString(),
                         modified: new Date().toISOString()
                     };
@@ -81,14 +110,21 @@ class FileIOAPI {
         }
     }
 
-    async getMediaMetadata(mediaId) {
+    async getMediaMetadata(mediaId, date = null) {
         try {
+            // Try date-based path first, then fall back to root meta/
+            if (date) {
+                try {
+                    return await this.readJSON(`meta/${date}/${mediaId}.json`);
+                } catch {}
+            }
             return await this.readJSON(`meta/${mediaId}.json`);
         } catch {
             return {
                 tags: [],
                 title: '',
                 caption: '',
+                date: date,
                 created: new Date().toISOString(),
                 modified: new Date().toISOString()
             };
@@ -100,7 +136,12 @@ class FileIOAPI {
             ...metadata,
             modified: new Date().toISOString()
         };
-        await this.writeJSON(`meta/${mediaId}.json`, updated);
+        const date = metadata.date || updated.date;
+        if (date) {
+            await this.writeJSON(`meta/${date}/${mediaId}.json`, updated);
+        } else {
+            await this.writeJSON(`meta/${mediaId}.json`, updated);
+        }
         return updated;
     }
 

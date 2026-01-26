@@ -76,6 +76,34 @@ pub async fn handle_file_io(op: &str, base_path: &Path, rel_path: &str, payload:
                 Err("No payload provided for write".to_string())
             }
         }
+        "write_binary" => {
+            // Write binary data (base64 encoded string)
+            if let Some(Value::String(base64_data)) = payload {
+                // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+                let base64_str = if let Some(idx) = base64_data.find("base64,") {
+                    &base64_data[idx + 7..]
+                } else {
+                    &base64_data
+                };
+                
+                let bytes = base64::decode(base64_str)
+                    .map_err(|e| format!("Failed to decode base64: {}", e))?;
+                
+                if let Some(parent) = path.parent() {
+                    if !parent.exists() {
+                        fs::create_dir_all(parent)
+                            .await
+                            .map_err(|e| format!("Failed to create directory: {}", e))?;
+                    }
+                }
+                fs::write(&path, bytes)
+                    .await
+                    .map_err(|e| format!("Failed to write binary file: {}", e))?;
+                Ok(serde_json::json!({ "ok": true }))
+            } else {
+                Err("No base64 payload provided for write_binary".to_string())
+            }
+        }
         "list" => {
             let mut entries = fs::read_dir(&path)
                 .await

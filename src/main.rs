@@ -17,9 +17,25 @@ async fn file_io(
     commands::file_io::handle_file_io(&op, &base, &rel_path, payload).await
 }
 
+/// Get the default data directory path (platform-specific)
+/// On Windows: C:\Users\{user}\AppData\Local\mediaweb
+/// On macOS: ~/Library/Application Support/mediaweb
+/// On Linux: ~/.local/share/mediaweb
+#[tauri::command]
+fn get_default_data_path() -> String {
+    if let Some(data_dir) = dirs::data_dir() {
+        let mut mediaweb_dir = data_dir;
+        mediaweb_dir.push("mediaweb");
+        mediaweb_dir.to_string_lossy().to_string()
+    } else {
+        // Ultimate fallback to current directory
+        "./mediaweb".to_string()
+    }
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![file_io])
+        .invoke_handler(tauri::generate_handler![file_io, get_default_data_path])
         .setup(|app| {
             Ok(())
         })

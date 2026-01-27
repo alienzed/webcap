@@ -211,10 +211,29 @@ class FileIOAPI {
             const entries = await this.listDir('pages');
             const pages = [];
             for (const entry of entries) {
-                if (!entry.is_dir && entry.name.endsWith('.json')) {
+                if (entry.is_dir) {
+                    // Date subdirectory (e.g., 2026-01-26)
+                    try {
+                        const dateEntries = await this.listDir(`pages/${entry.name}`);
+                        for (const file of dateEntries) {
+                            if (!file.is_dir && file.name.endsWith('.json')) {
+                                const pageId = file.name.replace('.json', '');
+                                const page = await this.readJSON(`pages/${entry.name}/${file.name}`);
+                                pages.push(page);
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`Failed to read pages in ${entry.name}:`, e);
+                    }
+                } else if (entry.name.endsWith('.json')) {
+                    // Legacy flat file
                     const pageId = entry.name.replace('.json', '');
-                    const page = await this.getPage(pageId);
-                    pages.push(page);
+                    try {
+                        const page = await this.readJSON(`pages/${entry.name}`);
+                        pages.push(page);
+                    } catch (e) {
+                        console.error(`Failed to read page ${entry.name}:`, e);
+                    }
                 }
             }
             return pages;
@@ -232,12 +251,23 @@ class FileIOAPI {
             ...page,
             modified: new Date().toISOString()
         };
-        await this.writeJSON(`pages/${page.id}.json`, updated);
+        
+        // Use date-based subdirectory like media
+        const date = page.date || new Date().toISOString().split('T')[0];
+        updated.date = date;
+        
+        await this.writeJSON(`pages/${date}/${page.id}.json`, updated);
         return updated;
     }
 
-    async deletePage(pageId) {
-        await this.invoke('remove', `pages/${pageId}.json`);
+    async deletePage(page) {
+        // Handle both date-based and legacy flat paths
+        if (page.date) {
+            await this.invoke('remove', `pages/${page.date}/${page.id}.json`);
+        } else {
+            // Try legacy path
+            await this.invoke('remove', `pages/${page.id}.json`);
+        }
     }
 
     // === Helpers ===

@@ -373,6 +373,7 @@ textarea.form-input {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: var(--spacing-lg);
+    min-height: 400px;
 }
 
 .media-item {

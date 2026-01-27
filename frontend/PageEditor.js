@@ -38,6 +38,7 @@ class PageEditor {
                 <div class="empty-state" style="grid-column: 1/-1;">
                     <div class="empty-state-icon">📄</div>
                     <div class="empty-state-text">No pages yet. Create one to get started.</div>
+                    <button class="btn btn-primary" onclick="document.getElementById('btnNewPage').click()" style="margin-top: 1rem;">+ Create Your First Page</button>
                 </div>
             `;
             return;
@@ -50,6 +51,7 @@ class PageEditor {
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'btn btn-icon';
             deleteBtn.textContent = '🗑️';
+            deleteBtn.title = 'Delete this page';
             deleteBtn.style.position = 'absolute';
             deleteBtn.style.top = '10px';
             deleteBtn.style.right = '10px';
@@ -74,12 +76,12 @@ class PageEditor {
             const viewBtn = document.createElement('button');
             viewBtn.className = 'btn btn-icon';
             viewBtn.textContent = '👁️';
+            viewBtn.title = 'View Full Screen';
             viewBtn.style.position = 'absolute';
             viewBtn.style.top = '10px';
             viewBtn.style.right = '50px';
             viewBtn.style.width = '32px';
             viewBtn.style.height = '32px';
-            viewBtn.title = 'View Full Screen';
             viewBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.viewFullScreen(page);
@@ -386,24 +388,12 @@ class PageEditor {
         let content = '';
         if (column.type === 'text') {
             const textType = column.data.textType || 'p';
-            let styles = 'padding: 15px; background: #f9f9f9; border-radius: 4px; min-height: 60px; cursor: text; white-space: pre-wrap; word-wrap: break-word; transition: background 0.2s;';
-            let tag = 'div';
-            
-            if (textType === 'h1') {
-                styles = 'font-size: 2rem; font-weight: 700; margin: 20px 0 10px 0; cursor: text;';
-                tag = 'h1';
-            } else if (textType === 'h2') {
-                styles = 'font-size: 1.5rem; font-weight: 600; margin: 15px 0 8px 0; cursor: text;';
-                tag = 'h2';
-            } else if (textType === 'h3') {
-                styles = 'font-size: 1.25rem; font-weight: 600; margin: 12px 0 6px 0; cursor: text;';
-                tag = 'h3';
-            } else if (textType === 'blockquote') {
-                styles = 'padding: 15px; background: #f3f4f6; border-left: 4px solid #FF8C42; margin: 10px 0; font-style: italic; color: #6b7280; cursor: text;';
-                tag = 'blockquote';
-            }
-            
-            content = `<${tag} data-text-content style="${styles}" onmouseover="this.style.background='#f0f0f0'; this.style.opacity='0.8'" onmouseout="this.style.background=''; this.style.opacity='1'">${this.app.escapeHtml(column.data.content || 'Empty text')}</${tag}>`;
+            const textAlign = column.data.textAlign || 'left';
+            content = this.buildTextHtml({
+                textType,
+                textAlign,
+                content: column.data.content || 'Empty text'
+            }, true);
         } else if (column.type === 'image') {
             if (column.data.media_id) {
                 const media = this.app.media.find(m => m.id === column.data.media_id);
@@ -544,25 +534,120 @@ class PageEditor {
         const contentDiv = columnDiv.querySelector('[data-text-content]');
         if (!contentDiv) return;
         
-        const textarea = document.createElement('textarea');
-        textarea.value = column.data.content || '';
-        textarea.style.cssText = `
-            width: 100%;
-            min-height: 100px;
-            padding: 15px;
-            border: 2px solid #FF8C42;
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: 14px;
-            resize: vertical;
-            outline: none;
-        `;
+        // Initialize formatting data if not present
+        if (!column.data.textType) column.data.textType = 'p';
+        if (!column.data.textAlign) column.data.textAlign = 'left';
+        
+        let sourceMode = false;
         
         const originalContent = contentDiv.innerHTML;
         contentDiv.innerHTML = '';
-        contentDiv.appendChild(textarea);
-        textarea.focus();
-        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        
+        // Create toolbar
+        const toolbar = document.createElement('div');
+        toolbar.className = 'text-toolbar';
+        
+        // Element type selector
+        const typeSelect = document.createElement('select');
+        typeSelect.className = 'text-toolbar-select';
+        typeSelect.innerHTML = `
+            <option value="p" ${column.data.textType === 'p' ? 'selected' : ''}>Paragraph</option>
+            <option value="h1" ${column.data.textType === 'h1' ? 'selected' : ''}>Heading 1</option>
+            <option value="h2" ${column.data.textType === 'h2' ? 'selected' : ''}>Heading 2</option>
+            <option value="h3" ${column.data.textType === 'h3' ? 'selected' : ''}>Heading 3</option>
+            <option value="h4" ${column.data.textType === 'h4' ? 'selected' : ''}>Heading 4</option>
+            <option value="blockquote" ${column.data.textType === 'blockquote' ? 'selected' : ''}>Blockquote</option>
+        `;
+        
+        // Text alignment buttons
+        const alignGroup = document.createElement('div');
+        alignGroup.className = 'text-align-group';
+        
+        const alignments = [
+            { value: 'left', icon: '≡', title: 'Align Left' },
+            { value: 'center', icon: '≣', title: 'Align Center' },
+            { value: 'right', icon: '≡', title: 'Align Right' },
+            { value: 'justify', icon: '▭', title: 'Justify' }
+        ];
+        
+        alignments.forEach(align => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.innerHTML = align.icon;
+            btn.title = align.title;
+            btn.className = 'text-align-btn';
+            if (column.data.textAlign === align.value) {
+                btn.classList.add('active');
+            }
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                column.data.textAlign = align.value;
+                // Update all alignment buttons
+                alignGroup.querySelectorAll('button').forEach(b => {
+                    const isNowActive = b.title === align.title;
+                    b.classList.toggle('active', isNowActive);
+                });
+            });
+            alignGroup.appendChild(btn);
+        });
+        
+        // Source mode toggle
+        const sourceBtn = document.createElement('button');
+        sourceBtn.type = 'button';
+        sourceBtn.textContent = 'HTML';
+        sourceBtn.title = 'Toggle HTML source view';
+        sourceBtn.className = 'text-source-btn';
+        sourceBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            sourceMode = !sourceMode;
+            if (sourceMode) {
+                sourceBtn.classList.add('active');
+                typeSelect.disabled = true;
+                typeSelect.classList.add('disabled');
+                alignGroup.querySelectorAll('button').forEach(b => {
+                    b.disabled = true;
+                    b.classList.add('disabled');
+                });
+                textarea.classList.add('source-mode');
+            } else {
+                sourceBtn.classList.remove('active');
+                typeSelect.disabled = false;
+                typeSelect.classList.remove('disabled');
+                alignGroup.querySelectorAll('button').forEach(b => {
+                    b.disabled = false;
+                    b.classList.remove('disabled');
+                });
+                textarea.classList.remove('source-mode');
+            }
+        });
+        
+        // Help text
+        const helpText = document.createElement('span');
+        helpText.className = 'text-toolbar-help';
+        helpText.textContent = 'Ctrl+Enter to save, Esc to cancel';
+        
+        toolbar.appendChild(typeSelect);
+        toolbar.appendChild(alignGroup);
+        toolbar.appendChild(sourceBtn);
+        toolbar.appendChild(helpText);
+        
+        // Create textarea
+        const textarea = document.createElement('textarea');
+        textarea.value = column.data.content || '';
+        textarea.className = 'text-editor-textarea';
+        
+        typeSelect.addEventListener('change', (e) => {
+            e.preventDefault();
+            column.data.textType = typeSelect.value;
+        });
+        
+        // Prevent blur when clicking toolbar
+        // Track toolbar interaction to avoid premature blur saves
+        let interactingToolbar = false;
+        toolbar.addEventListener('mousedown', () => {
+            interactingToolbar = true;
+            setTimeout(() => { interactingToolbar = false; }, 200);
+        });
         
         const saveEdit = () => {
             const newValue = textarea.value.trim();
@@ -574,7 +659,18 @@ class PageEditor {
             }
         };
         
-        textarea.addEventListener('blur', saveEdit);
+        textarea.addEventListener('blur', () => {
+            // Wait for focus to settle, then decide whether to save
+            setTimeout(() => {
+                const active = document.activeElement;
+                if (interactingToolbar || contentDiv.contains(active)) {
+                    // Still interacting with toolbar/textarea/select; do not save yet
+                    return;
+                }
+                saveEdit();
+            }, 0);
+        });
+        
         textarea.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 contentDiv.innerHTML = originalContent;
@@ -583,6 +679,42 @@ class PageEditor {
                 saveEdit();
             }
         });
+        
+        contentDiv.appendChild(toolbar);
+        contentDiv.appendChild(textarea);
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }
+
+    buildTextHtml(data, includeDataAttr = false) {
+        const textType = data.textType || 'p';
+        const textAlign = data.textAlign || 'left';
+        const content = this.app.escapeHtml(data.content || 'Empty text');
+
+        let tag = 'p';
+        const classes = ['text-block', `text-align-${textAlign}`];
+
+        if (textType === 'h1') {
+            tag = 'h1';
+            classes.push('text-h1');
+        } else if (textType === 'h2') {
+            tag = 'h2';
+            classes.push('text-h2');
+        } else if (textType === 'h3') {
+            tag = 'h3';
+            classes.push('text-h3');
+        } else if (textType === 'h4') {
+            tag = 'h4';
+            classes.push('text-h4');
+        } else if (textType === 'blockquote') {
+            tag = 'blockquote';
+            classes.push('text-blockquote');
+        } else {
+            classes.push('text-body');
+        }
+
+        const dataAttr = includeDataAttr ? ' data-text-content' : '';
+        return `<${tag}${dataAttr} class="${classes.join(' ')}">${content}</${tag}>`;
     }
 
     renderMediaLibrary(filterText = '') {
@@ -762,7 +894,11 @@ class PageEditor {
             colDiv.style.boxSizing = 'border-box';
             
             if (column.type === 'text') {
-                colDiv.innerHTML = `<div style="padding: 15px; background: #f9f9f9; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;">${this.app.escapeHtml(column.data.content)}</div>`;
+                colDiv.innerHTML = this.buildTextHtml({
+                    textType: column.data.textType,
+                    textAlign: column.data.textAlign,
+                    content: column.data.content || ''
+                });
             } else if (column.type === 'image') {
                 const media = this.app.media.find(m => m.id === column.data.media_id);
                 if (media) {
@@ -819,7 +955,7 @@ class PageEditor {
         modal.innerHTML = `
             <div class="modal-content modal-large" style="max-width: 100%; height: 100%; margin: 0; border-radius: 0; overflow-y: auto;">
                 <div class="modal-header" style="position: sticky; top: 0; background: white; z-index: 10; border-bottom: 1px solid #ddd;">
-                    <h2>${this.app.escapeHtml(page.title)}</h2>
+                    <h2>Page Preview</h2>
                     <button class="btn-close">&times;</button>
                 </div>
                 <div class="modal-body" style="padding: 40px; background: white;">
@@ -891,7 +1027,11 @@ class PageEditor {
             let content = '';
             
             if (column.type === 'text') {
-                content = `<div style="padding: 15px; background: #f9f9f9; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;">${this.app.escapeHtml(column.data.content)}</div>`;
+                content = this.buildTextHtml({
+                    textType: column.data.textType,
+                    textAlign: column.data.textAlign,
+                    content: column.data.content || ''
+                });
             } else if (column.type === 'image') {
                 const media = this.app.media.find(m => m.id === column.data.media_id);
                 if (media) {
@@ -966,6 +1106,57 @@ class PageEditor {
             max-width: 100%;
             height: auto;
         }
+        .text-block {
+            display: block;
+            width: 100%;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .text-body {
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            min-height: 60px;
+        }
+        .text-h1,
+        .text-h2,
+        .text-h3,
+        .text-h4 {
+            background: transparent;
+            padding: 0;
+        }
+        .text-h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 20px 0 10px 0;
+        }
+        .text-h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 15px 0 8px 0;
+        }
+        .text-h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 12px 0 6px 0;
+        }
+        .text-h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 10px 0 5px 0;
+        }
+        .text-blockquote {
+            padding: 15px;
+            background: #f3f4f6;
+            border-left: 4px solid #FF8C42;
+            margin: 10px 0;
+            font-style: italic;
+            color: #6b7280;
+        }
+        .text-align-left { text-align: left; }
+        .text-align-center { text-align: center; }
+        .text-align-right { text-align: right; }
+        .text-align-justify { text-align: justify; }
     </style>
 </head>
 <body>

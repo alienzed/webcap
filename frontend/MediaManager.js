@@ -5,6 +5,7 @@ class MediaManager {
     constructor(app) {
         this.app = app;
         this.setupEventListeners();
+        this.setupDragAndDrop();
     }
 
     setupEventListeners() {
@@ -19,23 +20,76 @@ class MediaManager {
         });
     }
 
-    async handleFileUpload(e) {
-        if (!this.app.api) {
-            this.app.console.log('error', 'Please set a data path first.');
-            return;
-        }
+    setupDragAndDrop() {
+        const mediaGrid = document.getElementById('mediaGrid');
+        if (!mediaGrid) return;
+        
+        // Prevent default drag behaviors on entire document
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+        
+        // Handle drag over media grid
+        mediaGrid.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            if (this.app.api) {
+                mediaGrid.classList.add('drag-over');
+            }
+        });
+        
+        mediaGrid.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (this.app.api) {
+                mediaGrid.classList.add('drag-over');
+            }
+        });
+        
+        mediaGrid.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            // Only remove if leaving the grid itself
+            if (e.target === mediaGrid) {
+                mediaGrid.classList.remove('drag-over');
+            }
+        });
+        
+        mediaGrid.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            mediaGrid.classList.remove('drag-over');
+            
+            if (!this.app.api) {
+                this.app.console.log('error', 'Please set a data directory first');
+                alert('Please set up a data directory first!\n\nGo to Settings → Choose Directory');
+                this.app.switchToSection('settings');
+                return;
+            }
+            
+            const files = Array.from(e.dataTransfer.files).filter(file => 
+                file.type.startsWith('image/') || file.type.startsWith('video/')
+            );
+            
+            if (files.length === 0) {
+                this.app.console.log('warn', 'No valid media files to upload');
+                return;
+            }
+            
+            this.app.console.log('info', `Dropped ${files.length} file(s), starting upload...`);
+            await this.uploadFiles(files);
+        });
+    }
 
-        const files = Array.from(e.target.files);
+    async uploadFiles(files) {
         const today = new Date().toISOString().split('T')[0];
-        
-        this.app.console.log('info', `Starting upload of ${files.length} file(s)...`);
-        
         let successCount = 0;
         let failCount = 0;
 
-        for (const file of files) {
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
             const mediaId = this.app.generateIdFromFilename(file.name);
-            this.app.console.log('info', `Uploading: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+            
+            this.app.console.log('info', `[${i+1}/${files.length}] Uploading: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
             
             const media = {
                 id: mediaId,
@@ -55,9 +109,7 @@ class MediaManager {
                     reader.readAsDataURL(file);
                 });
 
-                this.app.console.log('info', `  → Encoded to base64, writing to disk...`);
                 await this.app.api.writeBinary(`media/${today}/${file.name}`, base64Data);
-                this.app.console.log('info', `  → File saved to media/${today}/${file.name}`);
 
                 await this.app.api.updateMediaMetadata(mediaId, {
                     tags: [],
@@ -80,7 +132,19 @@ class MediaManager {
         await this.app.loadData();
         this.renderGrid();
         
-        this.app.console.log('info', `Upload complete: ${successCount} succeeded, ${failCount} failed`);
+        this.app.console.log('info', `✓ Upload complete: ${successCount} succeeded, ${failCount} failed`);
+    }
+
+    async handleFileUpload(e) {
+        if (!this.app.api) {
+            this.app.console.log('error', 'Please set a data path first.');
+            return;
+        }
+
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+        
+        await this.uploadFiles(files);
         e.target.value = '';
     }
 
@@ -128,10 +192,13 @@ class MediaManager {
             `<span class="media-item-tag">${this.app.escapeHtml(tag)}</span>`
         ).join('');
 
+        const mediaIcon = media.media_type === 'image' ? '🖼️' : '🎬';
+        
         item.innerHTML = `
             <div class="media-thumbnail">
                 ${thumbnail}
-                <span class="media-type-badge">${media.media_type.toUpperCase()}</span>
+                <span class="media-type-badge" title="${media.media_type}">${mediaIcon}</span>
+                <button class="media-delete-btn" title="Delete media" data-media-id="${media.id}" style="position: absolute; top: 8px; right: 8px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 4px; width: 28px; height: 28px; cursor: pointer; font-size: 16px; display: none;">×</button>
             </div>
             <div class="media-info">
                 <div class="media-title">${metadata.title || this.app.truncate(media.filename, 20)}</div>
@@ -140,10 +207,85 @@ class MediaManager {
             </div>
         `;
 
+        // Show delete button on hover
+        item.addEventListener('mouseenter', () => {
+            const deleteBtn = item.querySelector('.media-delete-btn');
+            if (deleteBtn) deleteBtn.style.display = 'block';
+        });
+        
+        item.addEventListener('mouseleave', () => {
+            const deleteBtn = item.querySelector('.media-delete-btn');
+            if (deleteBtn) deleteBtn.style.display = 'none';
+        });
+        
+        // Delete button handler
+        const deleteBtn = item.querySelector('.media-delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await this.deleteMedia(media);
+            });
+        }
+
         item.addEventListener('click', () => {
             this.openEditor(media);
         });
         return item;
+    }
+
+    async deleteMedia(media) {
+        // Check if media is referenced in any pages
+        const referencingPages = this.app.pages.filter(page => {
+            // Check all columns/sections for image/video blocks
+            const items = page.columns || page.sections || [];
+            return items.some(item => {
+                const blocks = item.blocks || [];
+                return blocks.some(block => {
+                    if (block.type === 'Image' || block.type === 'Video') {
+                        return block.data.mediaId === media.id;
+                    }
+                    if (block.type === 'Gallery') {
+                        // Could check gallery queries, but that's complex
+                        return false;
+                    }
+                    return false;
+                });
+            });
+        });
+
+        if (referencingPages.length > 0) {
+            const pageNames = referencingPages.map(p => p.title).join(', ');
+            const confirmMsg = `This media is used in ${referencingPages.length} page(s): ${pageNames}\n\nAre you sure you want to delete it?`;
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+        } else {
+            if (!confirm(`Delete "${media.filename}"?`)) {
+                return;
+            }
+        }
+
+        try {
+            this.app.console.log('info', `Deleting media: ${media.filename}`);
+            
+            // Delete the media file
+            await this.app.api.deleteFile(`media/${media.date}/${media.filename}`);
+            
+            // Delete metadata
+            await this.app.api.deleteFile(`meta/${media.date}/${media.id}.json`);
+            
+            // Remove from app state
+            const idx = this.app.media.findIndex(m => m.id === media.id);
+            if (idx >= 0) {
+                this.app.media.splice(idx, 1);
+            }
+            
+            this.app.console.log('info', `✓ Deleted ${media.filename}`);
+            this.renderGrid();
+        } catch (err) {
+            this.app.console.log('error', `Failed to delete media: ${err.message || err}`);
+            alert(`Failed to delete media: ${err.message || err}`);
+        }
     }
 
     renderTagFilter() {

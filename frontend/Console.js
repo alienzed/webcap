@@ -91,6 +91,43 @@ class Console {
         }
         
         this.render();
+        
+        // Also update status bar
+        this.updateStatusBar(level, message);
+    }
+
+    updateStatusBar(level, message) {
+        const statusBar = document.getElementById('statusBar');
+        const statusText = document.getElementById('statusText');
+        
+        if (!statusBar || !statusText) return;
+        
+        // Remove previous level classes
+        statusBar.className = 'status-bar';
+        
+        // Add level class
+        if (level === 'error') {
+            statusBar.classList.add('error');
+        } else if (level === 'warn') {
+            statusBar.classList.add('warning');
+        } else if (message.includes('...') || message.includes('Loading') || message.includes('Uploading')) {
+            statusBar.classList.add('progress');
+        } else if (message.includes('✓') || message.includes('success')) {
+            statusBar.classList.add('success');
+        }
+        
+        // Update text
+        statusText.textContent = message;
+        
+        // Auto-fade after 5 seconds for non-errors
+        if (level !== 'error') {
+            setTimeout(() => {
+                if (statusText.textContent === message) {
+                    statusBar.className = 'status-bar';
+                    statusText.textContent = 'Ready';
+                }
+            }, 5000);
+        }
     }
 
     render() {

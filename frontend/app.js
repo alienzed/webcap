@@ -186,8 +186,8 @@ class MediaWeb {
             this.mediaManager.filterMedia(e.target.value);
         });
 
-        // About
-        document.getElementById('btnAbout').addEventListener('click', () => {
+        // About via logo
+        document.querySelector('.logo').addEventListener('click', () => {
             this.showAbout();
         });
 
@@ -206,6 +206,16 @@ class MediaWeb {
             btn.addEventListener('click', () => {
                 this.closeModal();
             });
+        });
+
+        // Escape key closes modals
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const activeModal = document.querySelector('.modal.active');
+                if (activeModal) {
+                    this.closeModal();
+                }
+            }
         });
     }
 
@@ -447,11 +457,24 @@ class MediaWeb {
                 <h2 style="margin-bottom: 10px;">MediaWeb v0.1.0</h2>
                 <p style="margin: 10px 0; color: #6B7280;">A portable, offline-first Media CMS + Page Builder</p>
                 <hr style="margin: 20px 0; border: none; border-top: 1px solid #E5E7EB;">
-                <p style="font-size: 0.9rem; color: #6B7280; margin-bottom: 15px;">Built with Tauri, Rust, and vanilla JavaScript</p>
+                <div style="text-align: left; max-width: 500px; margin: 0 auto;">
+                    <h3 style="font-size: 1rem; margin-bottom: 10px; color: #374151;">⌨️ Keyboard Shortcuts</h3>
+                    <table style="width: 100%; font-size: 0.85rem; color: #6B7280; border-collapse: collapse;">
+                        <tr><td style="padding: 4px 0;"><code>M</code></td><td>Go to Media</td></tr>
+                        <tr><td style="padding: 4px 0;"><code>P</code></td><td>Go to Pages</td></tr>
+                        <tr><td style="padding: 4px 0;"><code>S</code></td><td>Go to Settings</td></tr>
+                        <tr><td style="padding: 4px 0;"><code>/</code></td><td>Focus Search</td></tr>
+                        <tr><td style="padding: 4px 0;"><code>Ctrl+U</code></td><td>Upload Media</td></tr>
+                        <tr><td style="padding: 4px 0;"><code>Ctrl+N</code></td><td>New Page</td></tr>
+                        <tr><td style="padding: 4px 0;"><code>Ctrl+S</code></td><td>Save (in editor)</td></tr>
+                        <tr><td style="padding: 4px 0;"><code>Esc</code></td><td>Close Dialog/Modal</td></tr>
+                        <tr><td style="padding: 4px 0;"><code>Ctrl+\`</code></td><td>Toggle Console</td></tr>
+                        <tr><td style="padding: 4px 0;"><code>Ctrl+Shift+K</code></td><td>Clear Console</td></tr>
+                    </table>
+                </div>
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #E5E7EB;">
+                <p style="font-size: 0.9rem; color: #6B7280; margin-bottom: 10px;">Built with Tauri, Rust, and vanilla JavaScript</p>
                 <p style="font-size: 0.9rem; color: #6B7280; margin-bottom: 15px;">All data stored locally in human-readable JSON</p>
-                <p style="font-size: 0.9rem; color: #9CA3AF;">
-                    <strong>Keyboard:</strong> M=Media, P=Pages, S=Settings, /=Search, Esc=Close
-                </p>
                 <p style="font-size: 0.85rem; color: #9CA3AF; margin-top: 20px;">
                     © 2025 · Made for creative professionals · MIT License
                 </p>
@@ -461,9 +484,9 @@ class MediaWeb {
         const modal = document.createElement('div');
         modal.className = 'modal active';
         modal.innerHTML = `
-            <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-content" style="max-width: 550px;">
                 <div class="modal-header">
-                    <h2>About</h2>
+                    <h2>About & Keyboard Shortcuts</h2>
                     <button class="btn-close">&times;</button>
                 </div>
                 <div class="modal-body">

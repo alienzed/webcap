@@ -1,0 +1,115 @@
+/* Media library and grid */
+
+.media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--spacing-lg);
+    min-height: 400px;
+    position: relative;
+    transition: background-color 0.2s ease;
+}
+
+.media-grid[data-drop-zone="true"].drag-over {
+    background-color: rgba(255, 140, 66, 0.05);
+    border: 2px dashed var(--color-primary-orange);
+    border-radius: var(--radius-lg);
+}
+
+.media-grid[data-drop-zone="true"].drag-over::before {
+    content: '📁 Drop files to upload';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.5rem;
+    color: var(--color-primary-orange);
+    pointer-events: none;
+    z-index: 10;
+}
+
+.media-item {
+    background-color: var(--color-white);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.media-item:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.media-thumbnail {
+    width: 100%;
+    height: 160px;
+    background-color: var(--color-grey-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.media-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.media-thumbnail video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.media-type-badge {
+    position: absolute;
+    top: var(--spacing-sm);
+    left: var(--spacing-sm);
+    background-color: var(--color-primary-orange);
+    color: var(--color-white);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.media-info {
+    padding: var(--spacing-md);
+}
+
+.media-title {
+    font-weight: 600;
+    color: var(--color-grey-dark);
+    font-size: 0.9rem;
+    margin-bottom: var(--spacing-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.media-filename {
+    font-size: 0.8rem;
+    color: var(--color-grey-medium);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.media-item-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-sm);
+}
+
+.media-item-tag {
+    font-size: 0.7rem;
+    background-color: var(--color-grey-light);
+    color: var(--color-grey-medium);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+}

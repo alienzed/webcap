@@ -61,6 +61,10 @@ class FileIOAPI {
         return await this.invoke('write_binary', relPath, base64Data);
     }
 
+    async deleteFile(relPath) {
+        return await this.invoke('remove', relPath);
+    }
+
     async listDir(relPath) {
         return await this.invoke('list', relPath);
     }

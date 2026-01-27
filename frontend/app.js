@@ -245,12 +245,8 @@ class MediaWeb {
         });
 
         // Modal controls
-        document.querySelectorAll('.modal .btn-close, .modal .btn-secondary').forEach(btn => {
+        document.querySelectorAll('.modal .btn-close').forEach(btn => {
             btn.addEventListener('click', () => this.closeModal());
-        });
-
-        document.getElementById('btnSaveMedia').addEventListener('click', () => {
-            this.saveMediaMetadata();
         });
 
         document.getElementById('btnClearConsole').addEventListener('click', () => {
@@ -259,6 +255,10 @@ class MediaWeb {
 
         document.getElementById('btnToggleConsole').addEventListener('click', () => {
             this.toggleConsole();
+        });
+
+        document.getElementById('btnSaveMedia').addEventListener('click', () => {
+            this.saveMediaMetadata();
         });
 
         document.getElementById('btnNewPage').addEventListener('click', () => {
@@ -291,6 +291,10 @@ class MediaWeb {
 
         document.getElementById('btnAbout').addEventListener('click', () => {
             this.showAbout();
+        });
+
+        document.getElementById('btnCancelPicker').addEventListener('click', () => {
+            document.getElementById('mediaPickerModal').classList.remove('active');
         });
     }
 
@@ -518,6 +522,24 @@ class MediaWeb {
         e.target.value = '';
     }
 
+    getMediaFilePath(media) {
+        if (!this.api) return '';
+        return media.date
+            ? `${this.api.basePath}/media/${media.date}/${media.filename}`
+            : `${this.api.basePath}/media/${media.filename}`;
+    }
+
+    getMediaFileUrl(media) {
+        const filePath = this.getMediaFilePath(media);
+        if (!filePath) return '';
+
+        // Tauri 2 exposes convertFileSrc on both global and core namespaces
+        const tauriConvert = window.__TAURI__?.convertFileSrc || window.__TAURI__?.core?.convertFileSrc;
+        return tauriConvert
+            ? tauriConvert(filePath)
+            : `file:///${filePath.replace(/\\/g, '/')}`;
+    }
+
     renderMediaGrid() {
         const grid = document.getElementById('mediaGrid');
         grid.innerHTML = '';
@@ -536,18 +558,14 @@ class MediaWeb {
             const item = document.createElement('div');
             item.className = 'media-item';
             
-            // Construct file path based on date
-            const filePath = media.date 
-                ? `${this.api.basePath}/media/${media.date}/${media.filename}`
-                : `${this.api.basePath}/media/${media.filename}`;
-            
-            let thumbnail = '📹';
+            const fileUrl = this.getMediaFileUrl(media);
+            console.log(`[Media Thumbnail] ${media.filename}: ${fileUrl}`);
+            let thumbnail = '';
             
             if (media.media_type === 'image') {
-                // Use file:// protocol to load from disk
-                thumbnail = `<img src="file:///${filePath.replace(/\\/g, '/')}" alt="${media.filename}">`;
+                thumbnail = `<img loading="lazy" src="${fileUrl}" alt="${media.filename}" onerror="console.error('Failed to load image:', '${fileUrl}')">`;
             } else if (media.media_type === 'video') {
-                thumbnail = '🎬';
+                thumbnail = `<video muted preload="none"><source src="${fileUrl}" onerror="console.error('Failed to load video:', '${fileUrl}')"></video>`;
             }
 
             const metadata = this.getMediaMetadata(media.id);
@@ -631,11 +649,13 @@ class MediaWeb {
             const item = document.createElement('div');
             item.className = 'media-item';
             
-            const fileData = localStorage.getItem(`mediaweb_file_${media.id}`);
-            let thumbnail = media.media_type === 'image' ? '🖼️' : '📹';
+            const fileUrl = this.getMediaFileUrl(media);
+            let thumbnail = '';
             
-            if (media.media_type === 'image' && fileData) {
-                thumbnail = `<img src="${fileData}" alt="${media.filename}">`;
+            if (media.media_type === 'image') {
+                thumbnail = `<img loading="lazy" src="${fileUrl}" alt="${media.filename}">`;
+            } else if (media.media_type === 'video') {
+                thumbnail = `<video muted preload="none"><source src="${fileUrl}"></video>`;
             }
 
             const metadata = this.getMediaMetadata(media.id);
@@ -666,12 +686,13 @@ class MediaWeb {
         const metadata = this.getMediaMetadata(media.id);
 
         const preview = document.getElementById('mediaPreview');
-        const fileData = localStorage.getItem(`mediaweb_file_${media.id}`);
+        const fileUrl = this.getMediaFileUrl(media);
         
-        if (fileData && media.media_type === 'image') {
-            preview.innerHTML = `<img src="${fileData}" alt="${media.filename}">`;
-        } else if (fileData && media.media_type === 'video') {
-            preview.innerHTML = `<video controls><source src="${fileData}"></video>`;
+        // Render preview directly from disk using Tauri-safe URLs
+        if (fileUrl && media.media_type === 'image') {
+            preview.innerHTML = `<img src="${fileUrl}" alt="${media.filename}">`;
+        } else if (fileUrl && media.media_type === 'video') {
+            preview.innerHTML = `<video controls><source src="${fileUrl}"></video>`;
         } else {
             preview.innerHTML = `<div style="text-align: center; padding: 60px; color: #ccc;">Preview not available</div>`;
         }
@@ -812,6 +833,29 @@ class MediaWeb {
 
     openPageEditor(page) {
         this.log('info', `Opened page editor for "${page.title || 'New Page'}"`);
+        
+        // Migrate old format if needed
+        if (page.sections && !page.columns) {
+            page.columns = [];
+            // Convert old sections/blocks to columns
+            page.sections.forEach(section => {
+                section.blocks.forEach(block => {
+                    page.columns.push({
+                        id: block.id,
+                        width: block.columns || 12,
+                        type: block.type,
+                        data: block.data
+                    });
+                });
+            });
+            delete page.sections;
+        }
+        
+        // Ensure columns array exists
+        if (!page.columns) {
+            page.columns = [];
+        }
+        
         this.currentEditor = { type: 'page', page: JSON.parse(JSON.stringify(page)) };
 
         document.getElementById('pageTitle').value = page.title;
@@ -819,16 +863,254 @@ class MediaWeb {
 
         const canvas = document.getElementById('pageCanvas');
         canvas.innerHTML = '';
+        
+        // Setup drop zone on canvas
+        this.setupCanvasDropZone(canvas);
+        
+        // Render existing columns
+        this.renderPageColumns();
 
-        if (page.sections.length === 0) {
-            canvas.innerHTML = '<div class="empty-state"><div class="empty-state-text">No sections yet. Click "+ Add Section" to start building your page.</div></div>';
-        } else {
-            page.sections.forEach((section, idx) => {
-                this.renderSection(section, idx, canvas);
-            });
-        }
+        // Populate media library sidebar
+        this.renderEditorMediaLibrary();
+
+        // Wire up filter input
+        const filterInput = document.getElementById('editorMediaFilter');
+        filterInput.value = '';
+        filterInput.addEventListener('input', () => {
+            this.renderEditorMediaLibrary(filterInput.value);
+        });
 
         document.getElementById('pageEditorModal').classList.add('active');
+    }
+
+    setupCanvasDropZone(canvas) {
+        canvas.style.display = 'flex';
+        canvas.style.flexWrap = 'wrap';
+        canvas.style.minHeight = '400px';
+        canvas.style.padding = '20px';
+        canvas.style.border = '2px dashed #ddd';
+        canvas.style.borderRadius = '8px';
+        canvas.style.background = 'white';
+        
+        canvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            canvas.style.borderColor = '#FF8C42';
+            canvas.style.background = '#fff9f5';
+        });
+
+        canvas.addEventListener('dragleave', (e) => {
+            if (e.target === canvas) {
+                canvas.style.borderColor = '#ddd';
+                canvas.style.background = 'white';
+            }
+        });
+
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            canvas.style.borderColor = '#ddd';
+            canvas.style.background = 'white';
+            
+            const mediaId = e.dataTransfer.getData('mediaId');
+            const mediaType = e.dataTransfer.getData('mediaType');
+            
+            if (mediaId && mediaType) {
+                const page = this.currentEditor.page;
+                const column = {
+                    id: this.generateId(),
+                    width: 12,
+                    type: mediaType,
+                    data: { media_id: mediaId, caption: '' }
+                };
+                
+                page.columns.push(column);
+                
+                const media = this.media.find(m => m.id === mediaId);
+                const metadata = this.getMediaMetadata(mediaId);
+                this.log('info', `Added ${mediaType} "${metadata.title || media.filename}" to page`);
+                
+                this.renderPageColumns();
+            }
+        });
+    }
+
+    renderPageColumns() {
+        const canvas = document.getElementById('pageCanvas');
+        const page = this.currentEditor.page;
+        
+        // Clear except for the drop hint
+        const existingColumns = canvas.querySelectorAll('.page-column');
+        existingColumns.forEach(col => col.remove());
+        
+        if (page.columns.length === 0) {
+            const hint = document.createElement('div');
+            hint.style.cssText = 'width: 100%; text-align: center; color: #999; padding: 40px;';
+            hint.innerHTML = 'Drag media from the left or click "+ Add Text" below';
+            canvas.appendChild(hint);
+            return;
+        }
+        
+        page.columns.forEach((column, idx) => {
+            const colDiv = this.createColumnElement(column, idx);
+            canvas.appendChild(colDiv);
+        });
+    }
+
+    createColumnElement(column, idx) {
+        const div = document.createElement('div');
+        div.className = 'page-column';
+        div.style.width = `${(column.width / 12) * 100}%`;
+        div.style.padding = '10px';
+        div.style.boxSizing = 'border-box';
+        
+        let content = '';
+        if (column.type === 'text') {
+            content = `<div style="padding: 15px; background: #f9f9f9; border-radius: 4px; min-height: 60px;">${this.escapeHtml(column.data.content || 'Empty text')}</div>`;
+        } else if (column.type === 'image') {
+            if (column.data.media_id) {
+                const media = this.media.find(m => m.id === column.data.media_id);
+                if (media) {
+                    const fileUrl = this.getMediaFileUrl(media);
+                    content = `
+                        <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                            <img src="${fileUrl}" style="width: 100%; height: auto; display: block;">
+                            ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.escapeHtml(column.data.caption)}</div>` : ''}
+                        </div>
+                    `;
+                }
+            }
+        } else if (column.type === 'video') {
+            if (column.data.media_id) {
+                const media = this.media.find(m => m.id === column.data.media_id);
+                if (media) {
+                    const fileUrl = this.getMediaFileUrl(media);
+                    content = `
+                        <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                            <video controls style="width: 100%; height: auto; display: block;">
+                                <source src="${fileUrl}">
+                            </video>
+                            ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.escapeHtml(column.data.caption)}</div>` : ''}
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        div.innerHTML = `
+            ${content}
+            <div style="margin-top: 8px; display: flex; gap: 5px; justify-content: flex-end;">
+                <button type="button" data-action="width" title="Width: ${column.width}/12" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">📏 ${column.width}/12</button>
+                <button type="button" data-action="edit" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">✏️</button>
+                <button type="button" data-action="delete" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">🗑️</button>
+            </div>
+        `;
+
+        const widthBtn = div.querySelector('[data-action="width"]');
+        const editBtn = div.querySelector('[data-action="edit"]');
+        const deleteBtn = div.querySelector('[data-action="delete"]');
+
+        widthBtn.addEventListener('click', () => {
+            const widths = [3, 4, 6, 8, 12];
+            const currentIdx = widths.indexOf(column.width);
+            const nextIdx = (currentIdx + 1) % widths.length;
+            column.width = widths[nextIdx];
+            this.renderPageColumns();
+        });
+
+        editBtn.addEventListener('click', () => {
+            if (column.type === 'text') {
+                const newText = prompt('Edit text content:', column.data.content || '');
+                if (newText !== null) {
+                    column.data.content = newText;
+                    this.renderPageColumns();
+                }
+            } else {
+                const caption = prompt('Edit caption:', column.data.caption || '');
+                if (caption !== null) {
+                    column.data.caption = caption;
+                    this.renderPageColumns();
+                }
+            }
+        });
+
+        deleteBtn.addEventListener('click', () => {
+            const page = this.currentEditor.page;
+            const colIdx = page.columns.findIndex(c => c.id === column.id);
+            if (colIdx >= 0) {
+                page.columns.splice(colIdx, 1);
+                this.renderPageColumns();
+            }
+        });
+
+        return div;
+    }
+
+    renderEditorMediaLibrary(filterText = '') {
+        const library = document.getElementById('editorMediaLibrary');
+        library.innerHTML = '';
+        library.style.display = 'grid';
+        library.style.gridTemplateColumns = '1fr 1fr';
+        library.style.gap = '8px';
+
+        if (this.media.length === 0) {
+            library.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: #999; font-size: 12px;">No media yet</div>';
+            return;
+        }
+
+        // Filter media by search text
+        const filter = filterText.toLowerCase();
+        const filtered = this.media.filter(media => {
+            if (!filter) return true;
+            const metadata = this.getMediaMetadata(media.id);
+            return media.filename.toLowerCase().includes(filter) ||
+                   (metadata.title && metadata.title.toLowerCase().includes(filter)) ||
+                   metadata.tags.some(tag => tag.toLowerCase().includes(filter));
+        });
+
+        if (filtered.length === 0) {
+            library.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: #999; font-size: 12px;">No matching media</div>';
+            return;
+        }
+
+        filtered.forEach(media => {
+            const item = document.createElement('div');
+            item.className = 'editor-media-item';
+            item.draggable = true;
+            item.dataset.mediaId = media.id;
+            item.dataset.mediaType = media.media_type;
+            
+            const fileUrl = this.getMediaFileUrl(media);
+            const metadata = this.getMediaMetadata(media.id);
+            
+            let thumbnail = '';
+            if (media.media_type === 'image') {
+                thumbnail = `<img src="${fileUrl}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 4px; display: block;">`;
+            } else {
+                thumbnail = `<div style="width: 100%; height: 80px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;">🎬</div>`;
+            }
+            
+            item.innerHTML = `
+                ${thumbnail}
+                <div style="font-size: 10px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${metadata.title || media.filename}">
+                    ${this.truncate(metadata.title || media.filename, 15)}
+                </div>
+            `;
+
+            item.style.cssText = 'cursor: grab; padding: 4px; border: 1px solid #ddd; border-radius: 4px; background: white;';
+            
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('mediaId', media.id);
+                e.dataTransfer.setData('mediaType', media.media_type);
+                e.dataTransfer.effectAllowed = 'copy';
+                item.style.opacity = '0.5';
+            });
+
+            item.addEventListener('dragend', () => {
+                item.style.opacity = '1';
+            });
+
+            library.appendChild(item);
+        });
     }
 
     renderSection(section, idx, canvas) {
@@ -847,8 +1129,49 @@ class MediaWeb {
         `;
 
         const blocksContainer = secDiv.querySelector('.blocks-container');
+        blocksContainer.style.display = 'flex';
+        blocksContainer.style.flexWrap = 'wrap';
+        blocksContainer.style.alignItems = 'flex-start';
+        blocksContainer.style.minHeight = '100px';
+        blocksContainer.style.border = '2px dashed transparent';
+        blocksContainer.style.borderRadius = '4px';
+        blocksContainer.style.transition = 'all 0.2s';
+        
+        // Add drop zone handlers
+        blocksContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            blocksContainer.style.borderColor = '#FF8C42';
+            blocksContainer.style.background = '#fff9f5';
+        });
+
+        blocksContainer.addEventListener('dragleave', () => {
+            blocksContainer.style.borderColor = 'transparent';
+            blocksContainer.style.background = '';
+        });
+
+        blocksContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            blocksContainer.style.borderColor = 'transparent';
+            blocksContainer.style.background = '';
+            
+            const mediaId = e.dataTransfer.getData('mediaId');
+            const mediaType = e.dataTransfer.getData('mediaType');
+            
+            if (mediaId && mediaType) {
+                const block = this.addBlockToSection(section, mediaType, 12);
+                block.data.media_id = mediaId;
+                
+                const media = this.media.find(m => m.id === mediaId);
+                const metadata = this.getMediaMetadata(mediaId);
+                this.log('info', `Added ${mediaType} "${metadata.title || media.filename}" to section`);
+                
+                this.renderSection(section, idx, canvas.parentElement);
+            }
+        });
+        
         if (section.blocks.length === 0) {
-            blocksContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #ccc;">No blocks in this section</div>';
+            blocksContainer.innerHTML = '<div style="padding: 40px; text-align: center; color: #999; width: 100%;">Drag media here or click "+ Add Block"</div>';
         } else {
             section.blocks.forEach((block, bIdx) => {
                 const blockDiv = this.createBlockElement(block, bIdx, section);
@@ -866,13 +1189,10 @@ class MediaWeb {
             }
         });
 
-        secDiv.querySelector('button:last-child').addEventListener('click', () => {
-            const blockType = prompt('Block type (text, image, gallery, video):');
-            if (blockType) {
-                this.addBlockToSection(section, blockType);
-                secDiv.querySelector('button:last-child').remove();
-                this.renderSection(section, idx, canvas.parentElement);
-            }
+        const addBlockBtn = secDiv.querySelector('button:last-child');
+        addBlockBtn.innerHTML = '+ Add Block';
+        addBlockBtn.addEventListener('click', () => {
+            this.showBlockTypeMenu(section, idx, canvas);
         });
 
         canvas.appendChild(secDiv);
@@ -882,30 +1202,79 @@ class MediaWeb {
         const div = document.createElement('div');
         div.className = 'block';
         div.setAttribute('data-block-id', block.id);
+        div.style.width = block.columns ? `${(block.columns / 12) * 100}%` : '100%';
+        div.style.display = 'inline-block';
+        div.style.verticalAlign = 'top';
+        div.style.padding = '5px';
+        div.style.boxSizing = 'border-box';
 
         let content = '';
-        if (block.type === 'Text') {
-            content = `<div class="block-content"><strong>Text:</strong> ${this.truncate(block.data.content, 50)}</div>`;
-        } else if (block.type === 'Image') {
-            const mediaTitle = this.getMediaTitle(block.data.media_id);
-            content = `<div class="block-content"><strong>Image:</strong> ${mediaTitle || block.data.media_id}</div>`;
-        } else if (block.type === 'Gallery') {
-            content = `<div class="block-content"><strong>Gallery:</strong> ${block.data.query_id} (${block.data.layout})</div>`;
-        } else if (block.type === 'Video') {
-            const mediaTitle = this.getMediaTitle(block.data.media_id);
-            content = `<div class="block-content"><strong>Video:</strong> ${mediaTitle || block.data.media_id}</div>`;
+        if (block.type === 'text') {
+            content = `<div class="block-content" style="padding: 10px; background: #f9f9f9; border-radius: 4px;"><strong>Text:</strong> ${this.truncate(block.data.content || 'Empty', 80)}</div>`;
+        } else if (block.type === 'image') {
+            if (block.data.media_id) {
+                const media = this.media.find(m => m.id === block.data.media_id);
+                if (media) {
+                    const fileUrl = this.getMediaFileUrl(media);
+                    const metadata = this.getMediaMetadata(block.data.media_id);
+                    content = `
+                        <div class="block-content" style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                            <img src="${fileUrl}" style="width: 100%; height: auto; display: block;">
+                            ${block.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${block.data.caption}</div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    content = `<div class="block-content" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">Image not found</div>`;
+                }
+            } else {
+                content = `<div class="block-content" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">No image selected</div>`;
+            }
+        } else if (block.type === 'video') {
+            if (block.data.media_id) {
+                const media = this.media.find(m => m.id === block.data.media_id);
+                if (media) {
+                    const fileUrl = this.getMediaFileUrl(media);
+                    const metadata = this.getMediaMetadata(block.data.media_id);
+                    content = `
+                        <div class="block-content" style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                            <video controls style="width: 100%; height: auto; display: block;">
+                                <source src="${fileUrl}">
+                            </video>
+                            ${block.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${block.data.caption}</div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    content = `<div class="block-content" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">Video not found</div>`;
+                }
+            } else {
+                content = `<div class="block-content" style="padding: 20px; text-align: center; background: #f9f9f9; border-radius: 4px;">No video selected</div>`;
+            }
+        } else if (block.type === 'gallery') {
+            content = `<div class="block-content" style="padding: 10px; background: #f9f9f9; border-radius: 4px;"><strong>Gallery:</strong> ${block.data.query_id || 'Not configured'} (${block.data.layout})</div>`;
         }
 
         div.innerHTML = `
             ${content}
             <div class="block-toolbar">
-                <button data-action="edit">Edit</button>
-                <button data-action="delete">Delete</button>
+                <button data-action="width" title="Width: ${block.columns}/12">📏 ${block.columns}/12</button>
+                <button data-action="edit">✏️ Edit</button>
+                <button data-action="delete">🗑️</button>
             </div>
         `;
 
+        const widthBtn = div.querySelector('[data-action="width"]');
         const editBtn = div.querySelector('[data-action="edit"]');
         const deleteBtn = div.querySelector('[data-action="delete"]');
+
+        widthBtn.addEventListener('click', () => {
+            const widths = [3, 4, 6, 8, 12];
+            const currentIdx = widths.indexOf(block.columns || 12);
+            const nextIdx = (currentIdx + 1) % widths.length;
+            block.columns = widths[nextIdx];
+            div.style.width = `${(block.columns / 12) * 100}%`;
+            widthBtn.textContent = `📏 ${block.columns}/12`;
+            widthBtn.title = `Width: ${block.columns}/12`;
+        });
 
         editBtn.addEventListener('click', () => this.editBlock(block, section));
         deleteBtn.addEventListener('click', () => {
@@ -920,14 +1289,28 @@ class MediaWeb {
     }
 
     editBlock(block, section) {
-        const title = block.type === 'Text' ? 'Edit Text Block' : `Edit ${block.type} Block`;
-        let content = prompt(`Edit block content:\n(JSON format)\n\n${JSON.stringify(block.data, null, 2)}`);
-        
-        if (content) {
-            try {
-                block.data = JSON.parse(content);
-            } catch (e) {
-                alert('Invalid JSON format');
+        if (block.type === 'text') {
+            const newText = prompt('Edit text content:', block.data.content || '');
+            if (newText !== null) {
+                block.data.content = newText;
+            }
+        } else if (block.type === 'image' || block.type === 'video') {
+            const caption = prompt('Edit caption (leave empty for none):', block.data.caption || '');
+            if (caption !== null) {
+                block.data.caption = caption;
+            }
+            const changeMedia = confirm('Do you want to change the media file?');
+            if (changeMedia) {
+                this.openMediaPicker(block, section, 0, document.getElementById('pageCanvas'));
+            }
+        } else {
+            let content = prompt(`Edit block content:\n(JSON format)\n\n${JSON.stringify(block.data, null, 2)}`);
+            if (content) {
+                try {
+                    block.data = JSON.parse(content);
+                } catch (e) {
+                    alert('Invalid JSON format');
+                }
             }
         }
     }
@@ -937,6 +1320,101 @@ class MediaWeb {
         if (!media) return null;
         const metadata = this.getMediaMetadata(mediaId);
         return metadata.title || media.filename;
+    }
+
+    showBlockTypeMenu(section, sectionIdx, canvas) {
+        const types = [
+            { type: 'image', label: '🖼️ Image', columns: [6, 12] },
+            { type: 'video', label: '🎬 Video', columns: [6, 12] },
+            { type: 'text', label: '📝 Text', columns: [12] },
+            { type: 'gallery', label: '🎞️ Gallery', columns: [12] }
+        ];
+
+        let menu = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+        types.forEach(t => {
+            menu += `<button type="button" class="btn btn-secondary" data-type="${t.type}">${t.label}</button>`;
+        });
+        menu += '</div>';
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+        overlay.innerHTML = `<div style="background: white; padding: 30px; border-radius: 8px; min-width: 250px;">${menu}</div>`;
+        
+        overlay.addEventListener('click', (e) => {
+            // Find button if clicked on button or its content
+            const button = e.target.closest('[data-type]');
+            if (button) {
+                const blockType = button.dataset.type;
+                const block = this.addBlockToSection(section, blockType);
+                
+                if (blockType === 'image' || blockType === 'video') {
+                    overlay.remove();
+                    this.openMediaPicker(block, section, sectionIdx, canvas);
+                } else if (blockType === 'text') {
+                    const text = prompt('Enter text content:');
+                    if (text) {
+                        block.data.content = text;
+                    }
+                    this.renderSection(section, sectionIdx, canvas);
+                    overlay.remove();
+                } else {
+                    this.renderSection(section, sectionIdx, canvas);
+                    overlay.remove();
+                }
+            } else if (e.target === overlay) {
+                overlay.remove();
+            }
+        });
+        
+        document.body.appendChild(overlay);
+    }
+
+    openMediaPicker(block, section, sectionIdx, canvas) {
+        this.currentMediaPickerTarget = { block, section, sectionIdx, canvas };
+        
+        const grid = document.getElementById('mediaPickerGrid');
+        grid.innerHTML = '';
+
+        const mediaType = block.type === 'image' ? 'image' : 'video';
+        const filtered = this.media.filter(m => m.media_type === mediaType);
+
+        filtered.forEach(media => {
+            const item = document.createElement('div');
+            item.className = 'media-item';
+            item.style.cursor = 'pointer';
+            
+            const fileUrl = this.getMediaFileUrl(media);
+            let thumbnail = '';
+            
+            if (media.media_type === 'image') {
+                thumbnail = `<img loading="lazy" src="${fileUrl}" alt="${media.filename}">`;
+            } else if (media.media_type === 'video') {
+                thumbnail = `<video muted preload="none"><source src="${fileUrl}"></video>`;
+            }
+
+            const metadata = this.getMediaMetadata(media.id);
+            
+            item.innerHTML = `
+                <div class="media-thumbnail">
+                    ${thumbnail}
+                    <span class="media-type-badge">${media.media_type.toUpperCase()}</span>
+                </div>
+                <div class="media-info">
+                    <div class="media-title">${metadata.title || this.truncate(media.filename, 20)}</div>
+                </div>
+            `;
+
+            item.addEventListener('click', () => {
+                block.data.media_id = media.id;
+                document.getElementById('mediaPickerModal').classList.remove('active');
+                this.renderSection(section, sectionIdx, canvas);
+                this.log('info', `Added ${mediaType} "${metadata.title || media.filename}" to block`);
+            });
+
+            grid.appendChild(item);
+        });
+
+        document.getElementById('mediaPickerModal').classList.add('active');
     }
 
     addSection() {
@@ -955,11 +1433,12 @@ class MediaWeb {
         this.renderSection(section, page.sections.length - 1, canvas);
     }
 
-    addBlockToSection(section, blockType) {
+    addBlockToSection(section, blockType, columns = 12) {
         const block = {
             id: this.generateId(),
             order: section.blocks.length,
             type: blockType,
+            columns: columns,
             data: {}
         };
 
@@ -972,6 +1451,7 @@ class MediaWeb {
         }
 
         section.blocks.push(block);
+        return block;
     }
 
     async savePage() {

@@ -161,9 +161,10 @@
                 <h2>Page Editor</h2>
                 <button class="btn-close">&times;</button>
             </div>
-            <div class="modal-body">
-                <div class="page-editor">
-                    <div class="editor-sidebar">
+            <div class="modal-body" style="padding: 0; height: 70vh;">
+                <div class="page-editor" style="display: flex; height: 100%;">
+                    <!-- Left: Page Settings & Media Library -->
+                    <div class="editor-sidebar" style="width: 280px; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto;">
                         <div class="form-group">
                             <label>Page Title</label>
                             <input type="text" id="pageTitle" class="form-input">
@@ -172,9 +173,17 @@
                             <label>URL Slug</label>
                             <input type="text" id="pageSlug" class="form-input">
                         </div>
-                        <button class="btn btn-secondary" id="btnAddSection">+ Add Section</button>
+                        <button type="button" class="btn btn-secondary" id="btnAddSection" style="width: 100%; margin-bottom: 20px;">+ Add Section</button>
+                        
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
+                        
+                        <h4 style="margin-bottom: 10px; font-size: 14px; color: #666;">Media Library</h4>
+                        <input type="search" id="editorMediaFilter" class="form-input" placeholder="Filter media..." style="margin-bottom: 15px; font-size: 13px;">
+                        <div id="editorMediaLibrary" class="editor-media-library"></div>
                     </div>
-                    <div class="editor-canvas">
+                    
+                    <!-- Right: Canvas -->
+                    <div class="editor-canvas" style="flex: 1; padding: 20px; overflow-y: auto; background: #f9f9f9;">
                         <div id="pageCanvas" class="page-canvas">
                             <!-- Sections added here -->
                         </div>
@@ -184,6 +193,22 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="btnClosePageEditor">Cancel</button>
                 <button class="btn btn-primary" id="btnSavePage">Save Page</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Media Picker -->
+    <div id="mediaPickerModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Select Media</h2>
+                <button class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="mediaPickerGrid" class="media-grid"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnCancelPicker">Cancel</button>
             </div>
         </div>
     </div>

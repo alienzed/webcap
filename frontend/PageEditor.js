@@ -23,6 +23,10 @@ class PageEditor {
         document.getElementById('btnExportHTML').addEventListener('click', () => {
             this.exportHTML();
         });
+
+        document.getElementById('btnClosePageEditor').addEventListener('click', () => {
+            this.closeEditor();
+        });
     }
 
     renderPagesList() {
@@ -161,8 +165,8 @@ class PageEditor {
     }
 
     setupCanvasDropZone(canvas) {
-        canvas.style.display = 'grid';
-        canvas.style.gridTemplateColumns = 'repeat(12, 1fr)';
+        canvas.style.display = 'flex';
+        canvas.style.flexWrap = 'wrap';
         canvas.style.gap = '0px';
         canvas.style.minHeight = '400px';
         canvas.style.padding = '20px';
@@ -229,79 +233,105 @@ class PageEditor {
     addPlaceholder(canvas) {
         const placeholder = document.createElement('div');
         placeholder.className = 'column-placeholder';
-        placeholder.style.cssText = 'width: 100%; padding: 10px; box-sizing: border-box;';
+        placeholder.style.cssText = 'flex: 0 0 100%; padding: 15px 10px; box-sizing: border-box; background: #fafafa; border-radius: 8px; margin: 0 10px;';
+        
+        // Create type selector first (always visible)
+        const typeSelector = document.createElement('div');
+        typeSelector.className = 'text-type-selector';
+        typeSelector.style.cssText = 'margin-bottom: 10px; display: flex; gap: 6px; justify-content: flex-start; flex-wrap: wrap;';
+        
+        const types = [
+            { tag: 'h1', label: 'H1', desc: 'Heading 1' },
+            { tag: 'h2', label: 'H2', desc: 'Heading 2' },
+            { tag: 'h3', label: 'H3', desc: 'Heading 3' },
+            { tag: 'p', label: 'P', desc: 'Paragraph' },
+            { tag: 'blockquote', label: '❝', desc: 'Quote' }
+        ];
+        
+        let selectedType = 'p';
+        
+        types.forEach(t => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = t.label;
+            btn.title = t.desc;
+            btn.style.cssText = `
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: 500;
+                border: 2px solid #ddd;
+                background: white;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: all 0.2s;
+            `;
+            btn.dataset.textType = t.tag;
+            
+            if (t.tag === 'p') {
+                btn.style.background = '#FF8C42';
+                btn.style.color = 'white';
+                btn.style.borderColor = '#FF8C42';
+            }
+            
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Update all buttons
+                typeSelector.querySelectorAll('button').forEach(b => {
+                    b.style.background = 'white';
+                    b.style.color = 'inherit';
+                    b.style.borderColor = '#ddd';
+                });
+                // Highlight selected
+                btn.style.background = '#FF8C42';
+                btn.style.color = 'white';
+                btn.style.borderColor = '#FF8C42';
+                selectedType = t.tag;
+                input.focus();
+            });
+            
+            btn.addEventListener('mouseover', () => {
+                if (btn.style.background !== '#FF8C42') {
+                    btn.style.borderColor = '#FF8C42';
+                    btn.style.color = '#FF8C42';
+                }
+            });
+            
+            btn.addEventListener('mouseout', () => {
+                if (btn.style.background !== '#FF8C42') {
+                    btn.style.borderColor = '#ddd';
+                    btn.style.color = 'inherit';
+                }
+            });
+            
+            typeSelector.appendChild(btn);
+        });
+        
+        placeholder.appendChild(typeSelector);
         
         const input = document.createElement('input');
         input.type = 'text';
-        input.placeholder = 'Add text or drag media here...';
+        input.placeholder = 'Add text...';
         input.className = 'placeholder-input';
         input.style.cssText = `
             width: 100%;
             padding: 20px;
-            border: 1px solid transparent;
+            border: 1px solid #ddd;
             border-radius: 8px;
-            background: transparent;
+            background: white;
             font-size: 14px;
-            color: #999;
+            color: #333;
             outline: none;
             transition: all 0.2s;
         `;
         
         input.addEventListener('focus', () => {
             input.style.borderColor = '#FF8C42';
-            input.style.background = 'white';
-            input.style.color = '#333';
             input.style.boxShadow = '0 2px 8px rgba(255,140,66,0.15)';
-            
-            // Show text type selector on focus
-            if (!placeholder.querySelector('.text-type-selector')) {
-                const typeSelector = document.createElement('div');
-                typeSelector.className = 'text-type-selector';
-                typeSelector.style.cssText = 'margin-top: 8px; display: flex; gap: 4px; justify-content: flex-start;';
-                
-                const types = [
-                    { tag: 'h1', label: 'H1', desc: 'Heading 1' },
-                    { tag: 'h2', label: 'H2', desc: 'Heading 2' },
-                    { tag: 'h3', label: 'H3', desc: 'Heading 3' },
-                    { tag: 'p', label: 'P', desc: 'Paragraph' },
-                    { tag: 'blockquote', label: '❝', desc: 'Quote' }
-                ];
-                
-                types.forEach(t => {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.textContent = t.label;
-                    btn.title = t.desc;
-                    btn.style.cssText = 'padding: 4px 10px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; transition: all 0.2s;';
-                    btn.dataset.textType = t.tag;
-                    if (t.tag === 'p') {
-                        btn.style.background = '#FF8C42';
-                        btn.style.color = 'white';
-                        btn.style.borderColor = '#FF8C42';
-                    }
-                    btn.addEventListener('click', () => {
-                        // Update all buttons
-                        placeholder.querySelectorAll('.text-type-selector button').forEach(b => {
-                            b.style.background = 'white';
-                            b.style.color = 'inherit';
-                            b.style.borderColor = '#ddd';
-                        });
-                        // Highlight selected
-                        btn.style.background = '#FF8C42';
-                        btn.style.color = 'white';
-                        btn.style.borderColor = '#FF8C42';
-                        // Store in input
-                        input.dataset.textType = t.tag;
-                    });
-                    typeSelector.appendChild(btn);
-                });
-                
-                placeholder.appendChild(typeSelector);
-                input.dataset.textType = 'p'; // Default to paragraph
-            }
         });
         
         input.addEventListener('blur', () => {
+            input.style.borderColor = '#ddd';
+            input.style.boxShadow = 'none';
             if (input.value.trim()) {
                 const page = this.app.currentEditor.page;
                 const column = {
@@ -310,17 +340,12 @@ class PageEditor {
                     type: 'text',
                     data: { 
                         content: input.value.trim(),
-                        textType: input.dataset.textType || 'p'
+                        textType: selectedType
                     }
                 };
                 page.columns.push(column);
-                this.app.console.log('info', `Added ${input.dataset.textType || 'p'} text column`);
+                this.app.console.log('info', `Added ${selectedType} text column`);
                 this.renderColumns();
-            } else {
-                input.style.borderColor = 'transparent';
-                input.style.background = 'transparent';
-                input.style.color = '#999';
-                input.style.boxShadow = 'none';
             }
         });
         
@@ -352,7 +377,9 @@ class PageEditor {
     createColumnElement(column, idx) {
         const div = document.createElement('div');
         div.className = 'page-column';
-        div.style.width = `${(column.width / 12) * 100}%`;
+        const widthPercent = (column.width / 12) * 100;
+        div.style.flex = `0 0 ${widthPercent}%`;
+        div.style.minWidth = '0';
         div.style.padding = '10px';
         div.style.boxSizing = 'border-box';
         
@@ -815,24 +842,45 @@ class PageEditor {
     }
     
     exportHTML() {
-        if (!this.app.currentEditor || this.app.currentEditor.type !== 'page') return;
-        
-        const page = this.app.currentEditor.page;
-        const title = document.getElementById('pageTitle').value || 'Untitled Page';
-        page.title = title;
-        
-        const html = this.generatePageHTML(page);
-        
-        // Create download link
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${page.slug || 'page'}.html`;
-        a.click();
-        URL.revokeObjectURL(url);
-        
-        this.app.console.log('info', `Exported "${page.title}" as HTML`);
+        try {
+            if (!this.app.currentEditor || this.app.currentEditor.type !== 'page') {
+                this.app.console.log('error', 'No page selected for export');
+                return;
+            }
+            
+            const page = this.app.currentEditor.page;
+            const title = document.getElementById('pageTitle').value || 'Untitled Page';
+            page.title = title;
+            
+            const html = this.generatePageHTML(page);
+            const filename = `${page.slug || 'page'}.html`;
+            
+            // Convert HTML to base64 for binary write
+            const base64Html = btoa(unescape(encodeURIComponent(html)));
+            
+            window.__TAURI__.invoke('file_io', {
+                op: 'write_binary',
+                data_path: this.app.dataPath,
+                rel_path: filename,
+                payload: base64Html
+            }).then(() => {
+                this.app.console.log('info', `Exported "${page.title}" as HTML`);
+            }).catch((err) => {
+                console.error('Export error:', err);
+                this.app.console.log('error', `Export failed: ${err}`);
+            });
+        } catch (e) {
+            console.error('Export error:', e);
+            this.app.console.log('error', `Export failed: ${e.message}`);
+        }
+    }
+
+    closeEditor() {
+        const modal = document.getElementById('pageEditorModal');
+        if (modal) {
+            modal.classList.remove('active');
+        }
+        this.app.currentEditor = null;
     }
     
     generatePageHTML(page) {

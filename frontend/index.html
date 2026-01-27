@@ -43,8 +43,8 @@
             </nav>
 
             <div class="sidebar-footer">
-                <button class="btn-icon" id="btnAbout" title="About">
-                    ℹ️
+                <button class="btn-icon" id="btnToggleConsole" title="Toggle Console (Ctrl+`)">
+                    >\
                 </button>
             </div>
         </aside>
@@ -62,15 +62,16 @@
                 </div>
 
                 <div class="filters">
-                    <input type="search" id="searchMedia" class="search-input" placeholder="Search by title or caption...">
+                    <input type="search" id="searchMedia" class="search-input" placeholder="Search by title or caption..." title="Type to search, click × to clear">
                     <div class="tag-filter">
                         <label>Filter by tags:</label>
                         <div id="tagList" class="tag-list"></div>
                     </div>
                 </div>
 
-                <div id="mediaGrid" class="media-grid">
+                <div id="mediaGrid" class="media-grid" data-drop-zone="true">
                     <!-- Media items loaded here -->
+                    <!-- Drag & drop files here to upload -->
                 </div>
             </section>
 
@@ -83,6 +84,50 @@
 
                 <div id="pagesList" class="pages-list">
                     <!-- Pages loaded here -->
+                </div>
+            </section>
+
+            <!-- Page Editor Section -->
+            <section id="pageEditor" class="section" style="display: none;">
+                <div class="section-header">
+                    <h1>Page Editor</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" id="btnBackToPages">← Back to Pages</button>
+                    </div>
+                </div>
+                
+                <div class="page-editor-container" style="display: flex; gap: 20px; height: calc(100vh - 200px);">
+                    <!-- Left: Page Settings & Media Library -->
+                    <div class="editor-sidebar" style="width: 300px; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; flex-shrink: 0; background: #f9f9f9; border-radius: 8px;">
+                        <div class="form-group">
+                            <label>Page Title</label>
+                            <input type="text" id="pageTitle" class="form-input" placeholder="Untitled Page" required>
+                        </div>
+                        <div class="form-group">
+                            <label>URL Slug</label>
+                            <input type="text" id="pageSlug" class="form-input" placeholder="auto-generated">
+                        </div>
+                        
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
+                        
+                        <h4 style="margin-bottom: 10px; font-size: 14px; color: #666;">Media Library</h4>
+                        <input type="search" id="editorMediaFilter" class="form-input" placeholder="Filter media..." style="margin-bottom: 15px; font-size: 13px;">
+                        <div id="editorMediaLibrary" class="editor-media-library"></div>
+                    </div>
+                    
+                    <!-- Right: Canvas -->
+                    <div class="editor-canvas" style="flex: 1; padding: 20px; overflow-y: auto; background: white; border-radius: 8px; border: 2px dashed #ddd;">
+                        <div id="pageCanvas" class="page-canvas">
+                            <!-- Sections added here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-editor-footer" style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" id="btnPreviewPage">Preview</button>
+                    <button class="btn btn-secondary" id="btnExportHTML">Export HTML</button>
+                    <button class="btn btn-secondary" id="btnClosePageEditor">Cancel</button>
+                    <button class="btn btn-primary" id="btnSavePage">Save Page</button>
                 </div>
             </section>
 
@@ -155,20 +200,28 @@
                 <h2>Page Editor</h2>
                 <button class="btn-close">&times;</button>
             </div>
-            <div class="modal-body">
-                <div class="page-editor">
-                    <div class="editor-sidebar">
+            <div class="modal-body" style="padding: 0; height: 70vh;">
+                <div class="page-editor" style="display: flex; height: 100%;">
+                    <!-- Left: Page Settings & Media Library -->
+                    <div class="editor-sidebar" style="width: 280px; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; flex-shrink: 0;">
                         <div class="form-group">
                             <label>Page Title</label>
-                            <input type="text" id="pageTitle" class="form-input">
+                            <input type="text" id="pageTitle" class="form-input" placeholder="Untitled Page" required>
                         </div>
                         <div class="form-group">
                             <label>URL Slug</label>
-                            <input type="text" id="pageSlug" class="form-input">
+                            <input type="text" id="pageSlug" class="form-input" placeholder="auto-generated">
                         </div>
-                        <button class="btn btn-secondary" id="btnAddSection">+ Add Section</button>
+                        
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
+                        
+                        <h4 style="margin-bottom: 10px; font-size: 14px; color: #666;">Media Library</h4>
+                        <input type="search" id="editorMediaFilter" class="form-input" placeholder="Filter media..." style="margin-bottom: 15px; font-size: 13px;">
+                        <div id="editorMediaLibrary" class="editor-media-library"></div>
                     </div>
-                    <div class="editor-canvas">
+                    
+                    <!-- Right: Canvas -->
+                    <div class="editor-canvas" style="flex: 1; padding: 20px; overflow-y: auto; background: #f9f9f9;">
                         <div id="pageCanvas" class="page-canvas">
                             <!-- Sections added here -->
                         </div>
@@ -176,12 +229,48 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnPreviewPage">Preview</button>
+                <button class="btn btn-secondary" id="btnExportHTML">Export HTML</button>
                 <button class="btn btn-secondary" id="btnClosePageEditor">Cancel</button>
                 <button class="btn btn-primary" id="btnSavePage">Save Page</button>
             </div>
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Modal: Media Picker -->
+    <div id="mediaPickerModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Select Media</h2>
+                <button class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="mediaPickerGrid" class="media-grid"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnCancelPicker">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Console Panel -->
+    <div id="consolePanel" class="console-panel">
+        <div class="console-header">
+            <div class="console-title">Console</div>
+            <button class="btn-console-action" id="btnClearConsole" title="Clear Console (Ctrl+Shift+K)">🗑️</button>
+        </div>
+        <div id="consoleBody" class="console-body"></div>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="statusBar" class="status-bar">
+        <span id="statusText">Ready</span>
+    </div>
+
+    <script src="api.js" defer></script>
+    <script src="Console.js" defer></script>
+    <script src="MediaManager.js" defer></script>
+    <script src="PageEditor.js" defer></script>
+    <script src="app.js" defer></script>
 </body>
 </html>

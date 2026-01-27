@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use serde_json::Value;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 
 /// Validates a relative path to prevent directory traversal attacks.
 /// Only allows alphanumeric, dash, underscore, dot, and forward slash.
@@ -24,35 +26,45 @@ fn sanitize_rel_path(rel_path: &str) -> Result<&str, String> {
     Ok(rel_path)
 }
 
-/// Ensures the base path exists and returns its canonical form.
-async fn canonical_base(base_path: &Path) -> Result<PathBuf, String> {
+/// Resolves a relative path against a base path safely.
+async fn resolve_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String> {
+    eprintln!("🔍 [resolve_path] base={:?}, rel={:?}", base_path, rel_path);
+    let _ = sanitize_rel_path(rel_path)?;
+
+    // Ensure base exists and get absolute form
     if !base_path.exists() {
         fs::create_dir_all(base_path)
             .await
             .map_err(|e| format!("Cannot create base path: {}", e))?;
     }
 
-    base_path
-        .canonicalize()
-        .map_err(|e| format!("Cannot canonicalize base path: {}", e))
-}
-
-/// Resolves a relative path against a base path safely.
-async fn resolve_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String> {
-    let _ = sanitize_rel_path(rel_path)?;
-    let canonical_base = canonical_base(base_path).await?;
-    let joined = base_path.join(rel_path);
-
-    let canonical_joined = if joined.exists() {
-        joined.canonicalize().map_err(|e| format!("Cannot canonicalize path: {}", e))?
+    let base_abs = if base_path.is_absolute() {
+        base_path.to_path_buf()
     } else {
-        joined.clone()
+        std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?
+            .join(base_path)
     };
 
-    if !canonical_joined.starts_with(&canonical_base) {
-        return Err("Path escape detected".into());
+    // Depth-based escape check (no need for canonicalize on non-existent paths)
+    let mut depth: i32 = 0;
+    for component in Path::new(rel_path).components() {
+        match component {
+            std::path::Component::Normal(_) => depth += 1,
+            std::path::Component::ParentDir => {
+                depth -= 1;
+                if depth < 0 {
+                    eprintln!("❌ [resolve_path] Too many .. -> escape");
+                    return Err("Path escape detected".into());
+                }
+            }
+            std::path::Component::CurDir => {}
+            _ => {}
+        }
     }
 
+    let joined = base_abs.join(rel_path);
+    eprintln!("✅ [resolve_path] depth={}, joined={:?}", depth, joined);
     Ok(joined)
 }
 
@@ -87,6 +99,37 @@ pub async fn handle_file_io(op: &str, base_path: &Path, rel_path: &str, payload:
                 Ok(data)
             } else {
                 Err("No payload provided for write".to_string())
+            }
+        }
+        "write_binary" => {
+            eprintln!("💾 [file_io] Writing binary file: {:?}", path);
+            if let Some(Value::String(base64_data)) = payload {
+                // Remove data URL prefix if present
+                let base64_str = if let Some(idx) = base64_data.find("base64,") {
+                    &base64_data[idx + 7..]
+                } else {
+                    &base64_data
+                };
+
+                let bytes = STANDARD
+                    .decode(base64_str)
+                    .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+                if let Some(parent) = path.parent() {
+                    if !parent.exists() {
+                        fs::create_dir_all(parent)
+                            .await
+                            .map_err(|e| format!("Failed to create directory: {}", e))?;
+                    }
+                }
+
+                fs::write(&path, bytes)
+                    .await
+                    .map_err(|e| format!("Failed to write binary file: {}", e))?;
+                eprintln!("✅ [file_io] Binary write successful");
+                Ok(serde_json::json!({ "ok": true }))
+            } else {
+                Err("No base64 payload provided for write_binary".to_string())
             }
         }
         "list" => {

@@ -27,32 +27,35 @@ fn sanitize_rel_path(rel_path: &str) -> Result<&str, String> {
 
 /// Resolves a relative path against a base path safely.
 async fn resolve_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String> {
+    eprintln!("🔍 [resolve_path] Input: base={:?}, rel={:?}", base_path, rel_path);
+    
     let _ = sanitize_rel_path(rel_path)?;
     let joined = base_path.join(rel_path);
     
     // Get base path in absolute form
     let base_abs = if base_path.is_absolute() {
+        eprintln!("🔍 [resolve_path] Base is absolute");
         base_path.to_path_buf()
     } else {
-        std::env::current_dir()
-            .map_err(|e| format!("Failed to get current directory: {}", e))?
-            .join(base_path)
+        let cwd = std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?;
+        let abs = cwd.join(base_path);
+        eprintln!("🔍 [resolve_path] Base is relative, resolved to: {:?}", abs);
+        abs
     };
     
-    // Manually normalize the joined path by resolving components
-    let mut normalized = PathBuf::new();
+    // Count parent directory traversals to detect escapes
+    let mut depth = 0i32;
     
-    // Start with the base absolute path
-    for component in base_abs.components() {
-        normalized.push(component);
-    }
-    
-    // Add the relative path components
     for component in Path::new(rel_path).components() {
         match component {
-            std::path::Component::Normal(name) => normalized.push(name),
+            std::path::Component::Normal(_) => {
+                depth += 1;
+            },
             std::path::Component::ParentDir => {
-                if !normalized.pop() {
+                depth -= 1;
+                if depth < 0 {
+                    eprintln!("❌ [resolve_path] ERROR: Too many .. - would escape base directory");
                     return Err("Path escape detected (too many ..)".into());
                 }
             },
@@ -61,36 +64,39 @@ async fn resolve_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, Strin
         }
     }
     
-    // Verify the normalized path still starts with base
-    if !normalized.starts_with(&base_abs) {
-        return Err("Path escape detected".into());
-    }
-    
+    eprintln!("✅ [resolve_path] Path OK (depth={}), returning: {:?}", depth, joined);
     Ok(joined)
 }
 
 /// Handles generic file I/O operations: read, write, list, mkdir, remove.
 /// All operations are relative to base_path with security validation.
 pub async fn handle_file_io(op: &str, base_path: &Path, rel_path: &str, payload: Option<Value>) -> Result<Value, String> {
+    eprintln!("📁 [file_io] Operation: {}, base: {:?}, rel: {:?}", op, base_path, rel_path);
+    
     // Ensure base path exists to allow canonicalization
     if !base_path.exists() {
+        eprintln!("📁 [file_io] Base path doesn't exist, creating: {:?}", base_path);
         fs::create_dir_all(base_path)
             .await
             .map_err(|e| format!("Cannot create base path: {}", e))?;
     }
 
     let path = resolve_path(base_path, rel_path).await?;
+    eprintln!("📁 [file_io] Resolved path: {:?}", path);
     
     match op {
         "read" => {
+            eprintln!("📖 [file_io] Reading file: {:?}", path);
             let content = fs::read_to_string(&path)
                 .await
                 .map_err(|e| format!("Failed to read file: {}", e))?;
             let json: Value = serde_json::from_str(&content)
                 .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+            eprintln!("✅ [file_io] Read successful");
             Ok(json)
         }
         "write" => {
+            eprintln!("✍️ [file_io] Writing file: {:?}", path);
             if let Some(data) = payload {
                 let json_string = serde_json::to_string_pretty(&data)
                     .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
@@ -110,30 +116,41 @@ pub async fn handle_file_io(op: &str, base_path: &Path, rel_path: &str, payload:
             }
         }
         "write_binary" => {
+            eprintln!("💾 [file_io] Writing binary file: {:?}", path);
             // Write binary data (base64 encoded string)
             if let Some(Value::String(base64_data)) = payload {
+                eprintln!("💾 [file_io] Base64 data length: {}", base64_data.len());
+                
                 // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
                 let base64_str = if let Some(idx) = base64_data.find("base64,") {
+                    eprintln!("💾 [file_io] Stripping data URL prefix");
                     &base64_data[idx + 7..]
                 } else {
                     &base64_data
                 };
                 
+                eprintln!("💾 [file_io] Decoding base64...");
                 let bytes = base64::decode(base64_str)
                     .map_err(|e| format!("Failed to decode base64: {}", e))?;
+                eprintln!("💾 [file_io] Decoded {} bytes", bytes.len());
                 
                 if let Some(parent) = path.parent() {
                     if !parent.exists() {
+                        eprintln!("💾 [file_io] Creating parent directory: {:?}", parent);
                         fs::create_dir_all(parent)
                             .await
                             .map_err(|e| format!("Failed to create directory: {}", e))?;
                     }
                 }
+                
+                eprintln!("💾 [file_io] Writing {} bytes to disk...", bytes.len());
                 fs::write(&path, bytes)
                     .await
                     .map_err(|e| format!("Failed to write binary file: {}", e))?;
+                eprintln!("✅ [file_io] Binary write successful");
                 Ok(serde_json::json!({ "ok": true }))
             } else {
+                eprintln!("❌ [file_io] ERROR: No base64 payload provided");
                 Err("No base64 payload provided for write_binary".to_string())
             }
         }

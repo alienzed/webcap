@@ -84,9 +84,10 @@ class MediaWeb {
             // Try to read config file
             this.log('info', `Reading config from: ${configDir}/.. → mediaweb-config.json`);
             const configContent = await tauriInvoke('file_io', {
-                operation: 'read',
+                op: 'read',
                 dataPath: configDir + '/..',
-                relPath: 'mediaweb-config.json'
+                relPath: 'mediaweb-config.json',
+                payload: null
             });
             
             const config = JSON.parse(configContent);
@@ -123,14 +124,15 @@ class MediaWeb {
             this.log('info', `Saving config to: ${this.configPath}`);
             this.log('info', `Config content: ${JSON.stringify(config)}`);
             
-            const configDir = this.configPath.substring(0, this.configPath.lastIndexOf('/'));
+            const lastSlash = Math.max(this.configPath.lastIndexOf('/'), this.configPath.lastIndexOf('\\'));
+            const configDir = lastSlash >= 0 ? this.configPath.substring(0, lastSlash) : this.configPath;
             this.log('info', `Config dir: ${configDir}, relPath: mediaweb-config.json`);
             
             await tauriInvoke('file_io', {
-                operation: 'write',
+                op: 'write',
                 dataPath: configDir,
                 relPath: 'mediaweb-config.json',
-                data: JSON.stringify(config, null, 2)
+                payload: JSON.stringify(config, null, 2)
             });
             
             this.log('info', '✓ Configuration saved successfully');
@@ -249,6 +251,10 @@ class MediaWeb {
 
         document.getElementById('btnSaveMedia').addEventListener('click', () => {
             this.saveMediaMetadata();
+        });
+
+        document.getElementById('btnClearConsole').addEventListener('click', () => {
+            this.clearConsole();
         });
 
         document.getElementById('btnToggleConsole').addEventListener('click', () => {

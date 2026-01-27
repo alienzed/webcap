@@ -187,6 +187,16 @@ textarea.form-input {
     display: flex;
 }
 
+/* Media editor should appear above page editor when opened from within it */
+#mediaEditorModal {
+    z-index: 1100;
+}
+
+#mediaEditorModal .modal-content {
+    max-width: 85vw;
+    width: 85vw;
+}
+
 .modal-content {
     background-color: var(--color-white);
     border-radius: var(--radius-lg);

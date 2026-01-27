@@ -27,6 +27,10 @@ class PageEditor {
         document.getElementById('btnClosePageEditor').addEventListener('click', () => {
             this.closeEditor();
         });
+
+        document.getElementById('btnBackToPages').addEventListener('click', () => {
+            this.closeEditor();
+        });
     }
 
     renderPagesList() {
@@ -152,8 +156,14 @@ class PageEditor {
 
         const canvas = document.getElementById('pageCanvas');
         canvas.innerHTML = '';
+        canvas.style.display = 'flex';
+        canvas.style.flexWrap = 'wrap';
+        canvas.style.gap = '10px';
+        canvas.style.minHeight = '400px';
+        canvas.style.padding = '20px';
+        canvas.style.background = 'white';
+        canvas.style.boxSizing = 'border-box';
         
-        this.setupCanvasDropZone(canvas);
         this.renderColumns();
         this.renderMediaLibrary();
 
@@ -163,59 +173,10 @@ class PageEditor {
             this.renderMediaLibrary(filterInput.value);
         });
 
-        document.getElementById('pageEditorModal').classList.add('active');
-    }
-
-    setupCanvasDropZone(canvas) {
-        canvas.style.display = 'flex';
-        canvas.style.flexWrap = 'wrap';
-        canvas.style.gap = '0px';
-        canvas.style.minHeight = '400px';
-        canvas.style.padding = '20px';
-        canvas.style.background = 'white';
-        canvas.style.boxSizing = 'border-box';
-        
-        canvas.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.dataTransfer.dropEffect = 'copy';
-            canvas.style.background = '#fafafa';
-        });
-
-        canvas.addEventListener('dragleave', (e) => {
-            if (e.target === canvas) {
-                canvas.style.background = 'white';
-            }
-        });
-
-        canvas.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            canvas.style.background = 'white';
-            
-            const mediaId = e.dataTransfer.getData('mediaId');
-            const mediaType = e.dataTransfer.getData('mediaType');
-            
-            this.app.console.log('info', `Drop event: mediaId=${mediaId}, mediaType=${mediaType}`);
-            
-            if (mediaId && mediaType) {
-                const page = this.app.currentEditor.page;
-                const column = {
-                    id: this.app.generateId(),
-                    width: 12,
-                    type: mediaType,
-                    data: { media_id: mediaId, caption: '' }
-                };
-                
-                page.columns.push(column);
-                
-                const media = this.app.media.find(m => m.id === mediaId);
-                const metadata = this.app.getMediaMetadata(mediaId);
-                this.app.console.log('info', `Added ${mediaType} "${metadata.title || media.filename}" to page`);
-                
-                this.renderColumns();
-            }
-        });
+        // Show the page editor section instead of modal
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.getElementById('pageEditor').classList.add('active');
+        document.getElementById('pageEditor').style.display = 'block';
     }
 
     renderColumns() {
@@ -231,159 +192,105 @@ class PageEditor {
         
         this.addPlaceholder(canvas);
     }
-    
+
     addPlaceholder(canvas) {
         const placeholder = document.createElement('div');
         placeholder.className = 'column-placeholder';
         placeholder.style.cssText = 'flex: 0 0 100%; padding: 15px 10px; box-sizing: border-box; background: #fafafa; border-radius: 8px; margin: 0 10px;';
         
-        // Create type selector first (always visible)
-        const typeSelector = document.createElement('div');
-        typeSelector.className = 'text-type-selector';
-        typeSelector.style.cssText = 'margin-bottom: 10px; display: flex; gap: 6px; justify-content: flex-start; flex-wrap: wrap;';
-        
-        const types = [
-            { tag: 'h1', label: 'H1', desc: 'Heading 1' },
-            { tag: 'h2', label: 'H2', desc: 'Heading 2' },
-            { tag: 'h3', label: 'H3', desc: 'Heading 3' },
-            { tag: 'p', label: 'P', desc: 'Paragraph' },
-            { tag: 'blockquote', label: '❝', desc: 'Quote' }
-        ];
-        
-        let selectedType = 'p';
-        
-        types.forEach(t => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.textContent = t.label;
-            btn.title = t.desc;
-            btn.style.cssText = `
-                padding: 6px 12px;
-                font-size: 12px;
-                font-weight: 500;
-                border: 2px solid #ddd;
-                background: white;
-                border-radius: 4px;
-                cursor: pointer;
-                transition: all 0.2s;
-            `;
-            btn.dataset.textType = t.tag;
-            
-            if (t.tag === 'p') {
-                btn.style.background = '#FF8C42';
-                btn.style.color = 'white';
-                btn.style.borderColor = '#FF8C42';
-            }
-            
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                // Update all buttons
-                typeSelector.querySelectorAll('button').forEach(b => {
-                    b.style.background = 'white';
-                    b.style.color = 'inherit';
-                    b.style.borderColor = '#ddd';
-                });
-                // Highlight selected
-                btn.style.background = '#FF8C42';
-                btn.style.color = 'white';
-                btn.style.borderColor = '#FF8C42';
-                selectedType = t.tag;
-                input.focus();
-            });
-            
-            btn.addEventListener('mouseover', () => {
-                if (btn.style.background !== '#FF8C42') {
-                    btn.style.borderColor = '#FF8C42';
-                    btn.style.color = '#FF8C42';
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.textContent = 'Add text block';
+        addBtn.className = 'btn btn-primary';
+        addBtn.style.width = '100%';
+        addBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = this.app.currentEditor.page;
+            const columnId = this.app.generateId();
+            const column = {
+                id: columnId,
+                width: 12,
+                type: 'text',
+                data: { 
+                    content: '',
+                    textType: 'p',
+                    textAlign: 'left'
                 }
-            });
-            
-            btn.addEventListener('mouseout', () => {
-                if (btn.style.background !== '#FF8C42') {
-                    btn.style.borderColor = '#ddd';
-                    btn.style.color = 'inherit';
+            };
+            page.columns.push(column);
+            this.app.console.log('info', 'Added text column');
+            this.renderColumns();
+            setTimeout(() => {
+                const newColEl = document.querySelector(`.page-column[data-column-id="${columnId}"]`);
+                if (newColEl) {
+                    this.editTextInline(newColEl, column);
                 }
-            });
-            
-            typeSelector.appendChild(btn);
+            }, 0);
         });
         
-        placeholder.appendChild(typeSelector);
-        
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = 'Add text...';
-        input.className = 'placeholder-input';
-        input.style.cssText = `
-            width: 100%;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background: white;
-            font-size: 14px;
-            color: #333;
-            outline: none;
-            transition: all 0.2s;
-        `;
-        
-        input.addEventListener('focus', () => {
-            input.style.borderColor = '#FF8C42';
-            input.style.boxShadow = '0 2px 8px rgba(255,140,66,0.15)';
-        });
-        
-        input.addEventListener('blur', () => {
-            input.style.borderColor = '#ddd';
-            input.style.boxShadow = 'none';
-            if (input.value.trim()) {
-                const page = this.app.currentEditor.page;
-                const column = {
-                    id: this.app.generateId(),
-                    width: 12,
-                    type: 'text',
-                    data: { 
-                        content: input.value.trim(),
-                        textType: selectedType
-                    }
-                };
-                page.columns.push(column);
-                this.app.console.log('info', `Added ${selectedType} text column`);
-                this.renderColumns();
-            }
-        });
-        
-        input.addEventListener('mouseenter', () => {
-            if (document.activeElement !== input) {
-                input.style.background = '#fafafa';
-                input.style.borderColor = '#eee';
-            }
-        });
-        
-        input.addEventListener('mouseleave', () => {
-            if (document.activeElement !== input) {
-                input.style.background = 'transparent';
-                input.style.borderColor = 'transparent';
-            }
-        });
-        
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                input.blur();
-            }
-        });
-        
-        placeholder.appendChild(input);
+        placeholder.appendChild(addBtn);
         canvas.appendChild(placeholder);
     }
 
     createColumnElement(column, idx) {
         const div = document.createElement('div');
         div.className = 'page-column';
+        div.dataset.columnId = column.id;
+        
+        // Calculate width with proper gap handling for flexbox
+        // With gap: 10px, for n items filling the row, total gaps = (n-1) * 10px
         const widthPercent = (column.width / 12) * 100;
-        div.style.flex = `0 0 ${widthPercent}%`;
+        const itemsPerRow = 12 / column.width;
+        const totalGaps = (itemsPerRow - 1) * 10;
+        const gapPerItem = totalGaps / itemsPerRow;
+        
+        // Add extra buffer to ensure no wrapping (browsers can be inconsistent with calc)
+        const adjustedGap = gapPerItem + 1;
+        
+        div.style.flex = `0 0 calc(${widthPercent}% - ${adjustedGap}px)`;
+        div.style.maxWidth = `calc(${widthPercent}% - ${adjustedGap}px)`;
         div.style.minWidth = '0';
         div.style.padding = '10px';
         div.style.boxSizing = 'border-box';
+        div.style.position = 'relative';
+        
+        // Create toolbar at TOP
+        const toolbar = document.createElement('div');
+        toolbar.className = 'column-toolbar';
+        toolbar.style.cssText = 'display: flex; gap: 5px; margin-bottom: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px; opacity: 0; transition: opacity 0.2s;';
+        
+        const moveupBtn = document.createElement('button');
+        moveupBtn.type = 'button';
+        moveupBtn.textContent = '▲';
+        moveupBtn.title = 'Move Up';
+        moveupBtn.style.cssText = 'padding: 6px 10px; font-size: 14px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; font-weight: bold;';
+        
+        const movedownBtn = document.createElement('button');
+        movedownBtn.type = 'button';
+        movedownBtn.textContent = '▼';
+        movedownBtn.title = 'Move Down';
+        movedownBtn.style.cssText = 'padding: 6px 10px; font-size: 14px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; font-weight: bold;';
+        
+        const widthBtn = document.createElement('button');
+        widthBtn.type = 'button';
+        widthBtn.textContent = `${column.width}/12`;
+        widthBtn.title = `Width: ${column.width}/12`;
+        widthBtn.style.cssText = 'padding: 6px 10px; font-size: 12px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; font-weight: 500;';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = '🗑️';
+        deleteBtn.title = 'Delete';
+        deleteBtn.style.cssText = 'padding: 6px 10px; font-size: 14px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; margin-left: auto;';
+        
+        toolbar.appendChild(moveupBtn);
+        toolbar.appendChild(movedownBtn);
+        toolbar.appendChild(widthBtn);
+        toolbar.appendChild(deleteBtn);
+        
+        // Create content container
+        const contentContainer = document.createElement('div');
+        contentContainer.style.position = 'relative';
         
         let content = '';
         if (column.type === 'text') {
@@ -394,54 +301,67 @@ class PageEditor {
                 textAlign,
                 content: column.data.content || 'Empty text'
             }, true);
-        } else if (column.type === 'image') {
+            contentContainer.innerHTML = content;
+            
+            // Make text clickable to edit
+            const textContent = contentContainer.querySelector('[data-text-content]');
+            if (textContent) {
+                textContent.style.cursor = 'text';
+                textContent.addEventListener('click', () => {
+                    this.editTextInline(div, column);
+                });
+            }
+        } else if (column.type === 'image' || column.type === 'video') {
             if (column.data.media_id) {
                 const media = this.app.media.find(m => m.id === column.data.media_id);
                 if (media) {
                     const fileUrl = this.app.getMediaFileUrl(media);
-                    content = `
-                        <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                    const mediaWrapper = document.createElement('div');
+                    mediaWrapper.style.cssText = 'border: 2px solid #ddd; border-radius: 4px; overflow: hidden; position: relative;';
+                    
+                    if (column.type === 'image') {
+                        mediaWrapper.innerHTML = `
                             <img src="${fileUrl}" style="width: 100%; height: auto; display: block;">
                             ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.app.escapeHtml(column.data.caption)}</div>` : ''}
-                        </div>
-                    `;
-                }
-            }
-        } else if (column.type === 'video') {
-            if (column.data.media_id) {
-                const media = this.app.media.find(m => m.id === column.data.media_id);
-                if (media) {
-                    const fileUrl = this.app.getMediaFileUrl(media);
-                    content = `
-                        <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                        `;
+                    } else {
+                        mediaWrapper.innerHTML = `
                             <video controls style="width: 100%; height: auto; display: block;">
                                 <source src="${fileUrl}">
                             </video>
                             ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.app.escapeHtml(column.data.caption)}</div>` : ''}
-                        </div>
-                    `;
+                        `;
+                    }
+                    
+                    // Add floating edit button
+                    const editBtn = document.createElement('button');
+                    editBtn.type = 'button';
+                    editBtn.textContent = '✏️ Edit';
+                    editBtn.style.cssText = 'position: absolute; top: 10px; right: 10px; padding: 6px 12px; background: rgba(255, 255, 255, 0.95); border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); opacity: 0; transition: opacity 0.2s;';
+                    editBtn.addEventListener('click', () => {
+                        const media = this.app.media.find(m => m.id === column.data.media_id);
+                        if (media) {
+                            this.app.mediaManager.openEditor(media);
+                        }
+                    });
+                    
+                    mediaWrapper.appendChild(editBtn);
+                    mediaWrapper.addEventListener('mouseenter', () => {
+                        editBtn.style.opacity = '1';
+                    });
+                    mediaWrapper.addEventListener('mouseleave', () => {
+                        editBtn.style.opacity = '0';
+                    });
+                    
+                    contentContainer.appendChild(mediaWrapper);
                 }
             }
         }
-
-        div.innerHTML = `
-            ${content}
-            <div class="column-toolbar" style="margin-top: 8px; display: flex; gap: 5px; justify-content: flex-end; opacity: 0; transition: opacity 0.2s;">
-                <button type="button" data-action="moveup" title="Move Up" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">⬆️</button>
-                <button type="button" data-action="movedown" title="Move Down" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">⬇️</button>
-                <button type="button" data-action="width" title="Width: ${column.width}/12" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">📏 ${column.width}/12</button>
-                <button type="button" data-action="edit" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">✏️</button>
-                <button type="button" data-action="delete" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">🗑️</button>
-            </div>
-        `;
-
-        const moveupBtn = div.querySelector('[data-action="moveup"]');
-        const movedownBtn = div.querySelector('[data-action="movedown"]');
-        const widthBtn = div.querySelector('[data-action="width"]');
-        const editBtn = div.querySelector('[data-action="edit"]');
-        const deleteBtn = div.querySelector('[data-action="delete"]');
-        const toolbar = div.querySelector('.column-toolbar');
         
+        div.appendChild(toolbar);
+        div.appendChild(contentContainer);
+        
+        // Hover effects for toolbar
         div.addEventListener('mouseenter', () => {
             toolbar.style.opacity = '1';
             div.style.background = '#fafafa';
@@ -450,15 +370,6 @@ class PageEditor {
             toolbar.style.opacity = '0';
             div.style.background = '';
         });
-        
-        if (column.type === 'text') {
-            const textContent = div.querySelector('[data-text-content]');
-            if (textContent) {
-                textContent.addEventListener('click', () => {
-                    this.editTextInline(div, column);
-                });
-            }
-        }
 
         moveupBtn.addEventListener('click', () => {
             const page = this.app.currentEditor.page;
@@ -486,38 +397,6 @@ class PageEditor {
             this.renderColumns();
         });
 
-        editBtn.addEventListener('click', () => {
-            if (column.type === 'text') {
-                // Show text type and content editor
-                const types = [
-                    { tag: 'h1', label: 'Heading 1' },
-                    { tag: 'h2', label: 'Heading 2' },
-                    { tag: 'h3', label: 'Heading 3' },
-                    { tag: 'p', label: 'Paragraph' },
-                    { tag: 'blockquote', label: 'Blockquote' }
-                ];
-                
-                const currentType = column.data.textType || 'p';
-                const typeOptions = types.map(t => `${t.tag === currentType ? '✓ ' : ''}${t.label}`).join('\n');
-                const selectedType = prompt(`Select text type:\n\n${typeOptions}`, currentType);
-                
-                if (selectedType) {
-                    const match = types.find(t => t.label.includes(selectedType) || t.tag === selectedType);
-                    if (match) {
-                        column.data.textType = match.tag;
-                    }
-                }
-                
-                this.editTextInline(div, column);
-            } else {
-                const caption = prompt('Edit caption:', column.data.caption || '');
-                if (caption !== null) {
-                    column.data.caption = caption;
-                    this.renderColumns();
-                }
-            }
-        });
-
         deleteBtn.addEventListener('click', () => {
             const page = this.app.currentEditor.page;
             const colIdx = page.columns.findIndex(c => c.id === column.id);
@@ -538,116 +417,118 @@ class PageEditor {
         if (!column.data.textType) column.data.textType = 'p';
         if (!column.data.textAlign) column.data.textAlign = 'left';
         
-        let sourceMode = false;
-        
         const originalContent = contentDiv.innerHTML;
         contentDiv.innerHTML = '';
         
         // Create toolbar
         const toolbar = document.createElement('div');
         toolbar.className = 'text-toolbar';
+        toolbar.style.cssText = 'display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; padding: 12px; background: #f5f5f5; border-radius: 4px;';
         
-        // Element type selector
-        const typeSelect = document.createElement('select');
-        typeSelect.className = 'text-toolbar-select';
-        typeSelect.innerHTML = `
-            <option value="p" ${column.data.textType === 'p' ? 'selected' : ''}>Paragraph</option>
-            <option value="h1" ${column.data.textType === 'h1' ? 'selected' : ''}>Heading 1</option>
-            <option value="h2" ${column.data.textType === 'h2' ? 'selected' : ''}>Heading 2</option>
-            <option value="h3" ${column.data.textType === 'h3' ? 'selected' : ''}>Heading 3</option>
-            <option value="h4" ${column.data.textType === 'h4' ? 'selected' : ''}>Heading 4</option>
-            <option value="blockquote" ${column.data.textType === 'blockquote' ? 'selected' : ''}>Blockquote</option>
-        `;
+        // Type selector buttons (instead of dropdown)
+        const typeGroup = document.createElement('div');
+        typeGroup.style.cssText = 'display: flex; gap: 4px; padding-right: 8px; border-right: 1px solid #ddd;';
         
-        // Text alignment buttons
-        const alignGroup = document.createElement('div');
-        alignGroup.className = 'text-align-group';
-        
-        const alignments = [
-            { value: 'left', icon: '≡', title: 'Align Left' },
-            { value: 'center', icon: '≣', title: 'Align Center' },
-            { value: 'right', icon: '≡', title: 'Align Right' },
-            { value: 'justify', icon: '▭', title: 'Justify' }
+        const types = [
+            { value: 'p', label: 'P' },
+            { value: 'h1', label: 'H1' },
+            { value: 'h2', label: 'H2' },
+            { value: 'h3', label: 'H3' }
         ];
         
-        alignments.forEach(align => {
+        types.forEach(type => {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.innerHTML = align.icon;
-            btn.title = align.title;
-            btn.className = 'text-align-btn';
-            if (column.data.textAlign === align.value) {
-                btn.classList.add('active');
+            btn.textContent = type.label;
+            btn.style.cssText = 'padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; background: white; cursor: pointer; font-weight: 500;';
+            if (column.data.textType === type.value) {
+                btn.style.background = '#FF8C42';
+                btn.style.color = 'white';
+                btn.style.borderColor = '#FF8C42';
             }
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                column.data.textAlign = align.value;
-                // Update all alignment buttons
-                alignGroup.querySelectorAll('button').forEach(b => {
-                    const isNowActive = b.title === align.title;
-                    b.classList.toggle('active', isNowActive);
-                });
+            btn.addEventListener('click', () => {
+                column.data.textType = type.value;
+                updateTypeButtons();
             });
-            alignGroup.appendChild(btn);
+            typeGroup.appendChild(btn);
         });
         
-        // Source mode toggle
-        const sourceBtn = document.createElement('button');
-        sourceBtn.type = 'button';
-        sourceBtn.textContent = 'HTML';
-        sourceBtn.title = 'Toggle HTML source view';
-        sourceBtn.className = 'text-source-btn';
-        sourceBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            sourceMode = !sourceMode;
-            if (sourceMode) {
-                sourceBtn.classList.add('active');
-                typeSelect.disabled = true;
-                typeSelect.classList.add('disabled');
-                alignGroup.querySelectorAll('button').forEach(b => {
-                    b.disabled = true;
-                    b.classList.add('disabled');
-                });
-                textarea.classList.add('source-mode');
-            } else {
-                sourceBtn.classList.remove('active');
-                typeSelect.disabled = false;
-                typeSelect.classList.remove('disabled');
-                alignGroup.querySelectorAll('button').forEach(b => {
-                    b.disabled = false;
-                    b.classList.remove('disabled');
-                });
-                textarea.classList.remove('source-mode');
-            }
+        const updateTypeButtons = () => {
+            typeGroup.querySelectorAll('button').forEach((btn, idx) => {
+                const isActive = types[idx].value === column.data.textType;
+                btn.style.background = isActive ? '#FF8C42' : 'white';
+                btn.style.color = isActive ? 'white' : 'black';
+                btn.style.borderColor = isActive ? '#FF8C42' : '#ddd';
+            });
+        };
+        
+        // Alignment buttons
+        const alignGroup = document.createElement('div');
+        alignGroup.style.cssText = 'display: flex; gap: 4px;';
+        
+        const alignLeft = document.createElement('button');
+        alignLeft.type = 'button';
+        alignLeft.textContent = '≡';
+        alignLeft.title = 'Align Left';
+        alignLeft.style.cssText = 'padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; background: white; cursor: pointer; font-family: monospace;';
+        if (column.data.textAlign === 'left') {
+            alignLeft.style.background = '#FF8C42';
+        }
+        alignLeft.addEventListener('click', () => {
+            column.data.textAlign = 'left';
+            updateAlignButtons();
         });
+        
+        const alignCenter = document.createElement('button');
+        alignCenter.type = 'button';
+        alignCenter.textContent = '≣';
+        alignCenter.title = 'Align Center';
+        alignCenter.style.cssText = 'padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; background: white; cursor: pointer; font-family: monospace;';
+        if (column.data.textAlign === 'center') {
+            alignCenter.style.background = '#FF8C42';
+        }
+        alignCenter.addEventListener('click', () => {
+            column.data.textAlign = 'center';
+            updateAlignButtons();
+        });
+        
+        const alignRight = document.createElement('button');
+        alignRight.type = 'button';
+        alignRight.textContent = '≡';
+        alignRight.title = 'Align Right';
+        alignRight.style.cssText = 'padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; background: white; cursor: pointer; font-family: monospace;';
+        if (column.data.textAlign === 'right') {
+            alignRight.style.background = '#FF8C42';
+        }
+        alignRight.addEventListener('click', () => {
+            column.data.textAlign = 'right';
+            updateAlignButtons();
+        });
+        
+        const updateAlignButtons = () => {
+            alignLeft.style.background = column.data.textAlign === 'left' ? '#FF8C42' : 'white';
+            alignCenter.style.background = column.data.textAlign === 'center' ? '#FF8C42' : 'white';
+            alignRight.style.background = column.data.textAlign === 'right' ? '#FF8C42' : 'white';
+        };
+        
+        alignGroup.appendChild(alignLeft);
+        alignGroup.appendChild(alignCenter);
+        alignGroup.appendChild(alignRight);
         
         // Help text
         const helpText = document.createElement('span');
-        helpText.className = 'text-toolbar-help';
+        helpText.style.cssText = 'font-size: 11px; color: #666; margin-left: auto;';
         helpText.textContent = 'Ctrl+Enter to save, Esc to cancel';
         
-        toolbar.appendChild(typeSelect);
+        toolbar.appendChild(typeGroup);
         toolbar.appendChild(alignGroup);
-        toolbar.appendChild(sourceBtn);
         toolbar.appendChild(helpText);
         
         // Create textarea
         const textarea = document.createElement('textarea');
         textarea.value = column.data.content || '';
         textarea.className = 'text-editor-textarea';
-        
-        typeSelect.addEventListener('change', (e) => {
-            e.preventDefault();
-            column.data.textType = typeSelect.value;
-        });
-        
-        // Prevent blur when clicking toolbar
-        // Track toolbar interaction to avoid premature blur saves
-        let interactingToolbar = false;
-        toolbar.addEventListener('mousedown', () => {
-            interactingToolbar = true;
-            setTimeout(() => { interactingToolbar = false; }, 200);
-        });
+        textarea.style.cssText = 'width: 100%; min-height: 100px; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 14px; resize: vertical; box-sizing: border-box;';
         
         const saveEdit = () => {
             const newValue = textarea.value.trim();
@@ -660,14 +541,11 @@ class PageEditor {
         };
         
         textarea.addEventListener('blur', () => {
-            // Wait for focus to settle, then decide whether to save
+            // Simple blur - just check if focus moved completely away
             setTimeout(() => {
-                const active = document.activeElement;
-                if (interactingToolbar || contentDiv.contains(active)) {
-                    // Still interacting with toolbar/textarea/select; do not save yet
-                    return;
+                if (!contentDiv.contains(document.activeElement)) {
+                    saveEdit();
                 }
-                saveEdit();
             }, 0);
         });
         
@@ -703,12 +581,6 @@ class PageEditor {
         } else if (textType === 'h3') {
             tag = 'h3';
             classes.push('text-h3');
-        } else if (textType === 'h4') {
-            tag = 'h4';
-            classes.push('text-h4');
-        } else if (textType === 'blockquote') {
-            tag = 'blockquote';
-            classes.push('text-blockquote');
         } else {
             classes.push('text-body');
         }
@@ -732,7 +604,7 @@ class PageEditor {
         // Add instruction header
         const header = document.createElement('div');
         header.style.cssText = 'grid-column: 1/-1; padding: 8px; background: #FFF4E6; border-radius: 4px; font-size: 11px; color: #F59E0B; text-align: center; margin-bottom: 4px;';
-        header.textContent = '🖱️ Double-click or drag to add';
+        header.textContent = '� Double-click to add media to page';
         library.appendChild(header);
 
         const filter = filterText.toLowerCase();
@@ -752,7 +624,6 @@ class PageEditor {
         filtered.forEach(media => {
             const item = document.createElement('div');
             item.className = 'editor-media-item';
-            item.setAttribute('draggable', 'true');
             item.dataset.mediaId = media.id;
             item.dataset.mediaType = media.media_type;
             
@@ -761,7 +632,7 @@ class PageEditor {
             
             let thumbnail = '';
             if (media.media_type === 'image') {
-                thumbnail = `<img src="${fileUrl}" draggable="false" style="width: 100%; height: 80px; object-fit: cover; border-radius: 4px; display: block; pointer-events: none;">`;
+                thumbnail = `<img src="${fileUrl}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 4px; display: block; pointer-events: none;">`;
             } else {
                 thumbnail = `<div style="width: 100%; height: 80px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; pointer-events: none;">🎬</div>`;
             }
@@ -773,7 +644,7 @@ class PageEditor {
                 </div>
             `;
 
-            item.style.cssText = 'cursor: grab; padding: 4px; border: 1px solid #ddd; border-radius: 4px; background: white; user-select: none; transition: all 0.2s;';
+            item.style.cssText = 'cursor: pointer; padding: 4px; border: 1px solid #ddd; border-radius: 4px; background: white; user-select: none; transition: all 0.2s;';
             
             item.addEventListener('mouseenter', () => {
                 item.style.borderColor = '#FF8C42';
@@ -785,21 +656,7 @@ class PageEditor {
                 item.style.boxShadow = 'none';
             });
             
-            item.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', media.id);
-                e.dataTransfer.setData('mediaId', media.id);
-                e.dataTransfer.setData('mediaType', media.media_type);
-                e.dataTransfer.effectAllowed = 'copy';
-                item.style.opacity = '0.5';
-                item.style.cursor = 'grabbing';
-            });
-
-            item.addEventListener('dragend', () => {
-                item.style.opacity = '1';
-                item.style.cursor = 'grab';
-            });
-            
-            // Alternative: Double-click to add media
+            // Double-click to add media
             item.addEventListener('dblclick', () => {
                 this.app.console.log('info', `Double-clicked media: ${media.filename}`);
                 const page = this.app.currentEditor.page;
@@ -1012,10 +869,11 @@ class PageEditor {
     }
 
     closeEditor() {
-        const modal = document.getElementById('pageEditorModal');
-        if (modal) {
-            modal.classList.remove('active');
-        }
+        // Show pages list again
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.getElementById('pages').classList.add('active');
+        document.getElementById('pages').style.display = 'block';
+        document.getElementById('pageEditor').style.display = 'none';
         this.app.currentEditor = null;
     }
     

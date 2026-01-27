@@ -10,10 +10,15 @@ class FileIOAPI {
 
     async invoke(op, relPath, payload = null) {
         try {
-            const result = await window.__TAURI__.invoke('file_io', {
+            const invoke = window.__TAURI__?.core?.invoke;
+            if (!invoke) {
+                throw new Error('Tauri API not available');
+            }
+
+            const result = await invoke('file_io', {
                 op,
-                data_path: this.basePath,
-                rel_path: relPath,
+                dataPath: this.basePath,
+                relPath,
                 payload
             });
             return result;

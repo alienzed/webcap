@@ -43,6 +43,9 @@
             </nav>
 
             <div class="sidebar-footer">
+                <button class="btn-icon" id="btnToggleConsole" title="Console">
+                    >
+                </button>
                 <button class="btn-icon" id="btnAbout" title="About">
                     ℹ️
                 </button>
@@ -182,7 +185,12 @@
         </div>
     </div>
 
-    <script src="api.js"></script>
-    <script src="app.js"></script>
+    <!-- Console Panel -->
+    <div id="consolePanel" class="console-panel">
+        <div id="consoleBody" class="console-body"></div>
+    </div>
+
+    <script src="api.js" defer></script>
+    <script src="app.js" defer></script>
 </body>
 </html>

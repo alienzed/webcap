@@ -30,13 +30,39 @@ async fn resolve_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, Strin
     let _ = sanitize_rel_path(rel_path)?;
     let joined = base_path.join(rel_path);
     
-    // Ensure the resolved path is still within base_path (prevent symlink escape)
-    let canonical_base = base_path.canonicalize()
-        .map_err(|e| format!("Cannot canonicalize base path: {}", e))?;
-    let canonical_joined = joined.canonicalize()
-        .or_else(|_| Ok(joined.clone()))?;
+    // Get base path in absolute form
+    let base_abs = if base_path.is_absolute() {
+        base_path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?
+            .join(base_path)
+    };
     
-    if !canonical_joined.starts_with(&canonical_base) {
+    // Manually normalize the joined path by resolving components
+    let mut normalized = PathBuf::new();
+    
+    // Start with the base absolute path
+    for component in base_abs.components() {
+        normalized.push(component);
+    }
+    
+    // Add the relative path components
+    for component in Path::new(rel_path).components() {
+        match component {
+            std::path::Component::Normal(name) => normalized.push(name),
+            std::path::Component::ParentDir => {
+                if !normalized.pop() {
+                    return Err("Path escape detected (too many ..)".into());
+                }
+            },
+            std::path::Component::CurDir => {},
+            _ => {}
+        }
+    }
+    
+    // Verify the normalized path still starts with base
+    if !normalized.starts_with(&base_abs) {
         return Err("Path escape detected".into());
     }
     
@@ -46,6 +72,13 @@ async fn resolve_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, Strin
 /// Handles generic file I/O operations: read, write, list, mkdir, remove.
 /// All operations are relative to base_path with security validation.
 pub async fn handle_file_io(op: &str, base_path: &Path, rel_path: &str, payload: Option<Value>) -> Result<Value, String> {
+    // Ensure base path exists to allow canonicalization
+    if !base_path.exists() {
+        fs::create_dir_all(base_path)
+            .await
+            .map_err(|e| format!("Cannot create base path: {}", e))?;
+    }
+
     let path = resolve_path(base_path, rel_path).await?;
     
     match op {

@@ -3,13 +3,59 @@
 
 class MediaWeb {
     constructor() {
-        this.dataPath = localStorage.getItem('dataPath') || '';
+        this.dataPath = '';
         this.api = null;
         this.media = [];
         this.pages = [];
         this.tags = [];
         this.currentEditor = null;
+        this.consoleVisible = false;
+        this.consoleEntries = [];
+        this.configPath = null; // Will be set after getting user's config dir
+        
+        // Store original console methods BEFORE interception
+        this.originalConsole = {
+            log: console.log.bind(console),
+            warn: console.warn.bind(console),
+            error: console.error.bind(console)
+        };
+        
+        // Intercept console methods before init
+        this.setupConsoleInterception();
         this.init();
+    }
+
+    setupConsoleInterception() {
+        // Override console.log to send to in-app console
+        console.log = (...args) => {
+            this.originalConsole.log.apply(console, args);
+            const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+            this.log('info', message);
+        };
+
+        // Override console.warn
+        console.warn = (...args) => {
+            this.originalConsole.warn.apply(console, args);
+            const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+            this.log('warn', message);
+        };
+
+        // Override console.error
+        console.error = (...args) => {
+            this.originalConsole.error.apply(console, args);
+            const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+            this.log('error', message);
+        };
+
+        // Also capture uncaught errors
+        window.addEventListener('error', (event) => {
+            this.log('error', `Uncaught error: ${event.message} at ${event.filename}:${event.lineno}`);
+        });
+
+        // Capture unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            this.log('error', `Unhandled promise rejection: ${event.reason}`);
+        });
     }
 
     async init() {
@@ -21,37 +67,164 @@ class MediaWeb {
         }
     }
 
-    async ensureDataPath() {
-        if (!this.dataPath) {
-            // Get the platform-specific default path from Tauri
-            // On Windows: C:\Users\{user}\AppData\Local\mediaweb
-            // On macOS: ~/Library/Application Support/mediaweb
-            // On Linux: ~/.local/share/mediaweb
-            this.dataPath = await window.__TAURI__.invoke('get_default_data_path');
-            console.log('Using default data path:', this.dataPath);
-            localStorage.setItem('dataPath', this.dataPath);
+    async loadConfig() {
+        const tauriInvoke = window.__TAURI__?.core?.invoke;
+        if (!tauriInvoke) {
+            this.log('warn', 'Tauri API not available, cannot load config');
+            return null;
         }
+
+        try {
+            // Get user's config directory
+            this.log('info', 'Loading config: getting config directory...');
+            const configDir = await tauriInvoke('get_default_data_path');
+            this.configPath = `${configDir}/../mediaweb-config.json`;
+            this.log('info', `Config path: ${this.configPath}`);
+            
+            // Try to read config file
+            this.log('info', `Reading config from: ${configDir}/.. → mediaweb-config.json`);
+            const configContent = await tauriInvoke('file_io', {
+                operation: 'read',
+                dataPath: configDir + '/..',
+                relPath: 'mediaweb-config.json'
+            });
+            
+            const config = JSON.parse(configContent);
+            this.log('info', `✓ Loaded saved config: ${config.dataPath}`);
+            return config;
+        } catch (err) {
+            // Config file doesn't exist yet, that's okay
+            this.log('info', `No existing config file (${err.message || err})`);
+            return null;
+        }
+    }
+
+    async saveConfig() {
+        const tauriInvoke = window.__TAURI__?.core?.invoke;
+        if (!tauriInvoke) {
+            this.log('warn', 'Cannot save config: Tauri API not available');
+            return;
+        }
+        if (!this.configPath) {
+            this.log('warn', 'Cannot save config: configPath not set');
+            return;
+        }
+        if (!this.dataPath) {
+            this.log('warn', 'Cannot save config: dataPath not set');
+            return;
+        }
+
+        try {
+            const config = {
+                dataPath: this.dataPath,
+                lastUsed: new Date().toISOString()
+            };
+            
+            this.log('info', `Saving config to: ${this.configPath}`);
+            this.log('info', `Config content: ${JSON.stringify(config)}`);
+            
+            const configDir = this.configPath.substring(0, this.configPath.lastIndexOf('/'));
+            this.log('info', `Config dir: ${configDir}, relPath: mediaweb-config.json`);
+            
+            await tauriInvoke('file_io', {
+                operation: 'write',
+                dataPath: configDir,
+                relPath: 'mediaweb-config.json',
+                data: JSON.stringify(config, null, 2)
+            });
+            
+            this.log('info', '✓ Configuration saved successfully');
+        } catch (err) {
+            this.log('error', `Failed to save config: ${err.message || err}`);
+        }
+    }
+
+    async ensureDataPath() {
+        console.log('ensureDataPath: starting, current dataPath:', this.dataPath);
+
+        // Prefer Tauri global API (v2: core.invoke)
+        const tauriInvoke = window.__TAURI__?.core?.invoke;
+
+        // First, try to load saved config
+        const config = await this.loadConfig();
+        if (config && config.dataPath) {
+            this.dataPath = config.dataPath;
+            this.log('info', `Restored saved path: ${this.dataPath}`);
+        }
+
+        if (!this.dataPath) {
+            try {
+                if (tauriInvoke) {
+                    console.log('ensureDataPath: invoking get_default_data_path...');
+                    // Get the platform-specific default path from Tauri
+                    this.dataPath = await tauriInvoke('get_default_data_path');
+                    console.log('ensureDataPath: got path:', this.dataPath);
+                    this.log('info', `Path set to ${this.dataPath}`);
+                    await this.saveConfig();
+                } else {
+                    console.warn('ensureDataPath: Tauri API not available, using local fallback path');
+                    // Fallback to a relative data directory next to the app (works in browser too)
+                    this.dataPath = './mediaweb-data';
+                    this.log('info', `Path set to ${this.dataPath} (fallback)`);
+                }
+            } catch (err) {
+                console.error('ensureDataPath: Failed to get default data path:', err);
+                // Last resort: prompt the user
+                const manual = prompt('Enter a data directory path to use:', this.dataPath || './mediaweb-data');
+                if (manual) {
+                    this.dataPath = manual;
+                    this.log('info', `Path set to ${this.dataPath} (manual)`);
+                    await this.saveConfig();
+                } else {
+                    this.log('error', 'No data directory selected');
+                    this.log('error', 'No data directory selected. Please click "Choose" to select one.');
+                    return;
+                }
+            }
+        }
+
+        console.log('ensureDataPath: creating FileIOAPI with path:', this.dataPath);
+
         if (this.dataPath) {
             this.api = new FileIOAPI(this.dataPath);
+            console.log('ensureDataPath: FileIOAPI created, api:', this.api);
+            this.log('info', `Initializing data directory: ${this.dataPath}`);
             try {
                 await this.initializeDataDirectory();
+                this.log('info', 'Data directory initialized successfully');
+                console.log('ensureDataPath: data directory initialized');
             } catch (err) {
-                console.error('Failed to initialize data directory:', err);
+                this.log('error', `Failed to initialize data directory: ${err}`);
+                console.error('ensureDataPath: Failed to initialize data directory:', err);
             }
+        } else {
+            console.error('ensureDataPath: dataPath is still null/empty after trying to set it');
         }
     }
 
     setupEventListeners() {
         // Navigation
         document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', (e) => this.switchSection(e));
+            item.addEventListener('click', (e) => {
+                const section = e.currentTarget.getAttribute('data-section');
+                this.log('info', `Navigated to ${section || 'section'}`);
+                this.switchSection(e);
+            });
         });
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e));
 
         // Media Section
-        document.getElementById('btnUpload').addEventListener('click', () => {
+        document.getElementById('btnUpload').addEventListener('click', async () => {
+            if (!this.api) {
+                // Try to set or select a data path first
+                await this.selectDataPath();
+                if (!this.api) {
+                    this.log('error', 'Please choose a data directory first.');
+                    return;
+                }
+            }
             document.getElementById('fileInput').click();
         });
 
@@ -60,6 +233,7 @@ class MediaWeb {
         });
 
         document.getElementById('btnSelectDataPath').addEventListener('click', async () => {
+            this.log('info', 'Selecting data directory...');
             await this.selectDataPath();
         });
 
@@ -77,7 +251,12 @@ class MediaWeb {
             this.saveMediaMetadata();
         });
 
+        document.getElementById('btnToggleConsole').addEventListener('click', () => {
+            this.toggleConsole();
+        });
+
         document.getElementById('btnNewPage').addEventListener('click', () => {
+            this.log('info', 'Creating new page...');
             this.openPageEditor({
                 id: this.generateId(),
                 title: 'Untitled Page',
@@ -190,14 +369,24 @@ class MediaWeb {
 
     async selectDataPath() {
         try {
-            const selected = await window.__TAURI__.dialog.open({
-                directory: true,
-                multiple: false,
-                defaultPath: this.dataPath || undefined
-            });
+            const dialogOpen = window.__TAURI__?.dialog?.open;
+            let selected = null;
+
+            if (dialogOpen) {
+                selected = await dialogOpen({
+                    directory: true,
+                    multiple: false,
+                    defaultPath: this.dataPath || undefined
+                });
+            } else {
+                // Fallback: simple prompt if dialog API is not available
+                selected = prompt('Enter a data directory path to use:', this.dataPath || './mediaweb-data');
+            }
+
             if (selected) {
                 this.dataPath = selected;
-                localStorage.setItem('dataPath', this.dataPath);
+                this.log('info', `Path set to ${this.dataPath}`);
+                await this.saveConfig();
                 this.api = new FileIOAPI(this.dataPath);
                 await this.initializeDataDirectory();
                 await this.loadData();
@@ -205,6 +394,8 @@ class MediaWeb {
             }
         } catch (err) {
             console.error('Failed to select data path:', err);
+            this.log('error', `Failed to select path: ${err}`);
+            this.log('error', `Could not open directory picker: ${err.message}`);
         }
     }
 
@@ -220,10 +411,11 @@ class MediaWeb {
     async initializeDataDirectory() {
         if (!this.api) return;
         try {
+            this.log('info', 'Creating directory structure...');
             await this.api.initializeDataDir();
-            console.log('Initialized data directory:', this.dataPath);
+            this.log('info', `✓ Data directory ready at: ${this.dataPath}`);
         } catch (err) {
-            console.error('Failed to initialize data directory:', err);
+            this.log('error', `Failed to initialize data directory: ${err.message || err}`);
         }
     }
 
@@ -231,11 +423,13 @@ class MediaWeb {
         if (!this.api) return;
         
         try {
+            this.log('info', 'Loading media, pages, and tags...');
             this.media = await this.api.getMediaList();
             this.pages = await this.api.getPages();
             this.tags = await this.api.getTags();
+            this.log('info', `Loaded: ${this.media.length} media items, ${this.pages.length} pages, ${this.tags.length} tags`);
         } catch (err) {
-            console.error('Failed to load data:', err);
+            this.log('error', `Failed to load data: ${err.message || err}`);
             this.media = [];
             this.pages = [];
             this.tags = [];
@@ -247,15 +441,22 @@ class MediaWeb {
 
     async handleFileUpload(e) {
         if (!this.api) {
-            alert('Please set a data path first.');
+            this.log('error', 'Please set a data path first.');
             return;
         }
 
         const files = Array.from(e.target.files);
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
         
+        this.log('info', `Starting upload of ${files.length} file(s)...`);
+        
+        let successCount = 0;
+        let failCount = 0;
+
         for (const file of files) {
             const mediaId = this.generateIdFromFilename(file.name);
+            this.log('info', `Uploading: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+            
             const media = {
                 id: mediaId,
                 filename: file.name,
@@ -275,8 +476,12 @@ class MediaWeb {
                     reader.readAsDataURL(file);
                 });
 
+                this.log('info', `  → Encoded to base64, writing to disk...`);
+
                 // Write actual file to disk in date-based directory
                 await this.api.writeBinary(`media/${today}/${file.name}`, base64Data);
+
+                this.log('info', `  → File saved to media/${today}/${file.name}`);
 
                 // Create metadata entry
                 await this.api.updateMediaMetadata(mediaId, {
@@ -288,15 +493,20 @@ class MediaWeb {
                     modified: new Date().toISOString()
                 });
 
+                this.log('info', `  ✓ ${file.name} uploaded successfully`);
                 this.media.push(media);
+                successCount++;
             } catch (err) {
-                console.error(`Failed to upload ${file.name}:`, err);
-                alert(`Failed to upload ${file.name}: ${err}`);
+                failCount++;
+                this.log('error', `✗ Upload failed for ${file.name}: ${err.message || err}`);
             }
         }
 
         await this.loadData();
         this.renderMediaGrid();
+        
+        // Summary
+        this.log('info', `Upload complete: ${successCount} succeeded, ${failCount} failed`);
         
         // Reset input
         e.target.value = '';
@@ -391,6 +601,12 @@ class MediaWeb {
             return matchesSearch && matchesTags;
         });
 
+        const tagStr = activeTags.length > 0 ? ` (tags: ${activeTags.join(', ')})` : '';
+        const searchStr = search ? ` (search: "${search}")` : '';
+        if (search || activeTags.length > 0) {
+            this.log('info', `Filtered to ${filtered.length} of ${this.media.length} items${searchStr}${tagStr}`);
+        }
+
         // Re-render with filtered results
         const grid = document.getElementById('mediaGrid');
         grid.innerHTML = '';
@@ -439,6 +655,7 @@ class MediaWeb {
     }
 
     openMediaEditor(media) {
+        this.log('info', `Opened editor for "${media.filename}"`);
         this.currentEditor = { type: 'media', media };
         const metadata = this.getMediaMetadata(media.id);
 
@@ -516,6 +733,7 @@ class MediaWeb {
             rotation: null
         };
 
+        this.log('info', `Saving metadata for "${metadata.title || media.filename}"`);
         this.setMediaMetadata(media.id, metadata);
 
         // Add new tags to global registry
@@ -527,6 +745,7 @@ class MediaWeb {
         this.tags.sort();
 
         this.saveToDisk();
+        this.log('info', `Saved: ${metadata.tags.length} tags, title, and caption`);
         this.closeModal();
         this.renderMediaGrid();
         this.renderTagFilter();
@@ -586,6 +805,7 @@ class MediaWeb {
     }
 
     openPageEditor(page) {
+        this.log('info', `Opened page editor for "${page.title || 'New Page'}"`);
         this.currentEditor = { type: 'page', page: JSON.parse(JSON.stringify(page)) };
 
         document.getElementById('pageTitle').value = page.title;
@@ -756,12 +976,16 @@ class MediaWeb {
         page.slug = document.getElementById('pageSlug').value;
         page.modified = new Date().toISOString();
 
+        this.log('info', `Saving page "${page.title}" (${page.sections.length} sections)`);
+
         // Check if this is a new page or update
         const existingIdx = this.pages.findIndex(p => p.id === page.id);
         if (existingIdx >= 0) {
             this.pages[existingIdx] = page;
+            this.log('info', 'Page updated');
         } else {
             this.pages.push(page);
+            this.log('info', 'New page created');
         }
 
         this.saveToDisk();
@@ -884,6 +1108,49 @@ class MediaWeb {
                 modal.remove();
             }
         });
+    }
+
+    toggleConsole(force) {
+        const panel = document.getElementById('consolePanel');
+        this.consoleVisible = force !== undefined ? force : !this.consoleVisible;
+        if (this.consoleVisible) {
+            panel.classList.add('open');
+        } else {
+            panel.classList.remove('open');
+        }
+        this.renderConsole();
+    }
+
+    clearConsole() {
+        this.consoleEntries = [];
+        this.renderConsole();
+    }
+
+    log(level, message) {
+        const ts = new Date().toLocaleTimeString();
+        this.consoleEntries.push({ level, message, ts });
+        // keep last 200 lines
+        if (this.consoleEntries.length > 200) {
+            this.consoleEntries.shift();
+        }
+        this.renderConsole();
+        // Also mirror to browser console using original methods
+        if (level === 'error') this.originalConsole.error(message);
+        else if (level === 'warn') this.originalConsole.warn(message);
+        else this.originalConsole.log(message);
+    }
+
+    renderConsole() {
+        const body = document.getElementById('consoleBody');
+        if (!body) return;
+        body.innerHTML = '';
+        this.consoleEntries.forEach(entry => {
+            const line = document.createElement('div');
+            line.className = `console-line ${entry.level}`;
+            line.textContent = `[${entry.ts}] ${entry.level.toUpperCase()}: ${entry.message}`;
+            body.appendChild(line);
+        });
+        body.scrollTop = body.scrollHeight;
     }
 }
 

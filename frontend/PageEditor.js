@@ -19,6 +19,10 @@ class PageEditor {
         document.getElementById('btnPreviewPage').addEventListener('click', () => {
             this.preview();
         });
+        
+        document.getElementById('btnExportHTML').addEventListener('click', () => {
+            this.exportHTML();
+        });
     }
 
     renderPagesList() {
@@ -62,6 +66,20 @@ class PageEditor {
                     }
                 }
             });
+            
+            const viewBtn = document.createElement('button');
+            viewBtn.className = 'btn btn-icon';
+            viewBtn.textContent = '👁️';
+            viewBtn.style.position = 'absolute';
+            viewBtn.style.top = '10px';
+            viewBtn.style.right = '50px';
+            viewBtn.style.width = '32px';
+            viewBtn.style.height = '32px';
+            viewBtn.title = 'View Full Screen';
+            viewBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.viewFullScreen(page);
+            });
 
             card.style.position = 'relative';
             card.innerHTML = `
@@ -73,6 +91,7 @@ class PageEditor {
                 </div>
             `;
             card.appendChild(deleteBtn);
+            card.appendChild(viewBtn);
             card.addEventListener('click', () => this.open(page));
             list.appendChild(card);
         });
@@ -142,11 +161,13 @@ class PageEditor {
     }
 
     setupCanvasDropZone(canvas) {
-        canvas.style.display = 'flex';
-        canvas.style.flexWrap = 'wrap';
+        canvas.style.display = 'grid';
+        canvas.style.gridTemplateColumns = 'repeat(12, 1fr)';
+        canvas.style.gap = '0px';
         canvas.style.minHeight = '400px';
         canvas.style.padding = '20px';
         canvas.style.background = 'white';
+        canvas.style.boxSizing = 'border-box';
         
         canvas.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -231,6 +252,53 @@ class PageEditor {
             input.style.background = 'white';
             input.style.color = '#333';
             input.style.boxShadow = '0 2px 8px rgba(255,140,66,0.15)';
+            
+            // Show text type selector on focus
+            if (!placeholder.querySelector('.text-type-selector')) {
+                const typeSelector = document.createElement('div');
+                typeSelector.className = 'text-type-selector';
+                typeSelector.style.cssText = 'margin-top: 8px; display: flex; gap: 4px; justify-content: flex-start;';
+                
+                const types = [
+                    { tag: 'h1', label: 'H1', desc: 'Heading 1' },
+                    { tag: 'h2', label: 'H2', desc: 'Heading 2' },
+                    { tag: 'h3', label: 'H3', desc: 'Heading 3' },
+                    { tag: 'p', label: 'P', desc: 'Paragraph' },
+                    { tag: 'blockquote', label: '❝', desc: 'Quote' }
+                ];
+                
+                types.forEach(t => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = t.label;
+                    btn.title = t.desc;
+                    btn.style.cssText = 'padding: 4px 10px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; transition: all 0.2s;';
+                    btn.dataset.textType = t.tag;
+                    if (t.tag === 'p') {
+                        btn.style.background = '#FF8C42';
+                        btn.style.color = 'white';
+                        btn.style.borderColor = '#FF8C42';
+                    }
+                    btn.addEventListener('click', () => {
+                        // Update all buttons
+                        placeholder.querySelectorAll('.text-type-selector button').forEach(b => {
+                            b.style.background = 'white';
+                            b.style.color = 'inherit';
+                            b.style.borderColor = '#ddd';
+                        });
+                        // Highlight selected
+                        btn.style.background = '#FF8C42';
+                        btn.style.color = 'white';
+                        btn.style.borderColor = '#FF8C42';
+                        // Store in input
+                        input.dataset.textType = t.tag;
+                    });
+                    typeSelector.appendChild(btn);
+                });
+                
+                placeholder.appendChild(typeSelector);
+                input.dataset.textType = 'p'; // Default to paragraph
+            }
         });
         
         input.addEventListener('blur', () => {
@@ -240,10 +308,13 @@ class PageEditor {
                     id: this.app.generateId(),
                     width: 12,
                     type: 'text',
-                    data: { content: input.value.trim() }
+                    data: { 
+                        content: input.value.trim(),
+                        textType: input.dataset.textType || 'p'
+                    }
                 };
                 page.columns.push(column);
-                this.app.console.log('info', 'Added text column');
+                this.app.console.log('info', `Added ${input.dataset.textType || 'p'} text column`);
                 this.renderColumns();
             } else {
                 input.style.borderColor = 'transparent';
@@ -287,7 +358,25 @@ class PageEditor {
         
         let content = '';
         if (column.type === 'text') {
-            content = `<div data-text-content style="padding: 15px; background: #f9f9f9; border-radius: 4px; min-height: 60px; cursor: text; white-space: pre-wrap; word-wrap: break-word; transition: background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='#f9f9f9'">${this.app.escapeHtml(column.data.content || 'Empty text')}</div>`;
+            const textType = column.data.textType || 'p';
+            let styles = 'padding: 15px; background: #f9f9f9; border-radius: 4px; min-height: 60px; cursor: text; white-space: pre-wrap; word-wrap: break-word; transition: background 0.2s;';
+            let tag = 'div';
+            
+            if (textType === 'h1') {
+                styles = 'font-size: 2rem; font-weight: 700; margin: 20px 0 10px 0; cursor: text;';
+                tag = 'h1';
+            } else if (textType === 'h2') {
+                styles = 'font-size: 1.5rem; font-weight: 600; margin: 15px 0 8px 0; cursor: text;';
+                tag = 'h2';
+            } else if (textType === 'h3') {
+                styles = 'font-size: 1.25rem; font-weight: 600; margin: 12px 0 6px 0; cursor: text;';
+                tag = 'h3';
+            } else if (textType === 'blockquote') {
+                styles = 'padding: 15px; background: #f3f4f6; border-left: 4px solid #FF8C42; margin: 10px 0; font-style: italic; color: #6b7280; cursor: text;';
+                tag = 'blockquote';
+            }
+            
+            content = `<${tag} data-text-content style="${styles}" onmouseover="this.style.background='#f0f0f0'; this.style.opacity='0.8'" onmouseout="this.style.background=''; this.style.opacity='1'">${this.app.escapeHtml(column.data.content || 'Empty text')}</${tag}>`;
         } else if (column.type === 'image') {
             if (column.data.media_id) {
                 const media = this.app.media.find(m => m.id === column.data.media_id);
@@ -321,12 +410,16 @@ class PageEditor {
         div.innerHTML = `
             ${content}
             <div class="column-toolbar" style="margin-top: 8px; display: flex; gap: 5px; justify-content: flex-end; opacity: 0; transition: opacity 0.2s;">
+                <button type="button" data-action="moveup" title="Move Up" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">⬆️</button>
+                <button type="button" data-action="movedown" title="Move Down" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">⬇️</button>
                 <button type="button" data-action="width" title="Width: ${column.width}/12" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">📏 ${column.width}/12</button>
                 <button type="button" data-action="edit" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">✏️</button>
                 <button type="button" data-action="delete" style="padding: 4px 8px; font-size: 11px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer;">🗑️</button>
             </div>
         `;
 
+        const moveupBtn = div.querySelector('[data-action="moveup"]');
+        const movedownBtn = div.querySelector('[data-action="movedown"]');
         const widthBtn = div.querySelector('[data-action="width"]');
         const editBtn = div.querySelector('[data-action="edit"]');
         const deleteBtn = div.querySelector('[data-action="delete"]');
@@ -350,6 +443,24 @@ class PageEditor {
             }
         }
 
+        moveupBtn.addEventListener('click', () => {
+            const page = this.app.currentEditor.page;
+            const colIdx = page.columns.findIndex(c => c.id === column.id);
+            if (colIdx > 0) {
+                [page.columns[colIdx - 1], page.columns[colIdx]] = [page.columns[colIdx], page.columns[colIdx - 1]];
+                this.renderColumns();
+            }
+        });
+
+        movedownBtn.addEventListener('click', () => {
+            const page = this.app.currentEditor.page;
+            const colIdx = page.columns.findIndex(c => c.id === column.id);
+            if (colIdx < page.columns.length - 1) {
+                [page.columns[colIdx + 1], page.columns[colIdx]] = [page.columns[colIdx], page.columns[colIdx + 1]];
+                this.renderColumns();
+            }
+        });
+
         widthBtn.addEventListener('click', () => {
             const widths = [3, 4, 6, 8, 12];
             const currentIdx = widths.indexOf(column.width);
@@ -360,6 +471,26 @@ class PageEditor {
 
         editBtn.addEventListener('click', () => {
             if (column.type === 'text') {
+                // Show text type and content editor
+                const types = [
+                    { tag: 'h1', label: 'Heading 1' },
+                    { tag: 'h2', label: 'Heading 2' },
+                    { tag: 'h3', label: 'Heading 3' },
+                    { tag: 'p', label: 'Paragraph' },
+                    { tag: 'blockquote', label: 'Blockquote' }
+                ];
+                
+                const currentType = column.data.textType || 'p';
+                const typeOptions = types.map(t => `${t.tag === currentType ? '✓ ' : ''}${t.label}`).join('\n');
+                const selectedType = prompt(`Select text type:\n\n${typeOptions}`, currentType);
+                
+                if (selectedType) {
+                    const match = types.find(t => t.label.includes(selectedType) || t.tag === selectedType);
+                    if (match) {
+                        column.data.textType = match.tag;
+                    }
+                }
+                
                 this.editTextInline(div, column);
             } else {
                 const caption = prompt('Edit caption:', column.data.caption || '');
@@ -643,5 +774,160 @@ class PageEditor {
                 modal.remove();
             }
         });
+    }
+    
+    viewFullScreen(page) {
+        this.app.console.log('info', `Viewing "${page.title}" full screen`);
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal active';
+        modal.style.zIndex = '3000';
+        
+        const html = this.generatePageHTML(page);
+        
+        // Extract just the body content
+        const bodyMatch = html.match(/<body>([\s\S]*)<\/body>/);
+        const bodyContent = bodyMatch ? bodyMatch[1] : html;
+        
+        modal.innerHTML = `
+            <div class="modal-content modal-large" style="max-width: 100%; height: 100%; margin: 0; border-radius: 0; overflow-y: auto;">
+                <div class="modal-header" style="position: sticky; top: 0; background: white; z-index: 10; border-bottom: 1px solid #ddd;">
+                    <h2>${this.app.escapeHtml(page.title)}</h2>
+                    <button class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body" style="padding: 40px; background: white;">
+                    ${bodyContent}
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        modal.querySelector('.btn-close').addEventListener('click', () => {
+            modal.remove();
+        });
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+    }
+    
+    exportHTML() {
+        if (!this.app.currentEditor || this.app.currentEditor.type !== 'page') return;
+        
+        const page = this.app.currentEditor.page;
+        const title = document.getElementById('pageTitle').value || 'Untitled Page';
+        page.title = title;
+        
+        const html = this.generatePageHTML(page);
+        
+        // Create download link
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${page.slug || 'page'}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.app.console.log('info', `Exported "${page.title}" as HTML`);
+    }
+    
+    generatePageHTML(page) {
+        let columnsHTML = '';
+        
+        page.columns.forEach(column => {
+            const widthPercent = (column.width / 12) * 100;
+            let content = '';
+            
+            if (column.type === 'text') {
+                content = `<div style="padding: 15px; background: #f9f9f9; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;">${this.app.escapeHtml(column.data.content)}</div>`;
+            } else if (column.type === 'image') {
+                const media = this.app.media.find(m => m.id === column.data.media_id);
+                if (media) {
+                    const fileUrl = this.app.getMediaFileUrl(media);
+                    content = `
+                        <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                            <img src="${fileUrl}" style="width: 100%; height: auto; display: block;" alt="">
+                            ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.app.escapeHtml(column.data.caption)}</div>` : ''}
+                        </div>
+                    `;
+                }
+            } else if (column.type === 'video') {
+                const media = this.app.media.find(m => m.id === column.data.media_id);
+                if (media) {
+                    const fileUrl = this.app.getMediaFileUrl(media);
+                    content = `
+                        <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                            <video controls style="width: 100%; height: auto; display: block;">
+                                <source src="${fileUrl}">
+                            </video>
+                            ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.app.escapeHtml(column.data.caption)}</div>` : ''}
+                        </div>
+                    `;
+                }
+            }
+            
+            columnsHTML += `
+                <div style="width: ${widthPercent}%; padding: 10px; box-sizing: border-box; float: left;">
+                    ${content}
+                </div>
+            `;
+        });
+        
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${this.app.escapeHtml(page.title)}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f9fafb;
+        }
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 30px;
+            color: #1f2937;
+        }
+        .page-content {
+            display: flex;
+            flex-wrap: wrap;
+            margin: -10px;
+        }
+        .page-content::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+        img, video {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <h1 class="page-title">${this.app.escapeHtml(page.title)}</h1>
+        <div class="page-content">
+            ${columnsHTML}
+        </div>
+    </div>
+</body>
+</html>`;
     }
 }

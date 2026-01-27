@@ -233,6 +233,7 @@ class MediaManager {
         const container = document.getElementById('mediaTagsContainer');
         container.innerHTML = '';
 
+        // Show selected tags
         tags.forEach(tag => {
             const chip = document.createElement('div');
             chip.className = 'tag-chip';
@@ -245,6 +246,73 @@ class MediaManager {
             });
             container.appendChild(chip);
         });
+        
+        // Add popular/recent tags
+        const suggestedContainer = document.createElement('div');
+        suggestedContainer.style.cssText = 'margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb;';
+        
+        const suggestedLabel = document.createElement('div');
+        suggestedLabel.style.cssText = 'font-size: 11px; color: #9ca3af; margin-bottom: 6px; text-transform: uppercase; font-weight: 600;';
+        suggestedLabel.textContent = 'Quick Add:';
+        suggestedContainer.appendChild(suggestedLabel);
+        
+        const suggestedTagsDiv = document.createElement('div');
+        suggestedTagsDiv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px;';
+        
+        // Get all tags that haven't been added yet, prioritize by frequency
+        const availableTags = this.app.tags.filter(tag => !tags.includes(tag));
+        const tagsWithFreq = availableTags.map(tag => ({
+            tag,
+            freq: this.app.media.reduce((sum, m) => {
+                const meta = this.app.getMediaMetadata(m.id);
+                return sum + (meta.tags.includes(tag) ? 1 : 0);
+            }, 0)
+        })).sort((a, b) => b.freq - a.freq);
+        
+        const topTags = tagsWithFreq.slice(0, 8); // Show top 8
+        
+        if (topTags.length > 0) {
+            topTags.forEach(({tag}) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'tag-suggest';
+                btn.textContent = tag;
+                btn.style.cssText = 'padding: 4px 12px; font-size: 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; cursor: pointer; transition: all 0.2s;';
+                btn.addEventListener('mouseenter', () => {
+                    btn.style.background = '#FF8C42';
+                    btn.style.color = 'white';
+                    btn.style.borderColor = '#FF8C42';
+                });
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.background = '#f3f4f6';
+                    btn.style.color = 'inherit';
+                    btn.style.borderColor = '#d1d5db';
+                });
+                btn.addEventListener('click', () => {
+                    const chip = document.createElement('div');
+                    chip.className = 'tag-chip';
+                    chip.innerHTML = `
+                        ${this.app.escapeHtml(tag)}
+                        <button class="tag-chip-remove" type="button">&times;</button>
+                    `;
+                    chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
+                        chip.remove();
+                    });
+                    container.appendChild(chip);
+                    btn.style.opacity = '0.5';
+                    btn.disabled = true;
+                });
+                suggestedTagsDiv.appendChild(btn);
+            });
+        } else {
+            const noTags = document.createElement('div');
+            noTags.style.cssText = 'font-size: 11px; color: #d1d5db;';
+            noTags.textContent = 'No suggested tags';
+            suggestedTagsDiv.appendChild(noTags);
+        }
+        
+        suggestedContainer.appendChild(suggestedTagsDiv);
+        container.appendChild(suggestedContainer);
 
         const input = document.getElementById('mediaTagInput');
         input.addEventListener('keydown', (e) => {

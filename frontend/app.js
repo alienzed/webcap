@@ -194,18 +194,15 @@ class MediaWeb {
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e));
 
-        // Close modal on overlay click
+        // Close modal on overlay click or close button
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal')) {
                 this.closeModal();
             }
-        });
-        
-        // Close button in all modals
-        document.querySelectorAll('.btn-close').forEach(btn => {
-            btn.addEventListener('click', () => {
+            const closeBtn = e.target.closest('.btn-close');
+            if (closeBtn) {
                 this.closeModal();
-            });
+            }
         });
 
         // Escape key closes modals

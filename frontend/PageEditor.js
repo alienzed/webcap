@@ -31,6 +31,153 @@ class PageEditor {
         document.getElementById('btnBackToPages').addEventListener('click', () => {
             this.closeEditor();
         });
+
+        // Event delegation for pages list
+        const pagesList = document.getElementById('pagesList');
+        if (pagesList) {
+            pagesList.addEventListener('click', (e) => {
+                const deleteBtn = e.target.closest('.media-card-delete-btn');
+                if (deleteBtn) {
+                    e.stopPropagation();
+                    const card = e.target.closest('.page-card');
+                    const pageId = card.dataset.pageId;
+                    const page = this.app.pages.find(p => p.id === pageId);
+                    if (page && confirm(`Delete page "${page.title}"?`)) {
+                        const idx = this.app.pages.findIndex(p => p.id === page.id);
+                        if (idx >= 0) {
+                            this.app.pages.splice(idx, 1);
+                            if (this.app.api) {
+                                this.app.api.deletePage(page).catch(err => {
+                                    this.app.console.log('error', `Failed to delete page: ${err.message || err}`);
+                                });
+                            }
+                            this.renderPagesList();
+                        }
+                    }
+                    return;
+                }
+
+                const viewBtn = e.target.closest('.media-card-view-btn');
+                if (viewBtn) {
+                    e.stopPropagation();
+                    const card = e.target.closest('.page-card');
+                    const pageId = card.dataset.pageId;
+                    const page = this.app.pages.find(p => p.id === pageId);
+                    if (page) this.viewFullScreen(page);
+                    return;
+                }
+
+                const card = e.target.closest('.page-card');
+                if (card) {
+                    const pageId = card.dataset.pageId;
+                    const page = this.app.pages.find(p => p.id === pageId);
+                    if (page) this.open(page);
+                }
+            });
+        }
+
+        // Event delegation for page canvas (column toolbar buttons and text editing)
+        const pageCanvas = document.getElementById('pageCanvas');
+        if (pageCanvas) {
+            pageCanvas.addEventListener('click', (e) => {
+                // Column toolbar buttons
+                const moveupBtn = e.target.closest('[data-action="moveup"]');
+                if (moveupBtn) {
+                    const columnDiv = moveupBtn.closest('.column-element');
+                    const columnId = columnDiv.dataset.columnId;
+                    const page = this.app.currentEditor.page;
+                    const colIdx = page.columns.findIndex(c => c.id === columnId);
+                    if (colIdx > 0) {
+                        [page.columns[colIdx - 1], page.columns[colIdx]] = [page.columns[colIdx], page.columns[colIdx - 1]];
+                        this.renderColumns();
+                    }
+                    return;
+                }
+
+                const movedownBtn = e.target.closest('[data-action="movedown"]');
+                if (movedownBtn) {
+                    const columnDiv = movedownBtn.closest('.column-element');
+                    const columnId = columnDiv.dataset.columnId;
+                    const page = this.app.currentEditor.page;
+                    const colIdx = page.columns.findIndex(c => c.id === columnId);
+                    if (colIdx < page.columns.length - 1) {
+                        [page.columns[colIdx + 1], page.columns[colIdx]] = [page.columns[colIdx], page.columns[colIdx + 1]];
+                        this.renderColumns();
+                    }
+                    return;
+                }
+
+                const widthBtn = e.target.closest('[data-action="width"]');
+                if (widthBtn) {
+                    const columnDiv = widthBtn.closest('.column-element');
+                    const columnId = columnDiv.dataset.columnId;
+                    const column = this.app.currentEditor.page.columns.find(c => c.id === columnId);
+                    const widths = [3, 4, 6, 8, 12];
+                    const currentIdx = widths.indexOf(column.width);
+                    const nextIdx = (currentIdx + 1) % widths.length;
+                    column.width = widths[nextIdx];
+                    this.renderColumns();
+                    return;
+                }
+
+                const deleteBtn = e.target.closest('[data-action="delete"]');
+                if (deleteBtn) {
+                    const columnDiv = deleteBtn.closest('.column-element');
+                    const columnId = columnDiv.dataset.columnId;
+                    const page = this.app.currentEditor.page;
+                    const colIdx = page.columns.findIndex(c => c.id === columnId);
+                    if (colIdx >= 0) {
+                        page.columns.splice(colIdx, 1);
+                        this.renderColumns();
+                    }
+                    return;
+                }
+
+                // Text content click to edit
+                const textContent = e.target.closest('[data-text-content]');
+                if (textContent && !e.target.closest('.column-toolbar')) {
+                    const columnDiv = textContent.closest('.column-element');
+                    const columnId = columnDiv.dataset.columnId;
+                    const column = this.app.currentEditor.page.columns.find(c => c.id === columnId);
+                    if (column) this.editTextInline(columnDiv, column);
+                    return;
+                }
+
+                // Media edit button
+                const mediaEditBtn = e.target.closest('.media-edit-btn');
+                if (mediaEditBtn) {
+                    const mediaId = mediaEditBtn.dataset.mediaId;
+                    const media = this.app.media.find(m => m.id === mediaId);
+                    if (media) this.app.mediaManager.openEditor(media);
+                    return;
+                }
+            });
+        }
+
+        // Event delegation for media library
+        const editorMediaLibrary = document.getElementById('editorMediaLibrary');
+        if (editorMediaLibrary) {
+            editorMediaLibrary.addEventListener('dblclick', (e) => {
+                const mediaItem = e.target.closest('.media-item');
+                if (mediaItem) {
+                    const mediaId = mediaItem.dataset.mediaId;
+                    const media = this.app.media.find(m => m.id === mediaId);
+                    if (media && this.app.currentEditor && this.app.currentEditor.page) {
+                        const page = this.app.currentEditor.page;
+                        const column = {
+                            id: this.app.generateId(),
+                            width: 12,
+                            type: media.media_type,
+                            data: { media_id: mediaId, caption: '' }
+                        };
+                        page.columns.push(column);
+                        const metadata = this.app.getMediaMetadata(mediaId);
+                        this.app.console.log('info', `Added ${media.media_type} "${metadata.title || media.filename}" to page`);
+                        this.renderColumns();
+                    }
+                }
+            });
+        }
     }
 
     renderPagesList() {
@@ -50,48 +197,8 @@ class PageEditor {
 
         this.app.pages.forEach(page => {
             const card = document.createElement('div');
-            card.className = 'page-card';
-            
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'btn btn-icon';
-            deleteBtn.textContent = '🗑️';
-            deleteBtn.title = 'Delete this page';
-            deleteBtn.style.position = 'absolute';
-            deleteBtn.style.top = '10px';
-            deleteBtn.style.right = '10px';
-            deleteBtn.style.width = '32px';
-            deleteBtn.style.height = '32px';
-            deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (confirm(`Delete page "${page.title}"?`)) {
-                    const idx = this.app.pages.findIndex(p => p.id === page.id);
-                    if (idx >= 0) {
-                        this.app.pages.splice(idx, 1);
-                        if (this.app.api) {
-                            this.app.api.deletePage(page).catch(err => {
-                                this.app.console.log('error', `Failed to delete page: ${err.message || err}`);
-                            });
-                        }
-                        this.renderPagesList();
-                    }
-                }
-            });
-            
-            const viewBtn = document.createElement('button');
-            viewBtn.className = 'btn btn-icon';
-            viewBtn.textContent = '👁️';
-            viewBtn.title = 'View Full Screen';
-            viewBtn.style.position = 'absolute';
-            viewBtn.style.top = '10px';
-            viewBtn.style.right = '50px';
-            viewBtn.style.width = '32px';
-            viewBtn.style.height = '32px';
-            viewBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.viewFullScreen(page);
-            });
-
-            card.style.position = 'relative';
+            card.className = 'page-card media-card-positioned';
+            card.dataset.pageId = page.id;
             card.innerHTML = `
                 <div class="page-card-title">${this.app.escapeHtml(page.title)}</div>
                 <div class="page-card-slug">/${page.slug}</div>
@@ -99,10 +206,9 @@ class PageEditor {
                     <span>${page.columns ? page.columns.length : (page.sections ? page.sections.length : 0)} items</span>
                     <span>${this.app.formatDate(page.modified)}</span>
                 </div>
+                <button class="btn btn-icon media-card-delete-btn" title="Delete this page">🗑️</button>
+                <button class="btn btn-icon media-card-view-btn" title="View Full Screen">👁️</button>
             `;
-            card.appendChild(deleteBtn);
-            card.appendChild(viewBtn);
-            card.addEventListener('click', () => this.open(page));
             list.appendChild(card);
         });
     }
@@ -156,13 +262,6 @@ class PageEditor {
 
         const canvas = document.getElementById('pageCanvas');
         canvas.innerHTML = '';
-        canvas.style.display = 'flex';
-        canvas.style.flexWrap = 'wrap';
-        canvas.style.gap = '10px';
-        canvas.style.minHeight = '400px';
-        canvas.style.padding = '20px';
-        canvas.style.background = 'white';
-        canvas.style.boxSizing = 'border-box';
         
         this.renderColumns();
         this.renderMediaLibrary();
@@ -176,33 +275,97 @@ class PageEditor {
         // Show the page editor section instead of modal
         document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
         document.getElementById('pageEditor').classList.add('active');
-        document.getElementById('pageEditor').style.display = 'block';
+        document.getElementById('pageEditor').classList.remove('hidden');
     }
 
     renderColumns() {
         const canvas = document.getElementById('pageCanvas');
         const page = this.app.currentEditor.page;
-        
         canvas.innerHTML = '';
-        
-        page.columns.forEach((column, idx) => {
-            const colDiv = this.createColumnElement(column, idx);
-            canvas.appendChild(colDiv);
+
+        // Chunk columns into rows that sum to 12 or less
+        let currentRow = [];
+        let currentSum = 0;
+        const rows = [];
+        page.columns.forEach(col => {
+            const width = Number(col.width) || 12;
+            if (currentSum + width > 12) {
+                if (currentRow.length) rows.push(currentRow);
+                currentRow = [];
+                currentSum = 0;
+            }
+            currentRow.push(col);
+            currentSum += width;
         });
-        
-        this.addPlaceholder(canvas);
+        if (currentRow.length) rows.push(currentRow);
+
+        // Render each row as a flex row
+        rows.forEach(row => {
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'canvas-row';
+            rowDiv.style.display = 'flex';
+            rowDiv.style.gap = '12px';
+            row.forEach(column => {
+                const colDiv = this.createColumnElement(column);
+                // Set flex-basis as a percentage of 12 columns
+                const percent = (Number(column.width) || 12) / 12 * 100;
+                colDiv.style.flex = `0 0 ${percent}%`;
+                colDiv.style.maxWidth = `${percent}%`;
+                colDiv.style.boxSizing = 'border-box';
+                rowDiv.appendChild(colDiv);
+            });
+            canvas.appendChild(rowDiv);
+        });
+
+        // Add placeholder as a new full-width row
+        const placeholderRow = document.createElement('div');
+        placeholderRow.className = 'canvas-row';
+        placeholderRow.style.display = 'flex';
+        const placeholder = document.createElement('div');
+        placeholder.style.flex = '0 0 100%';
+        placeholder.style.maxWidth = '100%';
+        placeholder.style.boxSizing = 'border-box';
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.textContent = 'Add text block';
+        addBtn.className = 'btn btn-primary canvas-add-btn';
+        addBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = this.app.currentEditor.page;
+            const columnId = this.app.generateId();
+            const column = {
+                id: columnId,
+                width: 12,
+                type: 'text',
+                data: {
+                    content: '',
+                    textType: 'p',
+                    textAlign: 'left'
+                }
+            };
+            page.columns.push(column);
+            this.app.console.log('info', 'Added text column');
+            this.renderColumns();
+            setTimeout(() => {
+                const newColEl = document.querySelector(`.column-element[data-column-id="${columnId}"]`);
+                if (newColEl) {
+                    this.editTextInline(newColEl, column);
+                }
+            }, 0);
+        });
+        placeholder.appendChild(addBtn);
+        placeholderRow.appendChild(placeholder);
+        canvas.appendChild(placeholderRow);
     }
 
     addPlaceholder(canvas) {
         const placeholder = document.createElement('div');
-        placeholder.className = 'column-placeholder';
-        placeholder.style.cssText = 'flex: 0 0 100%; padding: 15px 10px; box-sizing: border-box; background: #fafafa; border-radius: 8px; margin: 0 10px;';
+        placeholder.className = 'canvas-placeholder';
         
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.textContent = 'Add text block';
-        addBtn.className = 'btn btn-primary';
-        addBtn.style.width = '100%';
+        addBtn.className = 'btn btn-primary canvas-add-btn';
         addBtn.addEventListener('click', (e) => {
             e.preventDefault();
             const page = this.app.currentEditor.page;
@@ -234,63 +397,22 @@ class PageEditor {
 
     createColumnElement(column, idx) {
         const div = document.createElement('div');
-        div.className = 'page-column';
+        div.className = `column-element col-${column.width}`;
         div.dataset.columnId = column.id;
         
-        // Calculate width with proper gap handling for flexbox
-        // With gap: 10px, for n items filling the row, total gaps = (n-1) * 10px
-        const widthPercent = (column.width / 12) * 100;
-        const itemsPerRow = 12 / column.width;
-        const totalGaps = (itemsPerRow - 1) * 10;
-        const gapPerItem = totalGaps / itemsPerRow;
-        
-        // Add extra buffer to ensure no wrapping (browsers can be inconsistent with calc)
-        const adjustedGap = gapPerItem + 1;
-        
-        div.style.flex = `0 0 calc(${widthPercent}% - ${adjustedGap}px)`;
-        div.style.maxWidth = `calc(${widthPercent}% - ${adjustedGap}px)`;
-        div.style.minWidth = '0';
-        div.style.padding = '10px';
-        div.style.boxSizing = 'border-box';
-        div.style.position = 'relative';
-        
-        // Create toolbar at TOP
+        // Create toolbar with data attributes
         const toolbar = document.createElement('div');
         toolbar.className = 'column-toolbar';
-        toolbar.style.cssText = 'display: flex; gap: 5px; margin-bottom: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px; opacity: 0; transition: opacity 0.2s;';
-        
-        const moveupBtn = document.createElement('button');
-        moveupBtn.type = 'button';
-        moveupBtn.textContent = '▲';
-        moveupBtn.title = 'Move Up';
-        moveupBtn.style.cssText = 'padding: 6px 10px; font-size: 14px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; font-weight: bold;';
-        
-        const movedownBtn = document.createElement('button');
-        movedownBtn.type = 'button';
-        movedownBtn.textContent = '▼';
-        movedownBtn.title = 'Move Down';
-        movedownBtn.style.cssText = 'padding: 6px 10px; font-size: 14px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; font-weight: bold;';
-        
-        const widthBtn = document.createElement('button');
-        widthBtn.type = 'button';
-        widthBtn.textContent = `${column.width}/12`;
-        widthBtn.title = `Width: ${column.width}/12`;
-        widthBtn.style.cssText = 'padding: 6px 10px; font-size: 12px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; font-weight: 500;';
-        
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.textContent = '🗑️';
-        deleteBtn.title = 'Delete';
-        deleteBtn.style.cssText = 'padding: 6px 10px; font-size: 14px; border: 1px solid #ddd; background: white; border-radius: 3px; cursor: pointer; margin-left: auto;';
-        
-        toolbar.appendChild(moveupBtn);
-        toolbar.appendChild(movedownBtn);
-        toolbar.appendChild(widthBtn);
-        toolbar.appendChild(deleteBtn);
+        toolbar.innerHTML = `
+            <button type="button" class="column-toolbar-btn" data-action="moveup" title="Move Up">▲</button>
+            <button type="button" class="column-toolbar-btn" data-action="movedown" title="Move Down">▼</button>
+            <button type="button" class="column-width-btn" data-action="width" title="Width: ${column.width}/12">${column.width}/12</button>
+            <button type="button" class="column-delete-btn" data-action="delete" title="Delete">🗑️</button>
+        `;
         
         // Create content container
         const contentContainer = document.createElement('div');
-        contentContainer.style.position = 'relative';
+        contentContainer.className = 'column-content-container';
         
         let content = '';
         if (column.type === 'text') {
@@ -302,22 +424,13 @@ class PageEditor {
                 content: column.data.content || 'Empty text'
             }, true);
             contentContainer.innerHTML = content;
-            
-            // Make text clickable to edit
-            const textContent = contentContainer.querySelector('[data-text-content]');
-            if (textContent) {
-                textContent.style.cursor = 'text';
-                textContent.addEventListener('click', () => {
-                    this.editTextInline(div, column);
-                });
-            }
         } else if (column.type === 'image' || column.type === 'video') {
             if (column.data.media_id) {
                 const media = this.app.media.find(m => m.id === column.data.media_id);
                 if (media) {
                     const fileUrl = this.app.getMediaFileUrl(media);
                     const mediaWrapper = document.createElement('div');
-                    mediaWrapper.style.cssText = 'border: 2px solid #ddd; border-radius: 4px; overflow: hidden; position: relative;';
+                    mediaWrapper.className = 'media-wrapper';
                     
                     if (column.type === 'image') {
                         mediaWrapper.innerHTML = `
@@ -333,26 +446,14 @@ class PageEditor {
                         `;
                     }
                     
-                    // Add floating edit button
+                    // Add floating edit button with data attribute
                     const editBtn = document.createElement('button');
                     editBtn.type = 'button';
+                    editBtn.className = 'media-edit-btn';
                     editBtn.textContent = '✏️ Edit';
-                    editBtn.style.cssText = 'position: absolute; top: 10px; right: 10px; padding: 6px 12px; background: rgba(255, 255, 255, 0.95); border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); opacity: 0; transition: opacity 0.2s;';
-                    editBtn.addEventListener('click', () => {
-                        const media = this.app.media.find(m => m.id === column.data.media_id);
-                        if (media) {
-                            this.app.mediaManager.openEditor(media);
-                        }
-                    });
+                    editBtn.dataset.mediaId = column.data.media_id;
                     
                     mediaWrapper.appendChild(editBtn);
-                    mediaWrapper.addEventListener('mouseenter', () => {
-                        editBtn.style.opacity = '1';
-                    });
-                    mediaWrapper.addEventListener('mouseleave', () => {
-                        editBtn.style.opacity = '0';
-                    });
-                    
                     contentContainer.appendChild(mediaWrapper);
                 }
             }
@@ -360,52 +461,6 @@ class PageEditor {
         
         div.appendChild(toolbar);
         div.appendChild(contentContainer);
-        
-        // Hover effects for toolbar
-        div.addEventListener('mouseenter', () => {
-            toolbar.style.opacity = '1';
-            div.style.background = '#fafafa';
-        });
-        div.addEventListener('mouseleave', () => {
-            toolbar.style.opacity = '0';
-            div.style.background = '';
-        });
-
-        moveupBtn.addEventListener('click', () => {
-            const page = this.app.currentEditor.page;
-            const colIdx = page.columns.findIndex(c => c.id === column.id);
-            if (colIdx > 0) {
-                [page.columns[colIdx - 1], page.columns[colIdx]] = [page.columns[colIdx], page.columns[colIdx - 1]];
-                this.renderColumns();
-            }
-        });
-
-        movedownBtn.addEventListener('click', () => {
-            const page = this.app.currentEditor.page;
-            const colIdx = page.columns.findIndex(c => c.id === column.id);
-            if (colIdx < page.columns.length - 1) {
-                [page.columns[colIdx + 1], page.columns[colIdx]] = [page.columns[colIdx], page.columns[colIdx + 1]];
-                this.renderColumns();
-            }
-        });
-
-        widthBtn.addEventListener('click', () => {
-            const widths = [3, 4, 6, 8, 12];
-            const currentIdx = widths.indexOf(column.width);
-            const nextIdx = (currentIdx + 1) % widths.length;
-            column.width = widths[nextIdx];
-            this.renderColumns();
-        });
-
-        deleteBtn.addEventListener('click', () => {
-            const page = this.app.currentEditor.page;
-            const colIdx = page.columns.findIndex(c => c.id === column.id);
-            if (colIdx >= 0) {
-                page.columns.splice(colIdx, 1);
-                this.renderColumns();
-            }
-        });
-
         return div;
     }
 
@@ -422,12 +477,11 @@ class PageEditor {
         
         // Create toolbar
         const toolbar = document.createElement('div');
-        toolbar.className = 'text-toolbar';
-        toolbar.style.cssText = 'display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; padding: 12px; background: #f5f5f5; border-radius: 4px;';
+        toolbar.className = 'text-editor-inline-toolbar';
         
         // Type selector buttons (instead of dropdown)
         const typeGroup = document.createElement('div');
-        typeGroup.style.cssText = 'display: flex; gap: 4px; padding-right: 8px; border-right: 1px solid #ddd;';
+        typeGroup.className = 'text-type-group';
         
         const types = [
             { value: 'p', label: 'P' },
@@ -439,12 +493,10 @@ class PageEditor {
         types.forEach(type => {
             const btn = document.createElement('button');
             btn.type = 'button';
+            btn.className = 'text-type-btn';
             btn.textContent = type.label;
-            btn.style.cssText = 'padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; background: white; cursor: pointer; font-weight: 500;';
             if (column.data.textType === type.value) {
-                btn.style.background = '#FF8C42';
-                btn.style.color = 'white';
-                btn.style.borderColor = '#FF8C42';
+                btn.classList.add('active');
             }
             btn.addEventListener('click', () => {
                 column.data.textType = type.value;
@@ -456,23 +508,21 @@ class PageEditor {
         const updateTypeButtons = () => {
             typeGroup.querySelectorAll('button').forEach((btn, idx) => {
                 const isActive = types[idx].value === column.data.textType;
-                btn.style.background = isActive ? '#FF8C42' : 'white';
-                btn.style.color = isActive ? 'white' : 'black';
-                btn.style.borderColor = isActive ? '#FF8C42' : '#ddd';
+                btn.classList.toggle('active', isActive);
             });
         };
         
         // Alignment buttons
         const alignGroup = document.createElement('div');
-        alignGroup.style.cssText = 'display: flex; gap: 4px;';
+        alignGroup.className = 'text-align-group-inline';
         
         const alignLeft = document.createElement('button');
         alignLeft.type = 'button';
+        alignLeft.className = 'text-align-btn-inline';
         alignLeft.textContent = '≡';
         alignLeft.title = 'Align Left';
-        alignLeft.style.cssText = 'padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; background: white; cursor: pointer; font-family: monospace;';
         if (column.data.textAlign === 'left') {
-            alignLeft.style.background = '#FF8C42';
+            alignLeft.classList.add('active');
         }
         alignLeft.addEventListener('click', () => {
             column.data.textAlign = 'left';
@@ -481,11 +531,11 @@ class PageEditor {
         
         const alignCenter = document.createElement('button');
         alignCenter.type = 'button';
-        alignCenter.textContent = '≣';
+        alignCenter.className = 'text-align-btn-inline';
+        alignCenter.textContent = '≃';
         alignCenter.title = 'Align Center';
-        alignCenter.style.cssText = 'padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; background: white; cursor: pointer; font-family: monospace;';
         if (column.data.textAlign === 'center') {
-            alignCenter.style.background = '#FF8C42';
+            alignCenter.classList.add('active');
         }
         alignCenter.addEventListener('click', () => {
             column.data.textAlign = 'center';
@@ -494,11 +544,11 @@ class PageEditor {
         
         const alignRight = document.createElement('button');
         alignRight.type = 'button';
+        alignRight.className = 'text-align-btn-inline';
         alignRight.textContent = '≡';
         alignRight.title = 'Align Right';
-        alignRight.style.cssText = 'padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; background: white; cursor: pointer; font-family: monospace;';
         if (column.data.textAlign === 'right') {
-            alignRight.style.background = '#FF8C42';
+            alignRight.classList.add('active');
         }
         alignRight.addEventListener('click', () => {
             column.data.textAlign = 'right';
@@ -506,9 +556,9 @@ class PageEditor {
         });
         
         const updateAlignButtons = () => {
-            alignLeft.style.background = column.data.textAlign === 'left' ? '#FF8C42' : 'white';
-            alignCenter.style.background = column.data.textAlign === 'center' ? '#FF8C42' : 'white';
-            alignRight.style.background = column.data.textAlign === 'right' ? '#FF8C42' : 'white';
+            alignLeft.classList.toggle('active', column.data.textAlign === 'left');
+            alignCenter.classList.toggle('active', column.data.textAlign === 'center');
+            alignRight.classList.toggle('active', column.data.textAlign === 'right');
         };
         
         alignGroup.appendChild(alignLeft);
@@ -517,7 +567,7 @@ class PageEditor {
         
         // Help text
         const helpText = document.createElement('span');
-        helpText.style.cssText = 'font-size: 11px; color: #666; margin-left: auto;';
+        helpText.className = 'text-editor-help';
         helpText.textContent = 'Ctrl+Enter to save, Esc to cancel';
         
         toolbar.appendChild(typeGroup);
@@ -527,8 +577,7 @@ class PageEditor {
         // Create textarea
         const textarea = document.createElement('textarea');
         textarea.value = column.data.content || '';
-        textarea.className = 'text-editor-textarea';
-        textarea.style.cssText = 'width: 100%; min-height: 100px; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 14px; resize: vertical; box-sizing: border-box;';
+        textarea.className = 'text-editor-textarea-inline';
         
         const saveEdit = () => {
             const newValue = textarea.value.trim();
@@ -592,19 +641,17 @@ class PageEditor {
     renderMediaLibrary(filterText = '') {
         const library = document.getElementById('editorMediaLibrary');
         library.innerHTML = '';
-        library.style.display = 'grid';
-        library.style.gridTemplateColumns = '1fr 1fr';
-        library.style.gap = '8px';
+        library.className = 'editor-media-library';
 
         if (this.app.media.length === 0) {
-            library.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: #999; font-size: 12px;">No media yet</div>';
+            library.innerHTML = '<div class="editor-media-header">No media yet</div>';
             return;
         }
         
         // Add instruction header
         const header = document.createElement('div');
-        header.style.cssText = 'grid-column: 1/-1; padding: 8px; background: #FFF4E6; border-radius: 4px; font-size: 11px; color: #F59E0B; text-align: center; margin-bottom: 4px;';
-        header.textContent = '� Double-click to add media to page';
+        header.className = 'editor-media-header';
+        header.textContent = '🎬 Double-click to add media to page';
         library.appendChild(header);
 
         const filter = filterText.toLowerCase();
@@ -617,13 +664,13 @@ class PageEditor {
         });
 
         if (filtered.length === 0) {
-            library.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: #999; font-size: 12px;">No matching media</div>';
+            library.innerHTML = '<div class="editor-media-header">No matching media</div>';
             return;
         }
 
         filtered.forEach(media => {
             const item = document.createElement('div');
-            item.className = 'editor-media-item';
+            item.className = 'editor-media-item media-item';
             item.dataset.mediaId = media.id;
             item.dataset.mediaType = media.media_type;
             
@@ -643,34 +690,6 @@ class PageEditor {
                     ${this.app.truncate(metadata.title || media.filename, 15)}
                 </div>
             `;
-
-            item.style.cssText = 'cursor: pointer; padding: 4px; border: 1px solid #ddd; border-radius: 4px; background: white; user-select: none; transition: all 0.2s;';
-            
-            item.addEventListener('mouseenter', () => {
-                item.style.borderColor = '#FF8C42';
-                item.style.boxShadow = '0 2px 4px rgba(255,140,66,0.2)';
-            });
-            
-            item.addEventListener('mouseleave', () => {
-                item.style.borderColor = '#ddd';
-                item.style.boxShadow = 'none';
-            });
-            
-            // Double-click to add media
-            item.addEventListener('dblclick', () => {
-                this.app.console.log('info', `Double-clicked media: ${media.filename}`);
-                const page = this.app.currentEditor.page;
-                const column = {
-                    id: this.app.generateId(),
-                    width: 12,
-                    type: media.media_type,
-                    data: { media_id: media.id, caption: '' }
-                };
-                page.columns.push(column);
-                const metadata = this.app.getMediaMetadata(media.id);
-                this.app.console.log('info', `Added ${media.media_type} "${metadata.title || media.filename}" to page`);
-                this.renderColumns();
-            });
 
             library.appendChild(item);
         });
@@ -724,15 +743,14 @@ class PageEditor {
         const title = document.getElementById('pageTitle').value || 'Untitled Page';
         
         const modal = document.createElement('div');
-        modal.className = 'modal active';
-        modal.style.zIndex = '2000';
+        modal.className = 'modal active modal-preview';
         modal.innerHTML = `
-            <div class="modal-content modal-large" style="max-width: 1000px;">
+            <div class="modal-content modal-large">
                 <div class="modal-header">
                     <h2>${this.app.escapeHtml(title)}</h2>
                     <button class="btn-close">&times;</button>
                 </div>
-                <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+                <div class="modal-body">
                     <div id="pagePreviewContent" style="padding: 20px;"></div>
                 </div>
             </div>
@@ -741,48 +759,69 @@ class PageEditor {
         document.body.appendChild(modal);
         
         const content = document.getElementById('pagePreviewContent');
-        content.style.display = 'flex';
-        content.style.flexWrap = 'wrap';
+        content.className = 'preview-content';
         
-        page.columns.forEach(column => {
-            const colDiv = document.createElement('div');
-            colDiv.style.width = `${(column.width / 12) * 100}%`;
-            colDiv.style.padding = '10px';
-            colDiv.style.boxSizing = 'border-box';
-            
-            if (column.type === 'text') {
-                colDiv.innerHTML = this.buildTextHtml({
-                    textType: column.data.textType,
-                    textAlign: column.data.textAlign,
-                    content: column.data.content || ''
-                });
-            } else if (column.type === 'image') {
-                const media = this.app.media.find(m => m.id === column.data.media_id);
-                if (media) {
-                    const fileUrl = this.app.getMediaFileUrl(media);
-                    colDiv.innerHTML = `
-                        <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
-                            <img src="${fileUrl}" style="width: 100%; height: auto; display: block;">
-                            ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.app.escapeHtml(column.data.caption)}</div>` : ''}
-                        </div>
-                    `;
+        // Group columns into rows that sum to 12 or less
+        function chunkColumns(columns) {
+            const rows = [];
+            let currentRow = [];
+            let currentSum = 0;
+            columns.forEach(col => {
+                const width = Number(col.width) || 12;
+                if (currentSum + width > 12) {
+                    if (currentRow.length) rows.push(currentRow);
+                    currentRow = [];
+                    currentSum = 0;
                 }
-            } else if (column.type === 'video') {
-                const media = this.app.media.find(m => m.id === column.data.media_id);
-                if (media) {
-                    const fileUrl = this.app.getMediaFileUrl(media);
-                    colDiv.innerHTML = `
-                        <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
-                            <video controls style="width: 100%; height: auto; display: block;">
-                                <source src="${fileUrl}">
-                            </video>
-                            ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.app.escapeHtml(column.data.caption)}</div>` : ''}
-                        </div>
-                    `;
+                currentRow.push(col);
+                currentSum += width;
+            });
+            if (currentRow.length) rows.push(currentRow);
+            return rows;
+        }
+
+        const rows = chunkColumns(page.columns);
+        rows.forEach(row => {
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'preview-content'; // 12-col grid
+            row.forEach(column => {
+                const colDiv = document.createElement('div');
+                colDiv.className = `preview-column col-${column.width}`;
+
+                if (column.type === 'text') {
+                    colDiv.innerHTML = this.buildTextHtml({
+                        textType: column.data.textType,
+                        textAlign: column.data.textAlign,
+                        content: column.data.content || ''
+                    });
+                } else if (column.type === 'image') {
+                    const media = this.app.media.find(m => m.id === column.data.media_id);
+                    if (media) {
+                        const fileUrl = this.app.getMediaFileUrl(media);
+                        colDiv.innerHTML = `
+                            <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                                <img src="${fileUrl}" style="width: 100%; height: auto; display: block;">
+                                ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.app.escapeHtml(column.data.caption)}</div>` : ''}
+                            </div>
+                        `;
+                    }
+                } else if (column.type === 'video') {
+                    const media = this.app.media.find(m => m.id === column.data.media_id);
+                    if (media) {
+                        const fileUrl = this.app.getMediaFileUrl(media);
+                        colDiv.innerHTML = `
+                            <div style="border: 2px solid #ddd; border-radius: 4px; overflow: hidden;">
+                                <video controls style="width: 100%; height: auto; display: block;">
+                                    <source src="${fileUrl}">
+                                </video>
+                                ${column.data.caption ? `<div style="padding: 8px; background: #f9f9f9; font-size: 0.9em;">${this.app.escapeHtml(column.data.caption)}</div>` : ''}
+                            </div>
+                        `;
+                    }
                 }
-            }
-            
-            content.appendChild(colDiv);
+                rowDiv.appendChild(colDiv);
+            });
+            content.appendChild(rowDiv);
         });
         
         modal.querySelector('.btn-close').addEventListener('click', () => {
@@ -801,7 +840,6 @@ class PageEditor {
         
         const modal = document.createElement('div');
         modal.className = 'modal active';
-        modal.style.zIndex = '3000';
         
         const html = this.generatePageHTML(page);
         
@@ -872,8 +910,7 @@ class PageEditor {
         // Show pages list again
         document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
         document.getElementById('pages').classList.add('active');
-        document.getElementById('pages').style.display = 'block';
-        document.getElementById('pageEditor').style.display = 'none';
+        document.getElementById('pageEditor').classList.add('hidden');
         this.app.currentEditor = null;
     }
     
@@ -916,11 +953,7 @@ class PageEditor {
                 }
             }
             
-            columnsHTML += `
-                <div style="width: ${widthPercent}%; padding: 10px; box-sizing: border-box; float: left;">
-                    ${content}
-                </div>
-            `;
+            columnsHTML += `<div style="width: ${widthPercent}%; padding: 10px; box-sizing: border-box; float: left;">${content}</div>`;
         });
         
         return `<!DOCTYPE html>

@@ -14,10 +14,47 @@ class MediaManager {
             this.saveMetadata();
         });
         
-        // Media editor close button
-        document.getElementById('btnCloseEditor')?.addEventListener('click', () => {
-            this.app.closeModal();
+        // Event delegation for tag chips
+        const tagsContainer = document.getElementById('mediaTagsContainer');
+        tagsContainer.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('.tag-chip-remove');
+            if (removeBtn) {
+                removeBtn.closest('.tag-chip').remove();
+            }
         });
+        const mediaGrid = document.getElementById('mediaGrid');
+        if (mediaGrid) {
+            mediaGrid.addEventListener('click', (e) => {
+                // Handle delete button click
+                const deleteBtn = e.target.closest('.media-delete-btn');
+                if (deleteBtn) {
+                    e.stopPropagation();
+                    const mediaId = deleteBtn.dataset.mediaId;
+                    const media = this.app.media.find(m => m.id === mediaId);
+                    if (media) this.deleteMedia(media);
+                    return;
+                }
+                
+                // Handle media item click (open editor)
+                const item = e.target.closest('.media-item');
+                if (item) {
+                    const mediaId = item.dataset.mediaId;
+                    const media = this.app.media.find(m => m.id === mediaId);
+                    if (media) this.openEditor(media);
+                }
+            });
+        }
+        
+        // Event delegation for tag filters
+        const tagFilterContainer = document.getElementById('mediaTagFilter');
+        if (tagFilterContainer) {
+            tagFilterContainer.addEventListener('click', (e) => {
+                const tagSpan = e.target.closest('.tag');
+                if (tagSpan) {
+                    this.toggleTagFilter(tagSpan.textContent.trim(), tagSpan);
+                }
+            });
+        }
     }
 
     setupDragAndDrop() {
@@ -194,11 +231,12 @@ class MediaManager {
 
         const mediaIcon = media.media_type === 'image' ? '🖼️' : '🎬';
         
+        item.dataset.mediaId = media.id;
         item.innerHTML = `
             <div class="media-thumbnail">
                 ${thumbnail}
                 <span class="media-type-badge" title="${media.media_type}">${mediaIcon}</span>
-                <button class="media-delete-btn" title="Delete media" data-media-id="${media.id}" style="position: absolute; top: 8px; right: 8px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 4px; width: 28px; height: 28px; cursor: pointer; font-size: 16px; display: none;">×</button>
+                <button class="media-delete-btn" title="Delete media" data-media-id="${media.id}">×</button>
             </div>
             <div class="media-info">
                 <div class="media-title">${metadata.title || this.app.truncate(media.filename, 20)}</div>
@@ -206,30 +244,7 @@ class MediaManager {
                 <div class="media-item-tags">${tagsHtml}</div>
             </div>
         `;
-
-        // Show delete button on hover
-        item.addEventListener('mouseenter', () => {
-            const deleteBtn = item.querySelector('.media-delete-btn');
-            if (deleteBtn) deleteBtn.style.display = 'block';
-        });
         
-        item.addEventListener('mouseleave', () => {
-            const deleteBtn = item.querySelector('.media-delete-btn');
-            if (deleteBtn) deleteBtn.style.display = 'none';
-        });
-        
-        // Delete button handler
-        const deleteBtn = item.querySelector('.media-delete-btn');
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                await this.deleteMedia(media);
-            });
-        }
-
-        item.addEventListener('click', () => {
-            this.openEditor(media);
-        });
         return item;
     }
 
@@ -296,7 +311,6 @@ class MediaManager {
             const span = document.createElement('span');
             span.className = 'tag';
             span.textContent = tag;
-            span.addEventListener('click', () => this.toggleTagFilter(tag, span));
             container.appendChild(span);
         });
     }
@@ -383,23 +397,20 @@ class MediaManager {
                 ${this.app.escapeHtml(tag)}
                 <button class="tag-chip-remove" type="button">&times;</button>
             `;
-            chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
-                chip.remove();
-            });
             container.appendChild(chip);
         });
         
         // Add popular/recent tags
         const suggestedContainer = document.createElement('div');
-        suggestedContainer.style.cssText = 'margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb;';
+        suggestedContainer.className = 'suggested-tags-container';
         
         const suggestedLabel = document.createElement('div');
-        suggestedLabel.style.cssText = 'font-size: 11px; color: #9ca3af; margin-bottom: 6px; text-transform: uppercase; font-weight: 600;';
+        suggestedLabel.className = 'suggested-tags-label';
         suggestedLabel.textContent = 'Quick Add:';
         suggestedContainer.appendChild(suggestedLabel);
         
         const suggestedTagsDiv = document.createElement('div');
-        suggestedTagsDiv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px;';
+        suggestedTagsDiv.className = 'suggested-tags-list';
         
         // Get all tags that haven't been added yet, prioritize by frequency
         const availableTags = this.app.tags.filter(tag => !tags.includes(tag));
@@ -419,17 +430,7 @@ class MediaManager {
                 btn.type = 'button';
                 btn.className = 'tag-suggest';
                 btn.textContent = tag;
-                btn.style.cssText = 'padding: 4px 12px; font-size: 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 16px; cursor: pointer; transition: all 0.2s;';
-                btn.addEventListener('mouseenter', () => {
-                    btn.style.background = '#FF8C42';
-                    btn.style.color = 'white';
-                    btn.style.borderColor = '#FF8C42';
-                });
-                btn.addEventListener('mouseleave', () => {
-                    btn.style.background = '#f3f4f6';
-                    btn.style.color = 'inherit';
-                    btn.style.borderColor = '#d1d5db';
-                });
+                btn.dataset.tag = tag;
                 btn.addEventListener('click', () => {
                     const chip = document.createElement('div');
                     chip.className = 'tag-chip';
@@ -437,25 +438,21 @@ class MediaManager {
                         ${this.app.escapeHtml(tag)}
                         <button class="tag-chip-remove" type="button">&times;</button>
                     `;
-                    chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
-                        chip.remove();
-                    });
                     container.appendChild(chip);
-                    btn.style.opacity = '0.5';
+                    btn.classList.add('disabled');
                     btn.disabled = true;
                 });
                 suggestedTagsDiv.appendChild(btn);
             });
         } else {
             const noTags = document.createElement('div');
-            noTags.style.cssText = 'font-size: 11px; color: #d1d5db;';
+            noTags.className = 'suggested-tags-none';
             noTags.textContent = 'No suggested tags';
             suggestedTagsDiv.appendChild(noTags);
         }
         
         suggestedContainer.appendChild(suggestedTagsDiv);
         container.appendChild(suggestedContainer);
-
         const input = document.getElementById('mediaTagInput');
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -468,9 +465,6 @@ class MediaManager {
                         ${this.app.escapeHtml(tag)}
                         <button class="tag-chip-remove" type="button">&times;</button>
                     `;
-                    chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
-                        chip.remove();
-                    });
                     container.appendChild(chip);
                     input.value = '';
                 }

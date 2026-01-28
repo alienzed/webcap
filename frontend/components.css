@@ -212,23 +212,30 @@ textarea.form-input {
     max-width: 1000px;
 }
 
-.modal-header {
-    padding: var(--spacing-lg);
-    border-bottom: 1px solid var(--color-border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.modal-preview {
+    z-index: 2000;
 }
 
-.modal-header h2 {
-    margin: 0;
-    color: var(--color-grey-dark);
+.modal-content {
+    background-color: var(--color-white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-large .modal-content {
+    max-width: 1000px;
 }
 
 .modal-body {
     flex: 1;
     overflow-y: auto;
     padding: var(--spacing-lg);
+    max-height: 80vh;
 }
 
 .modal-footer {
@@ -300,6 +307,28 @@ textarea.form-input {
     padding: 0;
     display: flex;
     align-items: center;
+}
+
+.tag-suggest {
+    padding: 4px 12px;
+    font-size: 12px;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tag-suggest:hover {
+    background: #FF8C42;
+    color: white;
+    border-color: #FF8C42;
+}
+
+.tag-suggest:disabled,
+.tag-suggest.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* Settings */
@@ -381,4 +410,51 @@ textarea.form-input {
 .empty-state-text {
     font-size: 1rem;
     margin-bottom: var(--spacing-lg);
+}
+
+/* Suggested tags */
+
+.suggested-tags-container {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.suggested-tags-label {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.suggested-tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.suggested-tag-btn {
+    padding: 4px 12px;
+    font-size: 12px;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.suggested-tag-btn:hover {
+    background: #e5e7eb;
+}
+
+.suggested-tag-btn.active {
+    background: #FF8C42;
+    color: white;
+    border-color: #FF8C42;
+}
+
+.suggested-tags-none {
+    font-size: 11px;
+    color: #d1d5db;
 }

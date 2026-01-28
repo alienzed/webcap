@@ -113,3 +113,27 @@
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--radius-sm);
 }
+
+.media-delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    font-size: 16px;
+    display: none;
+    transition: background 0.2s ease;
+}
+
+.media-item:hover .media-delete-btn {
+    display: block;
+}
+
+.media-delete-btn:hover {
+    background: rgba(220, 38, 38, 1);
+}

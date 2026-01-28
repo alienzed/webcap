@@ -123,3 +123,9 @@
     display: flex;
     gap: var(--spacing-md);
 }
+
+/* Utility classes */
+
+.hidden {
+    display: none !important;
+}

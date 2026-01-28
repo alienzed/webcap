@@ -88,7 +88,7 @@
             </section>
 
             <!-- Page Editor Section -->
-            <section id="pageEditor" class="section" style="display: none;">
+            <section id="pageEditor" class="section hidden">
                 <div class="section-header">
                     <h1>Page Editor</h1>
                     <div class="header-actions">
@@ -96,9 +96,9 @@
                     </div>
                 </div>
                 
-                <div class="page-editor-container" style="display: flex; gap: 20px; height: calc(100vh - 200px);">
+                <div class="page-editor-container">
                     <!-- Left: Page Settings & Media Library -->
-                    <div class="editor-sidebar" style="width: 300px; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; flex-shrink: 0; background: #f9f9f9; border-radius: 8px;">
+                    <div class="page-editor-sidebar">
                         <div class="form-group">
                             <label>Page Title</label>
                             <input type="text" id="pageTitle" class="form-input" placeholder="Untitled Page" required>
@@ -108,22 +108,22 @@
                             <input type="text" id="pageSlug" class="form-input" placeholder="auto-generated">
                         </div>
                         
-                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
+                        <hr>
                         
-                        <h4 style="margin-bottom: 10px; font-size: 14px; color: #666;">Media Library</h4>
-                        <input type="search" id="editorMediaFilter" class="form-input" placeholder="Filter media..." style="margin-bottom: 15px; font-size: 13px;">
+                        <h4>Media Library</h4>
+                        <input type="search" id="editorMediaFilter" class="form-input editor-media-filter" placeholder="Filter media...">
                         <div id="editorMediaLibrary" class="editor-media-library"></div>
                     </div>
                     
                     <!-- Right: Canvas -->
-                    <div class="editor-canvas" style="flex: 1; padding: 20px; overflow-y: auto; background: white; border-radius: 8px; border: 2px dashed #ddd;">
+                    <div class="page-editor-canvas">
                         <div id="pageCanvas" class="page-canvas">
                             <!-- Sections added here -->
                         </div>
                     </div>
                 </div>
 
-                <div class="page-editor-footer" style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <div class="page-editor-footer">
                     <button class="btn btn-secondary" id="btnPreviewPage">Preview</button>
                     <button class="btn btn-secondary" id="btnExportHTML">Export HTML</button>
                     <button class="btn btn-secondary" id="btnClosePageEditor">Cancel</button>
@@ -192,67 +192,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Modal: Page Editor -->
-    <div id="pageEditorModal" class="modal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h2>Page Editor</h2>
-                <button class="btn-close">&times;</button>
-            </div>
-            <div class="modal-body" style="padding: 0; height: 70vh;">
-                <div class="page-editor" style="display: flex; height: 100%;">
-                    <!-- Left: Page Settings & Media Library -->
-                    <div class="editor-sidebar" style="width: 280px; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; flex-shrink: 0;">
-                        <div class="form-group">
-                            <label>Page Title</label>
-                            <input type="text" id="pageTitle" class="form-input" placeholder="Untitled Page" required>
-                        </div>
-                        <div class="form-group">
-                            <label>URL Slug</label>
-                            <input type="text" id="pageSlug" class="form-input" placeholder="auto-generated">
-                        </div>
-                        
-                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
-                        
-                        <h4 style="margin-bottom: 10px; font-size: 14px; color: #666;">Media Library</h4>
-                        <input type="search" id="editorMediaFilter" class="form-input" placeholder="Filter media..." style="margin-bottom: 15px; font-size: 13px;">
-                        <div id="editorMediaLibrary" class="editor-media-library"></div>
-                    </div>
-                    
-                    <!-- Right: Canvas -->
-                    <div class="editor-canvas" style="flex: 1; padding: 20px; overflow-y: auto; background: #f9f9f9;">
-                        <div id="pageCanvas" class="page-canvas">
-                            <!-- Sections added here -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="btnPreviewPage">Preview</button>
-                <button class="btn btn-secondary" id="btnExportHTML">Export HTML</button>
-                <button class="btn btn-secondary" id="btnClosePageEditor">Cancel</button>
-                <button class="btn btn-primary" id="btnSavePage">Save Page</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Media Picker -->
-    <div id="mediaPickerModal" class="modal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h2>Select Media</h2>
-                <button class="btn-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="mediaPickerGrid" class="media-grid"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="btnCancelPicker">Cancel</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Console Panel -->
     <div id="consolePanel" class="console-panel">
         <div class="console-header">

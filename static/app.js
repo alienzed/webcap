@@ -1,1 +1,0 @@
-// ...existing code from frontend/app.js will be copied here

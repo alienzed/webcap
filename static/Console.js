@@ -1,1 +1,0 @@
-// ...existing code from frontend/Console.js will be copied here

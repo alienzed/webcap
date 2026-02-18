@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaWeb - Local-First Media CMS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='components.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='console.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='media-library.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='layout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='page-editor.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='responsive.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div id="app">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Logo: Gradient circle with frame inside -->
+                    <defs>
+                        <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#FF8C42;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#6B7280;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <circle cx="50" cy="50" r="48" fill="url(#logoGradient)" opacity="0.2"/>
+                    <rect x="20" y="20" width="60" height="60" fill="none" stroke="url(#logoGradient)" stroke-width="2"/>
+                    <circle cx="35" cy="35" r="4" fill="url(#logoGradient)"/>
+                    <path d="M20 80 L35 50 L55 65 L80 30" fill="none" stroke="url(#logoGradient)" stroke-width="2"/>
+                </svg>
+                <span class="logo-text">MediaWeb</span>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#media" class="nav-item active" data-section="media">
+                    <span class="nav-icon">🖼️</span>
+                    <span>Media</span>
+                </a>
+                <a href="#pages" class="nav-item" data-section="pages">
+                    <span class="nav-icon">📄</span>
+                    <span>Pages</span>
+                </a>
+                <a href="#settings" class="nav-item" data-section="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <!-- Add tooltips for unlabeled icons -->
+                <button class="btn-icon" id="btnToggleConsole" title="Toggle Console (Ctrl+`)">\</button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Media Section -->
+            <section id="media" class="section active">
+                <div class="section-header">
+                    <h1>Media Library</h1>
+                    <div class="header-actions">
+                        <input type="file" id="fileInput" multiple accept="image/*,video/*" hidden>
+                        <button class="btn btn-primary" id="btnUpload">+ Add Media</button>
+                    </div>
+                </div>
+
+                <div class="filters">
+                    <input type="search" id="searchMedia" class="search-input" placeholder="Search by title or caption..." title="Type to search, click × to clear">
+                    <div class="tag-filter">
+                        <label>Filter by tags:</label>
+                        <div id="tagList" class="tag-list"></div>
+                    </div>
+                </div>
+
+                <div id="mediaGrid" class="media-grid" data-drop-zone="true">
+                    <!-- Media items loaded here -->
+                    <!-- Drag & drop files here to upload -->
+                </div>
+            </section>
+
+            <!-- Pages Section -->
+            <section id="pages" class="section">
+                <div class="section-header">
+                    <h1>Pages</h1>
+                    <button class="btn btn-primary" id="btnNewPage">+ New Page</button>
+                </div>
+
+                <div id="pagesList" class="pages-list">
+                    <!-- Pages loaded here -->
+                </div>
+            </section>
+
+            <!-- Page Editor Section -->
+            <section id="pageEditor" class="section hidden">
+                <div class="section-header">
+                    <h1>Page Editor</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" id="btnBackToPages">← Back to Pages</button>
+                    </div>
+                </div>
+                
+                <div class="page-editor-container">
+                    <!-- Left: Page Settings & Media Library -->
+                    <div class="page-editor-sidebar">
+                        <div class="form-group">
+                            <label>Page Title</label>
+                            <input type="text" id="pageTitle" class="form-input" placeholder="Untitled Page" required>
+                        </div>
+                        <div class="form-group">
+                            <label>URL Slug</label>
+                            <input type="text" id="pageSlug" class="form-input" placeholder="auto-generated">
+                        </div>
+                        
+                        <hr>
+                        
+                        <h4>Media Library</h4>
+                        <input type="search" id="editorMediaFilter" class="form-input editor-media-filter" placeholder="Filter media...">
+                        <div id="editorMediaLibrary" class="editor-media-library"></div>
+                    </div>
+                    
+                    <!-- Right: Canvas -->
+                    <div class="page-editor-canvas">
+                        <div id="pageCanvas" class="page-canvas">
+                            <!-- Sections added here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-editor-footer">
+                    <button class="btn btn-secondary" id="btnPreviewPage">Preview</button>
+                    <button class="btn btn-secondary" id="btnExportHTML">Export HTML</button>
+                    <button class="btn btn-secondary" id="btnClosePageEditor">Cancel</button>
+                    <button class="btn btn-primary" id="btnSavePage">Save Page</button>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings" class="section">
+                <div class="section-header">
+                    <h1>Settings</h1>
+                </div>
+
+                <div class="settings-panel">
+                    <div class="setting-item">
+                        <label>Data Directory</label>
+                        <div class="data-path">
+                            <span id="dataPathDisplay">Not set</span>
+                            <button class="btn btn-secondary" id="btnSelectDataPath">Choose</button>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <label>Database Info</label>
+                        <div class="info-box">
+                            <p>Total Media: <span id="infoMediaCount">0</span></p>
+                            <p>Total Pages: <span id="infoPagesCount">0</span></p>
+                            <p>Total Tags: <span id="infoTagsCount">0</span></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Corrected layout for media editor modal -->
+            <section id="mediaEditorModal" class="media-editor-modal hidden">
+                <div class="media-editor">
+                    <div class="media-editor-sidebar">
+                        <div class="media-editor-media">
+                            <img src="" alt="Media" id="mediaPreview">
+                        </div>
+                        <div class="media-editor-details">
+                            <label for="mediaTitle">Title</label>
+                            <input type="text" id="mediaTitle" placeholder="Enter title">
+
+                            <label for="mediaCaption">Caption</label>
+                            <textarea id="mediaCaption" placeholder="Enter caption"></textarea>
+
+                            <div class="media-editor-tags">
+                                <label>Tags</label>
+                                <div id="mediaTagsContainer">
+                                    <!-- Tags will be dynamically added here -->
+                                </div>
+                                <input type="text" id="addTagInput" placeholder="Add a tag">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="media-editor-actions">
+                        <button id="btnSaveMedia">Save</button>
+                        <button id="btnCancelMedia">Cancel</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Console Panel -->
+    <div id="consolePanel" class="console-panel">
+            <div class="console-header">
+            <div class="console-title">Console</div>
+            <button class="btn-console-action" id="btnClearConsole" title="Clear Console (Ctrl+Shift+K)">🗑️</button>
+        </div>
+        <div id="consoleBody" class="console-body"></div>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="statusBar" class="status-bar">
+        <span id="statusText">Ready</span>
+    </div>
+
+    <script src="{{ url_for('static', filename='api.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='Console.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='MediaManager.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='PageEditor.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>

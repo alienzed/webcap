@@ -1,0 +1,56 @@
+.page-editor-canvas {
+    background: linear-gradient(180deg, #f8fafc 80%, #f3f4f6 100%);
+    border-radius: 18px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.03);
+    margin: 24px 0 24px 0;
+    /* No padding, as requested */
+}
+
+/* Ghost used by pointer-based drag fallback */
+.drag-ghost {
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    background-color: #444;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.98;
+}
+
+/* Visual insert marker between columns during pointer drag */
+.insert-marker {
+    background: linear-gradient(180deg, #ffb27a, #ff7a18);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    border-radius: 3px;
+}
+/* Button styling in the page editor uses shared component styles with small overrides */
+/* Keep rules minimal: rely on global .btn / .btn-primary / .btn-secondary in components.css */
+.page-editor-canvas .btn,
+.page-editor-canvas .canvas-add-btn,
+.canvas-row .btn {
+    border-radius: 20px;
+}
+.page-editor-canvas .btn-primary,
+.canvas-row .btn-primary {
+    /* subtle, canvas-specific primary tint */
+    background: linear-gradient(90deg, #ffb37b 0%, #ff8c42 100%);
+    color: #fff;
+}
+.page-editor-canvas .btn-secondary,
+.canvas-row .btn-secondary {
+    background: #f7f7f9;
+    color: #333;
+}
+
+
+.page-editor-footer {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* Minimal layout for page editor split and canvas flex rows */
+.page-editor-container {
+    display: flex;
+    gap: 24px;
+}

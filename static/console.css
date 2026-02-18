@@ -1,0 +1,58 @@
+/* Console and status bar */
+
+.console-panel {
+    position: fixed;
+    left: 240px;
+    right: 0;
+    bottom: 0;
+    height: 220px;
+    background: #0b1220;
+    color: #d1d5db;
+    border-top: 1px solid #111827;
+    box-shadow: var(--shadow-md);
+    display: none;
+    flex-direction: column;
+    z-index: 900;
+}
+
+.console-panel.open {
+    display: flex;
+}
+
+.console-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-bottom: 1px solid #111827;
+    background: #0f172a;
+}
+
+.console-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.btn-console-action {
+    border: 1px solid #1f2937;
+    background: #111827;
+    color: #d1d5db;
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: var(--transition-default);
+}
+
+.btn-console-action:hover {
+    background: #1f2937;
+    border-color: #2563eb;
+}
+
+.console-body {
+    flex: 1;
+    padding: 4px 8px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    background: #0b1220;
+}

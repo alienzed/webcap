@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MediaWeb - Canvas</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <h1>Canvas</h1>
+    <form id="export-form" method="post">
+        <textarea id="canvas-html" name="html" rows="10" cols="80" placeholder="Add HTML here..."></textarea><br>
+        <button type="submit">Export to HTML</button>
+    </form>
+    <h2>Media Files</h2>
+    <ul>
+        {% for filename, filetags in tags.items() %}
+        <li>
+            <a href="/media/{{ filename }}" target="_blank">{{ filename }}</a> ({{ filetags|join(', ') }})
+        </li>
+        {% endfor %}
+    </ul>
+    <a href="/">Back to Home</a>
+    <script>
+    document.getElementById('export-form').onsubmit = function(e) {
+        // Allow normal form submission
+    };
+    </script>
+</body>
+</html>

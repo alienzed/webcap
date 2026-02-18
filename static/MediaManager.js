@@ -1,0 +1,1 @@
+// ...existing code from frontend/MediaManager.js will be copied here

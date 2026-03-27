@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minimal Local Page Tool</title>
+  <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <div class="app">
+    <div class="panel stack">
+      <div class="row-inline">
+        <input id="new-page-name" type="text" placeholder="new page name">
+        <button id="create-page-btn" type="button">Create</button>
+      </div>
+      <input id="page-filter" type="text" placeholder="filter pages">
+      <div id="page-list" class="page-list"></div>
+      <button id="open-page-btn" type="button">Open Page</button>
+      <div id="drop-zone" class="drop-zone">
+        Drop video here
+        <div class="small">.mp4 .webm .ogg</div>
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+    <div class="panel">
+      <textarea id="editor" spellcheck="false"></textarea>
+    </div>
+    <div class="panel">
+      <iframe id="preview"></iframe>
+    </div>
+  </div>
+  <script src="/static/js/editor.js"></script>
+  <script src="/static/js/pages.js"></script>
+  <script src="/static/js/media.js"></script>
+  <script src="/static/js/main.js"></script>
+</body>
+</html>

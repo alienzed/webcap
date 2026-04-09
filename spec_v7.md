@@ -1,4 +1,4 @@
-# MediaWeb — Spec v7 (Dual Module, High-Level)
+# WebCap — Spec v7 (Dual Module, High-Level)
 
 ## 1. Purpose
 Define two modules inside one portable local app:

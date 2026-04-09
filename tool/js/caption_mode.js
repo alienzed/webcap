@@ -201,53 +201,128 @@
     ui.newPageNameEl.value = names.join(' / ');
   }
 
-  function renderFileList(ui, state, filterText) {
-    var q = (filterText || '').toLowerCase();
-    ui.pageListEl.innerHTML = '';
+  async function renderFileList(ui, state, filterText) {
+      var q = (filterText || '').toLowerCase();
+      ui.pageListEl.innerHTML = '';
 
-    state.childFolders.forEach(function(folderItem) {
-      var label = '[DIR] ' + folderItem.name;
-      if (q && label.toLowerCase().indexOf(q) === -1) {
-        return;
-      }
-      var row = document.createElement('div');
-      row.className = 'page-item folder-item';
-      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(label) + '</div>';
-      row.ondblclick = function() {
-        state.dirStack.push(folderItem.handle);
-        refreshPickerDirectory(ui, state).catch(function(err) {
-          setStatus(ui, String(err && err.message ? err.message : err));
-        });
-      };
-      row.onclick = function() {
-        setStatus(ui, 'Double-click folder to enter: ' + folderItem.name);
-      };
-      ui.pageListEl.appendChild(row);
-    });
+      // Count matches for filter
+      var matchCount = 0;
 
-    state.items.forEach(function(mediaItem) {
-      var lower = mediaItem.label.toLowerCase();
-      if (q && lower.indexOf(q) === -1) {
-        return;
-      }
-
-      var row = document.createElement('div');
-      var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
-      row.className = 'page-item' + (isActive ? ' active' : '');
-      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>';
-      row.onclick = function() {
-        if (state.currentItem && state.currentItem.key === mediaItem.key) {
+      // Folder filtering (unchanged)
+      state.childFolders.forEach(function(folderItem) {
+        var label = '[DIR] ' + folderItem.name;
+        if (q && label.toLowerCase().indexOf(q) === -1) {
           return;
         }
-        saveCurrentCaption(ui, state).then(function() {
-          return selectMedia(ui, state, mediaItem);
-        }).catch(function(err) {
-          setStatus(ui, String(err && err.message ? err.message : err));
+        var row = document.createElement('div');
+        row.className = 'page-item folder-item';
+        row.innerHTML = '<div>' + CaptionUtils.escapeHtml(label) + '</div>';
+        row.ondblclick = function() {
+          state.dirStack.push(folderItem.handle);
+          refreshPickerDirectory(ui, state).catch(function(err) {
+            setStatus(ui, String(err && err.message ? err.message : err));
+          });
+        };
+        row.onclick = function() {
+          setStatus(ui, 'Double-click folder to enter: ' + folderItem.name);
+        };
+        ui.pageListEl.appendChild(row);
+        matchCount++;
+      });
+
+      // --- Caption filtering logic ---
+      // Cache for caption texts
+      if (!state._captionCache) state._captionCache = {};
+      var captionCache = state._captionCache;
+
+      // Helper to fetch caption for a media item
+      function fetchCaption(folder, fileName) {
+        var key = folder + '/' + fileName;
+        if (captionCache[key] !== undefined) return Promise.resolve(captionCache[key]);
+        return fetch('/caption/load?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(fileName))
+          .then(function(resp) { return resp.ok ? resp.json() : { caption: '' }; })
+          .then(function(data) {
+            captionCache[key] = (data.caption || '');
+            return captionCache[key];
+          }).catch(function() {
+            captionCache[key] = '';
+            return '';
+          });
+      }
+
+      // Gather all caption fetch promises
+      var captionPromises = state.items.map(function(mediaItem) {
+        return fetchCaption(state.folder, mediaItem.fileName).then(function(captionText) {
+          return { mediaItem: mediaItem, captionText: captionText };
         });
-      };
-      ui.pageListEl.appendChild(row);
-    });
-  }
+      });
+
+      // Wait for all captions, then filter and render
+      Promise.all(captionPromises).then(function(results) {
+        results.forEach(function(entry) {
+          var mediaItem = entry.mediaItem;
+          var captionText = entry.captionText.toLowerCase();
+          var lower = mediaItem.label.toLowerCase();
+          // Match if file name or caption contains filter
+          if (q && lower.indexOf(q) === -1 && captionText.indexOf(q) === -1) {
+            return;
+          }
+
+          var row = document.createElement('div');
+          var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
+          row.className = 'page-item' + (isActive ? ' active' : '');
+
+          // Add open folder button (only for path mode)
+          var openBtn = '';
+          if (state.mode === 'path') {
+            openBtn = '<button class="open-folder-btn" title="Open containing folder" data-file="' + encodeURIComponent(mediaItem.fileName) + '">📂</button>';
+          }
+
+          row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>' + openBtn;
+
+          row.onclick = function(e) {
+            // Open folder button click
+            if (e.target && e.target.classList.contains('open-folder-btn')) {
+              var file = decodeURIComponent(e.target.getAttribute('data-file'));
+              // POST to /open_folder with folder and file
+              fetch('/open_folder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: state.folder + '/' + file })
+              }).then(function(resp) {
+                if (!resp.ok) return resp.json().then(function(data) { setStatus(ui, data.error || 'Failed to open folder'); });
+                setStatus(ui, 'Opened folder for: ' + file);
+              }).catch(function(err) {
+                setStatus(ui, 'Failed to open folder: ' + err);
+              });
+              e.stopPropagation();
+              return;
+            }
+            if (state.currentItem && state.currentItem.key === mediaItem.key) {
+              return;
+            }
+            saveCurrentCaption(ui, state).then(function() {
+              return selectMedia(ui, state, mediaItem);
+            }).catch(function(err) {
+              setStatus(ui, String(err && err.message ? err.message : err));
+            });
+          };
+          ui.pageListEl.appendChild(row);
+          matchCount++;
+        });
+
+        // Show count above list
+        var countDiv = document.getElementById('caption-filter-count');
+        if (!countDiv) {
+          countDiv = document.createElement('div');
+          countDiv.id = 'caption-filter-count';
+          countDiv.style = 'font-size:13px;color:#888;margin-bottom:4px;';
+          ui.pageListEl.parentNode.insertBefore(countDiv, ui.pageListEl);
+        }
+        countDiv.textContent = matchCount + ' item' + (matchCount === 1 ? '' : 's') + ' match filter';
+      });
+    }
+  
 
   async function selectMedia(ui, state, mediaItem) {
     state.currentItem = mediaItem;

@@ -1,4 +1,4 @@
-# MediaWeb
+# WebCap
 
 A small local two-mode tool:
 - Page mode for local HTML page editing with page-local video uploads

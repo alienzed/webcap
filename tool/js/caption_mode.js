@@ -1,3 +1,4 @@
+// Modularized: uses CaptionState and CaptionOps
 (function() {
   var IMAGE_EXTENSIONS = { '.jpg': true, '.jpeg': true, '.png': true, '.gif': true, '.webp': true, '.bmp': true };
   var MEDIA_EXTENSIONS = {
@@ -8,21 +9,7 @@
   function startCaptionMode(context) {
     var ui = context.ui;
     var scheduleSave = DebounceModule.create(500);
-    var state = {
-      folder: '',
-      suppressInput: false,
-      items: [],
-      childFolders: [],
-      currentItem: null,
-      objectUrl: '',
-      mode: 'path',
-      dirStack: [],
-      reviewMode: false,
-      captionCache: {},
-      listRenderSeq: 0,
-      reviewedSet: new Set()
-    };
-
+    var state = window.CaptionState;
     configureUiForCaptionMode(ui);
 
     ui.openPageBtn.addEventListener('click', function() {
@@ -53,14 +40,12 @@
         }
         setReviewMode(ui, state, true);
         setStatus(ui, 'Reviewing all captions (read-only)');
-
         var currentSeq = ++state.listRenderSeq;
         var promises = state.items.map(function(item) {
-          return loadCaptionTextForItem(state, item).then(function(text) {
+          return CaptionOps.loadCaptionTextForItem(state, item).then(function(text) {
             return { name: item.fileName, text: text };
           });
         });
-
         Promise.all(promises).then(function(results) {
           if (currentSeq !== state.listRenderSeq || !state.reviewMode) {
             return;
@@ -263,193 +248,148 @@
     return 'path:' + (state.folder || '') + ':' + mediaItem.fileName;
   }
 
-  function loadCaptionTextForItem(state, mediaItem) {
-    var key = captionCacheKey(state, mediaItem);
-    if (Object.prototype.hasOwnProperty.call(state.captionCache, key)) {
-      return Promise.resolve(state.captionCache[key]);
-    }
-
-    if (mediaItem.kind === 'picker') {
-      return readPickerCaption(mediaItem).then(function(result) {
-        state.captionCache[key] = result.text || '';
-        return state.captionCache[key];
-      });
-    }
-
-    return new Promise(function(resolve) {
-      HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function(status, responseText) {
-        if (status !== 200) {
-          state.captionCache[key] = '';
-          resolve('');
-          return;
-        }
-        try {
-          var data = JSON.parse(responseText);
-          state.captionCache[key] = data.caption || '';
-          resolve(state.captionCache[key]);
-        } catch (e) {
-          state.captionCache[key] = '';
-          resolve('');
-        }
-      });
-    });
-  }
+  // loadCaptionTextForItem now in CaptionOps
 
   async function renderFileList(ui, state, filterText, token, filterToken) {
-      var q = (filterText || '').toLowerCase();
-      var renderSeq = ++state.listRenderSeq;
-      ui.pageListEl.innerHTML = '';
-
-      var countDiv = document.getElementById('caption-filter-count');
-      if (!countDiv) {
-        countDiv = document.createElement('div');
-        countDiv.id = 'caption-filter-count';
-        countDiv.style = 'font-size:13px;color:#888;margin-bottom:4px;';
-        ui.pageListEl.parentNode.insertBefore(countDiv, ui.pageListEl);
-      }
-
-      var matchCount = 0;
-
-      state.childFolders.forEach(function(folderItem) {
-        var label = '[DIR] ' + folderItem.name;
-        if (q && label.toLowerCase().indexOf(q) === -1) {
-          return;
-        }
-        var row = document.createElement('div');
-        row.className = 'page-item folder-item';
-        row.innerHTML = '<div>' + CaptionUtils.escapeHtml(label) + '</div>';
-        row.ondblclick = function() {
-          state.dirStack.push(folderItem.handle);
-          refreshPickerDirectory(ui, state).catch(function(err) {
-            setStatus(ui, String(err && err.message ? err.message : err));
-          });
-        };
-        row.onclick = function() {
-          setStatus(ui, 'Double-click folder to enter: ' + folderItem.name);
-        };
-        ui.pageListEl.appendChild(row);
-        matchCount++;
-      });
-
-      function attachMediaRow(mediaItem, captionText) {
-        var row = document.createElement('div');
-        var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
-        var emptyCaption = (captionText !== null && captionText !== undefined) && !(captionText || '').trim();
-        var reviewed = state.reviewedSet.has(mediaItem.key);
-        row.className = 'page-item' + (isActive ? ' active' : '') + (emptyCaption ? ' empty-caption' : '') + (reviewed ? ' reviewed' : '');
-        row.setAttribute('data-key', mediaItem.key);
-
-        var openBtn = '';
-        if (state.mode === 'path') {
-          openBtn = '<button class="open-folder-btn" title="Open containing folder" data-file="' + encodeURIComponent(mediaItem.fileName) + '">Open</button>';
-        }
-        row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>' + openBtn;
-
-        row.onclick = function(e) {
-          if (e.target && e.target.classList.contains('open-folder-btn')) {
-            var file = decodeURIComponent(e.target.getAttribute('data-file'));
-            fetch('/open_folder', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: state.folder + '/' + file })
-            }).then(function(resp) {
-              if (!resp.ok) {
-                return resp.json().then(function(data) {
-                  setStatus(ui, data.error || 'Failed to open folder');
-                });
-              }
-              setStatus(ui, 'Opened folder for: ' + file);
-            }).catch(function(err) {
-              setStatus(ui, 'Failed to open folder: ' + err);
-            });
-            e.stopPropagation();
-            return;
-          }
-
-          if (state.currentItem && state.currentItem.key === mediaItem.key) {
-            return;
-          }
-          saveCurrentCaption(ui, state).then(function() {
-            return selectMedia(ui, state, mediaItem);
-          }).catch(function(err) {
-            setStatus(ui, String(err && err.message ? err.message : err));
-          });
-        };
-
-        row.ondblclick = function(e) {
-          // Toggle reviewed state on double-click
-          if (state.reviewedSet.has(mediaItem.key)) {
-            state.reviewedSet.delete(mediaItem.key);
-          } else {
-            state.reviewedSet.add(mediaItem.key);
-          }
-          renderFileList(ui, state, ui.filterEl.value);
-          e.stopPropagation();
-        };
-
-        ui.pageListEl.appendChild(row);
-        matchCount++;
-      }
-
-      if (!q) {
-        state.items.forEach(function(mediaItem) {
-          attachMediaRow(mediaItem, null);
-        });
-        countDiv.textContent = matchCount + ' item' + (matchCount === 1 ? '' : 's') + ' match filter';
-
-        state.items.forEach(function(mediaItem) {
-          loadCaptionTextForItem(state, mediaItem).then(function(captionText) {
-            if (renderSeq !== state.listRenderSeq) {
-              return;
-            }
-            var row = null;
-            var rows = ui.pageListEl.querySelectorAll('.page-item[data-key]');
-            for (var i = 0; i < rows.length; i += 1) {
-              if (rows[i].getAttribute('data-key') === mediaItem.key) {
-                row = rows[i];
-                break;
-              }
-            }
-            if (!row) {
-              return;
-            }
-            if (!(captionText || '').trim()) {
-              row.classList.add('empty-caption');
-            } else {
-              row.classList.remove('empty-caption');
-            }
-          });
-        });
+    var q = (filterText || '').toLowerCase();
+    var renderSeq = ++state.listRenderSeq;
+    ui.pageListEl.innerHTML = '';
+    var countDiv = document.getElementById('caption-filter-count');
+    if (!countDiv) {
+      countDiv = document.createElement('div');
+      countDiv.id = 'caption-filter-count';
+      countDiv.style = 'font-size:13px;color:#888;margin-bottom:4px;';
+      ui.pageListEl.parentNode.insertBefore(countDiv, ui.pageListEl);
+    }
+    var matchCount = 0;
+    state.childFolders.forEach(function(folderItem) {
+      var label = '[DIR] ' + folderItem.name;
+      if (q && label.toLowerCase().indexOf(q) === -1) {
         return;
       }
-
-      var captionPromises = state.items.map(function(mediaItem) {
-        return loadCaptionTextForItem(state, mediaItem).then(function(captionText) {
-          return { mediaItem: mediaItem, captionText: captionText || '' };
+      var row = document.createElement('div');
+      row.className = 'page-item folder-item';
+      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(label) + '</div>';
+      row.ondblclick = function() {
+        state.dirStack.push(folderItem.handle);
+        refreshPickerDirectory(ui, state).catch(function(err) {
+          setStatus(ui, String(err && err.message ? err.message : err));
         });
+      };
+      row.onclick = function() {
+        setStatus(ui, 'Double-click folder to enter: ' + folderItem.name);
+      };
+      ui.pageListEl.appendChild(row);
+      matchCount++;
+    });
+    function attachMediaRow(mediaItem, captionText) {
+      var row = document.createElement('div');
+      var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
+      var emptyCaption = (captionText !== null && captionText !== undefined) && !(captionText || '').trim();
+      var reviewed = state.reviewedSet.has(mediaItem.key);
+      row.className = 'page-item' + (isActive ? ' active' : '') + (emptyCaption ? ' empty-caption' : '') + (reviewed ? ' reviewed' : '');
+      row.setAttribute('data-key', mediaItem.key);
+      var openBtn = '';
+      if (state.mode === 'path') {
+        openBtn = '<button class="open-folder-btn" title="Open containing folder" data-file="' + encodeURIComponent(mediaItem.fileName) + '">Open</button>';
+      }
+      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>' + openBtn;
+      row.onclick = function(e) {
+        if (e.target && e.target.classList.contains('open-folder-btn')) {
+          var file = decodeURIComponent(e.target.getAttribute('data-file'));
+          fetch('/open_folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: state.folder + '/' + file })
+          }).then(function(resp) {
+            if (!resp.ok) {
+              return resp.json().then(function(data) {
+                setStatus(ui, data.error || 'Failed to open folder');
+              });
+            }
+            setStatus(ui, 'Opened folder for: ' + file);
+          }).catch(function(err) {
+            setStatus(ui, 'Failed to open folder: ' + err);
+          });
+          e.stopPropagation();
+          return;
+        }
+        if (state.currentItem && state.currentItem.key === mediaItem.key) {
+          return;
+        }
+        saveCurrentCaption(ui, state).then(function() {
+          return selectMedia(ui, state, mediaItem);
+        }).catch(function(err) {
+          setStatus(ui, String(err && err.message ? err.message : err));
+        });
+      };
+      row.ondblclick = function(e) {
+        // Toggle reviewed state on double-click
+        if (state.reviewedSet.has(mediaItem.key)) {
+          state.reviewedSet.delete(mediaItem.key);
+        } else {
+          state.reviewedSet.add(mediaItem.key);
+        }
+        renderFileList(ui, state, ui.filterEl.value);
+        e.stopPropagation();
+      };
+      ui.pageListEl.appendChild(row);
+      matchCount++;
+    }
+    if (!q) {
+      state.items.forEach(function(mediaItem) {
+        attachMediaRow(mediaItem, null);
       });
-
-      Promise.all(captionPromises).then(function(results) {
-        if (renderSeq !== state.listRenderSeq) {
-          return;
-        }
-        if (filterToken && token !== undefined && token !== filterToken.current) {
-          return;
-        }
-
-        results.forEach(function(entry) {
-          var mediaItem = entry.mediaItem;
-          var captionText = entry.captionText;
-          var lower = mediaItem.label.toLowerCase();
-          if (lower.indexOf(q) === -1 && captionText.toLowerCase().indexOf(q) === -1) {
+      countDiv.textContent = matchCount + ' item' + (matchCount === 1 ? '' : 's') + ' match filter';
+      state.items.forEach(function(mediaItem) {
+        CaptionOps.loadCaptionTextForItem(state, mediaItem).then(function(captionText) {
+          if (renderSeq !== state.listRenderSeq) {
             return;
           }
-          attachMediaRow(mediaItem, captionText);
+          var row = null;
+          var rows = ui.pageListEl.querySelectorAll('.page-item[data-key]');
+          for (var i = 0; i < rows.length; i += 1) {
+            if (rows[i].getAttribute('data-key') === mediaItem.key) {
+              row = rows[i];
+              break;
+            }
+          }
+          if (!row) {
+            return;
+          }
+          if (!(captionText || '').trim()) {
+            row.classList.add('empty-caption');
+          } else {
+            row.classList.remove('empty-caption');
+          }
         });
-
-        countDiv.textContent = matchCount + ' item' + (matchCount === 1 ? '' : 's') + ' match filter';
       });
+      return;
     }
+    var captionPromises = state.items.map(function(mediaItem) {
+      return CaptionOps.loadCaptionTextForItem(state, mediaItem).then(function(captionText) {
+        return { mediaItem: mediaItem, captionText: captionText || '' };
+      });
+    });
+    Promise.all(captionPromises).then(function(results) {
+      if (renderSeq !== state.listRenderSeq) {
+        return;
+      }
+      if (filterToken && token !== undefined && token !== filterToken.current) {
+        return;
+      }
+      results.forEach(function(entry) {
+        var mediaItem = entry.mediaItem;
+        var captionText = entry.captionText;
+        var lower = mediaItem.label.toLowerCase();
+        if (lower.indexOf(q) === -1 && captionText.toLowerCase().indexOf(q) === -1) {
+          return;
+        }
+        attachMediaRow(mediaItem, captionText);
+      });
+      countDiv.textContent = matchCount + ' item' + (matchCount === 1 ? '' : 's') + ' match filter';
+    });
+  }
   
 
   async function selectMedia(ui, state, mediaItem) {
@@ -515,18 +455,7 @@
     return savePathCaption(ui, state, state.currentItem, ui.editorEl.value || '');
   }
 
-  function savePathCaption(ui, state, mediaItem, text) {
-    return new Promise(function(resolve, reject) {
-      HttpModule.postJson('/caption/save', { folder: state.folder, media: mediaItem.fileName, text: text }, function(status, responseText) {
-        if (status === 200) {
-          setStatus(ui, 'Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt'));
-          resolve();
-          return;
-        }
-        reject(new Error(CaptionUtils.getErrorMessage(responseText, 'Could not save caption')));
-      });
-    });
-  }
+  // savePathCaption now in CaptionOps
 
   async function savePickerCaption(ui, mediaItem, text) {
     var captionName = mediaItem.fileName.replace(/\.[^.]+$/, '.txt');

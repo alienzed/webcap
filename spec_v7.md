@@ -1,203 +1,159 @@
-# WebCap — Spec v7 (Dual Module, High-Level)
+# WebCap — Spec v7 (Current Architecture)
 
 ## 1. Purpose
-Define two modules inside one portable local app:
-- Module A: Local Page Tool (current behavior)
-- Module B: Caption Assistant (new mode)
+Define the current portable local app architecture with two active user modes and one unified caption workflow:
+- Module A: Local Page Tool
+- Module B: Caption + Review (caption editing, combined review, stats, validation)
 
-This document is a planning reference only. It does not authorize behavior changes without validation.
+This document reflects current behavior and guardrails.
 
 ---
 
 ## 2. Global Non-Negotiables
 - No regressions in Module A.
-- No database.
-- No installer required.
+- No database dependency.
 - Portable where Python + browser work.
-- Keep implementation simple and fault-averse.
-- Prefer separate module files over shared conditional logic.
-- Target file size ceiling: 400 lines per file.
+- Keep implementation simple and explicit.
+- Prefer modular files over large mixed-condition files.
+- Minimize destructive filesystem operations.
 
 ---
 
-## 3. Module A: Local Page Tool (Existing)
-### Goal
-Create and edit small local HTML pages with local media support.
+## 3. Active Modes
+### 3.1 Page Mode (Module A)
+Goal:
+- Create/edit local HTML pages from template.
 
-### High-Level Requirements
-- Create page folders from template.
-- Edit raw HTML in center pane.
-- Live preview HTML in right pane.
-- List/filter pages in left sidebar.
-- Debounced save while editing.
-- Save current page before switching pages.
-- Drag/drop video to copy into page-local media folder.
-- Append valid video markup into editor after upload.
-- Keep current route and UI behavior stable.
+High-level behavior:
+- Left: page list/filter/actions
+- Middle: raw HTML editor
+- Right: live preview
+- Debounced save
+- Save-before-switch behavior
+- Media drop/upload support
 
-### Out of Scope for Module A
-- Caption workflows.
-- Cross-folder media browsing outside page folders.
+### 3.2 Caption Mode (Module B)
+Goal:
+- Edit per-file captions and review full dataset quality in one workspace.
 
----
-
-## 4. Module B: Caption Assistant (New)
-### Goal
-Caption media in existing folders with fewer clicks than VSCode split workflow.
-
-### High-Level Requirements
-- User opens media by choosing a folder (Chromium browsers).
-- Sidebar lists media files (images + videos).
-- In Choose Folder flow, media is shown one folder at a time; subfolder media is discovered by entering that subfolder.
-- `.txt` files should be hidden when practical.
-- Selecting media:
-  - shows media preview on right pane (`<video>` or `<img>`), and
-  - loads matching caption text in center editor.
-- Caption filename convention:
-  - same basename as media file,
-  - `.txt` extension,
-  - stored in the same folder as media.
-- If caption file is missing, support creating it implicitly.
-- Plain text only (no rich text, no markdown, no SRT features).
-- Save behavior should be immediate/debounced and reliable.
-- Do not copy or move media files.
-- App leaves no extra trace besides caption text edits.
-
-### Nice-to-Have (Only if Simple)
-- Easy switch to a different folder.
-
-### Out of Scope for Module B
-- Custom full file explorer equivalent to VSCode.
-- Database metadata/indexing.
-
-### Runtime Notes
-- Core app remains cross-platform.
-- Choose Folder flow depends on browser support for directory picker APIs (Chromium browsers).
-
----
-
-## 5. Shared UI Contract
-Three-pane layout remains consistent:
-- Left: list/navigation/actions
-- Middle: text editor
-- Right: preview pane
-
-Current app layout should be reused where possible without coupling module logic.
-
----
-
-## 6. Modularity Contract
-- No mixed business logic in single files via mode conditionals.
-- Shared code allowed only for low-level primitives (IO helpers, status updates, simple HTTP helpers, debounce).
-- Module-specific workflows remain in separate files.
-- If sharing introduces risk, duplicate safely.
-
----
-
-## 7. Safety and Validation Gates
-Before Module B implementation:
-1. Modularize Module A in small, reversible steps.
-2. Validate behavior after each step using a fixed smoke checklist.
-3. Proceed to Module B only after Module A passes unchanged behavior checks.
-
-Regression policy:
-- Stop immediately on unexpected behavior drift.
-- Revert the last change set and redesign the step.
-
----
-
-## 8. Success Criteria
-- Module A remains functionally unchanged.
-- Module B enables fast caption workflow:
-  - pick folder,
-  - pick media,
-  - edit matching caption,
-  - preview media continuously.
-- Architecture stays maintainable and modular under file size limits.
-
----
-
-## 9. Git Rollback Command (Return to Current Snapshot)
-Run from repository root:
-
-```bash
-git reset --hard e78f34d4ee8709b207b0753281b4b1f1a4715e37
-git clean -fd
-```
-
-Pinned commit:
-- short: `e78f34d4ee87`
-- full: `e78f34d4ee8709b207b0753281b4b1f1a4715e37`
+High-level behavior:
+- Folder picker flow (Chromium browsers)
+- Left: folder/file list + filter + review actions + stats/validation controls
+- Middle: caption editor (per-file) or combined captions (review action)
+- Right: media preview (per-file) or stats/validation report (review action)
 
 Notes:
-- This resets all tracked file changes to this exact commit.
-- This also removes untracked files and directories.
+- Standalone Stats mode is retired from normal navigation.
+- URL `mode=stats` is treated as caption mode.
 
 ---
 
-## 10. Immediate Next Step (Before Any Refactor)
-Create and use a fixed smoke checklist for Module A. No modularization step is allowed unless this checklist passes before and after the step.
+## 4. Unified Caption + Review Workflow
+### 4.1 Per-file captioning
+- Selecting a media file loads matching caption text (`.txt`) in center pane.
+- Right pane shows media preview.
+- Caption autosaves via debounce while editing.
 
-Smoke checklist (Module A):
-1. Start server and open the tool.
-2. Create a test page.
-3. Type HTML in editor and confirm preview updates.
-4. Wait for debounce and confirm save persisted.
-5. Switch pages and confirm current page saves before load.
-6. Drop a supported video and confirm upload + inserted markup.
-7. Open page in new tab and confirm media path works.
+### 4.2 Review action (implicit, same screen)
+- `Review Captions` action:
+  - saves current selection first,
+  - builds combined captions text for all currently listed media,
+  - computes stats/validation using current Stats & Validation inputs,
+  - shows combined text in center,
+  - shows report in right pane,
+  - keeps file list active.
+- Clicking a file row returns to normal per-file view (caption + media preview).
 
-Execution rule:
-- Refactor only one micro-step at a time.
-- Re-run the full checklist after each micro-step.
-- If any item fails, stop and revert the last micro-step.
+### 4.3 Report interactions
+- Validation failure filename is clickable:
+  - selects corresponding file in left list,
+  - loads caption + media,
+  - scrolls selected row into view.
+- Top/Rare token entries are clickable:
+  - push token into filter input,
+  - trigger normal list filter flow.
+- Missing-required-phrase entries are clickable:
+  - selects corresponding file in left list,
+  - loads caption + media,
+  - scrolls selected row into view.
 
 ---
 
-## 11. v7.1 Additions (High-Level)
+## 5. Scope of Review/Stats Computation
+- Computation is based on currently open file list in caption mode (current folder context).
+- Non-recursive by default (one folder at a time through navigation).
 
-### 11.1 Caption Templating (Module B)
-Goal:
-- Reduce copy/paste noise when creating new captions.
+---
 
-High-level behavior:
-- Provide optional template inputs for caption seeding.
-- Apply template only when caption is new/empty.
-- Do not auto-overwrite existing non-empty captions.
-- Keep template composition deterministic and explicit.
+## 6. Safety Rules
+### 6.1 No combined-caption write risk
+- Combined review text is not tied to a concrete media item.
+- Save path requires a selected concrete item and non-review state.
 
-Suggested inputs (high-level only):
-- Leading key phrase.
-- Optional common middle component.
-- Optional trailing phrase (e.g., lighting/viewpoint placeholder).
-- Optional filename token mapping (`token -> phrase`) for controlled phrase insertion.
+### 6.2 Rename safety backup
+- Before rename mutation, original media and paired caption are copied to `.caption_trash` under current folder.
+- Backup copy is overwrite-allowed (single practical undo copy behavior).
+- No automatic deletion from trash.
 
-Constraints:
-- Plain text only.
-- No hidden or background mutation of existing captions.
-- Keep implementation simple and reversible.
+### 6.3 Mutation boundaries
+- No delete workflow is introduced.
+- Rename remains explicit via row context menu.
 
-### 11.2 Stats & Validation (Module B)
-Goal:
-- Help dataset balancing and consistency checks for LoRA preparation.
+---
 
-High-level behavior:
-- Coverage check for required key phrase across loaded files.
-- Fixed set of phrase counters for balance overview.
-- Validation rules based on filename token mappings.
+## 7. Modularity Contract
+Current modular split:
+- `tool/js/caption_mode.js`: caption mode orchestration and core selection/save flow
+- `tool/js/caption_review.js`: review/stats bridge and report interaction handlers
+- `tool/js/caption_list.js`: file list rendering and row interactions (including rename)
+- `tool/js/caption_ops.js`: caption read/save helpers
+- `tool/js/stats_engine.js`: pure stats/validation computation
+- `tool/js/stats_view.js`: stats controls/report rendering helpers
 
-Validation examples (high-level):
-- If filename contains token `fd`, caption should include phrase `face down`.
-- Flag mismatches for review.
+Rules:
+- Keep business concerns isolated by module.
+- Reuse shared helpers where behavior is identical.
+- Avoid new cross-module coupling unless needed for UX continuity.
+
+---
+
+## 8. Validation Inputs and Outputs
+Inputs:
+- Required key phrase
+- Balance phrases (one per line)
+- Token rules (`token => phrase`)
 
 Outputs:
-- Counts and percentages.
-- Missing/failed item list for quick review.
+- Coverage summary
+- Missing required phrase list
+- Balance counts + percentages
+- Validation mismatch list
+- Top tokens / rare tokens
 
-Constraints:
-- No database.
-- No destructive edits required to run stats/validation.
-- Prefer explicit recalculation actions over hidden background processing.
+Token filtering note:
+- Built-in blacklist removes non-informative tokens (`a`, `is`, `on`, `and`) from token stats.
+
+---
+
+## 9. Success Criteria
+- Page mode behavior remains stable.
+- Captioning and review happen in one coherent workflow.
+- Clicking report failures accelerates correction loop.
+- Combined review remains non-destructive.
+- Rename retains practical recoverability through `.caption_trash`.
+- Codebase remains modular and maintainable.
+
+---
+
+## 10. Operational Smoke Checklist
+1. Open Page mode, edit/save/preview page as normal.
+2. Open Caption mode, choose folder, select file, edit caption, autosave.
+3. Trigger Review Captions and verify combined text + report generation.
+4. Click validation failure and verify file selection + media load + row scroll.
+5. Click token and verify filter is applied.
+6. Click missing-required item and verify file selection + media load + row scroll.
+7. Rename file and verify `.caption_trash` receives original media (+ caption if present).
+8. Confirm combined review text cannot be saved into a single caption file.
 
 ---
 

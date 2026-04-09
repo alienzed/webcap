@@ -53,6 +53,18 @@ var StatsViewModule = (function() {
         '<strong>' + escapeHtml(row.fileName) + '</strong></button> - ' + escapeHtml(row.reason) + '</li>';
     }).join('') : '<li style="color:#777;">No validation failures.</li>';
 
+    var requiredRows = '';
+    if (!report.requiredPhrase) {
+      requiredRows = '<li style="color:#777;">Required key phrase is not set.</li>';
+    } else if (!report.requiredMissing || !report.requiredMissing.length) {
+      requiredRows = '<li style="color:#777;">All captions include required phrase.</li>';
+    } else {
+      requiredRows = report.requiredMissing.slice(0, 40).map(function(row) {
+        return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '">' +
+          '<strong>' + escapeHtml(row.fileName) + '</strong></button> - ' + escapeHtml(row.reason) + '</li>';
+      }).join('');
+    }
+
     var topRows = report.topTokens.length ? report.topTokens.slice(0, 25).map(function(row) {
       return '<li><button class="token-link" data-token="' + encodeURIComponent(row.token) + '">' + escapeHtml(row.token) +
         '</button>: <strong>' + row.count + '</strong></li>';
@@ -82,6 +94,7 @@ var StatsViewModule = (function() {
       '<div>Missing captions: <strong>' + report.missingCaption + '</strong></div>' +
       '<div>Required phrase: <strong>' + escapeHtml(requiredLabel) + '</strong></div>' +
       '<div>Required hits: <strong>' + report.requiredHits + ' (' + report.requiredPercent + '%)</strong></div></div>' +
+      '<div class="card"><h3>Missing Required Phrase</h3><ul>' + requiredRows + '</ul></div>' +
       '<div class="card"><h3>Balance Counts</h3><table><thead><tr><th>Phrase</th><th>Count</th><th>Percent</th></tr></thead><tbody>' + phraseRows + '</tbody></table></div>' +
       '<div class="card"><h3>Validation Failures</h3><ul>' + failRows + '</ul></div>' +
       '<div class="card"><h3>Top Tokens</h3><ul>' + topRows + '</ul></div>' +

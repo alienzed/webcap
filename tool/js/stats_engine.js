@@ -50,6 +50,7 @@ var StatsEngineModule = (function() {
     var withCaption = 0;
     var missingCaption = 0;
     var requiredHits = 0;
+    var requiredMissing = [];
     var phraseCounts = {};
     var ruleFailures = [];
     var tokenCounts = {};
@@ -71,6 +72,11 @@ var StatsEngineModule = (function() {
 
       if (requiredPhrase && captionNorm.indexOf(requiredPhrase) !== -1) {
         requiredHits += 1;
+      } else if (requiredPhrase) {
+        requiredMissing.push({
+          fileName: item.fileName,
+          reason: 'Missing required phrase "' + requiredPhrase + '"'
+        });
       }
 
       phrases.forEach(function(p) {
@@ -122,6 +128,7 @@ var StatsEngineModule = (function() {
       requiredPhrase: requiredPhrase,
       requiredHits: requiredHits,
       requiredPercent: requiredPercent,
+      requiredMissing: requiredMissing,
       phraseSummary: phraseSummary,
       ruleFailures: ruleFailures,
       topTokens: topTokens,

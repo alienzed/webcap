@@ -21,22 +21,6 @@
 
     configureUiForCaptionMode(ui);
 
-    ui.createBtn.addEventListener('click', function() {
-      var folder = CaptionUtils.normalizeFolderInput(ui.newPageNameEl.value || '');
-      if (!folder) {
-        setStatus(ui, 'Enter a folder path first');
-        return;
-      }
-      ui.newPageNameEl.value = folder;
-      openFolderPath(ui, state, folder);
-    });
-
-    ui.newPageNameEl.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') {
-        ui.createBtn.click();
-      }
-    });
-
     ui.openPageBtn.addEventListener('click', function() {
       chooseFolder(ui, state);
     });
@@ -60,14 +44,16 @@
       });
     });
 
-    setStatus(ui, 'Caption mode ready. Choose Folder or Open Path. Double-click folders to enter.');
+    setStatus(ui, 'Caption mode ready. Choose Folder, then double-click folders to enter.');
   }
 
   function configureUiForCaptionMode(ui) {
-    ui.captionUpBtn = ensureUpButton();
-    ui.newPageNameEl.value = '';
-    ui.newPageNameEl.placeholder = 'absolute folder path';
-    ui.createBtn.textContent = 'Open Path';
+    ui.newPageNameEl.value = 'No folder selected';
+    ui.newPageNameEl.placeholder = '';
+    ui.newPageNameEl.readOnly = true;
+    ui.newPageNameEl.classList.add('caption-folder-label');
+    ui.topInputRow.classList.add('single');
+    ui.createBtn.style.display = 'none';
     ui.openPageBtn.textContent = 'Choose Folder';
     ui.captionUpBtn.style.display = '';
     ui.dropZone.style.display = 'none';
@@ -81,20 +67,6 @@
     doc.close();
   }
 
-  function ensureUpButton() {
-    var existing = document.getElementById('caption-up-btn');
-    if (existing) {
-      return existing;
-    }
-    var reference = document.getElementById('open-page-btn');
-    var upBtn = document.createElement('button');
-    upBtn.id = 'caption-up-btn';
-    upBtn.type = 'button';
-    upBtn.textContent = 'Up';
-    reference.insertAdjacentElement('afterend', upBtn);
-    return upBtn;
-  }
-
   function chooseFolder(ui, state) {
     if (typeof window.showDirectoryPicker !== 'function') {
       setStatus(ui, 'Choose Folder is available in Chromium browsers (Chrome/Edge).');
@@ -106,7 +78,7 @@
       state.folder = '';
       state.currentItem = null;
       state.dirStack = [rootHandle];
-      ui.newPageNameEl.value = rootHandle.name || '';
+      updateFolderLabel(ui, state);
       return refreshPickerDirectory(ui, state);
     }).catch(function(err) {
       if (err && err.name === 'AbortError') {
@@ -194,13 +166,14 @@
         return;
       }
       state.dirStack.pop();
+      updateFolderLabel(ui, state);
       refreshPickerDirectory(ui, state).catch(function(err) {
         setStatus(ui, String(err && err.message ? err.message : err));
       });
       return;
     }
 
-    var current = CaptionUtils.normalizeFolderInput(ui.newPageNameEl.value || state.folder || '');
+    var current = CaptionUtils.normalizeFolderInput(state.folder || '');
     if (!current) {
       setStatus(ui, 'No folder loaded');
       return;
@@ -210,8 +183,22 @@
       setStatus(ui, 'Already at top-level path');
       return;
     }
-    ui.newPageNameEl.value = parent;
     openFolderPath(ui, state, parent);
+  }
+
+  function updateFolderLabel(ui, state) {
+    if (state.mode !== 'picker') {
+      ui.newPageNameEl.value = state.folder || 'No folder selected';
+      return;
+    }
+
+    if (!state.dirStack.length) {
+      ui.newPageNameEl.value = 'No folder selected';
+      return;
+    }
+
+    var names = state.dirStack.map(function(handle) { return handle.name; });
+    ui.newPageNameEl.value = names.join(' / ');
   }
 
   function renderFileList(ui, state, filterText) {

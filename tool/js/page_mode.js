@@ -2,6 +2,16 @@
   function startPageMode(context) {
     var ui = context.ui;
 
+    ui.createBtn.style.display = '';
+    ui.createBtn.textContent = 'Create';
+    ui.newPageNameEl.readOnly = false;
+    ui.newPageNameEl.classList.remove('caption-folder-label');
+    ui.newPageNameEl.placeholder = 'new page name';
+    ui.topInputRow.classList.remove('single');
+    ui.openPageBtn.textContent = 'Open Page';
+    ui.captionUpBtn.style.display = 'none';
+    ui.dropZone.style.display = '';
+
     EditorModule.init({
       editor: ui.editorEl,
       preview: ui.previewEl,

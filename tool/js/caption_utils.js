@@ -52,13 +52,36 @@ var CaptionUtils = (function() {
   }
 
   function renderPreviewHtml(ui, isImage, src) {
-    var tag = isImage
-      ? '<img src="' + src + '" alt="preview" style="max-width:100%;max-height:100%;object-fit:contain;">'
-      : '<video controls style="max-width:100%;max-height:100%;"><source src="' + src + '"></video>';
+    var tag = '';
+    if (isImage) {
+      tag = '<img src="' + src + '" alt="preview" style="max-width:100%;max-height:100%;object-fit:contain;">';
+    } else {
+      tag = '' +
+        '<div id="video-wrap" style="max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">' +
+        '  <video id="media-video" controls preload="metadata" style="max-width:100%;max-height:100%;">' +
+        '    <source src="' + src + '">' +
+        '  </video>' +
+        '  <div id="video-error" style="display:none;color:#ddd;font:13px system-ui;text-align:center;max-width:420px;">' +
+        '    Video failed to load in browser preview. The codec may be unsupported.' +
+        '  </div>' +
+        '</div>';
+    }
 
     var doc = ui.previewEl.contentDocument || ui.previewEl.contentWindow.document;
     doc.open();
-    doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' + tag + '</body></html>');
+    doc.write(
+      '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
+      tag +
+      '<script>\n' +
+      'var video=document.getElementById("media-video");\n' +
+      'if(video){\n' +
+      '  var error=document.getElementById("video-error");\n' +
+      '  video.addEventListener("error",function(){ if(error){ error.style.display="block"; } });\n' +
+      '  var source=video.querySelector("source");\n' +
+      '  if(source){ source.addEventListener("error",function(){ if(error){ error.style.display="block"; } }); }\n' +
+      '}\n' +
+      '<\/script></body></html>'
+    );
     doc.close();
   }
 

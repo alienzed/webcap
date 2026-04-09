@@ -9,7 +9,9 @@ window.addEventListener('DOMContentLoaded', function() {
     dropZone: document.getElementById('drop-zone'),
     createBtn: document.getElementById('create-page-btn'),
     newPageNameEl: document.getElementById('new-page-name'),
-    openPageBtn: document.getElementById('open-page-btn')
+    openPageBtn: document.getElementById('open-page-btn'),
+    captionUpBtn: document.getElementById('caption-up-btn'),
+    topInputRow: document.getElementById('new-page-name').parentElement
   };
 
   var params = new URLSearchParams(window.location.search);

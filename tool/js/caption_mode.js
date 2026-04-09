@@ -12,9 +12,11 @@
       folder: '',
       suppressInput: false,
       items: [],
+      childFolders: [],
       currentItem: null,
       objectUrl: '',
-      mode: 'path'
+      mode: 'path',
+      dirStack: []
     };
 
     configureUiForCaptionMode(ui);
@@ -39,8 +41,12 @@
       chooseFolder(ui, state);
     });
 
+    ui.captionUpBtn.addEventListener('click', function() {
+      navigateUp(ui, state);
+    });
+
     ui.filterEl.addEventListener('input', function() {
-      renderMediaList(ui, state, ui.filterEl.value);
+      renderFileList(ui, state, ui.filterEl.value);
     });
 
     ui.editorEl.addEventListener('input', function() {
@@ -54,14 +60,16 @@
       });
     });
 
-    setStatus(ui, 'Caption mode ready. Choose Folder (Chrome) or type a path and click Open Path.');
+    setStatus(ui, 'Caption mode ready. Choose Folder or Open Path. Double-click folders to enter.');
   }
 
   function configureUiForCaptionMode(ui) {
+    ui.captionUpBtn = ensureUpButton();
     ui.newPageNameEl.value = '';
     ui.newPageNameEl.placeholder = 'absolute folder path';
     ui.createBtn.textContent = 'Open Path';
     ui.openPageBtn.textContent = 'Choose Folder';
+    ui.captionUpBtn.style.display = '';
     ui.dropZone.style.display = 'none';
     ui.editorEl.value = '';
     ui.editorEl.placeholder = 'Caption text (.txt)';
@@ -71,6 +79,20 @@
     doc.open();
     doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">Select a media file to preview.</body></html>');
     doc.close();
+  }
+
+  function ensureUpButton() {
+    var existing = document.getElementById('caption-up-btn');
+    if (existing) {
+      return existing;
+    }
+    var reference = document.getElementById('open-page-btn');
+    var upBtn = document.createElement('button');
+    upBtn.id = 'caption-up-btn';
+    upBtn.type = 'button';
+    upBtn.textContent = 'Up';
+    reference.insertAdjacentElement('afterend', upBtn);
+    return upBtn;
   }
 
   function setStatus(ui, text) {
@@ -84,7 +106,12 @@
     }
 
     window.showDirectoryPicker().then(function(rootHandle) {
-      return loadFromPickedFolder(ui, state, rootHandle);
+      state.mode = 'picker';
+      state.folder = '';
+      state.currentItem = null;
+      state.dirStack = [rootHandle];
+      ui.newPageNameEl.value = rootHandle.name || '';
+      return refreshPickerDirectory(ui, state);
     }).catch(function(err) {
       if (err && err.name === 'AbortError') {
         setStatus(ui, 'Folder selection canceled');
@@ -102,9 +129,10 @@
       }
 
       var data = JSON.parse(responseText);
-      state.folder = folder;
       state.mode = 'path';
+      state.folder = folder;
       state.currentItem = null;
+      state.childFolders = [];
       state.items = (data.files || []).map(function(name) {
         return {
           key: name,
@@ -114,7 +142,7 @@
         };
       });
 
-      renderMediaList(ui, state, ui.filterEl.value);
+      renderFileList(ui, state, ui.filterEl.value);
 
       if (!state.items.length) {
         clearEditorAndPreview(ui, state);
@@ -128,61 +156,101 @@
     });
   }
 
-  async function loadFromPickedFolder(ui, state, rootHandle) {
+  async function refreshPickerDirectory(ui, state) {
+    var currentDir = state.dirStack[state.dirStack.length - 1];
+    var childFolders = [];
     var items = [];
-    await collectMediaItems(rootHandle, '', items);
 
-    items.sort(function(a, b) {
-      return a.label.localeCompare(b.label);
-    });
+    for await (var entry of currentDir.values()) {
+      if (entry.kind === 'directory') {
+        childFolders.push({ name: entry.name, handle: entry });
+        continue;
+      }
+      if (entry.kind !== 'file') {
+        continue;
+      }
+      var ext = getFileExtension(entry.name);
+      if (!MEDIA_EXTENSIONS[ext]) {
+        continue;
+      }
+      items.push({
+        key: entry.name,
+        label: entry.name,
+        fileName: entry.name,
+        kind: 'picker',
+        fileHandle: entry,
+        dirHandle: currentDir
+      });
+    }
 
-    state.mode = 'picker';
-    state.folder = '';
-    state.currentItem = null;
+    childFolders.sort(function(a, b) { return a.name.localeCompare(b.name); });
+    items.sort(function(a, b) { return a.label.localeCompare(b.label); });
+
+    state.childFolders = childFolders;
     state.items = items;
-    ui.newPageNameEl.value = rootHandle.name || '';
+    state.currentItem = null;
 
-    renderMediaList(ui, state, ui.filterEl.value);
+    renderFileList(ui, state, ui.filterEl.value);
 
     if (!items.length) {
       clearEditorAndPreview(ui, state);
-      setStatus(ui, 'No supported media files found in chosen folder');
+      setStatus(ui, 'No supported media files in current folder');
       return;
     }
 
     await selectMedia(ui, state, items[0]);
   }
 
-  async function collectMediaItems(dirHandle, prefix, out) {
-    for await (var entry of dirHandle.values()) {
-      if (entry.kind === 'directory') {
-        await collectMediaItems(entry, prefix + entry.name + '/', out);
-        continue;
+  function navigateUp(ui, state) {
+    if (state.mode === 'picker') {
+      if (state.dirStack.length <= 1) {
+        setStatus(ui, 'Already at selected root folder');
+        return;
       }
-      if (entry.kind !== 'file') {
-        continue;
-      }
-
-      var ext = getFileExtension(entry.name);
-      if (!MEDIA_EXTENSIONS[ext]) {
-        continue;
-      }
-
-      var relativePath = prefix + entry.name;
-      out.push({
-        key: relativePath,
-        label: relativePath,
-        fileName: entry.name,
-        kind: 'picker',
-        fileHandle: entry,
-        dirHandle: dirHandle
+      state.dirStack.pop();
+      refreshPickerDirectory(ui, state).catch(function(err) {
+        setStatus(ui, String(err && err.message ? err.message : err));
       });
+      return;
     }
+
+    var current = normalizeFolderInput(ui.newPageNameEl.value || state.folder || '');
+    if (!current) {
+      setStatus(ui, 'No folder loaded');
+      return;
+    }
+    var parent = parentPath(current);
+    if (!parent || parent === current) {
+      setStatus(ui, 'Already at top-level path');
+      return;
+    }
+    ui.newPageNameEl.value = parent;
+    openFolderPath(ui, state, parent);
   }
 
-  function renderMediaList(ui, state, filterText) {
+  function renderFileList(ui, state, filterText) {
     var q = (filterText || '').toLowerCase();
     ui.pageListEl.innerHTML = '';
+
+    state.childFolders.forEach(function(folderItem) {
+      var label = '[DIR] ' + folderItem.name;
+      if (q && label.toLowerCase().indexOf(q) === -1) {
+        return;
+      }
+      var row = document.createElement('div');
+      row.className = 'page-item';
+      row.innerHTML = '<div>' + escapeHtml(label) + '</div>';
+      row.ondblclick = function() {
+        state.dirStack.push(folderItem.handle);
+        refreshPickerDirectory(ui, state).catch(function(err) {
+          setStatus(ui, String(err && err.message ? err.message : err));
+        });
+      };
+      row.onclick = function() {
+        setStatus(ui, 'Double-click folder to enter: ' + folderItem.name);
+      };
+      ui.pageListEl.appendChild(row);
+    });
 
     state.items.forEach(function(mediaItem) {
       var lower = mediaItem.label.toLowerCase();
@@ -193,7 +261,6 @@
       var row = document.createElement('div');
       var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
       row.className = 'page-item' + (isActive ? ' active' : '');
-      row.setAttribute('data-key', mediaItem.key);
       row.innerHTML = '<div>' + escapeHtml(mediaItem.label) + '</div>';
       row.onclick = function() {
         if (state.currentItem && state.currentItem.key === mediaItem.key) {
@@ -213,13 +280,12 @@
 
   async function selectMedia(ui, state, mediaItem) {
     state.currentItem = mediaItem;
-    renderMediaList(ui, state, ui.filterEl.value);
+    renderFileList(ui, state, ui.filterEl.value);
 
     if (mediaItem.kind === 'picker') {
       await selectPickerMedia(ui, state, mediaItem);
       return;
     }
-
     await selectPathMedia(ui, state, mediaItem);
   }
 
@@ -227,24 +293,21 @@
     return new Promise(function(resolve, reject) {
       renderPathPreview(ui, state.folder, mediaItem.fileName);
 
-      HttpModule.get(
-        '/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName),
-        function(status, responseText) {
-          if (status !== 200) {
-            reject(new Error(getErrorMessage(responseText, 'Could not load caption')));
-            return;
-          }
-
-          var data = JSON.parse(responseText);
-          state.suppressInput = true;
-          ui.editorEl.value = data.caption || '';
-          state.suppressInput = false;
-
-          var suffix = data.exists ? 'existing caption loaded' : 'new caption file will be created on save';
-          setStatus(ui, 'Selected: ' + mediaItem.label + ' (' + suffix + ')');
-          resolve();
+      HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function(status, responseText) {
+        if (status !== 200) {
+          reject(new Error(getErrorMessage(responseText, 'Could not load caption')));
+          return;
         }
-      );
+
+        var data = JSON.parse(responseText);
+        state.suppressInput = true;
+        ui.editorEl.value = data.caption || '';
+        state.suppressInput = false;
+
+        var suffix = data.exists ? 'existing caption loaded' : 'new caption file will be created on save';
+        setStatus(ui, 'Selected: ' + mediaItem.label + ' (' + suffix + ')');
+        resolve();
+      });
     });
   }
 
@@ -296,7 +359,6 @@
           resolve();
           return;
         }
-
         reject(new Error(getErrorMessage(responseText, 'Could not save caption')));
       });
     });
@@ -351,11 +413,7 @@
 
     var doc = ui.previewEl.contentDocument || ui.previewEl.contentWindow.document;
     doc.open();
-    doc.write(
-      '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
-      tag +
-      '</body></html>'
-    );
+    doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' + tag + '</body></html>');
     doc.close();
   }
 
@@ -368,6 +426,21 @@
       text = text.slice(1, -1).trim();
     }
     return text;
+  }
+
+  function parentPath(pathText) {
+    var p = String(pathText || '').trim();
+    if (!p) {
+      return '';
+    }
+    p = p.replace(/[\\\/]+$/, '');
+    var idx1 = p.lastIndexOf('/');
+    var idx2 = p.lastIndexOf('\\');
+    var idx = Math.max(idx1, idx2);
+    if (idx <= 0) {
+      return p;
+    }
+    return p.slice(0, idx);
   }
 
   function getFileExtension(name) {

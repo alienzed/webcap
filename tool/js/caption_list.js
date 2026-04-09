@@ -111,49 +111,9 @@ var CaptionListModule = (function() {
       row.className = 'page-item' + (isActive ? ' active' : '') + (emptyCaption ? ' empty-caption' : '') + (reviewed ? ' reviewed' : '');
       row.setAttribute('data-key', mediaItem.key);
 
-      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>' +
-        '<button class="rename-file-btn" title="Rename media file" data-file="' + encodeURIComponent(mediaItem.fileName) + '">Rename</button>';
+      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>';
 
       row.onclick = function(e) {
-        if (e.target && e.target.classList.contains('rename-file-btn')) {
-          var oldFile = decodeURIComponent(e.target.getAttribute('data-file'));
-          var input = window.prompt('Rename file', oldFile);
-          if (input === null) {
-            e.stopPropagation();
-            return;
-          }
-          var newFile = String(input || '').trim();
-          if (!newFile || newFile === oldFile) {
-            e.stopPropagation();
-            return;
-          }
-          if (newFile === '.' || newFile === '..' || newFile.indexOf('/') !== -1 || newFile.indexOf('\\') !== -1) {
-            deps.setStatus(ui, 'Invalid filename');
-            e.stopPropagation();
-            return;
-          }
-          if (newFile.indexOf('.') === -1) {
-            var dot = oldFile.lastIndexOf('.');
-            if (dot > -1) {
-              newFile += oldFile.slice(dot);
-            }
-          }
-          if (!MEDIA_NAME_PATTERN.test(newFile)) {
-            deps.setStatus(ui, 'Unsupported media file type');
-            e.stopPropagation();
-            return;
-          }
-
-          renamePickerMedia(mediaItem, oldFile, newFile).then(function() {
-            deps.setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
-            deps.refreshCurrentDirectory(ui, state);
-          }).catch(function(err) {
-            deps.setStatus(ui, (err && err.message) ? err.message : ('Rename failed: ' + err));
-          });
-          e.stopPropagation();
-          return;
-        }
-
         if (state.currentItem && state.currentItem.key === mediaItem.key) {
           return;
         }
@@ -167,6 +127,40 @@ var CaptionListModule = (function() {
           return deps.selectMedia(ui, state, mediaItem);
         }).catch(function(err) {
           deps.setStatus(ui, String(err && err.message ? err.message : err));
+        });
+      };
+
+      row.oncontextmenu = function(e) {
+        e.preventDefault();
+        var oldFile = mediaItem.fileName;
+        var input = window.prompt('Rename file', oldFile);
+        if (input === null) {
+          return;
+        }
+        var newFile = String(input || '').trim();
+        if (!newFile || newFile === oldFile) {
+          return;
+        }
+        if (newFile === '.' || newFile === '..' || newFile.indexOf('/') !== -1 || newFile.indexOf('\\') !== -1) {
+          deps.setStatus(ui, 'Invalid filename');
+          return;
+        }
+        if (newFile.indexOf('.') === -1) {
+          var dot = oldFile.lastIndexOf('.');
+          if (dot > -1) {
+            newFile += oldFile.slice(dot);
+          }
+        }
+        if (!MEDIA_NAME_PATTERN.test(newFile)) {
+          deps.setStatus(ui, 'Unsupported media file type');
+          return;
+        }
+
+        renamePickerMedia(mediaItem, oldFile, newFile).then(function() {
+          deps.setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
+          deps.refreshCurrentDirectory(ui, state);
+        }).catch(function(err) {
+          deps.setStatus(ui, (err && err.message) ? err.message : ('Rename failed: ' + err));
         });
       };
 

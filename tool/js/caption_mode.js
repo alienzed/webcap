@@ -29,7 +29,12 @@
         renderFileList(ui, state, ui.filterEl.value, token, filterToken);
       });
     });
-
+    ui.pageListEl.addEventListener('keydown', function(e) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
+        return;
+      }
+      navigateListByArrow(ui, state, e.key === 'ArrowDown' ? 1 : -1, e);
+    });
 
     var reviewBtn = document.getElementById('review-captions-btn');
     if (reviewBtn) {
@@ -108,6 +113,7 @@
     ui.editorEl.value = '';
     ui.editorEl.placeholder = 'Caption text (.txt)';
     ui.pageListEl.innerHTML = '';
+    ui.pageListEl.tabIndex = 0;
 
     var doc = ui.previewEl.contentDocument || ui.previewEl.contentWindow.document;
     doc.open();
@@ -232,14 +238,65 @@
       renderFileList: renderFileList
     });
   }
+  function navigateListByArrow(ui, state, step, event) {
+    var rows = ui.pageListEl.querySelectorAll('.page-item[data-key]');
+    if (!rows.length) {
+      return;
+    }
+
+    event.preventDefault();
+
+    var currentIdx = -1;
+    if (state.currentItem) {
+      for (var i = 0; i < rows.length; i += 1) {
+        if (rows[i].getAttribute('data-key') === state.currentItem.key) {
+          currentIdx = i;
+          break;
+        }
+      }
+    }
+
+    var nextIdx = 0;
+    if (currentIdx === -1) {
+      nextIdx = step > 0 ? 0 : rows.length - 1;
+    } else {
+      nextIdx = currentIdx + step;
+      if (nextIdx < 0 || nextIdx >= rows.length) {
+        return;
+      }
+    }
+
+    var key = rows[nextIdx].getAttribute('data-key');
+    var mediaItem = null;
+    for (var j = 0; j < state.items.length; j += 1) {
+      if (state.items[j].key === key) {
+        mediaItem = state.items[j];
+        break;
+      }
+    }
+    if (!mediaItem) {
+      return;
+    }
+
+    if (state.reviewMode) {
+      selectMedia(ui, state, mediaItem).catch(function(err) {
+        setStatus(ui, String(err && err.message ? err.message : err));
+      });
+      return;
+    }
+
+    saveCurrentCaption(ui, state).then(function() {
+      return selectMedia(ui, state, mediaItem);
+    }).catch(function(err) {
+      setStatus(ui, String(err && err.message ? err.message : err));
+    });
+  }
   
 
   async function selectMedia(ui, state, mediaItem) {
     setReviewMode(ui, state, false);
     state.currentItem = mediaItem;
     renderFileList(ui, state, ui.filterEl.value);
-
-    // Always update textarea with the selected file's caption
     if (mediaItem.kind === 'picker') {
       await selectPickerMedia(ui, state, mediaItem);
       return;

@@ -154,4 +154,51 @@ Execution rule:
 
 ---
 
+## 11. v7.1 Additions (High-Level)
+
+### 11.1 Caption Templating (Module B)
+Goal:
+- Reduce copy/paste noise when creating new captions.
+
+High-level behavior:
+- Provide optional template inputs for caption seeding.
+- Apply template only when caption is new/empty.
+- Do not auto-overwrite existing non-empty captions.
+- Keep template composition deterministic and explicit.
+
+Suggested inputs (high-level only):
+- Leading key phrase.
+- Optional common middle component.
+- Optional trailing phrase (e.g., lighting/viewpoint placeholder).
+- Optional filename token mapping (`token -> phrase`) for controlled phrase insertion.
+
+Constraints:
+- Plain text only.
+- No hidden or background mutation of existing captions.
+- Keep implementation simple and reversible.
+
+### 11.2 Stats & Validation (Module B)
+Goal:
+- Help dataset balancing and consistency checks for LoRA preparation.
+
+High-level behavior:
+- Coverage check for required key phrase across loaded files.
+- Fixed set of phrase counters for balance overview.
+- Validation rules based on filename token mappings.
+
+Validation examples (high-level):
+- If filename contains token `fd`, caption should include phrase `face down`.
+- Flag mismatches for review.
+
+Outputs:
+- Counts and percentages.
+- Missing/failed item list for quick review.
+
+Constraints:
+- No database.
+- No destructive edits required to run stats/validation.
+- Prefer explicit recalculation actions over hidden background processing.
+
+---
+
 END

@@ -19,7 +19,8 @@
       dirStack: [],
       reviewMode: false,
       captionCache: {},
-      listRenderSeq: 0
+      listRenderSeq: 0,
+      reviewedSet: new Set()
     };
 
     configureUiForCaptionMode(ui);
@@ -334,7 +335,8 @@
         var row = document.createElement('div');
         var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
         var emptyCaption = (captionText !== null && captionText !== undefined) && !(captionText || '').trim();
-        row.className = 'page-item' + (isActive ? ' active' : '') + (emptyCaption ? ' empty-caption' : '');
+        var reviewed = state.reviewedSet.has(mediaItem.key);
+        row.className = 'page-item' + (isActive ? ' active' : '') + (emptyCaption ? ' empty-caption' : '') + (reviewed ? ' reviewed' : '');
         row.setAttribute('data-key', mediaItem.key);
 
         var openBtn = '';
@@ -372,6 +374,17 @@
           }).catch(function(err) {
             setStatus(ui, String(err && err.message ? err.message : err));
           });
+        };
+
+        row.ondblclick = function(e) {
+          // Toggle reviewed state on double-click
+          if (state.reviewedSet.has(mediaItem.key)) {
+            state.reviewedSet.delete(mediaItem.key);
+          } else {
+            state.reviewedSet.add(mediaItem.key);
+          }
+          renderFileList(ui, state, ui.filterEl.value);
+          e.stopPropagation();
         };
 
         ui.pageListEl.appendChild(row);

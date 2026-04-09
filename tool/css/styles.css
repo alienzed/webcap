@@ -218,3 +218,30 @@ iframe {
   background: #f8f9fb;
   cursor: default;
 }
+
+.stats-mode-list {
+  padding: 8px;
+}
+
+.stats-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stats-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.stats-controls label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stats-controls textarea,
+.stats-controls input {
+  font-size: 13px;
+}

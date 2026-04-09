@@ -11,15 +11,23 @@ window.addEventListener('DOMContentLoaded', function() {
     newPageNameEl: document.getElementById('new-page-name'),
     openPageBtn: document.getElementById('open-page-btn'),
     captionUpBtn: document.getElementById('caption-up-btn'),
+    reviewBtn: document.getElementById('review-captions-btn'),
     topInputRow: document.getElementById('new-page-name').parentElement
   };
 
   var params = new URLSearchParams(window.location.search);
   var requestedMode = params.get('mode') || 'page';
   var mode = ModeRouterModule.hasMode(requestedMode) ? requestedMode : 'page';
-  var nextMode = mode === 'caption' ? 'page' : 'caption';
+  var modeOrder = ['page', 'caption', 'stats'];
+  var modeLabels = {
+    page: 'Page Mode',
+    caption: 'Caption Mode',
+    stats: 'Stats Mode'
+  };
+  var modeIdx = modeOrder.indexOf(mode);
+  var nextMode = modeOrder[(modeIdx + 1) % modeOrder.length];
 
-  modeSwitchBtn.textContent = nextMode === 'caption' ? 'Caption Mode' : 'Page Mode';
+  modeSwitchBtn.textContent = modeLabels[nextMode] || 'Page Mode';
   modeSwitchBtn.onclick = function() {
     var nextParams = new URLSearchParams(window.location.search);
     nextParams.set('mode', nextMode);

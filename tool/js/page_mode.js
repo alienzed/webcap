@@ -10,6 +10,9 @@
     ui.topInputRow.classList.remove('single');
     ui.openPageBtn.textContent = 'Open Page';
     ui.captionUpBtn.style.display = 'none';
+    if (ui.reviewBtn) {
+      ui.reviewBtn.style.display = 'none';
+    }
     ui.dropZone.style.display = '';
     ui.editorEl.spellcheck = false;
 

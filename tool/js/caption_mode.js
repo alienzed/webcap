@@ -36,40 +36,6 @@
       navigateListByArrow(ui, state, e.key === 'ArrowDown' ? 1 : -1, e);
     });
 
-    var reviewBtn = document.getElementById('review-captions-btn');
-    if (reviewBtn) {
-      reviewBtn.addEventListener('click', function() {
-        if (!state.items.length) {
-          setStatus(ui, 'No media files loaded');
-          return;
-        }
-        state.currentItem = null;
-        renderFileList(ui, state, ui.filterEl.value);
-        clearEditorAndPreview(ui, state);
-        setReviewMode(ui, state, true);
-        setStatus(ui, 'Reviewing all captions (read-only)');
-        var currentSeq = ++state.listRenderSeq;
-        var promises = state.items.map(function(item) {
-          return CaptionOps.loadCaptionTextForItem(state, item).then(function(text) {
-            return { name: item.fileName, text: text };
-          });
-        });
-        Promise.all(promises).then(function(results) {
-          if (currentSeq !== state.listRenderSeq || !state.reviewMode) {
-            return;
-          }
-          var combined = results.map(function(r) {
-            return r.name + ':\n' + (r.text || '');
-          }).join('\n\n');
-          state.suppressInput = true;
-          ui.editorEl.value = combined;
-          state.suppressInput = false;
-        }).catch(function(err) {
-          setStatus(ui, String(err && err.message ? err.message : err));
-        });
-      });
-    }
-
     ui.editorEl.addEventListener('input', function() {
       if (state.suppressInput || !state.currentItem || state.reviewMode) {
         return;
@@ -108,6 +74,10 @@
     ui.captionUpBtn.style.display = '';
     ui.captionUpBtn.textContent = '↻';
     ui.captionUpBtn.title = 'Refresh directory';
+    var reviewBtn = document.getElementById('review-captions-btn');
+    if (reviewBtn) {
+      reviewBtn.style.display = 'none';
+    }
     ui.dropZone.style.display = 'none';
     ui.editorEl.spellcheck = true;
     ui.editorEl.value = '';

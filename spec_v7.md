@@ -46,9 +46,9 @@ Create and edit small local HTML pages with local media support.
 Caption media in existing folders with fewer clicks than VSCode split workflow.
 
 ### High-Level Requirements
-- User can open media either by choosing a folder in Chromium browsers or by opening an absolute folder path.
+- User opens media by choosing a folder (Chromium browsers).
 - Sidebar lists media files (images + videos).
-- In Choose Folder flow, media can be discovered recursively in subfolders.
+- In Choose Folder flow, media is shown one folder at a time; subfolder media is discovered by entering that subfolder.
 - `.txt` files should be hidden when practical.
 - Selecting media:
   - shows media preview on right pane (`<video>` or `<img>`), and
@@ -73,7 +73,6 @@ Caption media in existing folders with fewer clicks than VSCode split workflow.
 ### Runtime Notes
 - Core app remains cross-platform.
 - Choose Folder flow depends on browser support for directory picker APIs (Chromium browsers).
-- Open Path flow remains available as fallback.
 
 ---
 

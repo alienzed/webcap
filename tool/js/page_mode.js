@@ -11,6 +11,7 @@
     ui.openPageBtn.textContent = 'Open Page';
     ui.captionUpBtn.style.display = 'none';
     ui.dropZone.style.display = '';
+    ui.editorEl.spellcheck = false;
 
     EditorModule.init({
       editor: ui.editorEl,

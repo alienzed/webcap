@@ -9,6 +9,10 @@ A simple local tool to:
 
 No abstractions. Files are the source of truth.
 
+Scope note:
+- This v6 spec applies to Module A (Page Tool) behavior.
+- Caption Assistant behavior is defined in spec_v7.md.
+
 ---
 
 ## 2. Core Rules
@@ -202,8 +206,8 @@ No logic beyond filesystem.
 
 JS:
 - XMLHttpRequest only
-- no async/await
-- no promises
+- no async/await (Module A only)
+- no promises (Module A only)
 - one request per action
 - simple callbacks only
 

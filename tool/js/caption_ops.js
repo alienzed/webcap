@@ -67,6 +67,8 @@
   }
 
   global.CaptionOps = {
+    captionCacheKey: captionCacheKey,
+    readPickerCaption: readPickerCaption,
     loadCaptionTextForItem: loadCaptionTextForItem,
     savePathCaption: savePathCaption
   };

@@ -2,6 +2,8 @@
 // Caption sidebar render logic extracted from caption_mode for file-size safety.
 
 var CaptionListModule = (function() {
+  var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;
+
   async function renderFileList(ui, state, filterText, token, filterToken, deps) {
     var q = (filterText || '').toLowerCase();
     var renderSeq = ++state.listRenderSeq;
@@ -70,7 +72,8 @@ var CaptionListModule = (function() {
 
       var openBtn = '';
       if (state.mode === 'path') {
-        openBtn = '<button class="open-folder-btn" title="Open containing folder" data-file="' + encodeURIComponent(mediaItem.fileName) + '">Open</button>';
+        openBtn = '<button class="open-folder-btn" title="Open containing folder" data-file="' + encodeURIComponent(mediaItem.fileName) + '">Open</button>' +
+          '<button class="rename-file-btn" title="Rename media file" data-file="' + encodeURIComponent(mediaItem.fileName) + '">Rename</button>';
       }
       row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>' + openBtn;
 
@@ -95,13 +98,88 @@ var CaptionListModule = (function() {
           return;
         }
 
+        if (e.target && e.target.classList.contains('rename-file-btn')) {
+          var oldFile = decodeURIComponent(e.target.getAttribute('data-file'));
+          var input = window.prompt('Rename file', oldFile);
+          if (input === null) {
+            e.stopPropagation();
+            return;
+          }
+          var newFile = String(input || '').trim();
+          if (!newFile || newFile === oldFile) {
+            e.stopPropagation();
+            return;
+          }
+          if (newFile === '.' || newFile === '..' || newFile.indexOf('/') !== -1 || newFile.indexOf('\\') !== -1) {
+            deps.setStatus(ui, 'Invalid filename');
+            e.stopPropagation();
+            return;
+          }
+          if (newFile.indexOf('.') === -1) {
+            var dot = oldFile.lastIndexOf('.');
+            if (dot > -1) {
+              newFile += oldFile.slice(dot);
+            }
+          }
+          if (!MEDIA_NAME_PATTERN.test(newFile)) {
+            deps.setStatus(ui, 'Unsupported media file type');
+            e.stopPropagation();
+            return;
+          }
+          fetch('/caption/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: state.folder, old_media: oldFile, new_media: newFile })
+          }).then(function(resp) {
+            return resp.json().then(function(data) {
+              if (!resp.ok) {
+                deps.setStatus(ui, data.error || 'Rename failed');
+                return;
+              }
+              deps.setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
+              deps.refreshCurrentDirectory(ui, state);
+            });
+          }).catch(function(err) {
+            deps.setStatus(ui, 'Rename failed: ' + err);
+          });
+          e.stopPropagation();
+          return;
+        }
+
         if (state.currentItem && state.currentItem.key === mediaItem.key) {
+          return;
+        }
+        if (state.reviewMode) {
+          deps.selectMedia(ui, state, mediaItem).catch(function(err) {
+            deps.setStatus(ui, String(err && err.message ? err.message : err));
+          });
           return;
         }
         deps.saveCurrentCaption(ui, state).then(function() {
           return deps.selectMedia(ui, state, mediaItem);
         }).catch(function(err) {
           deps.setStatus(ui, String(err && err.message ? err.message : err));
+        });
+      };
+
+      row.oncontextmenu = function(e) {
+        if (state.mode !== 'path') {
+          return;
+        }
+        e.preventDefault();
+        fetch('/open_folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: state.folder + '/' + mediaItem.fileName })
+        }).then(function(resp) {
+          if (!resp.ok) {
+            return resp.json().then(function(data) {
+              deps.setStatus(ui, data.error || 'Failed to open folder');
+            });
+          }
+          deps.setStatus(ui, 'Opened folder for: ' + mediaItem.fileName);
+        }).catch(function(err) {
+          deps.setStatus(ui, 'Failed to open folder: ' + err);
         });
       };
 

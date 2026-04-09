@@ -279,11 +279,10 @@
     }
   }
 
-  // loadCaptionTextForItem now in CaptionOps
-
   async function renderFileList(ui, state, filterText, token, filterToken) {
     return CaptionListModule.renderFileList(ui, state, filterText, token, filterToken, {
       navigateUp: navigateUp,
+      refreshCurrentDirectory: refreshCurrentDirectory,
       refreshPickerDirectory: refreshPickerDirectory,
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,

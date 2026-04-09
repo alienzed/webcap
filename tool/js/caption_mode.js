@@ -64,7 +64,11 @@
       if (state.suppressInput || !state.currentItem || state.reviewMode) {
         return;
       }
+      var scheduledForKey = state.currentItem.key;
       scheduleSave(function() {
+        if (!state.currentItem || state.currentItem.key !== scheduledForKey || state.reviewMode) {
+          return;
+        }
         saveCurrentCaption(ui, state).catch(function(err) {
           setStatus(ui, String(err && err.message ? err.message : err));
         });
@@ -473,7 +477,7 @@
     if (state.currentItem.kind === 'picker') {
       return savePickerCaption(ui, state.currentItem, ui.editorEl.value || '');
     }
-    return savePathCaption(ui, state, state.currentItem, ui.editorEl.value || '');
+    return CaptionOps.savePathCaption(ui, state, state.currentItem, ui.editorEl.value || '');
   }
 
   // savePathCaption now in CaptionOps

@@ -2,6 +2,25 @@
 // Minimal caption file operations (load/save)
 
 (function(global) {
+  function captionCacheKey(state, mediaItem) {
+    if (mediaItem.kind === 'picker') {
+      var dirNames = state.dirStack.map(function(handle) { return handle.name; }).join('/');
+      return 'picker:' + dirNames + ':' + mediaItem.fileName;
+    }
+    return 'path:' + (state.folder || '') + ':' + mediaItem.fileName;
+  }
+
+  async function readPickerCaption(mediaItem) {
+    var captionName = mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
+    try {
+      var captionHandle = await mediaItem.dirHandle.getFileHandle(captionName);
+      var file = await captionHandle.getFile();
+      return { text: await file.text(), exists: true };
+    } catch (err) {
+      return { text: '', exists: false };
+    }
+  }
+
   function loadCaptionTextForItem(state, mediaItem) {
     var key = captionCacheKey(state, mediaItem);
     if (Object.prototype.hasOwnProperty.call(state.captionCache, key)) {
@@ -36,7 +55,9 @@
     return new Promise(function(resolve, reject) {
       HttpModule.postJson('/caption/save', { folder: state.folder, media: mediaItem.fileName, text: text }, function(status, responseText) {
         if (status === 200) {
-          setStatus(ui, 'Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt'));
+          if (ui && ui.statusEl) {
+            ui.statusEl.textContent = 'Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
+          }
           resolve();
           return;
         }

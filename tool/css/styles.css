@@ -67,6 +67,11 @@ body {
   flex-direction: column;
 }
 
+.page-list.with-stats-pane {
+  height: auto;
+  min-height: 120px;
+}
+
 .page-item {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
@@ -196,6 +201,20 @@ iframe {
   grid-template-columns: 1fr 1fr;
 }
 
+.filter-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+#caption-filter-clear-btn {
+  width: 30px;
+  min-width: 30px;
+  padding: 6px 0;
+  line-height: 1;
+}
+
 /* Small text */
 .small {
   font-size: 12px;
@@ -244,4 +263,11 @@ iframe {
 .stats-controls textarea,
 .stats-controls input {
   font-size: 13px;
+}
+
+#caption-stats-pane {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px;
 }

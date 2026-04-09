@@ -82,7 +82,7 @@ body {
 /* Highlight for empty captions */
 .page-item.empty-caption {
   background: #fffbe6 !important;
-  border-left: 3px solid #ffe066;
+  border-left: 3px solid #ff9c9c;
 }
 
 .page-item.folder-item {

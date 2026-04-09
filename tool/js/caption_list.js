@@ -4,6 +4,38 @@
 var CaptionListModule = (function() {
   var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;
 
+  async function writeFileFromArrayBuffer(dirHandle, name, buffer) {
+    var handle = await dirHandle.getFileHandle(name, { create: true });
+    var writer = await handle.createWritable();
+    await writer.write(buffer);
+    await writer.close();
+  }
+
+  async function writeFileFromText(dirHandle, name, text) {
+    var handle = await dirHandle.getFileHandle(name, { create: true });
+    var writer = await handle.createWritable();
+    await writer.write(text);
+    await writer.close();
+  }
+
+  async function backupOriginalPair(dirHandle, mediaItem, oldFile) {
+    var trashDir = await dirHandle.getDirectoryHandle('.caption_trash', { create: true });
+
+    var oldFileObj = await mediaItem.fileHandle.getFile();
+    await writeFileFromArrayBuffer(trashDir, oldFile, await oldFileObj.arrayBuffer());
+
+    var oldCaption = oldFile.replace(/\.[^.]+$/, '.txt');
+    try {
+      var oldCaptionHandle = await dirHandle.getFileHandle(oldCaption);
+      var oldCaptionFile = await oldCaptionHandle.getFile();
+      await writeFileFromText(trashDir, oldCaption, await oldCaptionFile.text());
+    } catch (err) {
+      if (!err || err.name !== 'NotFoundError') {
+        throw err;
+      }
+    }
+  }
+
   async function renamePickerMedia(mediaItem, oldFile, newFile) {
     var dirHandle = mediaItem.dirHandle;
 
@@ -15,6 +47,9 @@ var CaptionListModule = (function() {
         throw err;
       }
     }
+
+    // Keep a single-undo copy of original media+caption before mutating names.
+    await backupOriginalPair(dirHandle, mediaItem, oldFile);
 
     var oldFileObj = await mediaItem.fileHandle.getFile();
     var newMediaHandle = await dirHandle.getFileHandle(newFile, { create: true });

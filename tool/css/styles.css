@@ -79,6 +79,12 @@ body {
   border-left: 3px solid var(--accent);
 }
 
+/* Highlight for empty captions */
+.page-item.empty-caption {
+  background: #fffbe6 !important;
+  border-left: 3px solid #ffe066;
+}
+
 .page-item.folder-item {
   background: rgba(230,126,34,0.06);
   font-weight: 600;

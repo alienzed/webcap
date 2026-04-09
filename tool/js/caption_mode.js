@@ -16,9 +16,7 @@
       chooseFolder(ui, state);
     });
 
-    ui.captionUpBtn.addEventListener('click', function() {
-      navigateUp(ui, state);
-    });
+    // Remove Up button event, handled in file list now
 
     // Debounced async filter to avoid race conditions
     var filterToken = { current: 0 };
@@ -84,7 +82,7 @@
     ui.topInputRow.classList.add('single');
     ui.createBtn.style.display = 'none';
     ui.openPageBtn.textContent = 'Choose Folder';
-    ui.captionUpBtn.style.display = '';
+    ui.captionUpBtn.style.display = 'none';
     ui.dropZone.style.display = 'none';
     ui.editorEl.value = '';
     ui.editorEl.placeholder = 'Caption text (.txt)';
@@ -262,6 +260,28 @@
       ui.pageListEl.parentNode.insertBefore(countDiv, ui.pageListEl);
     }
     var matchCount = 0;
+    // Add 'Up One Directory' item if possible
+    var canGoUp = false;
+    if (state.mode === 'picker' && state.dirStack.length > 1) {
+      canGoUp = true;
+    } else if (state.mode === 'path') {
+      var current = CaptionUtils.normalizeFolderInput(state.folder || '');
+      var parent = CaptionUtils.parentPath(current);
+      if (parent && parent !== current) {
+        canGoUp = true;
+      }
+    }
+    if (canGoUp) {
+      var upRow = document.createElement('div');
+      upRow.className = 'page-item folder-item';
+      upRow.innerHTML = '<div>⬆ Up One Directory</div>';
+      upRow.onclick = function() {
+        navigateUp(ui, state);
+      };
+      ui.pageListEl.appendChild(upRow);
+      matchCount++;
+    }
+    // ...existing code for childFolders...
     state.childFolders.forEach(function(folderItem) {
       var label = '[DIR] ' + folderItem.name;
       if (q && label.toLowerCase().indexOf(q) === -1) {
@@ -397,6 +417,7 @@
     state.currentItem = mediaItem;
     renderFileList(ui, state, ui.filterEl.value);
 
+    // Always update textarea with the selected file's caption
     if (mediaItem.kind === 'picker') {
       await selectPickerMedia(ui, state, mediaItem);
       return;

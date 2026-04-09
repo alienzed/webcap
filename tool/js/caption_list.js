@@ -4,6 +4,56 @@
 var CaptionListModule = (function() {
   var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;
 
+  async function renamePickerMedia(mediaItem, oldFile, newFile) {
+    var dirHandle = mediaItem.dirHandle;
+
+    try {
+      await dirHandle.getFileHandle(newFile);
+      throw new Error('Target media filename already exists');
+    } catch (err) {
+      if (!err || err.name !== 'NotFoundError') {
+        throw err;
+      }
+    }
+
+    var oldFileObj = await mediaItem.fileHandle.getFile();
+    var newMediaHandle = await dirHandle.getFileHandle(newFile, { create: true });
+    var mediaWriter = await newMediaHandle.createWritable();
+    await mediaWriter.write(await oldFileObj.arrayBuffer());
+    await mediaWriter.close();
+    await dirHandle.removeEntry(oldFile);
+
+    var oldCaption = oldFile.replace(/\.[^.]+$/, '.txt');
+    var newCaption = newFile.replace(/\.[^.]+$/, '.txt');
+    if (oldCaption === newCaption) {
+      return;
+    }
+
+    try {
+      var oldCaptionHandle = await dirHandle.getFileHandle(oldCaption);
+
+      try {
+        await dirHandle.getFileHandle(newCaption);
+        throw new Error('Target caption filename already exists');
+      } catch (err2) {
+        if (!err2 || err2.name !== 'NotFoundError') {
+          throw err2;
+        }
+      }
+
+      var oldCaptionFile = await oldCaptionHandle.getFile();
+      var newCaptionHandle = await dirHandle.getFileHandle(newCaption, { create: true });
+      var captionWriter = await newCaptionHandle.createWritable();
+      await captionWriter.write(await oldCaptionFile.text());
+      await captionWriter.close();
+      await dirHandle.removeEntry(oldCaption);
+    } catch (err3) {
+      if (!err3 || err3.name !== 'NotFoundError') {
+        throw err3;
+      }
+    }
+  }
+
   async function renderFileList(ui, state, filterText, token, filterToken, deps) {
     var q = (filterText || '').toLowerCase();
     var renderSeq = ++state.listRenderSeq;
@@ -19,16 +69,7 @@ var CaptionListModule = (function() {
     var matchCount = 0;
 
     // Add 'Up One Directory' item if possible.
-    var canGoUp = false;
-    if (state.mode === 'picker' && state.dirStack.length > 1) {
-      canGoUp = true;
-    } else if (state.mode === 'path') {
-      var current = CaptionUtils.normalizeFolderInput(state.folder || '');
-      var parent = CaptionUtils.parentPath(current);
-      if (parent && parent !== current) {
-        canGoUp = true;
-      }
-    }
+    var canGoUp = state.dirStack.length > 1;
 
     if (canGoUp) {
       var upRow = document.createElement('div');
@@ -70,34 +111,10 @@ var CaptionListModule = (function() {
       row.className = 'page-item' + (isActive ? ' active' : '') + (emptyCaption ? ' empty-caption' : '') + (reviewed ? ' reviewed' : '');
       row.setAttribute('data-key', mediaItem.key);
 
-      var openBtn = '';
-      if (state.mode === 'path') {
-        openBtn = '<button class="open-folder-btn" title="Open containing folder" data-file="' + encodeURIComponent(mediaItem.fileName) + '">Open</button>' +
-          '<button class="rename-file-btn" title="Rename media file" data-file="' + encodeURIComponent(mediaItem.fileName) + '">Rename</button>';
-      }
-      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>' + openBtn;
+      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>' +
+        '<button class="rename-file-btn" title="Rename media file" data-file="' + encodeURIComponent(mediaItem.fileName) + '">Rename</button>';
 
       row.onclick = function(e) {
-        if (e.target && e.target.classList.contains('open-folder-btn')) {
-          var file = decodeURIComponent(e.target.getAttribute('data-file'));
-          fetch('/open_folder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: state.folder + '/' + file })
-          }).then(function(resp) {
-            if (!resp.ok) {
-              return resp.json().then(function(data) {
-                deps.setStatus(ui, data.error || 'Failed to open folder');
-              });
-            }
-            deps.setStatus(ui, 'Opened folder for: ' + file);
-          }).catch(function(err) {
-            deps.setStatus(ui, 'Failed to open folder: ' + err);
-          });
-          e.stopPropagation();
-          return;
-        }
-
         if (e.target && e.target.classList.contains('rename-file-btn')) {
           var oldFile = decodeURIComponent(e.target.getAttribute('data-file'));
           var input = window.prompt('Rename file', oldFile);
@@ -126,21 +143,12 @@ var CaptionListModule = (function() {
             e.stopPropagation();
             return;
           }
-          fetch('/caption/rename', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder: state.folder, old_media: oldFile, new_media: newFile })
-          }).then(function(resp) {
-            return resp.json().then(function(data) {
-              if (!resp.ok) {
-                deps.setStatus(ui, data.error || 'Rename failed');
-                return;
-              }
-              deps.setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
-              deps.refreshCurrentDirectory(ui, state);
-            });
+
+          renamePickerMedia(mediaItem, oldFile, newFile).then(function() {
+            deps.setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
+            deps.refreshCurrentDirectory(ui, state);
           }).catch(function(err) {
-            deps.setStatus(ui, 'Rename failed: ' + err);
+            deps.setStatus(ui, (err && err.message) ? err.message : ('Rename failed: ' + err));
           });
           e.stopPropagation();
           return;
@@ -159,27 +167,6 @@ var CaptionListModule = (function() {
           return deps.selectMedia(ui, state, mediaItem);
         }).catch(function(err) {
           deps.setStatus(ui, String(err && err.message ? err.message : err));
-        });
-      };
-
-      row.oncontextmenu = function(e) {
-        if (state.mode !== 'path') {
-          return;
-        }
-        e.preventDefault();
-        fetch('/open_folder', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: state.folder + '/' + mediaItem.fileName })
-        }).then(function(resp) {
-          if (!resp.ok) {
-            return resp.json().then(function(data) {
-              deps.setStatus(ui, data.error || 'Failed to open folder');
-            });
-          }
-          deps.setStatus(ui, 'Opened folder for: ' + mediaItem.fileName);
-        }).catch(function(err) {
-          deps.setStatus(ui, 'Failed to open folder: ' + err);
         });
       };
 

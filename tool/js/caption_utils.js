@@ -58,7 +58,7 @@ var CaptionUtils = (function() {
     } else {
       tag = '' +
         '<div id="video-wrap" style="max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">' +
-        '  <video id="media-video" controls preload="metadata" style="max-width:100%;max-height:100%;">' +
+        '  <video id="media-video" controls autoplay loop muted playsinline preload="metadata" style="max-width:100%;max-height:100%;">' +
         '    <source src="' + src + '">' +
         '  </video>' +
         '  <div id="video-error" style="display:none;color:#ddd;font:13px system-ui;text-align:center;max-width:420px;">' +
@@ -79,6 +79,7 @@ var CaptionUtils = (function() {
       '  video.addEventListener("error",function(){ if(error){ error.style.display="block"; } });\n' +
       '  var source=video.querySelector("source");\n' +
       '  if(source){ source.addEventListener("error",function(){ if(error){ error.style.display="block"; } }); }\n' +
+      '  var p=video.play(); if(p && p.catch){ p.catch(function(){}); }\n' +
       '}\n' +
       '<\/script></body></html>'
     );

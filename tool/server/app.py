@@ -2,8 +2,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 from page_ops import create_page, load_page, save_page, list_pages
 from media_ops import save_media
-from caption_ops import list_media_files, load_caption_text, save_caption_text, rename_media, serve_media_file
-from open_folder import register_open_folder_route
+from caption_ops import list_media_files, load_caption_text, save_caption_text, serve_media_file
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = ROOT / 'tool'
@@ -115,19 +114,6 @@ def caption_save_route():
         return jsonify({'error': str(exc)}), 400
 
 
-@app.route('/caption/rename', methods=['POST'])
-def caption_rename_route():
-    data = request.get_json(silent=True) or {}
-    try:
-        return jsonify(rename_media(
-            data.get('folder', ''),
-            data.get('old_media', ''),
-            data.get('new_media', '')
-        ))
-    except Exception as exc:
-        return jsonify({'error': str(exc)}), 400
-
-
 @app.route('/caption/media', methods=['GET'])
 def caption_media_route():
     folder = request.args.get('folder', '')
@@ -138,8 +124,6 @@ def caption_media_route():
         return jsonify({'error': str(exc)}), 404
     except Exception as exc:
         return jsonify({'error': str(exc)}), 400
-
-register_open_folder_route(app)
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)

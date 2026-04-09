@@ -69,39 +69,6 @@ def save_caption_text(folder: str, media_name: str, text: str):
     return {'ok': True, 'caption_file': caption_name}
 
 
-def rename_media(folder: str, old_media_name: str, new_media_name: str):
-    folder_path = _resolve_folder(folder)
-    old_media_name = _validate_media_name(old_media_name)
-    new_media_name = _validate_media_name(new_media_name)
-
-    new_suffix = Path(new_media_name).suffix.lower()
-    if new_suffix not in MEDIA_EXTENSIONS:
-        raise ValueError('Unsupported media file type')
-
-    old_media_path = folder_path / old_media_name
-    if not old_media_path.exists() or not old_media_path.is_file():
-        raise FileNotFoundError('Media file not found')
-
-    new_media_path = folder_path / new_media_name
-    if new_media_path.exists():
-        raise ValueError('Target media filename already exists')
-
-    old_caption_path = folder_path / _caption_name_for_media(old_media_name)
-    new_caption_path = folder_path / _caption_name_for_media(new_media_name)
-    if old_caption_path.exists() and old_caption_path != new_caption_path and new_caption_path.exists():
-        raise ValueError('Target caption filename already exists')
-
-    old_media_path.rename(new_media_path)
-    if old_caption_path.exists() and old_caption_path != new_caption_path:
-        old_caption_path.rename(new_caption_path)
-
-    return {
-        'ok': True,
-        'media': new_media_name,
-        'caption_file': new_caption_path.name
-    }
-
-
 def serve_media_file(folder: str, media_name: str):
     folder_path = _resolve_folder(folder)
     media_name = _validate_media_name(media_name)

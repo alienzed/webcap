@@ -137,34 +137,6 @@
     });
   }
 
-  function openFolderPath(ui, state, folder) {
-    HttpModule.get('/caption/list?folder=' + encodeURIComponent(folder), function(status, responseText) {
-      if (status !== 200) {
-        setStatus(ui, CaptionUtils.getErrorMessage(responseText, 'Could not open folder'));
-        return;
-      }
-
-      var data = JSON.parse(responseText);
-      state.mode = 'path';
-      state.folder = folder;
-      state.currentItem = null;
-      state.childFolders = [];
-      state.items = (data.files || []).map(function(name) {
-        return { key: name, label: name, fileName: name, kind: 'path' };
-      });
-
-      renderFileList(ui, state, ui.filterEl.value);
-      if (!state.items.length) {
-        clearEditorAndPreview(ui, state);
-        setStatus(ui, 'No supported media files in folder');
-        return;
-      }
-      selectMedia(ui, state, state.items[0]).catch(function(err) {
-        setStatus(ui, String(err && err.message ? err.message : err));
-      });
-    });
-  }
-
   async function refreshPickerDirectory(ui, state) {
     var currentDir = state.dirStack[state.dirStack.length - 1];
     var childFolders = [];
@@ -208,58 +180,28 @@
   }
 
   function refreshCurrentDirectory(ui, state) {
-    if (state.mode === 'picker') {
-      if (!state.dirStack.length) {
-        setStatus(ui, 'No folder loaded');
-        return;
-      }
-      refreshPickerDirectory(ui, state).catch(function(err) {
-        setStatus(ui, String(err && err.message ? err.message : err));
-      });
-      return;
-    }
-
-    var folder = CaptionUtils.normalizeFolderInput(state.folder || '');
-    if (!folder) {
+    if (!state.dirStack.length) {
       setStatus(ui, 'No folder loaded');
       return;
     }
-    openFolderPath(ui, state, folder);
+    refreshPickerDirectory(ui, state).catch(function(err) {
+      setStatus(ui, String(err && err.message ? err.message : err));
+    });
   }
 
   function navigateUp(ui, state) {
-    if (state.mode === 'picker') {
-      if (state.dirStack.length <= 1) {
-        setStatus(ui, 'Already at selected root folder');
-        return;
-      }
-      state.dirStack.pop();
-      updateFolderLabel(ui, state);
-      refreshPickerDirectory(ui, state).catch(function(err) {
-        setStatus(ui, String(err && err.message ? err.message : err));
-      });
+    if (state.dirStack.length <= 1) {
+      setStatus(ui, 'Already at selected root folder');
       return;
     }
-
-    var current = CaptionUtils.normalizeFolderInput(state.folder || '');
-    if (!current) {
-      setStatus(ui, 'No folder loaded');
-      return;
-    }
-    var parent = CaptionUtils.parentPath(current);
-    if (!parent || parent === current) {
-      setStatus(ui, 'Already at top-level path');
-      return;
-    }
-    openFolderPath(ui, state, parent);
+    state.dirStack.pop();
+    updateFolderLabel(ui, state);
+    refreshPickerDirectory(ui, state).catch(function(err) {
+      setStatus(ui, String(err && err.message ? err.message : err));
+    });
   }
 
   function updateFolderLabel(ui, state) {
-    if (state.mode !== 'picker') {
-      ui.newPageNameEl.value = state.folder || 'No folder selected';
-      return;
-    }
-
     if (!state.dirStack.length) {
       ui.newPageNameEl.value = 'No folder selected';
       return;

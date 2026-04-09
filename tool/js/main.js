@@ -17,12 +17,14 @@ window.addEventListener('DOMContentLoaded', function() {
 
   var params = new URLSearchParams(window.location.search);
   var requestedMode = params.get('mode') || 'page';
+  if (requestedMode === 'stats') {
+    requestedMode = 'caption';
+  }
   var mode = ModeRouterModule.hasMode(requestedMode) ? requestedMode : 'page';
-  var modeOrder = ['page', 'caption', 'stats'];
+  var modeOrder = ['page', 'caption'];
   var modeLabels = {
     page: 'Page Mode',
-    caption: 'Caption Mode',
-    stats: 'Stats Mode'
+    caption: 'Caption Mode'
   };
   var modeIdx = modeOrder.indexOf(mode);
   var nextMode = modeOrder[(modeIdx + 1) % modeOrder.length];

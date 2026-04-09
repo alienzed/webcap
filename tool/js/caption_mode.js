@@ -77,10 +77,15 @@
     ui.captionUpBtn.style.display = '';
     ui.captionUpBtn.textContent = '↻';
     ui.captionUpBtn.title = 'Refresh directory';
+    var actionRow = document.getElementById('caption-list-actions');
+    if (actionRow) {
+      actionRow.style.display = '';
+    }
     var reviewBtn = document.getElementById('review-captions-btn');
     if (reviewBtn) {
       reviewBtn.style.display = '';
       reviewBtn.textContent = 'Review Captions';
+      placeReviewButton(ui, reviewBtn);
     }
     ui.dropZone.style.display = 'none';
     ui.editorEl.spellcheck = true;
@@ -94,6 +99,22 @@
     doc.open();
     doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">Select a media file to preview.</body></html>');
     doc.close();
+  }
+
+  function placeReviewButton(ui, reviewBtn) {
+    var row = document.getElementById('caption-list-actions');
+    if (!row) {
+      row = document.createElement('div');
+      row.id = 'caption-list-actions';
+      row.className = 'caption-list-actions';
+      if (ui.pageListEl.parentNode) {
+        ui.pageListEl.parentNode.insertBefore(row, ui.pageListEl.nextSibling);
+      }
+    }
+    row.style.display = '';
+    if (reviewBtn.parentNode !== row) {
+      row.appendChild(reviewBtn);
+    }
   }
 
   function ensureStatsPane(ui) {

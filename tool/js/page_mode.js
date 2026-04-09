@@ -13,6 +13,10 @@
     if (ui.reviewBtn) {
       ui.reviewBtn.style.display = 'none';
     }
+    var actionRow = document.getElementById('caption-list-actions');
+    if (actionRow) {
+      actionRow.style.display = 'none';
+    }
     ui.dropZone.style.display = '';
     ui.editorEl.spellcheck = false;
 

@@ -72,6 +72,15 @@ body {
   min-height: 120px;
 }
 
+.caption-list-actions {
+  display: flex;
+  justify-content: stretch;
+}
+
+.caption-list-actions > button {
+  width: 100%;
+}
+
 .page-item {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);

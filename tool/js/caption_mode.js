@@ -22,7 +22,7 @@
     configureUiForCaptionMode(ui);
 
     ui.createBtn.addEventListener('click', function() {
-      var folder = normalizeFolderInput(ui.newPageNameEl.value || '');
+      var folder = CaptionUtils.normalizeFolderInput(ui.newPageNameEl.value || '');
       if (!folder) {
         setStatus(ui, 'Enter a folder path first');
         return;
@@ -95,10 +95,6 @@
     return upBtn;
   }
 
-  function setStatus(ui, text) {
-    ui.statusEl.textContent = text || '';
-  }
-
   function chooseFolder(ui, state) {
     if (typeof window.showDirectoryPicker !== 'function') {
       setStatus(ui, 'Choose Folder is available in Chromium browsers (Chrome/Edge).');
@@ -124,7 +120,7 @@
   function openFolderPath(ui, state, folder) {
     HttpModule.get('/caption/list?folder=' + encodeURIComponent(folder), function(status, responseText) {
       if (status !== 200) {
-        setStatus(ui, getErrorMessage(responseText, 'Could not open folder'));
+        setStatus(ui, CaptionUtils.getErrorMessage(responseText, 'Could not open folder'));
         return;
       }
 
@@ -134,22 +130,15 @@
       state.currentItem = null;
       state.childFolders = [];
       state.items = (data.files || []).map(function(name) {
-        return {
-          key: name,
-          label: name,
-          fileName: name,
-          kind: 'path'
-        };
+        return { key: name, label: name, fileName: name, kind: 'path' };
       });
 
       renderFileList(ui, state, ui.filterEl.value);
-
       if (!state.items.length) {
         clearEditorAndPreview(ui, state);
         setStatus(ui, 'No supported media files in folder');
         return;
       }
-
       selectMedia(ui, state, state.items[0]).catch(function(err) {
         setStatus(ui, String(err && err.message ? err.message : err));
       });
@@ -169,7 +158,7 @@
       if (entry.kind !== 'file') {
         continue;
       }
-      var ext = getFileExtension(entry.name);
+      var ext = CaptionUtils.getFileExtension(entry.name);
       if (!MEDIA_EXTENSIONS[ext]) {
         continue;
       }
@@ -185,19 +174,16 @@
 
     childFolders.sort(function(a, b) { return a.name.localeCompare(b.name); });
     items.sort(function(a, b) { return a.label.localeCompare(b.label); });
-
     state.childFolders = childFolders;
     state.items = items;
     state.currentItem = null;
 
     renderFileList(ui, state, ui.filterEl.value);
-
     if (!items.length) {
       clearEditorAndPreview(ui, state);
       setStatus(ui, 'No supported media files in current folder');
       return;
     }
-
     await selectMedia(ui, state, items[0]);
   }
 
@@ -214,12 +200,12 @@
       return;
     }
 
-    var current = normalizeFolderInput(ui.newPageNameEl.value || state.folder || '');
+    var current = CaptionUtils.normalizeFolderInput(ui.newPageNameEl.value || state.folder || '');
     if (!current) {
       setStatus(ui, 'No folder loaded');
       return;
     }
-    var parent = parentPath(current);
+    var parent = CaptionUtils.parentPath(current);
     if (!parent || parent === current) {
       setStatus(ui, 'Already at top-level path');
       return;
@@ -238,8 +224,8 @@
         return;
       }
       var row = document.createElement('div');
-      row.className = 'page-item';
-      row.innerHTML = '<div>' + escapeHtml(label) + '</div>';
+      row.className = 'page-item folder-item';
+      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(label) + '</div>';
       row.ondblclick = function() {
         state.dirStack.push(folderItem.handle);
         refreshPickerDirectory(ui, state).catch(function(err) {
@@ -261,19 +247,17 @@
       var row = document.createElement('div');
       var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
       row.className = 'page-item' + (isActive ? ' active' : '');
-      row.innerHTML = '<div>' + escapeHtml(mediaItem.label) + '</div>';
+      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>';
       row.onclick = function() {
         if (state.currentItem && state.currentItem.key === mediaItem.key) {
           return;
         }
-
         saveCurrentCaption(ui, state).then(function() {
           return selectMedia(ui, state, mediaItem);
         }).catch(function(err) {
           setStatus(ui, String(err && err.message ? err.message : err));
         });
       };
-
       ui.pageListEl.appendChild(row);
     });
   }
@@ -292,18 +276,15 @@
   function selectPathMedia(ui, state, mediaItem) {
     return new Promise(function(resolve, reject) {
       renderPathPreview(ui, state.folder, mediaItem.fileName);
-
       HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function(status, responseText) {
         if (status !== 200) {
-          reject(new Error(getErrorMessage(responseText, 'Could not load caption')));
+          reject(new Error(CaptionUtils.getErrorMessage(responseText, 'Could not load caption')));
           return;
         }
-
         var data = JSON.parse(responseText);
         state.suppressInput = true;
         ui.editorEl.value = data.caption || '';
         state.suppressInput = false;
-
         var suffix = data.exists ? 'existing caption loaded' : 'new caption file will be created on save';
         setStatus(ui, 'Selected: ' + mediaItem.label + ' (' + suffix + ')');
         resolve();
@@ -314,12 +295,10 @@
   async function selectPickerMedia(ui, state, mediaItem) {
     var file = await mediaItem.fileHandle.getFile();
     renderPickerPreview(ui, state, file, mediaItem.label);
-
     var caption = await readPickerCaption(mediaItem);
     state.suppressInput = true;
     ui.editorEl.value = caption.text;
     state.suppressInput = false;
-
     var suffix = caption.exists ? 'existing caption loaded' : 'new caption file will be created on save';
     setStatus(ui, 'Selected: ' + mediaItem.label + ' (' + suffix + ')');
   }
@@ -339,27 +318,21 @@
     if (!state.currentItem) {
       return Promise.resolve();
     }
-
     if (state.currentItem.kind === 'picker') {
       return savePickerCaption(ui, state.currentItem, ui.editorEl.value || '');
     }
-
     return savePathCaption(ui, state, state.currentItem, ui.editorEl.value || '');
   }
 
   function savePathCaption(ui, state, mediaItem, text) {
     return new Promise(function(resolve, reject) {
-      HttpModule.postJson('/caption/save', {
-        folder: state.folder,
-        media: mediaItem.fileName,
-        text: text
-      }, function(status, responseText) {
+      HttpModule.postJson('/caption/save', { folder: state.folder, media: mediaItem.fileName, text: text }, function(status, responseText) {
         if (status === 200) {
           setStatus(ui, 'Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt'));
           resolve();
           return;
         }
-        reject(new Error(getErrorMessage(responseText, 'Could not save caption')));
+        reject(new Error(CaptionUtils.getErrorMessage(responseText, 'Could not save caption')));
       });
     });
   }
@@ -379,7 +352,6 @@
       URL.revokeObjectURL(state.objectUrl);
       state.objectUrl = '';
     }
-
     var doc = ui.previewEl.contentDocument || ui.previewEl.contentWindow.document;
     doc.open();
     doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">No media to preview.</body></html>');
@@ -387,9 +359,9 @@
   }
 
   function renderPathPreview(ui, folder, mediaName) {
-    var ext = getFileExtension(mediaName);
+    var ext = CaptionUtils.getFileExtension(mediaName);
     var mediaUrl = '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(mediaName);
-    renderPreviewHtml(ui, ext, mediaUrl);
+    CaptionUtils.renderPreviewHtml(ui, !!IMAGE_EXTENSIONS[ext], mediaUrl);
   }
 
   function renderPickerPreview(ui, state, file, fallbackLabel) {
@@ -397,76 +369,13 @@
       URL.revokeObjectURL(state.objectUrl);
       state.objectUrl = '';
     }
-
     state.objectUrl = URL.createObjectURL(file);
-    var ext = getFileExtension(file.name || fallbackLabel || '');
-    renderPreviewHtml(ui, ext, state.objectUrl);
+    var ext = CaptionUtils.getFileExtension(file.name || fallbackLabel || '');
+    CaptionUtils.renderPreviewHtml(ui, !!IMAGE_EXTENSIONS[ext], state.objectUrl);
   }
 
-  function renderPreviewHtml(ui, ext, src) {
-    var tag = '';
-    if (IMAGE_EXTENSIONS[ext]) {
-      tag = '<img src="' + src + '" alt="preview" style="max-width:100%;max-height:100%;object-fit:contain;">';
-    } else {
-      tag = '<video controls style="max-width:100%;max-height:100%;"><source src="' + src + '"></video>';
-    }
-
-    var doc = ui.previewEl.contentDocument || ui.previewEl.contentWindow.document;
-    doc.open();
-    doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' + tag + '</body></html>');
-    doc.close();
-  }
-
-  function normalizeFolderInput(value) {
-    var text = String(value || '').trim();
-    if (!text) {
-      return '';
-    }
-    if (text.length >= 2 && text[0] === '"' && text[text.length - 1] === '"') {
-      text = text.slice(1, -1).trim();
-    }
-    return text;
-  }
-
-  function parentPath(pathText) {
-    var p = String(pathText || '').trim();
-    if (!p) {
-      return '';
-    }
-    p = p.replace(/[\\\/]+$/, '');
-    var idx1 = p.lastIndexOf('/');
-    var idx2 = p.lastIndexOf('\\');
-    var idx = Math.max(idx1, idx2);
-    if (idx <= 0) {
-      return p;
-    }
-    return p.slice(0, idx);
-  }
-
-  function getFileExtension(name) {
-    var idx = name.lastIndexOf('.');
-    if (idx === -1) {
-      return '';
-    }
-    return name.slice(idx).toLowerCase();
-  }
-
-  function getErrorMessage(responseText, fallback) {
-    try {
-      var data = JSON.parse(responseText);
-      return data.error || fallback;
-    } catch (e) {
-      return fallback;
-    }
-  }
-
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+  function setStatus(ui, text) {
+    ui.statusEl.textContent = text || '';
   }
 
   ModeRouterModule.registerMode('caption', startCaptionMode);

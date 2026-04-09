@@ -10,14 +10,17 @@
 <body>
   <div class="app">
     <div class="panel stack">
+      <button id="mode-switch-btn" type="button">Caption Mode</button>
       <div class="row-inline">
         <input id="new-page-name" type="text" placeholder="new page name">
         <button id="create-page-btn" type="button">Create</button>
       </div>
-      <button id="mode-switch-btn" type="button">Caption Mode</button>
+      <div class="row-inline row-equal">
+        <button id="open-page-btn" type="button">Open Page</button>
+        <button id="caption-up-btn" type="button" style="display:none">Up</button>
+      </div>
       <input id="page-filter" type="text" placeholder="filter pages">
       <div id="page-list" class="page-list"></div>
-      <button id="open-page-btn" type="button">Open Page</button>
       <div id="drop-zone" class="drop-zone">
         Drop video here
         <div class="small">.mp4 .webm .ogg</div>
@@ -39,6 +42,7 @@
   <script src="/static/js/media.js"></script>
   <script src="/static/js/mode_router.js"></script>
   <script src="/static/js/page_mode.js"></script>
+  <script src="/static/js/caption_utils.js"></script>
   <script src="/static/js/caption_mode.js"></script>
   <script src="/static/js/main.js"></script>
 </body>

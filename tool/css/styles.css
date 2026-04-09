@@ -79,6 +79,11 @@ body {
   border-left: 3px solid var(--accent);
 }
 
+.page-item.folder-item {
+  background: rgba(230,126,34,0.06);
+  font-weight: 600;
+}
+
 .page-meta {
   font-size: 12px;
   color: var(--muted);
@@ -169,6 +174,10 @@ iframe {
   gap: 8px;
 }
 
+.row-inline.row-equal {
+  grid-template-columns: 1fr 1fr;
+}
+
 /* Small text */
 .small {
   font-size: 12px;
@@ -179,4 +188,8 @@ iframe {
   font-size: 12px;
   color: var(--muted);
   min-height: 18px;
+}
+
+.stack > .status {
+  margin-top: auto;
 }

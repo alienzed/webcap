@@ -296,7 +296,7 @@
     }
     // ...existing code for childFolders...
     state.childFolders.forEach(function(folderItem) {
-      var label = '[DIR] ' + folderItem.name;
+      var label = '&#128193; ' + folderItem.name;
       if (q && label.toLowerCase().indexOf(q) === -1) {
         return;
       }

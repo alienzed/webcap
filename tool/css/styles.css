@@ -83,7 +83,7 @@ body {
 }
 
 .page-item.active {
-  background: rgba(230,126,34,0.12);
+  background: rgba(52, 146, 255, 0.12);
   border-left: 3px solid var(--accent);
 }
 

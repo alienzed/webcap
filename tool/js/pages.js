@@ -3,13 +3,13 @@ var PagesModule = (function() {
   var pages = [];
   var pageListEl = null;
   var filterEl = null;
-  var statusEl = null;
+  var statusApi = null;
   var editorApi = null;
 
   function init(config) {
     pageListEl = config.pageListEl;
     filterEl = config.filterEl;
-    statusEl = config.statusEl;
+    statusApi = StatusModule.create(config.statusEl);
     editorApi = config.editorApi;
 
     filterEl.addEventListener('input', function() {
@@ -18,30 +18,11 @@ var PagesModule = (function() {
   }
 
   function setStatus(text) {
-    statusEl.textContent = text || '';
+    statusApi.set(text);
   }
 
   function normalizePageName(name) {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  }
-
-  function httpGet(url, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.onload = function() {
-      callback(xhr.status, xhr.responseText);
-    };
-    xhr.send();
-  }
-
-  function httpPostJson(url, data, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onload = function() {
-      callback(xhr.status, xhr.responseText);
-    };
-    xhr.send(JSON.stringify(data));
   }
 
   function extractMetadata(html, pageName) {
@@ -86,7 +67,7 @@ var PagesModule = (function() {
   }
 
   function refreshPages(callback) {
-    httpGet('/pages', function(status, text) {
+    HttpModule.get('/pages', function(status, text) {
       if (status !== 200) {
         setStatus('Could not list pages');
         if (callback) { callback(); }
@@ -101,7 +82,7 @@ var PagesModule = (function() {
       }
       var remaining = names.length;
       names.forEach(function(name) {
-        httpGet('/load?page=' + encodeURIComponent(name), function(loadStatus, html) {
+        HttpModule.get('/load?page=' + encodeURIComponent(name), function(loadStatus, html) {
           if (loadStatus === 200) {
             pages.push(extractMetadata(html, name));
           } else {
@@ -119,7 +100,7 @@ var PagesModule = (function() {
   }
 
   function loadPage(name, callback) {
-    httpGet('/load?page=' + encodeURIComponent(name), function(status, html) {
+    HttpModule.get('/load?page=' + encodeURIComponent(name), function(status, html) {
       if (status !== 200) {
         setStatus('Could not load page');
         if (callback) { callback(false); }
@@ -138,7 +119,7 @@ var PagesModule = (function() {
       if (callback) { callback(true); }
       return;
     }
-    httpPostJson('/save', { page: currentPage, html: editorApi.getContent() }, function(status) {
+    HttpModule.postJson('/save', { page: currentPage, html: editorApi.getContent() }, function(status) {
       if (status === 200) {
         refreshPages(function() {
           setStatus('Saved: ' + currentPage);
@@ -170,7 +151,7 @@ var PagesModule = (function() {
     }
 
     var proceed = function() {
-      httpPostJson('/create', { page: name }, function(status, response) {
+      HttpModule.postJson('/create', { page: name }, function(status, response) {
         if (status !== 200) {
           var msg = 'Could not create page';
           try {

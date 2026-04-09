@@ -46,18 +46,15 @@ var MediaModule = (function() {
     formData.append('file', file);
     formData.append('page', pageName);
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/upload', true);
-    xhr.onload = function() {
-      if (xhr.status !== 200) {
+    HttpModule.postFormData('/upload', formData, function(status, responseText) {
+      if (status !== 200) {
         pagesApi.setStatus('Upload failed');
         return;
       }
-      var data = JSON.parse(xhr.responseText);
+      var data = JSON.parse(responseText);
       editorApi.appendHtml(generateVideoHtml(data.filename, pageName));
       pagesApi.setStatus('Added video: ' + data.filename);
-    };
-    xhr.send(formData);
+    });
   }
 
   function generateVideoHtml(filename, pageName) {

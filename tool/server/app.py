@@ -2,6 +2,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 from page_ops import create_page, load_page, save_page, list_pages
 from media_ops import save_media
+from caption_ops import list_media_files, load_caption_text, save_caption_text, serve_media_file
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = ROOT / 'tool'
@@ -78,6 +79,51 @@ def page_media(page, filename):
 @app.route('/pages/<path:filename>')
 def page_files(filename):
     return send_from_directory(ROOT / 'pages', filename)
+
+
+@app.route('/caption/list', methods=['GET'])
+def caption_list_route():
+    folder = request.args.get('folder', '')
+    try:
+        files = list_media_files(folder)
+        return jsonify({'files': files})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 400
+
+
+@app.route('/caption/load', methods=['GET'])
+def caption_load_route():
+    folder = request.args.get('folder', '')
+    media = request.args.get('media', '')
+    try:
+        return jsonify(load_caption_text(folder, media))
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 400
+
+
+@app.route('/caption/save', methods=['POST'])
+def caption_save_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(save_caption_text(
+            data.get('folder', ''),
+            data.get('media', ''),
+            data.get('text', '')
+        ))
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 400
+
+
+@app.route('/caption/media', methods=['GET'])
+def caption_media_route():
+    folder = request.args.get('folder', '')
+    media = request.args.get('media', '')
+    try:
+        return serve_media_file(folder, media)
+    except FileNotFoundError as exc:
+        return jsonify({'error': str(exc)}), 404
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 400
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)

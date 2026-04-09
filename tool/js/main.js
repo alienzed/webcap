@@ -1,52 +1,30 @@
 window.addEventListener('DOMContentLoaded', function() {
-  var editorEl = document.getElementById('editor');
-  var previewEl = document.getElementById('preview');
-  var pageListEl = document.getElementById('page-list');
-  var filterEl = document.getElementById('page-filter');
-  var statusEl = document.getElementById('status');
-  var dropZone = document.getElementById('drop-zone');
-  var createBtn = document.getElementById('create-page-btn');
-  var newPageNameEl = document.getElementById('new-page-name');
+  var modeSwitchBtn = document.getElementById('mode-switch-btn');
+  var ui = {
+    editorEl: document.getElementById('editor'),
+    previewEl: document.getElementById('preview'),
+    pageListEl: document.getElementById('page-list'),
+    filterEl: document.getElementById('page-filter'),
+    statusEl: document.getElementById('status'),
+    dropZone: document.getElementById('drop-zone'),
+    createBtn: document.getElementById('create-page-btn'),
+    newPageNameEl: document.getElementById('new-page-name'),
+    openPageBtn: document.getElementById('open-page-btn')
+  };
 
-  EditorModule.init({
-    editor: editorEl,
-    preview: previewEl,
-    onDebouncedSave: function() {
-      PagesModule.saveCurrentPage();
-    }
-  });
+  var params = new URLSearchParams(window.location.search);
+  var requestedMode = params.get('mode') || 'page';
+  var mode = ModeRouterModule.hasMode(requestedMode) ? requestedMode : 'page';
+  var nextMode = mode === 'caption' ? 'page' : 'caption';
 
-  PagesModule.init({
-    pageListEl: pageListEl,
-    filterEl: filterEl,
-    statusEl: statusEl,
-    editorApi: EditorModule
-  });
+  modeSwitchBtn.textContent = nextMode === 'caption' ? 'Caption Mode' : 'Page Mode';
+  modeSwitchBtn.onclick = function() {
+    var nextParams = new URLSearchParams(window.location.search);
+    nextParams.set('mode', nextMode);
+    window.location.search = nextParams.toString();
+  };
 
-  MediaModule.init({
-    dropZone: dropZone,
-    pagesApi: PagesModule,
-    editorApi: EditorModule
-  });
-
-  createBtn.addEventListener('click', function() {
-    PagesModule.createPage(newPageNameEl.value, function(ok) {
-      if (ok) {
-        newPageNameEl.value = '';
-      }
-    });
-  });
-
-  newPageNameEl.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') {
-      createBtn.click();
-    }
-  });
-
-  PagesModule.refreshPages(function() {
-    PagesModule.setStatus('Ready');
+  ModeRouterModule.startMode(mode, {
+    ui: ui
   });
 });
-document.getElementById("open-page-btn").onclick = function() {
-  openCurrentPage();
-};

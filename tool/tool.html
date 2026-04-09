@@ -14,6 +14,7 @@
         <input id="new-page-name" type="text" placeholder="new page name">
         <button id="create-page-btn" type="button">Create</button>
       </div>
+      <button id="mode-switch-btn" type="button">Caption Mode</button>
       <input id="page-filter" type="text" placeholder="filter pages">
       <div id="page-list" class="page-list"></div>
       <button id="open-page-btn" type="button">Open Page</button>
@@ -30,9 +31,15 @@
       <iframe id="preview"></iframe>
     </div>
   </div>
+  <script src="/static/js/debounce.js"></script>
   <script src="/static/js/editor.js"></script>
+  <script src="/static/js/http.js"></script>
+  <script src="/static/js/status.js"></script>
   <script src="/static/js/pages.js"></script>
   <script src="/static/js/media.js"></script>
+  <script src="/static/js/mode_router.js"></script>
+  <script src="/static/js/page_mode.js"></script>
+  <script src="/static/js/caption_mode.js"></script>
   <script src="/static/js/main.js"></script>
 </body>
 </html>

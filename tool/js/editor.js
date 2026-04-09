@@ -1,24 +1,22 @@
 var EditorModule = (function() {
   var editor = null;
   var preview = null;
-  var saveTimer = null;
+  var scheduleSave = null;
   var onDebouncedSave = null;
 
   function init(config) {
     editor = config.editor;
     preview = config.preview;
     onDebouncedSave = config.onDebouncedSave;
+    scheduleSave = DebounceModule.create(800);
 
     editor.addEventListener('input', function() {
       renderPreview(editor.value);
-      if (saveTimer) {
-        clearTimeout(saveTimer);
-      }
-      saveTimer = setTimeout(function() {
+      scheduleSave(function() {
         if (onDebouncedSave) {
           onDebouncedSave();
         }
-      }, 800);
+      });
     });
   }
 
@@ -49,14 +47,11 @@ var EditorModule = (function() {
     }
     editor.value = current + html + '\n';
     renderPreview(editor.value);
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-    }
-    saveTimer = setTimeout(function() {
+    scheduleSave(function() {
       if (onDebouncedSave) {
         onDebouncedSave();
       }
-    }, 800);
+    });
   }
 
   return {

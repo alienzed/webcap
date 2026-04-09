@@ -64,6 +64,15 @@
       if (state.suppressInput || !state.currentItem || state.reviewMode) {
         return;
       }
+      var currentRow = ui.pageListEl.querySelector('.page-item[data-key="' + state.currentItem.key + '"]');
+      if (currentRow) {
+        if ((ui.editorEl.value || '').trim()) {
+          currentRow.classList.remove('empty-caption');
+        } else {
+          currentRow.classList.add('empty-caption');
+        }
+      }
+      state.captionCache[captionCacheKey(state, state.currentItem)] = ui.editorEl.value || '';
       var scheduledForKey = state.currentItem.key;
       scheduleSave(function() {
         if (!state.currentItem || state.currentItem.key !== scheduledForKey || state.reviewMode) {
@@ -437,6 +446,10 @@
           reject(new Error(CaptionUtils.getErrorMessage(responseText, 'Could not load caption')));
           return;
         }
+        if (state.currentItem !== mediaItem) {
+          resolve();
+          return;
+        }
         var data = JSON.parse(responseText);
         state.suppressInput = true;
         ui.editorEl.value = data.caption || '';
@@ -452,6 +465,9 @@
     var file = await mediaItem.fileHandle.getFile();
     renderPickerPreview(ui, state, file, mediaItem.label);
     var caption = await readPickerCaption(mediaItem);
+    if (state.currentItem !== mediaItem) {
+      return;
+    }
     state.suppressInput = true;
     ui.editorEl.value = caption.text;
     state.suppressInput = false;

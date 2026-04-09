@@ -11,9 +11,13 @@
     var scheduleSave = DebounceModule.create(500);
     var state = window.CaptionState;
     configureUiForCaptionMode(ui);
-    ensureStatsPane(ui);
-    ensureFilterClearButton(ui);
-    wireReviewActions(ui, state);
+    CaptionReviewModule.init(ui, state, {
+      setStatus: setStatus,
+      saveCurrentCaption: saveCurrentCaption,
+      setReviewMode: setReviewMode,
+      renderFileList: renderFileList,
+      selectMedia: selectMedia
+    });
 
     ui.openPageBtn.addEventListener('click', function() {
       chooseFolder(ui, state);
@@ -115,186 +119,6 @@
     if (reviewBtn.parentNode !== row) {
       row.appendChild(reviewBtn);
     }
-  }
-
-  function ensureStatsPane(ui) {
-    var container = document.getElementById('caption-stats-pane');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'caption-stats-pane';
-      container.innerHTML = StatsViewModule.buildStatsPanelHtml('Update Review');
-      ui.pageListEl.parentNode.insertBefore(container, ui.dropZone);
-    }
-    var details = document.getElementById('stats-details');
-    if (details) {
-      details.open = false;
-    }
-  }
-
-  function wireReviewActions(ui, state) {
-    var reviewBtn = document.getElementById('review-captions-btn');
-    if (reviewBtn) {
-      reviewBtn.onclick = function() {
-        runReview(ui, state);
-      };
-    }
-
-    var runBtn = document.getElementById('stats-run-btn');
-    if (runBtn) {
-      runBtn.onclick = function() {
-        runReview(ui, state);
-      };
-    }
-
-    window.addEventListener('message', function(event) {
-      var data = event.data;
-      if (!data) {
-        return;
-      }
-      if (data.type === 'caption-review-select') {
-        selectByFileName(ui, state, data.fileName);
-        return;
-      }
-      if (data.type === 'caption-review-token') {
-        applyTokenFilter(ui, data.token);
-      }
-    });
-  }
-
-  function runReview(ui, state) {
-    if (!state.items.length) {
-      setStatus(ui, 'No media files loaded');
-      return;
-    }
-
-    saveCurrentCaption(ui, state).then(function() {
-      setReviewMode(ui, state, true);
-      state.currentItem = null;
-      renderFileList(ui, state, ui.filterEl.value);
-      var details = document.getElementById('stats-details');
-      if (details) {
-        details.open = true;
-      }
-
-      var runSeq = (state.reviewSeq || 0) + 1;
-      state.reviewSeq = runSeq;
-      setStatus(ui, 'Building combined captions and stats...');
-
-      var promises = state.items.map(function(item) {
-        return CaptionOps.loadCaptionTextForItem(state, item).then(function(text) {
-          return {
-            fileName: item.fileName,
-            caption: text || ''
-          };
-        });
-      });
-
-      return Promise.all(promises).then(function(results) {
-        if (state.reviewSeq !== runSeq) {
-          return;
-        }
-        var options = StatsViewModule.getOptionsFromDom();
-        var report = StatsEngineModule.compute(results, {
-          requiredPhrase: options.requiredPhrase,
-          phrases: options.phrases,
-          tokenRules: options.tokenRules
-        });
-        state.suppressInput = true;
-        ui.editorEl.value = StatsViewModule.buildCombinedCaptionsText(results);
-        state.suppressInput = false;
-        StatsViewModule.renderReportPreview(ui, report);
-        setStatus(ui, 'Review ready: ' + results.length + ' files');
-      });
-    }).catch(function(err) {
-      setStatus(ui, String(err && err.message ? err.message : err));
-    });
-  }
-
-  function selectByFileName(ui, state, fileName) {
-    if (!fileName) {
-      return;
-    }
-    var target = null;
-    for (var i = 0; i < state.items.length; i += 1) {
-      if (state.items[i].fileName === fileName) {
-        target = state.items[i];
-        break;
-      }
-    }
-    if (!target) {
-      setStatus(ui, 'File not found in current folder: ' + fileName);
-      return;
-    }
-
-    if (ui.filterEl.value) {
-      ui.filterEl.value = '';
-      ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-
-    selectMedia(ui, state, target).then(function() {
-      scrollToCurrentRow(ui, state);
-    }).catch(function(err) {
-      setStatus(ui, String(err && err.message ? err.message : err));
-    });
-  }
-
-  function applyTokenFilter(ui, token) {
-    var value = String(token || '').trim();
-    ui.filterEl.value = value;
-    var ev = new Event('input', { bubbles: true });
-    ui.filterEl.dispatchEvent(ev);
-    if (value) {
-      setStatus(ui, 'Filter applied from token: ' + value);
-    }
-  }
-
-  function ensureFilterClearButton(ui) {
-    if (!ui.filterEl) {
-      return;
-    }
-    var parent = ui.filterEl.parentNode;
-    if (!parent) {
-      return;
-    }
-
-    var row = document.getElementById('caption-filter-row');
-    if (!row) {
-      row = document.createElement('div');
-      row.id = 'caption-filter-row';
-      row.className = 'filter-row';
-      parent.insertBefore(row, ui.filterEl);
-      row.appendChild(ui.filterEl);
-    }
-
-    var clearBtn = document.getElementById('caption-filter-clear-btn');
-    if (!clearBtn) {
-      clearBtn = document.createElement('button');
-      clearBtn.id = 'caption-filter-clear-btn';
-      clearBtn.type = 'button';
-      clearBtn.title = 'Clear filter';
-      clearBtn.textContent = 'x';
-      row.appendChild(clearBtn);
-      clearBtn.onclick = function() {
-        if (!ui.filterEl.value) {
-          ui.filterEl.focus();
-          return;
-        }
-        ui.filterEl.value = '';
-        ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
-        ui.filterEl.focus();
-      };
-    }
-  }
-
-  function scrollToCurrentRow(ui, state) {
-    if (!state.currentItem) {
-      return;
-    }
-    var row = ui.pageListEl.querySelector('.page-item[data-key="' + state.currentItem.key + '"]');
-    if (!row || !row.scrollIntoView) {
-      return;
-    }
-    row.scrollIntoView({ block: 'nearest' });
   }
 
   function chooseFolder(ui, state) {

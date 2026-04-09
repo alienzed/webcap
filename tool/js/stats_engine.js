@@ -1,4 +1,11 @@
 var StatsEngineModule = (function() {
+  var TOKEN_BLACKLIST = {
+    a: true,
+    is: true,
+    on: true,
+    and: true
+  };
+
   function normalize(text) {
     return String(text || '').toLowerCase();
   }
@@ -82,6 +89,9 @@ var StatsEngineModule = (function() {
       });
 
       tokenize(caption).forEach(function(tok) {
+        if (TOKEN_BLACKLIST[tok]) {
+          return;
+        }
         tokenCounts[tok] = (tokenCounts[tok] || 0) + 1;
       });
     });

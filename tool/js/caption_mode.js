@@ -27,6 +27,14 @@
       refreshCurrentDirectory(ui, state);
     });
 
+    if (ui.pruneBtn) {
+      ui.pruneBtn.addEventListener('click', function() {
+        pruneSelectedItem(ui, state).catch(function(err) {
+          setStatus(ui, String(err && err.message ? err.message : err));
+        });
+      });
+    }
+
     // Debounced async filter to avoid race conditions
     var filterToken = { current: 0 };
     var debouncedFilter = DebounceModule.create(150);
@@ -86,10 +94,16 @@
       actionRow.style.display = '';
     }
     var reviewBtn = document.getElementById('review-captions-btn');
+    var pruneBtn = document.getElementById('prune-caption-btn');
     if (reviewBtn) {
       reviewBtn.style.display = '';
       reviewBtn.textContent = 'Review Captions';
-      placeReviewButton(ui, reviewBtn);
+      placeActionButtons(ui, reviewBtn, pruneBtn);
+    }
+    if (pruneBtn) {
+      pruneBtn.style.display = '';
+      pruneBtn.textContent = 'Prune Selected';
+      placeActionButtons(ui, reviewBtn, pruneBtn);
     }
     ui.dropZone.style.display = 'none';
     ui.editorEl.spellcheck = true;
@@ -105,7 +119,7 @@
     doc.close();
   }
 
-  function placeReviewButton(ui, reviewBtn) {
+  function placeActionButtons(ui, reviewBtn, pruneBtn) {
     var row = document.getElementById('caption-list-actions');
     if (!row) {
       row = document.createElement('div');
@@ -116,9 +130,52 @@
       }
     }
     row.style.display = '';
-    if (reviewBtn.parentNode !== row) {
+    if (reviewBtn && reviewBtn.parentNode !== row) {
       row.appendChild(reviewBtn);
     }
+    if (pruneBtn && pruneBtn.parentNode !== row) {
+      row.appendChild(pruneBtn);
+    }
+  }
+
+  async function pruneSelectedItem(ui, state) {
+    if (!state.currentItem) {
+      setStatus(ui, 'No selected media item to prune');
+      return;
+    }
+    await pruneMediaItem(ui, state, state.currentItem);
+  }
+
+  async function pruneMediaItem(ui, state, mediaItem) {
+    if (!mediaItem) {
+      setStatus(ui, 'No media item to prune');
+      return;
+    }
+    if (mediaItem.kind !== 'picker') {
+      setStatus(ui, 'Prune is available for folder-picker items only');
+      return;
+    }
+
+    var fileName = mediaItem.fileName;
+    var confirmed = window.confirm('Move this media file and its caption to .caption_trash?\n\n' + fileName);
+    if (!confirmed) {
+      return;
+    }
+
+    if (state.currentItem && state.currentItem.key === mediaItem.key) {
+      await saveCurrentCaption(ui, state);
+    }
+
+    await CaptionListModule.prunePickerMedia(mediaItem);
+
+    delete state.captionCache[CaptionOps.captionCacheKey(state, mediaItem)];
+    state.reviewedSet.delete(mediaItem.key);
+    if (state.currentItem && state.currentItem.key === mediaItem.key) {
+      state.currentItem = null;
+    }
+
+    await refreshPickerDirectory(ui, state);
+    setStatus(ui, 'Pruned to .caption_trash: ' + fileName);
   }
 
   function chooseFolder(ui, state) {
@@ -244,6 +301,7 @@
       refreshPickerDirectory: refreshPickerDirectory,
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
+      pruneMedia: pruneMediaItem,
       selectMedia: selectMedia,
       renderFileList: renderFileList
     });

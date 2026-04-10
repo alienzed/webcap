@@ -3,6 +3,101 @@
 
 var CaptionListModule = (function() {
   var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;
+  var contextMenuEl = null;
+
+  function hideContextMenu() {
+    if (contextMenuEl) {
+      contextMenuEl.style.display = 'none';
+      contextMenuEl.innerHTML = '';
+    }
+  }
+
+  function ensureContextMenu() {
+    if (contextMenuEl) {
+      return contextMenuEl;
+    }
+
+    contextMenuEl = document.createElement('div');
+    contextMenuEl.className = 'caption-context-menu';
+    contextMenuEl.style.display = 'none';
+    document.body.appendChild(contextMenuEl);
+
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        hideContextMenu();
+      }
+    });
+    window.addEventListener('scroll', hideContextMenu, true);
+
+    return contextMenuEl;
+  }
+
+  function showContextMenu(clientX, clientY, actions) {
+    var el = ensureContextMenu();
+    el.innerHTML = '';
+    actions.forEach(function(action) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'caption-context-menu-item';
+      btn.textContent = action.label;
+      btn.onclick = function(ev) {
+        ev.stopPropagation();
+        hideContextMenu();
+        action.run();
+      };
+      el.appendChild(btn);
+    });
+
+    el.style.display = 'block';
+    el.style.left = clientX + 'px';
+    el.style.top = clientY + 'px';
+
+    var rect = el.getBoundingClientRect();
+    var left = clientX;
+    var top = clientY;
+    if (rect.right > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - rect.width - 8);
+    }
+    if (rect.bottom > window.innerHeight - 8) {
+      top = Math.max(8, window.innerHeight - rect.height - 8);
+    }
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+  }
+
+  function promptRenameMedia(mediaItem, ui, state, deps) {
+    var oldFile = mediaItem.fileName;
+    var input = window.prompt('Rename file', oldFile);
+    if (input === null) {
+      return;
+    }
+    var newFile = String(input || '').trim();
+    if (!newFile || newFile === oldFile) {
+      return;
+    }
+    if (newFile === '.' || newFile === '..' || newFile.indexOf('/') !== -1 || newFile.indexOf('\\') !== -1) {
+      deps.setStatus(ui, 'Invalid filename');
+      return;
+    }
+    if (newFile.indexOf('.') === -1) {
+      var dot = oldFile.lastIndexOf('.');
+      if (dot > -1) {
+        newFile += oldFile.slice(dot);
+      }
+    }
+    if (!MEDIA_NAME_PATTERN.test(newFile)) {
+      deps.setStatus(ui, 'Unsupported media file type');
+      return;
+    }
+
+    renamePickerMedia(mediaItem, oldFile, newFile).then(function() {
+      deps.setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
+      deps.refreshCurrentDirectory(ui, state);
+    }).catch(function(err) {
+      deps.setStatus(ui, (err && err.message) ? err.message : ('Rename failed: ' + err));
+    });
+  }
 
   async function writeFileFromArrayBuffer(dirHandle, name, buffer) {
     var handle = await dirHandle.getFileHandle(name, { create: true });
@@ -29,6 +124,32 @@ var CaptionListModule = (function() {
       var oldCaptionHandle = await dirHandle.getFileHandle(oldCaption);
       var oldCaptionFile = await oldCaptionHandle.getFile();
       await writeFileFromText(trashDir, oldCaption, await oldCaptionFile.text());
+    } catch (err) {
+      if (!err || err.name !== 'NotFoundError') {
+        throw err;
+      }
+    }
+  }
+
+  function makeTrashName(baseName) {
+    var stamp = Date.now().toString(36);
+    var rand = Math.floor(Math.random() * 0xffff).toString(16);
+    return stamp + '_' + rand + '__' + baseName;
+  }
+
+  async function moveFileToTrash(dirHandle, trashDir, sourceName, trashName) {
+    var sourceHandle = await dirHandle.getFileHandle(sourceName);
+    var sourceFile = await sourceHandle.getFile();
+    await writeFileFromArrayBuffer(trashDir, trashName, await sourceFile.arrayBuffer());
+    await dirHandle.removeEntry(sourceName);
+  }
+
+  async function moveCaptionToTrashIfPresent(dirHandle, trashDir, sourceName, trashName) {
+    try {
+      var sourceHandle = await dirHandle.getFileHandle(sourceName);
+      var sourceFile = await sourceHandle.getFile();
+      await writeFileFromText(trashDir, trashName, await sourceFile.text());
+      await dirHandle.removeEntry(sourceName);
     } catch (err) {
       if (!err || err.name !== 'NotFoundError') {
         throw err;
@@ -87,6 +208,25 @@ var CaptionListModule = (function() {
         throw err3;
       }
     }
+  }
+
+  async function prunePickerMedia(mediaItem) {
+    var dirHandle = mediaItem.dirHandle;
+    var mediaName = mediaItem.fileName;
+    var captionName = mediaName.replace(/\.[^.]+$/, '.txt');
+    var trashDir = await dirHandle.getDirectoryHandle('.caption_trash', { create: true });
+    var trashMediaName = makeTrashName(mediaName);
+    var trashCaptionName = makeTrashName(captionName);
+
+    await moveFileToTrash(dirHandle, trashDir, mediaName, trashMediaName);
+    await moveCaptionToTrashIfPresent(dirHandle, trashDir, captionName, trashCaptionName);
+
+    return {
+      mediaName: mediaName,
+      captionName: captionName,
+      trashMediaName: trashMediaName,
+      trashCaptionName: trashCaptionName
+    };
   }
 
   async function renderFileList(ui, state, filterText, token, filterToken, deps) {
@@ -167,36 +307,23 @@ var CaptionListModule = (function() {
 
       row.oncontextmenu = function(e) {
         e.preventDefault();
-        var oldFile = mediaItem.fileName;
-        var input = window.prompt('Rename file', oldFile);
-        if (input === null) {
-          return;
-        }
-        var newFile = String(input || '').trim();
-        if (!newFile || newFile === oldFile) {
-          return;
-        }
-        if (newFile === '.' || newFile === '..' || newFile.indexOf('/') !== -1 || newFile.indexOf('\\') !== -1) {
-          deps.setStatus(ui, 'Invalid filename');
-          return;
-        }
-        if (newFile.indexOf('.') === -1) {
-          var dot = oldFile.lastIndexOf('.');
-          if (dot > -1) {
-            newFile += oldFile.slice(dot);
+        e.stopPropagation();
+        showContextMenu(e.clientX, e.clientY, [
+          {
+            label: 'Rename',
+            run: function() {
+              promptRenameMedia(mediaItem, ui, state, deps);
+            }
+          },
+          {
+            label: 'Prune',
+            run: function() {
+              deps.pruneMedia(ui, state, mediaItem).catch(function(err) {
+                deps.setStatus(ui, String(err && err.message ? err.message : err));
+              });
+            }
           }
-        }
-        if (!MEDIA_NAME_PATTERN.test(newFile)) {
-          deps.setStatus(ui, 'Unsupported media file type');
-          return;
-        }
-
-        renamePickerMedia(mediaItem, oldFile, newFile).then(function() {
-          deps.setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
-          deps.refreshCurrentDirectory(ui, state);
-        }).catch(function(err) {
-          deps.setStatus(ui, (err && err.message) ? err.message : ('Rename failed: ' + err));
-        });
+        ]);
       };
 
       row.ondblclick = function(e) {
@@ -275,6 +402,7 @@ var CaptionListModule = (function() {
   }
 
   return {
-    renderFileList: renderFileList
+    renderFileList: renderFileList,
+    prunePickerMedia: prunePickerMedia
   };
 })();

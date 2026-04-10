@@ -75,10 +75,37 @@ body {
 .caption-list-actions {
   display: flex;
   justify-content: stretch;
+  gap: 8px;
 }
 
 .caption-list-actions > button {
+  width: auto;
+  flex: 1 1 0;
+}
+
+.caption-context-menu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 150px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  padding: 4px;
+}
+
+.caption-context-menu-item {
   width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border-radius: 6px;
+  border: none;
+  padding: 8px 10px;
+}
+
+.caption-context-menu-item:hover {
+  background: var(--hover);
 }
 
 .page-item {

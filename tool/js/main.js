@@ -12,6 +12,7 @@ window.addEventListener('DOMContentLoaded', function() {
     openPageBtn: document.getElementById('open-page-btn'),
     captionUpBtn: document.getElementById('caption-up-btn'),
     reviewBtn: document.getElementById('review-captions-btn'),
+    pruneBtn: document.getElementById('prune-caption-btn'),
     topInputRow: document.getElementById('new-page-name').parentElement
   };
 

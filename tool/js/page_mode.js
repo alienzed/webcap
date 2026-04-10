@@ -13,6 +13,9 @@
     if (ui.reviewBtn) {
       ui.reviewBtn.style.display = 'none';
     }
+    if (ui.pruneBtn) {
+      ui.pruneBtn.style.display = 'none';
+    }
     var actionRow = document.getElementById('caption-list-actions');
     if (actionRow) {
       actionRow.style.display = 'none';

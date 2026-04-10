@@ -297,6 +297,48 @@
     setStatus(ui, 'Pruned to .caption_trash: ' + fileName);
   }
 
+  async function restoreMediaItem(ui, state, mediaItem) {
+    if (!mediaItem) {
+      setStatus(ui, 'No media item to restore');
+      return;
+    }
+    if (mediaItem.kind !== 'picker') {
+      setStatus(ui, 'Restore is available for folder-picker items only');
+      return;
+    }
+    if (state.dirStack.length < 2 || state.dirStack[state.dirStack.length - 1].name !== '.caption_trash') {
+      setStatus(ui, 'Restore is available inside .caption_trash only');
+      return;
+    }
+
+    if (state.currentItem && state.currentItem.key === mediaItem.key) {
+      await saveCurrentCaption(ui, state);
+    }
+
+    var targetDir = state.dirStack[state.dirStack.length - 2];
+    var restored = await CaptionListModule.restorePickerMedia(mediaItem, targetDir);
+
+    delete state.captionCache[CaptionOps.captionCacheKey(state, mediaItem)];
+    state.reviewedSet.delete(mediaItem.key);
+    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+      state.focusSet.keys = state.focusSet.keys.filter(function(key) {
+        return key !== mediaItem.key;
+      });
+      if (!state.focusSet.keys.length) {
+        state.focusSet = null;
+      }
+    }
+    if (state.scheduleFolderStateSave) {
+      state.scheduleFolderStateSave();
+    }
+    if (state.currentItem && state.currentItem.key === mediaItem.key) {
+      state.currentItem = null;
+    }
+
+    await refreshPickerDirectory(ui, state);
+    setStatus(ui, 'Restored from .caption_trash: ' + restored.mediaName);
+  }
+
   function chooseFolder(ui, state) {
     if (typeof window.showDirectoryPicker !== 'function') {
       setStatus(ui, 'Choose Folder is available in Chromium browsers (Chrome/Edge).');
@@ -628,6 +670,7 @@
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
       pruneMedia: pruneMediaItem,
+      restoreMedia: restoreMediaItem,
       activateFocusSet: activateFocusSet,
       clearFocusSet: clearFocusSet,
       onReviewedSetChanged: function() {

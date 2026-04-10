@@ -133,6 +133,8 @@ var StatsViewModule = (function() {
       '<style>' +
       'body{font-family:system-ui;margin:0;padding:10px;background:#f7f8fa;color:#2b2f33;}' +
       '.card{background:#fff;border:1px solid #d6d8dc;border-radius:8px;padding:8px;margin-bottom:8px;}' +
+      '.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}' +
+      '.row .card{margin-bottom:0;}' +
       'h3{margin:0 0 6px 0;font-size:14px;}' +
       'table{width:100%;border-collapse:collapse;font-size:12px;}' +
       'th,td{border-bottom:1px solid #eceef1;padding:5px;text-align:left;vertical-align:top;}' +
@@ -155,13 +157,17 @@ var StatsViewModule = (function() {
       '<div class="card"><h3>Missing Required Phrase</h3><ul>' + requiredRows + '</ul></div>' +
       '<div class="card"><h3>Balance Counts</h3><table><thead><tr><th>Phrase</th><th>Count</th><th>Percent</th></tr></thead><tbody>' + phraseRows + '</tbody></table></div>' +
       '<div class="card"><h3>Validation Failures</h3><ul>' + failRows + '</ul></div>' +
+      '<div class="row">' +
       '<div class="card"><h3>Shortest Captions</h3><ul>' + shortestRows + '</ul></div>' +
       '<div class="card"><h3>Longest Captions</h3><ul>' + longestRows + '</ul></div>' +
+      '</div>' +
       '<div class="card"><h3>Duplicate Captions</h3><ul>' + duplicateRows + '</ul></div>' +
       '<div class="card"><h3>Length Outliers (Bottom 5%)</h3><ul>' + shortOutlierRows + '</ul></div>' +
       '<div class="card"><h3>Length Outliers (Top 5%)</h3><ul>' + longOutlierRows + '</ul></div>' +
+      '<div class="row">' +
       '<div class="card"><h3>Top Tokens</h3><ul class="token-grid">' + topRows + '</ul></div>' +
       '<div class="card"><h3>Rare Tokens (&lt;=2)</h3><ul class="token-grid">' + rareRows + '</ul></div>' +
+      '</div>' +
       '<script>' +
       'document.querySelectorAll(".fail-link").forEach(function(btn){' +
       'btn.addEventListener("click",function(){' +

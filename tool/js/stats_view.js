@@ -48,6 +48,7 @@ var StatsViewModule = (function() {
       '      <label>Rules (file:token => phrase or caption:phrase => phrase)</label>' +
         '      <textarea id="stats-token-rules" rows="4" placeholder="fd => face down\nfile:fu => face up\ncaption:front view => face"></textarea>' +
       '      <button id="stats-run-btn" type="button">' + escapeHtml(label) + '</button>' +
+      '      <button id="folder-settings-reset-btn" type="button" title="Delete .webcap_state.json for current folder">Reset Folder Settings</button>' +
       '    </div>' +
         '  </details>' +
         '  <details id="primer-details">' +
@@ -154,16 +155,22 @@ var StatsViewModule = (function() {
       '<div class="summary-row"><span>Missing captions</span><strong>' + report.missingCaption + '</strong></div>' +
       '<div class="summary-row"><span>Required phrase</span><strong>' + escapeHtml(requiredLabel) + '</strong></div>' +
       '<div class="summary-row"><span>Required hits</span><strong>' + report.requiredHits + ' (' + report.requiredPercent + '%)</strong></div></div>' +
+      '<div class="row">' +
       '<div class="card"><h3>Missing Required Phrase</h3><ul>' + requiredRows + '</ul></div>' +
       '<div class="card"><h3>Balance Counts</h3><table><thead><tr><th>Phrase</th><th>Count</th><th>Percent</th></tr></thead><tbody>' + phraseRows + '</tbody></table></div>' +
+      '</div>' +
+      '<div class="row">' +
       '<div class="card"><h3>Validation Failures</h3><ul>' + failRows + '</ul></div>' +
+      '<div class="card"><h3>Duplicate Captions</h3><ul>' + duplicateRows + '</ul></div>' +
+      '</div>' +
       '<div class="row">' +
       '<div class="card"><h3>Shortest Captions</h3><ul>' + shortestRows + '</ul></div>' +
       '<div class="card"><h3>Longest Captions</h3><ul>' + longestRows + '</ul></div>' +
       '</div>' +
-      '<div class="card"><h3>Duplicate Captions</h3><ul>' + duplicateRows + '</ul></div>' +
+      '<div class="row">' +
       '<div class="card"><h3>Length Outliers (Bottom 5%)</h3><ul>' + shortOutlierRows + '</ul></div>' +
       '<div class="card"><h3>Length Outliers (Top 5%)</h3><ul>' + longOutlierRows + '</ul></div>' +
+      '</div>' +
       '<div class="row">' +
       '<div class="card"><h3>Top Tokens</h3><ul class="token-grid">' + topRows + '</ul></div>' +
       '<div class="card"><h3>Rare Tokens (&lt;=2)</h3><ul class="token-grid">' + rareRows + '</ul></div>' +

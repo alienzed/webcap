@@ -13,9 +13,6 @@
     if (ui.reviewBtn) {
       ui.reviewBtn.style.display = 'none';
     }
-    if (ui.pruneBtn) {
-      ui.pruneBtn.style.display = 'none';
-    }
     if (ui.autosetBtn) {
       ui.autosetBtn.style.display = 'none';
     }

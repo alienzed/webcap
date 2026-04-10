@@ -1,5 +1,7 @@
 // Modularized: uses CaptionState and CaptionOps
 (function() {
+  var FOLDER_STATE_FILE = '.webcap_state.json';
+  var FOLDER_STATE_VERSION = 1;
   var IMAGE_EXTENSIONS = { '.jpg': true, '.jpeg': true, '.png': true, '.gif': true, '.webp': true, '.bmp': true };
   var MEDIA_EXTENSIONS = {
     '.mp4': true, '.webm': true, '.ogg': true, '.mov': true, '.mkv': true, '.avi': true, '.m4v': true,
@@ -18,6 +20,8 @@
       renderFileList: renderFileList,
       selectMedia: selectMedia
     });
+    setupFolderStatePersistence(ui, state);
+    setupFolderStateReset(ui, state);
 
     ui.openPageBtn.addEventListener('click', function() {
       chooseFolder(ui, state);
@@ -26,14 +30,6 @@
     ui.captionUpBtn.addEventListener('click', function() {
       refreshCurrentDirectory(ui, state);
     });
-
-    if (ui.pruneBtn) {
-      ui.pruneBtn.addEventListener('click', function() {
-        pruneSelectedItem(ui, state).catch(function(err) {
-          setStatus(ui, String(err && err.message ? err.message : err));
-        });
-      });
-    }
 
     if (ui.autosetBtn) {
       ui.autosetBtn.addEventListener('click', function() {
@@ -102,22 +98,16 @@
       actionRow.style.display = '';
     }
     var reviewBtn = document.getElementById('review-captions-btn');
-    var pruneBtn = document.getElementById('prune-caption-btn');
     var autosetBtn = document.getElementById('run-autoset-btn');
     if (reviewBtn) {
       reviewBtn.style.display = '';
       reviewBtn.textContent = 'Review Captions';
-      placeActionButtons(ui, reviewBtn, pruneBtn, autosetBtn);
-    }
-    if (pruneBtn) {
-      pruneBtn.style.display = '';
-      pruneBtn.textContent = 'Prune Selected';
-      placeActionButtons(ui, reviewBtn, pruneBtn, autosetBtn);
+      placeActionButtons(ui, reviewBtn, autosetBtn);
     }
     if (autosetBtn) {
       autosetBtn.style.display = '';
       autosetBtn.textContent = 'Run Autoset';
-      placeActionButtons(ui, reviewBtn, pruneBtn, autosetBtn);
+      placeActionButtons(ui, reviewBtn, autosetBtn);
     }
     ui.dropZone.style.display = 'none';
     ui.editorEl.spellcheck = true;
@@ -133,7 +123,7 @@
     doc.close();
   }
 
-  function placeActionButtons(ui, reviewBtn, pruneBtn, autosetBtn) {
+  function placeActionButtons(ui, reviewBtn, autosetBtn) {
     var row = document.getElementById('caption-list-actions');
     if (!row) {
       row = document.createElement('div');
@@ -146,9 +136,6 @@
     row.style.display = '';
     if (reviewBtn && reviewBtn.parentNode !== row) {
       row.appendChild(reviewBtn);
-    }
-    if (pruneBtn && pruneBtn.parentNode !== row) {
-      row.appendChild(pruneBtn);
     }
     if (autosetBtn && autosetBtn.parentNode !== row) {
       row.appendChild(autosetBtn);
@@ -191,14 +178,6 @@
     });
   }
 
-  async function pruneSelectedItem(ui, state) {
-    if (!state.currentItem) {
-      setStatus(ui, 'No selected media item to prune');
-      return;
-    }
-    await pruneMediaItem(ui, state, state.currentItem);
-  }
-
   async function pruneMediaItem(ui, state, mediaItem) {
     if (!mediaItem) {
       setStatus(ui, 'No media item to prune');
@@ -223,6 +202,9 @@
 
     delete state.captionCache[CaptionOps.captionCacheKey(state, mediaItem)];
     state.reviewedSet.delete(mediaItem.key);
+    if (state.scheduleFolderStateSave) {
+      state.scheduleFolderStateSave();
+    }
     if (state.currentItem && state.currentItem.key === mediaItem.key) {
       state.currentItem = null;
     }
@@ -243,7 +225,9 @@
       state.currentItem = null;
       state.dirStack = [rootHandle];
       updateFolderLabel(ui, state);
-      return refreshPickerDirectory(ui, state);
+      return loadFolderStateForRoot(ui, state, rootHandle).then(function() {
+        return refreshPickerDirectory(ui, state);
+      });
     }).catch(function(err) {
       if (err && err.name === 'AbortError') {
         setStatus(ui, 'Folder selection canceled');
@@ -305,6 +289,200 @@
     DirHandleStoreModule.saveLastDir(currentDir, names);
   }
 
+  function setupFolderStatePersistence(ui, state) {
+    var saveLater = DebounceModule.create(300);
+    state.scheduleFolderStateSave = function() {
+      saveLater(function() {
+        saveFolderStateForCurrentRoot(ui, state).catch(function(err) {
+          setStatus(ui, String(err && err.message ? err.message : err));
+        });
+      });
+    };
+    var ids = [
+      'stats-required-phrase',
+      'stats-phrases',
+      'stats-token-rules',
+      'primer-template',
+      'primer-defaults',
+      'primer-mappings'
+    ];
+
+    ids.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el || el.__folderStateBound) {
+        return;
+      }
+      el.__folderStateBound = true;
+      el.addEventListener('input', function() {
+        state.scheduleFolderStateSave();
+      });
+    });
+  }
+
+  function setupFolderStateReset(ui, state) {
+    var btn = document.getElementById('folder-settings-reset-btn');
+    if (!btn || btn.__folderResetBound) {
+      return;
+    }
+    btn.__folderResetBound = true;
+    btn.addEventListener('click', function() {
+      resetFolderState(ui, state).catch(function(err) {
+        setStatus(ui, String(err && err.message ? err.message : err));
+      });
+    });
+  }
+
+  function sanitizeFolderState(data) {
+    var src = data || {};
+    var stats = src.stats || {};
+    var primer = src.primer || {};
+    var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
+    reviewedKeys = reviewedKeys.map(function(key) { return String(key || ''); }).filter(Boolean);
+    return {
+      version: FOLDER_STATE_VERSION,
+      stats: {
+        requiredPhrase: String(stats.requiredPhrase || ''),
+        phrases: String(stats.phrases || ''),
+        tokenRules: String(stats.tokenRules || '')
+      },
+      primer: {
+        template: String(primer.template || ''),
+        defaults: String(primer.defaults || ''),
+        mappings: String(primer.mappings || '')
+      },
+      reviewedKeys: reviewedKeys
+    };
+  }
+
+  function emptyFolderState() {
+    return sanitizeFolderState({
+      stats: {
+        requiredPhrase: '',
+        phrases: '',
+        tokenRules: ''
+      },
+      primer: {
+        template: '',
+        defaults: '',
+        mappings: ''
+      },
+      reviewedKeys: []
+    });
+  }
+
+  function snapshotFolderStateFromDom() {
+    var stats = StatsViewModule.getOptionsFromDom();
+    var primer = StatsViewModule.getPrimerOptionsFromDom();
+    return sanitizeFolderState({
+      stats: stats,
+      primer: primer,
+      reviewedKeys: Array.from(window.CaptionState.reviewedSet || []).sort()
+    });
+  }
+
+  function applyFolderStateToDom(folderState) {
+    var clean = sanitizeFolderState(folderState);
+    var requiredPhraseEl = document.getElementById('stats-required-phrase');
+    var phrasesEl = document.getElementById('stats-phrases');
+    var tokenRulesEl = document.getElementById('stats-token-rules');
+    var templateEl = document.getElementById('primer-template');
+    var defaultsEl = document.getElementById('primer-defaults');
+    var mappingsEl = document.getElementById('primer-mappings');
+
+    if (requiredPhraseEl) {
+      requiredPhraseEl.value = clean.stats.requiredPhrase;
+    }
+    if (phrasesEl) {
+      phrasesEl.value = clean.stats.phrases;
+    }
+    if (tokenRulesEl) {
+      tokenRulesEl.value = clean.stats.tokenRules;
+    }
+    if (templateEl) {
+      templateEl.value = clean.primer.template;
+    }
+    if (defaultsEl) {
+      defaultsEl.value = clean.primer.defaults;
+    }
+    if (mappingsEl) {
+      mappingsEl.value = clean.primer.mappings;
+    }
+  }
+
+  async function readFolderStateFile(rootHandle) {
+    try {
+      var handle = await rootHandle.getFileHandle(FOLDER_STATE_FILE);
+      var file = await handle.getFile();
+      var text = await file.text();
+      var data = JSON.parse(text || '{}');
+      return sanitizeFolderState(data);
+    } catch (err) {
+      if (!err || err.name !== 'NotFoundError') {
+        throw err;
+      }
+      return null;
+    }
+  }
+
+  async function writeFolderStateFile(rootHandle, folderState) {
+    var handle = await rootHandle.getFileHandle(FOLDER_STATE_FILE, { create: true });
+    var writer = await handle.createWritable();
+    await writer.write(JSON.stringify(folderState, null, 2));
+    await writer.close();
+  }
+
+  async function loadFolderStateForRoot(ui, state, rootHandle) {
+    var folderState = await readFolderStateFile(rootHandle);
+    if (!folderState) {
+      state.reviewedSet = new Set();
+      applyFolderStateToDom(emptyFolderState());
+      return;
+    }
+    applyFolderStateToDom(folderState);
+    state.reviewedSet = new Set(folderState.reviewedKeys || []);
+    state.lastFolderStateKey = rootHandle.name;
+    setStatus(ui, 'Loaded folder settings from ' + FOLDER_STATE_FILE);
+  }
+
+  async function saveFolderStateForCurrentRoot(ui, state) {
+    if (!state.dirStack || !state.dirStack.length) {
+      return;
+    }
+    var rootHandle = state.dirStack[0];
+    if (!rootHandle) {
+      return;
+    }
+    var snapshot = snapshotFolderStateFromDom();
+    await writeFolderStateFile(rootHandle, snapshot);
+  }
+
+  async function resetFolderState(ui, state) {
+    if (!state.dirStack || !state.dirStack.length) {
+      setStatus(ui, 'No folder loaded');
+      return;
+    }
+
+    var confirmed = window.confirm('Reset saved folder settings?\n\nThis deletes .webcap_state.json in the current root folder.');
+    if (!confirmed) {
+      return;
+    }
+
+    var rootHandle = state.dirStack[0];
+    try {
+      await rootHandle.removeEntry(FOLDER_STATE_FILE);
+    } catch (err) {
+      if (!err || err.name !== 'NotFoundError') {
+        throw err;
+      }
+    }
+
+    applyFolderStateToDom(emptyFolderState());
+    state.reviewedSet = new Set();
+    renderFileList(ui, state, ui.filterEl.value);
+
+    setStatus(ui, 'Folder settings reset (.webcap_state.json removed)');
+  }
+
   function refreshCurrentDirectory(ui, state) {
     if (!state.dirStack.length) {
       setStatus(ui, 'No folder loaded');
@@ -355,6 +533,11 @@
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
       pruneMedia: pruneMediaItem,
+      onReviewedSetChanged: function() {
+        if (state.scheduleFolderStateSave) {
+          state.scheduleFolderStateSave();
+        }
+      },
       selectMedia: selectMedia,
       renderFileList: renderFileList
     });

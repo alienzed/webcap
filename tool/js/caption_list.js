@@ -333,6 +333,9 @@ var CaptionListModule = (function() {
         } else {
           state.reviewedSet.add(mediaItem.key);
         }
+        if (deps.onReviewedSetChanged) {
+          deps.onReviewedSetChanged();
+        }
         deps.renderFileList(ui, state, ui.filterEl.value);
         e.stopPropagation();
       };

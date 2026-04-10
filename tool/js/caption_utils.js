@@ -86,12 +86,27 @@ var CaptionUtils = (function() {
     doc.close();
   }
 
+  function renderTextPreview(ui, title, text) {
+    var doc = ui.previewEl.contentDocument || ui.previewEl.contentWindow.document;
+    var safeTitle = escapeHtml(title || 'Output');
+    var safeText = escapeHtml(text || '');
+    doc.open();
+    doc.write(
+      '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#111;color:#e6e6e6;font:13px Consolas,monospace;display:flex;flex-direction:column;height:100vh;">' +
+      '<div style="padding:10px 12px;border-bottom:1px solid #333;font:600 12px system-ui,sans-serif;letter-spacing:.2px;">' + safeTitle + '</div>' +
+      '<pre style="margin:0;padding:12px;white-space:pre-wrap;word-break:break-word;overflow:auto;flex:1;">' + safeText + '</pre>' +
+      '</body></html>'
+    );
+    doc.close();
+  }
+
   return {
     normalizeFolderInput: normalizeFolderInput,
     parentPath: parentPath,
     getFileExtension: getFileExtension,
     getErrorMessage: getErrorMessage,
     escapeHtml: escapeHtml,
-    renderPreviewHtml: renderPreviewHtml
+    renderPreviewHtml: renderPreviewHtml,
+    renderTextPreview: renderTextPreview
   };
 })();

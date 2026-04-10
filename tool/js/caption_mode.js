@@ -35,6 +35,14 @@
       });
     }
 
+    if (ui.autosetBtn) {
+      ui.autosetBtn.addEventListener('click', function() {
+        runAutoset(ui).catch(function(err) {
+          setStatus(ui, String(err && err.message ? err.message : err));
+        });
+      });
+    }
+
     // Debounced async filter to avoid race conditions
     var filterToken = { current: 0 };
     var debouncedFilter = DebounceModule.create(150);
@@ -95,15 +103,21 @@
     }
     var reviewBtn = document.getElementById('review-captions-btn');
     var pruneBtn = document.getElementById('prune-caption-btn');
+    var autosetBtn = document.getElementById('run-autoset-btn');
     if (reviewBtn) {
       reviewBtn.style.display = '';
       reviewBtn.textContent = 'Review Captions';
-      placeActionButtons(ui, reviewBtn, pruneBtn);
+      placeActionButtons(ui, reviewBtn, pruneBtn, autosetBtn);
     }
     if (pruneBtn) {
       pruneBtn.style.display = '';
       pruneBtn.textContent = 'Prune Selected';
-      placeActionButtons(ui, reviewBtn, pruneBtn);
+      placeActionButtons(ui, reviewBtn, pruneBtn, autosetBtn);
+    }
+    if (autosetBtn) {
+      autosetBtn.style.display = '';
+      autosetBtn.textContent = 'Run Autoset';
+      placeActionButtons(ui, reviewBtn, pruneBtn, autosetBtn);
     }
     ui.dropZone.style.display = 'none';
     ui.editorEl.spellcheck = true;
@@ -119,7 +133,7 @@
     doc.close();
   }
 
-  function placeActionButtons(ui, reviewBtn, pruneBtn) {
+  function placeActionButtons(ui, reviewBtn, pruneBtn, autosetBtn) {
     var row = document.getElementById('caption-list-actions');
     if (!row) {
       row = document.createElement('div');
@@ -136,6 +150,45 @@
     if (pruneBtn && pruneBtn.parentNode !== row) {
       row.appendChild(pruneBtn);
     }
+    if (autosetBtn && autosetBtn.parentNode !== row) {
+      row.appendChild(autosetBtn);
+    }
+  }
+
+  function runAutoset(ui) {
+    return new Promise(function(resolve) {
+      if (!ui.autosetBtn) {
+        resolve();
+        return;
+      }
+
+      ui.autosetBtn.disabled = true;
+      setStatus(ui, 'Running autoset...');
+      CaptionUtils.renderTextPreview(ui, 'Autoset Output', 'Running scripts/autoset.py --master .\nPlease wait...');
+
+      HttpModule.postJson('/caption/run_autoset', { master: '.' }, function(status, responseText) {
+        ui.autosetBtn.disabled = false;
+
+        var payload = null;
+        try {
+          payload = JSON.parse(responseText || '{}');
+        } catch (err) {
+          payload = { error: 'Could not parse autoset output', output: String(responseText || '') };
+        }
+
+        var command = payload.command || 'scripts/autoset.py --master .';
+        var output = payload.output || payload.error || '';
+        var title = status === 200 ? 'Autoset Completed' : 'Autoset Failed';
+        CaptionUtils.renderTextPreview(ui, title, '$ ' + command + '\n\n' + output);
+
+        if (status === 200) {
+          setStatus(ui, 'Autoset complete');
+        } else {
+          setStatus(ui, payload.error || 'Autoset failed');
+        }
+        resolve();
+      });
+    });
   }
 
   async function pruneSelectedItem(ui, state) {

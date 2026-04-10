@@ -13,6 +13,7 @@ window.addEventListener('DOMContentLoaded', function() {
     captionUpBtn: document.getElementById('caption-up-btn'),
     reviewBtn: document.getElementById('review-captions-btn'),
     pruneBtn: document.getElementById('prune-caption-btn'),
+    autosetBtn: document.getElementById('run-autoset-btn'),
     topInputRow: document.getElementById('new-page-name').parentElement
   };
 

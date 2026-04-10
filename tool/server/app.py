@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import sys
 from flask import Flask, jsonify, request, send_from_directory
 from page_ops import create_page, load_page, save_page, list_pages
 from media_ops import save_media
@@ -10,6 +12,18 @@ JS_DIR = TOOL_DIR / 'js'
 CSS_DIR = TOOL_DIR / 'css'
 
 app = Flask(__name__, static_folder=None)
+
+
+def resolve_python_executable():
+    venv_windows = ROOT / '.venv' / 'Scripts' / 'python.exe'
+    if venv_windows.exists():
+        return str(venv_windows)
+
+    venv_posix = ROOT / '.venv' / 'bin' / 'python'
+    if venv_posix.exists():
+        return str(venv_posix)
+
+    return sys.executable
 
 
 @app.route('/')
@@ -124,6 +138,53 @@ def caption_media_route():
         return jsonify({'error': str(exc)}), 404
     except Exception as exc:
         return jsonify({'error': str(exc)}), 400
+
+
+@app.route('/caption/run_autoset', methods=['POST'])
+def caption_run_autoset_route():
+    data = request.get_json(silent=True) or {}
+    master = str(data.get('master') or '.').strip() or '.'
+
+    script_path = ROOT / 'scripts' / 'autoset.py'
+    if not script_path.exists():
+        return jsonify({'error': f'Autoset script not found: {script_path.as_posix()}'}), 404
+
+    python_executable = resolve_python_executable()
+    cmd = [python_executable, str(script_path), '--master', master]
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=3600,
+            check=False
+        )
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Autoset timed out after 3600s'}), 408
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+    combined = ''
+    if proc.stdout:
+        combined += proc.stdout
+    if proc.stderr:
+        if combined:
+            combined += '\n'
+        combined += proc.stderr
+
+    payload = {
+        'ok': proc.returncode == 0,
+        'returncode': proc.returncode,
+        'python': python_executable,
+        'command': ' '.join(cmd),
+        'output': combined.strip() or '(no output)'
+    }
+
+    if proc.returncode != 0:
+        payload['error'] = 'Autoset failed with return code ' + str(proc.returncode)
+        return jsonify(payload), 400
+    return jsonify(payload)
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)

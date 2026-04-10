@@ -1,11 +1,11 @@
-# WebCap — Spec v7 (Current Architecture)
+# WebCap — Spec v7.2 (Current Architecture)
 
 ## 1. Purpose
 Define the current portable local app architecture with two active user modes and one unified caption workflow:
 - Module A: Local Page Tool
 - Module B: Caption + Review (caption editing, combined review, stats, validation)
 
-This document reflects current behavior and guardrails.
+This document reflects current behavior and guardrails, including in-app prune and pre-training autoset execution.
 
 ---
 
@@ -39,6 +39,7 @@ Goal:
 High-level behavior:
 - Folder picker flow (Chromium browsers)
 - Left: folder/file list + filter + review actions + stats/validation controls
+- Left actions include: `Review Captions`, `Prune Selected`, `Run Autoset`
 - Middle: caption editor (per-file) or combined captions (review action)
 - Right: media preview (per-file) or stats/validation report (review action)
 
@@ -77,6 +78,19 @@ Notes:
   - loads caption + media,
   - scrolls selected row into view.
 
+### 4.4 Row context menu interactions
+- Right-click on a media row opens a context menu (not immediate prompt).
+- Context actions:
+  - `Rename`
+  - `Prune`
+- `Prune` moves selected media and paired caption to `.caption_trash` under current folder.
+
+### 4.5 Pre-training autoset action
+- `Run Autoset` action executes `scripts/autoset.py --master .` from repository root.
+- Right pane shows textual command output (stdout/stderr combined) after run completion.
+- Status row reflects running/completed/failed state.
+- Backend route: `POST /caption/run_autoset`.
+
 ---
 
 ## 5. Scope of Review/Stats Computation
@@ -95,9 +109,15 @@ Notes:
 - Backup copy is overwrite-allowed (single practical undo copy behavior).
 - No automatic deletion from trash.
 
-### 6.3 Mutation boundaries
-- No delete workflow is introduced.
-- Rename remains explicit via row context menu.
+### 6.3 Prune safety behavior
+- Prune is non-destructive relative to dataset recovery expectations.
+- Prune operation copies media and paired caption into `.caption_trash` with unique stamped names, then removes originals from working folder.
+- No automatic deletion from `.caption_trash`.
+
+### 6.4 Mutation boundaries
+- No permanent delete workflow is introduced in UI.
+- Rename and prune remain explicit via row context menu.
+- Toolbar-level `Prune Selected` uses the same safe prune mechanism as context menu prune.
 
 ---
 
@@ -105,10 +125,11 @@ Notes:
 Current modular split:
 - `tool/js/caption_mode.js`: caption mode orchestration and core selection/save flow
 - `tool/js/caption_review.js`: review/stats bridge and report interaction handlers
-- `tool/js/caption_list.js`: file list rendering and row interactions (including rename)
+- `tool/js/caption_list.js`: file list rendering, row context menu, rename + safe prune operations
 - `tool/js/caption_ops.js`: caption read/save helpers
 - `tool/js/stats_engine.js`: pure stats/validation computation
 - `tool/js/stats_view.js`: stats controls/report rendering helpers
+- `tool/server/app.py`: HTTP routes including autoset execution endpoint
 
 Rules:
 - Keep business concerns isolated by module.
@@ -131,7 +152,7 @@ Outputs:
 - Top tokens / rare tokens
 
 Token filtering note:
-- Built-in blacklist removes non-informative tokens (`a`, `is`, `on`, `and`) from token stats.
+- Built-in blacklist removes common non-informative tokens/pronouns from token stats.
 
 ---
 
@@ -141,6 +162,8 @@ Token filtering note:
 - Clicking report failures accelerates correction loop.
 - Combined review remains non-destructive.
 - Rename retains practical recoverability through `.caption_trash`.
+- Prune is available in-app and preserves recoverability through `.caption_trash`.
+- Autoset can be triggered in-app and returns actionable output in right pane.
 - Codebase remains modular and maintainable.
 
 ---
@@ -152,8 +175,11 @@ Token filtering note:
 4. Click validation failure and verify file selection + media load + row scroll.
 5. Click token and verify filter is applied.
 6. Click missing-required item and verify file selection + media load + row scroll.
-7. Rename file and verify `.caption_trash` receives original media (+ caption if present).
-8. Confirm combined review text cannot be saved into a single caption file.
+7. Right-click media row and verify context menu shows `Rename` + `Prune`.
+8. Rename file and verify `.caption_trash` receives original media (+ caption if present).
+9. Prune selected/context-row item and verify source files leave working folder and appear in `.caption_trash`.
+10. Run Autoset and verify right pane shows command output and status updates.
+11. Confirm combined review text cannot be saved into a single caption file.
 
 ---
 

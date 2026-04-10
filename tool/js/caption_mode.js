@@ -380,11 +380,11 @@
   }
 
   function buildAutoPrimer(fileName) {
-    var options = StatsViewModule.getOptionsFromDom();
-    if (!options || !options.tokenRules) {
+    var primerOptions = StatsViewModule.getPrimerOptionsFromDom();
+    if (!primerOptions || !primerOptions.template.trim()) {
       return '';
     }
-    return CaptionTemplateModule.buildPrimer(fileName, options.tokenRules);
+    return CaptionTemplateModule.buildPrimerFromConfig(fileName, primerOptions);
   }
 
   function saveCurrentCaption(ui, state) {

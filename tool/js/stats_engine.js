@@ -66,6 +66,52 @@ var StatsEngineModule = (function() {
       .filter(Boolean);
   }
 
+  function normalizedCaptionKey(text) {
+    return String(text || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function computeLengthInsights(captionRows) {
+    if (!captionRows.length) {
+      return {
+        shortestCaptions: [],
+        longestCaptions: [],
+        shortOutliers: [],
+        longOutliers: []
+      };
+    }
+
+    var sorted = captionRows.slice().sort(function(a, b) {
+      return a.tokenCount - b.tokenCount || a.charCount - b.charCount || a.fileName.localeCompare(b.fileName);
+    });
+
+    var shortestCaptions = sorted.slice(0, 10);
+    var longestCaptions = sorted.slice(-10).reverse();
+
+    var cut = Math.max(1, Math.floor(sorted.length * 0.05));
+    var shortOutliers = sorted.slice(0, cut);
+    var longOutliers = sorted.slice(-cut).reverse();
+
+    return {
+      shortestCaptions: shortestCaptions,
+      longestCaptions: longestCaptions,
+      shortOutliers: shortOutliers,
+      longOutliers: longOutliers
+    };
+  }
+
+  function computeDuplicateInsights(duplicatesMap) {
+    return Object.keys(duplicatesMap)
+      .map(function(key) {
+        return duplicatesMap[key];
+      })
+      .filter(function(group) { return group.count > 1; })
+      .sort(function(a, b) { return b.count - a.count || a.files[0].localeCompare(b.files[0]); })
+      .slice(0, 20);
+  }
+
   function compute(items, options) {
     var requiredPhrase = normalize(options && options.requiredPhrase || '').trim();
     var phrases = parsePhrases(options && options.phrases || '');
@@ -79,6 +125,8 @@ var StatsEngineModule = (function() {
     var phraseCounts = {};
     var ruleFailures = [];
     var tokenCounts = {};
+    var captionRows = [];
+    var duplicatesMap = {};
 
     phrases.forEach(function(p) {
       phraseCounts[p] = 0;
@@ -134,6 +182,28 @@ var StatsEngineModule = (function() {
         }
         tokenCounts[tok] = (tokenCounts[tok] || 0) + 1;
       });
+
+      var trimmed = caption.trim();
+      if (trimmed) {
+        var row = {
+          fileName: item.fileName,
+          charCount: caption.length,
+          tokenCount: tokenize(caption).length
+        };
+        captionRows.push(row);
+
+        var dupKey = normalizedCaptionKey(caption);
+        if (!duplicatesMap[dupKey]) {
+          duplicatesMap[dupKey] = {
+            normalizedCaption: dupKey,
+            sample: trimmed,
+            count: 0,
+            files: []
+          };
+        }
+        duplicatesMap[dupKey].count += 1;
+        duplicatesMap[dupKey].files.push(item.fileName);
+      }
     });
 
     var rareTokens = Object.keys(tokenCounts)
@@ -154,6 +224,8 @@ var StatsEngineModule = (function() {
     });
 
     var requiredPercent = total ? Math.round((requiredHits / total) * 1000) / 10 : 0;
+    var lengthInsights = computeLengthInsights(captionRows);
+    var duplicateCaptions = computeDuplicateInsights(duplicatesMap);
 
     return {
       total: total,
@@ -165,6 +237,11 @@ var StatsEngineModule = (function() {
       requiredMissing: requiredMissing,
       phraseSummary: phraseSummary,
       ruleFailures: ruleFailures,
+      shortestCaptions: lengthInsights.shortestCaptions,
+      longestCaptions: lengthInsights.longestCaptions,
+      shortOutliers: lengthInsights.shortOutliers,
+      longOutliers: lengthInsights.longOutliers,
+      duplicateCaptions: duplicateCaptions,
       topTokens: topTokens,
       rareTokens: rareTokens
     };

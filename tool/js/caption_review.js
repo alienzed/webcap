@@ -43,7 +43,7 @@ var CaptionReviewModule = (function() {
         return;
       }
       if (data.type === 'caption-review-select') {
-        selectByFileName(ui, state, data.fileName, deps);
+        selectByFileName(ui, state, data.fileName, deps, data.focusFiles, data.focusSource);
         return;
       }
       if (data.type === 'caption-review-token') {
@@ -59,6 +59,9 @@ var CaptionReviewModule = (function() {
     }
 
     deps.saveCurrentCaption(ui, state).then(function() {
+      if (deps.clearFocusSet) {
+        deps.clearFocusSet(ui, state);
+      }
       deps.setReviewMode(ui, state, true);
       state.currentItem = null;
       deps.renderFileList(ui, state, ui.filterEl.value);
@@ -101,10 +104,15 @@ var CaptionReviewModule = (function() {
     });
   }
 
-  function selectByFileName(ui, state, fileName, deps) {
+  function selectByFileName(ui, state, fileName, deps, focusFiles, focusSource) {
     if (!fileName) {
       return;
     }
+
+    if (deps.activateFocusSet && focusFiles && focusFiles.length) {
+      deps.activateFocusSet(ui, state, focusFiles, focusSource || 'Focused Items');
+    }
+
     var target = null;
     for (var i = 0; i < state.items.length; i += 1) {
       if (state.items[i].fileName === fileName) {

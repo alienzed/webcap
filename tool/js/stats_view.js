@@ -67,13 +67,26 @@ var StatsViewModule = (function() {
   }
 
   function renderReportPreview(ui, report) {
+    function encodeFocus(files) {
+      var names = (files || []).map(function(name) { return String(name || ''); }).filter(Boolean);
+      return encodeURIComponent(names.join('\n'));
+    }
+
     var requiredLabel = report.requiredPhrase ? report.requiredPhrase : '(not set)';
     var phraseRows = report.phraseSummary.length ? report.phraseSummary.map(function(row) {
       return '<tr><td>' + escapeHtml(row.phrase) + '</td><td>' + row.count + '</td><td>' + row.percent + '%</td></tr>';
     }).join('') : '<tr><td colspan="3" style="color:#777;">No phrases configured.</td></tr>';
 
+    var validationFocus = (report.ruleFailures || []).map(function(row) { return row.fileName; });
+    var requiredFocus = (report.requiredMissing || []).map(function(row) { return row.fileName; });
+    var shortestFocus = (report.shortestCaptions || []).map(function(row) { return row.fileName; });
+    var longestFocus = (report.longestCaptions || []).map(function(row) { return row.fileName; });
+    var shortOutlierFocus = (report.shortOutliers || []).map(function(row) { return row.fileName; });
+    var longOutlierFocus = (report.longOutliers || []).map(function(row) { return row.fileName; });
+
     var failRows = report.ruleFailures.length ? report.ruleFailures.slice(0, 40).map(function(row) {
-      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '">' +
+      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '" data-focus="' +
+        encodeFocus(validationFocus) + '" data-source="' + encodeURIComponent('Validation Failures') + '">' +
         '<strong>' + escapeHtml(row.fileName) + '</strong></button> - ' + escapeHtml(row.reason) + '</li>';
     }).join('') : '<li style="color:#777;">No validation failures.</li>';
 
@@ -84,7 +97,8 @@ var StatsViewModule = (function() {
       requiredRows = '<li style="color:#777;">All captions include required phrase.</li>';
     } else {
       requiredRows = report.requiredMissing.slice(0, 40).map(function(row) {
-        return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '">' +
+        return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '" data-focus="' +
+          encodeFocus(requiredFocus) + '" data-source="' + encodeURIComponent('Missing Required Phrase') + '">' +
           '<strong>' + escapeHtml(row.fileName) + '</strong></button> - ' + escapeHtml(row.reason) + '</li>';
       }).join('');
     }
@@ -100,18 +114,22 @@ var StatsViewModule = (function() {
     }).join('') : '<li style="color:#777;">No rare tokens found.</li>';
 
     var shortestRows = report.shortestCaptions && report.shortestCaptions.length ? report.shortestCaptions.map(function(row) {
-      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '">' +
+      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '" data-focus="' +
+        encodeFocus(shortestFocus) + '" data-source="' + encodeURIComponent('Shortest Captions') + '">' +
         escapeHtml(row.fileName) + '</button> - ' + row.tokenCount + ' tokens, ' + row.charCount + ' chars</li>';
     }).join('') : '<li style="color:#777;">No caption length data.</li>';
 
     var longestRows = report.longestCaptions && report.longestCaptions.length ? report.longestCaptions.map(function(row) {
-      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '">' +
+      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '" data-focus="' +
+        encodeFocus(longestFocus) + '" data-source="' + encodeURIComponent('Longest Captions') + '">' +
         escapeHtml(row.fileName) + '</button> - ' + row.tokenCount + ' tokens, ' + row.charCount + ' chars</li>';
     }).join('') : '<li style="color:#777;">No caption length data.</li>';
 
     var duplicateRows = report.duplicateCaptions && report.duplicateCaptions.length ? report.duplicateCaptions.map(function(group) {
+      var groupFocus = encodeFocus(group.files || []);
       var shown = group.files.slice(0, 4).map(function(fileName) {
-        return '<button class="fail-link" data-file="' + encodeURIComponent(fileName) + '">' + escapeHtml(fileName) + '</button>';
+        return '<button class="fail-link" data-file="' + encodeURIComponent(fileName) + '" data-focus="' + groupFocus +
+          '" data-source="' + encodeURIComponent('Duplicate Captions') + '">' + escapeHtml(fileName) + '</button>';
       }).join(', ');
       var extra = group.files.length > 4 ? ' +' + (group.files.length - 4) + ' more' : '';
       var sample = group.sample.length > 120 ? group.sample.slice(0, 117) + '...' : group.sample;
@@ -120,12 +138,14 @@ var StatsViewModule = (function() {
     }).join('') : '<li style="color:#777;">No duplicate captions detected.</li>';
 
     var shortOutlierRows = report.shortOutliers && report.shortOutliers.length ? report.shortOutliers.map(function(row) {
-      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '">' +
+      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '" data-focus="' +
+        encodeFocus(shortOutlierFocus) + '" data-source="' + encodeURIComponent('Length Outliers (Bottom 5%)') + '">' +
         escapeHtml(row.fileName) + '</button> - ' + row.tokenCount + ' tokens</li>';
     }).join('') : '<li style="color:#777;">No short outliers.</li>';
 
     var longOutlierRows = report.longOutliers && report.longOutliers.length ? report.longOutliers.map(function(row) {
-      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '">' +
+      return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '" data-focus="' +
+        encodeFocus(longOutlierFocus) + '" data-source="' + encodeURIComponent('Length Outliers (Top 5%)') + '">' +
         escapeHtml(row.fileName) + '</button> - ' + row.tokenCount + ' tokens</li>';
     }).join('') : '<li style="color:#777;">No long outliers.</li>';
 
@@ -179,7 +199,11 @@ var StatsViewModule = (function() {
       'document.querySelectorAll(".fail-link").forEach(function(btn){' +
       'btn.addEventListener("click",function(){' +
       'var f=btn.getAttribute("data-file")||"";' +
-      'if(window.parent&&window.parent.postMessage){window.parent.postMessage({type:"caption-review-select",fileName:decodeURIComponent(f)},"*");}' +
+      'var focus=btn.getAttribute("data-focus")||"";' +
+      'var source=btn.getAttribute("data-source")||"";' +
+      'var files=[];' +
+      'if(focus){files=decodeURIComponent(focus).split("\\n").filter(Boolean);}' +
+      'if(window.parent&&window.parent.postMessage){window.parent.postMessage({type:"caption-review-select",fileName:decodeURIComponent(f),focusFiles:files,focusSource:decodeURIComponent(source||"")},"*");}' +
       '});' +
       '});' +
       'document.querySelectorAll(".token-link").forEach(function(btn){' +

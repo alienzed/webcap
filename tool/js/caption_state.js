@@ -14,7 +14,8 @@
     reviewMode: false,
     captionCache: {},
     listRenderSeq: 0,
-    reviewedSet: new Set()
+    reviewedSet: new Set(),
+    focusSet: null
   };
   global.CaptionState = state;
 })(window);

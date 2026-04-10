@@ -233,6 +233,16 @@ var CaptionListModule = (function() {
     var q = (filterText || '').toLowerCase();
     var renderSeq = ++state.listRenderSeq;
     ui.pageListEl.innerHTML = '';
+    var mediaItems = state.items;
+    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+      var allow = {};
+      state.focusSet.keys.forEach(function(key) {
+        allow[key] = true;
+      });
+      mediaItems = state.items.filter(function(item) {
+        return !!allow[item.key];
+      });
+    }
     var countDiv = document.getElementById('caption-filter-count');
     if (!countDiv) {
       countDiv = document.createElement('div');
@@ -345,12 +355,12 @@ var CaptionListModule = (function() {
     }
 
     if (!q) {
-      state.items.forEach(function(mediaItem) {
+      mediaItems.forEach(function(mediaItem) {
         attachMediaRow(mediaItem, null);
       });
       countDiv.textContent = matchCount + ' item' + (matchCount === 1 ? '' : 's') + ' match filter';
 
-      state.items.forEach(function(mediaItem) {
+      mediaItems.forEach(function(mediaItem) {
         CaptionOps.loadCaptionTextForItem(state, mediaItem).then(function(captionText) {
           if (renderSeq !== state.listRenderSeq) {
             return;
@@ -376,7 +386,7 @@ var CaptionListModule = (function() {
       return;
     }
 
-    var captionPromises = state.items.map(function(mediaItem) {
+    var captionPromises = mediaItems.map(function(mediaItem) {
       return CaptionOps.loadCaptionTextForItem(state, mediaItem).then(function(captionText) {
         return { mediaItem: mediaItem, captionText: captionText || '' };
       });

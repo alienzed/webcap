@@ -12,13 +12,15 @@
     var ui = context.ui;
     var scheduleSave = DebounceModule.create(500);
     var state = window.CaptionState;
-    configureUiForCaptionMode(ui);
+    configureUiForCaptionMode(ui, state);
     CaptionReviewModule.init(ui, state, {
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
       setReviewMode: setReviewMode,
       renderFileList: renderFileList,
-      selectMedia: selectMedia
+      selectMedia: selectMedia,
+      activateFocusSet: activateFocusSet,
+      clearFocusSet: clearFocusSet
     });
     setupFolderStatePersistence(ui, state);
     setupFolderStateReset(ui, state);
@@ -82,7 +84,7 @@
     setStatus(ui, 'Caption mode ready. Choose Folder, then double-click folders to enter.');
   }
 
-  function configureUiForCaptionMode(ui) {
+  function configureUiForCaptionMode(ui, state) {
     ui.newPageNameEl.value = 'No folder selected';
     ui.newPageNameEl.placeholder = '';
     ui.newPageNameEl.readOnly = true;
@@ -102,12 +104,12 @@
     if (reviewBtn) {
       reviewBtn.style.display = '';
       reviewBtn.textContent = 'Review Captions';
-      placeActionButtons(ui, reviewBtn, autosetBtn);
+      placeActionButtons(ui, state, reviewBtn, autosetBtn);
     }
     if (autosetBtn) {
       autosetBtn.style.display = '';
       autosetBtn.textContent = 'Run Autoset';
-      placeActionButtons(ui, reviewBtn, autosetBtn);
+      placeActionButtons(ui, state, reviewBtn, autosetBtn);
     }
     ui.dropZone.style.display = 'none';
     ui.editorEl.spellcheck = true;
@@ -123,7 +125,7 @@
     doc.close();
   }
 
-  function placeActionButtons(ui, reviewBtn, autosetBtn) {
+  function placeActionButtons(ui, state, reviewBtn, autosetBtn) {
     var row = document.getElementById('caption-list-actions');
     if (!row) {
       row = document.createElement('div');
@@ -140,6 +142,80 @@
     if (autosetBtn && autosetBtn.parentNode !== row) {
       row.appendChild(autosetBtn);
     }
+
+    var exitBtn = ensureFocusSetExitButton(ui, state, row);
+    refreshFocusSetUi(ui, state, exitBtn);
+  }
+
+  function ensureFocusSetExitButton(ui, state, row) {
+    var exitBtn = document.getElementById('focus-set-exit-btn');
+    if (!exitBtn) {
+      exitBtn = document.createElement('button');
+      exitBtn.id = 'focus-set-exit-btn';
+      exitBtn.type = 'button';
+      exitBtn.textContent = 'Exit Set';
+      exitBtn.style.display = 'none';
+      row.appendChild(exitBtn);
+    }
+    if (!exitBtn.__focusSetBound) {
+      exitBtn.__focusSetBound = true;
+      exitBtn.onclick = function() {
+        clearFocusSet(ui, state, true);
+      };
+    }
+    return exitBtn;
+  }
+
+  function refreshFocusSetUi(ui, state, exitBtn) {
+    var btn = exitBtn || document.getElementById('focus-set-exit-btn');
+    if (!btn) {
+      return;
+    }
+    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+      btn.style.display = '';
+      var source = state.focusSet.source ? (' - ' + state.focusSet.source) : '';
+      btn.title = 'Show full folder list' + source;
+      return;
+    }
+    btn.style.display = 'none';
+    btn.title = 'Show full folder list';
+  }
+
+  function clearFocusSet(ui, state, rerender) {
+    state.focusSet = null;
+    if (rerender) {
+      renderFileList(ui, state, ui.filterEl.value);
+    }
+  }
+
+  function activateFocusSet(ui, state, fileNames, source) {
+    var seen = {};
+    var keys = [];
+    var names = (fileNames || []).map(function(name) { return String(name || ''); }).filter(Boolean);
+    names.forEach(function(fileName) {
+      for (var i = 0; i < state.items.length; i += 1) {
+        var item = state.items[i];
+        if (item.fileName !== fileName) {
+          continue;
+        }
+        if (!seen[item.key]) {
+          seen[item.key] = true;
+          keys.push(item.key);
+        }
+        break;
+      }
+    });
+
+    if (!keys.length) {
+      clearFocusSet(ui, state, true);
+      return;
+    }
+
+    state.focusSet = {
+      keys: keys,
+      source: String(source || '')
+    };
+    renderFileList(ui, state, ui.filterEl.value);
   }
 
   function runAutoset(ui) {
@@ -202,6 +278,14 @@
 
     delete state.captionCache[CaptionOps.captionCacheKey(state, mediaItem)];
     state.reviewedSet.delete(mediaItem.key);
+    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+      state.focusSet.keys = state.focusSet.keys.filter(function(key) {
+        return key !== mediaItem.key;
+      });
+      if (!state.focusSet.keys.length) {
+        state.focusSet = null;
+      }
+    }
     if (state.scheduleFolderStateSave) {
       state.scheduleFolderStateSave();
     }
@@ -223,6 +307,7 @@
       state.mode = 'picker';
       state.folder = '';
       state.currentItem = null;
+      state.focusSet = null;
       state.dirStack = [rootHandle];
       updateFolderLabel(ui, state);
       return loadFolderStateForRoot(ui, state, rootHandle).then(function() {
@@ -270,6 +355,15 @@
     state.childFolders = childFolders;
     state.items = items;
     state.currentItem = null;
+
+    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+      var allow = {};
+      items.forEach(function(item) { allow[item.key] = true; });
+      state.focusSet.keys = state.focusSet.keys.filter(function(key) { return !!allow[key]; });
+      if (!state.focusSet.keys.length) {
+        state.focusSet = null;
+      }
+    }
 
     renderFileList(ui, state, ui.filterEl.value);
     if (!items.length) {
@@ -526,6 +620,7 @@
   }
 
   async function renderFileList(ui, state, filterText, token, filterToken) {
+    refreshFocusSetUi(ui, state);
     return CaptionListModule.renderFileList(ui, state, filterText, token, filterToken, {
       navigateUp: navigateUp,
       refreshCurrentDirectory: refreshCurrentDirectory,
@@ -533,6 +628,8 @@
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
       pruneMedia: pruneMediaItem,
+      activateFocusSet: activateFocusSet,
+      clearFocusSet: clearFocusSet,
       onReviewedSetChanged: function() {
         if (state.scheduleFolderStateSave) {
           state.scheduleFolderStateSave();

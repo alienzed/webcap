@@ -327,11 +327,25 @@
           return;
         }
         var data = JSON.parse(responseText);
+        var seeded = false;
+        var text = data.caption || '';
+        if (!text.trim()) {
+          var primer = buildAutoPrimer(mediaItem.fileName);
+          if (primer) {
+            text = primer;
+            seeded = true;
+          }
+        }
         state.suppressInput = true;
-        ui.editorEl.value = data.caption || '';
+        ui.editorEl.value = text;
         state.suppressInput = false;
-        var suffix = data.exists ? 'existing caption loaded' : 'new caption file will be created on save';
+        var suffix = seeded ? 'primer applied' : (data.exists ? 'existing caption loaded' : 'new caption file will be created on save');
         setStatus(ui, 'Selected: ' + mediaItem.label + ' (' + suffix + ')');
+        if (seeded) {
+          saveCurrentCaption(ui, state).catch(function(err) {
+            setStatus(ui, String(err && err.message ? err.message : err));
+          });
+        }
         resolve();
       });
     });
@@ -344,11 +358,33 @@
     if (state.currentItem !== mediaItem) {
       return;
     }
+    var seeded = false;
+    var text = caption.text || '';
+    if (!text.trim()) {
+      var primer = buildAutoPrimer(mediaItem.fileName);
+      if (primer) {
+        text = primer;
+        seeded = true;
+      }
+    }
     state.suppressInput = true;
-    ui.editorEl.value = caption.text;
+    ui.editorEl.value = text;
     state.suppressInput = false;
-    var suffix = caption.exists ? 'existing caption loaded' : 'new caption file will be created on save';
+    var suffix = seeded ? 'primer applied' : (caption.exists ? 'existing caption loaded' : 'new caption file will be created on save');
     setStatus(ui, 'Selected: ' + mediaItem.label + ' (' + suffix + ')');
+    if (seeded) {
+      saveCurrentCaption(ui, state).catch(function(err) {
+        setStatus(ui, String(err && err.message ? err.message : err));
+      });
+    }
+  }
+
+  function buildAutoPrimer(fileName) {
+    var options = StatsViewModule.getOptionsFromDom();
+    if (!options || !options.tokenRules) {
+      return '';
+    }
+    return CaptionTemplateModule.buildPrimer(fileName, options.tokenRules);
   }
 
   function saveCurrentCaption(ui, state) {

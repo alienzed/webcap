@@ -34,8 +34,8 @@ var StatsViewModule = (function() {
       '      <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">' +
       '      <label>Balance phrases (one per line)</label>' +
       '      <textarea id="stats-phrases" rows="4" placeholder="face down\nface up\nfront view\nback view"></textarea>' +
-      '      <label>Token rules (token => phrase, one per line)</label>' +
-      '      <textarea id="stats-token-rules" rows="4" placeholder="fd => face down\nfu => face up"></textarea>' +
+      '      <label>Rules (file:token => phrase or caption:phrase => phrase)</label>' +
+      '      <textarea id="stats-token-rules" rows="4" placeholder="template: {subject}, {view}, {lighting}\ndefault:lighting=soft light\nfile:fd => view=face down\ncaption:front view => face"></textarea>' +
       '      <button id="stats-run-btn" type="button">' + escapeHtml(label) + '</button>' +
       '    </div>' +
       '  </details>' +

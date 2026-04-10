@@ -3,6 +3,8 @@ var StatsEngineModule = (function() {
     a: true,
     is: true,
     on: true,
+    she: true,
+    her: true,
     and: true
   };
 
@@ -31,12 +33,35 @@ var StatsEngineModule = (function() {
         if (idx === -1) {
           return null;
         }
-        var token = line.slice(0, idx).trim().toLowerCase();
-        var phrase = line.slice(idx + 2).trim().toLowerCase();
-        if (!token || !phrase) {
+        var left = line.slice(0, idx).trim().toLowerCase();
+        var rightRaw = line.slice(idx + 2).trim();
+        var right = rightRaw.toLowerCase();
+        if (!left || !right) {
           return null;
         }
-        return { token: token, phrase: phrase };
+
+        // Primer assignment lines (e.g. file:fd => view=face down) are not validation rules.
+        if (right.indexOf('=') !== -1) {
+          return null;
+        }
+
+        var scope = 'file';
+        var trigger = left;
+        var colon = left.indexOf(':');
+        if (colon > 0) {
+          var prefix = left.slice(0, colon).trim();
+          var value = left.slice(colon + 1).trim();
+          if ((prefix === 'file' || prefix === 'caption') && value) {
+            scope = prefix;
+            trigger = value;
+          }
+        }
+
+        if (!trigger) {
+          return null;
+        }
+
+        return { scope: scope, trigger: trigger, required: right };
       })
       .filter(Boolean);
   }
@@ -86,10 +111,19 @@ var StatsEngineModule = (function() {
       });
 
       tokenRules.forEach(function(rule) {
-        if (fileNorm.indexOf(rule.token) !== -1 && captionNorm.indexOf(rule.phrase) === -1) {
+        if (rule.scope === 'caption') {
+          if (captionNorm.indexOf(rule.trigger) !== -1 && captionNorm.indexOf(rule.required) === -1) {
+            ruleFailures.push({
+              fileName: item.fileName,
+              reason: 'Caption phrase "' + rule.trigger + '" requires phrase "' + rule.required + '"'
+            });
+          }
+          return;
+        }
+        if (fileNorm.indexOf(rule.trigger) !== -1 && captionNorm.indexOf(rule.required) === -1) {
           ruleFailures.push({
             fileName: item.fileName,
-            reason: 'Token "' + rule.token + '" requires phrase "' + rule.phrase + '"'
+            reason: 'Filename token "' + rule.trigger + '" requires phrase "' + rule.required + '"'
           });
         }
       });

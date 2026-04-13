@@ -9,6 +9,11 @@ This document reflects current behavior and guardrails, including in-app prune a
 
 ---
 
+## 2a. Config File Creation and Population
+The application automatically ensures that required config files (`configlo.toml`, `confighi.toml`, `dataset.lo.toml`, `dataset.hi.toml`) exist in the selected working directory when entering Caption Mode. If any are missing, they are created from template files in `/templates/default/`, with dataset paths substituted as appropriate. This guarantees a valid configuration environment for all core workflows without manual file setup.
+
+This behavior is implemented in the frontend and is required for correct operation and user experience.
+
 ## 2. Global Non-Negotiables
 - No regressions in Module A.
 - No database dependency.

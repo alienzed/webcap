@@ -1,0 +1,20 @@
+enable_ar_bucket = true
+
+
+[[directory]]
+path = "/mnt/w/training/massage/v3/auto_dataset/square"
+num_repeats = 2
+group = "videos"
+size_buckets = [
+# Alternatives: [448, 448], [512, 512]
+  [480, 480, 45],
+]
+
+[[directory]]
+path = "/mnt/w/training/massage/v3/auto_dataset/169"
+num_repeats = 2
+group = "videos"
+size_buckets = [
+# Alternatives: [576, 320], [672, 384]
+  [640, 352, 45],
+]

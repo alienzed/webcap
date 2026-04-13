@@ -379,17 +379,17 @@
         continue;
       }
       var ext = CaptionUtils.getFileExtension(entry.name);
-      if (!MEDIA_EXTENSIONS[ext]) {
-        continue;
+      // Accept config files as well as media
+      if (MEDIA_EXTENSIONS[ext] || entry.name === 'configlo.toml' || entry.name === 'confighi.toml' || entry.name === 'dataset.lo.toml' || entry.name === 'dataset.hi.toml') {
+        items.push({
+          key: entry.name,
+          label: entry.name,
+          fileName: entry.name,
+          kind: (MEDIA_EXTENSIONS[ext] ? 'picker' : 'config'),
+          fileHandle: entry,
+          dirHandle: currentDir
+        });
       }
-      items.push({
-        key: entry.name,
-        label: entry.name,
-        fileName: entry.name,
-        kind: 'picker',
-        fileHandle: entry,
-        dirHandle: currentDir
-      });
     }
 
     childFolders.sort(function(a, b) { return a.name.localeCompare(b.name); });
@@ -397,6 +397,9 @@
     state.childFolders = childFolders;
     state.items = items;
     state.currentItem = null;
+
+    // Auto-create config files if missing
+    await maybeCreateConfigFiles(currentDir);
 
     if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
       var allow = {};
@@ -414,6 +417,41 @@
       return;
     }
     await selectMedia(ui, state, items[0]);
+  }
+
+  // Minimal config file creation logic
+  async function maybeCreateConfigFiles(dirHandle) {
+    const configFiles = [
+      { name: 'configlo.toml', template: 'configlo.toml', dataset: 'dataset.lo.toml' },
+      { name: 'confighi.toml', template: 'confighi.toml', dataset: 'dataset.hi.toml' },
+      { name: 'dataset.lo.toml', template: 'dataset.lo.toml' },
+      { name: 'dataset.hi.toml', template: 'dataset.hi.toml' }
+    ];
+    for (const cfg of configFiles) {
+      let exists = false;
+      try {
+        await dirHandle.getFileHandle(cfg.name);
+        exists = true;
+      } catch (e) {}
+      if (exists) continue;
+      // Read template
+      let text = '';
+      try {
+        text = await (await fetch(`/templates/default/${cfg.template}`)).text();
+      } catch (e) { continue; }
+      // For configlo/confighi, substitute dataset path
+      if (cfg.dataset) {
+        text = text.replace(/^(dataset\s*=\s*").*?(")/m, `dataset = "${cfg.dataset}"`);
+        text = text.replace(/^(dataset\s*=\s*).*/m, `dataset = "${cfg.dataset}"`);
+      }
+      // Write file
+      try {
+        const handle = await dirHandle.getFileHandle(cfg.name, { create: true });
+        const writer = await handle.createWritable();
+        await writer.write(text);
+        await writer.close();
+      } catch (e) {}
+    }
   }
 
   function persistCurrentDirectory(state) {
@@ -741,6 +779,20 @@
     setReviewMode(ui, state, false);
     state.currentItem = mediaItem;
     renderFileList(ui, state, ui.filterEl.value);
+    if (mediaItem.kind === 'config') {
+      // Show config file in editor, right pane indicator
+      const file = await mediaItem.fileHandle.getFile();
+      const text = await file.text();
+      state.suppressInput = true;
+      ui.editorEl.value = text;
+      state.suppressInput = false;
+      setStatus(ui, 'Editing config file: ' + mediaItem.label);
+      // Optionally, disable spellcheck for config files
+      ui.editorEl.spellcheck = false;
+      return;
+    } else {
+      ui.editorEl.spellcheck = true;
+    }
     if (mediaItem.kind === 'picker') {
       await selectPickerMedia(ui, state, mediaItem);
       return;
@@ -823,6 +875,10 @@
 
   function saveCurrentCaption(ui, state) {
     if (state.reviewMode || !state.currentItem) {
+      return Promise.resolve();
+    }
+    if (state.currentItem.kind === 'config') {
+      // Do not auto-save config files as captions
       return Promise.resolve();
     }
     if (state.currentItem.kind === 'picker') {

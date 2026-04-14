@@ -10,7 +10,6 @@
 <body>
   <div class="app">
     <div class="panel stack">
-      <button id="mode-switch-btn" type="button">Caption Mode</button>
       <div class="row-inline">
         <input id="new-page-name" type="text" placeholder="new page name">
         <button id="create-page-btn" type="button">Create</button>
@@ -21,7 +20,7 @@
       </div>
       <button id="review-captions-btn" type="button" style="margin-bottom:8px">Review All Captions</button>
       <button id="run-autoset-btn" type="button" style="margin-bottom:8px;display:none">Run Autoset</button>
-      <input id="page-filter" type="text" placeholder="filter pages">
+      <input id="page-filter" type="text" placeholder="filter">
       <div id="page-list" class="page-list"></div>
       <div id="drop-zone" class="drop-zone">
         Drop video here
@@ -39,10 +38,8 @@
   <script src="/static/js/debounce.js"></script>
   <script src="/static/js/editor.js"></script>
   <script src="/static/js/http.js"></script>
-  <script src="/static/js/pages.js"></script>
   <script src="/static/js/media.js"></script>
   <script src="/static/js/mode_router.js"></script>
-  <script src="/static/js/page_mode.js"></script>
   <script src="/static/js/caption_utils.js"></script>
   <script src="/static/js/caption_state.js"></script>
   <script src="/static/js/caption_ops.js"></script>

@@ -1,5 +1,4 @@
 window.addEventListener('DOMContentLoaded', function() {
-  var modeSwitchBtn = document.getElementById('mode-switch-btn');
   var ui = {
     editorEl: document.getElementById('editor'),
     previewEl: document.getElementById('preview'),
@@ -17,25 +16,11 @@ window.addEventListener('DOMContentLoaded', function() {
   };
 
   var params = new URLSearchParams(window.location.search);
-  var requestedMode = params.get('mode') || 'page';
+  var requestedMode = params.get('mode') || 'caption';
   if (requestedMode === 'stats') {
     requestedMode = 'caption';
   }
-  var mode = ModeRouterModule.hasMode(requestedMode) ? requestedMode : 'page';
-  var modeOrder = ['page', 'caption'];
-  var modeLabels = {
-    page: 'Page Mode',
-    caption: 'Caption Mode'
-  };
-  var modeIdx = modeOrder.indexOf(mode);
-  var nextMode = modeOrder[(modeIdx + 1) % modeOrder.length];
-
-  modeSwitchBtn.textContent = modeLabels[nextMode] || 'Page Mode';
-  modeSwitchBtn.onclick = function() {
-    var nextParams = new URLSearchParams(window.location.search);
-    nextParams.set('mode', nextMode);
-    window.location.search = nextParams.toString();
-  };
+  var mode = ModeRouterModule.hasMode(requestedMode) ? requestedMode : 'caption';
 
   ModeRouterModule.startMode(mode, {
     ui: ui

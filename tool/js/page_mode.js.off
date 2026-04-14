@@ -4,9 +4,9 @@
 
     ui.createBtn.style.display = '';
     ui.createBtn.textContent = 'Create';
-    ui.newPageNameEl.readOnly = false;
-    ui.newPageNameEl.classList.remove('caption-folder-label');
-    ui.newPageNameEl.placeholder = 'new page name';
+    ui.folderLabelEl.readOnly = false;
+    ui.folderLabelEl.classList.remove('caption-folder-label');
+    ui.folderLabelEl.placeholder = 'new page name';
     ui.topInputRow.classList.remove('single');
     ui.openPageBtn.textContent = 'Open Page';
     ui.captionUpBtn.style.display = 'none';
@@ -45,14 +45,14 @@
     });
 
     ui.createBtn.addEventListener('click', function() {
-      PagesModule.createPage(ui.newPageNameEl.value, function(ok) {
+      PagesModule.createPage(ui.folderLabelEl.value, function(ok) {
         if (ok) {
-          ui.newPageNameEl.value = '';
+          ui.folderLabelEl.value = '';
         }
       });
     });
 
-    ui.newPageNameEl.addEventListener('keydown', function(e) {
+    ui.folderLabelEl.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         ui.createBtn.click();
       }

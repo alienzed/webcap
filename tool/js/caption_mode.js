@@ -85,11 +85,11 @@
   }
 
   function configureUiForCaptionMode(ui, state) {
-    ui.newPageNameEl.value = 'No folder selected';
-    ui.newPageNameEl.placeholder = '';
-    ui.newPageNameEl.readOnly = true;
-    ui.newPageNameEl.classList.add('caption-folder-label');
-    ui.topInputRow.classList.add('single');
+    // ui.folderLabelEl.value = 'No folder selected';
+    // ui.folderLabelEl.placeholder = '';
+    // ui.folderLabelEl.readOnly = true;
+    // ui.folderLabelEl.classList.add('caption-folder-label');
+    // ui.topInputRow.classList.add('single');
     ui.createBtn.style.display = 'none';
     ui.openPageBtn.textContent = 'Choose Folder';
     ui.captionUpBtn.style.display = '';
@@ -681,12 +681,12 @@
 
   function updateFolderLabel(ui, state) {
     if (!state.dirStack.length) {
-      ui.newPageNameEl.value = 'No folder selected';
+      ui.folderLabelEl.value = 'No folder selected';
       return;
     }
 
     var names = state.dirStack.map(function(handle) { return handle.name; });
-    ui.newPageNameEl.value = names.join(' / ');
+    ui.folderLabelEl.value = names.join(' / ');
   }
 
   function setReviewMode(ui, state, enabled) {

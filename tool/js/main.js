@@ -7,12 +7,12 @@ window.addEventListener('DOMContentLoaded', function() {
     statusEl: document.getElementById('status'),
     dropZone: document.getElementById('drop-zone'),
     createBtn: document.getElementById('create-page-btn'),
-    newPageNameEl: document.getElementById('new-page-name'),
     openPageBtn: document.getElementById('open-page-btn'),
     captionUpBtn: document.getElementById('caption-up-btn'),
     reviewBtn: document.getElementById('review-captions-btn'),
     autosetBtn: document.getElementById('run-autoset-btn'),
-    topInputRow: document.getElementById('new-page-name').parentElement
+    folderLabelEl: document.getElementById('folder-label'),
+    topInputRow: document.getElementById('folder-label').parentElement
   };
 
   var params = new URLSearchParams(window.location.search);

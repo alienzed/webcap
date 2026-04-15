@@ -1,56 +1,113 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Minimal Local Page Tool</title>
-  <link rel="stylesheet" href="/static/css/bootstrap.min.css">
-  <link rel="stylesheet" href="/static/css/styles.css">
-</head>
-<body>
-  <div class="app">
-    <div class="panel stack">
-      <div class="row-inline">
-        <input id="folder-label" type="text" value="No folder selected" placeholder="" readonly class="caption-folder-label">
-        <button id="create-page-btn" type="button">Create</button>
-      </div>
-      <div class="row-inline row-equal">
-        <button id="open-page-btn" type="button">Open Page</button>
-        <button id="caption-up-btn" type="button" style="display:none">Up</button>
-      </div>
-      <button id="review-captions-btn" type="button" style="margin-bottom:8px">Review All Captions</button>
-      <button id="run-autoset-btn" type="button" style="margin-bottom:8px;display:none">Run Autoset</button>
-      <input id="page-filter" type="text" placeholder="filter">
-      <div id="page-list" class="page-list"></div>
-      <div id="drop-zone" class="drop-zone">
-        Drop video here
-        <div class="small">.mp4 .webm .ogg</div>
-      </div>
-      <div id="status" class="status"></div>
-    </div>
-    <div class="panel">
-      <textarea id="editor" spellcheck="false"></textarea>
-    </div>
-    <div class="panel">
-      <iframe id="preview"></iframe>
-    </div>
-  </div>
-  <script src="/static/js/debounce.js"></script>
-  <script src="/static/js/editor.js"></script>
-  <script src="/static/js/http.js"></script>
-  <script src="/static/js/media.js"></script>
-  <script src="/static/js/mode_router.js"></script>
-  <script src="/static/js/caption_utils.js"></script>
-  <script src="/static/js/caption_state.js"></script>
-  <script src="/static/js/caption_ops.js"></script>
-  <script src="/static/js/caption_trash_ops.js"></script>
-  <script src="/static/js/caption_list.js"></script>
-  <script src="/static/js/dir_handle_store.js"></script>
-  <script src="/static/js/stats_engine.js"></script>
-  <script src="/static/js/stats_view.js"></script>
-  <script src="/static/js/caption_template.js"></script>
-  <script src="/static/js/caption_review.js"></script>
-  <script src="/static/js/caption_mode.js"></script>
-  <script src="/static/js/main.js"></script>
-</body>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Minimal Local Page Tool</title>
+        <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+        <link rel="stylesheet" href="/static/css/styles.css">
+    </head>
+    <body>
+        <div class="app">
+            <div class="panel stack">
+                <div class="row-inline">
+                    <input
+                        id="folder-label"
+                        type="text"
+                        value="No folder selected"
+                        placeholder=""
+                        readonly
+                        class="caption-folder-label"
+                    >
+                </div>
+                <div class="row-inline row-equal">
+                    <button id="open-page-btn" type="button">Choose Folder</button>
+                    <button id="caption-up-btn" type="button" title="Refresh directory">↻</button>
+                </div>
+                <div id="caption-filter-row" class="filter-row">
+                    <input id="page-filter" type="text" placeholder="filter">
+                    <button
+                        id="caption-filter-clear-btn"
+                        type="button"
+                        title="Clear filter"
+                        onclick="if (!document.getElementById('page-filter').value) { document.getElementById('page-filter').focus(); return; } document.getElementById('page-filter').value = ''; document.getElementById('page-filter').dispatchEvent(new Event('input', { bubbles: true }));"
+                    >x</button>
+                </div>
+                <div id="page-list" class="page-list with-stats-pane"></div>
+                <button id="review-captions-btn" type="button" style="margin-bottom:8px">Review Captions</button>
+                <div id="caption-stats-pane">
+                    <div class="stats-panel">
+                        <details id="stats-details">
+                            <summary>
+                                <strong>Stats &amp; Validation</strong>
+                            </summary>
+                            <div class="stats-controls">
+                                <label>Required key phrase</label>
+                                <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
+                                <label>Balance phrases (one per line)</label>
+                                <textarea id="stats-phrases" rows="4" placeholder="face down
+                                  face up
+                                  front view
+                                  back view">
+                                </textarea>
+                                <label>Rules (file:token =&gt; phrase or caption:phrase =&gt; phrase)</label>
+                                <textarea id="stats-token-rules" rows="4" placeholder="fd =&gt; face down
+                                  file:fu =&gt; face up
+                                  caption:front view =&gt; face">
+                                </textarea>
+                                <button id="stats-run-btn" type="button">Update Review</button>
+                                <button id="folder-settings-reset-btn" type="button" title="Delete .webcap_state.json for current folder">Reset Folder Settings</button>
+                            </div>
+                        </details>
+                        <details id="primer-details">
+                            <summary>
+                                <strong>Template Primer</strong>
+                            </summary>
+                            <div class="stats-controls">
+                                <label>Template (multiline, placeholders like {subject})</label>
+                                <textarea id="primer-template" rows="4" placeholder="{subject}
+                                  {view}
+                                  {lighting}">
+                                </textarea>
+                                <label>Defaults (key=value per line)</label>
+                                <textarea id="primer-defaults" rows="3" placeholder="lighting=soft light"></textarea>
+                                <label>Filename mappings (file:token =&gt; key=value)</label>
+                                <textarea id="primer-mappings" rows="4" placeholder="file:fd =&gt; view=face down
+                                  file:woman =&gt; subject=woman">
+                                </textarea>
+                                <div class="small">Applies automatically when a caption is empty.</div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+                <div id="status" class="status"></div>
+            </div>
+            <div class="panel">
+                <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
+            </div>
+            <div class="panel">
+                <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
+            </div>
+            <div id="caption-list-actions" class="caption-list-actions">
+              <button id="focus-set-exit-btn" type="button" style="display:none">Exit Set</button>
+            </div>
+        </div>
+        <script src="/static/js/debounce.js"></script>
+        <script src="/static/js/editor.js"></script>
+        <script src="/static/js/http.js"></script>
+        <script src="/static/js/media.js"></script>
+        <script src="/static/js/mode_router.js"></script>
+        <script src="/static/js/caption_utils.js"></script>
+        <script src="/static/js/caption_state.js"></script>
+        <script src="/static/js/caption_ops.js"></script>
+        <script src="/static/js/caption_trash_ops.js"></script>
+        <script src="/static/js/caption_list.js"></script>
+        <script src="/static/js/dir_handle_store.js"></script>
+        <script src="/static/js/stats_engine.js"></script>
+        <script src="/static/js/stats_view.js"></script>
+        <script src="/static/js/caption_template.js"></script>
+        <script src="/static/js/caption_review.js"></script>
+        <script src="/static/js/caption_mode.js"></script>
+        <script src="/static/js/main.js"></script>
+    </body>
 </html>

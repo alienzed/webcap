@@ -33,7 +33,7 @@ var StatsViewModule = (function() {
       return item.fileName + ':\n' + (item.caption || '');
     }).join('\n\n');
   }
-
+  /*
   function buildStatsPanelHtml(buttonLabel) {
     var label = buttonLabel || 'Recalculate';
     return '' +
@@ -64,7 +64,7 @@ var StatsViewModule = (function() {
         '    </div>' +
         '  </details>' +
       '</div>';
-  }
+  }*/
 
   function renderReportPreview(ui, report) {
     function encodeFocus(files) {
@@ -225,7 +225,7 @@ var StatsViewModule = (function() {
     getOptionsFromDom: getOptionsFromDom,
     getPrimerOptionsFromDom: getPrimerOptionsFromDom,
     buildCombinedCaptionsText: buildCombinedCaptionsText,
-    buildStatsPanelHtml: buildStatsPanelHtml,
+    //buildStatsPanelHtml: buildStatsPanelHtml,
     renderReportPreview: renderReportPreview
   };
 })();

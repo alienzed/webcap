@@ -12,7 +12,7 @@
     var ui = context.ui;
     var scheduleSave = DebounceModule.create(500);
     var state = window.CaptionState;
-    configureUiForCaptionMode(ui, state);
+    //configureUiForCaptionMode(ui, state);
     CaptionReviewModule.init(ui, state, {
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
@@ -25,7 +25,7 @@
     setupFolderStatePersistence(ui, state);
     setupFolderStateReset(ui, state);
 
-    ui.openPageBtn.addEventListener('click', function() {
+    ui.chooseFolderBtn.addEventListener('click', function() {
       chooseFolder(ui, state);
     });
 
@@ -90,39 +90,38 @@
     // ui.folderLabelEl.readOnly = true;
     // ui.folderLabelEl.classList.add('caption-folder-label');
     // ui.topInputRow.classList.add('single');
-    ui.createBtn.style.display = 'none';
-    ui.openPageBtn.textContent = 'Choose Folder';
-    ui.captionUpBtn.style.display = '';
-    ui.captionUpBtn.textContent = '↻';
-    ui.captionUpBtn.title = 'Refresh directory';
-    var actionRow = document.getElementById('caption-list-actions');
-    if (actionRow) {
-      actionRow.style.display = '';
-    }
-    var reviewBtn = document.getElementById('review-captions-btn');
-    var autosetBtn = document.getElementById('run-autoset-btn');
-    if (reviewBtn) {
-      reviewBtn.style.display = '';
-      reviewBtn.textContent = 'Review Captions';
-      placeActionButtons(ui, state, reviewBtn, autosetBtn);
-    }
-    if (autosetBtn) {
-      autosetBtn.style.display = '';
-      autosetBtn.textContent = 'Run Autoset';
-      placeActionButtons(ui, state, reviewBtn, autosetBtn);
-    }
-    ui.dropZone.style.display = 'none';
-    ui.editorEl.spellcheck = true;
-    ui.editorEl.value = '';
-    ui.editorEl.placeholder = 'Caption text (.txt)';
-    ui.pageListEl.innerHTML = '';
-    ui.pageListEl.classList.add('with-stats-pane');
-    ui.pageListEl.tabIndex = 0;
-
-    var doc = ui.previewEl.contentDocument || ui.previewEl.contentWindow.document;
-    doc.open();
-    doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">Select a media file to preview.</body></html>');
-    doc.close();
+    //ui.createBtn.style.display = 'none';
+    //ui.chooseFolderBtn.textContent = 'Choose Folder';
+    //ui.captionUpBtn.style.display = '';
+    //ui.captionUpBtn.textContent = '↻';
+    //ui.captionUpBtn.title = 'Refresh directory';
+    //var actionRow = document.getElementById('caption-list-actions');
+    //if (actionRow) {
+    //  actionRow.style.display = '';
+    //}
+    //var reviewBtn = document.getElementById('review-captions-btn');
+    //var autosetBtn = document.getElementById('run-autoset-btn');
+    //if (reviewBtn) {
+    //  reviewBtn.style.display = '';
+    //  reviewBtn.textContent = 'Review Captions';
+    //  placeActionButtons(ui, state, reviewBtn, autosetBtn);
+    //}
+    //if (autosetBtn) {
+    //  autosetBtn.style.display = '';
+    //  autosetBtn.textContent = 'Run Autoset';
+    //  placeActionButtons(ui, state, reviewBtn, autosetBtn);
+    //}
+    //ui.dropZone.style.display = 'none';
+    //ui.editorEl.spellcheck = true;
+    //ui.editorEl.value = '';
+    //ui.editorEl.placeholder = 'Caption text (.txt)';
+    //ui.pageListEl.innerHTML = ''; 
+    //ui.pageListEl.classList.add('with-stats-pane');
+    //ui.pageListEl.tabIndex = 0;
+    //var doc = ui.previewEl.contentDocument || ui.previewEl.contentWindow.document;
+    //doc.open();
+    //doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">No media to preview.</body></html>');
+    //doc.close();
   }
 
   function placeActionButtons(ui, state, reviewBtn, autosetBtn) {

@@ -3,11 +3,11 @@
 
 var CaptionReviewModule = (function() {
   function init(ui, state, deps) {
-    ensureStatsPane(ui);
-    ensureFilterClearButton(ui);
+    //ensureStatsPane(ui);
+    //ensureFilterClearButton(ui);
     wireReviewActions(ui, state, deps);
   }
-
+  /*
   function ensureStatsPane(ui) {
     var container = document.getElementById('caption-stats-pane');
     if (!container) {
@@ -21,6 +21,7 @@ var CaptionReviewModule = (function() {
       details.open = false;
     }
   }
+  */
 
   function wireReviewActions(ui, state, deps) {
     var reviewBtn = document.getElementById('review-captions-btn');
@@ -144,44 +145,6 @@ var CaptionReviewModule = (function() {
     ui.filterEl.dispatchEvent(ev);
     if (value) {
       deps.setStatus(ui, 'Filter applied from token: ' + value);
-    }
-  }
-
-  function ensureFilterClearButton(ui) {
-    if (!ui.filterEl) {
-      return;
-    }
-    var parent = ui.filterEl.parentNode;
-    if (!parent) {
-      return;
-    }
-
-    var row = document.getElementById('caption-filter-row');
-    if (!row) {
-      row = document.createElement('div');
-      row.id = 'caption-filter-row';
-      row.className = 'filter-row';
-      parent.insertBefore(row, ui.filterEl);
-      row.appendChild(ui.filterEl);
-    }
-
-    var clearBtn = document.getElementById('caption-filter-clear-btn');
-    if (!clearBtn) {
-      clearBtn = document.createElement('button');
-      clearBtn.id = 'caption-filter-clear-btn';
-      clearBtn.type = 'button';
-      clearBtn.title = 'Clear filter';
-      clearBtn.textContent = 'x';
-      row.appendChild(clearBtn);
-      clearBtn.onclick = function() {
-        if (!ui.filterEl.value) {
-          ui.filterEl.focus();
-          return;
-        }
-        ui.filterEl.value = '';
-        ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
-        ui.filterEl.focus();
-      };
     }
   }
 

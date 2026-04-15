@@ -2,13 +2,13 @@
   function startPageMode(context) {
     var ui = context.ui;
 
-    ui.createBtn.style.display = '';
-    ui.createBtn.textContent = 'Create';
+    //ui.createBtn.style.display = '';
+    //ui.createBtn.textContent = 'Create';
     ui.folderLabelEl.readOnly = false;
     ui.folderLabelEl.classList.remove('caption-folder-label');
     ui.folderLabelEl.placeholder = 'new page name';
     ui.topInputRow.classList.remove('single');
-    ui.openPageBtn.textContent = 'Open Page';
+    ui.chooseFolderBtn.textContent = 'Open Page';
     ui.captionUpBtn.style.display = 'none';
     if (ui.reviewBtn) {
       ui.reviewBtn.style.display = 'none';
@@ -43,7 +43,7 @@
       pagesApi: PagesModule,
       editorApi: EditorModule
     });
-
+    /*
     ui.createBtn.addEventListener('click', function() {
       PagesModule.createPage(ui.folderLabelEl.value, function(ok) {
         if (ok) {
@@ -57,8 +57,8 @@
         ui.createBtn.click();
       }
     });
-
-    ui.openPageBtn.onclick = function() {
+    */
+    ui.chooseFolderBtn.onclick = function() {
       openCurrentPage();
     };
 

@@ -379,12 +379,12 @@
       }
       var ext = CaptionUtils.getFileExtension(entry.name);
       // Accept config files as well as media
-      if (MEDIA_EXTENSIONS[ext] || entry.name === 'configlo.toml' || entry.name === 'confighi.toml' || entry.name === 'dataset.lo.toml' || entry.name === 'dataset.hi.toml') {
+      if (MEDIA_EXTENSIONS[ext]) {
         items.push({
           key: entry.name,
           label: entry.name,
           fileName: entry.name,
-          kind: (MEDIA_EXTENSIONS[ext] ? 'picker' : 'config'),
+          kind: 'picker',
           fileHandle: entry,
           dirHandle: currentDir
         });
@@ -418,7 +418,7 @@
     await selectMedia(ui, state, items[0]);
   }
 
-  // Minimal config file creation logic
+  // Config file creation logic remains intact
   async function maybeCreateConfigFiles(dirHandle) {
     const configFiles = [
       { name: 'configlo.toml', template: 'configlo.toml', dataset: 'dataset.lo.toml' },

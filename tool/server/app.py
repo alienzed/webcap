@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = ROOT / 'tool'
 JS_DIR = TOOL_DIR / 'js'
 CSS_DIR = TOOL_DIR / 'css'
+TEMPLATES_DIR = TOOL_DIR / 'templates'
+
 
 app = Flask(__name__, static_folder=None)
 
@@ -37,6 +39,8 @@ def static_files(filename):
         return send_from_directory(JS_DIR, filename[3:])
     if filename.startswith('css/'):
         return send_from_directory(CSS_DIR, filename[4:])
+    if filename.startswith('templates/'):
+        return send_from_directory(TEMPLATES_DIR, filename[10:])
     return send_from_directory(TOOL_DIR, filename)
 
 

@@ -307,3 +307,7 @@ iframe {
   background: #fff;
   padding: 8px;
 }
+
+#toml-files-panel:not([open]) #toml-files-list {
+  display: none;
+}

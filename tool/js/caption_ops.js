@@ -61,7 +61,7 @@
           resolve();
           return;
         }
-        reject(new Error(CaptionUtils.getErrorMessage(responseText, 'Could not save caption')));
+        reject(new Error(getErrorMessage(responseText, 'Could not save caption')));
       });
     });
   }

@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Minimal Local Page Tool</title>
+        <title>WebCap</title>
         <link rel="stylesheet" href="/static/css/bootstrap.min.css">
         <link rel="stylesheet" href="/static/css/styles.css">
     </head>
@@ -35,6 +35,11 @@
                 </div>
                 <div id="page-list" class="page-list with-stats-pane"></div>
                 <button id="review-captions-btn" type="button" style="margin-bottom:8px">Review Captions</button>
+                <!-- Collapsible panel for .toml files using <details> and <summary> -->
+                <details id="toml-files-panel">
+                    <summary>Config Files</summary>
+                    <div id="toml-files-list" class="folder-content"></div>
+                </details>
                 <div id="caption-stats-pane">
                     <div class="stats-panel">
                         <details id="stats-details">
@@ -92,12 +97,12 @@
               <button id="focus-set-exit-btn" type="button" style="display:none">Exit Set</button>
             </div>
         </div>
+        <script src="/static/js/common.js"></script>
         <script src="/static/js/debounce.js"></script>
         <script src="/static/js/editor.js"></script>
         <script src="/static/js/http.js"></script>
         <script src="/static/js/media.js"></script>
         <script src="/static/js/mode_router.js"></script>
-        <script src="/static/js/caption_utils.js"></script>
         <script src="/static/js/caption_state.js"></script>
         <script src="/static/js/caption_ops.js"></script>
         <script src="/static/js/caption_trash_ops.js"></script>
@@ -109,5 +114,13 @@
         <script src="/static/js/caption_review.js"></script>
         <script src="/static/js/caption_mode.js"></script>
         <script src="/static/js/main.js"></script>
+        <script>
+        window.addEventListener('error', function(event) {
+          console.error('Global error:', event.error || event.message);
+        });
+        window.addEventListener('unhandledrejection', function(event) {
+          console.error('Unhandled promise rejection:', event.reason);
+        });
+        </script>
     </body>
 </html>

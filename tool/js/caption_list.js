@@ -1,7 +1,7 @@
 // caption_list.js
 // Caption sidebar render logic extracted from caption_mode for file-size safety.
 
-var CaptionListModule = (function() {
+var CaptionListModule = (function () {
   var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;
   var contextMenuEl = null;
 
@@ -23,7 +23,7 @@ var CaptionListModule = (function() {
     document.body.appendChild(contextMenuEl);
 
     document.addEventListener('click', hideContextMenu);
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         hideContextMenu();
       }
@@ -36,12 +36,12 @@ var CaptionListModule = (function() {
   function showContextMenu(clientX, clientY, actions) {
     var el = ensureContextMenu();
     el.innerHTML = '';
-    actions.forEach(function(action) {
+    actions.forEach(function (action) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'caption-context-menu-item';
       btn.textContent = action.label;
-      btn.onclick = function(ev) {
+      btn.onclick = function (ev) {
         ev.stopPropagation();
         hideContextMenu();
         action.run();
@@ -77,7 +77,7 @@ var CaptionListModule = (function() {
       return;
     }
     if (newFile === '.' || newFile === '..' || newFile.indexOf('/') !== -1 || newFile.indexOf('\\') !== -1) {
-      deps.setStatus(ui, 'Invalid filename');
+      setStatus(ui, 'Invalid filename');
       return;
     }
     if (newFile.indexOf('.') === -1) {
@@ -87,15 +87,15 @@ var CaptionListModule = (function() {
       }
     }
     if (!MEDIA_NAME_PATTERN.test(newFile)) {
-      deps.setStatus(ui, 'Unsupported media file type');
+      setStatus(ui, 'Unsupported media file type');
       return;
     }
 
-    renamePickerMedia(mediaItem, oldFile, newFile).then(function() {
-      deps.setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
+    renamePickerMedia(mediaItem, oldFile, newFile).then(function () {
+      setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
       deps.refreshCurrentDirectory(ui, state);
-    }).catch(function(err) {
-      deps.setStatus(ui, (err && err.message) ? err.message : ('Rename failed: ' + err));
+    }).catch(function (err) {
+      setStatus(ui, (err && err.message) ? err.message : ('Rename failed: ' + err));
     });
   }
 
@@ -164,6 +164,7 @@ var CaptionListModule = (function() {
     return CaptionTrashOps.restorePickerMedia(mediaItem, targetDirHandle);
   }
 
+  // Update renderFileList to handle .toml files list without navigation
   async function renderFileList(ui, state, filterText, token, filterToken, deps) {
     var q = (filterText || '').toLowerCase();
     var renderSeq = ++state.listRenderSeq;
@@ -171,10 +172,10 @@ var CaptionListModule = (function() {
     var mediaItems = state.items;
     if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
       var allow = {};
-      state.focusSet.keys.forEach(function(key) {
+      state.focusSet.keys.forEach(function (key) {
         allow[key] = true;
       });
-      mediaItems = state.items.filter(function(item) {
+      mediaItems = state.items.filter(function (item) {
         return !!allow[item.key];
       });
     }
@@ -195,33 +196,74 @@ var CaptionListModule = (function() {
       var upRow = document.createElement('div');
       upRow.className = 'page-item folder-item';
       upRow.innerHTML = '<div>⬆ Up One Directory</div>';
-      upRow.onclick = function() {
+      upRow.onclick = function () {
         deps.navigateUp(ui, state);
       };
       ui.pageListEl.appendChild(upRow);
       matchCount++;
     }
 
-    state.childFolders.forEach(function(folderItem) {
+    state.childFolders.forEach(function (folderItem) {
       var label = '📁 ' + folderItem.name;
       if (q && label.toLowerCase().indexOf(q) === -1) {
         return;
       }
       var row = document.createElement('div');
       row.className = 'page-item folder-item';
-      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(label) + '</div>';
-      row.ondblclick = function() {
+      row.innerHTML = '<div>' + escapeHtml(label) + '</div>';
+      row.ondblclick = function () {
         state.dirStack.push(folderItem.handle);
-        deps.refreshPickerDirectory(ui, state).catch(function(err) {
-          deps.setStatus(ui, String(err && err.message ? err.message : err));
+        Promise.all([
+          deps.refreshPickerDirectory(ui, state),
+          refreshConfigFiles(ui, state)
+        ]).catch(function (err) {
+          setStatus(ui, String(err && err.message ? err.message : err));
         });
       };
-      row.onclick = function() {
-        deps.setStatus(ui, 'Double-click folder to enter: ' + folderItem.name);
+      row.onclick = function () {
+        setStatus(ui, 'Double-click folder to enter: ' + folderItem.name);
       };
       ui.pageListEl.appendChild(row);
       matchCount++;
     });
+
+    // Populate the .toml files list from the current directory using state.configItems
+    var tomlList = document.getElementById('toml-files-list');
+    if (tomlList) {
+      tomlList.innerHTML = '';
+      var tomlFiles = (state.configItems && state.configItems.length) ? state.configItems : [];
+      if (tomlFiles.length === 0) {
+        var emptyMessage = document.createElement('div');
+        emptyMessage.className = 'empty-message';
+        emptyMessage.innerText = 'No .toml files found in this directory.';
+        tomlList.appendChild(emptyMessage);
+      } else {
+        tomlFiles.forEach(function (tomlItem) {
+          var row = document.createElement('div');
+          row.className = 'page-item';
+          row.innerHTML = '<div>' + escapeHtml(tomlItem.fileName) + '</div>';
+          row.onclick = function () {
+            setStatus(ui, 'Editing: ' + tomlItem.fileName);
+            window.loadTomlFile(ui, state, tomlItem);
+          };
+          tomlList.appendChild(row);
+        });
+      }
+    }
+
+    // Update .toml section to resemble media list with collapsible panel
+    var tomlSection = document.createElement('div');
+    tomlSection.className = 'page-item folder-item';
+    tomlSection.innerHTML = '<div class="folder-header">📂 .toml Files</div>';
+    var tomlList = document.createElement('div');
+    tomlList.className = 'folder-content';
+    tomlList.style.display = 'none';
+    tomlSection.appendChild(tomlList);
+    ui.pageListEl.appendChild(tomlSection);
+
+    tomlSection.querySelector('.folder-header').onclick = function () {
+      tomlList.style.display = tomlList.style.display === 'none' ? 'block' : 'none';
+    };
 
     function attachMediaRow(mediaItem, captionText) {
       var row = document.createElement('div');
@@ -231,26 +273,26 @@ var CaptionListModule = (function() {
       row.className = 'page-item' + (isActive ? ' active' : '') + (emptyCaption ? ' empty-caption' : '') + (reviewed ? ' reviewed' : '');
       row.setAttribute('data-key', mediaItem.key);
 
-      row.innerHTML = '<div>' + CaptionUtils.escapeHtml(mediaItem.label) + '</div>';
+      row.innerHTML = '<div>' + escapeHtml(mediaItem.label) + '</div>';
 
-      row.onclick = function(e) {
+      row.onclick = function (e) {
         if (state.currentItem && state.currentItem.key === mediaItem.key) {
           return;
         }
         if (state.reviewMode) {
-          deps.selectMedia(ui, state, mediaItem).catch(function(err) {
-            deps.setStatus(ui, String(err && err.message ? err.message : err));
+          deps.selectMedia(ui, state, mediaItem).catch(function (err) {
+            setStatus(ui, String(err && err.message ? err.message : err));
           });
           return;
         }
-        deps.saveCurrentCaption(ui, state).then(function() {
+        deps.saveCurrentCaption(ui, state).then(function () {
           return deps.selectMedia(ui, state, mediaItem);
-        }).catch(function(err) {
-          deps.setStatus(ui, String(err && err.message ? err.message : err));
+        }).catch(function (err) {
+          setStatus(ui, String(err && err.message ? err.message : err));
         });
       };
 
-      row.oncontextmenu = function(e) {
+      row.oncontextmenu = function (e) {
         e.preventDefault();
         e.stopPropagation();
         var inTrashFolder = state.dirStack.length > 1 && state.dirStack[state.dirStack.length - 1].name === '.caption_trash';
@@ -258,23 +300,23 @@ var CaptionListModule = (function() {
         showContextMenu(e.clientX, e.clientY, [
           {
             label: 'Rename',
-            run: function() {
+            run: function () {
               promptRenameMedia(mediaItem, ui, state, deps);
             }
           },
           {
             label: canRestore ? 'Restore' : 'Prune',
-            run: function() {
+            run: function () {
               var op = canRestore ? deps.restoreMedia : deps.pruneMedia;
-              op(ui, state, mediaItem).catch(function(err) {
-                deps.setStatus(ui, String(err && err.message ? err.message : err));
+              op(ui, state, mediaItem).catch(function (err) {
+                setStatus(ui, String(err && err.message ? err.message : err));
               });
             }
           }
         ]);
       };
 
-      row.ondblclick = function(e) {
+      row.ondblclick = function (e) {
         // Toggle reviewed state on double-click.
         if (state.reviewedSet.has(mediaItem.key)) {
           state.reviewedSet.delete(mediaItem.key);
@@ -293,13 +335,13 @@ var CaptionListModule = (function() {
     }
 
     if (!q) {
-      mediaItems.forEach(function(mediaItem) {
+      mediaItems.forEach(function (mediaItem) {
         attachMediaRow(mediaItem, null);
       });
       countDiv.textContent = matchCount + ' item' + (matchCount === 1 ? '' : 's') + ' match filter';
 
-      mediaItems.forEach(function(mediaItem) {
-        CaptionOps.loadCaptionTextForItem(state, mediaItem).then(function(captionText) {
+      mediaItems.forEach(function (mediaItem) {
+        CaptionOps.loadCaptionTextForItem(state, mediaItem).then(function (captionText) {
           if (renderSeq !== state.listRenderSeq) {
             return;
           }
@@ -324,13 +366,13 @@ var CaptionListModule = (function() {
       return;
     }
 
-    var captionPromises = mediaItems.map(function(mediaItem) {
-      return CaptionOps.loadCaptionTextForItem(state, mediaItem).then(function(captionText) {
+    var captionPromises = mediaItems.map(function (mediaItem) {
+      return CaptionOps.loadCaptionTextForItem(state, mediaItem).then(function (captionText) {
         return { mediaItem: mediaItem, captionText: captionText || '' };
       });
     });
 
-    Promise.all(captionPromises).then(function(results) {
+    Promise.all(captionPromises).then(function (results) {
       if (renderSeq !== state.listRenderSeq) {
         return;
       }
@@ -338,7 +380,7 @@ var CaptionListModule = (function() {
         return;
       }
 
-      results.forEach(function(entry) {
+      results.forEach(function (entry) {
         var mediaItem = entry.mediaItem;
         var captionText = entry.captionText;
         var lower = mediaItem.label.toLowerCase();
@@ -350,6 +392,59 @@ var CaptionListModule = (function() {
 
       countDiv.textContent = matchCount + ' item' + (matchCount === 1 ? '' : 's') + ' match filter';
     });
+  }
+
+  // Add logic to populate the .toml files panel dynamically
+  function populateTomlFilesPanel(ui, state) {
+    var tomlList = document.getElementById('toml-files-list');
+
+    tomlList.innerHTML = ''; // Clear existing content
+
+    state.configItems.forEach(function (tomlItem) {
+      debugLog('[populateTomlFilesPanel] Adding TOML file to panel:', tomlItem.fileName);
+      var row = document.createElement('div');
+      row.className = 'page-item';
+      row.innerHTML = '<div>' + escapeHtml(tomlItem.fileName) + '</div>';
+      row.onclick = function () {
+        debugLog('[populateTomlFilesPanel] Clicked on TOML file:', tomlItem.fileName);
+        setStatus(ui, 'Editing: ' + tomlItem.fileName);
+        window.loadTomlFile(ui, state, tomlItem);
+      };
+      tomlList.appendChild(row);
+      debugLog('[populateTomlFilesPanel] Appended row to toml-files-list:', row.outerHTML);
+    });
+
+    if (state.configItems.length === 0) {
+      debugLog('[populateTomlFilesPanel] No TOML files found in state.configItems.');
+      var emptyMessage = document.createElement('div');
+      emptyMessage.className = 'empty-message';
+      emptyMessage.innerText = 'No .toml files found in this directory.';
+      tomlList.appendChild(emptyMessage);
+      debugLog('[populateTomlFilesPanel] Appended empty message to toml-files-list.');
+    }
+
+    debugLog('[populateTomlFilesPanel] Child items of toml-files-list after operations:', tomlList.children);
+  }
+
+  window.populateTomlFilesPanel = populateTomlFilesPanel;
+
+  // Update refreshPickerDirectory to call populateTomlFilesPanel
+  async function refreshPickerDirectory(ui, state, deps) {
+    await deps.refreshPickerDirectory(ui, state);
+    // Only refreshConfigFiles should call populateTomlFilesPanel
+  }
+
+  // Update navigateUp to call populateTomlFilesPanel
+  function navigateUp(ui, state, deps) {
+    if (state.dirStack.length > 1) {
+      state.dirStack.pop();
+      Promise.all([
+        deps.refreshPickerDirectory(ui, state),
+        refreshConfigFiles(ui, state)
+      ]).catch(function (err) {
+        setStatus(ui, String(err && err.message ? err.message : err));
+      });
+    }
   }
 
   return {

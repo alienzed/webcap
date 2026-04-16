@@ -1,6 +1,6 @@
 var StatsViewModule = (function() {
   function escapeHtml(str) {
-    return CaptionUtils.escapeHtml(str);
+    return escapeHtml(str);
   }
 
   function getOptionsFromDom() {

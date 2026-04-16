@@ -130,3 +130,121 @@ window.getErrorMessage = getErrorMessage;
 window.escapeHtml = escapeHtml;
 window.renderPreviewHtml = renderPreviewHtml;
 window.renderTextPreview = renderTextPreview;
+
+
+var DebounceModule = (function() {
+  function create(waitMs) {
+    var timer = null;
+    return function(callback) {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      timer = setTimeout(callback, waitMs);
+    };
+  }
+
+  return {
+    create: create
+  };
+})();
+
+var EditorModule = (function() {
+  var editor = null;
+  var preview = null;
+  var scheduleSave = null;
+  var onDebouncedSave = null;
+
+  function init(config) {
+    editor = config.editor;
+    preview = config.preview;
+    onDebouncedSave = config.onDebouncedSave;
+    scheduleSave = DebounceModule.create(800);
+
+    editor.addEventListener('input', function() {
+      renderPreview(editor.value);
+      scheduleSave(function() {
+        if (onDebouncedSave) {
+          onDebouncedSave();
+        }
+      });
+    });
+  }
+
+  function renderPreview(html) {
+    var doc = preview.contentDocument || preview.contentWindow.document;
+    var fullHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+      '<link rel="stylesheet" href="/static/css/bootstrap.min.css"></head><body>' +
+      html + '</body></html>';
+    doc.open();
+    doc.write(fullHtml);
+    doc.close();
+  }
+
+  function setContent(html) {
+    editor.value = html;
+    renderPreview(html);
+  }
+
+  function getContent() {
+    return editor.value;
+  }
+
+  function appendHtml(html) {
+    var current = editor.value;
+    if (current && current.slice(-1) !== '\n') {
+      current += '\n';
+    }
+    editor.value = current + html + '\n';
+    renderPreview(editor.value);
+    scheduleSave(function() {
+      if (onDebouncedSave) {
+        onDebouncedSave();
+      }
+    });
+  }
+
+  return {
+    init: init,
+    setContent: setContent,
+    getContent: getContent,
+    appendHtml: appendHtml,
+    renderPreview: renderPreview
+  };
+})();
+
+var HttpModule = (function() {
+  function get(url, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.onload = function() {
+      callback(xhr.status, xhr.responseText);
+    };
+    xhr.send();
+  }
+
+  function postJson(url, data, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+      callback(xhr.status, xhr.responseText);
+    };
+    xhr.send(JSON.stringify(data));
+  }
+
+  function postFormData(url, formData, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.onload = function() {
+      callback(xhr.status, xhr.responseText);
+    };
+    xhr.send(formData);
+  }
+
+  return {
+    get: get,
+    postJson: postJson,
+    postFormData: postFormData
+  };
+})();

@@ -15,14 +15,10 @@ window.addEventListener('DOMContentLoaded', function() {
     topInputRow: document.getElementById('folder-label').parentElement
   };
 
-  var params = new URLSearchParams(window.location.search);
-  var requestedMode = params.get('mode') || 'caption';
-  if (requestedMode === 'stats') {
-    requestedMode = 'caption';
+  // Only one mode remains: caption mode
+  if (typeof window.startCaptionMode === 'function') {
+    window.startCaptionMode({ ui: ui });
+  } else {
+    console.error('startCaptionMode is not available');
   }
-  var mode = ModeRouterModule.hasMode(requestedMode) ? requestedMode : 'caption';
-
-  ModeRouterModule.startMode(mode, {
-    ui: ui
-  });
 });

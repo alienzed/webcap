@@ -3,25 +3,8 @@
 
 var CaptionReviewModule = (function() {
   function init(ui, state, deps) {
-    //ensureStatsPane(ui);
-    //ensureFilterClearButton(ui);
     wireReviewActions(ui, state, deps);
   }
-  /*
-  function ensureStatsPane(ui) {
-    var container = document.getElementById('caption-stats-pane');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'caption-stats-pane';
-      container.innerHTML = StatsViewModule.buildStatsPanelHtml('Update Review');
-      ui.pageListEl.parentNode.insertBefore(container, ui.dropZone);
-    }
-    var details = document.getElementById('stats-details');
-    if (details) {
-      details.open = false;
-    }
-  }
-  */
 
   function wireReviewActions(ui, state, deps) {
     var reviewBtn = document.getElementById('review-captions-btn');

@@ -887,7 +887,9 @@
   }
 
 
-  ModeRouterModule.registerMode('caption', startCaptionMode);
+
+  // Expose startCaptionMode globally for main.js
+  window.startCaptionMode = startCaptionMode;
 
   // Moved loadTomlFile inside the IIFE
   function loadTomlFile(ui, state, tomlItem) {

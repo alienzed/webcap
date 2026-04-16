@@ -33,39 +33,7 @@ var StatsViewModule = (function() {
       return item.fileName + ':\n' + (item.caption || '');
     }).join('\n\n');
   }
-  /*
-  function buildStatsPanelHtml(buttonLabel) {
-    var label = buttonLabel || 'Recalculate';
-    return '' +
-      '<div class="stats-panel">' +
-      '  <details id="stats-details" open>' +
-      '    <summary><strong>Stats & Validation</strong></summary>' +
-      '    <div class="stats-controls">' +
-      '      <label>Required key phrase</label>' +
-      '      <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">' +
-      '      <label>Balance phrases (one per line)</label>' +
-      '      <textarea id="stats-phrases" rows="4" placeholder="face down\nface up\nfront view\nback view"></textarea>' +
-      '      <label>Rules (file:token => phrase or caption:phrase => phrase)</label>' +
-        '      <textarea id="stats-token-rules" rows="4" placeholder="fd => face down\nfile:fu => face up\ncaption:front view => face"></textarea>' +
-      '      <button id="stats-run-btn" type="button">' + escapeHtml(label) + '</button>' +
-      '      <button id="folder-settings-reset-btn" type="button" title="Delete .webcap_state.json for current folder">Reset Folder Settings</button>' +
-      '    </div>' +
-        '  </details>' +
-        '  <details id="primer-details">' +
-        '    <summary><strong>Template Primer</strong></summary>' +
-        '    <div class="stats-controls">' +
-        '      <label>Template (multiline, placeholders like {subject})</label>' +
-        '      <textarea id="primer-template" rows="4" placeholder="{subject}\n{view}\n{lighting}"></textarea>' +
-        '      <label>Defaults (key=value per line)</label>' +
-        '      <textarea id="primer-defaults" rows="3" placeholder="lighting=soft light"></textarea>' +
-        '      <label>Filename mappings (file:token => key=value)</label>' +
-        '      <textarea id="primer-mappings" rows="4" placeholder="file:fd => view=face down\nfile:woman => subject=woman"></textarea>' +
-        '      <div class="small">Applies automatically when a caption is empty.</div>' +
-        '    </div>' +
-        '  </details>' +
-      '</div>';
-  }*/
-
+  
   function renderReportPreview(ui, report) {
     function encodeFocus(files) {
       var names = (files || []).map(function(name) { return String(name || ''); }).filter(Boolean);

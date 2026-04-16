@@ -251,20 +251,6 @@ var CaptionListModule = (function () {
       }
     }
 
-    // Update .toml section to resemble media list with collapsible panel
-    var tomlSection = document.createElement('div');
-    // tomlSection.className = 'page-item folder-item';
-    // tomlSection.innerHTML = '<div class="folder-header">📂 .toml Files</div>';
-    // var tomlList = document.createElement('div');
-    // tomlList.className = 'folder-content';
-    // tomlList.style.display = 'none';
-    // tomlSection.appendChild(tomlList);
-    // ui.pageListEl.appendChild(tomlSection);
-
-    // tomlSection.querySelector('.folder-header').onclick = function () {
-    //   tomlList.style.display = tomlList.style.display === 'none' ? 'block' : 'none';
-    // };
-
     function attachMediaRow(mediaItem, captionText) {
       var row = document.createElement('div');
       var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
@@ -405,7 +391,6 @@ var CaptionListModule = (function () {
   // Update refreshPickerDirectory to call populateTomlFilesPanel
   async function refreshPickerDirectory(ui, state, deps) {
     await deps.refreshPickerDirectory(ui, state);
-    // Only refreshConfigFiles should call populateTomlFilesPanel
   }
 
   // Update navigateUp to call populateTomlFilesPanel

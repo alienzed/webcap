@@ -32,6 +32,10 @@ def resolve_python_executable():
 def index():
     return send_from_directory(TOOL_DIR, 'tool.html')
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(TOOL_DIR, 'favicon.ico')
+
 
 @app.route('/static/<path:filename>')
 def static_files(filename):

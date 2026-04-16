@@ -26,7 +26,7 @@
 
 5. **Scope Control**
    - Only implement endpoints and features that are strictly required for current app functionality.
-   - Avoid adding features (e.g., delete, directory creation, advanced browsing) unless a real use case emerges.
+   - Avoid adding features (e.g., delete, advanced browsing) unless a real use case emerges.
    - Document any new requirements before expanding scope.
 
 6. **Regression Prevention**

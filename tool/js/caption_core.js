@@ -1,7 +1,4 @@
 // caption_core.js
-// caption_ops.js
-// Minimal caption file operations (load/save)
-
 (function(global) {
   function captionCacheKey(state, mediaItem) {
     if (mediaItem.kind === 'picker') {
@@ -74,9 +71,6 @@
     savePathCaption: savePathCaption
   };
 })(window);
-
-// caption_template.js
-// Minimal primer engine: auto-seed empty captions from template rules.
 
 var CaptionTemplateModule = (function() {
   function parseDefaults(multiline) {
@@ -303,7 +297,6 @@ var CaptionTemplateModule = (function() {
   };
 })();
 
-// caption_trash_ops.js
 // File mutation helpers for prune/restore and trash naming.
 
 var CaptionTrashOps = (function() {
@@ -476,7 +469,7 @@ var CaptionTrashOps = (function() {
     restorePickerMedia: restorePickerMedia
   };
 })();
-// caption_state.js
+
 // Minimal state management for caption mode
 
 (function(global) {

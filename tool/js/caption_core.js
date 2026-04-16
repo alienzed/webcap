@@ -1,0 +1,499 @@
+// caption_core.js
+// caption_ops.js
+// Minimal caption file operations (load/save)
+
+(function(global) {
+  function captionCacheKey(state, mediaItem) {
+    if (mediaItem.kind === 'picker') {
+      var dirNames = state.dirStack.map(function(handle) { return handle.name; }).join('/');
+      return 'picker:' + dirNames + ':' + mediaItem.fileName;
+    }
+    return 'path:' + (state.folder || '') + ':' + mediaItem.fileName;
+  }
+
+  async function readPickerCaption(mediaItem) {
+    var captionName = mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
+    try {
+      var captionHandle = await mediaItem.dirHandle.getFileHandle(captionName);
+      var file = await captionHandle.getFile();
+      return { text: await file.text(), exists: true };
+    } catch (err) {
+      return { text: '', exists: false };
+    }
+  }
+
+  function loadCaptionTextForItem(state, mediaItem) {
+    var key = captionCacheKey(state, mediaItem);
+    if (Object.prototype.hasOwnProperty.call(state.captionCache, key)) {
+      return Promise.resolve(state.captionCache[key]);
+    }
+    if (mediaItem.kind === 'picker') {
+      return readPickerCaption(mediaItem).then(function(result) {
+        state.captionCache[key] = result.text || '';
+        return state.captionCache[key];
+      });
+    }
+    return new Promise(function(resolve) {
+      HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function(status, responseText) {
+        if (status !== 200) {
+          state.captionCache[key] = '';
+          resolve('');
+          return;
+        }
+        try {
+          var data = JSON.parse(responseText);
+          state.captionCache[key] = data.caption || '';
+          resolve(state.captionCache[key]);
+        } catch (e) {
+          state.captionCache[key] = '';
+          resolve('');
+        }
+      });
+    });
+  }
+
+  function savePathCaption(ui, state, mediaItem, text) {
+    return new Promise(function(resolve, reject) {
+      HttpModule.postJson('/caption/save', { folder: state.folder, media: mediaItem.fileName, text: text }, function(status, responseText) {
+        if (status === 200) {
+          if (ui && ui.statusEl) {
+            ui.statusEl.textContent = 'Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
+          }
+          resolve();
+          return;
+        }
+        reject(new Error(getErrorMessage(responseText, 'Could not save caption')));
+      });
+    });
+  }
+
+  global.CaptionOps = {
+    captionCacheKey: captionCacheKey,
+    readPickerCaption: readPickerCaption,
+    loadCaptionTextForItem: loadCaptionTextForItem,
+    savePathCaption: savePathCaption
+  };
+})(window);
+
+// caption_template.js
+// Minimal primer engine: auto-seed empty captions from template rules.
+
+var CaptionTemplateModule = (function() {
+  function parseDefaults(multiline) {
+    var defaults = {};
+    String(multiline || '')
+      .split(/\r?\n/)
+      .map(function(line) { return line.trim(); })
+      .filter(Boolean)
+      .forEach(function(line) {
+        var eq = line.indexOf('=');
+        if (eq <= 0) {
+          return;
+        }
+        var key = line.slice(0, eq).trim().toLowerCase();
+        var value = line.slice(eq + 1).trim();
+        if (key) {
+          defaults[key] = value;
+        }
+      });
+    return defaults;
+  }
+
+  function parseMappings(multiline) {
+    return String(multiline || '')
+      .split(/\r?\n/)
+      .map(function(line) { return line.trim(); })
+      .filter(Boolean)
+      .map(function(line) {
+        var idx = line.indexOf('=>');
+        if (idx === -1) {
+          return null;
+        }
+
+        var left = line.slice(0, idx).trim().toLowerCase();
+        var right = line.slice(idx + 2).trim();
+        var eq = right.indexOf('=');
+        if (!left || !right || eq <= 0) {
+          return null;
+        }
+
+        var key = right.slice(0, eq).trim().toLowerCase();
+        var value = right.slice(eq + 1).trim();
+        if (!key || !value) {
+          return null;
+        }
+
+        var scope = 'file';
+        var trigger = left;
+        var colon = left.indexOf(':');
+        if (colon > 0) {
+          var prefix = left.slice(0, colon).trim();
+          var scopedTrigger = left.slice(colon + 1).trim();
+          if ((prefix === 'file' || prefix === 'caption') && scopedTrigger) {
+            scope = prefix;
+            trigger = scopedTrigger;
+          }
+        }
+
+        if (scope !== 'file') {
+          return null;
+        }
+
+        return { trigger: trigger, key: key, value: value };
+      })
+      .filter(Boolean);
+  }
+
+  function renderMultilineTemplate(template, values) {
+    var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function(_, rawKey) {
+      var key = String(rawKey || '').toLowerCase();
+      return values.hasOwnProperty(key) ? values[key] : '';
+    });
+
+    rendered = rendered
+      .split(/\r?\n/)
+      .map(function(line) { return line.replace(/[ \t]+$/g, ''); })
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    return rendered;
+  }
+
+  function buildPrimerFromConfig(fileName, config) {
+    var template = String(config && config.template || '');
+    if (!template.trim()) {
+      return '';
+    }
+
+    var defaults = parseDefaults(config && config.defaults || '');
+    var mappings = parseMappings(config && config.mappings || '');
+    var fileNorm = String(fileName || '').toLowerCase();
+    var values = {};
+
+    Object.keys(defaults).forEach(function(key) {
+      values[key] = defaults[key];
+    });
+
+    mappings.forEach(function(rule) {
+      if (fileNorm.indexOf(rule.trigger) !== -1) {
+        values[rule.key] = rule.value;
+      }
+    });
+
+    return renderMultilineTemplate(template, values);
+  }
+
+  function parseRules(multiline) {
+    var template = '';
+    var defaults = {};
+    var assignments = [];
+
+    String(multiline || '')
+      .split(/\r?\n/)
+      .map(function(line) { return line.trim(); })
+      .filter(Boolean)
+      .forEach(function(line) {
+        var lower = line.toLowerCase();
+
+        if (lower.indexOf('template:') === 0) {
+          template = line.slice('template:'.length).trim();
+          return;
+        }
+
+        if (lower.indexOf('default:') === 0) {
+          var defaultPart = line.slice('default:'.length).trim();
+          var eq = defaultPart.indexOf('=');
+          if (eq > 0) {
+            var key = defaultPart.slice(0, eq).trim().toLowerCase();
+            var value = defaultPart.slice(eq + 1).trim();
+            if (key) {
+              defaults[key] = value;
+            }
+          }
+          return;
+        }
+
+        var idx = line.indexOf('=>');
+        if (idx === -1) {
+          return;
+        }
+
+        var left = line.slice(0, idx).trim().toLowerCase();
+        var right = line.slice(idx + 2).trim();
+        var eq = right.indexOf('=');
+        if (!left || !right || eq <= 0) {
+          return;
+        }
+
+        var key = right.slice(0, eq).trim().toLowerCase();
+        var value = right.slice(eq + 1).trim();
+        if (!key || !value) {
+          return;
+        }
+
+        var scope = 'file';
+        var trigger = left;
+        var colon = left.indexOf(':');
+        if (colon > 0) {
+          var prefix = left.slice(0, colon).trim();
+          var scopedTrigger = left.slice(colon + 1).trim();
+          if ((prefix === 'file' || prefix === 'caption') && scopedTrigger) {
+            scope = prefix;
+            trigger = scopedTrigger;
+          }
+        }
+
+        if (scope !== 'file') {
+          return;
+        }
+
+        assignments.push({ trigger: trigger, key: key, value: value });
+      });
+
+    return {
+      template: template,
+      defaults: defaults,
+      assignments: assignments
+    };
+  }
+
+  function renderTemplate(template, values) {
+    var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function(_, rawKey) {
+      var key = String(rawKey || '').toLowerCase();
+      return values.hasOwnProperty(key) ? values[key] : '';
+    });
+
+    rendered = rendered
+      .replace(/\s+/g, ' ')
+      .replace(/\s+,/g, ',')
+      .replace(/,\s*,+/g, ', ')
+      .replace(/^,\s*/, '')
+      .replace(/,\s*$/, '')
+      .trim();
+
+    return rendered;
+  }
+
+  function buildPrimer(fileName, rulesText) {
+    var cfg = parseRules(rulesText);
+    if (!cfg.template) {
+      return '';
+    }
+
+    var fileNorm = String(fileName || '').toLowerCase();
+    var values = {};
+
+    Object.keys(cfg.defaults).forEach(function(key) {
+      values[key] = cfg.defaults[key];
+    });
+
+    cfg.assignments.forEach(function(rule) {
+      if (fileNorm.indexOf(rule.trigger) !== -1) {
+        values[rule.key] = rule.value;
+      }
+    });
+
+    return renderTemplate(cfg.template, values);
+  }
+
+  return {
+    buildPrimer: buildPrimer,
+    buildPrimerFromConfig: buildPrimerFromConfig
+  };
+})();
+
+// caption_trash_ops.js
+// File mutation helpers for prune/restore and trash naming.
+
+var CaptionTrashOps = (function() {
+  var TRASH_NAME_PATTERN = /^[^_]+_[^_]+__.+$/;
+
+  async function writeFileFromArrayBuffer(dirHandle, name, buffer) {
+    var handle = await dirHandle.getFileHandle(name, { create: true });
+    var writer = await handle.createWritable();
+    await writer.write(buffer);
+    await writer.close();
+  }
+
+  async function writeFileFromText(dirHandle, name, text) {
+    var handle = await dirHandle.getFileHandle(name, { create: true });
+    var writer = await handle.createWritable();
+    await writer.write(text);
+    await writer.close();
+  }
+
+  function makeTrashName(baseName) {
+    var stamp = Date.now().toString(36);
+    var rand = Math.floor(Math.random() * 0xffff).toString(16);
+    return stamp + '_' + rand + '__' + baseName;
+  }
+
+  function getOriginalNameFromTrashName(name) {
+    var fileName = String(name || '');
+    if (!TRASH_NAME_PATTERN.test(fileName)) {
+      return '';
+    }
+    var splitAt = fileName.indexOf('__');
+    if (splitAt < 0) {
+      return '';
+    }
+    return fileName.slice(splitAt + 2);
+  }
+
+  async function assertFileMissing(dirHandle, name) {
+    try {
+      await dirHandle.getFileHandle(name);
+      throw new Error('Cannot restore, file already exists');
+    } catch (err) {
+      if (!err || err.name !== 'NotFoundError') {
+        throw err;
+      }
+    }
+  }
+
+  async function copyFileIfVerified(sourceDir, sourceName, targetDir, targetName) {
+    var sourceHandle = await sourceDir.getFileHandle(sourceName);
+    var sourceFile = await sourceHandle.getFile();
+    var sourceBytes = await sourceFile.arrayBuffer();
+
+    await writeFileFromArrayBuffer(targetDir, targetName, sourceBytes);
+
+    var targetHandle = await targetDir.getFileHandle(targetName);
+    var targetFile = await targetHandle.getFile();
+    if (targetFile.size !== sourceFile.size) {
+      throw new Error('Restore failed verification');
+    }
+  }
+
+  async function moveFileToTrash(dirHandle, trashDir, sourceName, trashName) {
+    var sourceHandle = await dirHandle.getFileHandle(sourceName);
+    var sourceFile = await sourceHandle.getFile();
+    await writeFileFromArrayBuffer(trashDir, trashName, await sourceFile.arrayBuffer());
+    await dirHandle.removeEntry(sourceName);
+  }
+
+  async function moveCaptionToTrashIfPresent(dirHandle, trashDir, sourceName, trashName) {
+    try {
+      var sourceHandle = await dirHandle.getFileHandle(sourceName);
+      var sourceFile = await sourceHandle.getFile();
+      await writeFileFromText(trashDir, trashName, await sourceFile.text());
+      await dirHandle.removeEntry(sourceName);
+    } catch (err) {
+      if (!err || err.name !== 'NotFoundError') {
+        throw err;
+      }
+    }
+  }
+
+  async function findMatchingTrashCaptionName(trashDirHandle, expectedCaptionName) {
+    for await (var entry of trashDirHandle.values()) {
+      if (entry.kind !== 'file') {
+        continue;
+      }
+      if (getOriginalNameFromTrashName(entry.name) === expectedCaptionName) {
+        return entry.name;
+      }
+    }
+    return '';
+  }
+
+  async function backupOriginalPair(dirHandle, mediaItem, oldFile) {
+    var trashDir = await dirHandle.getDirectoryHandle('.caption_trash', { create: true });
+
+    var oldFileObj = await mediaItem.fileHandle.getFile();
+    await writeFileFromArrayBuffer(trashDir, oldFile, await oldFileObj.arrayBuffer());
+
+    var oldCaption = oldFile.replace(/\.[^.]+$/, '.txt');
+    try {
+      var oldCaptionHandle = await dirHandle.getFileHandle(oldCaption);
+      var oldCaptionFile = await oldCaptionHandle.getFile();
+      await writeFileFromText(trashDir, oldCaption, await oldCaptionFile.text());
+    } catch (err) {
+      if (!err || err.name !== 'NotFoundError') {
+        throw err;
+      }
+    }
+  }
+
+  async function prunePickerMedia(mediaItem) {
+    var dirHandle = mediaItem.dirHandle;
+    var mediaName = mediaItem.fileName;
+    var captionName = mediaName.replace(/\.[^.]+$/, '.txt');
+    var trashDir = await dirHandle.getDirectoryHandle('.caption_trash', { create: true });
+    var trashMediaName = makeTrashName(mediaName);
+    var trashCaptionName = makeTrashName(captionName);
+
+    await moveFileToTrash(dirHandle, trashDir, mediaName, trashMediaName);
+    await moveCaptionToTrashIfPresent(dirHandle, trashDir, captionName, trashCaptionName);
+
+    return {
+      mediaName: mediaName,
+      captionName: captionName,
+      trashMediaName: trashMediaName,
+      trashCaptionName: trashCaptionName
+    };
+  }
+
+  async function restorePickerMedia(mediaItem, targetDirHandle) {
+    var trashDirHandle = mediaItem.dirHandle;
+    var trashMediaName = mediaItem.fileName;
+    var originalMediaName = getOriginalNameFromTrashName(trashMediaName);
+    if (!originalMediaName) {
+      throw new Error('Cannot restore: not a pruned file');
+    }
+
+    var originalCaptionName = originalMediaName.replace(/\.[^.]+$/, '.txt');
+
+    await assertFileMissing(targetDirHandle, originalMediaName);
+    var trashCaptionName = await findMatchingTrashCaptionName(trashDirHandle, originalCaptionName);
+    if (trashCaptionName) {
+      await assertFileMissing(targetDirHandle, originalCaptionName);
+    }
+
+    await copyFileIfVerified(trashDirHandle, trashMediaName, targetDirHandle, originalMediaName);
+    if (trashCaptionName) {
+      await copyFileIfVerified(trashDirHandle, trashCaptionName, targetDirHandle, originalCaptionName);
+    }
+
+    await trashDirHandle.removeEntry(trashMediaName);
+    if (trashCaptionName) {
+      await trashDirHandle.removeEntry(trashCaptionName);
+    }
+
+    return {
+      trashMediaName: trashMediaName,
+      mediaName: originalMediaName,
+      captionName: originalCaptionName
+    };
+  }
+
+  return {
+    backupOriginalPair: backupOriginalPair,
+    makeTrashName: makeTrashName,
+    getOriginalNameFromTrashName: getOriginalNameFromTrashName,
+    prunePickerMedia: prunePickerMedia,
+    restorePickerMedia: restorePickerMedia
+  };
+})();
+// caption_state.js
+// Minimal state management for caption mode
+
+(function(global) {
+  var state = {
+    folder: '',
+    suppressInput: false,
+    items: [],
+    childFolders: [],
+    currentItem: null,
+    objectUrl: '',
+    mode: 'path',
+    dirStack: [],
+    reviewMode: false,
+    captionCache: {},
+    listRenderSeq: 0,
+    reviewedSet: new Set(),
+    focusSet: null
+  };
+  global.CaptionState = state;
+})(window);

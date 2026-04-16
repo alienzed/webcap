@@ -1,7 +1,7 @@
 // Global common helpers for webcap
 
 // Set this to true to enable debug logging
-window.DEBUG = true;
+window.DEBUG = false;
 
 /**
  * Logs messages to the console if debugging is enabled.
@@ -64,15 +64,6 @@ function getErrorMessage(responseText, fallback) {
   }
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 function renderPreviewHtml(ui, isImage, src) {
   var tag = '';
   if (isImage) {
@@ -121,6 +112,16 @@ function renderTextPreview(ui, title, text) {
   );
   doc.close();
 }
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 
 window.setStatus = setStatus;
 window.normalizeFolderInput = normalizeFolderInput;

@@ -253,17 +253,17 @@ var CaptionListModule = (function () {
 
     // Update .toml section to resemble media list with collapsible panel
     var tomlSection = document.createElement('div');
-    tomlSection.className = 'page-item folder-item';
-    tomlSection.innerHTML = '<div class="folder-header">📂 .toml Files</div>';
-    var tomlList = document.createElement('div');
-    tomlList.className = 'folder-content';
-    tomlList.style.display = 'none';
-    tomlSection.appendChild(tomlList);
-    ui.pageListEl.appendChild(tomlSection);
+    // tomlSection.className = 'page-item folder-item';
+    // tomlSection.innerHTML = '<div class="folder-header">📂 .toml Files</div>';
+    // var tomlList = document.createElement('div');
+    // tomlList.className = 'folder-content';
+    // tomlList.style.display = 'none';
+    // tomlSection.appendChild(tomlList);
+    // ui.pageListEl.appendChild(tomlSection);
 
-    tomlSection.querySelector('.folder-header').onclick = function () {
-      tomlList.style.display = tomlList.style.display === 'none' ? 'block' : 'none';
-    };
+    // tomlSection.querySelector('.folder-header').onclick = function () {
+    //   tomlList.style.display = tomlList.style.display === 'none' ? 'block' : 'none';
+    // };
 
     function attachMediaRow(mediaItem, captionText) {
       var row = document.createElement('div');
@@ -396,34 +396,8 @@ var CaptionListModule = (function () {
 
   // Add logic to populate the .toml files panel dynamically
   function populateTomlFilesPanel(ui, state) {
-    var tomlList = document.getElementById('toml-files-list');
-
-    tomlList.innerHTML = ''; // Clear existing content
-
-    state.configItems.forEach(function (tomlItem) {
-      debugLog('[populateTomlFilesPanel] Adding TOML file to panel:', tomlItem.fileName);
-      var row = document.createElement('div');
-      row.className = 'page-item';
-      row.innerHTML = '<div>' + escapeHtml(tomlItem.fileName) + '</div>';
-      row.onclick = function () {
-        debugLog('[populateTomlFilesPanel] Clicked on TOML file:', tomlItem.fileName);
-        setStatus(ui, 'Editing: ' + tomlItem.fileName);
-        window.loadTomlFile(ui, state, tomlItem);
-      };
-      tomlList.appendChild(row);
-      debugLog('[populateTomlFilesPanel] Appended row to toml-files-list:', row.outerHTML);
-    });
-
-    if (state.configItems.length === 0) {
-      debugLog('[populateTomlFilesPanel] No TOML files found in state.configItems.');
-      var emptyMessage = document.createElement('div');
-      emptyMessage.className = 'empty-message';
-      emptyMessage.innerText = 'No .toml files found in this directory.';
-      tomlList.appendChild(emptyMessage);
-      debugLog('[populateTomlFilesPanel] Appended empty message to toml-files-list.');
-    }
-
-    debugLog('[populateTomlFilesPanel] Child items of toml-files-list after operations:', tomlList.children);
+    // Hide config file list: do nothing
+    // (Autocreation logic remains active elsewhere)
   }
 
   window.populateTomlFilesPanel = populateTomlFilesPanel;

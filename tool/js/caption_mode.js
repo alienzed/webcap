@@ -891,6 +891,8 @@
 
   // Moved loadTomlFile inside the IIFE
   function loadTomlFile(ui, state, tomlItem) {
+    // Set currentItem to the config file so autosave/save logic is correct
+    state.currentItem = tomlItem;
     tomlItem.fileHandle.getFile()
       .then(function(file) {
         return file.text();
@@ -898,14 +900,29 @@
       .then(function(content) {
         ui.editorEl.value = content;
         ui.editorEl.oninput = function() {
+          if (!state.tomlCache) state.tomlCache = {};
           state.tomlCache[tomlItem.key] = ui.editorEl.value;
         };
         ui.saveBtn.onclick = function() {
+          // Only save if the currentItem is still this config file
+          if (state.currentItem !== tomlItem) {
+            setStatus(ui, 'Not saving: another file is now selected.');
+            return;
+          }
+          console.debug('[loadTomlFile] Save button clicked for', tomlItem.fileName);
           tomlItem.fileHandle.createWritable()
             .then(function(writer) {
-              writer.write(state.tomlCache[tomlItem.key] || '');
-              writer.close();
+              console.debug('[loadTomlFile] Writer created for', tomlItem.fileName);
+              writer.write((state.tomlCache && state.tomlCache[tomlItem.key]) || '');
+              return writer.close();
+            })
+            .then(function() {
               setStatus(ui, 'Saved: ' + tomlItem.fileName);
+              console.debug('[loadTomlFile] Save completed for', tomlItem.fileName);
+            })
+            .catch(function(err) {
+              setStatus(ui, 'Error saving file: ' + tomlItem.fileName);
+              console.error('[loadTomlFile] Error saving', tomlItem.fileName, err);
             });
         };
       })

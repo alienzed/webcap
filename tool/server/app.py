@@ -67,6 +67,47 @@ def fs_list():
                 print(f"[fs_list] Searching in {FS_ROOT}")
                 print(f"[fs_list] Requested {rel_path} -> {dir_path} (NOT FOUND)")
             return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
+        # Originals and config file management: only if valid set folder
+        try:
+            from .originals_utils import MEDIA_EXTS, copy_media_to_originals, is_blacklisted
+            def is_set_folder(path):
+                name = path.name.lower()
+                if name == 'originals' or 'trash' in name or 'prune' in name:
+                    return False
+                if is_blacklisted(name):
+                    return False
+                # Must contain at least one media or caption file
+                for entry in path.iterdir():
+                    if entry.is_file() and (entry.suffix.lower() in MEDIA_EXTS or entry.suffix.lower() == '.txt'):
+                        return True
+                return False
+
+            if is_set_folder(dir_path):
+                copy_media_to_originals(str(dir_path))
+                # Config file creation
+                from pathlib import Path
+                import shutil
+                templates = {
+                    'configlo.toml': 'configlo.toml',
+                    'confighi.toml': 'confighi.toml',
+                    'dataset.lo.toml': 'dataset.lo.toml',
+                    'dataset.hi.toml': 'dataset.hi.toml',
+                }
+                for fname, tname in templates.items():
+                    fpath = dir_path / fname
+                    if not fpath.exists():
+                        tpath = TEMPLATES_DIR / tname
+                        if tpath.exists():
+                            text = tpath.read_text(encoding='utf-8')
+                            # For configlo/confighi, substitute dataset path
+                            if fname == 'configlo.toml':
+                                text = re.sub(r'^(dataset\s*=\s*).*$','dataset = "dataset.lo.toml"', text, flags=re.MULTILINE)
+                            elif fname == 'confighi.toml':
+                                text = re.sub(r'^(dataset\s*=\s*).*$','dataset = "dataset.hi.toml"', text, flags=re.MULTILINE)
+                            fpath.write_text(text, encoding='utf-8')
+        except Exception as oe:
+            if FS_DEBUG:
+                print(f"[fs_list] WARNING: Could not update originals/configs: {oe}")
         entries = []
         for entry in sorted(dir_path.iterdir(), key=lambda e: e.name.lower()):
             if entry.is_dir():

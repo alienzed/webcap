@@ -175,6 +175,9 @@ var CaptionListModule = (function () {
         return function () {
           console.log('[webcap] renderFileList: folder double-click', folderName);
           state.folder = (state.folder ? state.folder + '/' : '') + folderName;
+          if (state.dirStack && state.dirStack.length) {
+            state.dirStack.push({ name: folderName });
+          }
           if (deps && typeof deps.refreshCurrentDirectory === 'function') {
             deps.refreshCurrentDirectory(ui, state);
           }

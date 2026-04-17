@@ -15,7 +15,7 @@
     console.log('[webcap] startCaptionMode: initializing');
     var xhr = new XMLHttpRequest();
     xhr.open('GET', '/fs/root');
-    xhr.onreadystatechange = function() {
+    xhr.onreadystatechange = async function() {
       if (xhr.readyState === 4) {
         if (xhr.status === 200) {
           try {
@@ -527,13 +527,10 @@
       return;
     }
     state.dirStack.pop();
+    // Rebuild state.folder from dirStack (excluding root)
+    state.folder = state.dirStack.slice(1).map(function(entry) { return entry.name; }).join('/');
     updateFolderLabel(ui, state);
-    Promise.all([
-      refreshPickerDirectory(ui, state),
-    ])
-    .catch(function(err) {
-      setStatus(ui, String(err && err.message ? err.message : err));
-    });
+    refreshCurrentDirectory(ui, state);
   }
 
   function updateFolderLabel(ui, state) {
@@ -562,7 +559,7 @@
   function renderFileList(ui, state, filterText, token, filterToken) {
     CaptionListModule.refreshFocusSetUi(ui, state);
     return CaptionListModule.renderFileList(ui, state, filterText, token, filterToken, {
-      navigateUp: CaptionListModule.navigateUp,
+      navigateUp: navigateUp,
       refreshCurrentDirectory: refreshCurrentDirectory,
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
@@ -695,7 +692,6 @@
       // Do not auto-save config files as captions
       return Promise.resolve();
     }
-    // Picker logic removed; only backend path logic remains
     return CaptionOps.savePathCaption(ui, state, state.currentItem, ui.editorEl.value || '');
   }
 

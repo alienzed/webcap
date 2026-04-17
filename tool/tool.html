@@ -21,8 +21,7 @@
                     >
                 </div>
                 <div class="row-inline row-equal">
-                    <button id="open-page-btn" type="button">Choose Folder</button>
-                    <button id="caption-up-btn" type="button" title="Refresh directory">↻</button>
+                    <button id="refresh-btn" type="button" title="Refresh directory">↻</button>
                 </div>
                 <div id="caption-filter-row" class="filter-row">
                     <input id="page-filter" type="text" placeholder="filter">
@@ -33,13 +32,8 @@
                         onclick="if (!document.getElementById('page-filter').value) { document.getElementById('page-filter').focus(); return; } document.getElementById('page-filter').value = ''; document.getElementById('page-filter').dispatchEvent(new Event('input', { bubbles: true }));"
                     >x</button>
                 </div>
-                <div id="page-list" class="page-list with-stats-pane"></div>
+                <div id="media-list" class="media-list with-stats-pane"></div>
                 <button id="review-captions-btn" type="button" style="margin-bottom:8px">Review Captions</button>
-                <!-- Collapsible panel for .toml files using <details> and <summary> -->
-                <details id="toml-files-panel" style="display: none;">
-                    <summary>Config Files</summary>
-                    <div id="toml-files-list" class="folder-content"></div>
-                </details>
                 <div id="caption-stats-pane">
                     <div class="stats-panel">
                         <details id="stats-details">

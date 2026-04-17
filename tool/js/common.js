@@ -1,7 +1,7 @@
 // Global common helpers for webcap
 
 // Set this to true to enable debug logging
-window.DEBUG = false;
+window.DEBUG = true;
 
 /**
  * Logs messages to the console if debugging is enabled.
@@ -60,6 +60,7 @@ function getErrorMessage(responseText, fallback) {
     var data = JSON.parse(responseText);
     return data.error || fallback;
   } catch (e) {
+    console.warn('Failed to parse error response as JSON:', e);
     return fallback;
   }
 }
@@ -302,6 +303,7 @@ var DirHandleStoreModule = (function() {
         };
       });
     }).catch(function() {
+      console.warn('Failed to save last directory handle to IndexedDB');
       return Promise.resolve();
     });
   }
@@ -322,6 +324,7 @@ var DirHandleStoreModule = (function() {
         };
       });
     }).catch(function() {
+      console.warn('Failed to load last directory handle from IndexedDB');
       return null;
     });
   }

@@ -54,7 +54,7 @@ body {
 }
 
 /* Page list */
-.page-list {
+.media-list {
   border: 1px solid var(--border);
   background: #fff;
   border-radius: 6px;
@@ -67,7 +67,7 @@ body {
   flex-direction: column;
 }
 
-.page-list.with-stats-pane {
+.media-list.with-stats-pane {
   height: auto;
   min-height: 120px;
 }
@@ -306,8 +306,4 @@ iframe {
   border-radius: 6px;
   background: #fff;
   padding: 8px;
-}
-
-#toml-files-panel:not([open]) #toml-files-list {
-  display: none;
 }

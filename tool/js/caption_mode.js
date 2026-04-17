@@ -12,43 +12,61 @@
     var ui = context.ui;
     var scheduleSave = DebounceModule.create(500);
     var state = window.CaptionState;
-    //configureUiForCaptionMode(ui, state);
+    console.log('[webcap] startCaptionMode: initializing');
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/fs/root');
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          try {
+            var resp = JSON.parse(xhr.responseText);
+            var rootPath = resp.root || '';
+            console.log('[webcap] startCaptionMode: /fs/root response', resp);
+            state.folder = '';
+            state.dirStack = [{ name: rootPath }];
+            console.log('[webcap] startCaptionMode: set state.folder and state.dirStack', state.folder, state.dirStack);
+            try {
+              refreshCurrentDirectory(ui, state);
+              setStatus(ui, 'Caption mode ready. Root directory loaded: ' + rootPath);
+            } catch (e) {
+              setStatus(ui, 'Error loading root directory: ' + (e && e.message ? e.message : e));
+              console.error('[webcap] Error loading root directory:', e);
+            }
+          } catch (e) {
+            setStatus(ui, 'Backend FS_ROOT: [error reading response]');
+            console.error('[webcap] Error parsing /fs/root response:', e);
+          }
+        } else {
+          setStatus(ui, 'Backend FS_ROOT: [error fetching]');
+          console.error('[webcap] Error fetching /fs/root:', xhr.status, xhr.responseText);
+        }
+      }
+    };
+    xhr.send();
     CaptionReviewModule.init(ui, state, {
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
       setReviewMode: setReviewMode,
       renderFileList: renderFileList,
-      selectMedia: selectMedia,
-      activateFocusSet: activateFocusSet,
-      clearFocusSet: clearFocusSet
+      selectMedia: selectPathMedia, // Use the correct backend-driven media selector
+      activateFocusSet: CaptionListModule.activateFocusSet,
+      clearFocusSet: CaptionListModule.clearFocusSet
     });
     setupFolderStatePersistence(ui, state);
     setupFolderStateReset(ui, state);
 
-    ui.chooseFolderBtn.addEventListener('click', function() {
-      chooseFolder(ui, state);
-    });
-
-    ui.captionUpBtn.addEventListener('click', function() {
+    ui.refreshBtn.addEventListener('click', function() {
+      console.log('[webcap] refreshBtn clicked');
       refreshCurrentDirectory(ui, state);
     });
 
-    if (ui.autosetBtn) {
-      ui.autosetBtn.addEventListener('click', function() {
-        runAutoset(ui).catch(function(err) {
-          setStatus(ui, String(err && err.message ? err.message : err));
-        });
-      });
-    }
-
-    // Debounced async filter to avoid race conditions
     var filterToken = { current: 0 };
     var debouncedFilter = DebounceModule.create(150);
     ui.filterEl.addEventListener('input', function() {
       var token = ++filterToken.current;
+      console.log('[webcap] filter input, token', token, 'value', ui.filterEl.value);
       debouncedFilter(function() {
         renderFileList(ui, state, ui.filterEl.value, token, filterToken);
-        // If filter should affect config files, call refreshConfigFiles(ui, state) here
       });
     });
     ui.pageListEl.addEventListener('keydown', function(e) {
@@ -82,139 +100,48 @@
       });
     });
 
-    setStatus(ui, 'Caption mode ready. Choose Folder, then double-click folders to enter.');
+    state.folder = '';
+    console.log('[webcap] startCaptionMode: calling refreshCurrentDirectory');
+    refreshCurrentDirectory(ui, state);
+    setStatus(ui, 'Caption mode ready. Root directory loaded.');
   }
 
-  function ensureFocusSetExitButton(ui, state, row) {
-    var exitBtn = document.getElementById('focus-set-exit-btn');
-    if (!exitBtn) {
-      exitBtn = document.createElement('button');
-      exitBtn.id = 'focus-set-exit-btn';
-      exitBtn.type = 'button';
-      exitBtn.textContent = 'Exit Set';
-      exitBtn.style.display = 'none';
-      row.appendChild(exitBtn);
-    }
-    if (!exitBtn.__focusSetBound) {
-      exitBtn.__focusSetBound = true;
-      exitBtn.onclick = function() {
-        clearFocusSet(ui, state, true);
-      };
-    }
-    return exitBtn;
-  }
-
-  function refreshFocusSetUi(ui, state, exitBtn) {
-    var btn = exitBtn || document.getElementById('focus-set-exit-btn');
-    if (!btn) {
-      return;
-    }
-    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
-      btn.style.display = '';
-      var source = state.focusSet.source ? (' - ' + state.focusSet.source) : '';
-      btn.title = 'Show full folder list' + source;
-      return;
-    }
-    btn.style.display = 'none';
-    btn.title = 'Show full folder list';
-  }
-
-  function clearFocusSet(ui, state, rerender) {
-    state.focusSet = null;
-    if (rerender) {
-      renderFileList(ui, state, ui.filterEl.value);
-      // If clearing focus set should affect config files, call refreshConfigFiles(ui, state) here
-    }
-  }
-
-  function activateFocusSet(ui, state, fileNames, source) {
-    var seen = {};
-    var keys = [];
-    var names = (fileNames || []).map(function(name) { return String(name || ''); }).filter(Boolean);
-    names.forEach(function(fileName) {
-        for (var i = 0; i < state.items.length; i += 1) {
-            var item = state.items[i];
-            if (item.fileName !== fileName) {
-                continue;
-            }
-            if (!seen[item.fileName]) {
-                keys.push(item.fileName);
-                seen[item.fileName] = true;
-            }
-        }
-    });
-
-    if (!keys.length) {
-        clearFocusSet(ui, state, true);
-        return;
-    }
-
-    state.focusSet = {
-        keys: keys,
-        source: String(source || '')
-    };
-    renderFileList(ui, state, ui.filterEl.value);
-    // If activating focus set should affect config files, call refreshConfigFiles(ui, state) here
-  }
-
-  function runAutoset(ui) {
-    return new Promise(function(resolve) {
-      if (!ui.autosetBtn) {
-        resolve();
-        return;
-      }
-
-      ui.autosetBtn.disabled = true;
-      setStatus(ui, 'Running autoset...');
-      renderTextPreview(ui, 'Autoset Output', 'Running scripts/autoset.py --master .\nPlease wait...');
-
-      HttpModule.postJson('/caption/run_autoset', { master: '.' }, function(status, responseText) {
-        ui.autosetBtn.disabled = false;
-
-        var payload = null;
-        try {
-          payload = JSON.parse(responseText || '{}');
-        } catch (err) {
-          payload = { error: 'Could not parse autoset output', output: String(responseText || '') };
-        }
-
-        var command = payload.command || 'scripts/autoset.py --master .';
-        var output = payload.output || payload.error || '';
-        var title = status === 200 ? 'Autoset Completed' : 'Autoset Failed';
-        renderTextPreview(ui, title, '$ ' + command + '\n\n' + output);
-
-        if (status === 200) {
-          setStatus(ui, 'Autoset complete');
-        } else {
-          setStatus(ui, payload.error || 'Autoset failed');
-        }
-        resolve();
-      });
-    });
-  }
 
   async function pruneMediaItem(ui, state, mediaItem) {
     if (!mediaItem) {
       setStatus(ui, 'No media item to prune');
       return;
     }
-    if (mediaItem.kind !== 'picker') {
-      setStatus(ui, 'Prune is available for folder-picker items only');
-      return;
-    }
-
     var fileName = mediaItem.fileName;
     var confirmed = window.confirm('Move this media file and its caption to .caption_trash?\n\n' + fileName);
     if (!confirmed) {
       return;
     }
-
     if (state.currentItem && state.currentItem.key === mediaItem.key) {
       await saveCurrentCaption(ui, state);
     }
-
-    await CaptionListModule.prunePickerMedia(mediaItem);
-
+    await CaptionListModule.pruneMedia(ui, state, mediaItem, {
+      pruneMedia: async function(ui, state, mediaItem) {
+        // Move media and caption to .caption_trash via backend
+        return new Promise(function(resolve, reject) {
+          var folder = state.folder || '';
+          var media = mediaItem.fileName;
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/caption/prune');
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+              if (xhr.status === 200) {
+                resolve();
+              } else {
+                reject(new Error('Prune failed: ' + xhr.responseText));
+              }
+            }
+          };
+          xhr.send(JSON.stringify({ folder: folder, media: media }));
+        });
+      }
+    });
     delete state.captionCache[CaptionOps.captionCacheKey(state, mediaItem)];
     state.reviewedSet.delete(mediaItem.key);
     if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
@@ -231,8 +158,7 @@
     if (state.currentItem && state.currentItem.key === mediaItem.key) {
       state.currentItem = null;
     }
-
-    await refreshPickerDirectory(ui, state);
+    refreshCurrentDirectory(ui, state);
     setStatus(ui, 'Pruned to .caption_trash: ' + fileName);
   }
 
@@ -241,22 +167,40 @@
       setStatus(ui, 'No media item to restore');
       return;
     }
-    if (mediaItem.kind !== 'picker') {
-      setStatus(ui, 'Restore is available for folder-picker items only');
-      return;
-    }
     if (state.dirStack.length < 2 || state.dirStack[state.dirStack.length - 1].name !== '.caption_trash') {
       setStatus(ui, 'Restore is available inside .caption_trash only');
       return;
     }
-
     if (state.currentItem && state.currentItem.key === mediaItem.key) {
       await saveCurrentCaption(ui, state);
     }
-
-    var targetDir = state.dirStack[state.dirStack.length - 2];
-    var restored = await CaptionListModule.restorePickerMedia(mediaItem, targetDir);
-
+    await CaptionListModule.restoreMedia(ui, state, mediaItem, {
+      restoreMedia: async function(ui, state, mediaItem) {
+        // Restore media and caption from .caption_trash via backend
+        return new Promise(function(resolve, reject) {
+          var folder = state.folder || '';
+          var media = mediaItem.fileName;
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/caption/restore');
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+              if (xhr.status === 200) {
+                try {
+                  var resp = JSON.parse(xhr.responseText);
+                  resolve(resp);
+                } catch (e) {
+                  resolve({ mediaName: media });
+                }
+              } else {
+                reject(new Error('Restore failed: ' + xhr.responseText));
+              }
+            }
+          };
+          xhr.send(JSON.stringify({ folder: folder, media: media }));
+        });
+      }
+    });
     delete state.captionCache[CaptionOps.captionCacheKey(state, mediaItem)];
     state.reviewedSet.delete(mediaItem.key);
     if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
@@ -273,100 +217,65 @@
     if (state.currentItem && state.currentItem.key === mediaItem.key) {
       state.currentItem = null;
     }
-
-    await refreshPickerDirectory(ui, state);
-    setStatus(ui, 'Restored from .caption_trash: ' + restored.mediaName);
+    refreshCurrentDirectory(ui, state);
+    setStatus(ui, 'Restored from .caption_trash: ' + mediaItem.fileName);
   }
 
-  function chooseFolder(ui, state) {
-    if (typeof window.showDirectoryPicker !== 'function') {
-      setStatus(ui, 'Choose Folder is available in Chromium browsers (Chrome/Edge).');
-      return;
-    }
-
-    window.showDirectoryPicker().then(function(rootHandle) {
-      state.mode = 'picker';
-      state.folder = '';
-      state.currentItem = null;
-      state.focusSet = null;
-      state.dirStack = [rootHandle];
-      updateFolderLabel(ui, state);
-      return loadFolderStateForRoot(ui, state, rootHandle).then(function() {
-        return Promise.all([
-          refreshPickerDirectory(ui, state),
-          refreshConfigFiles(ui, state)
-        ]);
-      });
-    }).catch(function(err) {
-      if (err && err.name === 'AbortError') {
-        setStatus(ui, 'Folder selection canceled');
-        return;
+  // Directory listing now uses backend /fs/list
+  function refreshCurrentDirectory(ui, state) {
+    var path = state.folder || '';
+    console.log('[webcap] refreshCurrentDirectory: called with path', path);
+    if (ui.folderLabelEl) {
+      if (state.dirStack && state.dirStack.length) {
+        ui.folderLabelEl.value = state.dirStack[state.dirStack.length - 1].name;
+      } else {
+        ui.folderLabelEl.value = '';
       }
-      setStatus(ui, String(err && err.message ? err.message : 'Could not choose folder'));
-    });
+    }
+    console.log('[webcap] refreshCurrentDirectory: requesting /fs/list', path);
+
+    var url = '/fs/list' + (path ? ('?path=' + encodeURIComponent(path)) : '');
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url);
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          try {
+            var resp = JSON.parse(xhr.responseText);
+            // Expect resp.folders and resp.files arrays
+            state.childFolders = (resp.folders || []).map(function(name) {
+              return { name: name };
+            });
+            // Only include media files in state.items
+            state.items = (resp.files || []).filter(function(name) {
+              var ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+              return MEDIA_EXTENSIONS[ext];
+            }).map(function(name) {
+              return {
+                fileName: name,
+                label: name,
+                key: name
+              };
+            });
+            renderFileList(ui, state, ui.filterEl.value);
+            setStatus(ui, 'Loaded folder: ' + (path || '[root]'));
+          } catch (e) {
+            setStatus(ui, 'Error parsing folder list: ' + (e && e.message ? e.message : e));
+            state.childFolders = [];
+            state.items = [];
+            renderFileList(ui, state, ui.filterEl.value);
+          }
+        } else {
+          setStatus(ui, 'Error loading folder: ' + xhr.status);
+          state.childFolders = [];
+          state.items = [];
+          renderFileList(ui, state, ui.filterEl.value);
+        }
+      }
+    };
+    xhr.send();
   }
 
-  async function refreshPickerDirectory(ui, state) {
-    var currentDir = state.dirStack[state.dirStack.length - 1];
-    var childFolders = [];
-    var items = [];
-    persistCurrentDirectory(state);
-
-    for await (var entry of currentDir.values()) {
-      if (entry.kind === 'directory') {
-        childFolders.push({ name: entry.name, handle: entry });
-        continue;
-      }
-      if (entry.kind !== 'file') {
-        continue;
-      }
-      var ext = getFileExtension(entry.name);
-      // Accept config files as well as media
-      if (MEDIA_EXTENSIONS[ext]) {
-        items.push({
-          key: entry.name,
-          label: entry.name,
-          fileName: entry.name,
-          kind: 'picker',
-          fileHandle: entry,
-          dirHandle: currentDir
-        });
-      }
-    }
-
-    childFolders.sort(function(a, b) { return a.name.localeCompare(b.name); });
-    items.sort(function(a, b) { return a.label.localeCompare(b.label); });
-
-    state.childFolders = childFolders;
-    state.items = items;
-    state.currentItem = null;
-
-    // Only auto-create config files in set folders (with media), not app-created folders
-    var forbidden = { 'originals': 1, 'caption_trash': 1, 'auto_dataset': 1 };
-    var folderName = currentDir.name || '';
-
-    if (items.length > 0 && !forbidden[folderName]) {
-      await maybeCreateConfigFiles(currentDir);
-      await refreshConfigFiles(ui, state);
-    }
-
-    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
-      var allow = {};
-      items.forEach(function(item) { allow[item.key] = true; });
-      state.focusSet.keys = state.focusSet.keys.filter(function(key) { return !!allow[key]; });
-      if (!state.focusSet.keys.length) {
-        state.focusSet = null;
-      }
-    }
-
-    renderFileList(ui, state, ui.filterEl.value);
-    if (!items.length) {
-      clearEditorAndPreview(ui, state);
-      setStatus(ui, 'No supported media files in current folder');
-      return;
-    }
-    await selectMedia(ui, state, items[0]);
-  }
 
   // Config file creation logic remains intact
   async function maybeCreateConfigFiles(dirHandle) {
@@ -381,7 +290,9 @@
       try {
         await dirHandle.getFileHandle(cfg.name);
         exists = true;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`Config file ${cfg.name} does not exist and will be created from template.`);
+      }
       if (exists) continue;
       // Read template
       let text = '';
@@ -407,17 +318,10 @@
         const writer = await handle.createWritable();
         await writer.write(text);
         await writer.close();
-      } catch (e) {}
+      } catch (e) {
+        console.error(`Error creating config file ${cfg.name}:`, e);
+      }
     }
-  }
-
-  function persistCurrentDirectory(state) {
-    if (!window.DirHandleStoreModule || !state.dirStack.length) {
-      return;
-    }
-    var currentDir = state.dirStack[state.dirStack.length - 1];
-    var names = state.dirStack.map(function(handle) { return handle.name; });
-    DirHandleStoreModule.saveLastDir(currentDir, names);
   }
 
   function setupFolderStatePersistence(ui, state) {
@@ -548,6 +452,7 @@
       var data = JSON.parse(text || '{}');
       return sanitizeFolderState(data);
     } catch (err) {
+      console.warn('Could not read folder state file:', err);
       if (!err || err.name !== 'NotFoundError') {
         throw err;
       }
@@ -602,6 +507,7 @@
     try {
       await rootHandle.removeEntry(FOLDER_STATE_FILE);
     } catch (err) {
+      console.warn('Could not remove folder state file:', err);
       if (!err || err.name !== 'NotFoundError') {
         throw err;
       }
@@ -614,15 +520,6 @@
     setStatus(ui, 'Folder settings reset (.webcap_state.json removed)');
   }
 
-  function refreshCurrentDirectory(ui, state) {
-    if (!state.dirStack.length) {
-      setStatus(ui, 'No folder loaded');
-      return;
-    }
-    refreshPickerDirectory(ui, state).catch(function(err) {
-      setStatus(ui, String(err && err.message ? err.message : err));
-    });
-  }
 
   function navigateUp(ui, state) {
     if (state.dirStack.length <= 1) {
@@ -633,7 +530,6 @@
     updateFolderLabel(ui, state);
     Promise.all([
       refreshPickerDirectory(ui, state),
-      refreshConfigFiles(ui, state)
     ])
     .catch(function(err) {
       setStatus(ui, String(err && err.message ? err.message : err));
@@ -642,12 +538,15 @@
 
   function updateFolderLabel(ui, state) {
     if (!state.dirStack.length) {
-      ui.folderLabelEl.value = 'No folder selected';
+      ui.folderLabelEl.value = '[root]';
       return;
     }
-
-    var names = state.dirStack.map(function(handle) { return handle.name; });
-    ui.folderLabelEl.value = names.join(' / ');
+    var current = state.dirStack[state.dirStack.length - 1];
+    var name = current && current.name ? current.name : '[root]';
+    if (!name || name === '' || name === '/' || name === '\\') {
+      name = '[root]';
+    }
+    ui.folderLabelEl.value = name;
   }
 
   function setReviewMode(ui, state, enabled) {
@@ -660,24 +559,42 @@
     }
   }
 
-  async function renderFileList(ui, state, filterText, token, filterToken) {
-    refreshFocusSetUi(ui, state);
+  function renderFileList(ui, state, filterText, token, filterToken) {
+    CaptionListModule.refreshFocusSetUi(ui, state);
     return CaptionListModule.renderFileList(ui, state, filterText, token, filterToken, {
-      navigateUp: navigateUp,
+      navigateUp: CaptionListModule.navigateUp,
       refreshCurrentDirectory: refreshCurrentDirectory,
-      refreshPickerDirectory: refreshPickerDirectory,
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
       pruneMedia: pruneMediaItem,
       restoreMedia: restoreMediaItem,
-      activateFocusSet: activateFocusSet,
-      clearFocusSet: clearFocusSet,
+      renameMedia: async function(ui, state, mediaItem, oldFile, newFile) {
+        // Rename media and caption via backend
+        return new Promise(function(resolve, reject) {
+          var folder = state.folder || '';
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/fs/rename');
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+              if (xhr.status === 200) {
+                resolve();
+              } else {
+                reject(new Error('Rename failed: ' + xhr.responseText));
+              }
+            }
+          };
+          xhr.send(JSON.stringify({ folder: folder, old_name: oldFile, new_name: newFile }));
+        });
+      },
+      activateFocusSet: CaptionListModule.activateFocusSet,
+      clearFocusSet: CaptionListModule.clearFocusSet,
       onReviewedSetChanged: function() {
         if (state.scheduleFolderStateSave) {
           state.scheduleFolderStateSave();
         }
       },
-      selectMedia: selectMedia,
+      selectMedia: selectPathMedia,
       renderFileList: renderFileList
     });
   }
@@ -735,94 +652,31 @@
     });
   }
 
-  async function selectMedia(ui, state, mediaItem) {
-    setReviewMode(ui, state, false);
-    state.currentItem = mediaItem;
-    renderFileList(ui, state, ui.filterEl.value);
-    if (mediaItem.kind === 'config') {
-      // Show config file in editor, right pane indicator
-      const file = await mediaItem.fileHandle.getFile();
-      const text = await file.text();
-      state.suppressInput = true;
-      ui.editorEl.value = text;
-      state.suppressInput = false;
-      setStatus(ui, 'Editing config file: ' + mediaItem.label);
-      // Optionally, disable spellcheck for config files
-      ui.editorEl.spellcheck = false;
-      return;
-    } else {
-      ui.editorEl.spellcheck = true;
-    }
-    if (mediaItem.kind === 'picker') {
-      await selectPickerMedia(ui, state, mediaItem);
-      return;
-    }
-    await selectPathMedia(ui, state, mediaItem);
-  }
-
   function selectPathMedia(ui, state, mediaItem) {
     return new Promise(function(resolve, reject) {
+      // Set currentItem before any UI update
+      state.currentItem = mediaItem;
       renderPathPreview(ui, state.folder, mediaItem.fileName);
       HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function(status, responseText) {
         if (status !== 200) {
-          reject(new Error(getErrorMessage(responseText, 'Could not load caption')));
+          setStatus(ui, 'Error loading caption: ' + status);
           return;
         }
-        if (state.currentItem !== mediaItem) {
-          resolve();
+        var text = '';
+        try {
+          var data = JSON.parse(responseText);
+          text = data.caption || '';
+        } catch (e) {
+          setStatus(ui, 'Error parsing caption: ' + e);
           return;
         }
-        var data = JSON.parse(responseText);
-        var seeded = false;
-        var text = data.caption || '';
-        if (!text.trim()) {
-          var primer = buildAutoPrimer(mediaItem.fileName);
-          if (primer) {
-            text = primer;
-            seeded = true;
-          }
-        }
-        state.suppressInput = true;
         ui.editorEl.value = text;
-        state.suppressInput = false;
-        var suffix = seeded ? 'primer applied' : (data.exists ? 'existing caption loaded' : 'new caption file will be created on save');
+        var suffix = mediaItem.fileName.split('.').pop();
         setStatus(ui, 'Selected: ' + mediaItem.label + ' (' + suffix + ')');
-        if (seeded) {
-          saveCurrentCaption(ui, state).catch(function(err) {
-            setStatus(ui, String(err && err.message ? err.message : err));
-          });
-        }
-        resolve();
+        // Re-render list to show selection
+        renderFileList(ui, state, ui.filterEl.value);
       });
     });
-  }
-
-  async function selectPickerMedia(ui, state, mediaItem) {
-    var file = await mediaItem.fileHandle.getFile();
-    renderPickerPreview(ui, state, file, mediaItem.label);
-    var caption = await CaptionOps.readPickerCaption(mediaItem);
-    if (state.currentItem !== mediaItem) {
-      return;
-    }
-    var seeded = false;
-    var text = caption.text || '';
-    if (!text.trim()) {
-      var primer = buildAutoPrimer(mediaItem.fileName);
-      if (primer) {
-        text = primer;
-        seeded = true;
-      }
-    }
-    state.suppressInput = true;
-    ui.editorEl.value = text;
-    state.suppressInput = false;
-    var suffix = seeded ? 'primer applied' : (caption.exists ? 'existing caption loaded' : 'new caption file will be created on save');
-    setStatus(ui, 'Selected: ' + mediaItem.label + ' (' + suffix + ')');
-    if (seeded) {
-      saveCurrentCaption(ui, state).catch(function(err) {
-        setStatus(ui, String(err && err.message ? err.message : err));
-      });
-    }
   }
 
   function buildAutoPrimer(fileName) {
@@ -841,21 +695,8 @@
       // Do not auto-save config files as captions
       return Promise.resolve();
     }
-    if (state.currentItem.kind === 'picker') {
-      return savePickerCaption(ui, state.currentItem, ui.editorEl.value || '');
-    }
+    // Picker logic removed; only backend path logic remains
     return CaptionOps.savePathCaption(ui, state, state.currentItem, ui.editorEl.value || '');
-  }
-
-  // savePathCaption now in CaptionOps
-
-  async function savePickerCaption(ui, mediaItem, text) {
-    var captionName = mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
-    var captionHandle = await mediaItem.dirHandle.getFileHandle(captionName, { create: true });
-    var writer = await captionHandle.createWritable();
-    await writer.write(text);
-    await writer.close();
-    setStatus(ui, 'Saved: ' + captionName);
   }
 
   function clearEditorAndPreview(ui, state) {
@@ -876,101 +717,7 @@
     renderPreviewHtml(ui, !!IMAGE_EXTENSIONS[ext], mediaUrl);
   }
 
-  function renderPickerPreview(ui, state, file, fallbackLabel) {
-    if (state.objectUrl) {
-      URL.revokeObjectURL(state.objectUrl);
-      state.objectUrl = '';
-    }
-    state.objectUrl = URL.createObjectURL(file);
-    var ext = getFileExtension(file.name || fallbackLabel || '');
-    renderPreviewHtml(ui, !!IMAGE_EXTENSIONS[ext], state.objectUrl);
-  }
-
-
-
   // Expose startCaptionMode globally for main.js
   window.startCaptionMode = startCaptionMode;
-
-  // Moved loadTomlFile inside the IIFE
-  function loadTomlFile(ui, state, tomlItem) {
-    // Set currentItem to the config file so autosave/save logic is correct
-    state.currentItem = tomlItem;
-    tomlItem.fileHandle.getFile()
-      .then(function(file) {
-        return file.text();
-      })
-      .then(function(content) {
-        ui.editorEl.value = content;
-        ui.editorEl.oninput = function() {
-          if (!state.tomlCache) state.tomlCache = {};
-          state.tomlCache[tomlItem.key] = ui.editorEl.value;
-        };
-        ui.saveBtn.onclick = function() {
-          // Only save if the currentItem is still this config file
-          if (state.currentItem !== tomlItem) {
-            setStatus(ui, 'Not saving: another file is now selected.');
-            return;
-          }
-          console.debug('[loadTomlFile] Save button clicked for', tomlItem.fileName);
-          tomlItem.fileHandle.createWritable()
-            .then(function(writer) {
-              console.debug('[loadTomlFile] Writer created for', tomlItem.fileName);
-              writer.write((state.tomlCache && state.tomlCache[tomlItem.key]) || '');
-              return writer.close();
-            })
-            .then(function() {
-              setStatus(ui, 'Saved: ' + tomlItem.fileName);
-              console.debug('[loadTomlFile] Save completed for', tomlItem.fileName);
-            })
-            .catch(function(err) {
-              setStatus(ui, 'Error saving file: ' + tomlItem.fileName);
-              console.error('[loadTomlFile] Error saving', tomlItem.fileName, err);
-            });
-        };
-      })
-      .catch(function(err) {
-        setStatus(ui, 'Error loading file: ' + tomlItem.fileName);
-      });
-  }
-
-  window.loadTomlFile = loadTomlFile;
-
-  async function refreshConfigFiles(ui, state) {
-    var currentDir = state.dirStack[state.dirStack.length - 1];
-    var configItems = [];
-
-    debugLog('[refreshConfigFiles] dir:', currentDir.name, 'stack:', state.dirStack.map(d => d.name || d));
-
-    for await (var entry of currentDir.values()) {
-        debugLog('[refreshConfigFiles] Checking entry:', entry.name, 'of kind:', entry.kind);
-        if (entry.kind !== 'file') {
-            continue;
-        }
-        var ext = getFileExtension(entry.name);
-        debugLog('[refreshConfigFiles] File extension:', ext);
-        if (ext === '.toml') {
-            if (entry.name && typeof entry.name === 'string') {
-                debugLog('[refreshConfigFiles] Adding valid .toml file:', entry.name);
-                configItems.push({
-                    key: entry.name,
-                    label: entry.name,
-                    fileName: entry.name,
-                    kind: 'config',
-                    fileHandle: entry,
-                    dirHandle: currentDir
-                });
-            } else {
-                debugLog('[refreshConfigFiles] Invalid .toml file detected:', entry);
-            }
-        }
-    }
-
-    configItems.sort(function(a, b) { return a.label.localeCompare(b.label); });
-    state.configItems = configItems;
-
-    // Minimal deps object for .toml panel (removed)
-    populateTomlFilesPanel(ui, state);
-  }
-
-  window.refreshConfigFiles = refreshConfigFiles;
 })();
+

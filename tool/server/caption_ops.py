@@ -1,6 +1,7 @@
 from pathlib import Path
 from flask import send_from_directory
-from file_ops import read_text, write_text
+from .file_ops import read_text, write_text
+from .fs_utils import safe_join_fs_root
 
 MEDIA_EXTENSIONS = {
     '.mp4', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.m4v',
@@ -12,8 +13,7 @@ def _resolve_folder(folder: str) -> Path:
     folder = (folder or '').strip()
     if not folder:
         raise ValueError('Missing folder path')
-
-    path = Path(folder).expanduser().resolve()
+    path = safe_join_fs_root(folder)
     if not path.exists() or not path.is_dir():
         raise ValueError('Folder does not exist')
     return path

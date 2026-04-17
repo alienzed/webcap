@@ -15,12 +15,9 @@ A portable, local-first app for media dataset curation and training, with explic
 ---
 
 ## 3. User Workflows
-### 3.1 Page Mode
-- List, filter, create, edit, and preview HTML pages.
-- Debounced save, media upload, and safe navigation.
 
-### 3.2 Caption Mode
-- Folder picker for dataset navigation.
+### 3.1 Caption Mode
+- Back end config path for dataset navigation.
 - Per-file caption editing with autosave and media preview.
 - Combined review: aggregate captions, stats, validation, and interactive report.
 - Context menu: Rename and Prune (safe, recoverable, non-destructive).

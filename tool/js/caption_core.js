@@ -1,22 +1,28 @@
 // caption_core.js
 (function(global) {
+
   function captionCacheKey(state, mediaItem) {
-    if (mediaItem.kind === 'picker') {
-      var dirNames = state.dirStack.map(function(handle) { return handle.name; }).join('/');
-      return 'picker:' + dirNames + ':' + mediaItem.fileName;
-    }
     return 'path:' + (state.folder || '') + ':' + mediaItem.fileName;
   }
 
-  async function readPickerCaption(mediaItem) {
-    var captionName = mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
-    try {
-      var captionHandle = await mediaItem.dirHandle.getFileHandle(captionName);
-      var file = await captionHandle.getFile();
-      return { text: await file.text(), exists: true };
-    } catch (err) {
-      return { text: '', exists: false };
-    }
+  // All caption reads now use backend endpoint /caption/load
+  function readCaptionFromBackend(state, mediaItem) {
+    var key = captionCacheKey(state, mediaItem);
+    return new Promise(function(resolve) {
+      var url = '/caption/load?folder=' + encodeURIComponent(state.folder || '') + '&media=' + encodeURIComponent(mediaItem.fileName);
+      HttpModule.get(url, function(status, responseText) {
+        if (status !== 200) {
+          resolve({ text: '', exists: false });
+          return;
+        }
+        try {
+          var resp = JSON.parse(responseText);
+          resolve({ text: resp.caption || '', exists: !!resp.exists });
+        } catch (e) {
+          resolve({ text: '', exists: false });
+        }
+      });
+    });
   }
 
   function loadCaptionTextForItem(state, mediaItem) {
@@ -24,28 +30,9 @@
     if (Object.prototype.hasOwnProperty.call(state.captionCache, key)) {
       return Promise.resolve(state.captionCache[key]);
     }
-    if (mediaItem.kind === 'picker') {
-      return readPickerCaption(mediaItem).then(function(result) {
-        state.captionCache[key] = result.text || '';
-        return state.captionCache[key];
-      });
-    }
-    return new Promise(function(resolve) {
-      HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function(status, responseText) {
-        if (status !== 200) {
-          state.captionCache[key] = '';
-          resolve('');
-          return;
-        }
-        try {
-          var data = JSON.parse(responseText);
-          state.captionCache[key] = data.caption || '';
-          resolve(state.captionCache[key]);
-        } catch (e) {
-          state.captionCache[key] = '';
-          resolve('');
-        }
-      });
+    return readCaptionFromBackend(state, mediaItem).then(function(result) {
+      state.captionCache[key] = result.text || '';
+      return state.captionCache[key];
     });
   }
 
@@ -66,7 +53,6 @@
 
   global.CaptionOps = {
     captionCacheKey: captionCacheKey,
-    readPickerCaption: readPickerCaption,
     loadCaptionTextForItem: loadCaptionTextForItem,
     savePathCaption: savePathCaption
   };
@@ -340,6 +326,7 @@ var CaptionTrashOps = (function() {
       throw new Error('Cannot restore, file already exists');
     } catch (err) {
       if (!err || err.name !== 'NotFoundError') {
+        console.error('[assertFileMissing] Unexpected error:', err);
         throw err;
       }
     }
@@ -374,6 +361,7 @@ var CaptionTrashOps = (function() {
       await dirHandle.removeEntry(sourceName);
     } catch (err) {
       if (!err || err.name !== 'NotFoundError') {
+        console.error('[moveCaptionToTrashIfPresent] Unexpected error:', err);
         throw err;
       }
     }
@@ -404,69 +392,16 @@ var CaptionTrashOps = (function() {
       await writeFileFromText(trashDir, oldCaption, await oldCaptionFile.text());
     } catch (err) {
       if (!err || err.name !== 'NotFoundError') {
+        console.error('[backupOriginalPair] Unexpected error:', err);
         throw err;
       }
     }
   }
 
-  async function prunePickerMedia(mediaItem) {
-    var dirHandle = mediaItem.dirHandle;
-    var mediaName = mediaItem.fileName;
-    var captionName = mediaName.replace(/\.[^.]+$/, '.txt');
-    var trashDir = await dirHandle.getDirectoryHandle('.caption_trash', { create: true });
-    var trashMediaName = makeTrashName(mediaName);
-    var trashCaptionName = makeTrashName(captionName);
-
-    await moveFileToTrash(dirHandle, trashDir, mediaName, trashMediaName);
-    await moveCaptionToTrashIfPresent(dirHandle, trashDir, captionName, trashCaptionName);
-
-    return {
-      mediaName: mediaName,
-      captionName: captionName,
-      trashMediaName: trashMediaName,
-      trashCaptionName: trashCaptionName
-    };
-  }
-
-  async function restorePickerMedia(mediaItem, targetDirHandle) {
-    var trashDirHandle = mediaItem.dirHandle;
-    var trashMediaName = mediaItem.fileName;
-    var originalMediaName = getOriginalNameFromTrashName(trashMediaName);
-    if (!originalMediaName) {
-      throw new Error('Cannot restore: not a pruned file');
-    }
-
-    var originalCaptionName = originalMediaName.replace(/\.[^.]+$/, '.txt');
-
-    await assertFileMissing(targetDirHandle, originalMediaName);
-    var trashCaptionName = await findMatchingTrashCaptionName(trashDirHandle, originalCaptionName);
-    if (trashCaptionName) {
-      await assertFileMissing(targetDirHandle, originalCaptionName);
-    }
-
-    await copyFileIfVerified(trashDirHandle, trashMediaName, targetDirHandle, originalMediaName);
-    if (trashCaptionName) {
-      await copyFileIfVerified(trashDirHandle, trashCaptionName, targetDirHandle, originalCaptionName);
-    }
-
-    await trashDirHandle.removeEntry(trashMediaName);
-    if (trashCaptionName) {
-      await trashDirHandle.removeEntry(trashCaptionName);
-    }
-
-    return {
-      trashMediaName: trashMediaName,
-      mediaName: originalMediaName,
-      captionName: originalCaptionName
-    };
-  }
-
   return {
     backupOriginalPair: backupOriginalPair,
     makeTrashName: makeTrashName,
-    getOriginalNameFromTrashName: getOriginalNameFromTrashName,
-    prunePickerMedia: prunePickerMedia,
-    restorePickerMedia: restorePickerMedia
+    getOriginalNameFromTrashName: getOriginalNameFromTrashName
   };
 })();
 

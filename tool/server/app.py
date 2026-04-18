@@ -325,18 +325,10 @@ def caption_reset():
         return jsonify({"error": "Missing required parameters"}), 400
     try:
         folder_path = safe_join_fs_root(folder)
-        originals_path = folder_path / "originals"
-        src_media = originals_path / file_name
-        dst_media = folder_path / file_name
-        if not src_media.exists() or not src_media.is_file():
+        from .originals_utils import restore_original_media
+        ok = restore_original_media(folder_path, file_name)
+        if not ok:
             return jsonify({"error": "Original media not found in originals"}), 404
-        # Overwrite current media file with original
-        with open(src_media, "rb") as fsrc, open(dst_media, "wb") as fdst:
-            fdst.write(fsrc.read())
-        try:
-            os.chmod(dst_media, 0o644)
-        except Exception:
-            pass
         return jsonify({"ok": True})
     except Exception as e:
         if FS_DEBUG:

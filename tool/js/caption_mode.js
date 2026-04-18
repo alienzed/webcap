@@ -280,11 +280,11 @@
                 key: name
               };
             });
-            renderFileList(ui, state, ui.filterEl.value);
-            setStatus(ui, 'Loaded folder: ' + (path || '[root]'));
             // --- PATCH: Load and apply folder state fields ---
             readFolderStateFile(path).then(function(folderState) {
               if (folderState) applyFolderStateToDom(folderState);
+              renderFileList(ui, state, ui.filterEl.value);
+              setStatus(ui, 'Loaded folder: ' + (path || '[root]'));
             });
             // --- END PATCH ---
           } catch (e) {
@@ -399,6 +399,10 @@
 
   function applyFolderStateToDom(folderState) {
     var clean = sanitizeFolderState(folderState);
+    // Restore reviewedSet from reviewedKeys for persistence
+    if (window.CaptionState && Array.isArray(clean.reviewedKeys)) {
+      window.CaptionState.reviewedSet = new Set(clean.reviewedKeys);
+    }
     var requiredPhraseEl = document.getElementById('stats-required-phrase');
     var phrasesEl = document.getElementById('stats-phrases');
     var tokenRulesEl = document.getElementById('stats-token-rules');

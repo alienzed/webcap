@@ -60,3 +60,32 @@ def copy_media_to_originals(working_dir):
             os.chmod(orig_path, 0o644)
         except Exception:
             pass  # Don't fail if chmod is not supported
+
+
+def restore_original_media(folder_path, file_name):
+    """
+    Restore the media file (and its caption, if present) from the originals folder to the working folder.
+    Returns True if successful, False if the original media does not exist.
+    """
+    originals_dir = ensure_originals_folder(folder_path)
+    orig_media_path = os.path.join(originals_dir, file_name)
+    dest_media_path = os.path.join(folder_path, file_name)
+    if not os.path.exists(orig_media_path):
+        return False
+    shutil.copy2(orig_media_path, dest_media_path)
+    try:
+        os.chmod(dest_media_path, 0o644)
+    except Exception:
+        pass
+    # Restore caption file if present
+    base, _ = os.path.splitext(file_name)
+    for ext in ['.txt', '.vtt', '.srt']:
+        orig_caption = os.path.join(originals_dir, base + ext)
+        dest_caption = os.path.join(folder_path, base + ext)
+        if os.path.exists(orig_caption):
+            shutil.copy2(orig_caption, dest_caption)
+            try:
+                os.chmod(dest_caption, 0o644)
+            except Exception:
+                pass
+    return True

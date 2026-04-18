@@ -154,27 +154,29 @@ var CaptionListModule = (function () {
       matchCount++;
     }
 
-    // Add current directory entry with open folder icon, below 'Up One Directory', but skip if at root or in 'originals'
-    if (state.folder && state.folder.length && state.folder !== 'originals') {
+    // Add current directory entry with open folder icon, below 'Up One Directory', but skip if at root or if current folder is named 'originals' (at any depth)
+    if (state.folder && state.folder.length) {
       var currentDirName = state.folder.split(/[\\/]/).pop();
-      var currentRow = document.createElement('div');
-      currentRow.className = 'page-item folder-item current-folder-item';
-      currentRow.innerHTML = '<div>🗁 ' + escapeHtml(currentDirName) + ' (current)</div>';
-      currentRow.oncontextmenu = function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var actions = [
-          {
-            label: 'Folder Actions (coming soon)',
-            run: function() {
-              setStatus(ui, 'No actions yet for current directory.');
+      if (currentDirName.toLowerCase() !== 'originals') {
+        var currentRow = document.createElement('div');
+        currentRow.className = 'page-item folder-item current-folder-item current-folder-bordered';
+        currentRow.innerHTML = '<div>🗁 ' + escapeHtml(currentDirName) + '</div>';
+        currentRow.oncontextmenu = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var actions = [
+            {
+              label: 'Folder Actions (coming soon)',
+              run: function() {
+                setStatus(ui, 'No actions yet for current directory.');
+              }
             }
-          }
-        ];
-        showContextMenu(e.clientX, e.clientY, actions);
-      };
-      ui.pageListEl.appendChild(currentRow);
-      matchCount++;
+          ];
+          showContextMenu(e.clientX, e.clientY, actions);
+        };
+        ui.pageListEl.appendChild(currentRow);
+        matchCount++;
+      }
     }
 
     if (window.DEBUG) {

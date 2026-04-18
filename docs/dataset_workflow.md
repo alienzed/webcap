@@ -40,7 +40,7 @@ _All steps above are manual/external._
 ## 4. FPS Normalization & Dataset Organization (Automatable by App)
 
 - Convert all videos to target FPS (e.g., 16 fps for WAN2.2) using ffmpeg.
-- Originals (original FPS) are moved to an `originals/` folder automatically by the app.
+- Originals (original FPS) are moved to an `originals/` folder automatically by the app. All reversibility (prune, restore, reset) is handled by the presence of files in `originals/`—no trash or state file is used.
 - Normalized copies are placed in the working set (e.g., `autodataset/`).
 - FPS value should be configurable for future models.
 - This step can be repeated as captions are finalized; the app should support re-running normalization without data loss.
@@ -77,7 +77,7 @@ _All steps above are manual/external._
 ---
 
 ### Folder Structure Notes
-- `originals/` — Untouched originals (original FPS, non-censored, etc.)
+- `originals/` — Untouched originals (original FPS, non-censored, etc.). All destructive actions are reversible by restoring from this folder; no `.caption_trash` or pruned.json is used.
 - `auto_dataset/` — Working set, normalized to target FPS, AR-organized, captioned, etc.
 - `defaced/` (optional) — Censored/defaced versions, with originals kept elsewhere.
 

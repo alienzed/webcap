@@ -6,7 +6,7 @@ This document defines all safety, mutation, and coding rules for the WebCap proj
 
 ## 1. Safety & Mutation Rules
 - No destructive filesystem operations without explicit user action and recoverability.
-- All destructive actions (rename, prune) must copy originals to `.caption_trash` before removal.
+- All destructive actions (rename, prune, reset) must ensure a copy exists in the `originals` folder before removal or overwrite. No `.caption_trash` or state file is used; reversibility is guaranteed by the presence of the original in `originals`.
 - No permanent delete workflow in the UI.
 - Combined review text is never written to disk as a media caption.
 - All mutations are explicit and require user confirmation or context menu action.

@@ -1,2 +1,4 @@
 pages/
+tool/server/__pycache__/
 __pycache__/
+tool/server/__pycache__/file_ops.cpython-313.pyc

@@ -9,7 +9,9 @@ import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
+
 from .fs_utils import safe_join_fs_root, FS_ROOT, FS_DEBUG
+from .caption_ops import _resolve_folder
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -41,12 +43,32 @@ def folder_state_load():
 @app.route("/fs/folder_state/save", methods=["POST"])
 def folder_state_save():
     data = request.get_json(silent=True) or {}
+
     rel_path = data.get("folder", "").strip()
     try:
-        folder_path = safe_join_fs_root(rel_path)
+        print("[folder_state_save] Incoming data:", data)
+        # Use the same folder resolution as captions
+        folder_path = _resolve_folder(rel_path)
         state_path = folder_path / ".webcap_state.json"
+        print(f"[folder_state_save] Writing to: {state_path}")
+        # Minimal patch: always include 'stats' and 'primer' fields
+        state = dict(data.get("state", {}))
+        print("[folder_state_save] State before patch:", state)
+        if "stats" not in state:
+            state["stats"] = {"requiredPhrase": "", "phrases": "", "tokenRules": ""}
+        if "primer" not in state:
+            state["primer"] = {"template": "", "defaults": "", "mappings": ""}
+        print("[folder_state_save] State to be written:", state)
         with open(state_path, "w", encoding="utf-8") as f:
-            json.dump(data.get("state", {}), f, indent=2)
+            json.dump(state, f, indent=2)
+        print("[folder_state_save] State written to file.")
+        # Optionally, read back and print for verification
+        try:
+            with open(state_path, "r", encoding="utf-8") as f:
+                written = json.load(f)
+            print("[folder_state_save] State read back from file:", written)
+        except Exception as e:
+            print("[folder_state_save] Could not read back file:", e)
         return jsonify({"ok": True})
     except Exception as e:
         if FS_DEBUG:

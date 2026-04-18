@@ -432,27 +432,24 @@
   }
 
   async function saveFolderStateForCurrentRoot(ui, state) {
-    if (!state.dirStack || !state.dirStack.length) {
+    if (!state.folder) {
       return;
     }
-    // Use the first entry in dirStack as the root folder ('' for root, else relative path)
-    var rootEntry = state.dirStack[0];
-    var folderPath = rootEntry && rootEntry.name ? rootEntry.name : '';
+    var folderPath = state.folder;
     var snapshot = snapshotFolderStateFromDom();
     await writeFolderStateFile(folderPath, snapshot);
   }
 
   async function resetFolderState(ui, state) {
-    if (!state.dirStack || !state.dirStack.length) {
+    if (!state.folder) {
       setStatus(ui, 'No folder loaded');
       return;
     }
-    var confirmed = window.confirm('Reset saved folder settings?\n\nThis deletes .webcap_state.json in the current root folder.');
+    var confirmed = window.confirm('Reset saved folder settings?\n\nThis deletes .webcap_state.json in the current folder.');
     if (!confirmed) {
       return;
     }
-    var rootEntry = state.dirStack[0];
-    var folderPath = rootEntry && rootEntry.name ? rootEntry.name : '';
+    var folderPath = state.folder;
     // Save empty state to backend (overwrites file)
     await writeFolderStateFile(folderPath, emptyFolderState());
     applyFolderStateToDom(emptyFolderState());

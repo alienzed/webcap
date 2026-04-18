@@ -17,12 +17,3 @@ def read_text(path: Path) -> str:
 def write_text(path: Path, content: str) -> None:
     ensure_dir(path.parent)
     path.write_text(content, encoding='utf-8')
-
-
-def list_page_names():
-    ensure_dir(PAGES_DIR)
-    return sorted([p.name for p in PAGES_DIR.iterdir() if p.is_dir() and (p / 'index.html').exists()])
-
-
-def copy_tree(src: Path, dst: Path) -> None:
-    shutil.copytree(src, dst)

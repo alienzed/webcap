@@ -67,8 +67,3 @@ def copy_media_to_originals(working_dir):
             # If not identical, skip (or could prompt user)
             continue
         shutil.copy2(fpath, orig_path)
-
-def ensure_original_exists(working_dir, fname):
-    """Ensure the original for fname exists in originals/. Return True if present, False otherwise."""
-    orig_path = os.path.join(working_dir, 'originals', fname)
-    return os.path.exists(orig_path)

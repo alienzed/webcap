@@ -256,6 +256,11 @@
             });
             renderFileList(ui, state, ui.filterEl.value);
             setStatus(ui, 'Loaded folder: ' + (path || '[root]'));
+            // --- PATCH: Load and apply folder state fields ---
+            readFolderStateFile(path).then(function(folderState) {
+              if (folderState) applyFolderStateToDom(folderState);
+            });
+            // --- END PATCH ---
           } catch (e) {
             setStatus(ui, 'Error parsing folder list: ' + (e && e.message ? e.message : e));
             state.childFolders = [];
@@ -395,39 +400,46 @@
     }
   }
 
-  async function readFolderStateFile(rootHandle) {
+
+  async function readFolderStateFile(folderPath) {
+    // folderPath: relative path from FS root ('' for root)
     try {
-      var handle = await rootHandle.getFileHandle(FOLDER_STATE_FILE);
-      var file = await handle.getFile();
-      var text = await file.text();
-      var data = JSON.parse(text || '{}');
-      return sanitizeFolderState(data);
+      const resp = await fetch('/fs/folder_state/load?folder=' + encodeURIComponent(folderPath), { method: 'GET' });
+      if (!resp.ok) throw new Error('Failed to load folder state');
+      const data = await resp.json();
+      return sanitizeFolderState(data || {});
     } catch (err) {
       console.warn('Could not read folder state file:', err);
-      if (!err || err.name !== 'NotFoundError') {
-        throw err;
-      }
       return null;
     }
   }
 
-  async function writeFolderStateFile(rootHandle, folderState) {
-    var handle = await rootHandle.getFileHandle(FOLDER_STATE_FILE, { create: true });
-    var writer = await handle.createWritable();
-    await writer.write(JSON.stringify(folderState, null, 2));
-    await writer.close();
+
+  async function writeFolderStateFile(folderPath, folderState) {
+    // folderPath: relative path from FS root ('' for root)
+    try {
+      const resp = await fetch('/fs/folder_state/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: folderPath, state: folderState })
+      });
+      if (!resp.ok) throw new Error('Failed to save folder state');
+      return true;
+    } catch (err) {
+      console.warn('Could not write folder state file:', err);
+      return false;
+    }
   }
 
   async function saveFolderStateForCurrentRoot(ui, state) {
     if (!state.dirStack || !state.dirStack.length) {
       return;
     }
-    var rootHandle = state.dirStack[0];
-    if (!rootHandle) {
-      return;
-    }
+    // Use the first entry in dirStack as the root folder ('' for root, else relative path)
+    var rootEntry = state.dirStack[0];
+    var folderPath = rootEntry && rootEntry.name ? rootEntry.name : '';
     var snapshot = snapshotFolderStateFromDom();
-    await writeFolderStateFile(rootHandle, snapshot);
+    await writeFolderStateFile(folderPath, snapshot);
   }
 
   async function resetFolderState(ui, state) {
@@ -435,27 +447,18 @@
       setStatus(ui, 'No folder loaded');
       return;
     }
-
     var confirmed = window.confirm('Reset saved folder settings?\n\nThis deletes .webcap_state.json in the current root folder.');
     if (!confirmed) {
       return;
     }
-
-    var rootHandle = state.dirStack[0];
-    try {
-      await rootHandle.removeEntry(FOLDER_STATE_FILE);
-    } catch (err) {
-      console.warn('Could not remove folder state file:', err);
-      if (!err || err.name !== 'NotFoundError') {
-        throw err;
-      }
-    }
-
+    var rootEntry = state.dirStack[0];
+    var folderPath = rootEntry && rootEntry.name ? rootEntry.name : '';
+    // Save empty state to backend (overwrites file)
+    await writeFolderStateFile(folderPath, emptyFolderState());
     applyFolderStateToDom(emptyFolderState());
     state.reviewedSet = new Set();
     renderFileList(ui, state, ui.filterEl.value);
-
-    setStatus(ui, 'Folder settings reset (.webcap_state.json removed)');
+    setStatus(ui, 'Folder settings reset (.webcap_state.json overwritten)');
   }
 
 

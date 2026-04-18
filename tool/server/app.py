@@ -1,3 +1,5 @@
+
+
 import sys
 import os
 import json
@@ -7,20 +9,7 @@ import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
-
-# Load config from tool/config.json
-CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
-with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-    config = json.load(f)
-FS_ROOT = Path(config['filesystem']['root'])
-FS_DEBUG = config.get('debug', False)
-
-def safe_join_fs_root(rel_path):
-    rel_path = rel_path.strip().replace('..', '').replace('\\', '/').replace('//', '/')
-    if rel_path.startswith('/'):
-        rel_path = rel_path[1:]
-    abs_path = (FS_ROOT / rel_path).resolve()
-    return abs_path
+from .fs_utils import safe_join_fs_root, FS_ROOT, FS_DEBUG
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,12 +18,41 @@ JS_DIR = TOOL_DIR / "js"
 CSS_DIR = TOOL_DIR / "css"
 TEMPLATES_DIR = TOOL_DIR / "templates"
 
-print(f"[webcap] FS_ROOT set to: {FS_ROOT}")
-print(f"[webcap] FS_DEBUG set to: {FS_DEBUG}")
-
 from .caption_ops import list_media_files, load_caption_text, save_caption_text, serve_media_file
 
 app = Flask(__name__, static_folder=None)
+
+@app.route("/fs/folder_state/load", methods=["GET"])
+def folder_state_load():
+    rel_path = request.args.get("folder", "").strip()
+    try:
+        folder_path = safe_join_fs_root(rel_path)
+        state_path = folder_path / ".webcap_state.json"
+        if not state_path.exists() or not state_path.is_file():
+            return jsonify({})
+        with open(state_path, "r", encoding="utf-8") as f:
+            return jsonify(json.load(f))
+    except Exception as e:
+        if FS_DEBUG:
+            print("[folder_state_load] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/fs/folder_state/save", methods=["POST"])
+def folder_state_save():
+    data = request.get_json(silent=True) or {}
+    rel_path = data.get("folder", "").strip()
+    try:
+        folder_path = safe_join_fs_root(rel_path)
+        state_path = folder_path / ".webcap_state.json"
+        with open(state_path, "w", encoding="utf-8") as f:
+            json.dump(data.get("state", {}), f, indent=2)
+        return jsonify({"ok": True})
+    except Exception as e:
+        if FS_DEBUG:
+            print("[folder_state_save] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
 
 # Read file contents (for captions, config, etc.)
 @app.route("/fs/read", methods=["GET"])

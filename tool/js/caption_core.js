@@ -288,20 +288,6 @@ var CaptionTemplateModule = (function() {
 var CaptionTrashOps = (function() {
   var TRASH_NAME_PATTERN = /^[^_]+_[^_]+__.+$/;
 
-  async function writeFileFromArrayBuffer(dirHandle, name, buffer) {
-    var handle = await dirHandle.getFileHandle(name, { create: true });
-    var writer = await handle.createWritable();
-    await writer.write(buffer);
-    await writer.close();
-  }
-
-  async function writeFileFromText(dirHandle, name, text) {
-    var handle = await dirHandle.getFileHandle(name, { create: true });
-    var writer = await handle.createWritable();
-    await writer.write(text);
-    await writer.close();
-  }
-
   function makeTrashName(baseName) {
     var stamp = Date.now().toString(36);
     var rand = Math.floor(Math.random() * 0xffff).toString(16);

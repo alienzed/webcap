@@ -337,16 +337,6 @@ def caption_reset():
             os.chmod(dst_media, 0o644)
         except Exception:
             pass
-        # Reset caption if present in originals
-        src_caption = originals_path / (Path(file_name).stem + ".txt")
-        dst_caption = folder_path / (Path(file_name).stem + ".txt")
-        if src_caption.exists():
-            with open(src_caption, "r", encoding="utf-8") as fsrc, open(dst_caption, "w", encoding="utf-8") as fdst:
-                fdst.write(fsrc.read())
-            try:
-                os.chmod(dst_caption, 0o644)
-            except Exception:
-                pass
         return jsonify({"ok": True})
     except Exception as e:
         if FS_DEBUG:

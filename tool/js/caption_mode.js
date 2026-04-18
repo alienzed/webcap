@@ -46,7 +46,6 @@
     CaptionReviewModule.init(ui, state, {
       setStatus: setStatus,
       saveCurrentCaption: saveCurrentCaption,
-      setReviewMode: setReviewMode,
       renderFileList: renderFileList,
       selectMedia: selectPathMedia, // Use the correct backend-driven media selector
       activateFocusSet: CaptionListModule.activateFocusSet,
@@ -77,7 +76,7 @@
     });
 
     ui.editorEl.addEventListener('input', function() {
-      if (state.suppressInput || !state.currentItem || state.reviewMode) {
+      if (state.suppressInput || !state.currentItem) {
         return;
       }
       var currentRow = ui.pageListEl.querySelector('.page-item[data-key="' + state.currentItem.key + '"]');
@@ -91,7 +90,7 @@
       state.captionCache[CaptionOps.captionCacheKey(state, state.currentItem)] = ui.editorEl.value || '';
       var scheduledForKey = state.currentItem.key;
       scheduleSave(function() {
-        if (!state.currentItem || state.currentItem.key !== scheduledForKey || state.reviewMode) {
+        if (!state.currentItem || state.currentItem.key !== scheduledForKey) {
           return;
         }
         saveCurrentCaption(ui, state).catch(function(err) {
@@ -254,10 +253,8 @@
   function refreshCurrentDirectory(ui, state) {
     var path = state.folder || '';
     console.log('[webcap] refreshCurrentDirectory: called with path', path);
-    if (ui.folderLabelEl) {
-      var last = state.dirStack && state.dirStack.length ? state.dirStack[state.dirStack.length - 1].name : '';
-      ui.folderLabelEl.value = last ? last.split(/[\\/]/).filter(Boolean).pop() : '[root]';
-    }
+    var last = state.dirStack && state.dirStack.length ? state.dirStack[state.dirStack.length - 1].name : '';
+    ui.folderLabelEl.value = last ? last.split(/[\\/]/).filter(Boolean).pop() : '[root]';
     console.log('[webcap] refreshCurrentDirectory: requesting /fs/list', path);
 
     var url = '/fs/list' + (path ? ('?path=' + encodeURIComponent(path)) : '');
@@ -513,17 +510,6 @@
     ui.folderLabelEl.value = name;
   }
 
-  function setReviewMode(ui, state, enabled) {
-    state.reviewMode = !!enabled;
-    if (state.reviewMode) {
-      ui.editorEl.setAttribute('readonly', 'readonly');
-      ui.editorEl.classList.add('readonly');
-    } else {
-      ui.editorEl.removeAttribute('readonly');
-      ui.editorEl.classList.remove('readonly');
-    }
-  }
-
   function renderFileList(ui, state, filterText, token, filterToken) {
     CaptionListModule.refreshFocusSetUi(ui, state);
     return CaptionListModule.renderFileList(ui, state, filterText, token, filterToken, {
@@ -604,13 +590,6 @@
       return;
     }
 
-    if (state.reviewMode) {
-      selectMedia(ui, state, mediaItem).catch(function(err) {
-        setStatus(ui, String(err && err.message ? err.message : err));
-      });
-      return;
-    }
-
     saveCurrentCaption(ui, state).then(function() {
       return selectMedia(ui, state, mediaItem);
     }).catch(function(err) {
@@ -622,11 +601,8 @@
     return new Promise(function(resolve, reject) {
       // Set currentItem before any UI update
       state.currentItem = mediaItem;
-      // Always ensure editor is editable unless in review mode
-      if (!state.reviewMode && ui.editorEl) {
-        ui.editorEl.removeAttribute('readonly');
-        ui.editorEl.classList.remove('readonly');
-      }
+      // Always ensure editor is editable
+      ui.editorEl.removeAttribute('readonly');
       renderPathPreview(ui, state.folder, mediaItem.fileName);
       HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function(status, responseText) {
         if (status !== 200) {
@@ -664,7 +640,7 @@
   window.buildAutoPrimer = buildAutoPrimer;
 
   function saveCurrentCaption(ui, state) {
-    if (state.reviewMode || !state.currentItem) {
+    if (!state.currentItem) {
       return Promise.resolve();
     }
     if (state.currentItem.kind === 'config') {

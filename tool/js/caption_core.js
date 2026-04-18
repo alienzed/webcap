@@ -40,9 +40,7 @@
     return new Promise(function(resolve, reject) {
       HttpModule.postJson('/caption/save', { folder: state.folder, media: mediaItem.fileName, text: text }, function(status, responseText) {
         if (status === 200) {
-          if (ui && ui.statusEl) {
-            ui.statusEl.textContent = 'Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
-          }
+          ui.statusEl.textContent = 'Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
           resolve();
           return;
         }
@@ -324,7 +322,6 @@ var CaptionTrashOps = (function() {
     objectUrl: '',
     mode: 'path',
     dirStack: [],
-    reviewMode: false,
     captionCache: {},
     listRenderSeq: 0,
     reviewedSet: new Set(),

@@ -77,7 +77,7 @@ var CaptionListModule = (function () {
       return;
     }
     if (newFile === '.' || newFile === '..' || newFile.indexOf('/') !== -1 || newFile.indexOf('\\') !== -1) {
-      deps.setStatus(ui, 'Invalid filename');
+      setStatus(ui, 'Invalid filename');
       return;
     }
     if (newFile.indexOf('.') === -1) {
@@ -87,15 +87,15 @@ var CaptionListModule = (function () {
       }
     }
     if (!MEDIA_NAME_PATTERN.test(newFile)) {
-      deps.setStatus(ui, 'Unsupported media file type');
+      setStatus(ui, 'Unsupported media file type');
       return;
     }
     // Backend rename: call deps.renameMedia
     deps.renameMedia(ui, state, mediaItem, oldFile, newFile).then(function () {
-      deps.setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
+      setStatus(ui, 'Renamed: ' + oldFile + ' -> ' + newFile);
       deps.refreshCurrentDirectory(ui, state);
     }).catch(function (err) {
-      deps.setStatus(ui, (err && err.message) ? err.message : ('Rename failed: ' + err));
+      setStatus(ui, (err && err.message) ? err.message : ('Rename failed: ' + err));
     });
   }
 
@@ -148,9 +148,7 @@ var CaptionListModule = (function () {
       upRow.className = 'page-item folder-item';
       upRow.innerHTML = '<div>⬆ Up One Directory</div>';
       upRow.onclick = function () {
-        if (deps && typeof deps.navigateUp === 'function') {
-          deps.navigateUp(ui, state, deps);
-        }
+        deps.navigateUp(ui, state, deps);
       };
       ui.pageListEl.appendChild(upRow);
       matchCount++;
@@ -176,12 +174,8 @@ var CaptionListModule = (function () {
           }
           // Clear current selection and editor/preview
           state.currentItem = null;
-          if (typeof window.clearEditorAndPreview === 'function') {
-            window.clearEditorAndPreview(ui, state);
-          }
-          if (deps && typeof deps.refreshCurrentDirectory === 'function') {
-            deps.refreshCurrentDirectory(ui, state);
-          }
+          window.clearEditorAndPreview(ui, state);
+          deps.refreshCurrentDirectory(ui, state);
         };
       })(folderItem.name);
       row.onclick = function () {
@@ -202,7 +196,7 @@ var CaptionListModule = (function () {
                 if (newName === null) return;
                 newName = String(newName || '').trim();
                 if (!newName || newName === oldName || newName === '.' || newName === '..' || /[\\/]/.test(newName)) {
-                  deps.setStatus(ui, 'Invalid folder name');
+                  setStatus(ui, 'Invalid folder name');
                   return;
                 }
                 var parent = state.folder || '';
@@ -214,14 +208,14 @@ var CaptionListModule = (function () {
                   .then(function(resp) { return resp.json().then(function(data) { return {status: resp.status, data: data}; }); })
                   .then(function(res) {
                     if (res.status === 200 && res.data && res.data.ok) {
-                      deps.setStatus(ui, 'Renamed folder: ' + oldName + ' -> ' + newName);
+                      setStatus(ui, 'Renamed folder: ' + oldName + ' -> ' + newName);
                       deps.refreshCurrentDirectory(ui, state);
                     } else {
-                      deps.setStatus(ui, (res.data && res.data.error) ? res.data.error : 'Rename failed');
+                      setStatus(ui, (res.data && res.data.error) ? res.data.error : 'Rename failed');
                     }
                   })
                   .catch(function(err) {
-                    deps.setStatus(ui, 'Rename failed: ' + err);
+                    setStatus(ui, 'Rename failed: ' + err);
                   });
               }
             });
@@ -245,7 +239,7 @@ var CaptionListModule = (function () {
 
       // Show primer/template content as preview if caption is missing
       var displayText = mediaItem.label;
-      if (emptyCaption && typeof window.buildAutoPrimer === 'function') {
+      if (emptyCaption) {
         var primerText = window.buildAutoPrimer(mediaItem.fileName);
         if (primerText && primerText.trim()) {
           displayText += ' <span style="color:#888;font-style:italic;">[primer]</span>';
@@ -256,12 +250,6 @@ var CaptionListModule = (function () {
       row.onclick = function (e) {
         if (state.currentItem && state.currentItem.key === mediaItem.key) {
           return;
-        }
-        if (state.reviewMode) {
-          // Exit review mode and restore editability
-          if (typeof window.setReviewMode === 'function') {
-            window.setReviewMode(ui, state, false);
-          }
         }
         deps.saveCurrentCaption(ui, state).then(function () {
           return deps.selectMedia(ui, state, mediaItem);
@@ -281,7 +269,7 @@ var CaptionListModule = (function () {
             label: 'Restore',
             run: function () {
               deps.restoreMedia(ui, state, mediaItem).catch(function (err) {
-                deps.setStatus(ui, String(err && err.message ? err.message : err));
+                setStatus(ui, String(err && err.message ? err.message : err));
               });
             }
           });
@@ -296,7 +284,7 @@ var CaptionListModule = (function () {
             label: 'Prune',
             run: function () {
               deps.pruneMedia(ui, state, mediaItem).catch(function (err) {
-                deps.setStatus(ui, String(err && err.message ? err.message : err));
+                setStatus(ui, String(err && err.message ? err.message : err));
               });
             }
           });
@@ -309,7 +297,7 @@ var CaptionListModule = (function () {
               label: 'Restore',
               run: function () {
                 deps.restoreMedia(ui, state, mediaItem).catch(function (err) {
-                  deps.setStatus(ui, String(err && err.message ? err.message : err));
+                  setStatus(ui, String(err && err.message ? err.message : err));
                 });
               }
             });
@@ -317,9 +305,9 @@ var CaptionListModule = (function () {
           actions.push({
             label: 'Reset',
             run: function () {
-              if (deps && typeof deps.resetMedia === 'function') {
+              if (deps) {
                 deps.resetMedia(ui, state, mediaItem).catch(function (err) {
-                  deps.setStatus(ui, String(err && err.message ? err.message : err));
+                  setStatus(ui, String(err && err.message ? err.message : err));
                 });
               } else {
                 setStatus(ui, 'Reset not available');
@@ -337,9 +325,7 @@ var CaptionListModule = (function () {
         } else {
           state.reviewedSet.add(mediaItem.key);
         }
-        if (deps.onReviewedSetChanged) {
-          deps.onReviewedSetChanged();
-        }
+        deps.onReviewedSetChanged();
         deps.renderFileList(ui, state, ui.filterEl.value);
         e.stopPropagation();
       };
@@ -411,9 +397,7 @@ var CaptionListModule = (function () {
   // Backend-based navigation up
   function navigateUp(ui, state, deps) {
     if (!state.dirStack || state.dirStack.length <= 1) {
-      if (deps && typeof deps.setStatus === 'function') {
-        deps.setStatus(ui, 'Already at selected root folder');
-      }
+      setStatus(ui, 'Already at selected root folder');
       return;
     }
     state.dirStack.pop();
@@ -422,12 +406,8 @@ var CaptionListModule = (function () {
     state.folder = folder;
     // Clear current selection and editor/preview
     state.currentItem = null;
-    if (typeof window.clearEditorAndPreview === 'function') {
-      window.clearEditorAndPreview(ui, state);
-    }
-    if (deps && typeof deps.refreshCurrentDirectory === 'function') {
-      deps.refreshCurrentDirectory(ui, state);
-    }
+    window.clearEditorAndPreview(ui, state);
+    deps.refreshCurrentDirectory(ui, state);
   }
 
   // Focus set UI logic moved from caption_mode.js
@@ -441,18 +421,9 @@ var CaptionListModule = (function () {
         // Clear focus set and reload full directory
         state.focusSet = null;
         // Restore editability on the editor (robust)
-        if (ui && ui.editorEl) {
-          ui.editorEl.removeAttribute('readonly');
-          ui.editorEl.classList.remove('readonly');
-        }
-        if (typeof window.clearEditorAndPreview === 'function') {
-          window.clearEditorAndPreview(ui, state);
-        }
-        if (typeof window.refreshCurrentDirectory === 'function') {
-          window.refreshCurrentDirectory(ui, state);
-        } else if (ui && ui.refreshCurrentDirectory) {
-          ui.refreshCurrentDirectory(ui, state);
-        }
+        ui.editorEl.removeAttribute('readonly');
+        window.clearEditorAndPreview(ui, state);
+        window.refreshCurrentDirectory(ui, state);
         // Hide the button (will be handled by refreshFocusSetUi too)
         exitBtn.style.display = 'none';
       };
@@ -473,17 +444,9 @@ var CaptionListModule = (function () {
     }
   }
 
-  function clearFocusSet(ui, state, rerender) {
+  function clearFocusSet(ui, state) {
     state.focusSet = null;
-    if (rerender) {
-      if (typeof window.refreshCurrentDirectory === 'function') {
-        window.refreshCurrentDirectory(ui, state);
-      } else if (ui && ui.refreshCurrentDirectory) {
-        ui.refreshCurrentDirectory(ui, state);
-      } else {
-        CaptionListModule.renderFileList(ui, state, ui.filterEl.value);
-      }
-    }
+    window.refreshCurrentDirectory(ui, state);
   }
 
   function activateFocusSet(ui, state, fileNames, source) {
@@ -504,7 +467,7 @@ var CaptionListModule = (function () {
     });
 
     if (!keys.length) {
-        CaptionListModule.clearFocusSet(ui, state, true);
+        CaptionListModule.clearFocusSet(ui, state);
         return;
     }
 
@@ -568,16 +531,14 @@ var CaptionReviewModule = (function() {
 
   function runReview(ui, state, deps) {
     if (!state.items.length) {
-      deps.setStatus(ui, 'No media files loaded');
+      setStatus(ui, 'No media files loaded');
       return;
     }
 
     deps.saveCurrentCaption(ui, state).then(function() {
-      if (deps.clearFocusSet) {
-        deps.clearFocusSet(ui, state);
-      }
-      deps.setReviewMode(ui, state, true);
+      deps.clearFocusSet(ui, state);
       state.currentItem = null;
+      ui.editorEl.setAttribute('readonly', 'readonly');
       deps.renderFileList(ui, state, ui.filterEl.value);
       var details = document.getElementById('stats-details');
       if (details) {
@@ -586,7 +547,7 @@ var CaptionReviewModule = (function() {
 
       var runSeq = (state.reviewSeq || 0) + 1;
       state.reviewSeq = runSeq;
-      deps.setStatus(ui, 'Building combined captions and stats...');
+      setStatus(ui, 'Building combined captions and stats...');
 
       var promises = state.items.map(function(item) {
         return CaptionOps.loadCaptionTextForItem(state, item).then(function(text) {
@@ -611,10 +572,10 @@ var CaptionReviewModule = (function() {
         ui.editorEl.value = StatsViewModule.buildCombinedCaptionsText(results);
         state.suppressInput = false;
         StatsViewModule.renderReportPreview(ui, report);
-        deps.setStatus(ui, 'Review ready: ' + results.length + ' files');
+        setStatus(ui, 'Review ready: ' + results.length + ' files');
       });
     }).catch(function(err) {
-      deps.setStatus(ui, String(err && err.message ? err.message : err));
+      setStatus(ui, String(err && err.message ? err.message : err));
     });
   }
 
@@ -623,7 +584,7 @@ var CaptionReviewModule = (function() {
       return;
     }
 
-    if (deps.activateFocusSet && focusFiles && focusFiles.length) {
+    if (focusFiles && focusFiles.length) {
       deps.activateFocusSet(ui, state, focusFiles, focusSource || 'Focused Items');
     }
 
@@ -635,7 +596,7 @@ var CaptionReviewModule = (function() {
       }
     }
     if (!target) {
-      deps.setStatus(ui, 'File not found in current folder: ' + fileName);
+      setStatus(ui, 'File not found in current folder: ' + fileName);
       return;
     }
 
@@ -647,7 +608,7 @@ var CaptionReviewModule = (function() {
     deps.selectMedia(ui, state, target).then(function() {
       scrollToCurrentRow(ui, state);
     }).catch(function(err) {
-      deps.setStatus(ui, String(err && err.message ? err.message : err));
+      setStatus(ui, String(err && err.message ? err.message : err));
     });
   }
 
@@ -657,7 +618,7 @@ var CaptionReviewModule = (function() {
     var ev = new Event('input', { bubbles: true });
     ui.filterEl.dispatchEvent(ev);
     if (value) {
-      deps.setStatus(ui, 'Filter applied from token: ' + value);
+      setStatus(ui, 'Filter applied from token: ' + value);
     }
   }
 

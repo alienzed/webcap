@@ -166,9 +166,71 @@ var CaptionListModule = (function () {
           e.stopPropagation();
           var actions = [
             {
-              label: 'Folder Actions (coming soon)',
+              label: 'Run autoset.py',
               run: function() {
-                setStatus(ui, 'No actions yet for current directory.');
+                setStatus(ui, 'Running autoset.py...');
+                // Stream output to the main preview pane (iframe)
+                var previewFrame = ui.previewEl;
+                if (previewFrame && previewFrame.contentDocument) {
+                  var doc = previewFrame.contentDocument;
+                  doc.open();
+                  doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                  doc.close();
+                }
+                var folderPath = state.folder;
+                fetch('/fs/autoset_run', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ folder: folderPath })
+                }).then(function(response) {
+                  var previewFrame = ui.previewEl;
+                  if (!response.body || !window.ReadableStream) {
+                    response.text().then(function(text) {
+                      if (previewFrame && previewFrame.contentDocument) {
+                        var doc = previewFrame.contentDocument;
+                        doc.open();
+                        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                        doc.write(text.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                        doc.write('</body></html>');
+                        doc.close();
+                      }
+                    });
+                    return;
+                  }
+                  var reader = response.body.getReader();
+                  var decoder = new TextDecoder();
+                  var output = '';
+                  function readChunk() {
+                    reader.read().then(function(result) {
+                      if (result.done) {
+                        setStatus(ui, 'autoset.py finished.');
+                        // Finalize output in preview pane
+                        if (previewFrame && previewFrame.contentDocument) {
+                          var doc = previewFrame.contentDocument;
+                          doc.open();
+                          doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                          doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                          doc.write('</body></html>');
+                          doc.close();
+                        }
+                        return;
+                      }
+                      output += decoder.decode(result.value, {stream:true});
+                      if (previewFrame && previewFrame.contentDocument) {
+                        var doc = previewFrame.contentDocument;
+                        doc.open();
+                        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                        doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                        doc.write('</body></html>');
+                        doc.close();
+                      }
+                      readChunk();
+                    });
+                  }
+                  readChunk();
+                }).catch(function(err) {
+                  setStatus(ui, 'autoset.py failed: ' + err);
+                });
               }
             }
           ];
@@ -239,6 +301,74 @@ var CaptionListModule = (function () {
                   .catch(function(err) {
                     setStatus(ui, 'Rename failed: ' + err);
                   });
+              }
+            });
+            actions.push({
+              label: 'Run autoset.py',
+              run: function() {
+                setStatus(ui, 'Running autoset.py...');
+                // Stream output to the main preview pane (iframe)
+                var previewFrame = ui.previewEl;
+                if (previewFrame && previewFrame.contentDocument) {
+                  var doc = previewFrame.contentDocument;
+                  doc.open();
+                  doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                  doc.close();
+                }
+                var folderPath = (state.folder ? state.folder + '/' : '') + folderItem.name;
+                fetch('/fs/autoset_run', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ folder: folderPath })
+                }).then(function(response) {
+                  var previewFrame = ui.previewEl;
+                  if (!response.body || !window.ReadableStream) {
+                    response.text().then(function(text) {
+                      if (previewFrame && previewFrame.contentDocument) {
+                        var doc = previewFrame.contentDocument;
+                        doc.open();
+                        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                        doc.write(text.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                        doc.write('</body></html>');
+                        doc.close();
+                      }
+                    });
+                    return;
+                  }
+                  var reader = response.body.getReader();
+                  var decoder = new TextDecoder();
+                  var output = '';
+                  function readChunk() {
+                    reader.read().then(function(result) {
+                      if (result.done) {
+                        setStatus(ui, 'autoset.py finished.');
+                        // Finalize output in preview pane
+                        if (previewFrame && previewFrame.contentDocument) {
+                          var doc = previewFrame.contentDocument;
+                          doc.open();
+                          doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                          doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                          doc.write('</body></html>');
+                          doc.close();
+                        }
+                        return;
+                      }
+                      output += decoder.decode(result.value, {stream:true});
+                      if (previewFrame && previewFrame.contentDocument) {
+                        var doc = previewFrame.contentDocument;
+                        doc.open();
+                        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                        doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                        doc.write('</body></html>');
+                        doc.close();
+                      }
+                      readChunk();
+                    });
+                  }
+                  readChunk();
+                }).catch(function(err) {
+                  setStatus(ui, 'autoset.py failed: ' + err);
+                });
               }
             });
           }

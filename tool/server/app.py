@@ -1,9 +1,9 @@
 
-
-
 import os
 import sys
 import json
+from flask import Response, stream_with_context
+import subprocess
 import traceback
 import re
 from pathlib import Path
@@ -163,12 +163,6 @@ def fs_list():
         return jsonify({"error": str(e)}), 400
 
 def resolve_python_executable():
-    venv_windows = ROOT / ".venv" / "Scripts" / "python.exe"
-    if venv_windows.exists():
-        return str(venv_windows)
-    venv_posix = ROOT / ".venv" / "bin" / "python"
-    if venv_posix.exists():
-        return str(venv_posix)
     return sys.executable
 
 @app.route("/")
@@ -398,6 +392,38 @@ def fs_rename_folder():
     except Exception as e:
         if FS_DEBUG:
             print("[fs_rename_folder] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+    
+
+# Minimal streaming endpoint for autoset.py
+@app.route("/fs/autoset_run", methods=["POST"])
+def autoset_run():
+    data = request.get_json(silent=True) or {}
+    folder = data.get("folder", "").strip()
+    if not folder:
+        return jsonify({"error": "Missing folder argument"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        if not folder_path.exists() or not folder_path.is_dir():
+            return jsonify({"error": f"Folder does not exist: {folder}"}), 404
+        # Use the same Python executable as the server
+        python_exe = resolve_python_executable()
+        autoset_path = str(ROOT / "scripts" / "autoset.py")
+        cmd = [python_exe, autoset_path, "--master", str(folder_path)]
+        def generate():
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, universal_newlines=True)
+                for line in proc.stdout:
+                    yield line
+                proc.stdout.close()
+                proc.wait()
+            except Exception as e:
+                yield f"[ERROR] {e}\n"
+        return Response(stream_with_context(generate()), mimetype="text/plain")
+    except Exception as e:
+        if FS_DEBUG:
+            print("[autoset_run] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
     

@@ -32,6 +32,9 @@ import os
 import statistics
 from PIL import Image
 from pathlib import Path
+import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # -------------------------
 # Configuration parameters

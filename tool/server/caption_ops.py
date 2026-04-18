@@ -1,7 +1,6 @@
 from pathlib import Path
 from flask import send_from_directory
 from .fs_utils import read_text, write_text, safe_join_fs_root
-from .fs_utils import safe_join_fs_root
 
 MEDIA_EXTENSIONS = {
     '.mp4', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.m4v',

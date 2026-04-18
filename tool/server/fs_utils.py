@@ -3,10 +3,9 @@ fs_utils.py
 
 Unified filesystem utilities: path safety, config, and file I/O.
 """
+
 from pathlib import Path
 import json
-import os
-import shutil
 
 # --- Config and Path Safety ---
 CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
@@ -32,3 +31,7 @@ def read_text(path: Path) -> str:
 def write_text(path: Path, content: str) -> None:
     ensure_dir(path.parent)
     path.write_text(content, encoding='utf-8')
+    try:
+        os.chmod(path, 0o644)
+    except Exception:
+        pass  # Don't fail if chmod is not supported

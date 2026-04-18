@@ -1,24 +1,21 @@
-import sys
 import os
+import sys
 import json
-import threading
 import traceback
 import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
-import shutil
 
 from .fs_utils import safe_join_fs_root, FS_ROOT, FS_DEBUG
-from .caption_ops import _resolve_folder
+from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 
+os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = ROOT / "tool"
 JS_DIR = TOOL_DIR / "js"
 CSS_DIR = TOOL_DIR / "css"
 TEMPLATES_DIR = TOOL_DIR / "templates"
-
-from .caption_ops import list_media_files, load_caption_text, save_caption_text, serve_media_file
 
 app = Flask(__name__, static_folder=None)
 

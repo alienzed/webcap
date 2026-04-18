@@ -67,3 +67,7 @@ def copy_media_to_originals(working_dir):
             # If not identical, skip (or could prompt user)
             continue
         shutil.copy2(fpath, orig_path)
+        try:
+            os.chmod(orig_path, 0o644)
+        except Exception:
+            pass  # Don't fail if chmod is not supported

@@ -190,9 +190,9 @@ var CaptionListModule = (function () {
       var row = document.createElement('div');
       row.className = 'page-item folder-item';
       row.innerHTML = '<div>' + escapeHtml(label) + '</div>';
-      row.ondblclick = (function(folderName) {
+      row.onclick = (function(folderName) {
         return function () {
-          console.log('[webcap] renderFileList: folder double-click', folderName);
+          console.log('[webcap] renderFileList: folder click', folderName);
           state.folder = (state.folder ? state.folder + '/' : '') + folderName;
           if (state.dirStack && state.dirStack.length) {
             state.dirStack.push({ name: folderName });
@@ -203,9 +203,6 @@ var CaptionListModule = (function () {
           deps.refreshCurrentDirectory(ui, state);
         };
       })(folderItem.name);
-      row.onclick = function () {
-        setStatus(ui, 'Double-click folder to enter: ' + folderItem.name);
-      };
       row.oncontextmenu = (function(folderItem) {
         return function(e) {
           e.preventDefault();
@@ -262,6 +259,23 @@ var CaptionListModule = (function () {
       row.className = 'page-item' + (isActive ? ' active' : '') + (emptyCaption ? ' empty-caption' : '') + (reviewed ? ' reviewed' : '');
       row.setAttribute('data-key', mediaItem.key);
 
+      // Choose icon based on file extension
+      var icon = '';
+      var ext = '';
+      if (mediaItem.fileName) {
+        var dot = mediaItem.fileName.lastIndexOf('.');
+        if (dot !== -1) ext = mediaItem.fileName.slice(dot).toLowerCase();
+      }
+      if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].indexOf(ext) !== -1) {
+        icon = '🖼️'; // image
+      } else if (['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v'].indexOf(ext) !== -1) {
+        icon = '🎬'; // video
+      } else if (['.ogg'].indexOf(ext) !== -1) {
+        icon = '🎵'; // audio (ogg)
+      } else {
+        icon = '📄'; // generic file
+      }
+
       // Show primer/template content as preview if caption is missing
       var displayText = mediaItem.label;
       if (emptyCaption) {
@@ -270,7 +284,7 @@ var CaptionListModule = (function () {
           displayText += ' <span style="color:#888;font-style:italic;">[primer]</span>';
         }
       }
-      row.innerHTML = '<div>&nbsp;' + escapeHtml(displayText) + '</div>';
+      row.innerHTML = '<div>' + icon + '&nbsp;' + escapeHtml(displayText) + '</div>';
 
       row.onclick = function (e) {
         if (state.currentItem && state.currentItem.key === mediaItem.key) {

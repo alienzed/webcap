@@ -154,8 +154,8 @@ var CaptionListModule = (function () {
       matchCount++;
     }
 
-    // Add current directory entry with open folder icon, below 'Up One Directory', but skip if at root
-    if (state.folder && state.folder.length) {
+    // Add current directory entry with open folder icon, below 'Up One Directory', but skip if at root or in 'originals'
+    if (state.folder && state.folder.length && state.folder !== 'originals') {
       var currentDirName = state.folder.split(/[\\/]/).pop();
       var currentRow = document.createElement('div');
       currentRow.className = 'page-item folder-item current-folder-item';

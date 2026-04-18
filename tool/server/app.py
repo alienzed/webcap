@@ -227,5 +227,86 @@ def caption_media_route():
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
+# Additional endpoints for renaming and restoring files
+@app.route("/fs/rename", methods=["POST"])
+def fs_rename():
+    data = request.get_json(silent=True) or {}
+    print("[fs_rename] Incoming data:", data)
+    folder = data.get("folder", "").strip()
+    # Accept both camelCase and snake_case keys for compatibility
+    old_file = data.get("oldFile") or data.get("old_name") or ""
+    new_file = data.get("newFile") or data.get("new_name") or ""
+    old_file = old_file.strip()
+    new_file = new_file.strip()
+    if not folder or not old_file or not new_file:
+        print("[fs_rename] Missing required parameters:", folder, old_file, new_file)
+        return jsonify({"error": "Missing required parameters"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        print(f"[fs_rename] folder_path={folder_path}")
+        old_path = folder_path / old_file
+        new_path = folder_path / new_file
+        print(f"[fs_rename] old_path={old_path}, new_path={new_path}")
+        # Rename media file
+        if not old_path.exists() or not old_path.is_file():
+            print("[fs_rename] Original file does not exist:", old_path)
+            return jsonify({"error": "Original file does not exist"}), 404
+        if new_path.exists():
+            print("[fs_rename] Target file already exists:", new_path)
+            return jsonify({"error": "Target file already exists"}), 409
+        old_path.rename(new_path)
+        print(f"[fs_rename] Renamed {old_path} -> {new_path}")
+        # Rename caption if present
+        old_caption = folder_path / (Path(old_file).stem + ".txt")
+        new_caption = folder_path / (Path(new_file).stem + ".txt")
+        print(f"[fs_rename] old_caption={old_caption}, new_caption={new_caption}")
+        if old_caption.exists() and not new_caption.exists():
+            old_caption.rename(new_caption)
+            print(f"[fs_rename] Renamed caption {old_caption} -> {new_caption}")
+        return jsonify({"ok": True})
+    except Exception as e:
+        print("[fs_rename] ERROR:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/caption/restore", methods=["POST"])
+def caption_restore():
+    data = request.get_json(silent=True) or {}
+    print("[caption_restore] Incoming data:", data)
+    folder = data.get("folder", "").strip()
+    file_name = data.get("fileName", "").strip()
+    if not folder or not file_name:
+        print("[caption_restore] Missing required parameters:", folder, file_name)
+        return jsonify({"error": "Missing required parameters"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        print(f"[caption_restore] folder_path={folder_path}")
+        trash_path = folder_path / ".caption_trash"
+        src_media = trash_path / file_name
+        dst_media = folder_path / file_name
+        print(f"[caption_restore] src_media={src_media}, dst_media={dst_media}")
+        # Restore media file
+        if not src_media.exists() or not src_media.is_file():
+            print("[caption_restore] File not found in .caption_trash:", src_media)
+            return jsonify({"error": "File not found in .caption_trash"}), 404
+        if dst_media.exists():
+            print("[caption_restore] Target file already exists:", dst_media)
+            return jsonify({"error": "Target file already exists"}), 409
+        src_media.rename(dst_media)
+        print(f"[caption_restore] Restored {src_media} -> {dst_media}")
+        # Restore caption if present
+        src_caption = trash_path / (Path(file_name).stem + ".txt")
+        dst_caption = folder_path / (Path(file_name).stem + ".txt")
+        print(f"[caption_restore] src_caption={src_caption}, dst_caption={dst_caption}")
+        if src_caption.exists() and not dst_caption.exists():
+            src_caption.rename(dst_caption)
+            print(f"[caption_restore] Restored caption {src_caption} -> {dst_caption}")
+        return jsonify({"ok": True})
+    except Exception as e:
+        print("[caption_restore] ERROR:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+    
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

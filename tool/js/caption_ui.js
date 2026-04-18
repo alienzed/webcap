@@ -140,9 +140,9 @@ var CaptionListModule = (function () {
 
     var matchCount = 0;
 
+
     // Add 'Up One Directory' item if possible.
     var canGoUp = state.dirStack.length > 1;
-
     if (canGoUp) {
       var upRow = document.createElement('div');
       upRow.className = 'page-item folder-item';
@@ -154,13 +154,36 @@ var CaptionListModule = (function () {
       matchCount++;
     }
 
+    // Add current directory entry with open folder icon, below 'Up One Directory', but skip if at root
+    if (state.folder && state.folder.length) {
+      var currentDirName = state.folder.split(/[\\/]/).pop();
+      var currentRow = document.createElement('div');
+      currentRow.className = 'page-item folder-item current-folder-item';
+      currentRow.innerHTML = '<div>🗁 ' + escapeHtml(currentDirName) + ' (current)</div>';
+      currentRow.oncontextmenu = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var actions = [
+          {
+            label: 'Folder Actions (coming soon)',
+            run: function() {
+              setStatus(ui, 'No actions yet for current directory.');
+            }
+          }
+        ];
+        showContextMenu(e.clientX, e.clientY, actions);
+      };
+      ui.pageListEl.appendChild(currentRow);
+      matchCount++;
+    }
+
     if (window.DEBUG) {
       console.log('[webcap] renderFileList: rendering folders:', state.childFolders);
     }
     console.log('[webcap] renderFileList: rendering folders', state.childFolders);
     for (var i = 0; i < state.childFolders.length; ++i) {
       var folderItem = state.childFolders[i];
-      var label = '📁 ' + folderItem.name;
+      var label = ' 🗀 ' + folderItem.name; // Indent with two spaces
       console.log('[webcap] renderFileList: rendering folder', folderItem);
       var row = document.createElement('div');
       row.className = 'page-item folder-item';
@@ -245,7 +268,7 @@ var CaptionListModule = (function () {
           displayText += ' <span style="color:#888;font-style:italic;">[primer]</span>';
         }
       }
-      row.innerHTML = '<div>' + escapeHtml(displayText) + '</div>';
+      row.innerHTML = '<div>&nbsp;' + escapeHtml(displayText) + '</div>';
 
       row.onclick = function (e) {
         if (state.currentItem && state.currentItem.key === mediaItem.key) {

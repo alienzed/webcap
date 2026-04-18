@@ -226,11 +226,8 @@
     var path = state.folder || '';
     console.log('[webcap] refreshCurrentDirectory: called with path', path);
     if (ui.folderLabelEl) {
-      if (state.dirStack && state.dirStack.length) {
-        ui.folderLabelEl.value = state.dirStack[state.dirStack.length - 1].name;
-      } else {
-        ui.folderLabelEl.value = '';
-      }
+      var last = state.dirStack && state.dirStack.length ? state.dirStack[state.dirStack.length - 1].name : '';
+      ui.folderLabelEl.value = last ? last.split(/[\\/]/).filter(Boolean).pop() : '[root]';
     }
     console.log('[webcap] refreshCurrentDirectory: requesting /fs/list', path);
 
@@ -277,52 +274,6 @@
   }
 
 
-  // Config file creation logic remains intact
-  async function maybeCreateConfigFiles(dirHandle) {
-    const configFiles = [
-      { name: 'configlo.toml', template: 'configlo.toml', dataset: 'dataset.lo.toml' },
-      { name: 'confighi.toml', template: 'confighi.toml', dataset: 'dataset.hi.toml' },
-      { name: 'dataset.lo.toml', template: 'dataset.lo.toml' },
-      { name: 'dataset.hi.toml', template: 'dataset.hi.toml' }
-    ];
-    for (const cfg of configFiles) {
-      let exists = false;
-      try {
-        await dirHandle.getFileHandle(cfg.name);
-        exists = true;
-      } catch (e) {
-        console.warn(`Config file ${cfg.name} does not exist and will be created from template.`);
-      }
-      if (exists) continue;
-      // Read template
-      let text = '';
-      try {
-        const response = await fetch(`/static/templates/${cfg.template}`);
-        if (!response.ok) {
-          console.error(`Failed to fetch template: ${cfg.template} (status ${response.status})`);
-          continue;
-        }
-        text = await response.text();
-      } catch (e) {
-        console.error(`Error fetching template ${cfg.template}:`, e);
-        continue;
-      }
-      // For configlo/confighi, substitute dataset path
-      if (cfg.dataset) {
-        text = text.replace(/^(dataset\s*=\s*").*?("?)/m, `dataset = "${cfg.dataset}"`);
-        text = text.replace(/^(dataset\s*=\s*).*/m, `dataset = "${cfg.dataset}"`);
-      }
-      // Write file
-      try {
-        const handle = await dirHandle.getFileHandle(cfg.name, { create: true });
-        const writer = await handle.createWritable();
-        await writer.write(text);
-        await writer.close();
-      } catch (e) {
-        console.error(`Error creating config file ${cfg.name}:`, e);
-      }
-    }
-  }
 
   function setupFolderStatePersistence(ui, state) {
     var saveLater = DebounceModule.create(300);
@@ -465,19 +416,6 @@
     var writer = await handle.createWritable();
     await writer.write(JSON.stringify(folderState, null, 2));
     await writer.close();
-  }
-
-  async function loadFolderStateForRoot(ui, state, rootHandle) {
-    var folderState = await readFolderStateFile(rootHandle);
-    if (!folderState) {
-      state.reviewedSet = new Set();
-      applyFolderStateToDom(emptyFolderState());
-      return;
-    }
-    applyFolderStateToDom(folderState);
-    state.reviewedSet = new Set(folderState.reviewedKeys || []);
-    state.lastFolderStateKey = rootHandle.name;
-    setStatus(ui, 'Loaded folder settings from ' + FOLDER_STATE_FILE);
   }
 
   async function saveFolderStateForCurrentRoot(ui, state) {
@@ -667,6 +605,10 @@
           setStatus(ui, 'Error parsing caption: ' + e);
           return;
         }
+        // If caption is missing, populate with primer/template
+        if (!(text || '').trim()) {
+          text = buildAutoPrimer(mediaItem.fileName);
+        }
         ui.editorEl.value = text;
         var suffix = mediaItem.fileName.split('.').pop();
         setStatus(ui, 'Selected: ' + mediaItem.label + ' (' + suffix + ')');
@@ -683,6 +625,7 @@
     }
     return CaptionTemplateModule.buildPrimerFromConfig(fileName, primerOptions);
   }
+  window.buildAutoPrimer = buildAutoPrimer;
 
   function saveCurrentCaption(ui, state) {
     if (state.reviewMode || !state.currentItem) {

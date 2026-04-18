@@ -198,7 +198,15 @@ var CaptionListModule = (function () {
       row.className = 'page-item' + (isActive ? ' active' : '') + (emptyCaption ? ' empty-caption' : '') + (reviewed ? ' reviewed' : '');
       row.setAttribute('data-key', mediaItem.key);
 
-      row.innerHTML = '<div>' + escapeHtml(mediaItem.label) + '</div>';
+      // Show primer/template content as preview if caption is missing
+      var displayText = mediaItem.label;
+      if (emptyCaption && typeof window.buildAutoPrimer === 'function') {
+        var primerText = window.buildAutoPrimer(mediaItem.fileName);
+        if (primerText && primerText.trim()) {
+          displayText += ' <span style="color:#888;font-style:italic;">[primer]</span>';
+        }
+      }
+      row.innerHTML = '<div>' + escapeHtml(displayText) + '</div>';
 
       row.onclick = function (e) {
         if (state.currentItem && state.currentItem.key === mediaItem.key) {

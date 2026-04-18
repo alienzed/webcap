@@ -1,6 +1,6 @@
 from pathlib import Path
 from flask import send_from_directory
-from .file_ops import read_text, write_text
+from .fs_utils import read_text, write_text, safe_join_fs_root
 from .fs_utils import safe_join_fs_root
 
 MEDIA_EXTENSIONS = {

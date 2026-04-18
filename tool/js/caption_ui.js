@@ -141,6 +141,8 @@ var CaptionListModule = (function () {
       countDiv.style = 'font-size:13px;color:#888;margin-bottom:4px;';
       ui.pageListEl.parentNode.insertBefore(countDiv, ui.pageListEl);
     }
+    // Always wire up the static Exit Set button after rendering
+    CaptionListModule.ensureFocusSetExitButton(ui, state);
 
     var matchCount = 0;
 
@@ -213,10 +215,10 @@ var CaptionListModule = (function () {
           return;
         }
         if (state.reviewMode) {
-          deps.selectMedia(ui, state, mediaItem).catch(function (err) {
-            setStatus(ui, String(err && err.message ? err.message : err));
-          });
-          return;
+          // Exit review mode and restore editability
+          if (typeof window.setReviewMode === 'function') {
+            window.setReviewMode(ui, state, false);
+          }
         }
         deps.saveCurrentCaption(ui, state).then(function () {
           return deps.selectMedia(ui, state, mediaItem);
@@ -345,44 +347,50 @@ var CaptionListModule = (function () {
   }
 
   // Focus set UI logic moved from caption_mode.js
-  function ensureFocusSetExitButton(ui, state, row) {
+  // Wire up the static Exit Set button below the media list
+  function ensureFocusSetExitButton(ui, state) {
     var exitBtn = document.getElementById('focus-set-exit-btn');
-    if (!exitBtn) {
-      exitBtn = document.createElement('button');
-      exitBtn.id = 'focus-set-exit-btn';
-      exitBtn.type = 'button';
-      exitBtn.textContent = 'Exit Set';
-      exitBtn.style.display = 'none';
-      row.appendChild(exitBtn);
-    }
+    if (!exitBtn) return;
     if (!exitBtn.__focusSetBound) {
       exitBtn.__focusSetBound = true;
       exitBtn.onclick = function() {
-        CaptionListModule.clearFocusSet(ui, state, true);
+        // Clear focus set and reload full directory
+        state.focusSet = null;
+        if (typeof window.refreshCurrentDirectory === 'function') {
+          window.refreshCurrentDirectory(ui, state);
+        } else if (ui && ui.refreshCurrentDirectory) {
+          ui.refreshCurrentDirectory(ui, state);
+        }
+        // Hide the button (will be handled by refreshFocusSetUi too)
+        exitBtn.style.display = 'none';
       };
     }
     return exitBtn;
   }
 
-  function refreshFocusSetUi(ui, state, exitBtn) {
-    var btn = exitBtn || document.getElementById('focus-set-exit-btn');
-    if (!btn) {
-      return;
-    }
+  function refreshFocusSetUi(ui, state) {
+    var btn = document.getElementById('focus-set-exit-btn');
+    if (!btn) return;
     if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
       btn.style.display = '';
       var source = state.focusSet.source ? (' - ' + state.focusSet.source) : '';
       btn.title = 'Show full folder list' + source;
-      return;
+    } else {
+      btn.style.display = 'none';
+      btn.title = 'Show full folder list';
     }
-    btn.style.display = 'none';
-    btn.title = 'Show full folder list';
   }
 
   function clearFocusSet(ui, state, rerender) {
     state.focusSet = null;
     if (rerender) {
-      CaptionListModule.renderFileList(ui, state, ui.filterEl.value);
+      if (typeof window.refreshCurrentDirectory === 'function') {
+        window.refreshCurrentDirectory(ui, state);
+      } else if (ui && ui.refreshCurrentDirectory) {
+        ui.refreshCurrentDirectory(ui, state);
+      } else {
+        CaptionListModule.renderFileList(ui, state, ui.filterEl.value);
+      }
     }
   }
 

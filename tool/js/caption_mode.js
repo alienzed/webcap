@@ -656,7 +656,8 @@
     renderPreviewHtml(ui, !!IMAGE_EXTENSIONS[ext], mediaUrl);
   }
 
-  // Expose startCaptionMode globally for main.js
+  // Expose refreshCurrentDirectory and startCaptionMode globally
+  window.refreshCurrentDirectory = refreshCurrentDirectory;
   window.startCaptionMode = startCaptionMode;
 })();
 

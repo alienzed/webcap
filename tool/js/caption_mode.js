@@ -515,10 +515,11 @@
 
   function setReviewMode(ui, state, enabled) {
     state.reviewMode = !!enabled;
-    ui.editorEl.readOnly = state.reviewMode;
     if (state.reviewMode) {
+      ui.editorEl.setAttribute('readonly', 'readonly');
       ui.editorEl.classList.add('readonly');
     } else {
+      ui.editorEl.removeAttribute('readonly');
       ui.editorEl.classList.remove('readonly');
     }
   }
@@ -621,6 +622,11 @@
     return new Promise(function(resolve, reject) {
       // Set currentItem before any UI update
       state.currentItem = mediaItem;
+      // Always ensure editor is editable unless in review mode
+      if (!state.reviewMode && ui.editorEl) {
+        ui.editorEl.removeAttribute('readonly');
+        ui.editorEl.classList.remove('readonly');
+      }
       renderPathPreview(ui, state.folder, mediaItem.fileName);
       HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function(status, responseText) {
         if (status !== 200) {
@@ -689,5 +695,7 @@
   // Expose refreshCurrentDirectory and startCaptionMode globally
   window.refreshCurrentDirectory = refreshCurrentDirectory;
   window.startCaptionMode = startCaptionMode;
+
+  window.clearEditorAndPreview = clearEditorAndPreview;
 })();
 

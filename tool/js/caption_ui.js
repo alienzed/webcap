@@ -99,12 +99,6 @@ var CaptionListModule = (function () {
     });
   }
 
-  function getOriginalNameFromTrashName(name) {
-    return CaptionTrashOps.getOriginalNameFromTrashName(name);
-  }
-
-  // Backend-based rename/prune/restore
-  // These are now just wrappers to deps
   async function renameMedia(ui, state, mediaItem, oldFile, newFile, deps) {
     return deps.renameMedia(ui, state, mediaItem, oldFile, newFile);
   }
@@ -179,6 +173,11 @@ var CaptionListModule = (function () {
           state.folder = (state.folder ? state.folder + '/' : '') + folderName;
           if (state.dirStack && state.dirStack.length) {
             state.dirStack.push({ name: folderName });
+          }
+          // Clear current selection and editor/preview
+          state.currentItem = null;
+          if (typeof window.clearEditorAndPreview === 'function') {
+            window.clearEditorAndPreview(ui, state);
           }
           if (deps && typeof deps.refreshCurrentDirectory === 'function') {
             deps.refreshCurrentDirectory(ui, state);
@@ -274,30 +273,48 @@ var CaptionListModule = (function () {
       row.oncontextmenu = function (e) {
         e.preventDefault();
         e.stopPropagation();
-        showContextMenu(e.clientX, e.clientY, [
-          {
-            label: 'Rename',
-            run: function () {
-              promptRenameMedia(mediaItem, ui, state, deps);
-            }
-          },
-          {
-            label: 'Prune',
-            run: function () {
-              deps.pruneMedia(ui, state, mediaItem).catch(function (err) {
-                deps.setStatus(ui, String(err && err.message ? err.message : err));
-              });
-            }
-          },
-          {
+        var actions = [];
+        var isInOriginals = (state.folder && state.folder.split(/[\\/]/).pop() === 'originals');
+        var fileName = mediaItem.fileName;
+        if (isInOriginals) {
+          actions.push({
             label: 'Restore',
             run: function () {
               deps.restoreMedia(ui, state, mediaItem).catch(function (err) {
                 deps.setStatus(ui, String(err && err.message ? err.message : err));
               });
             }
-          },
-          {
+          });
+        } else {
+          actions.push({
+            label: 'Rename',
+            run: function () {
+              promptRenameMedia(mediaItem, ui, state, deps);
+            }
+          });
+          actions.push({
+            label: 'Prune',
+            run: function () {
+              deps.pruneMedia(ui, state, mediaItem).catch(function (err) {
+                deps.setStatus(ui, String(err && err.message ? err.message : err));
+              });
+            }
+          });
+          // Only show Restore if file is missing from working dir but present in originals
+          var originals = (state.originals || []);
+          var inWorking = state.items.some(function(item) { return item.fileName === fileName; });
+          var inOriginals = originals.some(function(item) { return item.fileName === fileName; });
+          if (!inWorking && inOriginals) {
+            actions.push({
+              label: 'Restore',
+              run: function () {
+                deps.restoreMedia(ui, state, mediaItem).catch(function (err) {
+                  deps.setStatus(ui, String(err && err.message ? err.message : err));
+                });
+              }
+            });
+          }
+          actions.push({
             label: 'Reset',
             run: function () {
               if (deps && typeof deps.resetMedia === 'function') {
@@ -308,8 +325,9 @@ var CaptionListModule = (function () {
                 setStatus(ui, 'Reset not available');
               }
             }
-          }
-        ]);
+          });
+        }
+        showContextMenu(e.clientX, e.clientY, actions);
       };
 
       row.ondblclick = function (e) {
@@ -402,6 +420,11 @@ var CaptionListModule = (function () {
     // Rebuild state.folder from dirStack (excluding root)
     var folder = state.dirStack.slice(1).map(function(entry) { return entry.name; }).join('/');
     state.folder = folder;
+    // Clear current selection and editor/preview
+    state.currentItem = null;
+    if (typeof window.clearEditorAndPreview === 'function') {
+      window.clearEditorAndPreview(ui, state);
+    }
     if (deps && typeof deps.refreshCurrentDirectory === 'function') {
       deps.refreshCurrentDirectory(ui, state);
     }
@@ -417,6 +440,14 @@ var CaptionListModule = (function () {
       exitBtn.onclick = function() {
         // Clear focus set and reload full directory
         state.focusSet = null;
+        // Restore editability on the editor (robust)
+        if (ui && ui.editorEl) {
+          ui.editorEl.removeAttribute('readonly');
+          ui.editorEl.classList.remove('readonly');
+        }
+        if (typeof window.clearEditorAndPreview === 'function') {
+          window.clearEditorAndPreview(ui, state);
+        }
         if (typeof window.refreshCurrentDirectory === 'function') {
           window.refreshCurrentDirectory(ui, state);
         } else if (ui && ui.refreshCurrentDirectory) {

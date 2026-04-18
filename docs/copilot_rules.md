@@ -10,7 +10,7 @@ This document defines all safety, mutation, and coding rules for the WebCap proj
 - No permanent delete workflow in the UI.
 - Combined review text is never written to disk as a media caption.
 - All mutations are explicit and require user confirmation or context menu action.
-- UI is locked during any mutation or script execution to prevent conflicts.
+- UI does not require everything to be async, but safety does matter.
 
 ---
 

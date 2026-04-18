@@ -8,6 +8,7 @@ import traceback
 import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
+import shutil
 
 from .fs_utils import safe_join_fs_root, FS_ROOT, FS_DEBUG
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
@@ -108,8 +109,15 @@ def fs_list():
         # Originals and config file management: only if valid set folder
         try:
             from .originals_utils import MEDIA_EXTS, copy_media_to_originals, is_blacklisted
+
             def is_set_folder(path):
                 name = path.name.lower()
+                # Skip if this folder or any ancestor is 'auto_dataset'
+                p = path
+                while p != p.parent:
+                    if p.name.lower() == 'auto_dataset':
+                        return False
+                    p = p.parent
                 if name == 'originals' or 'trash' in name or 'prune' in name:
                     return False
                 if is_blacklisted(name):
@@ -426,6 +434,34 @@ def autoset_run():
             print("[autoset_run] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
+    
+
+@app.route('/fs/duplicate_folder', methods=['POST'])
+def duplicate_folder():
+    data = request.get_json()
+    src_rel = data.get('src')
+    try:
+        src_path = safe_join_fs_root(src_rel)
+    except Exception as e:
+        return jsonify({'error': f'Invalid source path: {e}'}), 400
+    if not src_rel or not src_path.exists() or not src_path.is_dir():
+        return jsonify({'error': 'Source folder does not exist'}), 400
+
+    base = src_path.name
+    parent = src_path.parent
+    # Find a new folder name like "folder copy", "folder copy 2", etc.
+    i = 1
+    while True:
+        if i == 1:
+            dst_path = parent / f"{base} copy"
+        else:
+            dst_path = parent / f"{base} copy {i}"
+        if not dst_path.exists():
+            break
+        i += 1
+
+    shutil.copytree(str(src_path), str(dst_path))
+    return jsonify({'success': True, 'dst': str(dst_path)})
     
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

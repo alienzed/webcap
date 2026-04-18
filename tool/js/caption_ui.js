@@ -303,6 +303,32 @@ var CaptionListModule = (function () {
                   });
               }
             });
+
+            actions.push({
+              label: 'Duplicate Folder',
+              run: function() {
+                setStatus(ui, 'Duplicating folder...');
+                var folderPath = (state.folder ? state.folder + '/' : '') + folderItem.name;
+                fetch('/fs/duplicate_folder', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ src: folderPath })
+                })
+                .then(function(resp) { return resp.json().then(function(data) { return {status: resp.status, data: data}; }); })
+                .then(function(res) {
+                  if (res.status === 200 && res.data && res.data.success) {
+                    setStatus(ui, 'Duplicated folder: ' + folderItem.name);
+                    deps.refreshCurrentDirectory(ui, state);
+                  } else {
+                    setStatus(ui, (res.data && res.data.error) ? res.data.error : 'Duplicate failed');
+                  }
+                })
+                .catch(function(err) {
+                  setStatus(ui, 'Duplicate failed: ' + err);
+                });
+              }
+            });
+
             actions.push({
               label: 'Run autoset.py',
               run: function() {

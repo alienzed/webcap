@@ -113,7 +113,7 @@
       return;
     }
     var fileName = mediaItem.fileName;
-    var confirmed = window.confirm('Move this media file and its caption to .caption_trash?\n\n' + fileName);
+    var confirmed = window.confirm('Prune this media file and its caption?\n\n' + fileName + '\n\nThis will move the media to the originals folder (if not already present) and remove it from this set. The latest caption will be saved in originals.');
     if (!confirmed) {
       return;
     }
@@ -122,7 +122,6 @@
     }
     await CaptionListModule.pruneMedia(ui, state, mediaItem, {
       pruneMedia: async function(ui, state, mediaItem) {
-        // Move media and caption to .caption_trash via backend
         return new Promise(function(resolve, reject) {
           var folder = state.folder || '';
           var media = mediaItem.fileName;
@@ -159,7 +158,7 @@
       state.currentItem = null;
     }
     refreshCurrentDirectory(ui, state);
-    setStatus(ui, 'Pruned to .caption_trash: ' + fileName);
+    setStatus(ui, 'Pruned to originals: ' + fileName);
   }
 
   async function restoreMediaItem(ui, state, mediaItem) {
@@ -167,8 +166,9 @@
       setStatus(ui, 'No media item to restore');
       return;
     }
-    if (state.dirStack.length < 2 || state.dirStack[state.dirStack.length - 1].name !== '.caption_trash') {
-      setStatus(ui, 'Restore is available inside .caption_trash only');
+    var fileName = mediaItem.fileName;
+    var confirmed = window.confirm('Restore this media file and its caption from originals?\n\n' + fileName + '\n\nThis will overwrite any current version in this set.');
+    if (!confirmed) {
       return;
     }
     if (state.currentItem && state.currentItem.key === mediaItem.key) {
@@ -176,7 +176,6 @@
     }
     await CaptionListModule.restoreMedia(ui, state, mediaItem, {
       restoreMedia: async function(ui, state, mediaItem) {
-        // Restore media and caption from .caption_trash via backend
         return new Promise(function(resolve, reject) {
           var folder = state.folder || '';
           var media = mediaItem.fileName;
@@ -218,7 +217,37 @@
       state.currentItem = null;
     }
     refreshCurrentDirectory(ui, state);
-    setStatus(ui, 'Restored from .caption_trash: ' + mediaItem.fileName);
+    setStatus(ui, 'Restored from originals: ' + fileName);
+  }
+
+  async function resetMediaItem(ui, state, mediaItem) {
+    if (!mediaItem) {
+      setStatus(ui, 'No media item to reset');
+      return;
+    }
+    var fileName = mediaItem.fileName;
+    var confirmed = window.confirm('Reset this media file and its caption to the original version?\n\n' + fileName);
+    if (!confirmed) {
+      return;
+    }
+    if (state.currentItem && state.currentItem.key === mediaItem.key) {
+      await saveCurrentCaption(ui, state);
+    }
+    var folder = state.folder || '';
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/caption/reset');
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          setStatus(ui, 'Reset to original: ' + fileName);
+          refreshCurrentDirectory(ui, state);
+        } else {
+          setStatus(ui, 'Reset failed: ' + xhr.responseText);
+        }
+      }
+    };
+    xhr.send(JSON.stringify({ folder: folder, fileName: fileName }));
   }
 
   // Directory listing now uses backend /fs/list
@@ -503,6 +532,7 @@
       saveCurrentCaption: saveCurrentCaption,
       pruneMedia: pruneMediaItem,
       restoreMedia: restoreMediaItem,
+      resetMedia: resetMediaItem,
       renameMedia: async function(ui, state, mediaItem, oldFile, newFile) {
         // Rename media and caption via backend
         return new Promise(function(resolve, reject) {

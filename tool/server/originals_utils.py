@@ -31,20 +31,9 @@ def file_hash(path, block_size=65536):
 
 
 def ensure_originals_folder(working_dir):
-    """
-    Find or create an 'originals' folder for the working_dir.
-    Priority:
-      1. If an 'originals' sibling exists in the parent directory, use it.
-      2. Otherwise, create/check 'originals' in the current working_dir.
-    """
-    parent_dir = os.path.dirname(os.path.abspath(working_dir))
-    sibling_originals = os.path.join(parent_dir, 'originals')
-    if os.path.isdir(sibling_originals):
-        return sibling_originals
-    # Fallback: create/check in current dir
-    originals_dir = os.path.join(working_dir, 'originals')
-    os.makedirs(originals_dir, exist_ok=True)
-    return originals_dir
+        originals_dir = os.path.join(os.path.abspath(working_dir), 'originals')
+        os.makedirs(originals_dir, exist_ok=True)
+        return originals_dir
 
 def copy_media_to_originals(working_dir):
     """Copy all media files in working_dir to originals/ if not already present (by name and hash)."""

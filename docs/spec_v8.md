@@ -16,7 +16,8 @@ A portable, local-first app dedicated to media caption curation and review, with
 - Dataset navigation via backend config path.
 - Per-file caption editing with autosave and media preview.
 - Combined review: aggregate captions, stats, validation, and interactive report.
-- Context menu: Rename and Prune (safe, recoverable, non-destructive; all reversibility is via the `originals` folder).
+- Context menu: Rename (file/folder), Prune, Restore, Reset (all safe, recoverable, non-destructive; all reversibility is via the `originals` folder, no trash or state file).
+- Folder renaming is supported via context menu, except for protected folders (e.g., `originals`).
 
 ---
 
@@ -28,9 +29,11 @@ A portable, local-first app dedicated to media caption curation and review, with
 ---
 
 ## 5. Feature List & Operational Checklist
-- Select/edit/autosave captions, review, stats, validation, prune, rename, autoset.
+- Select/edit/autosave captions, review, stats, validation, prune, rename (file/folder), restore, reset, autoset.
 - Modular JS and backend.
 - All destructive actions are recoverable via the `originals` folder (no trash or state file).
+- No `.caption_trash` or `pruned.json` is used; all state is managed by presence of originals only.
+- Context menu options are context-aware (e.g., protected folders like `originals` do not show Rename).
 
 ---
 

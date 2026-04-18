@@ -77,7 +77,7 @@ _All steps above are manual/external._
 ---
 
 ### Folder Structure Notes
-- `originals/` — Untouched originals (original FPS, non-censored, etc.). All destructive actions are reversible by restoring from this folder; no `.caption_trash` or pruned.json is used.
+- `originals/` — Untouched originals (original FPS, non-censored, etc.). All destructive actions are reversible by restoring from this folder.
 - `auto_dataset/` — Working set, normalized to target FPS, AR-organized, captioned, etc.
 - `defaced/` (optional) — Censored/defaced versions, with originals kept elsewhere.
 

@@ -1,3 +1,6 @@
+
+
+
 import os
 import sys
 import json
@@ -280,33 +283,141 @@ def caption_restore():
         return jsonify({"error": "Missing required parameters"}), 400
     try:
         folder_path = safe_join_fs_root(folder)
-        print(f"[caption_restore] folder_path={folder_path}")
-        trash_path = folder_path / ".caption_trash"
-        src_media = trash_path / file_name
+        originals_path = folder_path / "originals"
+        src_media = originals_path / file_name
         dst_media = folder_path / file_name
-        print(f"[caption_restore] src_media={src_media}, dst_media={dst_media}")
-        # Restore media file
         if not src_media.exists() or not src_media.is_file():
-            print("[caption_restore] File not found in .caption_trash:", src_media)
-            return jsonify({"error": "File not found in .caption_trash"}), 404
+            return jsonify({"error": "Original media not found in originals"}), 404
+        # Move media file back to set folder (overwrite if present)
         if dst_media.exists():
-            print("[caption_restore] Target file already exists:", dst_media)
-            return jsonify({"error": "Target file already exists"}), 409
+            dst_media.unlink()
         src_media.rename(dst_media)
-        print(f"[caption_restore] Restored {src_media} -> {dst_media}")
-        # Restore caption if present
-        src_caption = trash_path / (Path(file_name).stem + ".txt")
+        try:
+            os.chmod(dst_media, 0o644)
+        except Exception:
+            pass
+        # Restore caption if present (overwrite if present)
+        src_caption = originals_path / (Path(file_name).stem + ".txt")
         dst_caption = folder_path / (Path(file_name).stem + ".txt")
-        print(f"[caption_restore] src_caption={src_caption}, dst_caption={dst_caption}")
-        if src_caption.exists() and not dst_caption.exists():
-            src_caption.rename(dst_caption)
-            print(f"[caption_restore] Restored caption {src_caption} -> {dst_caption}")
+        if src_caption.exists():
+            if dst_caption.exists():
+                dst_caption.unlink()
+            with open(src_caption, "r", encoding="utf-8") as fsrc, open(dst_caption, "w", encoding="utf-8") as fdst:
+                fdst.write(fsrc.read())
+            try:
+                os.chmod(dst_caption, 0o644)
+            except Exception:
+                pass
         return jsonify({"ok": True})
     except Exception as e:
-        print("[caption_restore] ERROR:", e)
-        traceback.print_exc()
+        if FS_DEBUG:
+            print("[caption_restore] ERROR:", e)
+            traceback.print_exc()
         return jsonify({"error": str(e)}), 400
     
+# Reset media file to original from 'originals' folder
+@app.route("/caption/reset", methods=["POST"])
+def caption_reset():
+    data = request.get_json(silent=True) or {}
+    folder = data.get("folder", "").strip()
+    file_name = data.get("fileName", "").strip()
+    if not folder or not file_name:
+        return jsonify({"error": "Missing required parameters"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        originals_path = folder_path / "originals"
+        src_media = originals_path / file_name
+        dst_media = folder_path / file_name
+        if not src_media.exists() or not src_media.is_file():
+            return jsonify({"error": "Original media not found in originals"}), 404
+        # Overwrite current media file with original
+        with open(src_media, "rb") as fsrc, open(dst_media, "wb") as fdst:
+            fdst.write(fsrc.read())
+        try:
+            os.chmod(dst_media, 0o644)
+        except Exception:
+            pass
+        # Reset caption if present in originals
+        src_caption = originals_path / (Path(file_name).stem + ".txt")
+        dst_caption = folder_path / (Path(file_name).stem + ".txt")
+        if src_caption.exists():
+            with open(src_caption, "r", encoding="utf-8") as fsrc, open(dst_caption, "w", encoding="utf-8") as fdst:
+                fdst.write(fsrc.read())
+            try:
+                os.chmod(dst_caption, 0o644)
+            except Exception:
+                pass
+        return jsonify({"ok": True})
+    except Exception as e:
+        if FS_DEBUG:
+            print("[caption_reset] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
 
+@app.route("/caption/prune", methods=["POST"])
+def caption_prune():
+    data = request.get_json(silent=True) or {}
+    folder = data.get("folder", "").strip()
+    file_name = data.get("media", "").strip()
+    if not folder or not file_name:
+        return jsonify({"error": "Missing required parameters"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        originals_path = folder_path / "originals"
+        originals_path.mkdir(exist_ok=True)
+        src_media = folder_path / file_name
+        dst_media = originals_path / file_name
+        # Move media file to originals if not already present
+        if not src_media.exists() or not src_media.is_file():
+            return jsonify({"error": "Media file not found"}), 404
+        if not dst_media.exists():
+            src_media.rename(dst_media)
+        else:
+            src_media.unlink()  # Remove from set folder, keep original
+        # Always overwrite caption in originals
+        src_caption = folder_path / (Path(file_name).stem + ".txt")
+        dst_caption = originals_path / (Path(file_name).stem + ".txt")
+        if src_caption.exists():
+            with open(src_caption, "r", encoding="utf-8") as fsrc, open(dst_caption, "w", encoding="utf-8") as fdst:
+                fdst.write(fsrc.read())
+            try:
+                os.chmod(dst_caption, 0o644)
+            except Exception:
+                pass
+            src_caption.unlink()  # Remove from set folder
+        return jsonify({"ok": True})
+    except Exception as e:
+        if FS_DEBUG:
+            print("[caption_prune] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+
+# Rename a folder (not files)
+@app.route("/fs/rename_folder", methods=["POST"])
+def fs_rename_folder():
+    data = request.get_json(silent=True) or {}
+    parent = data.get("parent", "").strip()
+    old_name = data.get("oldName", "").strip()
+    new_name = data.get("newName", "").strip()
+    if not old_name or not new_name:
+        return jsonify({"error": "Missing required parameters"}), 400
+    if old_name in ("originals", ".", "..") or new_name in ("originals", ".", ".."):
+        return jsonify({"error": "Invalid folder name"}), 400
+    try:
+        parent_path = safe_join_fs_root(parent)
+        src = parent_path / old_name
+        dst = parent_path / new_name
+        if not src.exists() or not src.is_dir():
+            return jsonify({"error": "Source folder does not exist"}), 404
+        if dst.exists():
+            return jsonify({"error": "Target folder already exists"}), 409
+        src.rename(dst)
+        return jsonify({"ok": True})
+    except Exception as e:
+        if FS_DEBUG:
+            print("[fs_rename_folder] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+    
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

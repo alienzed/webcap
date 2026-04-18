@@ -188,6 +188,50 @@ var CaptionListModule = (function () {
       row.onclick = function () {
         setStatus(ui, 'Double-click folder to enter: ' + folderItem.name);
       };
+      row.oncontextmenu = (function(folderItem) {
+        return function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var protectedNames = ['originals', '.', '..'];
+          var actions = [];
+          if (protectedNames.indexOf(folderItem.name) === -1) {
+            actions.push({
+              label: 'Rename Folder',
+              run: function() {
+                var oldName = folderItem.name;
+                var newName = window.prompt('Rename folder', oldName);
+                if (newName === null) return;
+                newName = String(newName || '').trim();
+                if (!newName || newName === oldName || newName === '.' || newName === '..' || /[\\/]/.test(newName)) {
+                  deps.setStatus(ui, 'Invalid folder name');
+                  return;
+                }
+                var parent = state.folder || '';
+                fetch('/fs/rename_folder', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ parent: parent, oldName: oldName, newName: newName })
+                })
+                  .then(function(resp) { return resp.json().then(function(data) { return {status: resp.status, data: data}; }); })
+                  .then(function(res) {
+                    if (res.status === 200 && res.data && res.data.ok) {
+                      deps.setStatus(ui, 'Renamed folder: ' + oldName + ' -> ' + newName);
+                      deps.refreshCurrentDirectory(ui, state);
+                    } else {
+                      deps.setStatus(ui, (res.data && res.data.error) ? res.data.error : 'Rename failed');
+                    }
+                  })
+                  .catch(function(err) {
+                    deps.setStatus(ui, 'Rename failed: ' + err);
+                  });
+              }
+            });
+          }
+          if (actions.length > 0) {
+            showContextMenu(e.clientX, e.clientY, actions);
+          }
+        };
+      })(folderItem);
       ui.pageListEl.appendChild(row);
       matchCount++;
     }
@@ -230,8 +274,6 @@ var CaptionListModule = (function () {
       row.oncontextmenu = function (e) {
         e.preventDefault();
         e.stopPropagation();
-        var inTrashFolder = state.dirStack.length > 1 && state.dirStack[state.dirStack.length - 1].name === '.caption_trash';
-        var canRestore = inTrashFolder && !!getOriginalNameFromTrashName(mediaItem.fileName);
         showContextMenu(e.clientX, e.clientY, [
           {
             label: 'Rename',
@@ -240,12 +282,31 @@ var CaptionListModule = (function () {
             }
           },
           {
-            label: canRestore ? 'Restore' : 'Prune',
+            label: 'Prune',
             run: function () {
-              var op = canRestore ? deps.restoreMedia : deps.pruneMedia;
-              op(ui, state, mediaItem).catch(function (err) {
+              deps.pruneMedia(ui, state, mediaItem).catch(function (err) {
                 deps.setStatus(ui, String(err && err.message ? err.message : err));
               });
+            }
+          },
+          {
+            label: 'Restore',
+            run: function () {
+              deps.restoreMedia(ui, state, mediaItem).catch(function (err) {
+                deps.setStatus(ui, String(err && err.message ? err.message : err));
+              });
+            }
+          },
+          {
+            label: 'Reset',
+            run: function () {
+              if (deps && typeof deps.resetMedia === 'function') {
+                deps.resetMedia(ui, state, mediaItem).catch(function (err) {
+                  deps.setStatus(ui, String(err && err.message ? err.message : err));
+                });
+              } else {
+                setStatus(ui, 'Reset not available');
+              }
             }
           }
         ]);

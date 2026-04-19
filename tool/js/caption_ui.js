@@ -1,5 +1,4 @@
 // caption_ui.js
-// Caption sidebar render logic extracted from caption_mode for file-size safety.
 
 var CaptionListModule = (function () {
   var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;
@@ -114,7 +113,7 @@ var CaptionListModule = (function () {
         // No-op: refresh button is now static in HTML
     debugLog('[renderFileList] called. state.items:', state.items, 'state.childFolders:', state.childFolders, 'filterText:', filterText);
     if (window.DEBUG) {
-      console.log('[webcap] renderFileList: state.childFolders:', state.childFolders);
+      //console.log('[webcap] renderFileList: state.childFolders:', state.childFolders);
     }
     var q = (filterText || '').toLowerCase();
     var renderSeq = ++state.listRenderSeq;
@@ -222,6 +221,11 @@ var CaptionListModule = (function () {
                         doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
                         doc.write('</body></html>');
                         doc.close();
+                        // Scroll preview to bottom
+                        if (previewFrame && previewFrame.contentWindow) {
+                          var body = previewFrame.contentDocument && previewFrame.contentDocument.body;
+                          if (body) body.scrollTop = body.scrollHeight;
+                        }
                       }
                       readChunk();
                     });
@@ -269,17 +273,18 @@ var CaptionListModule = (function () {
                   function readChunk() {
                     reader.read().then(function(result) {
                       if (result.done) {
-                        setStatus(ui, 'Defacing finished.');
-                        if (previewFrame && previewFrame.contentDocument) {
-                          var doc = previewFrame.contentDocument;
-                          doc.open();
-                          doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
-                          doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
-                          doc.write('</body></html>');
-                          doc.close();
+                          setStatus(ui, 'Defacing finished.');
+                          if (previewFrame && previewFrame.contentDocument) {
+                            var doc = previewFrame.contentDocument;
+                            doc.open();
+                            doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                            doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                            doc.write('</body></html>');
+                            doc.close();
+                          }
+                          refreshCurrentDirectory(ui, state);
+                          return;
                         }
-                        return;
-                      }
                       output += decoder.decode(result.value, {stream:true});
                       if (previewFrame && previewFrame.contentDocument) {
                         var doc = previewFrame.contentDocument;
@@ -307,19 +312,19 @@ var CaptionListModule = (function () {
     }
 
     if (window.DEBUG) {
-      console.log('[webcap] renderFileList: rendering folders:', state.childFolders);
+      //console.log('[webcap] renderFileList: rendering folders:', state.childFolders);
     }
-    console.log('[webcap] renderFileList: rendering folders', state.childFolders);
+    //console.log('[webcap] renderFileList: rendering folders', state.childFolders);
     for (var i = 0; i < state.childFolders.length; ++i) {
       var folderItem = state.childFolders[i];
       var label = ' 🗀 ' + folderItem.name; // Indent with two spaces
-      console.log('[webcap] renderFileList: rendering folder', folderItem);
+      //console.log('[webcap] renderFileList: rendering folder', folderItem);
       var row = document.createElement('div');
       row.className = 'page-item folder-item';
       row.innerHTML = '<div>' + escapeHtml(label) + '</div>';
       row.onclick = (function(folderName) {
         return function () {
-          console.log('[webcap] renderFileList: folder click', folderName);
+          //console.log('[webcap] renderFileList: folder click', folderName);
           state.folder = (state.folder ? state.folder + '/' : '') + folderName;
           if (state.dirStack && state.dirStack.length) {
             state.dirStack.push({ name: folderName });
@@ -453,6 +458,9 @@ var CaptionListModule = (function () {
                                 doc.write('</body></html>');
                                 doc.close();
                               }
+                              if (typeof refreshCurrentDirectory === 'function') {
+                                refreshCurrentDirectory(ui, state);
+                              }
                               return;
                             }
                             output += decoder.decode(result.value, {stream:true});
@@ -463,6 +471,11 @@ var CaptionListModule = (function () {
                               doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
                               doc.write('</body></html>');
                               doc.close();
+                              // Scroll preview to bottom
+                              if (previewFrame && previewFrame.contentWindow) {
+                                var body = previewFrame.contentDocument && previewFrame.contentDocument.body;
+                                if (body) body.scrollTop = body.scrollHeight;
+                              }
                             }
                             readChunk();
                           });
@@ -529,6 +542,11 @@ var CaptionListModule = (function () {
                         doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
                         doc.write('</body></html>');
                         doc.close();
+                        // Scroll preview to bottom
+                        if (previewFrame && previewFrame.contentWindow) {
+                          var body = previewFrame.contentDocument && previewFrame.contentDocument.body;
+                          if (body) body.scrollTop = body.scrollHeight;
+                        }
                       }
                       readChunk();
                     });

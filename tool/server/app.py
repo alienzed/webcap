@@ -9,7 +9,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
 
-from .fs_utils import safe_join_fs_root, FS_ROOT, FS_DEBUG
+from .config import safe_join_fs_root, FS_ROOT, FS_DEBUG
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
@@ -107,7 +107,7 @@ def fs_list():
             return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
         # Originals and config file management: only if valid set folder
         try:
-            from .originals_utils import MEDIA_EXTS, copy_media_to_originals, is_blacklisted
+            from .originals import MEDIA_ALL_EXTS, copy_media_to_originals, is_blacklisted
 
             def is_set_folder(path):
                 name = path.name.lower()
@@ -123,7 +123,7 @@ def fs_list():
                     return False
                 # Must contain at least one media or caption file
                 for entry in path.iterdir():
-                    if entry.is_file() and (entry.suffix.lower() in MEDIA_EXTS or entry.suffix.lower() == '.txt'):
+                    if entry.is_file() and (entry.suffix.lower() in MEDIA_ALL_EXTS or entry.suffix.lower() == '.txt'):
                         return True
                 return False
 
@@ -326,7 +326,7 @@ def caption_reset():
         return jsonify({"error": "Missing required parameters"}), 400
     try:
         folder_path = safe_join_fs_root(folder)
-        from .originals_utils import restore_original_media
+        from .originals import restore_original_media
         ok = restore_original_media(folder_path, file_name)
         if not ok:
             return jsonify({"error": "Original media not found in originals"}), 404
@@ -471,8 +471,7 @@ def deface_folder():
         - Run deface CLI on the file.
         - If deface creates *_anonymized.mp4, move it to replace the original (after backup).
     """
-    import os, shutil, subprocess
-    from flask import request, Response, stream_with_context
+
 
     folder = request.json.get('folder')
     if not folder:
@@ -481,6 +480,13 @@ def deface_folder():
     folder_path = safe_join_fs_root(folder)
     originals_path = os.path.join(os.path.dirname(folder_path), 'originals')
     os.makedirs(originals_path, exist_ok=True)
+
+    # Find full path to deface executable
+    deface_path = shutil.which('deface')
+    if not deface_path:
+        def generate_error():
+            yield '[ERROR] deface executable not found in PATH or venv.\n'
+        return Response(stream_with_context(generate_error()), mimetype='text/plain'), 500
 
     def generate():
         for fname in os.listdir(folder_path):
@@ -497,14 +503,16 @@ def deface_folder():
 
             yield f'[INFO] Running deface on {fname}...\n'
             proc = subprocess.Popen(
-                ['deface', '-t', '0.4', '--mask-scale', '1', fpath],
+                [deface_path, '-t', '0.4', '--mask-scale', '1', fpath],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
             )
             for line in proc.stdout:
                 yield line
             proc.wait()
 
-            anon_fpath = fpath.replace('.mp4', '_anonymized.mp4')
+            from pathlib import Path
+            fpath_obj = Path(fpath)
+            anon_fpath = fpath_obj.with_name(fpath_obj.stem + '_anonymized.mp4')
             if os.path.exists(anon_fpath):
                 shutil.move(anon_fpath, os.path.join(folder_path, fname))
                 yield f'[SUCCESS] Defaced {fname}\n'
@@ -521,8 +529,7 @@ def deface_file():
     - Run deface CLI on the file with the given -t value.
     - If deface creates *_anonymized.mp4, move it to replace the original (after backup).
     """
-    import os, shutil, subprocess
-    from flask import request, Response, jsonify
+
 
     data = request.get_json()
     file_rel = data.get('file')
@@ -543,8 +550,13 @@ def deface_file():
         shutil.move(file_path, orig_fpath)
         file_path = orig_fpath
 
+    # Find full path to deface executable
+    deface_path = shutil.which('deface')
+    if not deface_path:
+        return Response('[ERROR] deface executable not found in PATH or venv.\n', mimetype='text/plain'), 500
+
     # Run deface CLI with custom threshold
-    deface_cmd = ['deface', '-t', thresh, '--mask-scale', '1', file_path]
+    deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1', file_path]
     proc = subprocess.Popen(deface_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
     def generate():
@@ -553,7 +565,9 @@ def deface_file():
         proc.wait()
 
     # Move anonymized file into place if created
-    anon_fpath = file_path.replace('.mp4', '_anonymized.mp4')
+    from pathlib import Path
+    file_path_obj = Path(file_path)
+    anon_fpath = file_path_obj.with_name(file_path_obj.stem + '_anonymized.mp4')
     if os.path.exists(anon_fpath):
         shutil.move(anon_fpath, os.path.join(folder_path, file_name))
 

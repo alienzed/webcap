@@ -3,6 +3,8 @@
 // Set this to true to enable debug logging
 window.DEBUG = true;
 
+var FOLDER_STATE_VERSION = 1;
+
 /**
  * Logs messages to the console if debugging is enabled.
  * @arguments The messages to log. Can be one or more arguments similar to console.log.
@@ -124,6 +126,55 @@ function escapeHtml(str) {
 }
 
 
+function sanitizeFolderState(data) {
+  var src = data || {};
+  var stats = src.stats || {};
+  var primer = src.primer || {};
+  var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
+  reviewedKeys = reviewedKeys.map(function(key) { return String(key || ''); }).filter(Boolean);
+  return {
+    version: FOLDER_STATE_VERSION,
+    stats: {
+      requiredPhrase: String(stats.requiredPhrase || ''),
+      phrases: String(stats.phrases || ''),
+      tokenRules: String(stats.tokenRules || '')
+    },
+    primer: {
+      template: String(primer.template || ''),
+      defaults: String(primer.defaults || ''),
+      mappings: String(primer.mappings || '')
+    },
+    reviewedKeys: reviewedKeys
+  };
+}
+window.sanitizeFolderState = sanitizeFolderState;
+
+function emptyFolderState() {
+  return sanitizeFolderState({
+    stats: {
+      requiredPhrase: '',
+      phrases: '',
+      tokenRules: ''
+    },
+    primer: {
+      template: '',
+      defaults: '',
+      mappings: ''
+    },
+    reviewedKeys: []
+  });
+}
+window.emptyFolderState = emptyFolderState;
+
+function buildAutoPrimer(fileName) {
+  var primerOptions = StatsViewModule.getPrimerOptionsFromDom();
+  if (!primerOptions || !primerOptions.template.trim()) {
+    return '';
+  }
+  return CaptionTemplateModule.buildPrimerFromConfig(fileName, primerOptions);
+}
+window.buildAutoPrimer = buildAutoPrimer;
+
 window.setStatus = setStatus;
 window.normalizeFolderInput = normalizeFolderInput;
 window.parentPath = parentPath;
@@ -132,6 +183,36 @@ window.getErrorMessage = getErrorMessage;
 window.escapeHtml = escapeHtml;
 window.renderPreviewHtml = renderPreviewHtml;
 window.renderTextPreview = renderTextPreview;
+
+async function readFolderStateFile(folderPath) {
+  // folderPath: relative path from FS root ('' for root)
+  try {
+    const resp = await fetch('/fs/folder_state/load?folder=' + encodeURIComponent(folderPath), { method: 'GET' });
+    if (!resp.ok) throw new Error('Failed to load folder state');
+    const data = await resp.json();
+    return sanitizeFolderState(data || {});
+  } catch (err) {
+    console.warn('Could not read folder state file:', err);
+    return null;
+  }
+}
+
+
+async function writeFolderStateFile(folderPath, folderState) {
+  // folderPath: relative path from FS root ('' for root)
+  try {
+    const resp = await fetch('/fs/folder_state/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: folderPath, state: folderState })
+    });
+    if (!resp.ok) throw new Error('Failed to save folder state');
+    return true;
+  } catch (err) {
+    console.warn('Could not write folder state file:', err);
+    return false;
+  }
+}
 
 
 var DebounceModule = (function() {

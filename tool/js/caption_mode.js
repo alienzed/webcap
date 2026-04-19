@@ -1,7 +1,6 @@
 // Modularized: uses CaptionState and CaptionOps
 (function() {
   var FOLDER_STATE_FILE = '.webcap_state.json';
-  var FOLDER_STATE_VERSION = 1;
   var IMAGE_EXTENSIONS = { '.jpg': true, '.jpeg': true, '.png': true, '.gif': true, '.webp': true, '.bmp': true };
   var MEDIA_EXTENSIONS = {
     '.mp4': true, '.webm': true, '.ogg': true, '.mov': true, '.mkv': true, '.avi': true, '.m4v': true,
@@ -87,7 +86,11 @@
           currentRow.classList.add('empty-caption');
         }
       }
-      state.captionCache[CaptionOps.captionCacheKey(state, state.currentItem)] = ui.editorEl.value || '';
+      var cacheKey = CaptionOps.captionCacheKey(state, state.currentItem);
+      if (window && window.console) {
+        console.log('[captionCache] WRITE', cacheKey, 'value:', ui.editorEl.value || '');
+      }
+      state.captionCache[cacheKey] = ui.editorEl.value || '';
       var scheduledForKey = state.currentItem.key;
       scheduleSave(function() {
         if (!state.currentItem || state.currentItem.key !== scheduledForKey) {
@@ -257,6 +260,9 @@
     console.log('[webcap] refreshCurrentDirectory: requesting /fs/list', path);
 
     var url = '/fs/list' + (path ? ('?path=' + encodeURIComponent(path)) : '');
+    // Clear current selection and editor/preview on folder change
+    state.currentItem = null;
+    clearEditorAndPreview(ui, state);
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url);
     xhr.onreadystatechange = function() {
@@ -348,43 +354,6 @@
     });
   }
 
-  function sanitizeFolderState(data) {
-    var src = data || {};
-    var stats = src.stats || {};
-    var primer = src.primer || {};
-    var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
-    reviewedKeys = reviewedKeys.map(function(key) { return String(key || ''); }).filter(Boolean);
-    return {
-      version: FOLDER_STATE_VERSION,
-      stats: {
-        requiredPhrase: String(stats.requiredPhrase || ''),
-        phrases: String(stats.phrases || ''),
-        tokenRules: String(stats.tokenRules || '')
-      },
-      primer: {
-        template: String(primer.template || ''),
-        defaults: String(primer.defaults || ''),
-        mappings: String(primer.mappings || '')
-      },
-      reviewedKeys: reviewedKeys
-    };
-  }
-
-  function emptyFolderState() {
-    return sanitizeFolderState({
-      stats: {
-        requiredPhrase: '',
-        phrases: '',
-        tokenRules: ''
-      },
-      primer: {
-        template: '',
-        defaults: '',
-        mappings: ''
-      },
-      reviewedKeys: []
-    });
-  }
 
   function snapshotFolderStateFromDom() {
     var stats = StatsViewModule.getOptionsFromDom();
@@ -426,37 +395,6 @@
     }
     if (mappingsEl) {
       mappingsEl.value = clean.primer.mappings;
-    }
-  }
-
-
-  async function readFolderStateFile(folderPath) {
-    // folderPath: relative path from FS root ('' for root)
-    try {
-      const resp = await fetch('/fs/folder_state/load?folder=' + encodeURIComponent(folderPath), { method: 'GET' });
-      if (!resp.ok) throw new Error('Failed to load folder state');
-      const data = await resp.json();
-      return sanitizeFolderState(data || {});
-    } catch (err) {
-      console.warn('Could not read folder state file:', err);
-      return null;
-    }
-  }
-
-
-  async function writeFolderStateFile(folderPath, folderState) {
-    // folderPath: relative path from FS root ('' for root)
-    try {
-      const resp = await fetch('/fs/folder_state/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: folderPath, state: folderState })
-      });
-      if (!resp.ok) throw new Error('Failed to save folder state');
-      return true;
-    } catch (err) {
-      console.warn('Could not write folder state file:', err);
-      return false;
     }
   }
 
@@ -618,14 +556,7 @@
     });
   }
 
-  function buildAutoPrimer(fileName) {
-    var primerOptions = StatsViewModule.getPrimerOptionsFromDom();
-    if (!primerOptions || !primerOptions.template.trim()) {
-      return '';
-    }
-    return CaptionTemplateModule.buildPrimerFromConfig(fileName, primerOptions);
-  }
-  window.buildAutoPrimer = buildAutoPrimer;
+
 
   function saveCurrentCaption(ui, state) {
     if (!state.currentItem) {
@@ -662,4 +593,3 @@
 
   window.clearEditorAndPreview = clearEditorAndPreview;
 })();
-

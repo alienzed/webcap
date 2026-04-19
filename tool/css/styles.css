@@ -56,24 +56,22 @@ body {
 .stack > * {
   margin-bottom: 10px;
 }
+.panel.stack:first-child{
+  overflow: auto;
+}
 
 /* Page list */
 .media-list {
   border: 1px solid var(--border);
   background: #fff;
   border-radius: 6px;
-  min-height: 180px;
+  min-height: 280px;
   max-height: none;
-  height: 100%;
+  height: auto;
   flex: 1 1 auto;
   overflow: auto;
   display: flex;
   flex-direction: column;
-}
-
-.media-list.with-stats-pane {
-  height: auto;
-  min-height: 120px;
 }
 
 .caption-list-actions {

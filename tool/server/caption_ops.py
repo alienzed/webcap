@@ -1,11 +1,22 @@
 from pathlib import Path
 from flask import send_from_directory
-from .fs_utils import read_text, write_text, safe_join_fs_root
+import json
+import os
 
-MEDIA_EXTENSIONS = {
-    '.mp4', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.m4v',
-    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'
-}
+# Load FS_ROOT from config.json
+CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
+with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+    config = json.load(f)
+FS_ROOT = Path(config['filesystem']['root'])
+
+# Minimal safe join (strip .., normalize, join to FS_ROOT)
+def safe_join_fs_root(rel_path):
+    rel_path = rel_path.strip().replace('..', '').replace('\\', '/').replace('//', '/')
+    if rel_path.startswith('/'):
+        rel_path = rel_path[1:]
+    abs_path = (FS_ROOT / rel_path).resolve()
+    return abs_path
+from .originals import MEDIA_ALL_EXTS
 
 
 def _resolve_folder(folder: str) -> Path:
@@ -37,7 +48,7 @@ def list_media_files(folder: str):
     folder_path = _resolve_folder(folder)
     files = [
         entry.name for entry in folder_path.iterdir()
-        if entry.is_file() and entry.suffix.lower() in MEDIA_EXTENSIONS
+        if entry.is_file() and entry.suffix.lower() in MEDIA_ALL_EXTS
     ]
     return sorted(files, key=lambda name: name.lower())
 
@@ -45,14 +56,15 @@ def list_media_files(folder: str):
 def load_caption_text(folder: str, media_name: str):
     folder_path = _resolve_folder(folder)
     media_name = _validate_media_name(media_name)
-
     caption_name = _caption_name_for_media(media_name)
     caption_path = folder_path / caption_name
+    print(f'[BACKEND][READ] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
     if not caption_path.exists():
         return {'caption': '', 'exists': False, 'caption_file': caption_name}
-
+    text = caption_path.read_text(encoding='utf-8')
+    print(f'[BACKEND][READ] FOUND caption: {text[:80]}...')
     return {
-        'caption': read_text(caption_path),
+        'caption': text,
         'exists': True,
         'caption_file': caption_name
     }
@@ -61,10 +73,16 @@ def load_caption_text(folder: str, media_name: str):
 def save_caption_text(folder: str, media_name: str, text: str):
     folder_path = _resolve_folder(folder)
     media_name = _validate_media_name(media_name)
-
     caption_name = _caption_name_for_media(media_name)
     caption_path = folder_path / caption_name
-    write_text(caption_path, text or '')
+    print(f'[BACKEND][WRITE] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
+    caption_path.parent.mkdir(parents=True, exist_ok=True)
+    caption_path.write_text(text or '', encoding='utf-8')
+    print(f'[BACKEND][WRITE] WROTE caption: {text[:80]}...')
+    try:
+        os.chmod(caption_path, 0o644)
+    except Exception:
+        pass
     return {'ok': True, 'caption_file': caption_name}
 
 

@@ -254,7 +254,6 @@
     var path = state.folder || '';
     console.log('[webcap] refreshCurrentDirectory: called with path', path);
     var last = state.dirStack && state.dirStack.length ? state.dirStack[state.dirStack.length - 1].name : '';
-    ui.folderLabelEl.value = last ? last.split(/[\\/]/).filter(Boolean).pop() : '[root]';
     console.log('[webcap] refreshCurrentDirectory: requesting /fs/list', path);
 
     var url = '/fs/list' + (path ? ('?path=' + encodeURIComponent(path)) : '');

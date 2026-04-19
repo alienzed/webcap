@@ -60,7 +60,7 @@ body {
   overflow: auto;
 }
 
-/* Page list */
+/* Media list */
 .media-list {
   border: 1px solid var(--border);
   background: #fff;

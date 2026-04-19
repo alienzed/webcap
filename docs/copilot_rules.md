@@ -34,7 +34,7 @@ This document defines all safety, mutation, and coding rules for the WebCap proj
 ---
 
 ## 4. Non-Negotiables
-- No regressions in Page Mode.
+- No regressions.
 - App must remain portable (Python + browser only).
 - Minimize destructive filesystem operations.
 - Maintainability and clarity are prioritized over scalability or flexibility.

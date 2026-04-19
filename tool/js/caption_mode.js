@@ -488,7 +488,6 @@
     setStatus(ui, 'Folder settings reset (.webcap_state.json overwritten)');
   }
 
-
   function navigateUp(ui, state) {
     if (state.dirStack.length <= 1) {
       setStatus(ui, 'Already at selected root folder');
@@ -497,21 +496,7 @@
     state.dirStack.pop();
     // Rebuild state.folder from dirStack (excluding root)
     state.folder = state.dirStack.slice(1).map(function(entry) { return entry.name; }).join('/');
-    updateFolderLabel(ui, state);
     refreshCurrentDirectory(ui, state);
-  }
-
-  function updateFolderLabel(ui, state) {
-    if (!state.dirStack.length) {
-      ui.folderLabelEl.value = '[root]';
-      return;
-    }
-    var current = state.dirStack[state.dirStack.length - 1];
-    var name = current && current.name ? current.name : '[root]';
-    if (!name || name === '' || name === '/' || name === '\\') {
-      name = '[root]';
-    }
-    ui.folderLabelEl.value = name;
   }
 
   function renderFileList(ui, state, filterText, token, filterToken) {

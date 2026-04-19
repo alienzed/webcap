@@ -111,6 +111,7 @@ var CaptionListModule = (function () {
 
   // Update renderFileList to handle .toml files list without navigation
   async function renderFileList(ui, state, filterText, token, filterToken, deps) {
+        // No-op: refresh button is now static in HTML
     debugLog('[renderFileList] called. state.items:', state.items, 'state.childFolders:', state.childFolders, 'filterText:', filterText);
     if (window.DEBUG) {
       console.log('[webcap] renderFileList: state.childFolders:', state.childFolders);
@@ -145,7 +146,7 @@ var CaptionListModule = (function () {
     var canGoUp = state.dirStack.length > 1;
     if (canGoUp) {
       var upRow = document.createElement('div');
-      upRow.className = 'page-item folder-item';
+      upRow.className = 'page-item folder-item header-item';
       upRow.innerHTML = '<div>⬆ Up One Directory</div>';
       upRow.onclick = function () {
         deps.navigateUp(ui, state, deps);
@@ -159,7 +160,7 @@ var CaptionListModule = (function () {
       var currentDirName = state.folder.split(/[\\/]/).pop();
       if (currentDirName.toLowerCase() !== 'originals') {
         var currentRow = document.createElement('div');
-        currentRow.className = 'page-item folder-item current-folder-item current-folder-bordered';
+        currentRow.className = 'page-item folder-item header-item current-folder-item current-folder-bordered';
         currentRow.innerHTML = '<div>🗁 ' + escapeHtml(currentDirName) + '</div>';
         currentRow.oncontextmenu = function(e) {
           e.preventDefault();
@@ -169,7 +170,6 @@ var CaptionListModule = (function () {
               label: 'Run autoset.py',
               run: function() {
                 setStatus(ui, 'Running autoset.py...');
-                // Stream output to the main preview pane (iframe)
                 var previewFrame = ui.previewEl;
                 if (previewFrame && previewFrame.contentDocument) {
                   var doc = previewFrame.contentDocument;
@@ -204,7 +204,6 @@ var CaptionListModule = (function () {
                     reader.read().then(function(result) {
                       if (result.done) {
                         setStatus(ui, 'autoset.py finished.');
-                        // Finalize output in preview pane
                         if (previewFrame && previewFrame.contentDocument) {
                           var doc = previewFrame.contentDocument;
                           doc.open();
@@ -230,6 +229,72 @@ var CaptionListModule = (function () {
                   readChunk();
                 }).catch(function(err) {
                   setStatus(ui, 'autoset.py failed: ' + err);
+                });
+              }
+            },
+            {
+              label: 'Deface',
+              run: function() {
+                setStatus(ui, 'Defacing all videos...');
+                var previewFrame = ui.previewEl;
+                if (previewFrame && previewFrame.contentDocument) {
+                  var doc = previewFrame.contentDocument;
+                  doc.open();
+                  doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                  doc.close();
+                }
+                var folderPath = state.folder;
+                fetch('/fs/deface_folder', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ folder: folderPath })
+                }).then(function(response) {
+                  var previewFrame = ui.previewEl;
+                  if (!response.body || !window.ReadableStream) {
+                    response.text().then(function(text) {
+                      if (previewFrame && previewFrame.contentDocument) {
+                        var doc = previewFrame.contentDocument;
+                        doc.open();
+                        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                        doc.write(text.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                        doc.write('</body></html>');
+                        doc.close();
+                      }
+                    });
+                    return;
+                  }
+                  var reader = response.body.getReader();
+                  var decoder = new TextDecoder();
+                  var output = '';
+                  function readChunk() {
+                    reader.read().then(function(result) {
+                      if (result.done) {
+                        setStatus(ui, 'Defacing finished.');
+                        if (previewFrame && previewFrame.contentDocument) {
+                          var doc = previewFrame.contentDocument;
+                          doc.open();
+                          doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                          doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                          doc.write('</body></html>');
+                          doc.close();
+                        }
+                        return;
+                      }
+                      output += decoder.decode(result.value, {stream:true});
+                      if (previewFrame && previewFrame.contentDocument) {
+                        var doc = previewFrame.contentDocument;
+                        doc.open();
+                        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                        doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                        doc.write('</body></html>');
+                        doc.close();
+                      }
+                      readChunk();
+                    });
+                  }
+                  readChunk();
+                }).catch(function(err) {
+                  setStatus(ui, 'Defacing failed: ' + err);
                 });
               }
             }
@@ -330,9 +395,86 @@ var CaptionListModule = (function () {
             });
 
             actions.push({
-              label: 'Run autoset.py',
+              label: 'Deface',
               run: function() {
-                setStatus(ui, 'Running autoset.py...');
+                // Add Deface... to file context menu for video files
+                if (['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v'].indexOf(ext) !== -1) {
+                  actions.push({
+                    label: 'Deface...',
+                    run: function () {
+                      var defaultThresh = '0.4';
+                      var t = window.prompt('Deface: Enter threshold (-t, 0.0-1.0)', defaultThresh);
+                      if (t === null) return;
+                      t = String(t).trim();
+                      if (!/^0(\.\d+)?|1(\.0+)?$/.test(t)) {
+                        setStatus(ui, 'Invalid threshold');
+                        return;
+                      }
+                      setStatus(ui, 'Defacing file...');
+                      var previewFrame = ui.previewEl;
+                      if (previewFrame && previewFrame.contentDocument) {
+                        var doc = previewFrame.contentDocument;
+                        doc.open();
+                        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                        doc.close();
+                      }
+                      var filePath = (state.folder ? state.folder + '/' : '') + mediaItem.fileName;
+                      fetch('/fs/deface_file', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ file: filePath, thresh: t })
+                      }).then(function(response) {
+                        var previewFrame = ui.previewEl;
+                        if (!response.body || !window.ReadableStream) {
+                          response.text().then(function(text) {
+                            if (previewFrame && previewFrame.contentDocument) {
+                              var doc = previewFrame.contentDocument;
+                              doc.open();
+                              doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                              doc.write(text.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                              doc.write('</body></html>');
+                              doc.close();
+                            }
+                          });
+                          return;
+                        }
+                        var reader = response.body.getReader();
+                        var decoder = new TextDecoder();
+                        var output = '';
+                        function readChunk() {
+                          reader.read().then(function(result) {
+                            if (result.done) {
+                              setStatus(ui, 'Defacing finished.');
+                              if (previewFrame && previewFrame.contentDocument) {
+                                var doc = previewFrame.contentDocument;
+                                doc.open();
+                                doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                                doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                                doc.write('</body></html>');
+                                doc.close();
+                              }
+                              return;
+                            }
+                            output += decoder.decode(result.value, {stream:true});
+                            if (previewFrame && previewFrame.contentDocument) {
+                              var doc = previewFrame.contentDocument;
+                              doc.open();
+                              doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                              doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                              doc.write('</body></html>');
+                              doc.close();
+                            }
+                            readChunk();
+                          });
+                        }
+                        readChunk();
+                      }).catch(function(err) {
+                        setStatus(ui, 'Defacing failed: ' + err);
+                      });
+                    }
+                  });
+                }
+                setStatus(ui, 'Defacing all videos...');
                 // Stream output to the main preview pane (iframe)
                 var previewFrame = ui.previewEl;
                 if (previewFrame && previewFrame.contentDocument) {
@@ -342,7 +484,7 @@ var CaptionListModule = (function () {
                   doc.close();
                 }
                 var folderPath = (state.folder ? state.folder + '/' : '') + folderItem.name;
-                fetch('/fs/autoset_run', {
+                fetch('/fs/deface_folder', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ folder: folderPath })
@@ -367,7 +509,7 @@ var CaptionListModule = (function () {
                   function readChunk() {
                     reader.read().then(function(result) {
                       if (result.done) {
-                        setStatus(ui, 'autoset.py finished.');
+                        setStatus(ui, 'Defacing finished.');
                         // Finalize output in preview pane
                         if (previewFrame && previewFrame.contentDocument) {
                           var doc = previewFrame.contentDocument;
@@ -393,7 +535,7 @@ var CaptionListModule = (function () {
                   }
                   readChunk();
                 }).catch(function(err) {
-                  setStatus(ui, 'autoset.py failed: ' + err);
+                  setStatus(ui, 'Defacing failed: ' + err);
                 });
               }
             });
@@ -483,6 +625,84 @@ var CaptionListModule = (function () {
               });
             }
           });
+          // Add Deface... for video files
+          var ext = (fileName || '').split('.').pop().toLowerCase();
+          if (["mp4","webm","mov","mkv","avi","m4v"].indexOf(ext) !== -1) {
+            actions.push({
+              label: 'Deface...',
+              run: function () {
+                var defaultThresh = '0.4';
+                var t = window.prompt('Deface: Enter threshold (-t, 0.0-1.0)', defaultThresh);
+                if (t === null) return;
+                t = String(t).trim();
+                if (!/^0(\.\d+)?|1(\.0+)?$/.test(t)) {
+                  setStatus(ui, 'Invalid threshold');
+                  return;
+                }
+                setStatus(ui, 'Defacing file...');
+                var previewFrame = ui.previewEl;
+                if (previewFrame && previewFrame.contentDocument) {
+                  var doc = previewFrame.contentDocument;
+                  doc.open();
+                  doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                  doc.close();
+                }
+                var filePath = (state.folder ? state.folder + '/' : '') + mediaItem.fileName;
+                fetch('/fs/deface_file', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ file: filePath, thresh: t })
+                }).then(function(response) {
+                  var previewFrame = ui.previewEl;
+                  if (!response.body || !window.ReadableStream) {
+                    response.text().then(function(text) {
+                      if (previewFrame && previewFrame.contentDocument) {
+                        var doc = previewFrame.contentDocument;
+                        doc.open();
+                        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                        doc.write(text.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                        doc.write('</body></html>');
+                        doc.close();
+                      }
+                    });
+                    return;
+                  }
+                  var reader = response.body.getReader();
+                  var decoder = new TextDecoder();
+                  var output = '';
+                  function readChunk() {
+                    reader.read().then(function(result) {
+                      if (result.done) {
+                        setStatus(ui, 'Defacing finished.');
+                        if (previewFrame && previewFrame.contentDocument) {
+                          var doc = previewFrame.contentDocument;
+                          doc.open();
+                          doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                          doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                          doc.write('</body></html>');
+                          doc.close();
+                        }
+                        return;
+                      }
+                      output += decoder.decode(result.value, {stream:true});
+                      if (previewFrame && previewFrame.contentDocument) {
+                        var doc = previewFrame.contentDocument;
+                        doc.open();
+                        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;">');
+                        doc.write(output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                        doc.write('</body></html>');
+                        doc.close();
+                      }
+                      readChunk();
+                    });
+                  }
+                  readChunk();
+                }).catch(function(err) {
+                  setStatus(ui, 'Defacing failed: ' + err);
+                });
+              }
+            });
+          }
           // Only show Restore if file is missing from working dir but present in originals
           var originals = (state.originals || []);
           var inWorking = state.items.some(function(item) { return item.fileName === fileName; });

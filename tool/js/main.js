@@ -7,9 +7,7 @@ window.addEventListener('DOMContentLoaded', function() {
     statusEl: document.getElementById('status'),
     dropZone: document.getElementById('drop-zone'),
     refreshBtn: document.getElementById('refresh-btn'),
-    reviewBtn: document.getElementById('review-captions-btn'),
-    folderLabelEl: document.getElementById('folder-label'),
-    topInputRow: document.getElementById('folder-label').parentElement
+    reviewBtn: document.getElementById('review-captions-btn')
   };
 
   window.startCaptionMode({ ui: ui });

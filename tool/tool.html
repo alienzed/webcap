@@ -10,17 +10,6 @@
     <body>
         <div class="app">
             <div class="panel stack">
-                <div class="row-inline folder-label-row">
-                    <input
-                        id="folder-label"
-                        type="text"
-                        value="No folder selected"
-                        placeholder=""
-                        readonly
-                        class="caption-folder-label"
-                    >
-                    <button id="refresh-btn" type="button" title="Refresh directory" class="refresh-btn-square">↻</button>
-                </div>
                 <div id="caption-filter-row" class="filter-row">
                     <input id="page-filter" type="text" placeholder="filter">
                     <button
@@ -30,7 +19,10 @@
                         onclick="if (!document.getElementById('page-filter').value) { document.getElementById('page-filter').focus(); return; } document.getElementById('page-filter').value = ''; document.getElementById('page-filter').dispatchEvent(new Event('input', { bubbles: true }));"
                     >x</button>
                 </div>
-                <div id="media-list" class="media-list with-stats-pane"></div>
+                <div class="media-list-wrapper">
+                    <button id="refresh-btn" type="button" title="Refresh directory" class="refresh-btn-square floating-refresh">↻</button>
+                    <div id="media-list" class="media-list with-stats-pane"></div>
+                </div>
                 <button id="focus-set-exit-btn" type="button" style="display:none;margin:8px 0 0 0;">Exit Set</button>
                 <button id="review-captions-btn" type="button" style="margin-bottom:8px">Review Captions</button>
                 <div id="caption-stats-pane">

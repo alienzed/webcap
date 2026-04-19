@@ -1,4 +1,3 @@
-
 import os
 import sys
 import json
@@ -417,7 +416,7 @@ def autoset_run():
             return jsonify({"error": f"Folder does not exist: {folder}"}), 404
         # Use the same Python executable as the server
         python_exe = resolve_python_executable()
-        autoset_path = str(ROOT / "scripts" / "autoset.py")
+        autoset_path = str(ROOT / "tool" / "server" / "autoset.py")
         cmd = [python_exe, autoset_path, "--master", str(folder_path)]
         def generate():
             try:
@@ -462,6 +461,103 @@ def duplicate_folder():
 
     shutil.copytree(str(src_path), str(dst_path))
     return jsonify({'success': True, 'dst': str(dst_path)})
+
+@app.route('/fs/deface_folder', methods=['POST'])
+def deface_folder():
+    """
+    Deface all .mp4 files in the given folder.
+    - For each .mp4:
+        - If not in originals, move it there first (never overwrite originals).
+        - Run deface CLI on the file.
+        - If deface creates *_anonymized.mp4, move it to replace the original (after backup).
+    """
+    import os, shutil, subprocess
+    from flask import request, Response, stream_with_context
+
+    folder = request.json.get('folder')
+    if not folder:
+        return Response('[ERROR] No folder specified\n', mimetype='text/plain'), 400
+
+    folder_path = safe_join_fs_root(folder)
+    originals_path = os.path.join(os.path.dirname(folder_path), 'originals')
+    os.makedirs(originals_path, exist_ok=True)
+
+    def generate():
+        for fname in os.listdir(folder_path):
+            if not fname.lower().endswith('.mp4'):
+                continue
+            fpath = os.path.join(folder_path, fname)
+            orig_fpath = os.path.join(originals_path, fname)
+
+            # Backup to originals if not already present
+            if not os.path.exists(orig_fpath):
+                yield f'[INFO] Moving {fname} to originals...\n'
+                shutil.move(fpath, orig_fpath)
+                fpath = orig_fpath
+
+            yield f'[INFO] Running deface on {fname}...\n'
+            proc = subprocess.Popen(
+                ['deface', '-t', '0.4', '--mask-scale', '1', fpath],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            for line in proc.stdout:
+                yield line
+            proc.wait()
+
+            anon_fpath = fpath.replace('.mp4', '_anonymized.mp4')
+            if os.path.exists(anon_fpath):
+                shutil.move(anon_fpath, os.path.join(folder_path, fname))
+                yield f'[SUCCESS] Defaced {fname}\n'
+            else:
+                yield f'[FAIL] Deface failed for {fname}\n'
+
+    return Response(stream_with_context(generate()), mimetype='text/plain')
+
+@app.route('/fs/deface_file', methods=['POST'])
+def deface_file():
+    """
+    Deface a single video file with a custom threshold.
+    - If not in originals, move it there first (never overwrite originals).
+    - Run deface CLI on the file with the given -t value.
+    - If deface creates *_anonymized.mp4, move it to replace the original (after backup).
+    """
+    import os, shutil, subprocess
+    from flask import request, Response, jsonify
+
+    data = request.get_json()
+    file_rel = data.get('file')
+    thresh = str(data.get('thresh', '0.4')).strip()
+    if not file_rel or not thresh:
+        return jsonify({'error': 'Missing file or threshold'}), 400
+
+    # Path safety (use your existing helpers)
+    file_path = safe_join_fs_root(file_rel)
+    folder_path = os.path.dirname(file_path)
+    file_name = os.path.basename(file_path)
+    originals_path = os.path.join(os.path.dirname(folder_path), 'originals')
+    os.makedirs(originals_path, exist_ok=True)
+    orig_fpath = os.path.join(originals_path, file_name)
+
+    # Backup to originals if not already present
+    if not os.path.exists(orig_fpath):
+        shutil.move(file_path, orig_fpath)
+        file_path = orig_fpath
+
+    # Run deface CLI with custom threshold
+    deface_cmd = ['deface', '-t', thresh, '--mask-scale', '1', file_path]
+    proc = subprocess.Popen(deface_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+    def generate():
+        for line in proc.stdout:
+            yield line
+        proc.wait()
+
+    # Move anonymized file into place if created
+    anon_fpath = file_path.replace('.mp4', '_anonymized.mp4')
+    if os.path.exists(anon_fpath):
+        shutil.move(anon_fpath, os.path.join(folder_path, file_name))
+
+    return Response(generate(), mimetype='text/plain')
     
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

@@ -1,3 +1,6 @@
+.media-list-wrapper {
+  position: relative;
+}
 
 :root {
   --bg: #f4f5f7;
@@ -27,6 +30,7 @@ body {
   background: #e6ffe6 !important;
   border-left: 3px solid #7ed957;
 }
+
 /* Layout */
 .app {
   display: grid;
@@ -131,12 +135,18 @@ body {
 /* Highlight for empty captions */
 .page-item.empty-caption {
   background: #fffbe6 !important;
-  border-left: 3px solid #ff9c9c;
+  border-left: 3px solid #ffc779;
 }
 
 .page-item.folder-item {
-  background: rgba(230,126,34,0.06);
+  background: rgba(157, 255, 242, 0.06);
   font-weight: 600;
+}
+
+.page-item.folder-item.header-item {
+  background: #f8f9fb;
+  font-weight: 600;
+  cursor: default;
 }
 
 .page-meta {
@@ -309,7 +319,6 @@ iframe {
   min-width: 28px;
   min-height: 28px;
   padding: 0;
-  margin-left: 2px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--panel);
@@ -319,6 +328,7 @@ iframe {
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
+  z-index: 10;
 }
 .refresh-btn-square:hover {
   background: var(--hover);
@@ -326,9 +336,22 @@ iframe {
   border-color: var(--accent);
   cursor: pointer;
 }
+.media-list {
+  position: relative;
+}
+.floating-refresh {
+  position: absolute;
+  top: 28px;
+  right: 8px;
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
 
 /* Subtle border below the current directory item */
 .current-folder-bordered {
   border-bottom: 2px solid #929292;
   margin-bottom: 0;
+}
+.d-none {
+  display: none !important;
 }

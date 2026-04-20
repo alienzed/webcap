@@ -23,7 +23,6 @@
    http://127.0.0.1:5000/
    ```
 
-
 ## Basic use
 1. Click the mode switch button to enter Caption mode.
 2. Use **Choose Folder** (Chromium browsers) or type an absolute path and click **Open Path**.

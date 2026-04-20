@@ -1,5 +1,5 @@
-output_dir = "/mnt/w/training/output"
-dataset    = "/mnt/w/training/massage/v3/dataset.lo.toml"
+output_dir = "/mnt/w/training/output/runs"
+dataset    = "/mnt/w/training/XX/dataset.lo.toml"
 
 epochs = 150
 save_every_n_epochs = 1
@@ -28,13 +28,11 @@ timestep_sample_method = 'logit_normal'
 min_t = 0
 max_t = 0.875
 
-
 [adapter]
 type = "lora"
 rank = 32
 dtype = "bfloat16"
 dropout = 0.05
-
 
 [optimizer]
 type = "AdamW8bitKahan"

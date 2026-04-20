@@ -18,7 +18,6 @@ def safe_join_fs_root(rel_path):
     return abs_path
 from .originals import MEDIA_ALL_EXTS
 
-
 def _resolve_folder(folder: str) -> Path:
     folder = (folder or '').strip()
     if not folder:
@@ -27,7 +26,6 @@ def _resolve_folder(folder: str) -> Path:
     if not path.exists() or not path.is_dir():
         raise ValueError('Folder does not exist')
     return path
-
 
 def _validate_media_name(media_name: str) -> str:
     media_name = (media_name or '').strip()
@@ -39,10 +37,8 @@ def _validate_media_name(media_name: str) -> str:
         raise ValueError('Invalid media filename')
     return media_name
 
-
 def _caption_name_for_media(media_name: str) -> str:
     return f'{Path(media_name).stem}.txt'
-
 
 def list_media_files(folder: str):
     folder_path = _resolve_folder(folder)
@@ -51,7 +47,6 @@ def list_media_files(folder: str):
         if entry.is_file() and entry.suffix.lower() in MEDIA_ALL_EXTS
     ]
     return sorted(files, key=lambda name: name.lower())
-
 
 def load_caption_text(folder: str, media_name: str):
     folder_path = _resolve_folder(folder)
@@ -69,7 +64,6 @@ def load_caption_text(folder: str, media_name: str):
         'caption_file': caption_name
     }
 
-
 def save_caption_text(folder: str, media_name: str, text: str):
     folder_path = _resolve_folder(folder)
     media_name = _validate_media_name(media_name)
@@ -84,7 +78,6 @@ def save_caption_text(folder: str, media_name: str, text: str):
     except Exception:
         pass
     return {'ok': True, 'caption_file': caption_name}
-
 
 def serve_media_file(folder: str, media_name: str):
     folder_path = _resolve_folder(folder)

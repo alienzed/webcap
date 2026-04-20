@@ -1,6 +1,5 @@
 enable_ar_bucket = true
 
-
 [[directory]]
 path = "/mnt/w/training/massage/v3/auto_dataset/square"
 num_repeats = 2

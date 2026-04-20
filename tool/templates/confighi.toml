@@ -1,5 +1,5 @@
-output_dir = "/mnt/w/training/output"
-dataset    = "/mnt/w/training/massage/v3/dataset.hi.toml"
+output_dir = "/mnt/w/training/output/runs"
+dataset    = "/mnt/w/training/XX/dataset.hi.toml"
 
 epochs = 100
 save_every_n_epochs = 1
@@ -18,7 +18,6 @@ caching_batch_size = 1
 steps_per_print = 10
 video_clip_mode = "single_beginning"
 
-
 [model]
 type = "wan"
 ckpt_path = "/mnt/w/models/Stable-diffusion/wan/Wan2.2-T2V-A14B"
@@ -28,12 +27,10 @@ transformer_dtype = "float8"
 min_t = 0.875
 max_t = 1.0
 
-
 [adapter]
 type = "lora"
 rank = 32
 dtype = "bfloat16"
-
 
 [optimizer]
 type = "AdamW8bitKahan"

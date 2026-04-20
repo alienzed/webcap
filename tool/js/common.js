@@ -417,8 +417,9 @@ restoreMedia = function( mediaItem) {
 // Save caption text for the current media item (fully global, fail-loudly)
 function savePathCaption() {
   var mediaItem = state.currentItem;
-  if (!mediaItem || !mediaItem.fileName) {
-    throw new Error('savePathCaption: invalid mediaItem');
+  // Guard: only save if currentItem matches the visible editor context
+  if (!mediaItem || !mediaItem.fileName || ui.editorEl.getAttribute('readonly')) {
+    throw new Error('savePathCaption: invalid or stale mediaItem');
   }
   return new Promise(function (resolve, reject) {
     HttpModule.postJson('/caption/save', {

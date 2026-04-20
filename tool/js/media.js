@@ -102,23 +102,29 @@ function selectPathMedia(mediaItem) {
     ui.editorEl.removeAttribute('readonly');
     renderPathPreview(state.folder, mediaItem.fileName);
     HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function (status, responseText) {
+      var text = '';
       if (status !== 200) {
+        ui.editorEl.value = '';
         setStatus('Error loading caption: ' + status);
+        renderFileList();
         return;
       }
-      var text = '';
       try {
         var data = JSON.parse(responseText);
         text = data.caption || '';
       } catch (e) {
+        ui.editorEl.value = '';
         setStatus('Error parsing caption: ' + e);
+        renderFileList();
         return;
       }
-      // If caption is missing, populate with primer/template
+      // If caption is missing or empty, auto-populate with primer/template if available
       if (!(text || '').trim()) {
-        text = buildAutoPrimer(mediaItem.fileName);
+        var primerText = buildAutoPrimer(mediaItem.fileName);
+        ui.editorEl.value = primerText || '';
+      } else {
+        ui.editorEl.value = text;
       }
-      ui.editorEl.value = text;
       var suffix = mediaItem.fileName.split('.').pop();
       setStatus('Selected: ' + mediaItem.label + ' (' + suffix + ')');
       // Re-render list to show selection

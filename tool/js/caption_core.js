@@ -25,22 +25,8 @@ function buildPrimerFromConfig(fileName, config) {
   if (!template.trim()) {
     return '';
   }
-
-  var defaults = parseDefaults(config && config.defaults || '');
-  var mappings = parseMappings(config && config.mappings || '');
-  var fileNorm = String(fileName || '').toLowerCase();
+  // Fallback: treat defaults/mappings as empty
   var values = {};
-
-  Object.keys(defaults).forEach(function (key) {
-    values[key] = defaults[key];
-  });
-
-  mappings.forEach(function (rule) {
-    if (fileNorm.indexOf(rule.trigger) !== -1) {
-      values[rule.key] = rule.value;
-    }
-  });
-
   return renderMultilineTemplate(template, values);
 }
 

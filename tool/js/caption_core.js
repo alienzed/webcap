@@ -1,331 +1,209 @@
 // caption_core.js
-(function(global) {
+// Global functions: captionCacheKey, renderMultilineTemplate, buildPrimerFromConfig, parseRules, renderTemplate, buildPrimer, makeTrashName, getOriginalNameFromTrashName, setupFolderStatePersistence, setupFolderStateReset
+function captionCacheKey(mediaItem) {
+  return 'path:' + (state.folder || '') + ':' + mediaItem.fileName;
+}
 
-  function captionCacheKey(state, mediaItem) {
-    return 'path:' + (state.folder || '') + ':' + mediaItem.fileName;
+function renderMultilineTemplate(template, values) {
+  var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function (_, rawKey) {
+    var key = String(rawKey || '').toLowerCase();
+    return values.hasOwnProperty(key) ? values[key] : '';
+  });
+
+  rendered = rendered
+    .split(/\r?\n/)
+    .map(function (line) { return line.replace(/[ \t]+$/g, ''); })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return rendered;
+}
+
+function buildPrimerFromConfig(fileName, config) {
+  var template = String(config && config.template || '');
+  if (!template.trim()) {
+    return '';
   }
 
-  // All caption reads now use backend endpoint /caption/load
-  function readCaptionFromBackend(state, mediaItem) {
-    var key = captionCacheKey(state, mediaItem);
-    return new Promise(function(resolve) {
-      var url = '/caption/load?folder=' + encodeURIComponent(state.folder || '') + '&media=' + encodeURIComponent(mediaItem.fileName);
-      HttpModule.get(url, function(status, responseText) {
-        if (status !== 200) {
-          resolve({ text: '', exists: false });
-          return;
-        }
-        try {
-          var resp = JSON.parse(responseText);
-          resolve({ text: resp.caption || '', exists: !!resp.exists });
-        } catch (e) {
-          resolve({ text: '', exists: false });
-        }
-      });
-    });
-  }
+  var defaults = parseDefaults(config && config.defaults || '');
+  var mappings = parseMappings(config && config.mappings || '');
+  var fileNorm = String(fileName || '').toLowerCase();
+  var values = {};
 
-  function loadCaptionTextForItem(state, mediaItem) {
-    var key = captionCacheKey(state, mediaItem);
-    if (Object.prototype.hasOwnProperty.call(state.captionCache, key)) {
-      return Promise.resolve(state.captionCache[key]);
+  Object.keys(defaults).forEach(function (key) {
+    values[key] = defaults[key];
+  });
+
+  mappings.forEach(function (rule) {
+    if (fileNorm.indexOf(rule.trigger) !== -1) {
+      values[rule.key] = rule.value;
     }
-    return readCaptionFromBackend(state, mediaItem).then(function(result) {
-      state.captionCache[key] = result.text || '';
-      return state.captionCache[key];
-    });
-  }
+  });
 
-  function savePathCaption(ui, state, mediaItem, text) {
-    return new Promise(function(resolve, reject) {
-      HttpModule.postJson('/caption/save', { folder: state.folder, media: mediaItem.fileName, text: text }, function(status, responseText) {
-        if (status === 200) {
-          ui.statusEl.textContent = 'Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
-          resolve();
-          return;
-        }
-        reject(new Error(getErrorMessage(responseText, 'Could not save caption')));
-      });
-    });
-  }
+  return renderMultilineTemplate(template, values);
+}
 
-  global.CaptionOps = {
-    captionCacheKey: captionCacheKey,
-    loadCaptionTextForItem: loadCaptionTextForItem,
-    savePathCaption: savePathCaption
-  };
-})(window);
+function parseRules(multiline) {
+  var template = '';
+  var defaults = {};
+  var assignments = [];
 
-var CaptionTemplateModule = (function() {
-  function parseDefaults(multiline) {
-    var defaults = {};
-    String(multiline || '')
-      .split(/\r?\n/)
-      .map(function(line) { return line.trim(); })
-      .filter(Boolean)
-      .forEach(function(line) {
-        var eq = line.indexOf('=');
-        if (eq <= 0) {
-          return;
-        }
-        var key = line.slice(0, eq).trim().toLowerCase();
-        var value = line.slice(eq + 1).trim();
-        if (key) {
-          defaults[key] = value;
-        }
-      });
-    return defaults;
-  }
+  String(multiline || '')
+    .split(/\r?\n/)
+    .map(function (line) { return line.trim(); })
+    .filter(Boolean)
+    .forEach(function (line) {
+      var lower = line.toLowerCase();
 
-  function parseMappings(multiline) {
-    return String(multiline || '')
-      .split(/\r?\n/)
-      .map(function(line) { return line.trim(); })
-      .filter(Boolean)
-      .map(function(line) {
-        var idx = line.indexOf('=>');
-        if (idx === -1) {
-          return null;
-        }
-
-        var left = line.slice(0, idx).trim().toLowerCase();
-        var right = line.slice(idx + 2).trim();
-        var eq = right.indexOf('=');
-        if (!left || !right || eq <= 0) {
-          return null;
-        }
-
-        var key = right.slice(0, eq).trim().toLowerCase();
-        var value = right.slice(eq + 1).trim();
-        if (!key || !value) {
-          return null;
-        }
-
-        var scope = 'file';
-        var trigger = left;
-        var colon = left.indexOf(':');
-        if (colon > 0) {
-          var prefix = left.slice(0, colon).trim();
-          var scopedTrigger = left.slice(colon + 1).trim();
-          if ((prefix === 'file' || prefix === 'caption') && scopedTrigger) {
-            scope = prefix;
-            trigger = scopedTrigger;
-          }
-        }
-
-        if (scope !== 'file') {
-          return null;
-        }
-
-        return { trigger: trigger, key: key, value: value };
-      })
-      .filter(Boolean);
-  }
-
-  function renderMultilineTemplate(template, values) {
-    var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function(_, rawKey) {
-      var key = String(rawKey || '').toLowerCase();
-      return values.hasOwnProperty(key) ? values[key] : '';
-    });
-
-    rendered = rendered
-      .split(/\r?\n/)
-      .map(function(line) { return line.replace(/[ \t]+$/g, ''); })
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-
-    return rendered;
-  }
-
-  function buildPrimerFromConfig(fileName, config) {
-    var template = String(config && config.template || '');
-    if (!template.trim()) {
-      return '';
-    }
-
-    var defaults = parseDefaults(config && config.defaults || '');
-    var mappings = parseMappings(config && config.mappings || '');
-    var fileNorm = String(fileName || '').toLowerCase();
-    var values = {};
-
-    Object.keys(defaults).forEach(function(key) {
-      values[key] = defaults[key];
-    });
-
-    mappings.forEach(function(rule) {
-      if (fileNorm.indexOf(rule.trigger) !== -1) {
-        values[rule.key] = rule.value;
+      if (lower.indexOf('template:') === 0) {
+        template = line.slice('template:'.length).trim();
+        return;
       }
-    });
 
-    return renderMultilineTemplate(template, values);
-  }
-
-  function parseRules(multiline) {
-    var template = '';
-    var defaults = {};
-    var assignments = [];
-
-    String(multiline || '')
-      .split(/\r?\n/)
-      .map(function(line) { return line.trim(); })
-      .filter(Boolean)
-      .forEach(function(line) {
-        var lower = line.toLowerCase();
-
-        if (lower.indexOf('template:') === 0) {
-          template = line.slice('template:'.length).trim();
-          return;
-        }
-
-        if (lower.indexOf('default:') === 0) {
-          var defaultPart = line.slice('default:'.length).trim();
-          var eq = defaultPart.indexOf('=');
-          if (eq > 0) {
-            var key = defaultPart.slice(0, eq).trim().toLowerCase();
-            var value = defaultPart.slice(eq + 1).trim();
-            if (key) {
-              defaults[key] = value;
-            }
-          }
-          return;
-        }
-
-        var idx = line.indexOf('=>');
-        if (idx === -1) {
-          return;
-        }
-
-        var left = line.slice(0, idx).trim().toLowerCase();
-        var right = line.slice(idx + 2).trim();
-        var eq = right.indexOf('=');
-        if (!left || !right || eq <= 0) {
-          return;
-        }
-
-        var key = right.slice(0, eq).trim().toLowerCase();
-        var value = right.slice(eq + 1).trim();
-        if (!key || !value) {
-          return;
-        }
-
-        var scope = 'file';
-        var trigger = left;
-        var colon = left.indexOf(':');
-        if (colon > 0) {
-          var prefix = left.slice(0, colon).trim();
-          var scopedTrigger = left.slice(colon + 1).trim();
-          if ((prefix === 'file' || prefix === 'caption') && scopedTrigger) {
-            scope = prefix;
-            trigger = scopedTrigger;
+      if (lower.indexOf('default:') === 0) {
+        var defaultPart = line.slice('default:'.length).trim();
+        var eq = defaultPart.indexOf('=');
+        if (eq > 0) {
+          var key = defaultPart.slice(0, eq).trim().toLowerCase();
+          var value = defaultPart.slice(eq + 1).trim();
+          if (key) {
+            defaults[key] = value;
           }
         }
-
-        if (scope !== 'file') {
-          return;
-        }
-
-        assignments.push({ trigger: trigger, key: key, value: value });
-      });
-
-    return {
-      template: template,
-      defaults: defaults,
-      assignments: assignments
-    };
-  }
-
-  function renderTemplate(template, values) {
-    var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function(_, rawKey) {
-      var key = String(rawKey || '').toLowerCase();
-      return values.hasOwnProperty(key) ? values[key] : '';
-    });
-
-    rendered = rendered
-      .replace(/\s+/g, ' ')
-      .replace(/\s+,/g, ',')
-      .replace(/,\s*,+/g, ', ')
-      .replace(/^,\s*/, '')
-      .replace(/,\s*$/, '')
-      .trim();
-
-    return rendered;
-  }
-
-  function buildPrimer(fileName, rulesText) {
-    var cfg = parseRules(rulesText);
-    if (!cfg.template) {
-      return '';
-    }
-
-    var fileNorm = String(fileName || '').toLowerCase();
-    var values = {};
-
-    Object.keys(cfg.defaults).forEach(function(key) {
-      values[key] = cfg.defaults[key];
-    });
-
-    cfg.assignments.forEach(function(rule) {
-      if (fileNorm.indexOf(rule.trigger) !== -1) {
-        values[rule.key] = rule.value;
+        return;
       }
-    });
 
-    return renderTemplate(cfg.template, values);
-  }
+      var idx = line.indexOf('=>');
+      if (idx === -1) {
+        return;
+      }
+
+      var left = line.slice(0, idx).trim().toLowerCase();
+      var right = line.slice(idx + 2).trim();
+      var eq = right.indexOf('=');
+      if (!left || !right || eq <= 0) {
+        return;
+      }
+
+      var key = right.slice(0, eq).trim().toLowerCase();
+      var value = right.slice(eq + 1).trim();
+      if (!key || !value) {
+        return;
+      }
+
+      var scope = 'file';
+      var trigger = left;
+      var colon = left.indexOf(':');
+      if (colon > 0) {
+        var prefix = left.slice(0, colon).trim();
+        var scopedTrigger = left.slice(colon + 1).trim();
+        if ((prefix === 'file' || prefix === 'caption') && scopedTrigger) {
+          scope = prefix;
+          trigger = scopedTrigger;
+        }
+      }
+
+      if (scope !== 'file') {
+        return;
+      }
+
+      assignments.push({ trigger: trigger, key: key, value: value });
+    });
 
   return {
-    buildPrimer: buildPrimer,
-    buildPrimerFromConfig: buildPrimerFromConfig
+    template: template,
+    defaults: defaults,
+    assignments: assignments
   };
-})();
+}
+
+function renderTemplate(template, values) {
+  var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function (_, rawKey) {
+    var key = String(rawKey || '').toLowerCase();
+    return values.hasOwnProperty(key) ? values[key] : '';
+  });
+
+  rendered = rendered
+    .replace(/\s+/g, ' ')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*,+/g, ', ')
+    .replace(/^,\s*/, '')
+    .replace(/,\s*$/, '')
+    .trim();
+
+  return rendered;
+}
+
+function buildPrimer(fileName, rulesText) {
+  var cfg = parseRules(rulesText);
+  if (!cfg.template) {
+    return '';
+  }
+
+  var fileNorm = String(fileName || '').toLowerCase();
+  var values = {};
+
+  Object.keys(cfg.defaults).forEach(function (key) {
+    values[key] = cfg.defaults[key];
+  });
+
+  cfg.assignments.forEach(function (rule) {
+    if (fileNorm.indexOf(rule.trigger) !== -1) {
+      values[rule.key] = rule.value;
+    }
+  });
+
+  return renderTemplate(cfg.template, values);
+}
+
+// All functions are now global: buildPrimer, buildPrimerFromConfig
 
 // File mutation helpers for prune/restore and trash naming.
+// All functions are now global: makeTrashName, getOriginalNameFromTrashName
 
-var CaptionTrashOps = (function() {
-  var TRASH_NAME_PATTERN = /^[^_]+_[^_]+__.+$/;
 
-  function makeTrashName(baseName) {
-    var stamp = Date.now().toString(36);
-    var rand = Math.floor(Math.random() * 0xffff).toString(16);
-    return stamp + '_' + rand + '__' + baseName;
-  }
 
-  function getOriginalNameFromTrashName(name) {
-    var fileName = String(name || '');
-    if (!TRASH_NAME_PATTERN.test(fileName)) {
-      return '';
-    }
-    var splitAt = fileName.indexOf('__');
-    if (splitAt < 0) {
-      return '';
-    }
-    return fileName.slice(splitAt + 2);
-  }
-
-  return {
-    makeTrashName: makeTrashName,
-    getOriginalNameFromTrashName: getOriginalNameFromTrashName
+function setupFolderStatePersistence(ui) {
+  var saveLater = debounceCreate(300);
+  state.scheduleFolderStateSave = function () {
+    saveLater(function () {
+      saveFolderStateForCurrentRoot().catch(function (err) {
+        setStatus(String(err && err.message ? err.message : err));
+      });
+    });
   };
-})();
+  var ids = [
+    'stats-required-phrase',
+    'stats-phrases',
+    'stats-token-rules',
+    'primer-template',
+    'primer-defaults',
+    'primer-mappings'
+  ];
 
-// Minimal state management for caption mode
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el || el.__folderStateBound) {
+      return;
+    }
+    el.__folderStateBound = true;
+    el.addEventListener('input', function () {
+      state.scheduleFolderStateSave();
+    });
+  });
+}
 
-(function(global) {
-  var state = {
-    folder: '',
-    suppressInput: false,
-    items: [],
-    childFolders: [],
-    currentItem: null,
-    objectUrl: '',
-    mode: 'path',
-    dirStack: [],
-    captionCache: {},
-    listRenderSeq: 0,
-    reviewedSet: new Set(),
-    focusSet: null
-  };
-  global.CaptionState = state;
-})(window);
+function setupFolderStateReset(ui) {
+  var btn = document.getElementById('folder-settings-reset-btn');
+  if (!btn || btn.__folderResetBound) {
+    return;
+  }
+  btn.__folderResetBound = true;
+  btn.addEventListener('click', function () {
+    resetFolderState().catch(function (err) {
+      setStatus(String(err && err.message ? err.message : err));
+    });
+  });
+}
+

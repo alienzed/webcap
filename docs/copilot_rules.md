@@ -14,9 +14,11 @@ This document defines all safety, mutation, and coding rules for the WebCap proj
 
 ---
 
+
 ## 2. Coding & Architectural Guidelines
 - No database dependency; all state is file-based.
 - Keep implementation simple, explicit, and minimal.
+- Use plain global variables and functions for all state and logic. Do not use IIFE, encapsulation, or modular patterns. If a global name collision occurs, it should throw an error and be fixed explicitly. This is intentional for maximal debuggability and clarity.
 - Prefer modular files over large, mixed-condition files.
 - Reuse shared helpers where behavior is identical.
 - Avoid new cross-module coupling unless needed for UX continuity.

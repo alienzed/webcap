@@ -11,20 +11,29 @@
         <div class="app">
             <div class="panel stack">
                 <div id="caption-filter-row" class="filter-row">
-                    <input id="page-filter" type="text" placeholder="filter">
+                    <input id="media-filter" type="text" placeholder="filter">
                     <button
                         id="caption-filter-clear-btn"
                         type="button"
                         title="Clear filter"
-                        onclick="if (!document.getElementById('page-filter').value) { document.getElementById('page-filter').focus(); return; } document.getElementById('page-filter').value = ''; document.getElementById('page-filter').dispatchEvent(new Event('input', { bubbles: true }));"
+                        onclick="if (!document.getElementById('media-filter').value) { document.getElementById('media-filter').focus(); return; } document.getElementById('media-filter').value = ''; document.getElementById('media-filter').dispatchEvent(new Event('input', { bubbles: true }));"
                     >x</button>
                 </div>
+                <div id="caption-filter-count"></div>
                 <div class="media-list-wrapper">
                     <button id="refresh-btn" type="button" title="Refresh directory" class="refresh-btn-square floating-refresh">↻</button>
+                    <div id="media-list-header">
+                        <div id="up-one-directory-row" class="media-item folder-item header-item" data-type="up" style="display:none;">
+                            <div>⬆ Up One Directory</div>
+                        </div>
+                        <div id="current-folder-row" class="media-item folder-item header-item current-folder-item current-folder-bordered" data-type="current-folder">
+                            <div>🗁 <span id="current-folder-label"></span></div>
+                        </div>
+                    </div>
                     <div id="media-list" class="media-list with-stats-pane"></div>
                 </div>
-                <button id="focus-set-exit-btn" type="button" style="display:none;margin:8px 0 0 0;">Exit Set</button>
-                <button id="review-captions-btn" type="button" style="margin-bottom:8px">Review Captions</button>
+                <button id="focus-set-exit-btn" type="button" style="display:none;margin:8px 0">Exit Set</button>
+                <button id="review-captions-btn" type="button" style="margin:8px 0">Review Captions</button>
                 <div id="caption-stats-pane">
                     <div class="stats-panel">
                         <details id="stats-details">
@@ -82,20 +91,14 @@
               <button id="focus-set-exit-btn" type="button" style="display:none">Exit Set</button>
             </div>
         </div>
+        <!-- JS load order: common.js, caption_core.js, caption_ui.js, media_list.js, preview_pane.js, main.js -->
         <script src="/static/js/common.js"></script>
-        <script src="/static/js/media.js"></script>
         <script src="/static/js/caption_core.js"></script>
-        <script src="/static/js/stats.js"></script>
         <script src="/static/js/caption_ui.js"></script>
-        <script src="/static/js/caption_mode.js"></script>
+        <script src="/static/js/media_list.js"></script>
+        <script src="/static/js/preview_pane.js"></script>
+        <script src="/static/js/media.js"></script>
+        <script src="/static/js/stats.js"></script>
         <script src="/static/js/main.js"></script>
-        <script>
-        window.addEventListener('error', function(event) {
-          console.error('Global error:', event.error || event.message);
-        });
-        window.addEventListener('unhandledrejection', function(event) {
-          console.error('Unhandled promise rejection:', event.reason);
-        });
-        </script>
     </body>
 </html>

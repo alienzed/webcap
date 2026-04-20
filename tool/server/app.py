@@ -22,21 +22,6 @@ TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
 
-@app.route("/fs/folder_state/load", methods=["GET"])
-def folder_state_load():
-    rel_path = request.args.get("folder", "").strip()
-    try:
-        folder_path = safe_join_fs_root(rel_path)
-        state_path = folder_path / ".webcap_state.json"
-        if not state_path.exists() or not state_path.is_file():
-            return jsonify({})
-        with open(state_path, "r", encoding="utf-8") as f:
-            return jsonify(json.load(f))
-    except Exception as e:
-        if FS_DEBUG:
-            print("[folder_state_load] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
 
 @app.route("/fs/folder_state/save", methods=["POST"])
 def folder_state_save():
@@ -95,80 +80,6 @@ def fs_root():
     return jsonify({"root": str(FS_ROOT)})
 
 
-@app.route("/fs/list", methods=["GET"])
-def fs_list():
-    rel_path = request.args.get("path", "").strip()
-    try:
-        dir_path = safe_join_fs_root(rel_path)
-        if not dir_path.exists() or not dir_path.is_dir():
-            if FS_DEBUG:
-                print(f"[fs_list] Searching in {FS_ROOT}")
-                print(f"[fs_list] Requested {rel_path} -> {dir_path} (NOT FOUND)")
-            return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
-        # Originals and config file management: only if valid set folder
-        try:
-            from .originals import MEDIA_ALL_EXTS, copy_media_to_originals, is_blacklisted
-
-            def is_set_folder(path):
-                name = path.name.lower()
-                # Skip if this folder or any ancestor is 'auto_dataset'
-                p = path
-                while p != p.parent:
-                    if p.name.lower() == 'auto_dataset':
-                        return False
-                    p = p.parent
-                if name == 'originals' or 'trash' in name or 'prune' in name:
-                    return False
-                if is_blacklisted(name):
-                    return False
-                # Must contain at least one media or caption file
-                for entry in path.iterdir():
-                    if entry.is_file() and (entry.suffix.lower() in MEDIA_ALL_EXTS or entry.suffix.lower() == '.txt'):
-                        return True
-                return False
-
-            if is_set_folder(dir_path):
-                copy_media_to_originals(str(dir_path))
-                # Config file creation
-                from pathlib import Path
-                import shutil
-                templates = {
-                    'configlo.toml': 'configlo.toml',
-                    'confighi.toml': 'confighi.toml',
-                    'dataset.lo.toml': 'dataset.lo.toml',
-                    'dataset.hi.toml': 'dataset.hi.toml',
-                }
-                for fname, tname in templates.items():
-                    fpath = dir_path / fname
-                    if not fpath.exists():
-                        tpath = TEMPLATES_DIR / tname
-                        if tpath.exists():
-                            text = tpath.read_text(encoding='utf-8')
-                            # For configlo/confighi, substitute dataset path
-                            if fname == 'configlo.toml':
-                                text = re.sub(r'^(dataset\s*=\s*).*$','dataset = "dataset.lo.toml"', text, flags=re.MULTILINE)
-                            elif fname == 'confighi.toml':
-                                text = re.sub(r'^(dataset\s*=\s*).*$','dataset = "dataset.hi.toml"', text, flags=re.MULTILINE)
-                            fpath.write_text(text, encoding='utf-8')
-        except Exception as oe:
-            if FS_DEBUG:
-                print(f"[fs_list] WARNING: Could not update originals/configs: {oe}")
-        entries = []
-        for entry in sorted(dir_path.iterdir(), key=lambda e: e.name.lower()):
-            if entry.is_dir():
-                entries.append({"name": entry.name, "type": "dir"})
-            elif entry.is_file():
-                entries.append({"name": entry.name, "type": "file"})
-        return jsonify({
-            "folders": [e["name"] for e in entries if e["type"] == "dir"],
-            "files": [e["name"] for e in entries if e["type"] == "file"]
-        })
-    except Exception as e:
-        if FS_DEBUG:
-            print("[fs_list] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
-
 def resolve_python_executable():
     return sys.executable
 
@@ -190,14 +101,6 @@ def static_files(filename):
         return send_from_directory(TEMPLATES_DIR, filename[10:])
     return send_from_directory(TOOL_DIR, filename)
 
-@app.route("/caption/list", methods=["GET"])
-def caption_list_route():
-    folder = request.args.get("folder", "")
-    try:
-        files = list_media_files(folder)
-        return jsonify({"files": files})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
 
 @app.route("/caption/load", methods=["GET"])
 def caption_load_route():
@@ -237,37 +140,78 @@ def fs_rename():
     data = request.get_json(silent=True) or {}
     print("[fs_rename] Incoming data:", data)
     folder = data.get("folder", "").strip()
-    # Accept both camelCase and snake_case keys for compatibility
-    old_file = data.get("oldFile") or data.get("old_name") or ""
-    new_file = data.get("newFile") or data.get("new_name") or ""
-    old_file = old_file.strip()
-    new_file = new_file.strip()
-    if not folder or not old_file or not new_file:
-        print("[fs_rename] Missing required parameters:", folder, old_file, new_file)
+    old_name = data.get("oldFile") or data.get("old_name") or ""
+    new_name = data.get("newFile") or data.get("new_name") or ""
+    old_name = old_name.strip()
+    new_name = new_name.strip()
+    if not folder or not old_name or not new_name:
+        print("[fs_rename] Missing required parameters:", folder, old_name, new_name)
         return jsonify({"error": "Missing required parameters"}), 400
     try:
         folder_path = safe_join_fs_root(folder)
-        print(f"[fs_rename] folder_path={folder_path}")
-        old_path = folder_path / old_file
-        new_path = folder_path / new_file
+        old_path = folder_path / old_name
+        new_path = folder_path / new_name
         print(f"[fs_rename] old_path={old_path}, new_path={new_path}")
-        # Rename media file
-        if not old_path.exists() or not old_path.is_file():
-            print("[fs_rename] Original file does not exist:", old_path)
-            return jsonify({"error": "Original file does not exist"}), 404
+        if not old_path.exists():
+            print("[fs_rename] Source does not exist:", old_path)
+            return jsonify({"error": "Source does not exist"}), 404
         if new_path.exists():
-            print("[fs_rename] Target file already exists:", new_path)
-            return jsonify({"error": "Target file already exists"}), 409
-        old_path.rename(new_path)
-        print(f"[fs_rename] Renamed {old_path} -> {new_path}")
-        # Rename caption if present
-        old_caption = folder_path / (Path(old_file).stem + ".txt")
-        new_caption = folder_path / (Path(new_file).stem + ".txt")
-        print(f"[fs_rename] old_caption={old_caption}, new_caption={new_caption}")
-        if old_caption.exists() and not new_caption.exists():
-            old_caption.rename(new_caption)
-            print(f"[fs_rename] Renamed caption {old_caption} -> {new_caption}")
-        return jsonify({"ok": True})
+            print("[fs_rename] Target already exists:", new_path)
+            return jsonify({"error": "Target already exists"}), 409
+        # Folder renaming logic
+        if old_path.is_dir():
+            # Disallow reserved names
+            if old_name in ("originals", ".", "..") or new_name in ("originals", ".", ".."):
+                return jsonify({"error": "Invalid folder name"}), 400
+            old_path.rename(new_path)
+            print(f"[fs_rename] Renamed folder {old_path} -> {new_path}")
+            return jsonify({"ok": True})
+        # File renaming logic
+        elif old_path.is_file():
+            old_path.rename(new_path)
+            print(f"[fs_rename] Renamed file {old_path} -> {new_path}")
+            # Rename caption if present (sidecar .txt)
+            old_caption = folder_path / (Path(old_name).stem + ".txt")
+            new_caption = folder_path / (Path(new_name).stem + ".txt")
+            print(f"[fs_rename] Caption rename check: old_caption={old_caption}, new_caption={new_caption}")
+            if not old_caption.exists():
+                print(f"[fs_rename] Caption file does not exist: {old_caption}")
+            elif new_caption.exists():
+                print(f"[fs_rename] Target caption already exists: {new_caption}")
+            else:
+                old_caption.rename(new_caption)
+                print(f"[fs_rename] Renamed caption {old_caption} -> {new_caption}")
+
+            # Update reviewedKeys in .webcap_state.json if present
+            state_path = folder_path / ".webcap_state.json"
+            if state_path.exists() and state_path.is_file():
+                try:
+                    with open(state_path, "r", encoding="utf-8") as f:
+                        folder_state = json.load(f)
+                    if (
+                        isinstance(folder_state, dict)
+                        and "reviewedKeys" in folder_state
+                        and isinstance(folder_state["reviewedKeys"], list)
+                    ):
+                        changed = False
+                        new_keys = []
+                        for k in folder_state["reviewedKeys"]:
+                            if k == old_name:
+                                new_keys.append(new_name)
+                                changed = True
+                            else:
+                                new_keys.append(k)
+                        if changed:
+                            folder_state["reviewedKeys"] = new_keys
+                            with open(state_path, "w", encoding="utf-8") as f:
+                                json.dump(folder_state, f, indent=2)
+                            print(f"[fs_rename] Updated reviewedKeys in {state_path}")
+                except Exception as e:
+                    print(f"[fs_rename] Could not update reviewedKeys: {e}")
+            return jsonify({"ok": True})
+        else:
+            print("[fs_rename] Source is neither file nor folder:", old_path)
+            return jsonify({"error": "Source is neither file nor folder"}), 400
     except Exception as e:
         print("[fs_rename] ERROR:", e)
         traceback.print_exc()
@@ -349,18 +293,51 @@ def caption_prune():
         originals_path = folder_path / "originals"
         originals_path.mkdir(exist_ok=True)
         src_media = folder_path / file_name
-        dst_media = originals_path / file_name
-        # Move media file to originals if not already present
         if not src_media.exists() or not src_media.is_file():
             return jsonify({"error": "Media file not found"}), 404
-        if not dst_media.exists():
-            src_media.rename(dst_media)
+
+        # Determine destination name in originals, handle conflicts by hash and renaming
+        def find_unique_name(base_name, ext, src_path, originals_path):
+            candidate = originals_path / (base_name + ext)
+            if not candidate.exists():
+                return candidate.name
+            # If exists and is identical, return original name
+            from tool.server.originals import file_hash
+            if file_hash(candidate) == file_hash(src_path):
+                return candidate.name
+            # Otherwise, find next available name
+            i = 1
+            while True:
+                candidate = originals_path / (f"{base_name}-{i}{ext}")
+                if not candidate.exists():
+                    return candidate.name
+                if file_hash(candidate) == file_hash(src_path):
+                    return candidate.name
+                i += 1
+
+        base = Path(file_name).stem
+        ext = Path(file_name).suffix
+        # Find unique name for media in originals
+        from tool.server.originals import file_hash
+        dst_media_name = find_unique_name(base, ext, src_media, originals_path)
+        dst_media = originals_path / dst_media_name
+
+        # Move/copy media to originals if not already present by hash
+        if dst_media.exists():
+            if file_hash(dst_media) == file_hash(src_media):
+                # Already present and identical, do nothing
+                pass
+            else:
+                # Name conflict, but not identical: move as new unique name
+                src_media.rename(dst_media)
         else:
-            src_media.unlink()  # Remove from set folder, keep original
-        # Always overwrite caption in originals
+            src_media.rename(dst_media)
+
+        # Always move/copy the latest caption to originals, using same base name as media
         src_caption = folder_path / (Path(file_name).stem + ".txt")
-        dst_caption = originals_path / (Path(file_name).stem + ".txt")
+        dst_caption = originals_path / (Path(dst_media_name).stem + ".txt")
         if src_caption.exists():
+            # Overwrite or create caption in originals
             with open(src_caption, "r", encoding="utf-8") as fsrc, open(dst_caption, "w", encoding="utf-8") as fdst:
                 fdst.write(fsrc.read())
             try:
@@ -368,6 +345,7 @@ def caption_prune():
             except Exception:
                 pass
             src_caption.unlink()  # Remove from set folder
+
         return jsonify({"ok": True})
     except Exception as e:
         if FS_DEBUG:
@@ -375,33 +353,6 @@ def caption_prune():
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 
-# Rename a folder (not files)
-@app.route("/fs/rename_folder", methods=["POST"])
-def fs_rename_folder():
-    data = request.get_json(silent=True) or {}
-    parent = data.get("parent", "").strip()
-    old_name = data.get("oldName", "").strip()
-    new_name = data.get("newName", "").strip()
-    if not old_name or not new_name:
-        return jsonify({"error": "Missing required parameters"}), 400
-    if old_name in ("originals", ".", "..") or new_name in ("originals", ".", ".."):
-        return jsonify({"error": "Invalid folder name"}), 400
-    try:
-        parent_path = safe_join_fs_root(parent)
-        src = parent_path / old_name
-        dst = parent_path / new_name
-        if not src.exists() or not src.is_dir():
-            return jsonify({"error": "Source folder does not exist"}), 404
-        if dst.exists():
-            return jsonify({"error": "Target folder already exists"}), 409
-        src.rename(dst)
-        return jsonify({"ok": True})
-    except Exception as e:
-        if FS_DEBUG:
-            print("[fs_rename_folder] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
-    
 
 # Minimal streaming endpoint for autoset.py
 @app.route("/fs/autoset_run", methods=["POST"])
@@ -462,116 +413,130 @@ def duplicate_folder():
     shutil.copytree(str(src_path), str(dst_path))
     return jsonify({'success': True, 'dst': str(dst_path)})
 
-@app.route('/fs/deface_folder', methods=['POST'])
-def deface_folder():
+
+# Unified deface endpoint
+@app.route('/fs/deface', methods=['POST'])
+def deface():
     """
-    Deface all .mp4 files in the given folder.
-    - For each .mp4:
-        - If not in originals, move it there first (never overwrite originals).
-        - Run deface CLI on the file.
-        - If deface creates *_anonymized.mp4, move it to replace the original (after backup).
+    Unified deface endpoint: accepts a file or folder, ensures originals backup by hash, runs deface with --output to overwrite input.
+    POST JSON: {"file": <file_rel> } or {"folder": <folder_rel>}
+    Optional: "thresh" (default 0.4)
     """
-
-
-    folder = request.json.get('folder')
-    if not folder:
-        return Response('[ERROR] No folder specified\n', mimetype='text/plain'), 400
-
-    folder_path = safe_join_fs_root(folder)
-    originals_path = os.path.join(os.path.dirname(folder_path), 'originals')
-    os.makedirs(originals_path, exist_ok=True)
-
-    # Find full path to deface executable
-    deface_path = shutil.which('deface')
-    if not deface_path:
-        def generate_error():
-            yield '[ERROR] deface executable not found in PATH or venv.\n'
-        return Response(stream_with_context(generate_error()), mimetype='text/plain'), 500
-
-    def generate():
-        for fname in os.listdir(folder_path):
-            if not fname.lower().endswith('.mp4'):
-                continue
-            fpath = os.path.join(folder_path, fname)
-            orig_fpath = os.path.join(originals_path, fname)
-
-            # Backup to originals if not already present
-            if not os.path.exists(orig_fpath):
-                yield f'[INFO] Moving {fname} to originals...\n'
-                shutil.move(fpath, orig_fpath)
-                fpath = orig_fpath
-
-            yield f'[INFO] Running deface on {fname}...\n'
-            proc = subprocess.Popen(
-                [deface_path, '-t', '0.4', '--mask-scale', '1', fpath],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-            )
-            for line in proc.stdout:
-                yield line
-            proc.wait()
-
-            from pathlib import Path
-            fpath_obj = Path(fpath)
-            anon_fpath = fpath_obj.with_name(fpath_obj.stem + '_anonymized.mp4')
-            if os.path.exists(anon_fpath):
-                shutil.move(anon_fpath, os.path.join(folder_path, fname))
-                yield f'[SUCCESS] Defaced {fname}\n'
-            else:
-                yield f'[FAIL] Deface failed for {fname}\n'
-
-    return Response(stream_with_context(generate()), mimetype='text/plain')
-
-@app.route('/fs/deface_file', methods=['POST'])
-def deface_file():
-    """
-    Deface a single video file with a custom threshold.
-    - If not in originals, move it there first (never overwrite originals).
-    - Run deface CLI on the file with the given -t value.
-    - If deface creates *_anonymized.mp4, move it to replace the original (after backup).
-    """
-
+    import subprocess
+    from pathlib import Path
+    from tool.server.originals import ensure_original_by_hash, ensure_originals_folder
 
     data = request.get_json()
     file_rel = data.get('file')
+    folder_rel = data.get('folder')
     thresh = str(data.get('thresh', '0.4')).strip()
-    if not file_rel or not thresh:
-        return jsonify({'error': 'Missing file or threshold'}), 400
+    if not (file_rel or folder_rel):
+        return jsonify({'error': 'Missing file or folder'}), 400
 
-    # Path safety (use your existing helpers)
-    file_path = safe_join_fs_root(file_rel)
-    folder_path = os.path.dirname(file_path)
-    file_name = os.path.basename(file_path)
-    originals_path = os.path.join(os.path.dirname(folder_path), 'originals')
-    os.makedirs(originals_path, exist_ok=True)
-    orig_fpath = os.path.join(originals_path, file_name)
-
-    # Backup to originals if not already present
-    if not os.path.exists(orig_fpath):
-        shutil.move(file_path, orig_fpath)
-        file_path = orig_fpath
-
-    # Find full path to deface executable
     deface_path = shutil.which('deface')
     if not deface_path:
         return Response('[ERROR] deface executable not found in PATH or venv.\n', mimetype='text/plain'), 500
 
-    # Run deface CLI with custom threshold
-    deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1', file_path]
-    proc = subprocess.Popen(deface_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-
-    def generate():
+    # Helper to deface a single file
+    def deface_one(file_path, thresh):
+        file_path = Path(file_path)
+        folder_path = file_path.parent
+        originals_dir = ensure_originals_folder(folder_path)
+        # Ensure backup by hash
+        ensure_original_by_hash(file_path, originals_dir)
+        # Run deface with --output to overwrite input
+        deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1', str(file_path), '--output', str(file_path)]
+        proc = subprocess.Popen(deface_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         for line in proc.stdout:
             yield line
         proc.wait()
+        if proc.returncode == 0:
+            yield f'[SUCCESS] Defaced {file_path.name}\n'
+        else:
+            yield f'[FAIL] Deface failed for {file_path.name}\n'
 
-    # Move anonymized file into place if created
-    from pathlib import Path
-    file_path_obj = Path(file_path)
-    anon_fpath = file_path_obj.with_name(file_path_obj.stem + '_anonymized.mp4')
-    if os.path.exists(anon_fpath):
-        shutil.move(anon_fpath, os.path.join(folder_path, file_name))
+    def generate():
+        if file_rel:
+            file_path = safe_join_fs_root(file_rel)
+            yield from deface_one(file_path, thresh)
+        elif folder_rel:
+            folder_path = safe_join_fs_root(folder_rel)
+            for fname in os.listdir(folder_path):
+                if not fname.lower().endswith('.mp4'):
+                    continue
+                file_path = os.path.join(folder_path, fname)
+                yield from deface_one(file_path, thresh)
 
-    return Response(generate(), mimetype='text/plain')
-    
+    return Response(stream_with_context(generate()), mimetype='text/plain')
+
+@app.route("/fs/describe", methods=["GET"])
+def fs_describe():
+    """
+    Unified endpoint: returns all folders, files (with metadata), and folder state for a directory.
+    No filtering; frontend decides what to display.
+    """
+    rel_path = request.args.get("path", "").strip()
+    try:
+        dir_path = safe_join_fs_root(rel_path)
+        if not dir_path.exists() or not dir_path.is_dir():
+            return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
+
+        # List folders and files (with metadata)
+        entries = []
+        for entry in sorted(dir_path.iterdir(), key=lambda e: e.name.lower()):
+            meta = {
+                "name": entry.name,
+                "type": "dir" if entry.is_dir() else "file",
+                "extension": entry.suffix.lower() if entry.is_file() else "",
+                "size": entry.stat().st_size if entry.is_file() else None,
+            }
+            entries.append(meta)
+
+        # Media/caption: include full caption text for each media file
+        from .originals import MEDIA_ALL_EXTS
+        from .caption_ops import _caption_name_for_media
+        captions = {}
+        for meta in entries:
+            if meta["type"] == "file" and meta["extension"] in MEDIA_ALL_EXTS:
+                caption_name = _caption_name_for_media(meta["name"])
+                caption_path = dir_path / caption_name
+                if caption_path.exists():
+                    try:
+                        text = caption_path.read_text(encoding="utf-8")
+                    except Exception as e:
+                        text = f"[ERROR: {e}]"
+                else:
+                    text = None
+                captions[meta["name"]] = {"text": text}
+
+        # Folder state (reviewed, stats, primer, etc.)
+        state_path = dir_path / ".webcap_state.json"
+        folder_state = {}
+        if state_path.exists() and state_path.is_file():
+            try:
+                with open(state_path, "r", encoding="utf-8") as f:
+                    folder_state = json.load(f)
+            except Exception as e:
+                folder_state = {"error": str(e)}
+        # Strict: fail loudly if reviewedKeys is missing or malformed
+        if not isinstance(folder_state, dict):
+            folder_state = {"error": ".webcap_state.json is not a dict"}
+        elif "reviewedKeys" not in folder_state:
+            folder_state["error"] = "Missing reviewedKeys in .webcap_state.json"
+        elif not isinstance(folder_state["reviewedKeys"], list):
+            folder_state["error"] = "reviewedKeys is not a list in .webcap_state.json"
+
+        return jsonify({
+            "folders": [e for e in entries if e["type"] == "dir"],
+            "files": [e for e in entries if e["type"] == "file"],
+            "captions": captions,  # {media file name: {text: ...}}
+            "folder_state": folder_state  # full .webcap_state.json
+        })
+    except Exception as e:
+        if FS_DEBUG:
+            print("[fs_describe] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

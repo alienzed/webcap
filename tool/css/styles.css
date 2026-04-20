@@ -1,7 +1,3 @@
-.media-list-wrapper {
-  position: relative;
-}
-
 :root {
   --bg: #f4f5f7;
   --panel: #ffffff;
@@ -26,7 +22,7 @@ body {
   background: var(--bg);
   color: var(--text);
 }
-.page-item.reviewed {
+.media-item.reviewed {
   background: #e6ffe6 !important;
   border-left: 3px solid #7ed957;
 }
@@ -60,9 +56,18 @@ body {
   overflow: auto;
 }
 
+/* Sidebar */
+#caption-filter-count {
+  font-size:13px;
+  color:#888;
+  margin-bottom:4px;
+}
 /* Media list */
-.media-list {
+.media-list-wrapper {
   border: 1px solid var(--border);
+  position: relative;
+}
+.media-list {
   background: #fff;
   border-radius: 6px;
   min-height: 280px;
@@ -110,41 +115,46 @@ body {
   background: var(--hover);
 }
 
-.page-item {
+.media-item {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: 0.15s;
 }
 
-.page-item:last-child {
+.media-item:last-child {
   border-bottom: none;
 }
 
-.page-item:hover {
+.media-item:hover {
   background: var(--hover);
 }
 
-.page-item.active {
+.media-item.active {
   background: rgba(52, 146, 255, 0.12);
   border-left: 3px solid var(--accent);
 }
 
 /* Highlight for empty captions */
-.page-item.empty-caption {
+.media-item.empty-caption {
   background: #fffbe6 !important;
   border-left: 3px solid #ffc779;
 }
 
-.page-item.folder-item {
+.media-item.folder-item {
   background: rgba(157, 255, 242, 0.06);
   font-weight: 600;
 }
 
-.page-item.folder-item.header-item {
+.media-item.folder-item.header-item {
   background: #f8f9fb;
   font-weight: 600;
   cursor: default;
+}
+/* Subtle border below the current directory item */
+.media-item.folder-item.current-folder-bordered {
+  border-bottom: 2px solid #929292;
+  margin-bottom: 0;
 }
 
 .page-meta {
@@ -339,17 +349,12 @@ iframe {
 }
 .floating-refresh {
   position: absolute;
-  top: 28px;
+  top: 5px;
   right: 8px;
   z-index: 20;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-/* Subtle border below the current directory item */
-.current-folder-bordered {
-  border-bottom: 2px solid #929292;
-  margin-bottom: 0;
-}
 .d-none {
   display: none !important;
 }

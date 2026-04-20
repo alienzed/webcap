@@ -57,6 +57,34 @@ def copy_media_to_originals(folder_path):
         shutil.copy2(entry, orig_path)
         safe_chmod(orig_path, 0o644)
 
+def ensure_original_by_hash(src_path, originals_dir):
+    """
+    Ensure src_path is backed up in originals_dir by hash.
+    If a file with the same hash exists, return its path.
+    If not, copy it (with unique name if needed), return new path.
+    """
+    src_path = Path(src_path)
+    originals_dir = Path(originals_dir)
+    src_hash = file_hash(src_path)
+    # Check for existing file with same hash in originals
+    for entry in originals_dir.iterdir():
+        if entry.is_file() and file_hash(entry) == src_hash:
+            return entry
+    # No match: copy with unique name if needed
+    base = src_path.stem
+    ext = src_path.suffix
+    candidate = originals_dir / (base + ext)
+    i = 1
+    while candidate.exists():
+        # Avoid name collision
+        if file_hash(candidate) == src_hash:
+            return candidate
+        candidate = originals_dir / (f"{base}-{i}{ext}")
+        i += 1
+    shutil.copy2(src_path, candidate)
+    safe_chmod(candidate, 0o644)
+    return candidate
+
 def restore_original_media(folder_path, file_name):
     """
     Restore the media file (and its caption, if present) from the originals folder to the working folder.

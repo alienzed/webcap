@@ -44,7 +44,11 @@ A portable, local-first app dedicated to media caption curation and review, with
 
 ## 6. State File Structure (`.webcap_state.json`)
 
-All persistent state for a folder is stored in `.webcap_state.json` in that folder. Example structure:
+All persistent state for a folder is stored in `.webcap_state.json` in that folder. Every field in this file must be explicitly snapshotted when saving, and explicitly restored/applied when loading, in the JS code (`snapshotFolderStateFromDom` and `applyFolderStateToDom`).
+
+**If you add new fields to the state file, you MUST update both functions to include and restore them.**
+
+Example structure:
 
 ```
 {

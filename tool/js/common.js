@@ -16,8 +16,27 @@ state = {
   captionCache: {},
   listRenderSeq: 0,
   reviewedSet: new Set(),
-  focusSet: null
+  focusSet: null,
+  flags: {} // key: file or folder name, value: color string (red/yellow/orange/green)
 };
+
+function markFlag(itemKey, color) {
+  if (color) {
+    state.flags[itemKey] = color;
+  } else {
+    delete state.flags[itemKey];
+  }
+  saveFlags();
+  refreshCurrentDirectory();
+}
+
+function saveFlags() {
+  // Save the full folder state (including flags, reviewedKeys, stats, primer, etc.)
+  var folderPath = state.folder || '';
+  var snapshot = snapshotFolderStateFromDom();
+  writeFolderStateFile(folderPath, snapshot);
+}
+
 
 // Define global UI object
 ui = {
@@ -197,7 +216,8 @@ function sanitizeFolderState(data) {
       defaults: String(primer.defaults || ''),
       mappings: String(primer.mappings || '')
     },
-    reviewedKeys: reviewedKeys
+    reviewedKeys: reviewedKeys,
+    flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {}
   };
 }
 
@@ -310,21 +330,32 @@ function clearEditorAndPreview() {
 
 
 function snapshotFolderStateFromDom() {
+  // IMPORTANT: If you add new fields to the folder state, you MUST include them here
+  // so they are persisted. This function must snapshot ALL fields that should be saved.
   var stats = getOptionsFromDom();
   var primer = statsGetPrimerOptionsFromDom();
   return sanitizeFolderState({
     stats: stats,
     primer: primer,
-    reviewedKeys: Array.from(state.reviewedSet || []).sort()
+    reviewedKeys: Array.from(state.reviewedSet || []).sort(),
+    flags: (typeof state.flags === 'object' && state.flags) ? state.flags : {}
+    // Add new fields here as needed
   });
 }
 
 function applyFolderStateToDom(folderState) {
+  // IMPORTANT: If you add new fields to the folder state, you MUST handle them here
+  // so they are restored to both the global state and the UI. This function must apply ALL fields.
   var clean = sanitizeFolderState(folderState);
   // Restore reviewedSet from reviewedKeys for persistence
   if (Array.isArray(clean.reviewedKeys)) {
     state.reviewedSet = new Set(clean.reviewedKeys);
   }
+  // Restore flags from loaded state
+  if (clean.flags) {
+    state.flags = clean.flags;
+  }
+  // Restore stats and primer fields to DOM
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
   var phrasesEl = document.getElementById('stats-phrases');
   var tokenRulesEl = document.getElementById('stats-token-rules');
@@ -350,6 +381,7 @@ function applyFolderStateToDom(folderState) {
   if (mappingsEl) {
     mappingsEl.value = clean.primer.mappings;
   }
+  // Add new field restoration logic here as needed
 }
 
 async function saveFolderStateForCurrentRoot() {

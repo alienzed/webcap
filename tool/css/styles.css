@@ -93,12 +93,26 @@ body {
 .caption-context-menu {
   position: fixed;
   z-index: 2000;
-  min-width: 150px;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
   padding: 4px;
+  box-sizing: border-box;
+}
+
+.caption-context-menu .flag-row {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 4px 0 4px 24px;
+  width: auto;
+  max-width: none;
+  align-self: flex-start;
 }
 
 .caption-context-menu-item {

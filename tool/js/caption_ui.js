@@ -37,18 +37,32 @@ function ensureContextMenu() {
 function showContextMenu(clientX, clientY, actions) {
   var el = ensureContextMenu();
   el.innerHTML = '';
+  var customRenderers = [];
   actions.forEach(function (action) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'caption-context-menu-item';
-    btn.textContent = action.label;
-    btn.onclick = function (ev) {
-      ev.stopPropagation();
-      hideContextMenu();
-      action.run();
-    };
-    el.appendChild(btn);
+    if (typeof action.render === 'function') {
+      customRenderers.push(action.render);
+    } else {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'caption-context-menu-item';
+      btn.textContent = action.label;
+      btn.onclick = function (ev) {
+        ev.stopPropagation();
+        hideContextMenu();
+        action.run();
+      };
+      el.appendChild(btn);
+    }
   });
+  // Render custom renderers (e.g., flag row) at the bottom
+  if (customRenderers.length) {
+    var customContainer = document.createElement('div');
+    customContainer.style.marginTop = '8px';
+    customRenderers.forEach(function (renderFn) {
+      renderFn(customContainer);
+    });
+    el.appendChild(customContainer);
+  }
 
   el.style.display = 'block';
   el.style.left = clientX + 'px';

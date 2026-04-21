@@ -108,3 +108,18 @@ def restore_original_media(folder_path, file_name):
         shutil.copy2(orig_caption_path, dest_caption_path)
         safe_chmod(dest_caption_path, 0o644)
     return True
+
+def restore_original_media_video_only(folder_path, file_name):
+    """
+    Restore only the media file from the originals folder to the working folder (do NOT restore caption).
+    Returns True if successful, False if the original media does not exist.
+    """
+    folder_path = Path(folder_path).resolve()
+    originals_dir = folder_path / 'originals'
+    orig_media_path = originals_dir / file_name
+    dest_media_path = folder_path / file_name
+    if not orig_media_path.exists():
+        return False
+    shutil.copy2(orig_media_path, dest_media_path)
+    safe_chmod(dest_media_path, 0o644)
+    return True

@@ -23,7 +23,7 @@ async function restoreMediaItem( mediaItem) {
         var folder = state.folder || '';
         var media = mediaItem.fileName;
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/caption/restore');
+        xhr.open('POST', '/media/restore');
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.onreadystatechange = function () {
           if (xhr.readyState === 4) {
@@ -79,7 +79,7 @@ async function resetMediaItem( mediaItem) {
   }
   var folder = state.folder || '';
   var xhr = new XMLHttpRequest();
-  xhr.open('POST', '/caption/reset');
+  xhr.open('POST', '/media/reset');
   xhr.setRequestHeader('Content-Type', 'application/json');
   xhr.onreadystatechange = function () {
     if (xhr.readyState === 4) {

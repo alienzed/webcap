@@ -79,7 +79,6 @@ def fs_read():
 def fs_root():
     return jsonify({"root": str(FS_ROOT)})
 
-
 def resolve_python_executable():
     return sys.executable
 
@@ -217,7 +216,7 @@ def fs_rename():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 
-@app.route("/caption/restore", methods=["POST"])
+@app.route("/media/restore", methods=["POST"])
 def caption_restore():
     data = request.get_json(silent=True) or {}
     print("[caption_restore] Incoming data:", data)
@@ -261,7 +260,7 @@ def caption_restore():
         return jsonify({"error": str(e)}), 400
     
 # Reset media file to original from 'originals' folder
-@app.route("/caption/reset", methods=["POST"])
+@app.route("/media/reset", methods=["POST"])
 def caption_reset():
     data = request.get_json(silent=True) or {}
     folder = data.get("folder", "").strip()
@@ -270,8 +269,8 @@ def caption_reset():
         return jsonify({"error": "Missing required parameters"}), 400
     try:
         folder_path = safe_join_fs_root(folder)
-        from .originals import restore_original_media
-        ok = restore_original_media(folder_path, file_name)
+        from .originals import restore_original_media_video_only
+        ok = restore_original_media_video_only(folder_path, file_name)
         if not ok:
             return jsonify({"error": "Original media not found in originals"}), 404
         return jsonify({"ok": True})
@@ -281,7 +280,7 @@ def caption_reset():
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 
-@app.route("/caption/prune", methods=["POST"])
+@app.route("/media/prune", methods=["POST"])
 def caption_prune():
     data = request.get_json(silent=True) or {}
     folder = data.get("folder", "").strip()

@@ -149,7 +149,6 @@ function buildPrimer(fileName, rulesText) {
 // All functions are now global: makeTrashName, getOriginalNameFromTrashName
 
 
-
 function setupFolderStatePersistence(ui) {
   var saveLater = debounceCreate(300);
   state.scheduleFolderStateSave = function () {

@@ -4,5 +4,4 @@ addEventListener('DOMContentLoaded', function() {
   // Load the root directory - read from tool/config.js
   refreshCurrentDirectory();
 
-
 });

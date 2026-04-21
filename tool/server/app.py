@@ -22,7 +22,6 @@ TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
 
-
 @app.route("/fs/folder_state/save", methods=["POST"])
 def folder_state_save():
     data = request.get_json(silent=True) or {}
@@ -99,7 +98,6 @@ def static_files(filename):
     if filename.startswith("templates/"):
         return send_from_directory(TEMPLATES_DIR, filename[10:])
     return send_from_directory(TOOL_DIR, filename)
-
 
 @app.route("/caption/load", methods=["GET"])
 def caption_load_route():
@@ -352,7 +350,6 @@ def caption_prune():
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 
-
 # Minimal streaming endpoint for autoset.py
 @app.route("/fs/autoset_run", methods=["POST"])
 def autoset_run():
@@ -411,7 +408,6 @@ def duplicate_folder():
 
     shutil.copytree(str(src_path), str(dst_path))
     return jsonify({'success': True, 'dst': str(dst_path)})
-
 
 # Unified deface endpoint
 @app.route('/fs/deface', methods=['POST'])

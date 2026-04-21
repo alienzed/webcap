@@ -37,7 +37,6 @@ function saveFlags() {
   writeFolderStateFile(folderPath, snapshot);
 }
 
-
 // Define global UI object
 ui = {
   editorEl: document.getElementById('editor'),
@@ -327,7 +326,6 @@ function clearEditorAndPreview() {
   doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">No media to preview.</body></html>');
   doc.close();
 }
-
 
 function snapshotFolderStateFromDom() {
   // IMPORTANT: If you add new fields to the folder state, you MUST include them here

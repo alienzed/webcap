@@ -299,7 +299,6 @@ function statsGetPrimerOptionsFromDom() {
 }
 
 
-
 function statsBuildCombinedCaptionsText(items) {
   if (!items.length) {
     return '';

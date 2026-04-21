@@ -103,10 +103,8 @@ EVAL_BUCKET_CAPS = {
     "916":    (416, 704),
 }
 
-
 # Highres plateau tolerance (normalized area >= 0.95 * max)
 HIGHRES_TOL = 0.05
-
 
 # -------------------------
 # ffprobe utility function
@@ -144,11 +142,9 @@ def ffprobe_info(video: Path):
     except Exception:
         return None
 
-
 # -------------------------
 # Aspect ratio classification
 # -------------------------
-
 
 
 def image_info(img: Path):
@@ -166,7 +162,6 @@ def classify_ar(w: int, h: int):
             return label
     return None
 
-
 # -------------------------
 # mfp computation
 # -------------------------
@@ -176,7 +171,6 @@ def mfp(w: int, h: int, frames: int):
     Megaframe-pixels proxy.
     """
     return (w // 32) * (h // 32) * frames
-
 
 # -------------------------
 # Candidate resolution generation
@@ -200,7 +194,6 @@ def within_wan_caps(ar_label: str, w: int, h: int) -> bool:
         if short_edge > MAX_NON_SQUARE_SHORT:
             return False
         return True
-
 
 def generate_candidate_resolutions_for_ar(target_ar: float, ar_label: str):
     """
@@ -240,7 +233,6 @@ def generate_candidate_resolutions_for_ar(target_ar: float, ar_label: str):
 
     candidates.sort(key=lambda x: x[2], reverse=True)
     return candidates
-
 
 # -------------------------
 # Copy video + .txt caption
@@ -291,11 +283,9 @@ def move_with_caption(src: Path, dst_dir: Path):
             dst_txt.unlink()
         shutil.move(txt, dst_txt)
 
-
 # -------------------------
 # Bucket selection helpers
 # -------------------------
-
 
 
 def copy_image_with_caption(src: Path, dst_dir: Path):
@@ -352,7 +342,6 @@ def select_frames_with_fallback(frame_counts, candidates, coverage_threshold):
 
     return None
 
-
 # ------------------------------------------------------------------
 # NEW helper – copy a file or convert its framerate if needed
 # ------------------------------------------------------------------
@@ -385,7 +374,6 @@ def copy_or_convert(src_path, dst_path, target_fps):
         os.makedirs(os.path.dirname(dst_path), exist_ok=True)
 
         # Perform the conversion
-        # Perform the conversion
         convert_cmd = (
             f'ffmpeg -y -i "{src_path}" '
             f'-vf "fps={target_fps}:round=near,format=yuv420p" '
@@ -403,8 +391,6 @@ def copy_or_convert(src_path, dst_path, target_fps):
         # Just copy – no re‑encoding
         os.makedirs(os.path.dirname(dst_path), exist_ok=True)
         shutil.copy2(src_path, dst_path)
-
-
 
 def choose_bucket_resolution(ar_label: str,
                              target_ar: float,
@@ -466,7 +452,6 @@ def choose_bucket_resolution(ar_label: str,
 
 
 
-
 def choose_image_bucket_resolution(
     ar_label: str,
     target_ar: float,
@@ -511,7 +496,6 @@ def choose_image_bucket_resolution(
     if best is None:
         return None
     return (best[2], best[3])
-
 
 def split_images_by_percentile(
     images,
@@ -558,7 +542,6 @@ def split_images_by_percentile(
         return images, []
 
     return reg, high
-
 
 def pick_image_buckets_for_ar(images, ar_label: str, target_ar: float):
     """
@@ -626,7 +609,6 @@ def select_eval_clips(ar_clips):
     return eval_selection
 
 
-
 # -------------------------
 # MAIN SCRIPT
 # -------------------------
@@ -666,7 +648,6 @@ def main():
 
     mfp_limit = VRAM_TO_MFP[args.vram]
     print(f"[INFO] Using VRAM={args.vram}GB → mfp_limit={mfp_limit}")
-
 
     # Scan videos + images
     if args.recursive:
@@ -764,7 +745,6 @@ def main():
     toml_lines = ["enable_ar_bucket = true\n"]
     bucket_json = {}
     image_plan = {}
-
 
     # -------------------------
     # Bucket selection per AR
@@ -1255,11 +1235,9 @@ def main():
                 if p.exists():
                     copy_image_with_caption(p, img_dir)
 
-
     # -------------------------
     # RESOLUTION RANKING REPORT (with 20% prune suggestion)
     # -------------------------
-
 
 
 
@@ -1336,7 +1314,6 @@ def main():
             eval_manifest = {}
             eval_toml_lines = ["enable_ar_bucket = true\n"]
 
-
             for ar_label, clips in eval_selection.items():
                 if not clips:
                     continue
@@ -1352,7 +1329,6 @@ def main():
                     train_vid = train_ar_dir / vid.name
                     if train_vid.exists():
                         move_with_caption(train_vid, eval_ar_dir)
-
 
                 # Eval bucket: use motion resolution + fixed frames
                 motion_bucket = bucket_json.get(ar_label, {}).get("motion")
@@ -1372,7 +1348,6 @@ def main():
                     "]",
                 ]
 
-
                 eval_manifest[ar_label] = [vid.name for (vid, _, _, _) in clips]
 
             # Write eval TOML
@@ -1388,11 +1363,9 @@ def main():
             print(f"[INFO] Eval dataset written to {eval_toml_path}")
         # end eval_generation_guard
 
-
     print("[INFO] Training example:")
     print(f'  dataset = "{toml_path.as_posix()}"')
     print("  python train.py --config your_config.toml")
-
 
 if __name__ == "__main__":
     main()

@@ -12,7 +12,6 @@ function hideContextMenu() {
   }
 }
 
-
 function ensureContextMenu() {
   if (contextMenuEl) {
     return contextMenuEl;
@@ -150,7 +149,6 @@ function activateFocusSet(fileNames, source) {
 }
 
 // Review/stats bridge for caption mode.
-
 
 // Review/stats bridge for caption mode.
 function wireReviewActions(state) {

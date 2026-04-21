@@ -14,7 +14,6 @@ This document defines all safety, mutation, and coding rules for the WebCap proj
 
 ---
 
-
 ## 2. Coding & Architectural Guidelines
 - No database dependency; all state is file-based.
 - Keep implementation simple, explicit, and minimal.

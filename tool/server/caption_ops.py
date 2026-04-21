@@ -1,3 +1,4 @@
+
 from pathlib import Path
 from flask import send_from_directory
 import json
@@ -88,3 +89,20 @@ def serve_media_file(folder: str, media_name: str):
         raise FileNotFoundError('Media file not found')
 
     return send_from_directory(folder_path, media_name)
+
+def caption_status_batch(folder: str, media_files: list):
+    folder_path = _resolve_folder(folder)
+    result = {}
+    for media_name in media_files:
+        caption_name = _caption_name_for_media(media_name)
+        caption_path = folder_path / caption_name
+        exists = caption_path.exists()
+        empty = True
+        if exists:
+            try:
+                text = caption_path.read_text(encoding='utf-8')
+                empty = (text.strip() == '')
+            except Exception:
+                empty = True
+        result[media_name] = {"exists": exists, "empty": empty}
+    return result

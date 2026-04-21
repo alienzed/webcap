@@ -1,6 +1,6 @@
 
 
-// Define global state object (state)
+// Define global state object ()
 // NOTE: This project intentionally uses plain global variables for all state and functions.
 // If a name collision occurs, it should throw an error and be fixed explicitly.
 // No IIFE, encapsulation, or modular patterns are used by design.
@@ -423,7 +423,7 @@ pruneMedia = async function( mediaItem) {
   }
   setStatus('Pruning media: ' + mediaItem.key + ' ...');
   try {
-    const resp = await fetch('/fs/prune', {
+    const resp = await fetch('/media/prune', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folder: state.folder, media: mediaItem.key })

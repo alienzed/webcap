@@ -1,66 +1,27 @@
-var mediaListEl = document.getElementById('media-list');
 addEventListener('DOMContentLoaded', function () {
-    var upRow = document.getElementById('up-one-directory-row');
-    if (upRow) {
-        upRow.onclick = function () {
-            navigateUp();
-        };
-    }
     var currentRow = document.getElementById('current-folder-row');
-    if (currentRow) {
-        currentRow.oncontextmenu = function (e) {
-            e.preventDefault();
-            var actions = [{
-                label: 'Run Autoset',
-                run: function () {
-                    setStatus('Running autoset...');
-                    streamPreviewFromFetch(
-                        '/fs/autoset_run',
-                        { folder: state.folder },
-                        ui,
-                        function () {
-                            setStatus('Autoset finished.');
-                        },
-                        function (err) {
-                            setStatus('Autoset failed: ' + err);
-                        }
-                    );
-                }
-            }];
-            showContextMenu(e.clientX, e.clientY, actions);
-        };
-    }
-    // Delegated event handlers
-    mediaListEl.onclick = function (e) {
-        var row = e.target.closest('.media-item');
-        if (!row) return;
-        var type = row.getAttribute('data-type');
-        var key = row.getAttribute('data-key');
-        if (type === 'up') {
-            navigateUp(state);
-        } else if (type === 'folder') {
-            state.folder = (state.folder ? state.folder + '/' : '') + key;
-            if (state.dirStack.length) {
-                state.dirStack.push({ name: key });
+    currentRow.oncontextmenu = function (e) {
+        e.preventDefault();
+        var actions = [{
+            label: 'Run Autoset',
+            run: function () {
+                setStatus('Running autoset...');
+                streamPreviewFromFetch(
+                    '/fs/autoset_run',
+                    { folder: state.folder },
+                    ui,
+                    function () {
+                        setStatus('Autoset finished.');
+                    },
+                    function (err) {
+                        setStatus('Autoset failed: ' + err);
+                    }
+                );
             }
-            state.currentItem = null;
-            clearEditorAndPreview();
-            refreshCurrentDirectory();
-        } else if (type === 'media') {
-            var mediaItem = state.items.find(function (item) { return item.key === key; });
-            if (!mediaItem) return;
-            if (state.currentItem && state.currentItem.key === mediaItem.key) return;
-            if (state.currentItem && state.currentItem.fileName) {
-                savePathCaption().then(function () {
-                    selectPathMedia(mediaItem);
-                }).catch(function (err) {
-                    setStatus(String(err && err.message ? err.message : err));
-                });
-            } else {
-                selectPathMedia(mediaItem);
-            }
-        }
+        }];
+        showContextMenu(e.clientX, e.clientY, actions);
     };
+    // Delegated event handlers (dblclick and contextmenu remain here)
     mediaListEl.ondblclick = function (e) {
         var row = e.target.closest('.media-item');
         if (!row) return;

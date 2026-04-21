@@ -83,40 +83,13 @@ function showContextMenu(clientX, clientY, actions) {
 // Focus set UI logic moved from caption_mode.js
 // Wire up the static Exit Set button below the media list
 function ensureFocusSetExitButton() {
-  var exitBtn = document.getElementById('focus-set-exit-btn');
-  if (!exitBtn) return;
-  if (!exitBtn.__focusSetBound) {
-    exitBtn.__focusSetBound = true;
-    exitBtn.onclick = function () {
-      // Clear focus set and reload full directory
-      state.focusSet = null;
-      // Restore editability on the editor (robust)
-      ui.editorEl.removeAttribute('readonly');
-      clearEditorAndPreview();
-      refreshCurrentDirectory();
-      // Hide the button (will be handled by refreshFocusSetUi too)
-      exitBtn.style.display = 'none';
-    };
-  }
-  return exitBtn;
+  // Wiring now handled in main.js
+  return document.getElementById('focus-set-exit-btn');
 }
 
 function refreshFocusSetUi() {
-  var btn = document.getElementById('focus-set-exit-btn');
-  if (!btn) return;
-  if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
-    btn.style.display = '';
-    var source = state.focusSet.source ? (' - ' + state.focusSet.source) : '';
-    btn.title = 'Show full folder list' + source;
-  } else {
-    btn.style.display = 'none';
-    btn.title = 'Show full folder list';
-  }
-}
-
-function clearFocusSet() {
-  state.focusSet = null;
-  refreshCurrentDirectory();
+  // Wiring now handled in main.js
+  return document.getElementById('focus-set-exit-btn');
 }
 
 function activateFocusSet(fileNames, source) {
@@ -149,23 +122,8 @@ function activateFocusSet(fileNames, source) {
 }
 
 // Review/stats bridge for caption mode.
-
-// Review/stats bridge for caption mode.
-function wireReviewActions(state) {
-  var reviewBtn = document.getElementById('review-captions-btn');
-  if (reviewBtn) {
-    reviewBtn.onclick = function () {
-      runReview(state);
-    };
-  }
-
-  var runBtn = document.getElementById('stats-run-btn');
-  if (runBtn) {
-    runBtn.onclick = function () {
-      runReview(state);
-    };
-  }
-
+function wireReviewActions() {
+  // Only the message event wiring remains here (button wiring is now in main.js)
   addEventListener('message', function (event) {
     var data = event.data;
     if (!data) {
@@ -181,7 +139,7 @@ function wireReviewActions(state) {
   });
 }
 
-async function runReview(state) {
+async function runReview() {
   if (!state.items.length) {
     setStatus('No media files loaded');
     return;
@@ -259,7 +217,7 @@ function selectByFileName(fileName, focusFiles, focusSource) {
   }
 
   selectMedia(target).then(function () {
-    scrollToCurrentRow(state);
+    //scrollToCurrentRow();
   }).catch(function (err) {
     setStatus(String(err && err.message ? err.message : err));
   });
@@ -360,10 +318,4 @@ function refreshCurrentDirectory() {
     }
   };
   xhr.send();
-}
-// Wire up refresh button
-if (ui.refreshBtn) {
-  ui.refreshBtn.addEventListener('click', function() {
-    refreshCurrentDirectory();
-  });
 }

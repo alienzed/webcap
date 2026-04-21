@@ -290,7 +290,7 @@ function refreshCurrentDirectory() {
           if (Object.keys(folderState).length) applyFolderStateToDom(folderState);
           state.reviewedSet = state.reviewedSet || new Set();
           renderFileList(ui.filterEl.value);
-          // --- Static header toggling ---
+          // --- Static header toggling (display only, wiring in main.js) ---
           var upRow = document.getElementById('up-one-directory-row');
           if (upRow) upRow.style.display = state.dirStack.length > 1 ? '' : 'none';
           var currentLabel = document.getElementById('current-folder-label');

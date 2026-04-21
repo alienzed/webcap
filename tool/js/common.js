@@ -19,24 +19,6 @@ state = {
   focusSet: null,
   flags: {} // key: file or folder name, value: color string (red/yellow/orange/green)
 };
-
-function markFlag(itemKey, color) {
-  if (color) {
-    state.flags[itemKey] = color;
-  } else {
-    delete state.flags[itemKey];
-  }
-  saveFlags();
-  refreshCurrentDirectory();
-}
-
-function saveFlags() {
-  // Save the full folder state (including flags, reviewedKeys, stats, primer, etc.)
-  var folderPath = state.folder || '';
-  var snapshot = snapshotFolderStateFromDom();
-  writeFolderStateFile(folderPath, snapshot);
-}
-
 // Define global UI object
 ui = {
   editorEl: document.getElementById('editor'),
@@ -244,18 +226,6 @@ function buildAutoPrimer(fileName) {
   return buildPrimerFromConfig(fileName, primerOptions);
 }
 
-async function readFolderStateFile(folderPath) {
-  // folderPath: relative path from FS root ('' for root)
-  try {
-    const resp = await fetch('/fs/folder_state/load?folder=' + encodeURIComponent(folderPath), { method: 'GET' });
-    if (!resp.ok) throw new Error('Failed to load folder state');
-    const data = await resp.json();
-    return sanitizeFolderState(data || {});
-  } catch (err) {
-    console.warn('Could not read folder state file:', err);
-    return null;
-  }
-}
 
 async function writeFolderStateFile(folderPath, folderState) {
   // folderPath: relative path from FS root ('' for root)
@@ -467,4 +437,22 @@ function savePathCaption() {
       reject(new Error(getErrorMessage(responseText, 'Could not save caption')));
     });
   });
+}
+
+
+function markFlag(itemKey, color) {
+  if (color) {
+    state.flags[itemKey] = color;
+  } else {
+    delete state.flags[itemKey];
+  }
+  saveFlags();
+  refreshCurrentDirectory();
+}
+
+function saveFlags() {
+  // Save the full folder state (including flags, reviewedKeys, stats, primer, etc.)
+  var folderPath = state.folder || '';
+  var snapshot = snapshotFolderStateFromDom();
+  writeFolderStateFile(folderPath, snapshot);
 }

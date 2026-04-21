@@ -385,9 +385,18 @@ def copy_or_convert(src_path, dst_path, target_fps):
         os.makedirs(os.path.dirname(dst_path), exist_ok=True)
 
         # Perform the conversion
+        # Perform the conversion
         convert_cmd = (
-            f'ffmpeg -y -i "{src_path}" -vf "fps={target_fps}" '
-            f'-c:v libx264 -crf 18 -preset slow -an -threads 8 "{dst_path}"'
+            f'ffmpeg -y -i "{src_path}" '
+            f'-vf "fps={target_fps}:round=near,format=yuv420p" '
+            f'-vsync cfr '
+            f'-c:v libx264 '
+            f'-profile:v high -level 4.0 '
+            f'-pix_fmt yuv420p '
+            f'-crf 14 -preset slow '
+            f'-movflags +faststart '
+            f'-g {target_fps * 2} '
+            f'-an "{dst_path}"'
         )
         subprocess.run(shlex.split(convert_cmd), check=True)
     else:

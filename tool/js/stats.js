@@ -1,58 +1,4 @@
-// StatsEngineModule as global object
-var TOKEN_BLACKLIST = {
-  a: true,
-  an: true,
-  the: true,
-  is: true,
-  are: true,
-  was: true,
-  were: true,
-  be: true,
-  being: true,
-  been: true,
-  on: true,
-  in: true,
-  to: true,
-  of: true,
-  for: true,
-  with: true,
-  by: true,
-  from: true,
-  at: true,
-  as: true,
-  or: true,
-  but: true,
-  she: true,
-  her: true,
-  his: true,
-  it: true,
-  they: true,
-  he: true,
-  him: true,
-  them: true,
-  this: true,
-  that: true,
-  these: true,
-  those: true,
-  and: true
-};
-
-function statsNormalize(text) {
-  return String(text || '').toLowerCase();
-}
-
-function statsTokenize(text) {
-  return normalize(text).split(/[^a-z0-9]+/).filter(Boolean);
-}
-
-function statsParsePhrases(multiline) {
-  return String(multiline || '')
-    .split(/\r?\n/)
-    .map(function (line) { return line.trim(); })
-    .filter(Boolean);
-}
-
-function statsParseTokenRules(multiline) {
+function parseTokenRules(multiline) {
   return String(multiline || '')
     .split(/\r?\n/)
     .map(function (line) { return line.trim(); })
@@ -95,14 +41,22 @@ function statsParseTokenRules(multiline) {
     .filter(Boolean);
 }
 
-function statsNormalizedCaptionKey(text) {
+function normalizedCaptionKey(text) {
   return String(text || '')
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-function statsComputeLengthInsights(captionRows) {
+function normalize(text) {
+  return String(text || '').toLowerCase();
+}
+
+function tokenize(text) {
+  return normalize(text).split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function computeLengthInsights(captionRows) {
   if (!captionRows.length) {
     return {
       shortestCaptions: [],
@@ -131,7 +85,7 @@ function statsComputeLengthInsights(captionRows) {
   };
 }
 
-function statsComputeDuplicateInsights(duplicatesMap) {
+function computeDuplicateInsights(duplicatesMap) {
   return Object.keys(duplicatesMap)
     .map(function (key) {
       return duplicatesMap[key];
@@ -141,7 +95,14 @@ function statsComputeDuplicateInsights(duplicatesMap) {
     .slice(0, 20);
 }
 
-function statsCompute(items, options) {
+function parsePhrases(multiline) {
+  return String(multiline || '')
+    .split(/\r?\n/)
+    .map(function (line) { return line.trim(); })
+    .filter(Boolean);
+}
+
+function compute(items, options) {
   var requiredPhrase = normalize(options && options.requiredPhrase || '').trim();
   var phrases = parsePhrases(options && options.phrases || '');
   var tokenRules = parseTokenRules(options && options.tokenRules || '');
@@ -276,7 +237,7 @@ function statsCompute(items, options) {
   };
 }
 
-function statsGetOptionsFromDom() {
+function getOptionsFromDom() {
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
   var phrasesEl = document.getElementById('stats-phrases');
   var tokenRulesEl = document.getElementById('stats-token-rules');
@@ -298,8 +259,7 @@ function statsGetPrimerOptionsFromDom() {
   };
 }
 
-
-function statsBuildCombinedCaptionsText(items) {
+function buildCombinedCaptionsText(items) {
   if (!items.length) {
     return '';
   }
@@ -308,7 +268,7 @@ function statsBuildCombinedCaptionsText(items) {
   }).join('\n\n');
 }
 
-function statsRenderReportPreview(report) {
+function renderReportPreview(report) {
   function encodeFocus(files) {
     var names = (files || []).map(function (name) { return String(name || ''); }).filter(Boolean);
     return encodeURIComponent(names.join('\n'));
@@ -486,6 +446,9 @@ function statsGetPrimerOptionsFromDom() {
   };
 }
 
+// Debounced auto-save for stats/primer changes
+var debouncedSaveFolderState = debounceCreate(600);
+
 function wireStatsPrimerAutoSave() {
   var statsFields = [
     document.getElementById('stats-required-phrase'),
@@ -506,8 +469,3 @@ function wireStatsPrimerAutoSave() {
     }
   });
 }
-
-// Wire up auto-save on DOMContentLoaded
-document.addEventListener('DOMContentLoaded', function () {
-  wireStatsPrimerAutoSave();
-});

@@ -1,3 +1,35 @@
+/* Flag/context menu buttons */
+.flag-btn {
+  border: 1px solid #bbb;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  display: inline-block;
+}
+.flag-btn--clear {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  outline: none;
+}
+.flag-btn--clear span {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #eee;
+  border: 1px solid #bbb;
+  line-height: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+}
 :root {
   --bg: #f4f5f7;
   --panel: #ffffff;
@@ -371,4 +403,8 @@ iframe {
 
 .d-none {
   display: none !important;
+}
+
+.statsHeader {
+  color:#777;
 }

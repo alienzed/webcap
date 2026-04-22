@@ -1,4 +1,5 @@
 
+
 // caption_ui.js
 // Global functions: hideContextMenu, ensureContextMenu, showContextMenu, ensureFocusSetExitButton, refreshFocusSetUi, clearFocusSet, activateFocusSet, wireReviewActions, runReview, selectByFileName, applyTokenFilter, refreshCurrentDirectory
 
@@ -80,17 +81,6 @@ function showContextMenu(clientX, clientY, actions) {
   el.style.top = top + 'px';
 }
 
-// Focus set UI logic moved from caption_mode.js
-// Wire up the static Exit Set button below the media list
-function ensureFocusSetExitButton() {
-  // Wiring now handled in main.js
-  return document.getElementById('focus-set-exit-btn');
-}
-
-function refreshFocusSetUi() {
-  // Wiring now handled in main.js
-  return document.getElementById('focus-set-exit-btn');
-}
 
 function activateFocusSet(fileNames, source) {
   var seen = {};
@@ -123,7 +113,19 @@ function activateFocusSet(fileNames, source) {
 
 // Review/stats bridge for caption mode.
 function wireReviewActions() {
-  // Only the message event wiring remains here (button wiring is now in main.js)
+  // Wire up Review Captions button and stats-run button to runReview
+  var reviewBtn = document.getElementById('review-captions-btn');
+  if (reviewBtn) {
+    reviewBtn.onclick = function () {
+      runReview();
+    };
+  }
+  var runBtn = document.getElementById('stats-run-btn');
+  if (runBtn) {
+    runBtn.onclick = function () {
+      runReview();
+    };
+  }
   addEventListener('message', function (event) {
     var data = event.data;
     if (!data) {
@@ -139,14 +141,13 @@ function wireReviewActions() {
   });
 }
 
-async function runReview() {
+function runReview() {
   if (!state.items.length) {
     setStatus('No media files loaded');
     return;
   }
-
   if (state.currentItem && state.currentItem.fileName) {
-    await savePathCaption();
+    savePathCaption();
   }
   clearFocusSet();
   state.currentItem = null;
@@ -156,21 +157,16 @@ async function runReview() {
   if (details) {
     details.open = true;
   }
-
   var runSeq = (state.reviewSeq || 0) + 1;
   state.reviewSeq = runSeq;
   setStatus('Building combined captions and stats...');
-
-  var promises = state.items.map(function (item) {
-    return loadCaptionTextForItem(item).then(function (text) {
-      return {
-        fileName: item.fileName,
-        caption: text || ''
-      };
-    });
+  var results = state.items.map(function (item) {
+    return {
+      fileName: item.fileName,
+      caption: item.caption || ''
+    };
   });
-
-  return Promise.all(promises).then(function (results) {
+  try {
     if (state.reviewSeq !== runSeq) {
       return;
     }
@@ -185,9 +181,9 @@ async function runReview() {
     state.suppressInput = false;
     renderReportPreview(report);
     setStatus('Review ready: ' + results.length + ' files');
-  }).catch(function (err) {
+  } catch (err) {
     setStatus(String(err && err.message ? err.message : err));
-  });
+  }
 }
 
 function selectByFileName(fileName, focusFiles, focusSource) {
@@ -236,7 +232,7 @@ function applyTokenFilter(token) {
 // Directory listing now uses backend /fs/list
 function refreshCurrentDirectory() {
   var path = state.folder || '';
-  console.log('[webcap] refreshCurrentDirectory: called with path', path);
+  debugLog('[webcap] refreshCurrentDirectory: called with path', path);
   // Ensure dirStack is initialized with root if empty or at root
   if (!state.dirStack || !Array.isArray(state.dirStack)) {
     state.dirStack = [];
@@ -244,14 +240,14 @@ function refreshCurrentDirectory() {
   if (!path) {
     // At root: dirStack should be exactly one entry for root
     if (state.dirStack.length !== 1 || state.dirStack[0].name !== '') {
-      state.dirStack = [ { name: '' } ];
+      state.dirStack = [{ name: '' }];
     }
   } else if (state.dirStack.length === 0) {
     // Navigating directly to a subfolder: initialize root first
-    state.dirStack = [ { name: '' } ];
+    state.dirStack = [{ name: '' }];
   }
   var last = state.dirStack && state.dirStack.length ? state.dirStack[state.dirStack.length - 1].name : '';
-  console.log('[webcap] refreshCurrentDirectory: requesting /fs/describe', path);
+  debugLog('[webcap] refreshCurrentDirectory: requesting /fs/describe', path);
 
   var url = '/fs/describe' + (path ? ('?path=' + encodeURIComponent(path)) : '');
   // Clear current selection and editor/preview on folder change
@@ -318,4 +314,10 @@ function refreshCurrentDirectory() {
     }
   };
   xhr.send();
+}
+// Clears the current focus set and updates UI accordingly
+function clearFocusSet() {
+  state.focusSet = null;
+  if (ui.focusSetExitBtn) ui.focusSetExitBtn.style.display = 'none';
+  renderFileList(ui.filterEl.value);
 }

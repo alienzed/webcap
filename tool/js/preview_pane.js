@@ -1,7 +1,3 @@
-// preview_pane.js
-// Global functions: clearPreview, writePreview, appendPreview, scrollPreviewToBottom, streamPreviewFromFetch
-
-// Centralized preview pane helpers for iframe-based output
 function clearPreview(previewEl) {
   if (previewEl && previewEl.contentDocument) {
     var doc = previewEl.contentDocument;
@@ -40,7 +36,6 @@ function scrollPreviewToBottom(previewEl) {
 }
 
 // Utility: Stream fetch output to preview pane
-// Usage: streamPreviewFromFetch(url, body, ui, onDone, onError)
 function streamPreviewFromFetch(url, body, ui, onDone, onError) {
   clearPreview(ui.previewEl);
   fetch(url, {

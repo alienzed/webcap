@@ -2,6 +2,37 @@
 // media.js
 // Global functions: restoreMediaItem, resetMediaItem, selectPathMedia, promptRenameMedia, navigateUp, renameMedia, renderPathPreview
 
+pruneMedia = async function( mediaItem) {
+  // Confirm before pruning
+  if (!state.folder || !mediaItem || !mediaItem.key) {
+    setStatus('No folder or media selected for prune');
+    return;
+  }
+  var confirmed = confirm('Permanently remove this media file?\n\n' + mediaItem.key + '\n\nThis cannot be undone.');
+  if (!confirmed) {
+    setStatus('Prune cancelled');
+    return;
+  }
+  setStatus('Pruning media: ' + mediaItem.key + ' ...');
+  try {
+    const resp = await fetch('/media/prune', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: state.folder, media: mediaItem.key })
+    });
+    if (!resp.ok) {
+      const msg = await resp.text();
+      setStatus('Prune failed: ' + getErrorMessage(msg, resp.statusText));
+      return;
+    }
+    setStatus('Media pruned: ' + mediaItem.key);
+    // Refresh file list
+    refreshCurrentDirectory();
+  } catch (err) {
+    setStatus('Prune error: ' + (err && err.message ? err.message : err));
+  }
+};
+
 async function restoreMediaItem( mediaItem) {
   if (!mediaItem) {
     setStatus('No media item to restore');
@@ -17,7 +48,7 @@ async function restoreMediaItem( mediaItem) {
       await savePathCaption();
     }
   }
-  await restoreMedia( mediaItem, {
+  await restoreMediaItem( mediaItem, {
     restoreMedia: async function ( mediaItem) {
       return new Promise(function (resolve, reject) {
         var folder = state.folder || '';
@@ -205,4 +236,40 @@ function renderPathPreview(folder, mediaName) {
   var ext = getFileExtension(mediaName);
   var mediaUrl = '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(mediaName);
   renderPreviewHtml(!!IMAGE_EXTENSIONS[ext], mediaUrl);
+}
+
+
+function renderPreviewHtml(isImage, src) {
+  var tag = '';
+  if (isImage) {
+    tag = '<img src="' + src + '" alt="preview" style="max-width:100%;max-height:100%;object-fit:contain;">';
+  } else {
+    tag = '' +
+      '<div id="video-wrap" style="max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">' +
+      '  <video id="media-video" controls autoplay loop muted playsinline preload="metadata" style="max-width:100%;max-height:100%;">' +
+      '    <source src="' + src + '">' +
+      '  </video>' +
+      '  <div id="video-error" style="display:none;color:#ddd;font:13px system-ui;text-align:center;max-width:420px;">' +
+      '    Video failed to load in browser preview. The codec may be unsupported.' +
+      '  </div>' +
+      '</div>';
+  }
+
+  var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
+  doc.open();
+  doc.write(
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
+    tag +
+    '<script>\n' +
+    'var video=document.getElementById("media-video");\n' +
+    'if(video){\n' +
+    '  var error=document.getElementById("video-error");\n' +
+    '  video.addEventListener("error",function(){ if(error){ error.style.display="block"; } });\n' +
+    '  var source=video.querySelector("source");\n' +
+    '  if(source){ source.addEventListener("error",function(){ if(error){ error.style.display="block"; } }); }\n' +
+    '  var p=video.play(); if(p && p.catch){ p.catch(function(){}); }\n' +
+    '}\n' +
+    '<\/script></body></html>'
+  );
+  doc.close();
 }

@@ -11,6 +11,25 @@ import shutil
 
 from .config import safe_join_fs_root, FS_ROOT, FS_DEBUG
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
+from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
+def maybe_create_config_files(folder_path):
+    folder = Path(folder_path)
+    if folder.name in ("originals", "auto_dataset"):
+        return
+    media_files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_ALL_EXTS]
+    if not media_files:
+        return
+    templates = ["confighi.toml", "configlo.toml", "dataset.hi.toml", "dataset.lo.toml"]
+    templates_dir = TOOL_DIR / "templates"
+    for name in templates:
+        dest = folder / name
+        src = templates_dir / name
+        if not dest.exists() and src.exists():
+            shutil.copy2(src, dest)
+            try:
+                os.chmod(dest, 0o644)
+            except Exception:
+                pass
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -471,10 +490,13 @@ def fs_describe():
     No filtering; frontend decides what to display.
     """
     rel_path = request.args.get("path", "").strip()
+
     try:
         dir_path = safe_join_fs_root(rel_path)
         if not dir_path.exists() or not dir_path.is_dir():
             return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
+        maybe_create_config_files(dir_path)
+        copy_media_to_originals(dir_path)
 
         # List folders and files (with metadata)
         entries = []

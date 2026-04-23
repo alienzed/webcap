@@ -1,4 +1,3 @@
-
 # WebCap — Spec v10
 
 ## 1. Purpose
@@ -78,3 +77,42 @@ Example structure:
 
 ## Rules & Guardrails
 See `copilot_rules.md` for all safety, mutation, and coding rules.
+
+---
+
+## Originals and Config File Creation Logic (Active Features)
+
+### Originals Folder (Media Backup)
+
+- **Purpose:** The `originals/` folder in each set folder serves as a backup for all media files (video and image) in that set. All destructive or lossy actions (prune, reset, rename, deface, etc.) are reversible by restoring from this folder.
+- **Automatic Creation:** The app automatically creates and maintains the `originals/` folder as follows:
+  - On every folder load (when the folder is described or listed in the UI), the backend checks if the folder is a valid set folder (not `originals`, not `auto_dataset`, not empty of media files).
+  - If at least one media file is present, the backend ensures the `originals/` folder exists and that every media file is backed up there.
+  - If the folder contains no media files, no `originals/` folder is created or modified.
+  - The originals backup is hash-based: files are only copied if missing or if their content has changed.
+- **Protection:** The UI and backend block renaming or deleting the `originals` folder to prevent accidental data loss.
+- **No Manual Management:** Users never need to manually create, move, or manage the `originals/` folder; the app guarantees its correctness and safety.
+
+### Config File Creation
+
+- **Purpose:** Each set folder must contain four configuration files: `configlo.toml`, `confighi.toml`, `dataset.lo.toml`, and `dataset.hi.toml`. These are required for downstream processing and are treated as first-class entries in the media list.
+- **Automatic Creation:** The app ensures these config files are present as follows:
+  - On every folder load (when the folder is described or listed in the UI), the backend checks if the folder is a valid set folder (not `originals`, not `auto_dataset`, not empty of media files).
+  - If at least one media file is present, the backend checks for each config file and copies it from the templates directory if missing.
+  - No string substitution or dynamic editing is performed; the template is copied as-is.
+  - If the folder contains no media files, no config files are created or modified.
+- **No Manual Management:** Users never need to manually create or edit these config files; the app guarantees their presence and correctness.
+
+### Summary Table
+
+| Condition on Folder Load         | Action                                                                 |
+|----------------------------------|------------------------------------------------------------------------|
+| Folder is `originals` or `auto_dataset` | No config or originals logic is triggered.                            |
+| Folder contains no media files   | No config files or originals folder are created or modified.           |
+| Folder contains media files      | Originals folder is created/updated and all media files are backed up. |
+|                                  | Config files are created from templates if missing.                    |
+
+### Recovery and Rebuild
+
+- If the `originals/` folder or any config file is deleted or lost, simply reloading the set folder in the app will automatically recreate and repopulate them as described above, provided media files are present.
+- All destructive actions are recoverable via the `originals/` folder; no trash or state file is used.

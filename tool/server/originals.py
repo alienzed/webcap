@@ -47,10 +47,11 @@ def copy_media_to_originals(folder_path):
     folder_path = Path(folder_path).resolve()
     if is_blacklisted(folder_path.name):
         return  # Never process blacklisted folders
+    media_files = [entry for entry in folder_path.iterdir() if entry.is_file() and entry.suffix.lower() in MEDIA_ALL_EXTS]
+    if not media_files:
+        return  # Do not create originals folder if no media files
     originals_dir = ensure_originals_folder(folder_path)
-    for entry in folder_path.iterdir():
-        if not entry.is_file() or entry.suffix.lower() not in MEDIA_ALL_EXTS:
-            continue
+    for entry in media_files:
         orig_path = originals_dir / entry.name
         if orig_path.exists() and file_hash(entry) == file_hash(orig_path):
             continue

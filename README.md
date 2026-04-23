@@ -52,7 +52,7 @@ Media caption editing and review with side-by-side preview, robust file-based st
 ## Usage
 
 ### Basic Workflow
-1. **Choose a folder** (via the UI or by typing a path) to load media files.
+1. **Navigate folders:** Use the sidebar folder list to browse and select your media directory. You can also enter a path manually if needed to load media files.
 2. **Select a media file** from the left list.
 3. **Edit the caption** in the center pane. Captions autosave to `.txt` files next to the media.
 4. **Preview** the media and caption in the right pane.
@@ -61,6 +61,7 @@ Media caption editing and review with side-by-side preview, robust file-based st
 7. **Prune, Restore, Deface**: Use context menus for advanced file operations. All destructive actions are atomic and safe.
 
 ### Features
+- **Autoset dataset prep:** Instantly prepares your media folder for WAN/diffusion-pipe training. Autoset scans your videos and images, analyzes resolutions and aspect ratios, and automatically creates optimal training buckets and a ready-to-use `dataset.auto.toml` config. It ensures all usable clips are included, avoids upscaling, and saves hours of manual sorting. Perfect for efficient, VRAM-aware dataset setup.
 - **Atomic backend:** All state and file operations are atomic and fail loudly—no silent errors or fallbacks.
 - **File-based state:** All state is stored in `.webcap_state.json` in each folder. No database required.
 - **Reviewed state:** Mark/unmark files as reviewed; state is always in sync with real files.

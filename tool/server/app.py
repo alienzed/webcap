@@ -11,6 +11,25 @@ import shutil
 
 from .config import safe_join_fs_root, FS_ROOT, FS_DEBUG
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
+from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
+def maybe_create_config_files(folder_path):
+    folder = Path(folder_path)
+    if folder.name in ("originals", "auto_dataset"):
+        return
+    media_files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_ALL_EXTS]
+    if not media_files:
+        return
+    templates = ["confighi.toml", "configlo.toml", "dataset.hi.toml", "dataset.lo.toml"]
+    templates_dir = TOOL_DIR / "templates"
+    for name in templates:
+        dest = folder / name
+        src = templates_dir / name
+        if not dest.exists() and src.exists():
+            shutil.copy2(src, dest)
+            try:
+                os.chmod(dest, 0o644)
+            except Exception:
+                pass
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -225,31 +244,12 @@ def caption_restore():
         return jsonify({"error": "Missing required parameters"}), 400
     try:
         folder_path = safe_join_fs_root(folder)
-        originals_path = folder_path / "originals"
-        src_media = originals_path / file_name
-        dst_media = folder_path / file_name
-        if not src_media.exists() or not src_media.is_file():
+        from .originals import restore_original_media
+        result = restore_original_media(folder_path, file_name)
+        if result == "not_found":
             return jsonify({"error": "Original media not found in originals"}), 404
-        # Move media file back to set folder (overwrite if present)
-        if dst_media.exists():
-            dst_media.unlink()
-        src_media.rename(dst_media)
-        try:
-            os.chmod(dst_media, 0o644)
-        except Exception:
-            pass
-        # Restore caption if present (overwrite if present)
-        src_caption = originals_path / (Path(file_name).stem + ".txt")
-        dst_caption = folder_path / (Path(file_name).stem + ".txt")
-        if src_caption.exists():
-            if dst_caption.exists():
-                dst_caption.unlink()
-            with open(src_caption, "r", encoding="utf-8") as fsrc, open(dst_caption, "w", encoding="utf-8") as fdst:
-                fdst.write(fsrc.read())
-            try:
-                os.chmod(dst_caption, 0o644)
-            except Exception:
-                pass
+        if result == "exists":
+            return jsonify({"error": "Media file already exists in set; restore will not overwrite."}), 409
         return jsonify({"ok": True})
     except Exception as e:
         if FS_DEBUG:
@@ -319,15 +319,13 @@ def caption_prune():
         dst_media_name = find_unique_name(base, ext, src_media, originals_path)
         dst_media = originals_path / dst_media_name
 
-        # Move/copy media to originals if not already present by hash
-        if dst_media.exists():
-            if file_hash(dst_media) == file_hash(src_media):
-                # Already present and identical, do nothing
-                pass
-            else:
-                # Name conflict, but not identical: move as new unique name
-                src_media.rename(dst_media)
+
+        # Ensure media is backed up in originals, then remove from set folder
+        if dst_media.exists() and file_hash(dst_media) == file_hash(src_media):
+            # Already present and identical, safe to delete from set folder
+            src_media.unlink()
         else:
+            # Move to originals (rename removes from set folder)
             src_media.rename(dst_media)
 
         # Always move/copy the latest caption to originals, using same base name as media
@@ -471,10 +469,13 @@ def fs_describe():
     No filtering; frontend decides what to display.
     """
     rel_path = request.args.get("path", "").strip()
+
     try:
         dir_path = safe_join_fs_root(rel_path)
         if not dir_path.exists() or not dir_path.is_dir():
             return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
+        maybe_create_config_files(dir_path)
+        copy_media_to_originals(dir_path)
 
         # List folders and files (with metadata)
         entries = []

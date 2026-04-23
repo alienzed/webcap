@@ -39,3 +39,8 @@ This document defines all safety, mutation, and coding rules for the WebCap proj
 - App must remain portable (Python + browser only).
 - Minimize destructive filesystem operations.
 - Maintainability and clarity are prioritized over scalability or flexibility.
+
+---
+
+## 5. Error Visibility
+- All errors must always be visible in the browser console. The status bar may show user-facing status or error summaries, but must never suppress or swallow errors. If an error is caught, it must also be logged to the console for debugging.

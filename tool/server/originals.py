@@ -47,10 +47,11 @@ def copy_media_to_originals(folder_path):
     folder_path = Path(folder_path).resolve()
     if is_blacklisted(folder_path.name):
         return  # Never process blacklisted folders
+    media_files = [entry for entry in folder_path.iterdir() if entry.is_file() and entry.suffix.lower() in MEDIA_ALL_EXTS]
+    if not media_files:
+        return  # Do not create originals folder if no media files
     originals_dir = ensure_originals_folder(folder_path)
-    for entry in folder_path.iterdir():
-        if not entry.is_file() or entry.suffix.lower() not in MEDIA_ALL_EXTS:
-            continue
+    for entry in media_files:
         orig_path = originals_dir / entry.name
         if orig_path.exists() and file_hash(entry) == file_hash(orig_path):
             continue
@@ -97,7 +98,9 @@ def restore_original_media(folder_path, file_name):
     orig_media_path = originals_dir / file_name
     dest_media_path = folder_path / file_name
     if not orig_media_path.exists():
-        return False
+        return "not_found"
+    if dest_media_path.exists():
+        return "exists"
     shutil.copy2(orig_media_path, dest_media_path)
     safe_chmod(dest_media_path, 0o644)
     # Restore caption file if present (sidecar .txt)
@@ -107,7 +110,7 @@ def restore_original_media(folder_path, file_name):
     if orig_caption_path.exists():
         shutil.copy2(orig_caption_path, dest_caption_path)
         safe_chmod(dest_caption_path, 0o644)
-    return True
+    return "ok"
 
 def restore_original_media_video_only(folder_path, file_name):
     """
@@ -122,4 +125,11 @@ def restore_original_media_video_only(folder_path, file_name):
         return False
     shutil.copy2(orig_media_path, dest_media_path)
     safe_chmod(dest_media_path, 0o644)
+    # Do NOT overwrite caption file if it exists
+    caption_name = Path(file_name).stem + '.txt'
+    orig_caption_path = originals_dir / caption_name
+    dest_caption_path = folder_path / caption_name
+    if orig_caption_path.exists() and not dest_caption_path.exists():
+        shutil.copy2(orig_caption_path, dest_caption_path)
+        safe_chmod(dest_caption_path, 0o644)
     return True

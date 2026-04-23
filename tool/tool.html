@@ -11,13 +11,7 @@
         <div class="app">
             <div class="panel stack">
                 <div id="caption-filter-row" class="filter-row">
-                    <input id="media-filter" type="text" placeholder="filter">
-                    <button
-                        id="caption-filter-clear-btn"
-                        type="button"
-                        title="Clear filter"
-                        onclick="if (!document.getElementById('media-filter').value) { document.getElementById('media-filter').focus(); return; } document.getElementById('media-filter').value = ''; document.getElementById('media-filter').dispatchEvent(new Event('input', { bubbles: true }));"
-                    >x</button>
+                    <input id="media-filter" type="search" placeholder="filter">
                 </div>
                 <div id="caption-filter-count"></div>
                 <div class="media-list-wrapper">
@@ -54,8 +48,6 @@
                                   file:fu =&gt; face up
                                   caption:front view =&gt; face">
                                 </textarea>
-                                <button id="stats-run-btn" type="button">Update Review</button>
-                                <button id="folder-settings-reset-btn" type="button" title="Delete .webcap_state.json for current folder">Reset Folder Settings</button>
                             </div>
                         </details>
                         <details id="primer-details">
@@ -91,14 +83,14 @@
               <button id="focus-set-exit-btn" type="button" style="display:none">Exit Set</button>
             </div>
         </div>
-        <!-- JS load order: common.js, caption_core.js, caption_ui.js, media_list.js, preview_pane.js, main.js -->
+        <!-- JS load order: constants.js, common.js, caption_core.js, caption_ui.js, media_list.js, preview_pane.js, main.js -->
+        <script src="/static/js/constants.js"></script>
         <script src="/static/js/common.js"></script>
-        <script src="/static/js/caption_core.js"></script>
-        <script src="/static/js/caption_ui.js"></script>
-        <script src="/static/js/media_list.js"></script>
+        <script src="/static/js/ui.js"></script>
         <script src="/static/js/preview_pane.js"></script>
         <script src="/static/js/media.js"></script>
         <script src="/static/js/stats.js"></script>
+        <script src="/static/js/folder_state.js"></script>
         <script src="/static/js/main.js"></script>
     </body>
 </html>

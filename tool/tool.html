@@ -11,13 +11,7 @@
         <div class="app">
             <div class="panel stack">
                 <div id="caption-filter-row" class="filter-row">
-                    <input id="media-filter" type="text" placeholder="filter">
-                    <button
-                        id="caption-filter-clear-btn"
-                        type="button"
-                        title="Clear filter"
-                        onclick="if (!document.getElementById('media-filter').value) { document.getElementById('media-filter').focus(); return; } document.getElementById('media-filter').value = ''; document.getElementById('media-filter').dispatchEvent(new Event('input', { bubbles: true }));"
-                    >x</button>
+                    <input id="media-filter" type="search" placeholder="filter">
                 </div>
                 <div id="caption-filter-count"></div>
                 <div class="media-list-wrapper">
@@ -92,9 +86,7 @@
         <!-- JS load order: constants.js, common.js, caption_core.js, caption_ui.js, media_list.js, preview_pane.js, main.js -->
         <script src="/static/js/constants.js"></script>
         <script src="/static/js/common.js"></script>
-        <script src="/static/js/core.js"></script>
         <script src="/static/js/ui.js"></script>
-        <script src="/static/js/media_list.js"></script>
         <script src="/static/js/preview_pane.js"></script>
         <script src="/static/js/media.js"></script>
         <script src="/static/js/stats.js"></script>

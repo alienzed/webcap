@@ -1,6 +1,6 @@
 # PROMPT FOR AGENT (place at top of request):
 
-"Trace the complete call chain for the Review Report feature, starting from all UI entry points down to every helper function (including all parsing, computation, and DOM helpers) that is directly or indirectly called. For each function in the chain, verify and report its existence in the codebase. If any function is missing, renamed, or not defined, explicitly flag it. List all function names, their file locations, and their relationships. Do not omit any helper or utility function that is called, even if it seems trivial."
+"Trace the complete call chain for the feature, starting from all UI entry points down to every helper function (including all parsing, computation, and DOM helpers) that is directly or indirectly called. For each function in the chain, verify and report its existence in the codebase. If any function is missing, renamed, or not defined, explicitly flag it. List all function names, their file locations, and their relationships. Do not omit any helper or utility function that is called, even if it seems trivial."
 
 # Review Report Feature: Function Map
 

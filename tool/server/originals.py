@@ -98,7 +98,9 @@ def restore_original_media(folder_path, file_name):
     orig_media_path = originals_dir / file_name
     dest_media_path = folder_path / file_name
     if not orig_media_path.exists():
-        return False
+        return "not_found"
+    if dest_media_path.exists():
+        return "exists"
     shutil.copy2(orig_media_path, dest_media_path)
     safe_chmod(dest_media_path, 0o644)
     # Restore caption file if present (sidecar .txt)
@@ -108,7 +110,7 @@ def restore_original_media(folder_path, file_name):
     if orig_caption_path.exists():
         shutil.copy2(orig_caption_path, dest_caption_path)
         safe_chmod(dest_caption_path, 0o644)
-    return True
+    return "ok"
 
 def restore_original_media_video_only(folder_path, file_name):
     """
@@ -123,4 +125,11 @@ def restore_original_media_video_only(folder_path, file_name):
         return False
     shutil.copy2(orig_media_path, dest_media_path)
     safe_chmod(dest_media_path, 0o644)
+    # Do NOT overwrite caption file if it exists
+    caption_name = Path(file_name).stem + '.txt'
+    orig_caption_path = originals_dir / caption_name
+    dest_caption_path = folder_path / caption_name
+    if orig_caption_path.exists() and not dest_caption_path.exists():
+        shutil.copy2(orig_caption_path, dest_caption_path)
+        safe_chmod(dest_caption_path, 0o644)
     return True

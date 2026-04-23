@@ -286,13 +286,6 @@ iframe {
   align-items: center;
 }
 
-#caption-filter-clear-btn {
-  width: 30px;
-  min-width: 30px;
-  padding: 6px 0;
-  line-height: 1;
-}
-
 /* Small text */
 .small {
   font-size: 12px;

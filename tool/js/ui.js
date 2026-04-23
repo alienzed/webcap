@@ -281,11 +281,12 @@ function refreshCurrentDirectory() {
               hasCaption: !!(text && text.trim().length)
             };
           });
-          // --- PATCH: Load and apply folder state fields ---
+          // --- Load and apply folder state fields ---
           var folderState = resp.folder_state || {};
           if (Object.keys(folderState).length) applyFolderStateToDom(folderState);
           state.reviewedSet = state.reviewedSet || new Set();
           renderFileList(ui.filterEl.value);
+          
           // --- Static header toggling (display only, wiring in main.js) ---
           var upRow = document.getElementById('up-one-directory-row');
           if (upRow) upRow.style.display = state.dirStack.length > 1 ? '' : 'none';
@@ -320,4 +321,10 @@ function clearFocusSet() {
   state.focusSet = null;
   if (ui.focusSetExitBtn) ui.focusSetExitBtn.style.display = 'none';
   renderFileList(ui.filterEl.value);
+}
+// Ensure live filtering as you type
+if (ui.filterEl) {
+  ui.filterEl.addEventListener('input', function () {
+    renderFileList();
+  });
 }

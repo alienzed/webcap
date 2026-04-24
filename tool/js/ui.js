@@ -209,7 +209,7 @@ function selectByFileName(fileName, focusFiles, focusSource) {
       ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    selectMedia(target).then(function () {
+    selectPathMedia(target).then(function () {
       //scrollToCurrentRow();
     }).catch(function (err) {
       setStatus(String(err && err.message ? err.message : err));

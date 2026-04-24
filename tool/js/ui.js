@@ -191,32 +191,37 @@ function selectByFileName(fileName, focusFiles, focusSource) {
     return;
   }
 
+  function doSelect() {
+    var target = null;
+    for (var i = 0; i < state.items.length; i += 1) {
+      if (state.items[i].fileName === fileName) {
+        target = state.items[i];
+        break;
+      }
+    }
+    if (!target) {
+      setStatus('File not found in current folder: ' + fileName);
+      return;
+    }
+
+    if (ui.filterEl.value) {
+      ui.filterEl.value = '';
+      ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    selectMedia(target).then(function () {
+      //scrollToCurrentRow();
+    }).catch(function (err) {
+      setStatus(String(err && err.message ? err.message : err));
+    });
+  }
+
   if (focusFiles && focusFiles.length) {
     activateFocusSet(focusFiles, focusSource || 'Focused Items');
+    setTimeout(doSelect, 0);
+  } else {
+    doSelect();
   }
-
-  var target = null;
-  for (var i = 0; i < state.items.length; i += 1) {
-    if (state.items[i].fileName === fileName) {
-      target = state.items[i];
-      break;
-    }
-  }
-  if (!target) {
-    setStatus('File not found in current folder: ' + fileName);
-    return;
-  }
-
-  if (ui.filterEl.value) {
-    ui.filterEl.value = '';
-    ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-
-  selectMedia(target).then(function () {
-    //scrollToCurrentRow();
-  }).catch(function (err) {
-    setStatus(String(err && err.message ? err.message : err));
-  });
 }
 
 function applyTokenFilter(token) {

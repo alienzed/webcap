@@ -100,10 +100,6 @@ _All steps above are manual/external._
 	- No need to manually create or manage an `originals/` folder; the app ensures all originals are safely backed up before any mutation (conversion, deface, etc.).
 	- All destructive or lossy operations are atomic and reversible.
 
-- **Asynchronous 16fps Conversion:**
-	- Videos are automatically converted to 16fps in the background after import or on folder load, with originals preserved.
-	- No manual batch conversion or risk of overwriting source files.
-
 - **Asynchronous Deface Integration:**
 	- Deface can be triggered per-file or per-folder from the UI, with originals always backed up.
 	- No need to run bash loops or manually rename anonymized files; the app manages naming and restoration.
@@ -113,7 +109,7 @@ _All steps above are manual/external._
 	- No need to run external tools or wait for metadata at review time.
 
 - **Contextual Actions:**
-	- All advanced actions (Deface, Convert to 16fps, Restore Original) are available via context menus, reducing the need to switch between Explorer and the app.
+	- All advanced actions (Deface, Restore,...) are available via context menus, reducing the need to switch between Explorer and the app.
 
 - **Safety and Simplicity:**
 	- The app enforces safe, explicit, and minimal workflows, reducing manual steps and the risk of data loss or confusion.

@@ -71,7 +71,7 @@ The flag feature allows users to mark files or folders with a color-coded flag (
 ## Implementation Review
 - **Meets requirements:**
   - All flag actions are explicit, synchronous, and reversible.
-  - No async/await or race-prone code in flag logic.
+  - No race-prone code in flag logic.
   - UI feedback is immediate and deterministic.
   - Flags persist and restore correctly.
 - **No issues found.**

@@ -86,7 +86,10 @@ function debounceCreate(waitMs) {
   };
 }
 
+
+// Called whenever the preview pane is cleared or replaced
 function clearEditorAndPreview() {
+  backgroundDefaceIfActive();
   ui.editorEl.value = '';
   if (state.objectUrl) {
     URL.revokeObjectURL(state.objectUrl);
@@ -96,6 +99,13 @@ function clearEditorAndPreview() {
   doc.open();
   doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">No media to preview.</body></html>');
   doc.close();
+}
+
+// Stub: Background the Deface stream if it is active in the preview pane
+function backgroundDefaceIfActive() {
+  // TODO: Implement logic to detect if Deface is running in the preview pane
+  // and background it, showing a status indicator elsewhere in the UI.
+  // For now, this is a placeholder for the central trigger.
 }
 
 

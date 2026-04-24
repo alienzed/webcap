@@ -51,6 +51,16 @@ A portable, local-first app for media caption curation and review. Focus: explic
 ## Rules & Guardrails
 See `copilot_rules.md` for all safety, mutation, and coding rules.
 
+
+---
+
+## Media Metadata Panel (New Feature)
+
+- When a media file is selected, a small info panel appears below the preview area showing key metadata: duration, resolution, fps, codec, file size, and container format.
+- Metadata is extracted using ffprobe (from ffmpeg) on the backend and returned as part of the media/caption load endpoint.
+- The panel updates on media selection and is always visible when a media file is selected.
+- If metadata is unavailable, fields display "N/A".
+
 ---
 
 ## Originals and Config File Creation Logic (Active Features)

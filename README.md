@@ -67,7 +67,7 @@ Media caption editing and review with side-by-side preview, robust file-based st
 - **Reviewed state:** Mark/unmark files as reviewed; state is always in sync with real files.
 - **Stats/Primer:** Edit and auto-save stats and primer fields for each folder.
 - **Prune/Restore/Deface:** Safely prune, restore, or anonymize media files with one click.
-- **No modules, no async/await:** All frontend code is global, explicit, and synchronous for maximum predictability.
+- **No modules:** All frontend code is global, explicit, grouped by feature for maximum predictability.
 
 ### Project Structure
 - `tool/tool.html` — Main UI HTML

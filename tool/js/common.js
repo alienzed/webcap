@@ -101,6 +101,7 @@ function clearEditorAndPreview() {
 
 // File/Folder Flags
 function markFlag(itemKey, color) {
+  debugLog('[markFlag] itemKey:', itemKey, 'color:', color, 'state.folder:', state.folder);
   if (color) {
     state.flags[itemKey] = color;
   } else {
@@ -114,6 +115,7 @@ function saveFlags() {
   // Save the full folder state (including flags, reviewedKeys, stats, primer, etc.)
   var folderPath = state.folder || '';
   var snapshot = snapshotFolderStateFromDom();
+  debugLog('[saveFlags] folderPath:', folderPath, 'snapshot:', snapshot);
   writeFolderStateFile(folderPath, snapshot);
 }
 

@@ -160,7 +160,7 @@ def fs_rename():
     new_name = data.get("newFile") or data.get("new_name") or ""
     old_name = old_name.strip()
     new_name = new_name.strip()
-    if not folder or not old_name or not new_name:
+    if not old_name or not new_name:
         print("[fs_rename] Missing required parameters:", folder, old_name, new_name)
         return jsonify({"error": "Missing required parameters"}), 400
     try:

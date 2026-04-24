@@ -1,97 +1,50 @@
----
+# WebCap — Specification
 
-## Destructive Actions: Explicit Definitions
-
-- **Restore:**
-	- Only available for files inside an `originals` folder (i.e., when the user is viewing the `originals` subfolder of a set folder).
-	- When triggered, copies the selected file **and its caption** (if present) from the current `originals` folder to its parent (set) folder.
-	- The operation is a one-way copy: the file and caption remain in `originals` and are added to the parent folder if and only if they do not already exist there.
-	- **Never overwrites:** If the file (or caption) already exists in the parent folder, display an error and do nothing.
-	- After a successful restore, the UI should notify the user and (optionally) offer to open or refresh the parent folder, but should **not** refresh or alter the current `originals` folder view or state.
-	- No state in the `originals` folder is changed by Restore.
-
-- **Reset:**
-	- Only available for files in set folders with an equivalent original.
-	- Overwrites the main file with the original, regardless of current content.
-	- Always overwrites, but only if the original exists.
-
-- **Prune:**
-	- Removes the file from the main set.
-	- File is recoverable from `originals` unless it was never backed up.
-# WebCap — Spec v10
-
-## 1. Purpose
-A portable, local-first app dedicated to media caption curation and review, with explicit, minimal, and safe workflows. All features are focused on efficient, reliable caption editing and dataset review.
+## 1. Purpose & Scope
+A portable, local-first app for media caption curation and review. Focus: explicit, minimal, and safe workflows for efficient, reliable caption editing and dataset review.
 
 ---
 
-## 2. Architecture
-- **Backend:** Python server for file operations, autoset, and review.
-- **Frontend:** Modular JS orchestrating UI, file ops, and review/stats logic.
+## 2. Architecture Overview
+- **Backend:** Python server for file operations, autoset, and review logic.
+- **Frontend:** Modular JavaScript for UI, file operations, and review/stats.
 
 ---
 
-## 3. User Workflows
+
+## 3. Core Workflows
 - Dataset navigation via backend config path.
 - Per-file caption editing with autosave and media preview.
 - Combined review: aggregate captions, stats, validation, and interactive report.
-- Context menu: Rename (file/folder), Prune, Restore, Reset, Deface, Flag (all safe, recoverable, non-destructive; all reversibility is via the `originals` folder, no trash or state file).
-- Flag (color) any file or folder for custom workflow (e.g., review, needs work, etc). Flags are visible in the UI and persist in state.
-- Mark files as reviewed (double-click, green highlight, persists in state).
-- Folder renaming is supported via context menu, except for protected folders (e.g., `originals`).
+- Context menu for all file/folder actions (see Features section).
+- Flagging and review state for workflow management.
+- Folder renaming (except protected folders).
 
 ---
+
 
 ## 4. UI/UX Principles
-- Minimal, explicit, and context-aware UI.
-- Actions that must finish before workflow continues can be synchronous. We do not need to be clever/fancy with the UX.
-- Output and errors are always visible and actionable. Do not hide errors; broken app > hidden errors
+- Minimal, explicit, context-aware UI.
+- Synchronous/blocking actions allowed for correctness.
+- Output and errors are always visible and actionable. Do not hide errors; broken app > hidden errors.
 
----
 
-## 5. Feature List & Operational Checklist
-- Select/edit/autosave captions, review, stats, validation, prune, rename (file/folder), restore, reset, autoset, deface, flag (color) any file or folder.
-- Modular JS and backend.
-- All destructive actions are recoverable via the `originals` folder (no trash or state file).
-- No `.caption_trash` or `pruned.json` is used; all state is managed by presence of originals only.
-- Context menu options are context-aware (e.g., protected folders like `originals` do not show Rename).
-- Flags (color markers) can be set/cleared for any file or folder; visible in the media list and persisted in `.webcap_state.json`.
-- Reviewed state: double-click a file to toggle reviewed status (highlighted in UI, persists in state).
-- Stats and Primer fields: editable per-folder, auto-saved, used for review/validation.
-- Deface: anonymize video files via context menu, with threshold prompt.
----
-
-## 6. State File Structure (`.webcap_state.json`)
-
-All persistent state for a folder is stored in `.webcap_state.json` in that folder. Every field in this file must be explicitly snapshotted when saving, and explicitly restored/applied when loading, in the JS code (`snapshotFolderStateFromDom` and `applyFolderStateToDom`).
-
-**If you add new fields to the state file, you MUST update both functions to include and restore them.**
-
-Example structure:
-
-```
-{
-	"flags": {
-		"originals": "red",         // folder flag
-		"myvideo.mp4": "yellow"     // file flag
-	},
-	"reviewedKeys": ["img1.jpg", "clip2.mp4"],
-	"stats": {
-		"requiredPhrase": "",
-		"phrases": "",
-		"tokenRules": ""
-	},
-	"primer": {
-		"template": "",
-		"defaults": "",
-		"mappings": ""
+## 5. Persistent State (`.webcap_state.json`)
+- Stored per-folder.
+- Fields: `flags`, `reviewedKeys`, `stats`, `primer`.
+- All state changes must be snapshotted/restored explicitly in JS (`snapshotFolderStateFromDom`, `applyFolderStateToDom`).
+- Example structure:
+	```
+	{
+		"flags": { "originals": "red", "myvideo.mp4": "yellow" },
+		"reviewedKeys": ["img1.jpg", "clip2.mp4"],
+		"stats": { ... },
+		"primer": { ... }
 	}
-}
-```
+	```
 
-- `flags`: object mapping file/folder names to color strings (e.g., "red", "yellow").
-- `reviewedKeys`: array of file names marked as reviewed.
-- `stats`/`primer`: per-folder metadata for review/validation.
+---
+- Deface: anonymize video files via context menu, with threshold prompt.
 
 ---
 
@@ -136,3 +89,72 @@ See `copilot_rules.md` for all safety, mutation, and coding rules.
 
 - If the `originals/` folder or any config file is deleted or lost, simply reloading the set folder in the app will automatically recreate and repopulate them as described above, provided media files are present.
 - All destructive actions are recoverable via the `originals/` folder; no trash or state file is used.
+
+---
+
+## 7. Folder Load Logic Summary
+
+| Condition on Folder Load         | Action                                                                 |
+|----------------------------------|------------------------------------------------------------------------|
+| Folder is `originals` or `auto_dataset` | No config/originals logic triggered.                            |
+| Folder contains no media files   | No config/originals created/modified.                                 |
+| Folder contains media files      | Originals folder and config files created/updated as needed.           |
+
+---
+
+## 8. Recovery and Rebuild
+
+- If the `originals/` folder or any config file is deleted or lost, simply reloading the set folder in the app will automatically recreate and repopulate them as described above, provided media files are present.
+- All destructive actions are recoverable via the `originals/` folder; no trash or state file is used.
+## 6. Feature Definitions
+
+### 6.1. Originals Folder (Media Backup)
+- **Purpose:** Backup for all media files in a set folder; enables safe, reversible destructive actions.
+- **Automatic Creation:** On folder load, if media files exist, backend ensures `originals/` exists and all media are backed up (hash-based, only if missing/changed).
+- **Protection:** Cannot rename/delete `originals` folder.
+- **No Manual Management:** App guarantees correctness; user never manages this folder directly.
+- **Recovery:** Reloading a set folder restores missing originals if media files are present.
+
+### 6.2. Config File Creation
+- **Purpose:** Each set folder must have `configlo.toml`, `confighi.toml`, `dataset.lo.toml`, `dataset.hi.toml` for downstream processing.
+- **Automatic Creation:** On folder load, backend copies missing config files from templates if media files exist.
+- **No Manual Management:** App guarantees presence/correctness; templates are copied as-is.
+
+### 6.3. Restore
+- **Trigger:** Only for files in `originals` folder (i.e., when the user is viewing the `originals` subfolder of a set folder).
+- **Action:** Copies the selected file **and its caption** (if present) from the current `originals` folder to its parent (set) folder.
+- **Rules:**
+	- The operation is a one-way copy: the file and caption remain in `originals` and are added to the parent folder if and only if they do not already exist there.
+	- **Never overwrites:** If the file (or caption) already exists in the parent folder, display an error and do nothing.
+	- After a successful restore, the UI should notify the user and (optionally) offer to open or refresh the parent folder, but should **not** refresh or alter the current `originals` folder view or state.
+	- No state in the `originals` folder is changed by Restore.
+
+### 6.4. Reset
+- **Trigger:** Only for files in set folders with an equivalent original.
+- **Action:** Overwrites the main file with the original, regardless of current content.
+- **Rules:** Always overwrites, but only if the original exists.
+
+### 6.5. Prune
+- **Action:** Removes the file from the main set.
+- **Recovery:** File is recoverable from `originals` unless it was never backed up.
+
+### 6.6. Rename (File/Folder)
+- **Action:** Rename via context menu.
+- **Rules:** Not available for protected folders (e.g., `originals`).
+
+### 6.7. Deface
+- **Action:** Anonymize video files via context menu, with threshold prompt.
+- **Recovery:** Original is backed up in `originals`.
+
+### 6.8. Flag (Color Marker)
+- **Action:** Set/clear color flag for any file/folder.
+- **Persistence:** Stored in `.webcap_state.json`, visible in UI.
+
+### 6.9. Reviewed State
+- **Action:** Double-click file to toggle reviewed status (green highlight).
+- **Persistence:** Stored in `.webcap_state.json`.
+
+### 6.10. Stats & Primer Fields
+- **Action:** Editable per-folder, auto-saved, used for review/validation.
+
+---

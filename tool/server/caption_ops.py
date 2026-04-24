@@ -22,8 +22,10 @@ from .originals import MEDIA_ALL_EXTS
 def _resolve_folder(folder: str) -> Path:
     folder = (folder or '').strip()
     if not folder:
-        raise ValueError('Missing folder path')
-    path = safe_join_fs_root(folder)
+        # Treat empty string as root
+        path = FS_ROOT
+    else:
+        path = safe_join_fs_root(folder)
     if not path.exists() or not path.is_dir():
         raise ValueError('Folder does not exist')
     return path

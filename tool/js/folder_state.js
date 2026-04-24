@@ -38,12 +38,16 @@ function sanitizeFolderState(data) {
  */
 async function writeFolderStateFile(folderPath, folderState) {
   // folderPath: relative path from FS root ('' for root)
+  debugLog('[writeFolderStateFile] folderPath:', folderPath, 'folderState:', folderState);
   try {
+    const payload = { folder: folderPath, state: folderState };
+    debugLog('[writeFolderStateFile] Sending payload:', payload);
     const resp = await fetch('/fs/folder_state/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: folderPath, state: folderState })
+      body: JSON.stringify(payload)
     });
+    debugLog('[writeFolderStateFile] Response status:', resp.status);
     if (!resp.ok) throw new Error('Failed to save folder state');
     return true;
   } catch (err) {

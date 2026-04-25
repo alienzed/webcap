@@ -363,6 +363,24 @@ def autoset_run():
         python_exe = resolve_python_executable()
         autoset_path = str(ROOT / "tool" / "server" / "autoset.py")
         cmd = [python_exe, autoset_path, "--master", str(folder_path)]
+
+        def copy_auto_to_hi_lo(current_folder):
+            import shutil, os
+            auto_path = os.path.join(current_folder, 'auto_dataset', 'dataset.auto.toml')
+            hi_path = os.path.join(current_folder, 'dataset.hi.toml')
+            lo_path = os.path.join(current_folder, 'dataset.lo.toml')
+            try:
+                if not os.path.exists(auto_path):
+                    print(f"[autoset] {auto_path} not found, skipping hi/lo copy.")
+                    return "dataset.auto.toml not found, skipping hi/lo copy."
+                shutil.copyfile(auto_path, hi_path)
+                shutil.copyfile(auto_path, lo_path)
+                print(f"[autoset] Copied {auto_path} to {hi_path} and {lo_path}.")
+                return "Copied dataset.auto.toml to hi/lo."
+            except Exception as e:
+                print(f"[autoset] Error copying auto.toml to hi/lo: {e}")
+                return f"Error copying auto.toml to hi/lo: {e}"
+
         def generate():
             try:
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, universal_newlines=True)
@@ -370,6 +388,9 @@ def autoset_run():
                     yield line
                 proc.stdout.close()
                 proc.wait()
+                # After autoset completes, attempt the copy
+                msg = copy_auto_to_hi_lo(str(folder_path))
+                yield f"[autoset] {msg}\n"
             except Exception as e:
                 yield f"[ERROR] {e}\n"
         return Response(stream_with_context(generate()), mimetype="text/plain")

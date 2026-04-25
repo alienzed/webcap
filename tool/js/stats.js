@@ -397,30 +397,55 @@ function renderReportPreview(report) {
     '<div class="card"><h3>Top Tokens</h3><ul class="token-grid">' + topRows + '</ul></div>' +
     '<div class="card"><h3>Rare Tokens (&lt;=2)</h3><ul class="token-grid">' + rareRows + '</ul></div>' +
     '</div>' +
-    '<script>' +
-    'document.querySelectorAll(".fail-link").forEach(function(btn){' +
-    'btn.addEventListener("click",function(){' +
-    'var f=btn.getAttribute("data-file")||"";' +
-    'var focus=btn.getAttribute("data-focus")||"";' +
-    'var source=btn.getAttribute("data-source")||"";' +
-    'var files=[];' +
-    'if(focus){files=decodeURIComponent(focus).split("\\n").filter(Boolean);}' +
-    'if(parent&&parent.postMessage){parent.postMessage({type:"caption-review-select",fileName:decodeURIComponent(f),focusFiles:files,focusSource:decodeURIComponent(source||"")},"*");}' +
-    '});' +
-    '});' +
-    'document.querySelectorAll(".token-link").forEach(function(btn){' +
-    'btn.addEventListener("click",function(){' +
-    'var t=btn.getAttribute("data-token")||"";' +
-    'if(parent&&parent.postMessage){parent.postMessage({type:"caption-review-token",token:decodeURIComponent(t)},"*");}' +
-    '});' +
-    '});' +
-    '<\/script>' +
+    // Media metadata panel placeholder:
+    '<div class="row"><div class="card"><h3>Media Metadata</h3><div id="media-metadata-panel">Loading...</div></div></div>' +
     '</body></html>';
 
   var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
   doc.open();
   doc.write(html);
   doc.close();
+
+  // Render media metadata panel after iframe is loaded
+  setTimeout(function() {
+    if (!parent || !parent.state || !parent.state.folder) return;
+    renderMediaMetadataPanel(parent.state.folder, doc);
+  }, 50);
+}
+
+// Render media metadata panel into the report iframe
+function renderMediaMetadataPanel(folder, doc) {
+  var panel = doc.getElementById('media-metadata-panel');
+  if (!panel) return;
+  panel.textContent = 'Loading...';
+  var url = '/fs/media_metadata?folder=' + encodeURIComponent(folder);
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status === 200) {
+      try {
+        var data = JSON.parse(xhr.responseText);
+        if (!Array.isArray(data)) throw new Error('Malformed metadata');
+        var cols = ['file','resolution','fps','aspect','size','bitrate','codec','color','duration','frames'];
+        var colLabels = {file:'File',resolution:'Resolution',fps:'FPS',aspect:'Aspect',size:'Size',bitrate:'Bitrate',codec:'Codec',color:'Color',duration:'Duration',frames:'Frames'};
+        var html = '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
+        data.forEach(function(row){
+          html += '<tr>' + cols.map(function(c){
+            var val = row[c] !== undefined ? String(row[c]) : '-';
+            return '<td>' + escapeHtml(val) + '</td>';
+          }).join('') + '</tr>';
+        });
+        html += '</tbody></table>';
+        panel.innerHTML = html;
+      } catch(e) {
+        panel.textContent = 'Failed to parse media metadata: ' + (e && e.message ? e.message : e);
+      }
+    } else {
+      panel.textContent = 'Failed to load media metadata (' + xhr.status + ')';
+    }
+  };
+  xhr.send();
 }
 
 // Stats/primer DOM helpers and auto-save wiring (moved from common.js)

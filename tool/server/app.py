@@ -9,6 +9,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
 
+from .media_metadata import update_media_metadata
 from .config import safe_join_fs_root, FS_ROOT, FS_DEBUG
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
@@ -555,5 +556,39 @@ def fs_describe():
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 
+ # Media metadata endpoint
+@app.route("/fs/media_metadata", methods=["GET"])
+def fs_media_metadata():
+    rel_path = request.args.get("folder", "").strip()
+    try:
+        folder_path = safe_join_fs_root(rel_path)
+        if not folder_path.exists() or not folder_path.is_dir():
+            return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
+        metadata_dict = update_media_metadata(folder_path)
+        # Convert dict of {filename: metadata} to list of records for the frontend table
+        metadata_list = []
+        for filename, info in metadata_dict.items():
+            record = {
+                "file": filename,
+                "resolution": info.get("resolution", "-"),
+                "fps": f"{info['fps']:.2f}" if info.get("fps") else "-",
+                "aspect": info.get("aspect_ratio", "-"),
+                "size": f"{info['size'] / (1024*1024):.2f} MB" if info.get("size") else "-",
+                "bitrate": f"{info['bitrate']} kbps" if info.get("bitrate") else "-",
+                "codec": info.get("codec", "-"),
+                "color": info.get("color_space", "-"),
+                "duration": f"{info['duration']:.2f}s" if info.get("duration") else "-",
+                "frames": info.get("frame_count", "-")
+            }
+            metadata_list.append(record)
+        return jsonify(metadata_list)
+    except Exception as e:
+        if FS_DEBUG:
+            print("[fs_media_metadata] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+

@@ -52,39 +52,14 @@ def copy_media_to_originals(folder_path):
         return  # Do not create originals folder if no media files
     originals_dir = ensure_originals_folder(folder_path)
     for entry in media_files:
-        orig_path = originals_dir / entry.name
-        if orig_path.exists() and file_hash(entry) == file_hash(orig_path):
-            continue
-        shutil.copy2(entry, orig_path)
-        safe_chmod(orig_path, 0o644)
+        rotate_on_collision(entry, originals_dir)
 
 def ensure_original_by_hash(src_path, originals_dir):
     """
-    Ensure src_path is backed up in originals_dir by hash.
-    If a file with the same hash exists, return its path.
-    If not, copy it (with unique name if needed), return new path.
+    Ensure src_path is backed up in originals_dir per rotate-on-collision spec (single-file entry point).
+    See rotate_on_collision for details.
     """
-    src_path = Path(src_path)
-    originals_dir = Path(originals_dir)
-    src_hash = file_hash(src_path)
-    # Check for existing file with same hash in originals
-    for entry in originals_dir.iterdir():
-        if entry.is_file() and file_hash(entry) == src_hash:
-            return entry
-    # No match: copy with unique name if needed
-    base = src_path.stem
-    ext = src_path.suffix
-    candidate = originals_dir / (base + ext)
-    i = 1
-    while candidate.exists():
-        # Avoid name collision
-        if file_hash(candidate) == src_hash:
-            return candidate
-        candidate = originals_dir / (f"{base}-{i}{ext}")
-        i += 1
-    shutil.copy2(src_path, candidate)
-    safe_chmod(candidate, 0o644)
-    return candidate
+    return rotate_on_collision(src_path, originals_dir)
 
 def restore_original_media(folder_path, file_name):
     """
@@ -133,3 +108,38 @@ def restore_original_media_video_only(folder_path, file_name):
         shutil.copy2(orig_caption_path, dest_caption_path)
         safe_chmod(dest_caption_path, 0o644)
     return True
+
+def rotate_on_collision(src_path, originals_dir):
+    """
+    Ensure src_path is backed up in originals_dir per rotate-on-collision spec:
+    - If name does not exist, copy as canonical.
+    - If name exists and hash matches, do nothing.
+    - If name exists and hash differs, rotate old to unique name, copy new as canonical.
+    Returns the path to the canonical file in originals_dir.
+    """
+    src_path = Path(src_path)
+    originals_dir = Path(originals_dir)
+    canonical = originals_dir / src_path.name
+    if not canonical.exists():
+        shutil.copy2(src_path, canonical)
+        safe_chmod(canonical, 0o644)
+        return canonical
+    # Exists: check hash
+    src_hash = file_hash(src_path)
+    canon_hash = file_hash(canonical)
+    if src_hash == canon_hash:
+        return canonical
+    # Name collision, different content: rotate
+    base = src_path.stem
+    ext = src_path.suffix
+    i = 1
+    while True:
+        rotated = originals_dir / f"{base}-{i}{ext}"
+        if not rotated.exists():
+            canonical.rename(rotated)
+            safe_chmod(rotated, 0o644)
+            break
+        i += 1
+    shutil.copy2(src_path, canonical)
+    safe_chmod(canonical, 0o644)
+    return canonical

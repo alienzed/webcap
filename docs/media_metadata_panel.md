@@ -1,6 +1,4 @@
 
-# Media Metadata Panel in Review Captions
-
 ## Purpose
 Display clip metadata (resolution, duration, frame count) for all media in the current set, instantly and reliably, with zero UI clutter or performance penalty.
 
@@ -96,5 +94,11 @@ Display clip metadata (resolution, duration, frame count) for all media in the c
 - Robust to file additions/removals/renames.
 
 ----
+
+# Media Metadata Panel in Review Captions
+
+**Status: Implemented (2026-04-28)**
+
+This feature is now complete and available in the Review Captions screen. The panel displays all required metadata fields for each media file, as described below.
 
 ----

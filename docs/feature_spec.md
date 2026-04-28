@@ -12,7 +12,9 @@ This document tracks major new features and their implementation specs. See indi
 ## 2. Media Metadata Panel in Review Captions
 - See: [docs/media_metadata_panel.md](docs/media_metadata_panel.md)
 - Purpose: Collapsible section in Review Captions area showing all clips with resolution, duration, frame count.
-- Status: Spec complete.
+- Status: **Implemented (2026-04-28)**
+
+> **Note:** This feature is now live. The Review Captions screen displays the metadata panel as specified, with all required fields populated from `media_metadata.json`.
 
 ## 3. Config File Editing (Safe, Minimal)
 - See: [docs/config_file_editing.md](docs/config_file_editing.md)

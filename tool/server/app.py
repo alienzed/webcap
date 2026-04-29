@@ -588,32 +588,41 @@ def fs_media_metadata():
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
     
+from .config import list_toml_files, read_toml_file, save_toml_file
+# --- Config file API ---
+@app.route("/fs/list_config", methods=["GET"])
+def list_config():
+    folder = request.args.get("folder", "").strip()
+    try:
+        files = list_toml_files(folder)
+        return jsonify({"files": files})
+    except Exception as e:
+        if FS_DEBUG:
+            print("[list_config] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/fs/read_config", methods=["GET"])
+def read_config():
+    folder = request.args.get("folder", "").strip()
+    filename = request.args.get("file", "").strip()
+    try:
+        text = read_toml_file(folder, filename)
+        return Response(text, mimetype="text/plain")
+    except Exception as e:
+        if FS_DEBUG:
+            print("[read_config] ERROR:", e)
+            traceback.print_exc()
+        return Response("", status=400)
+
 @app.route("/fs/save_config", methods=["POST"])
 def save_config():
-    """
-    Save a TOML config file in the current folder. Only allows .toml files, no directory traversal.
-    POST JSON: {"folder": <folder_rel>, "file": <filename>, "text": <file_content>}
-    """
     data = request.get_json(silent=True) or {}
     folder = data.get("folder", "").strip()
     filename = data.get("file", "").strip()
     text = data.get("text", "")
-    if not folder or not filename or not text:
-        return jsonify({"error": "Missing required parameters"}), 400
-    if not filename.endswith(".toml") or "/" in filename or ".." in filename or "\\" in filename:
-        return jsonify({"error": "Invalid filename"}), 400
     try:
-        folder_path = safe_join_fs_root(folder)
-        file_path = folder_path / filename
-        # Only allow writing to .toml files in the current folder
-        if not file_path.parent.samefile(folder_path):
-            return jsonify({"error": "Invalid file path"}), 400
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(text)
-        try:
-            os.chmod(file_path, 0o644)
-        except Exception:
-            pass
+        save_toml_file(folder, filename, text)
         return jsonify({"ok": True})
     except Exception as e:
         if FS_DEBUG:

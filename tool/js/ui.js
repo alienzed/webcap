@@ -1,6 +1,16 @@
 
 
 // caption_ui.js
+// --- ConfigEditor integration ---
+if (window.ConfigEditor) {
+  // Initialize with main editor and status elements
+  window.ConfigEditor.init(ui.editorEl, ui.statusEl);
+  // Wire up input event for config editing
+  ui.editorEl.addEventListener('input', function() {
+    window.ConfigEditor.onInput();
+  });
+  // Optionally, wire up a save button or auto-save (not shown here)
+}
 // Global functions: hideContextMenu, ensureContextMenu, showContextMenu, ensureFocusSetExitButton, refreshFocusSetUi, clearFocusSet, activateFocusSet, wireReviewActions, runReview, selectByFileName, applyTokenFilter, refreshCurrentDirectory
 
 var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;

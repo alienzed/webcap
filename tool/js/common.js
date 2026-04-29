@@ -86,6 +86,17 @@ function debounceCreate(waitMs) {
   };
 }
 
+// Debounced autosave for config files
+var configAutosaveTimer = null;
+function debouncedConfigAutosave() {
+  if (configAutosaveTimer) clearTimeout(configAutosaveTimer);
+  configAutosaveTimer = setTimeout(function() {
+    if (state.currentConfigFile) {
+      saveCurrentEditorContent();
+    }
+  }, 800); // 800ms after last input
+}
+
 
 // Called whenever the preview pane is cleared or replaced
 function clearEditorAndPreview() {

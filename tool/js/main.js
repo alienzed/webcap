@@ -24,6 +24,13 @@ function wireAllUi() {
       saveCurrentEditorContent();
     }
   });
+
+  // Autosave config files as you type (not for captions)
+  ui.editorEl.addEventListener('input', function() {
+    if (state.currentConfigFile) {
+      debouncedConfigAutosave();
+    }
+  });
   // Current folder row context menu handler
   if (ui.currentFolderRow) {
     ui.currentFolderRow.oncontextmenu = function (e) {

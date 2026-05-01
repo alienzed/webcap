@@ -13,31 +13,6 @@ from .media_metadata import update_media_metadata
 from .config import safe_join_fs_root, FS_ROOT, FS_DEBUG, fill_template_placeholders
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
-def maybe_create_config_files(folder_path):
-    folder = Path(folder_path)
-    if folder.name in ("originals", "auto_dataset"):
-        return
-    media_files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_ALL_EXTS]
-    if not media_files:
-        return
-    templates = ["confighi.toml", "configlo.toml", "dataset.hi.toml", "dataset.lo.toml"]
-    templates_dir = TOOL_DIR / "templates"
-    for name in templates:
-        dest = folder / name
-        src = templates_dir / name
-        if not dest.exists() and src.exists():
-            # Read template as text
-            with open(src, "r", encoding="utf-8") as f:
-                template_text = f.read()
-            # Fill placeholders using folder name as dataset
-            filled_text = fill_template_placeholders(template_text, folder.name)
-            # Write to destination
-            with open(dest, "w", encoding="utf-8") as f:
-                f.write(filled_text)
-            try:
-                os.chmod(dest, 0o644)
-            except Exception:
-                pass
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -638,7 +613,56 @@ def save_config():
             print("[save_config] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
-
+    
+@app.route("/fs/open_in_explorer", methods=["POST"])
+def open_in_explorer():
+    data = request.get_json(silent=True) or {}
+    rel_path = data.get("path", "").strip()
+    if not rel_path:
+        return jsonify({"error": "Missing path"}), 400
+    try:
+        abs_path = safe_join_fs_root(rel_path)
+        if not abs_path.exists():
+            return jsonify({"error": "Path does not exist"}), 404
+        # Open in system file explorer
+        if sys.platform.startswith("win"):
+            os.startfile(str(abs_path))
+        elif sys.platform.startswith("darwin"):
+            subprocess.Popen(["open", str(abs_path)])
+        else:
+            subprocess.Popen(["xdg-open", str(abs_path)])
+        return jsonify({"ok": True})
+    except Exception as e:
+        if FS_DEBUG:
+            print("[open_in_explorer] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    
+def maybe_create_config_files(folder_path):
+    folder = Path(folder_path)
+    if folder.name in ("originals", "auto_dataset"):
+        return
+    media_files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_ALL_EXTS]
+    if not media_files:
+        return
+    templates = ["confighi.toml", "configlo.toml", "dataset.hi.toml", "dataset.lo.toml"]
+    templates_dir = TOOL_DIR / "templates"
+    for name in templates:
+        dest = folder / name
+        src = templates_dir / name
+        if not dest.exists() and src.exists():
+            # Read template as text
+            with open(src, "r", encoding="utf-8") as f:
+                template_text = f.read()
+            # Fill placeholders using folder name as dataset
+            filled_text = fill_template_placeholders(template_text, folder.name)
+            # Write to destination
+            with open(dest, "w", encoding="utf-8") as f:
+                f.write(filled_text)
+            try:
+                os.chmod(dest, 0o644)
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

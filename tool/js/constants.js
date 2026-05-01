@@ -30,7 +30,7 @@ ui = {
 
 
 // Set this to true to enable debug logging
-var DEBUG = true;
+var DEBUG = false;
 var FOLDER_STATE_VERSION = 1;
 var FOLDER_STATE_FILE = '.webcap_state.json';
 var IMAGE_EXTENSIONS = { '.jpg': true, '.jpeg': true, '.png': true, '.gif': true, '.webp': true, '.bmp': true };

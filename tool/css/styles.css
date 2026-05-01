@@ -15,6 +15,7 @@
 html, body {
   height: 100%;
   margin: 0;
+  padding: 0
 }
 
 body {
@@ -148,15 +149,15 @@ body {
   background: var(--hover);
 }
 
-.media-item.active {
-  background: rgba(52, 146, 255, 0.12);
-  border-left: 3px solid var(--accent);
-}
-
 /* Highlight for empty captions */
 .media-item.empty-caption {
   background: #fffbe6 !important;
   border-left: 3px solid #ffc779;
+}
+
+.media-item.active {
+  background: rgba(52, 146, 255, 0.12);
+  border-left: 3px solid var(--accent);
 }
 
 .media-item.folder-item {
@@ -199,8 +200,12 @@ textarea:focus, input:focus {
 }
 
 /* Editor */
-textarea#editor {
+.editor-panel {
   min-height: calc(100vh - 40px);
+}
+
+textarea#editor {
+  min-height: calc(50vh - 40px);
   resize: none;
   font-family: Consolas, monospace;
   font-size: 14px;
@@ -525,4 +530,22 @@ iframe {
   text-align: center;
   font-size: 12px;
   color: #666;
+}
+/* Console Panel Styles */
+#console-panel {
+  background: #181c20;
+  color: #e6e6e6;
+  font-family: monospace;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 8px;
+  padding: 8px;
+  max-height: 320px;
+  min-height: 80px;
+  overflow-y: auto;
+  resize: vertical;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+  display: none;
+  z-index: 1000;
 }

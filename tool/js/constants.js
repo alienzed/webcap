@@ -25,6 +25,7 @@ ui = {
   upRow: document.getElementById('up-one-directory-row'),
   focusSetExitBtn: document.getElementById('focus-set-exit-btn'),
   currentFolderRow: document.getElementById('current-folder-row'),
+  consolePanelEl: document.getElementById('console-panel'),
 };
 
 

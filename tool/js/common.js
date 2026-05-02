@@ -29,6 +29,7 @@ function debugLog() {
 
 function setStatus(text) {
   ui.statusEl.textContent = text || '';
+  appendToConsolePanel(text || '');
 }
 
 function normalizeFolderInput(value) {
@@ -85,18 +86,6 @@ function debounceCreate(waitMs) {
     timer = setTimeout(callback, waitMs);
   };
 }
-
-// Debounced autosave for config files
-var configAutosaveTimer = null;
-function debouncedConfigAutosave() {
-  if (configAutosaveTimer) clearTimeout(configAutosaveTimer);
-  configAutosaveTimer = setTimeout(function() {
-    if (state.currentConfigFile) {
-      saveCurrentEditorContent();
-    }
-  }, 800); // 800ms after last input
-}
-
 
 // Called whenever the preview pane is cleared or replaced
 function clearEditorAndPreview() {
@@ -190,8 +179,17 @@ function savePathCaption() {
       text: ui.editorEl.value || ''
     }, function(status, responseText) {
       if (status === 200) {
-        if (ui && ui.statusEl) {
-          ui.statusEl.textContent = 'Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt');
+        setStatus('Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt'));
+        // Toggle empty-caption class on the relevant media item
+        if (ui && ui.mediaListEl && mediaItem && mediaItem.key) {
+          var itemEl = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + mediaItem.key + '"]');
+          if (itemEl) {
+            if (ui.editorEl.value && ui.editorEl.value.trim().length > 0) {
+              itemEl.classList.remove('empty-caption');
+            } else {
+              itemEl.classList.add('empty-caption');
+            }
+          }
         }
         resolve();
         return;

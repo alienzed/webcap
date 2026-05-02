@@ -1,7 +1,7 @@
 // media.js
 // Global functions: restoreMediaItem, resetMediaItem, selectPathMedia, promptRenameMedia, navigateUp, renameMedia, renderPathPreview
 
-pruneMedia = async function( mediaItem) {
+pruneMedia = async function (mediaItem) {
   // Confirm before pruning
   if (!state.folder || !mediaItem || !mediaItem.key) {
     setStatus('No folder or media selected for prune');
@@ -96,7 +96,7 @@ async function restoreMediaItem(mediaItem) {
   xhr.send(JSON.stringify({ folder: folder, fileName: fileName }));
 }
 
-async function resetMediaItem( mediaItem) {
+async function resetMediaItem(mediaItem) {
   if (!mediaItem) {
     setStatus('No media item to reset');
     return;
@@ -189,7 +189,7 @@ function promptRenameMedia(mediaItem) {
     setStatus('Unsupported media file type');
     return;
   }
-  renameMedia( mediaItem, oldFile, newFile).then(function () {
+  renameMedia(mediaItem, oldFile, newFile).then(function () {
     setStatus('Renamed: ' + oldFile + ' -> ' + newFile);
     refreshCurrentDirectory();
   }).catch(function (err) {
@@ -213,7 +213,7 @@ function navigateUp() {
   refreshCurrentDirectory();
 }
 
-async function renameMedia( mediaItem, oldFile, newFile) {
+async function renameMedia(mediaItem, oldFile, newFile) {
   // Rename media and caption via backend
   return new Promise(function (resolve, reject) {
     var folder = state.folder || '';
@@ -275,100 +275,182 @@ function renderPreviewHtml(isImage, src) {
 }
 
 async function renderFileList() {
-    debugLog('[renderFileList] called. state.items:', state.items, 'state.childFolders:', state.childFolders, 'filterText:', ui.filterEl.value);
-    var q = (ui.filterEl.value || '').toLowerCase();
-    var renderSeq = ++state.listRenderSeq;
-    ui.mediaListEl.innerHTML = '';
-    var mediaItems = state.items;
-    // Focus set logic (if active)
-    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
-        var allow = {};
-        state.focusSet.keys.forEach(function (key) {
-            allow[key] = true;
-        });
-        mediaItems = state.items.filter(function (item) {
-            return !!allow[item.key];
-        });
-    }
-    // Filter logic (by label, fileName, or caption)
-    if (q) {
-      mediaItems = mediaItems.filter(function (item) {
-        var label = (item.label || '').toLowerCase();
-        var fileName = (item.fileName || '').toLowerCase();
-        var caption = (item.caption || '').toLowerCase();
-        return label.indexOf(q) !== -1 || fileName.indexOf(q) !== -1 || caption.indexOf(q) !== -1;
-      });
-    }
-    // Show count of matching media items
-    ui.captionFilterCount.textContent = mediaItems.length + (mediaItems.length === 1 ? ' item matches the filter' : ' items match the filter');
-
-
-    var matchCount = 0;
-
-    // Modern color palette for flags
-    var FLAG_COLOR_MAP = {
-        green: '#43aa8b',   // teal green
-        yellow: '#ffd166',  // soft gold
-        orange: '#f8961e',  // warm orange
-        red: '#f94144'      // soft red
-    };
-    for (var i = 0; i < state.childFolders.length; ++i) {
-        var folderItem = state.childFolders[i];
-        var flagColor = state.flags && state.flags[folderItem.name];
-        var colorDot = '';
-        if (flagColor) {
-            var mappedColor = FLAG_COLOR_MAP[flagColor] || flagColor;
-            var dotStyle = 'display:inline-block;width:12px;height:12px;border-radius:50%;background:' + mappedColor + ';margin-left:8px;';
-            colorDot = '<span style="' + dotStyle + '"></span>';
-        }
-        var label = '🗀 ' + folderItem.name;
-        var row = document.createElement('div');
-        row.className = 'media-item folder-item';
-        row.setAttribute('data-type', 'folder');
-        row.setAttribute('data-key', folderItem.name);
-        row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%"><span>' + label + '</span>' + colorDot + '</div>';
-        ui.mediaListEl.appendChild(row);
-        matchCount++;
-    }
-
-    // Render media items
-    mediaItems.forEach(function (mediaItem) {
-        var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
-        var reviewed = state.reviewedSet.has(mediaItem.key);
-        var className = 'media-item';
-        if (isActive) className += ' active';
-        if (reviewed) className += ' reviewed';
-        if (!mediaItem.hasCaption) className += ' empty-caption';
-        var icon = '';
-        var ext = '';
-        if (mediaItem.fileName) {
-            var dot = mediaItem.fileName.lastIndexOf('.');
-            if (dot !== -1) ext = mediaItem.fileName.slice(dot).toLowerCase();
-        }
-        if ([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"].indexOf(ext) !== -1) {
-            icon = '🖼️';
-        } else if ([".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v"].indexOf(ext) !== -1) {
-            icon = '🎬';
-        } else if ([".ogg"].indexOf(ext) !== -1) {
-            icon = '🎵';
-        } else {
-            icon = '📄';
-        }
-        var flagColor = state.flags && state.flags[mediaItem.key];
-        var colorDot = '';
-        if (flagColor) {
-            var mappedColor = FLAG_COLOR_MAP[flagColor] || flagColor;
-            var dotStyle = 'display:inline-block;width:12px;height:12px;border-radius:50%;background:' + mappedColor + ';margin-left:8px;';
-            colorDot = '<span style="' + dotStyle + '"></span>';
-        }
-        var displayText = mediaItem.label;
-        var row = document.createElement('div');
-        row.className = className;
-        row.setAttribute('data-type', 'media');
-        row.setAttribute('data-key', mediaItem.key);
-        row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%">' + icon + '&nbsp;' + escapeHtml(displayText) + colorDot + '</div>';
-        ui.mediaListEl.appendChild(row);
-        matchCount++;
+  debugLog('[renderFileList] called. state.items:', state.items, 'state.childFolders:', state.childFolders, 'filterText:', ui.filterEl.value);
+  var q = (ui.filterEl.value || '').toLowerCase();
+  var renderSeq = ++state.listRenderSeq;
+  ui.mediaListEl.innerHTML = '';
+  var mediaItems = state.items;
+  // Focus set logic (if active)
+  if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+    var allow = {};
+    state.focusSet.keys.forEach(function (key) {
+      allow[key] = true;
     });
-}
+    mediaItems = state.items.filter(function (item) {
+      return !!allow[item.key];
+    });
+  }
+  // Filter logic (by label, fileName, or caption)
+  if (q) {
+    mediaItems = mediaItems.filter(function (item) {
+      var label = (item.label || '').toLowerCase();
+      var fileName = (item.fileName || '').toLowerCase();
+      var caption = (item.caption || '').toLowerCase();
+      return label.indexOf(q) !== -1 || fileName.indexOf(q) !== -1 || caption.indexOf(q) !== -1;
+    });
+  }
+  // Show count of matching media items
+  ui.captionFilterCount.textContent = mediaItems.length + (mediaItems.length === 1 ? ' item matches the filter' : ' items match the filter');
 
+
+  var matchCount = 0;
+
+  // Modern color palette for flags
+  var FLAG_COLOR_MAP = {
+    green: '#43aa8b',   // teal green
+    yellow: '#ffd166',  // soft gold
+    orange: '#f8961e',  // warm orange
+    red: '#f94144'      // soft red
+  };
+  for (var i = 0; i < state.childFolders.length; ++i) {
+    var folderItem = state.childFolders[i];
+    var flagColor = state.flags && state.flags[folderItem.name];
+    var colorDot = '';
+    if (flagColor) {
+      var mappedColor = FLAG_COLOR_MAP[flagColor] || flagColor;
+      var dotStyle = 'display:inline-block;width:12px;height:12px;border-radius:50%;background:' + mappedColor + ';margin-left:8px;';
+      colorDot = '<span style="' + dotStyle + '"></span>';
+    }
+    var label = '🗀 ' + folderItem.name;
+    var row = document.createElement('div');
+    row.className = 'media-item folder-item';
+    row.setAttribute('data-type', 'folder');
+    row.setAttribute('data-key', folderItem.name);
+    row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%"><span>' + label + '</span>' + colorDot + '</div>';
+    // Context menu for folder (orphaned, now handled in main.js)
+    /*
+    row.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, [
+        {
+          label: 'Open in Explorer',
+          run: function () {
+            fetch('/fs/open_in_explorer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + folderItem.name })
+            })
+            .then(function(resp) {
+              if (!resp.ok) {
+                return resp.json().then(function(data) {
+                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
+                }).catch(function() {
+                  throw new Error('Failed to open in explorer');
+                });
+              }
+            })
+            .catch(function(err) {
+              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
+            });
+          }
+        }
+      ]);
+    });
+    */
+    ui.mediaListEl.appendChild(row);
+    matchCount++;
+  }
+
+  // Render media items
+  mediaItems.forEach(function (mediaItem) {
+    var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
+    var reviewed = state.reviewedSet.has(mediaItem.key);
+    var className = 'media-item';
+    if (isActive) className += ' active';
+    if (reviewed) className += ' reviewed';
+    if (!mediaItem.hasCaption) className += ' empty-caption';
+    var icon = '';
+    var ext = '';
+    if (mediaItem.fileName) {
+      var dot = mediaItem.fileName.lastIndexOf('.');
+      if (dot !== -1) ext = mediaItem.fileName.slice(dot).toLowerCase();
+    }
+    if ([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"].indexOf(ext) !== -1) {
+      icon = '🖼️';
+    } else if ([".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v"].indexOf(ext) !== -1) {
+      icon = '🎬';
+    } else if ([".ogg"].indexOf(ext) !== -1) {
+      icon = '🎵';
+    } else {
+      icon = '📄';
+    }
+    var flagColor = state.flags && state.flags[mediaItem.key];
+    var colorDot = '';
+    if (flagColor) {
+      var mappedColor = FLAG_COLOR_MAP[flagColor] || flagColor;
+      var dotStyle = 'display:inline-block;width:12px;height:12px;border-radius:50%;background:' + mappedColor + ';margin-left:8px;';
+      colorDot = '<span style="' + dotStyle + '"></span>';
+    }
+    var displayText = mediaItem.label;
+    var row = document.createElement('div');
+    row.className = className;
+    row.setAttribute('data-type', 'media');
+    row.setAttribute('data-key', mediaItem.key);
+    row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%">' + icon + '&nbsp;' + escapeHtml(displayText) + colorDot + '</div>';
+    // Context menu for media file (orphaned, now handled in main.js)
+    /*
+    row.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, [
+        {
+          label: 'Rename',
+          run: function () { promptRenameMedia(mediaItem); }
+        },
+        {
+          label: 'Prune',
+          run: function () { pruneMedia(mediaItem); }
+        },
+        {
+          label: 'Reset',
+          run: function () { resetMediaItem(mediaItem); }
+        },
+        {
+          label: 'Deface',
+          run: function () { backgroundDefaceIfActive(); }
+        },
+        {
+          label: 'Flag',
+          render: function flagRowRenderer() {
+            // This will be handled by ui.js context menu renderer
+            // No-op here, just a marker for the renderer
+          }
+        },
+        {
+          label: 'Open in Explorer',
+          run: function () {
+            fetch('/fs/open_in_explorer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + mediaItem.key })
+            })
+            .then(function(resp) {
+              if (!resp.ok) {
+                return resp.json().then(function(data) {
+                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
+                }).catch(function() {
+                  throw new Error('Failed to open in explorer');
+                });
+              }
+            })
+            .catch(function(err) {
+              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
+            });
+          }
+        }
+      ]);
+    });
+    */
+    ui.mediaListEl.appendChild(row);
+    matchCount++;
+  });
+}

@@ -497,51 +497,51 @@ def choose_image_bucket_resolution(
         return None
     return (best[2], best[3])
 
-def split_images_by_percentile(
-    images,
-    highres_percent: float,
-    min_highres_count: int,
-    median_ratio_min: float,
-):
-    """
-    Split images into (regular, highres) groups based on a percentile of quality,
-    where quality is min(width, height).
+# def split_images_by_percentile(
+#     images,
+#     highres_percent: float,
+#     min_highres_count: int,
+#     median_ratio_min: float,
+# ):
+#     """
+#     Split images into (regular, highres) groups based on a percentile of quality,
+#     where quality is min(width, height).
 
-    Guardrails:
-      - If there aren't enough images to form a meaningful highres tier, return (all, []).
-      - If the highres tier isn't meaningfully higher-res (median ratio), return (all, []).
-    """
-    if not images:
-        return [], []
+#     Guardrails:
+#       - If there aren't enough images to form a meaningful highres tier, return (all, []).
+#       - If the highres tier isn't meaningfully higher-res (median ratio), return (all, []).
+#     """
+#     if not images:
+#         return [], []
 
-    if len(images) < (min_highres_count * 2):
-        # Can't form two non-trivial groups
-        return images, []
+#     if len(images) < (min_highres_count * 2):
+#         # Can't form two non-trivial groups
+#         return images, []
 
-    # Sort high → low by min-side, then by area
-    ranked = sorted(images, key=lambda x: (min(x[1], x[2]), x[1] * x[2]), reverse=True)
+#     # Sort high → low by min-side, then by area
+#     ranked = sorted(images, key=lambda x: (min(x[1], x[2]), x[1] * x[2]), reverse=True)
 
-    # Choose top P%
-    n = int(math.ceil(len(ranked) * highres_percent))
-    n = max(min_highres_count, min(n, len(ranked) - min_highres_count))
+#     # Choose top P%
+#     n = int(math.ceil(len(ranked) * highres_percent))
+#     n = max(min_highres_count, min(n, len(ranked) - min_highres_count))
 
-    high = ranked[:n]
-    reg = ranked[n:]
+#     high = ranked[:n]
+#     reg = ranked[n:]
 
-    # Median separation check
-    mins_all = [min(w, h) for (_, w, h) in ranked]
-    mins_high = [min(w, h) for (_, w, h) in high]
+#     # Median separation check
+#     mins_all = [min(w, h) for (_, w, h) in ranked]
+#     mins_high = [min(w, h) for (_, w, h) in high]
 
-    med_all = statistics.median(mins_all)
-    med_high = statistics.median(mins_high)
+#     med_all = statistics.median(mins_all)
+#     med_high = statistics.median(mins_high)
 
-    if med_all <= 0:
-        return images, []
+#     if med_all <= 0:
+#         return images, []
 
-    if (med_high / med_all) < median_ratio_min:
-        return images, []
+#     if (med_high / med_all) < median_ratio_min:
+#         return images, []
 
-    return reg, high
+#     return reg, high
 
 def pick_image_buckets_for_ar(images, ar_label: str, target_ar: float):
     """
@@ -558,6 +558,7 @@ def pick_image_buckets_for_ar(images, ar_label: str, target_ar: float):
         max_dim=IMG_REGULAR_MAX_DIM,
     )
     return (reg, reg_bucket), ([], None)
+
 def compute_clip_area(w: int, h: int) -> int:
     return w * h
 

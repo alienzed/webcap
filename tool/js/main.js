@@ -281,6 +281,28 @@ function wireAllUi() {
             }
           }
         ];
+        actions.push({
+          label: 'Open in Explorer',
+          run: function () {
+            fetch('/fs/open_in_explorer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + key })
+            })
+            .then(function(resp) {
+              if (!resp.ok) {
+                return resp.json().then(function(data) {
+                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
+                }).catch(function() {
+                  throw new Error('Failed to open in explorer');
+                });
+              }
+            })
+            .catch(function(err) {
+              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
+            });
+          }
+        });
         showContextMenu(e.clientX, e.clientY, actions);
       } else if (type === 'media') {
         var mediaItem = state.items.find(function (item) { return item.key === key; });
@@ -324,6 +346,28 @@ function wireAllUi() {
             };
             row.appendChild(clearBtn);
             container.appendChild(row);
+          }
+        });
+        actions.push({
+          label: 'Open in Explorer',
+          run: function () {
+            fetch('/fs/open_in_explorer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + key })
+            })
+            .then(function(resp) {
+              if (!resp.ok) {
+                return resp.json().then(function(data) {
+                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
+                }).catch(function() {
+                  throw new Error('Failed to open in explorer');
+                });
+              }
+            })
+            .catch(function(err) {
+              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
+            });
           }
         });
         if (isInOriginals) {

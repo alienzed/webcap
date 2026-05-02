@@ -327,7 +327,8 @@ async function renderFileList() {
     row.setAttribute('data-type', 'folder');
     row.setAttribute('data-key', folderItem.name);
     row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%"><span>' + label + '</span>' + colorDot + '</div>';
-    // Context menu for folder
+    // Context menu for folder (orphaned, now handled in main.js)
+    /*
     row.addEventListener('contextmenu', function (e) {
       e.preventDefault();
       showContextMenu(e.clientX, e.clientY, [
@@ -338,11 +339,24 @@ async function renderFileList() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + folderItem.name })
+            })
+            .then(function(resp) {
+              if (!resp.ok) {
+                return resp.json().then(function(data) {
+                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
+                }).catch(function() {
+                  throw new Error('Failed to open in explorer');
+                });
+              }
+            })
+            .catch(function(err) {
+              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
             });
           }
         }
       ]);
     });
+    */
     ui.mediaListEl.appendChild(row);
     matchCount++;
   }
@@ -383,7 +397,8 @@ async function renderFileList() {
     row.setAttribute('data-type', 'media');
     row.setAttribute('data-key', mediaItem.key);
     row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%">' + icon + '&nbsp;' + escapeHtml(displayText) + colorDot + '</div>';
-    // Context menu for media file
+    // Context menu for media file (orphaned, now handled in main.js)
+    /*
     row.addEventListener('contextmenu', function (e) {
       e.preventDefault();
       showContextMenu(e.clientX, e.clientY, [
@@ -417,11 +432,24 @@ async function renderFileList() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + mediaItem.key })
+            })
+            .then(function(resp) {
+              if (!resp.ok) {
+                return resp.json().then(function(data) {
+                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
+                }).catch(function() {
+                  throw new Error('Failed to open in explorer');
+                });
+              }
+            })
+            .catch(function(err) {
+              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
             });
           }
         }
       ]);
     });
+    */
     ui.mediaListEl.appendChild(row);
     matchCount++;
   });

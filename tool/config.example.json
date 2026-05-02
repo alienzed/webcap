@@ -1,0 +1,7 @@
+{
+  "filesystem": {
+    "root": "C:\\path\\to\\training\\root",
+    "models": "C:\\path\\to\\model\\root\\models"
+  },
+  "debug": true
+}

@@ -23,11 +23,6 @@ body {
   color: var(--text);
 }
 
-.media-item.reviewed {
-  background: #e6ffe6 !important;
-  border-left: 3px solid #7ed957;
-}
-
 /* Layout */
 .app {
   display: grid;
@@ -69,7 +64,13 @@ body {
 .media-list-wrapper {
   border: 1px solid var(--border);
   position: relative;
+  max-height: 100%;
 }
+.media-item.reviewed {
+  background: #e6ffe6 !important;
+  border-left: 3px solid #7ed957;
+}
+
 
 .media-list {
   background: #fff;

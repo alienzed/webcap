@@ -1,6 +1,7 @@
 {
   "filesystem": {
-    "root": "C:\\Users\\mschmid\\Documents\\repos\\training"
+    "root": "C:\\Users\\mschmid\\Documents\\repos\\training",
+    "models": "C:\\Users\\mschmid\\Documents\\repos\\models"
   },
   "debug": true
 }

@@ -58,13 +58,6 @@ function wireAllUi() {
           run: function () {
             setStatus('Defacing all videos...');
             var folderPath = state.folder || '';
-            var previewFrame = ui.previewEl;
-            if (previewFrame && previewFrame.contentDocument) {
-              var doc = previewFrame.contentDocument;
-              doc.open();
-              doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:monospace;font-size:13px;background:#222;color:#eee;padding:8px;white-space:pre-wrap;"></body></html>');
-              doc.close();
-            }
             streamPreviewFromFetch(
               '/fs/deface',
               { folder: folderPath },
@@ -157,6 +150,15 @@ function wireAllUi() {
         }
       }
     };
+
+    var btn = document.getElementById('console-toggle-btn');
+    if (btn && ui.consolePanelEl) {
+      btn.onclick = function() {
+        toggleConsolePanel();
+        // Change arrow direction
+        btn.innerHTML = (ui.consolePanelEl.style.display === 'none' || !ui.consolePanelEl.style.display) ? '&#x25B2;' : '&#x25BC;';
+      };
+    }
 
     // Media List context menu handler (moved from media_list.js)
     ui.mediaListEl.oncontextmenu = function (e) {
@@ -279,6 +281,28 @@ function wireAllUi() {
             }
           }
         ];
+        actions.push({
+          label: 'Open in Explorer',
+          run: function () {
+            fetch('/fs/open_in_explorer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + key })
+            })
+            .then(function(resp) {
+              if (!resp.ok) {
+                return resp.json().then(function(data) {
+                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
+                }).catch(function() {
+                  throw new Error('Failed to open in explorer');
+                });
+              }
+            })
+            .catch(function(err) {
+              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
+            });
+          }
+        });
         showContextMenu(e.clientX, e.clientY, actions);
       } else if (type === 'media') {
         var mediaItem = state.items.find(function (item) { return item.key === key; });
@@ -322,6 +346,28 @@ function wireAllUi() {
             };
             row.appendChild(clearBtn);
             container.appendChild(row);
+          }
+        });
+        actions.push({
+          label: 'Open in Explorer',
+          run: function () {
+            fetch('/fs/open_in_explorer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + key })
+            })
+            .then(function(resp) {
+              if (!resp.ok) {
+                return resp.json().then(function(data) {
+                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
+                }).catch(function() {
+                  throw new Error('Failed to open in explorer');
+                });
+              }
+            })
+            .catch(function(err) {
+              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
+            });
           }
         });
         if (isInOriginals) {

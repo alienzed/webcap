@@ -1,16 +1,3 @@
-
-
-// caption_ui.js
-// --- ConfigEditor integration ---
-if (window.ConfigEditor) {
-  // Initialize with main editor and status elements
-  window.ConfigEditor.init(ui.editorEl, ui.statusEl);
-  // Wire up input event for config editing
-  ui.editorEl.addEventListener('input', function() {
-    window.ConfigEditor.onInput();
-  });
-  // Optionally, wire up a save button or auto-save (not shown here)
-}
 // Global functions: hideContextMenu, ensureContextMenu, showContextMenu, ensureFocusSetExitButton, refreshFocusSetUi, clearFocusSet, activateFocusSet, wireReviewActions, runReview, selectByFileName, applyTokenFilter, refreshCurrentDirectory
 
 var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;
@@ -35,8 +22,19 @@ function ensureContextMenu() {
 
   document.addEventListener('click', hideContextMenu);
   document.addEventListener('keydown', function (e) {
+    // Hide context menu on Escape
     if (e.key === 'Escape') {
       hideContextMenu();
+      return;
+    }
+    // CTRL+S or CMD+S: Save caption if editor is focused and not read-only
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+      if (document.activeElement === ui.editorEl && !ui.editorEl.readOnly) {
+        e.preventDefault();
+        saveCurrentCaption(ui, state)
+          .then(function() { setStatus(ui, 'Saved (CTRL+S)'); })
+          .catch(function(err) { setStatus(ui, String(err && err.message ? err.message : err)); });
+      }
     }
   });
   addEventListener('scroll', hideContextMenu, true);
@@ -68,9 +66,50 @@ function showContextMenu(clientX, clientY, actions) {
   if (customRenderers.length) {
     var customContainer = document.createElement('div');
     customContainer.style.marginTop = '8px';
-    customRenderers.forEach(function (renderFn) {
-      renderFn(customContainer);
-    });
+    // If this is the flag color row, use the same palette as media.js
+    // Palette: green: #43aa8b, yellow: #ffd166, orange: #f8961e, red: #f94144
+    var flagColors = [
+      { color: '#f94144', key: 'red' },
+      { color: '#43aa8b', key: 'green' },
+      { color: '#ffd166', key: 'yellow' },
+      { color: '#f8961e', key: 'orange' }
+    ];
+    if (customRenderers.length === 1 && customRenderers[0].name === 'flagRowRenderer') {
+      // Render color dots for flags
+      flagColors.forEach(function (flag) {
+        var dot = document.createElement('span');
+        dot.style.display = 'inline-block';
+        dot.style.width = '20px';
+        dot.style.height = '20px';
+        dot.style.borderRadius = '50%';
+        dot.style.background = flag.color;
+        dot.style.margin = '0 8px 0 0';
+        dot.style.verticalAlign = 'middle';
+        dot.style.cursor = 'pointer';
+        dot.title = flag.key.charAt(0).toUpperCase() + flag.key.slice(1);
+        dot.onclick = function (e) {
+          e.stopPropagation();
+          hideContextMenu();
+          customRenderers[0](flag.key);
+        };
+        customContainer.appendChild(dot);
+      });
+      // Add a clear (X) button
+      var clearBtn = document.createElement('button');
+      clearBtn.textContent = '×';
+      clearBtn.style.marginLeft = '8px';
+      clearBtn.style.marginBottom = '10px';
+      clearBtn.onclick = function (e) {
+        e.stopPropagation();
+        hideContextMenu();
+        customRenderers[0](null);
+      };
+      customContainer.appendChild(clearBtn);
+    } else {
+      customRenderers.forEach(function (renderFn) {
+        renderFn(customContainer);
+      });
+    }
     el.appendChild(customContainer);
   }
 

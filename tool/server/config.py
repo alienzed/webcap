@@ -56,4 +56,20 @@ def save_toml_file(folder_path, filename, text):
         os.chmod(file_path, 0o644)
     except Exception:
         pass
-    return True
+
+        return True
+
+def fill_template_placeholders(toml_text, dataset_name):
+    """
+    Replace placeholders in TOML templates with config values and dataset name.
+    """
+    training_root = str(config['filesystem']['root']).replace('\\', '/')
+    models_root = str(config['filesystem'].get('models', '')).replace('\\', '/')
+    replacements = {
+        '{TRAINING_ROOT}': training_root,
+        '{MODELS_ROOT}': models_root,
+        '{DATASET}': dataset_name
+    }
+    for key, value in replacements.items():
+        toml_text = toml_text.replace(key, value)
+    return toml_text

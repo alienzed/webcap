@@ -109,7 +109,9 @@ function scrollPreviewToBottom(previewEl) {
 
 // Utility: Stream fetch output to preview pane
 function streamPreviewFromFetch(url, body, ui, onDone, onError) {
-  clearPreview(ui.previewEl);
+  ui.consolePanelEl.style.display = 'block';
+  var btn = document.getElementById('console-toggle-btn');
+  if (btn) btn.innerHTML = '\u25BC';
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -117,7 +119,7 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
   }).then(function(response) {
     if (!response.body || typeof ReadableStream === 'undefined') {
       response.text().then(function (text) {
-        writePreview(ui.previewEl, text.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+        appendToConsolePanel(text.replace(/</g, '<').replace(/>/g, '>'));
         if (onDone) onDone();
       });
       return;
@@ -128,13 +130,18 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
     function readChunk() {
       reader.read().then(function (result) {
         if (result.done) {
-          writePreview(ui.previewEl, output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+          // Final output
+          if (output) {
+            appendToConsolePanel(output.replace(/</g, '<').replace(/>/g, '>'));
+          }
           if (onDone) onDone();
           return;
         }
-        output += decoder.decode(result.value, { stream: true });
-        writePreview(ui.previewEl, output.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
-        scrollPreviewToBottom(ui.previewEl);
+        var chunk = decoder.decode(result.value, { stream: true });
+        output += chunk;
+        appendToConsolePanel(chunk.replace(/</g, '<').replace(/>/g, '>'));
+        // Auto-scroll
+        if (ui.consolePanelEl) ui.consolePanelEl.scrollTop = ui.consolePanelEl.scrollHeight;
         readChunk();
       });
     }

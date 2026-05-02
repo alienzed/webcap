@@ -71,10 +71,14 @@
                         </details>
                     </div>
                 </div>
-                <div id="status" class="status"></div>
+                <div id="status" class="status" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <span id="status-text" style="flex:1 1 auto;"></span>
+                    <button id="console-toggle-btn" type="button" title="Show/hide console" style="padding:2px 10px;font-size:13px;line-height:1.2;background:#222;color:#fff;border-radius:6px;border:none;">&#x25B2;</button>
+                </div>
             </div>
-            <div class="panel">
+            <div class="panel editor-panel">
                 <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
+                <div id="console-panel" style="display:none"></div>
             </div>
             <div class="panel">
                 <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
@@ -83,9 +87,10 @@
               <button id="focus-set-exit-btn" type="button" style="display:none">Exit Set</button>
             </div>
         </div>
-        <!-- JS load order: constants.js, common.js, caption_core.js, caption_ui.js, media_list.js, preview_pane.js, main.js -->
+        <!-- JS load order: constants.js, console_panel.js, common.js, caption_core.js, caption_ui.js, media_list.js, preview_pane.js, main.js -->
         <script src="/static/js/constants.js"></script>
         <script src="/static/js/common.js"></script>
+        <script src="/static/js/console_panel.js"></script>
         <script src="/static/js/ui.js"></script>
         <script src="/static/js/preview_pane.js"></script>
         <script src="/static/js/media.js"></script>

@@ -71,6 +71,19 @@ function wireAllUi() {
               }
             );
           }
+        },
+        {
+          label: 'Reset Reviewed',
+          run: function () {
+            if (!confirm('Clear all reviewed state for this folder?')) return;
+            state.reviewedSet = new Set();
+            var rows = ui.mediaListEl.querySelectorAll('.media-item.reviewed');
+            for (var i = 0; i < rows.length; i++) {
+              rows[i].classList.remove('reviewed');
+            }
+            saveFolderStateForCurrentRoot();
+            setStatus('Reviewed state cleared.');
+          }
         }
       ];
       showContextMenu(e.clientX, e.clientY, actions);
@@ -151,14 +164,12 @@ function wireAllUi() {
       }
     };
 
-    var btn = document.getElementById('console-toggle-btn');
-    if (btn && ui.consolePanelEl) {
-      btn.onclick = function() {
-        toggleConsolePanel();
-        // Change arrow direction
-        btn.innerHTML = (ui.consolePanelEl.style.display === 'none' || !ui.consolePanelEl.style.display) ? '&#x25B2;' : '&#x25BC;';
-      };
-    }
+    var ctBtn = document.getElementById('console-toggle-btn');
+    ctBtn.onclick = function() {
+      toggleConsolePanel();
+      // Change arrow direction
+      ctBtn.innerHTML = (ui.consolePanelEl.style.display === 'none' || !ui.consolePanelEl.style.display) ? '&#x25B2;' : '&#x25BC;';
+    };
 
     // Media List context menu handler (moved from media_list.js)
     ui.mediaListEl.oncontextmenu = function (e) {

@@ -1,7 +1,6 @@
 // Minimal console panel logic for webcap
 // Expects ui.consolePanelEl to be set in constants.js
 function appendToConsolePanel(msg) {
-  if (!ui.consolePanelEl) return;
   var div = document.createElement('div');
   // Render newlines as <br> for streaming output
   div.innerHTML = String(msg).replace(/\n/g, '<br>');
@@ -11,6 +10,8 @@ function appendToConsolePanel(msg) {
   while (ui.consolePanelEl.childNodes.length > maxLines) {
     ui.consolePanelEl.removeChild(ui.consolePanelEl.firstChild);
   }
+  // Always scroll to bottom after append
+  ui.consolePanelEl.scrollTop = ui.consolePanelEl.scrollHeight;
 }
 
 function toggleConsolePanel() {

@@ -157,6 +157,7 @@ function activateFocusSet(fileNames, source) {
     keys: keys,
     source: String(source || '')
   };
+  if (ui.focusSetExitBtn) ui.focusSetExitBtn.style.display = '';
   renderFileList(ui.filterEl.value);
 }
 

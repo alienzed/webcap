@@ -1,3 +1,17 @@
+/* Utility classes for inline style removal */
+.hidden { display: none !important; }
+.m8y { margin: 8px 0; }
+.status-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.flex1 { flex: 1 1 auto; }
+.console-toggle-btn {
+  padding: 2px 10px;
+  font-size: 13px;
+  line-height: 1.2;
+  background: #222;
+  color: #fff;
+  border-radius: 6px;
+  border: none;
+}
 :root {
   --bg: #f4f5f7;
   --panel: #ffffff;
@@ -65,7 +79,6 @@ body {
 .media-list-wrapper {
   border: 1px solid var(--border);
   position: relative;
-  max-height: 100%;
 }
 .media-item.reviewed {
   background: #e6ffe6 !important;
@@ -77,10 +90,10 @@ body {
   background: #fff;
   border-radius: 6px;
   min-height: 280px;
-  max-height: none;
+  max-height:680px;
+  overflow-y: auto;
   height: auto;
   flex: 1 1 auto;
-  overflow: auto;
   display: flex;
   flex-direction: column;
 }
@@ -542,11 +555,12 @@ iframe {
   border-radius: 8px;
   margin-top: 8px;
   padding: 8px;
-  max-height: 320px;
+  max-height: 49%;
   min-height: 80px;
   overflow-y: auto;
   resize: vertical;
   box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+  white-space: pre-wrap;
   display: none;
   z-index: 1000;
 }

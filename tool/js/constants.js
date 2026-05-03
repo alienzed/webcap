@@ -19,7 +19,7 @@ ui = {
   mediaListEl: document.getElementById('media-list'),
   filterEl: document.getElementById('media-filter'),
   captionFilterCount: document.getElementById('caption-filter-count'),
-  statusEl: document.getElementById('status'),
+  statusEl: document.getElementById('status-text'),
   refreshBtn: document.getElementById('refresh-btn'),
   reviewBtn: document.getElementById('review-captions-btn'),
   upRow: document.getElementById('up-one-directory-row'),

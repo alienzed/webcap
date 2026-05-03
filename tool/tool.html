@@ -17,7 +17,7 @@
                 <div class="media-list-wrapper">
                     <button id="refresh-btn" type="button" title="Refresh directory" class="refresh-btn-square floating-refresh">↻</button>
                     <div id="media-list-header">
-                        <div id="up-one-directory-row" class="media-item folder-item header-item" data-type="up" style="display:none;">
+                        <div id="up-one-directory-row" class="media-item folder-item header-item" data-type="up" style="display:none">
                             <div>⬆ Up One Directory</div>
                         </div>
                         <div id="current-folder-row" class="media-item folder-item header-item current-folder-item current-folder-bordered" data-type="current-folder">
@@ -26,8 +26,8 @@
                     </div>
                     <div id="media-list" class="media-list with-stats-pane"></div>
                 </div>
-                <button id="focus-set-exit-btn" type="button" style="display:none;margin:8px 0">Exit Set</button>
-                <button id="review-captions-btn" type="button" style="margin:8px 0">Review Captions</button>
+                <button id="focus-set-exit-btn" type="button" class="m8y" style="display:none">Exit Set</button>
+                <button id="review-captions-btn" type="button" class="m8y">Review Captions</button>
                 <div id="caption-stats-pane">
                     <div class="stats-panel">
                         <details id="stats-details">
@@ -71,14 +71,14 @@
                         </details>
                     </div>
                 </div>
-                <div id="status" class="status" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-                    <span id="status-text" style="flex:1 1 auto;"></span>
-                    <button id="console-toggle-btn" type="button" title="Show/hide console" style="padding:2px 10px;font-size:13px;line-height:1.2;background:#222;color:#fff;border-radius:6px;border:none;">&#x25B2;</button>
+                <div id="status" class="status status-bar">
+                    <span id="status-text" class="flex1"></span>
+                    <button id="console-toggle-btn" type="button" title="Show/hide console" class="console-toggle-btn">&#x25B2;</button>
                 </div>
             </div>
             <div class="panel editor-panel">
                 <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
-                <div id="console-panel" style="display:none"></div>
+                <div id="console-panel"></div>
             </div>
             <div class="panel">
                 <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>

@@ -25,6 +25,8 @@ function wireAllUi() {
     }
   });
 
+  ui.editorEl.addEventListener('input', handleEditorInputAutosave);
+
   document.addEventListener('keydown', function(e) {
     if (e.key === 'F2' && document.activeElement !== ui.editorEl && state.currentItem) {
       var inOriginals = state.folder && state.folder.split(/[\/]/).pop() === 'originals';

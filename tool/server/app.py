@@ -113,6 +113,7 @@ def caption_load_route():
 @app.route("/caption/save", methods=["POST"])
 def caption_save_route():
     data = request.get_json(silent=True) or {}
+    print("[BACKEND][SAVE] Incoming payload to /caption/save:", json.dumps(data, ensure_ascii=False))
     try:
         return jsonify(save_caption_text(
             data.get("folder", ""),
@@ -120,6 +121,7 @@ def caption_save_route():
             data.get("text", "")
         ))
     except Exception as exc:
+        print("[BACKEND][SAVE] ERROR in /caption/save:", exc)
         return jsonify({"error": str(exc)}), 400
 
 @app.route("/caption/media", methods=["GET"])

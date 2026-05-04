@@ -87,28 +87,6 @@ function debounceCreate(waitMs) {
   };
 }
 
-// Called whenever the preview pane is cleared or replaced
-function clearEditorAndPreview() {
-  backgroundDefaceIfActive();
-  ui.editorEl.value = '';
-  if (state.objectUrl) {
-    URL.revokeObjectURL(state.objectUrl);
-    state.objectUrl = '';
-  }
-  var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
-  doc.open();
-  doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">No media to preview.</body></html>');
-  doc.close();
-}
-
-// Stub: Background the Deface stream if it is active in the preview pane
-function backgroundDefaceIfActive() {
-  // TODO: Implement logic to detect if Deface is running in the preview pane
-  // and background it, showing a status indicator elsewhere in the UI.
-  // For now, this is a placeholder for the central trigger.
-}
-
-
 // File/Folder Flags
 function markFlag(itemKey, color) {
   debugLog('[markFlag] itemKey:', itemKey, 'color:', color, 'state.folder:', state.folder);
@@ -165,26 +143,21 @@ var HttpModule = {
   }
 };
 
-// Save caption text for the current media item (fully global, fail-loudly)
-function savePathCaption() {
-  var mediaItem = state.currentItem;
-  // Guard: only save if currentItem matches the visible editor context
-  if (!mediaItem || !mediaItem.fileName || ui.editorEl.getAttribute('readonly')) {
-    throw new Error('savePathCaption: invalid or stale mediaItem');
-  }
+// Save caption text for a given folder/media/text (atomic, stateless)
+function saveCaptionDirect(folder, media, text, mediaKey) {
   return new Promise(function (resolve, reject) {
     HttpModule.postJson('/caption/save', {
-      folder: state.folder,
-      media: mediaItem.fileName,
-      text: ui.editorEl.value || ''
+      folder: folder,
+      media: media,
+      text: text || ''
     }, function(status, responseText) {
       if (status === 200) {
-        setStatus('Saved: ' + mediaItem.fileName.replace(/\.[^.]+$/, '.txt'));
-        // Toggle empty-caption class on the relevant media item
-        if (ui && ui.mediaListEl && mediaItem && mediaItem.key) {
-          var itemEl = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + mediaItem.key + '"]');
+        setStatus('Saved: ' + (media || '').replace(/\.[^.]+$/, '.txt'));
+        // Toggle empty-caption class on the relevant media item if key provided
+        if (ui && ui.mediaListEl && mediaKey) {
+          var itemEl = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + mediaKey + '"]');
           if (itemEl) {
-            if (ui.editorEl.value && ui.editorEl.value.trim().length > 0) {
+            if (text && text.trim().length > 0) {
               itemEl.classList.remove('empty-caption');
             } else {
               itemEl.classList.add('empty-caption');
@@ -197,4 +170,14 @@ function savePathCaption() {
       reject(new Error(getErrorMessage(responseText, 'Could not save caption')));
     });
   });
+}
+
+// Save caption text for the current media item (fully global, fail-loudly)
+function savePathCaption() {
+  var mediaItem = state.currentItem;
+  // Guard: only save if currentItem matches the visible editor context
+  if (!mediaItem || !mediaItem.fileName || ui.editorEl.getAttribute('readonly')) {
+    throw new Error('savePathCaption: invalid or stale mediaItem');
+  }
+  return saveCaptionDirect(state.folder, mediaItem.fileName, ui.editorEl.value, mediaItem.key);
 }

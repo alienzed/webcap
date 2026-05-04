@@ -15,6 +15,8 @@ If complete and confirmed, move to Completed section
 - Contents checkboxes or something above the caption text editor, to allow me to set conditions for reviewed status, maybe reviewed is couple with another status "complete" where I have things like "hair color?, lighting? etc..." checkboxes or a nifty list I can use to validate things. This is useful because sometimes half way through captioning I notice I may have forgotten to add tokens for something meaningful, but it's easy to get distracted as moving through files.
 - Console appends, should scroll to bottom.
 - Prune probably requires it's own folder... same logic (not overwrite, rotate on collision, etc...) as originals minus the initial back up.
+- Make colors in context menu bigger
+- Make it so that the primer caption alone doesn't get saved.
 
 ## Backlog
 - Pruning a file works. The directory is refreshed (I think) but in large directories this can take time, I wonder why we're not just removing this one element as opposed to refreshing the entire list.

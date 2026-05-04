@@ -454,14 +454,20 @@ def deface():
         else:
             yield f'[FAIL] Deface failed for {file_path.name}\n'
 
+    deface_exts = {
+        '.mp4', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.m4v',
+        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'
+    }
+
     def generate():
         if file_rel:
             file_path = safe_join_fs_root(file_rel)
             yield from deface_one(file_path, thresh)
         elif folder_rel:
             folder_path = safe_join_fs_root(folder_rel)
-            for fname in os.listdir(folder_path):
-                if not fname.lower().endswith('.mp4'):
+            for fname in sorted(os.listdir(folder_path)):
+                ext = Path(fname).suffix.lower()
+                if ext not in deface_exts:
                     continue
                 file_path = os.path.join(folder_path, fname)
                 yield from deface_one(file_path, thresh)

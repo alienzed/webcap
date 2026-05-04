@@ -25,6 +25,16 @@ function wireAllUi() {
     }
   });
 
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'F2' && document.activeElement !== ui.editorEl && state.currentItem) {
+      var inOriginals = state.folder && state.folder.split(/[\/]/).pop() === 'originals';
+      if (!inOriginals) {
+        e.preventDefault();
+        promptRenameMedia(state.currentItem);
+      }
+    }
+  });
+
   // Autosave config files as you type (not for captions)
   ui.editorEl.addEventListener('input', function() {
     if (state.currentConfigFile) {
@@ -56,7 +66,7 @@ function wireAllUi() {
         {
           label: 'Deface',
           run: function () {
-            setStatus('Defacing all videos...');
+            setStatus('Defacing folder media...');
             var folderPath = state.folder || '';
             streamPreviewFromFetch(
               '/fs/deface',
@@ -429,7 +439,7 @@ function wireAllUi() {
             }
           });
           var ext = (fileName || '').split('.').pop().toLowerCase();
-          if (["mp4", "webm", "mov", "mkv", "avi", "m4v"].indexOf(ext) !== -1) {
+          if (MEDIA_EXTENSIONS['.' + ext]) {
             actions.push({
               label: 'Deface...',
               run: function () {

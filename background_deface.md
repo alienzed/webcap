@@ -56,22 +56,6 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
 }
 ```
 
-#### In common.js
-```js
-function clearEditorAndPreview() {
-  backgroundDefaceIfActive();
-  // ...existing logic...
-}
-
-function backgroundDefaceIfActive() {
-  if (state.defaceActive && !state.defaceBackgrounded) {
-    state.defaceBackgrounded = true;
-    showDefaceStatusIndicator();
-    hidePreviewPane();
-  }
-}
-```
-
 #### In UI logic
 - Add a persistent status indicator (e.g., spinner, progress bar) in the header/sidebar.
 - When Deface completes, show a notification/toast.

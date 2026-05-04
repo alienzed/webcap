@@ -84,7 +84,6 @@ function handleEditorInputAutosave(e) {
 
 // Called whenever the preview pane is cleared or replaced
 function clearEditorAndPreview() {
-  backgroundDefaceIfActive();
   ui.editorEl.value = '';
   if (state.objectUrl) {
     URL.revokeObjectURL(state.objectUrl);

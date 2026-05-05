@@ -626,19 +626,33 @@ def save_config():
 def open_in_explorer():
     data = request.get_json(silent=True) or {}
     rel_path = data.get("path", "").strip()
+    print("[open_in_explorer] Received rel_path:", rel_path)
     if not rel_path:
+        print("[open_in_explorer] ERROR: Missing path")
         return jsonify({"error": "Missing path"}), 400
     try:
         abs_path = safe_join_fs_root(rel_path)
+        print("[open_in_explorer] Resolved abs_path:", abs_path)
         if not abs_path.exists():
+            print("[open_in_explorer] ERROR: Path does not exist:", abs_path)
             return jsonify({"error": "Path does not exist"}), 404
         # Open in system file explorer
-        if sys.platform.startswith("win"):
-            os.startfile(str(abs_path))
-        elif sys.platform.startswith("darwin"):
-            subprocess.Popen(["open", str(abs_path)])
+        if abs_path.is_file():
+            if sys.platform.startswith("win"):
+                # explorer /select,"C:\path\to\file" (must be quoted)
+                quoted = str(abs_path).replace('/', '\\')
+                subprocess.Popen(["explorer", f"/select,{quoted}"])
+            elif sys.platform.startswith("darwin"):
+                subprocess.Popen(["open", "-R", str(abs_path)])
+            else:
+                subprocess.Popen(["xdg-open", str(abs_path.parent)])
         else:
-            subprocess.Popen(["xdg-open", str(abs_path)])
+            if sys.platform.startswith("win"):
+                os.startfile(str(abs_path))
+            elif sys.platform.startswith("darwin"):
+                subprocess.Popen(["open", str(abs_path)])
+            else:
+                subprocess.Popen(["xdg-open", str(abs_path)])
         return jsonify({"ok": True})
     except Exception as e:
         if FS_DEBUG:

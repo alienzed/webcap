@@ -1,3 +1,35 @@
+# Pruned File Handling (Prefix Approach)
+
+## Approach
+Pruned files are handled by moving them to the `originals` folder with a `pruned_` prefix (e.g., `pruned_cat.jpg`).
+If a file with that name already exists, either rotate (e.g., `pruned_cat_1.jpg`) or log/fail to avoid overwriting. No new folders are created, and no additional backup is made during prune—the pruned file itself is the backup.
+
+## Workflow
+
+
+- **On Prune:**
+  - Move the file to `originals/pruned_<filename>`.
+  - If `originals/pruned_<filename>` exists, rotate or log/fail.
+  - The pruned file is now the backup; no additional backup is created at this point.
+  - The main dataset file is deleted.
+
+
+- **On Restore:**
+  - Rename `originals/pruned_<filename>` to `<filename>` and move it back to the dataset folder.
+
+## Benefits
+- Minimal code changes (just rename on prune/restore).
+- Easy to filter or highlight pruned files by prefix.
+- Fully reversible and auditable.
+
+## Example
+
+Suppose you prune `cat.jpg`:
+
+- Before prune: `cat.jpg` is in the dataset folder.
+- After prune: `originals/pruned_cat.jpg` (pruned backup)
+
+To restore, simply rename `pruned_cat.jpg` back to `cat.jpg` and move it to the dataset folder.
 # Prune Feature: Function Map
 
 This document lists all DOM elements, JavaScript functions, and backend endpoints directly involved in the Prune feature of the webcap tool. Each step is traced from UI trigger to backend, with explicit verification of every function and variable.

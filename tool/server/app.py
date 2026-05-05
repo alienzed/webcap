@@ -279,52 +279,46 @@ def caption_prune():
             return jsonify({"error": "Media file not found"}), 404
 
         # Determine destination name in originals, handle conflicts by hash and renaming
-        def find_unique_name(base_name, ext, src_path, originals_path):
-            candidate = originals_path / (base_name + ext)
+
+
+        def find_unique_pruned_name(base_name, ext, src_path, originals_path):
+            # Always use pruned_ prefix, always rotate if exists
+            candidate = originals_path / (f"pruned_{base_name}{ext}")
             if not candidate.exists():
                 return candidate.name
-            # If exists and is identical, return original name
-            from tool.server.originals import file_hash
-            if file_hash(candidate) == file_hash(src_path):
-                return candidate.name
-            # Otherwise, find next available name
             i = 1
             while True:
-                candidate = originals_path / (f"{base_name}-{i}{ext}")
+                candidate = originals_path / (f"pruned_{base_name}-{i}{ext}")
                 if not candidate.exists():
-                    return candidate.name
-                if file_hash(candidate) == file_hash(src_path):
                     return candidate.name
                 i += 1
 
         base = Path(file_name).stem
         ext = Path(file_name).suffix
-        # Find unique name for media in originals
         from tool.server.originals import file_hash
-        dst_media_name = find_unique_name(base, ext, src_media, originals_path)
+        dst_media_name = find_unique_pruned_name(base, ext, src_media, originals_path)
         dst_media = originals_path / dst_media_name
 
 
-        # Ensure media is backed up in originals, then remove from set folder
-        if dst_media.exists() and file_hash(dst_media) == file_hash(src_media):
-            # Already present and identical, safe to delete from set folder
-            src_media.unlink()
-        else:
-            # Move to originals (rename removes from set folder)
-            src_media.rename(dst_media)
+        # Move to originals/pruned_<filename> (rotate if needed, use shutil.move for robustness)
+        import shutil
+        if dst_media.exists():
+            # Should not happen due to rotation, but double-check
+            raise Exception(f"Destination already exists: {dst_media}")
+        shutil.move(str(src_media), str(dst_media))
 
-        # Always move/copy the latest caption to originals, using same base name as media
+
+        # Always move/copy the latest caption to originals, using same base name as pruned media
         src_caption = folder_path / (Path(file_name).stem + ".txt")
         dst_caption = originals_path / (Path(dst_media_name).stem + ".txt")
         if src_caption.exists():
-            # Overwrite or create caption in originals
             with open(src_caption, "r", encoding="utf-8") as fsrc, open(dst_caption, "w", encoding="utf-8") as fdst:
                 fdst.write(fsrc.read())
             try:
                 os.chmod(dst_caption, 0o644)
             except Exception:
                 pass
-            src_caption.unlink()  # Remove from set folder
+            src_caption.unlink()
 
         return jsonify({"ok": True})
     except Exception as e:

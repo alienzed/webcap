@@ -193,5 +193,15 @@ function savePathCaption() {
   if (!mediaItem || !mediaItem.fileName || ui.editorEl.getAttribute('readonly')) {
     throw new Error('savePathCaption: invalid or stale mediaItem');
   }
-  return saveCaptionDirect(state.folder, mediaItem.fileName, ui.editorEl.value, mediaItem.key);
+  // Skip saving if editor contains only the primer caption
+  var primer = '';
+  if (mediaItem.fileName) {
+    primer = buildAutoPrimer(mediaItem.fileName);
+  }
+  var editorValue = ui.editorEl.value || '';
+  if (primer && editorValue.trim() === primer.trim()) {
+    debugLog('[savePathCaption] Skipped save: editor contains only primer caption');
+    return Promise.resolve();
+  }
+  return saveCaptionDirect(state.folder, mediaItem.fileName, editorValue, mediaItem.key);
 }

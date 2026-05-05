@@ -26,6 +26,15 @@ Media caption editing and review with side-by-side preview, robust file-based st
    - [ffmpeg](https://ffmpeg.org/download.html): Download and add to your PATH.
    - [deface](https://github.com/alienzed/deface): Install and add to your PATH if you want to use the deface feature.
 
+
+## Tests
+
+Automated tests are located in the `tests/` folder at the project root. These scripts validate core backend features (such as prune/restore) and should be run after major changes:
+
+```
+python tests/test_prune_restore.py
+```
+
 ## Configuration
 
 - Edit `tool/config.json` to set your filesystem root and other options.

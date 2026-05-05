@@ -25,8 +25,27 @@ pruneMedia = async function (mediaItem) {
       return;
     }
     setStatus('Media pruned: ' + mediaItem.key);
-    // Refresh file list
-    refreshCurrentDirectory();
+    // Remove pruned item from state.items and DOM instead of refreshing directory
+    if (window.state && Array.isArray(state.items)) {
+      var idx = state.items.findIndex(function(item) {
+        return item && (item.key === mediaItem.key || item.fileName === mediaItem.key);
+      });
+      if (idx !== -1) {
+        state.items.splice(idx, 1);
+      }
+    }
+    // Remove from DOM
+    if (ui && ui.mediaListEl) {
+      var itemEl = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + mediaItem.key + '"]');
+      if (itemEl && itemEl.parentNode) {
+        itemEl.parentNode.removeChild(itemEl);
+      }
+    }
+    // Optionally: clear editor if current item was pruned
+    if (state.currentItem && (state.currentItem.key === mediaItem.key || state.currentItem.fileName === mediaItem.key)) {
+      if (ui && ui.editorEl) ui.editorEl.value = '';
+      state.currentItem = null;
+    }
   } catch (err) {
     setStatus('Prune error: ' + (err && err.message ? err.message : err));
   }
@@ -191,6 +210,9 @@ function promptRenameMedia(mediaItem) {
   }
   renameMedia(mediaItem, oldFile, newFile).then(function () {
     setStatus('Renamed: ' + oldFile + ' -> ' + newFile);
+    // Store the new filename to reselect after refresh
+    window.state = window.state || {};
+    state.pendingSelectFileName = newFile;
     refreshCurrentDirectory();
   }).catch(function (err) {
     setStatus((err && err.message) ? err.message : ('Rename failed: ' + err));

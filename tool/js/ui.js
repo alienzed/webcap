@@ -355,6 +355,12 @@ function refreshCurrentDirectory() {
             }
           }
           setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
+          // If a file was just renamed, reselect it
+          if (window.state && state.pendingSelectFileName) {
+            var fname = state.pendingSelectFileName;
+            state.pendingSelectFileName = undefined;
+            setTimeout(function() { selectByFileName(fname); }, 0);
+          }
         } catch (e) {
           setStatus('Error parsing folder list: ' + (e && e.message ? e.message : e));
           state.childFolders = [];

@@ -164,6 +164,20 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
             }
           }
         }
+        // --- Carefully update state.items with the new caption (match by fileName only) ---
+        if (window.state && Array.isArray(state.items)) {
+          var updated = false;
+          for (var i = 0; i < state.items.length; i++) {
+            var item = state.items[i];
+            if (item && item.fileName === media) {
+              item.caption = text;
+              updated = true;
+              break;
+            }
+          }
+          // Optionally: log if not found (should not happen)
+          // if (!updated) console.warn('saveCaptionDirect: No matching state.items entry found for', media);
+        }
         resolve();
         return;
       }

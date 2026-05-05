@@ -30,33 +30,33 @@ def folder_state_save():
 
     rel_path = data.get("folder", "").strip()
     try:
-        print("[folder_state_save] Incoming data:", data)
+        # print("[folder_state_save] Incoming data:", data)
         # Use the same folder resolution as captions
         folder_path = _resolve_folder(rel_path)
         state_path = folder_path / ".webcap_state.json"
-        print(f"[folder_state_save] Writing to: {state_path}")
+        # print(f"[folder_state_save] Writing to: {state_path}")
         # Minimal patch: always include 'stats' and 'primer' fields
         state = dict(data.get("state", {}))
-        print("[folder_state_save] State before patch:", state)
+        # print("[folder_state_save] State before patch:", state)
         if "stats" not in state:
             state["stats"] = {"requiredPhrase": "", "phrases": "", "tokenRules": ""}
         if "primer" not in state:
             state["primer"] = {"template": "", "defaults": "", "mappings": ""}
-        print("[folder_state_save] State to be written:", state)
+        # print("[folder_state_save] State to be written:", state)
         with open(state_path, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
-        print("[folder_state_save] State written to file.")
+        # print("[folder_state_save] State written to file.")
         # Optionally, read back and print for verification
         try:
             with open(state_path, "r", encoding="utf-8") as f:
                 written = json.load(f)
-            print("[folder_state_save] State read back from file:", written)
+            # print("[folder_state_save] State read back from file:", written)
         except Exception as e:
             print("[folder_state_save] Could not read back file:", e)
         return jsonify({"ok": True})
     except Exception as e:
         if FS_DEBUG:
-            print("[folder_state_save] ERROR:", e)
+            # print("[folder_state_save] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 
@@ -72,7 +72,7 @@ def fs_read():
             return f.read()
     except Exception as e:
         if FS_DEBUG:
-            print("[fs_read] ERROR:", e)
+            # print("[fs_read] ERROR:", e)
             traceback.print_exc()
         return ("", 400)
 
@@ -113,7 +113,7 @@ def caption_load_route():
 @app.route("/caption/save", methods=["POST"])
 def caption_save_route():
     data = request.get_json(silent=True) or {}
-    print("[BACKEND][SAVE] Incoming payload to /caption/save:", json.dumps(data, ensure_ascii=False))
+    # print("[BACKEND][SAVE] Incoming payload to /caption/save:", json.dumps(data, ensure_ascii=False))
     try:
         return jsonify(save_caption_text(
             data.get("folder", ""),
@@ -121,7 +121,7 @@ def caption_save_route():
             data.get("text", "")
         ))
     except Exception as exc:
-        print("[BACKEND][SAVE] ERROR in /caption/save:", exc)
+        # print("[BACKEND][SAVE] ERROR in /caption/save:", exc)
         return jsonify({"error": str(exc)}), 400
 
 @app.route("/caption/media", methods=["GET"])
@@ -636,14 +636,29 @@ def open_in_explorer():
         if not abs_path.exists():
             print("[open_in_explorer] ERROR: Path does not exist:", abs_path)
             return jsonify({"error": "Path does not exist"}), 404
-        # Open in system file explorer
+        # --- WSL/Windows-aware fallback ---
+        def is_wsl():
+            try:
+                with open("/proc/version", "r") as f:
+                    if "Microsoft" in f.read():
+                        return True
+            except Exception:
+                pass
+            return os.environ.get("WSLENV") is not None
+
         if abs_path.is_file():
             if sys.platform.startswith("win"):
-                # explorer /select,"C:\path\to\file" (must be quoted)
                 quoted = str(abs_path).replace('/', '\\')
                 subprocess.Popen(["explorer", f"/select,{quoted}"])
             elif sys.platform.startswith("darwin"):
                 subprocess.Popen(["open", "-R", str(abs_path)])
+            elif is_wsl():
+                # Open parent folder and select file in Windows Explorer from WSL
+                # Use Windows path format
+                win_path = str(abs_path).replace("/mnt/c/", "C:/").replace("/", "\\")
+                parent = str(abs_path.parent).replace("/mnt/c/", "C:/").replace("/", "\\")
+                # Try to select the file if possible
+                subprocess.Popen(["powershell.exe", "/c", f'start explorer.exe /select,\"{win_path}\"']) 
             else:
                 subprocess.Popen(["xdg-open", str(abs_path.parent)])
         else:
@@ -651,6 +666,10 @@ def open_in_explorer():
                 os.startfile(str(abs_path))
             elif sys.platform.startswith("darwin"):
                 subprocess.Popen(["open", str(abs_path)])
+            elif is_wsl():
+                # Open folder in Windows Explorer from WSL
+                win_path = str(abs_path).replace("/mnt/c/", "C:/").replace("/", "\\")
+                subprocess.Popen(["powershell.exe", "/c", f'start explorer.exe \"{win_path}\"'])
             else:
                 subprocess.Popen(["xdg-open", str(abs_path)])
         return jsonify({"ok": True})

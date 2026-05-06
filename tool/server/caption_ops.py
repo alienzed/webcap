@@ -75,7 +75,7 @@ def save_caption_text(folder: str, media_name: str, text: str):
     print(f'[BACKEND][WRITE] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
     caption_path.parent.mkdir(parents=True, exist_ok=True)
     caption_path.write_text(text or '', encoding='utf-8')
-    print(f'[BACKEND][WRITE] WROTE caption: {text[:80]}...')
+    print(f'[BACKEND][WRITE] WROTE caption.')
     try:
         os.chmod(caption_path, 0o644)
     except Exception:

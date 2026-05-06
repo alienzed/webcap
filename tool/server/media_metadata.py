@@ -44,15 +44,25 @@ def probe_media_metadata(file_path):
             result["color_space"] = stream.get("pix_fmt", "")
             result["bitrate"] = int(stream.get("bit_rate", 0)) // 1000 if stream.get("bit_rate") else None
             # Always estimate frame count if fps and duration are present
-            result["frame_count"] = None
+            # Parse duration first so it's available for fallback
+            result["duration"] = float(info["format"]["duration"])
             fps = result.get("fps")
             duration = result.get("duration")
-            try:
-                if fps is not None and duration is not None:
+            # Try to get frame count from ffprobe if available
+            frame_count = stream.get("nb_frames") if stream else None
+            if frame_count is not None:
+                try:
+                    result["frame_count"] = int(frame_count)
+                except Exception:
+                    result["frame_count"] = None
+            else:
+                result["frame_count"] = None
+            # Always estimate frame count if missing but fps and duration are present
+            if result["frame_count"] is None and fps is not None and duration is not None:
+                try:
                     result["frame_count"] = int(round(float(fps) * float(duration)))
-            except Exception as e:
-                result["frame_count_estimate_error"] = str(e)
-            result["duration"] = float(info["format"]["duration"])
+                except Exception as e:
+                    result["frame_count_estimate_error"] = str(e)
         except Exception as e:
             result["error"] = str(e)
     elif ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}:

@@ -340,7 +340,7 @@ function renderReportPreview(report) {
       });
     });
     // Render config and media metadata panels after iframe is loaded
-    if (typeof renderConfigPanel === 'function') renderConfigPanel(doc);
+    renderConfigPanel(doc);
     if (!parent || !parent.state || !parent.state.folder) return;
     renderMediaMetadataPanel(parent.state.folder, doc);
   }, 50);

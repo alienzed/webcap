@@ -45,6 +45,7 @@ pruneMedia = async function (mediaItem) {
     if (state.currentItem && (state.currentItem.key === mediaItem.key || state.currentItem.fileName === mediaItem.key)) {
       if (ui && ui.editorEl) ui.editorEl.value = '';
       state.currentItem = null;
+      window.renderChecklistPanel();
     }
   } catch (err) {
     setStatus('Prune error: ' + (err && err.message ? err.message : err));
@@ -109,6 +110,7 @@ async function restoreMediaItem(mediaItem) {
       }
       if (state.currentItem && state.currentItem.key === mediaItem.key) {
         state.currentItem = null;
+        window.renderChecklistPanel();
       }
     }
   };
@@ -178,6 +180,7 @@ function selectPathMedia(mediaItem) {
       }
       var suffix = mediaItem.fileName.split('.').pop();
       setStatus('Selected: ' + mediaItem.label + ' (' + suffix + ')');
+      renderChecklistPanel();
       // Re-render list to show selection
       renderFileList();
     });

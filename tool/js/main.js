@@ -1,3 +1,24 @@
+// Hide checklist panel and clear current media selection
+function clearEditorAndPreview() {
+  if (ui && ui.editorEl) {
+    ui.editorEl.value = '';
+  }
+  if (state.objectUrl) {
+    URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl = '';
+  }
+  if (ui && ui.previewEl) {
+    var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
+    if (doc) {
+      doc.open();
+      doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">No media to preview.</body></html>');
+      doc.close();
+    }
+  }
+  var checklistPanelEl = document.getElementById('caption-checklist-panel');
+  if (checklistPanelEl) checklistPanelEl.style.display = 'none';
+  state.currentItem = null;
+}
 function wireAllUi() {
   // Autosaving of primer/stats changes (debounced)
   wireStatsPrimerAutoSave();
@@ -24,6 +45,35 @@ function wireAllUi() {
       saveCurrentEditorContent();
     }
   });
+
+  checklistPanelEl = document.getElementById('caption-checklist-panel');
+  setChecklistPanelVisible(false);
+  var addInput = document.getElementById('checklist-add-input');
+  var addBtn = document.getElementById('checklist-add-btn');
+  if (addBtn && addInput) {
+    addBtn.onclick = function() {
+      var val = addInput.value.trim();
+      if (!val || checklistItems.indexOf(val) !== -1) return;
+      checklistItems.push(val);
+      checklistItems.sort(checklistSort);
+      for (var k in checklistCheckedByMedia) {
+        if (checklistCheckedByMedia[k]) checklistCheckedByMedia[k][val] = false;
+      }
+      saveChecklistToFolderState();
+      renderChecklistPanel();
+      addInput.value = '';
+    };
+    addInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') addBtn.onclick();
+    });
+  }
+
+  var closeBtn = document.getElementById('checklist-close-btn');
+  if (closeBtn) {
+    closeBtn.onclick = function() {
+      checklistPanelEl.style.display = 'none';
+    };
+  }
 
   ui.editorEl.addEventListener('input', handleEditorInputAutosave);
 

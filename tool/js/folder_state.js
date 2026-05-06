@@ -24,7 +24,9 @@ function sanitizeFolderState(data) {
       mappings: String(primer.mappings || '')
     },
     reviewedKeys: reviewedKeys,
-    flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {}
+    flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {},
+    caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : undefined,
+    caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : undefined
   };
 }
 
@@ -66,12 +68,14 @@ function snapshotFolderStateFromDom() {
   // so they are persisted. This function must snapshot ALL fields that should be saved.
   var stats = getOptionsFromDom();
   var primer = statsGetPrimerOptionsFromDom();
+  // Add new fields here as needed
   return sanitizeFolderState({
     stats: stats,
     primer: primer,
     reviewedKeys: Array.from(state.reviewedSet || []).sort(),
-    flags: (typeof state.flags === 'object' && state.flags) ? state.flags : {}
-    // Add new fields here as needed
+    flags: (typeof state.flags === 'object' && state.flags) ? state.flags : {},
+    caption_requirements: (typeof window.checklistItems !== 'undefined') ? window.checklistItems.slice() : undefined,
+    caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined
   });
 }
 

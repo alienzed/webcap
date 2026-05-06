@@ -28,6 +28,13 @@ ui = {
   consolePanelEl: document.getElementById('console-panel'),
 };
 
+const DEFAULT_CHECKLIST_ITEMS = [
+  "Key phrase",
+  "Lighting",
+  "Setting",
+  "Clothing",
+  "Traits"
+];
 
 // Set this to true to enable debug logging
 var DEBUG = false;

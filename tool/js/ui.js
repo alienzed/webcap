@@ -201,6 +201,7 @@ function runReview() {
   }
   clearFocusSet();
   state.currentItem = null;
+  renderChecklistPanel();
   ui.editorEl.setAttribute('readonly', 'readonly');
   renderFileList(ui.filterEl.value);
   var details = document.getElementById('stats-details');
@@ -339,6 +340,7 @@ function refreshCurrentDirectory() {
           // --- Load and apply folder state fields ---
           var folderState = resp.folder_state || {};
           if (Object.keys(folderState).length) applyFolderStateToDom(folderState);
+          window.loadChecklistFromFolderState(folderState);
           state.reviewedSet = state.reviewedSet || new Set();
           renderFileList(ui.filterEl.value);
           

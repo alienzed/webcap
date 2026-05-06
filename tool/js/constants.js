@@ -1,3 +1,4 @@
+
 state = {
   folder: '',
   suppressInput: false,
@@ -29,12 +30,18 @@ ui = {
 };
 
 const DEFAULT_CHECKLIST_ITEMS = [
-  "Key phrase",
-  "Lighting",
-  "Setting",
+  "Key Phrase",
+  "Position",
+  "Action",
   "Clothing",
-  "Traits"
+  "Traits",
+  "Setting",
+  "Lighting",
+  "Viewpoint",
 ];
+
+// Central palette for flag colors (order matters for UI)
+const FLAG_COLORS = ['red', 'green', 'blue', 'yellow', 'orange'];
 
 // Set this to true to enable debug logging
 var DEBUG = false;

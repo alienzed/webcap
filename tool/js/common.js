@@ -87,59 +87,8 @@ function debounceCreate(waitMs) {
   };
 }
 
-// File/Folder Flags
-function markFlag(itemKey, color) {
-  debugLog('[markFlag] itemKey:', itemKey, 'color:', color, 'state.folder:', state.folder);
-  if (color) {
-    state.flags[itemKey] = color;
-  } else {
-    delete state.flags[itemKey];
-  }
-  saveFlags();
-  // Update only the flag dot in the DOM for the affected item
-  var FLAG_COLOR_MAP = {
-    green: '#43aa8b',
-    yellow: '#ffd166',
-    orange: '#f8961e',
-    red: '#f94144'
-  };
-  // Try both media and folder
-  var sel = '[data-key="' + itemKey.replace(/"/g, '\"') + '"]';
-  var itemEls = Array.prototype.slice.call(document.querySelectorAll('.media-item' + sel));
-  if (!itemEls.length) {
-    // Try folder only
-    itemEls = Array.prototype.slice.call(document.querySelectorAll('.folder-item' + sel));
-  }
-  itemEls.forEach(function(row) {
-    // Remove any existing flag dot
-    var dots = row.querySelectorAll('span[style*="border-radius:50%"]');
-    dots.forEach(function(dot) { dot.parentNode.removeChild(dot); });
-    // Add new dot if color is set
-    if (color) {
-      var mappedColor = FLAG_COLOR_MAP[color] || color;
-      var dot = document.createElement('span');
-      dot.style.display = 'inline-block';
-      dot.style.width = '12px';
-      dot.style.height = '12px';
-      dot.style.borderRadius = '50%';
-      dot.style.background = mappedColor;
-      dot.style.marginLeft = '8px';
-      row.querySelector('div').appendChild(dot);
-    }
-  });
-  // Do NOT refresh the directory or clear selection
-}
-
-function saveFlags() {
-  // Save the full folder state (including flags, reviewedKeys, stats, primer, etc.)
-  var folderPath = state.folder || '';
-  var snapshot = snapshotFolderStateFromDom();
-  debugLog('[saveFlags] folderPath:', folderPath, 'snapshot:', snapshot);
-  writeFolderStateFile(folderPath, snapshot);
-}
 
 // Network helper functions
-
 var HttpModule = {
   get: function(url, callback) {
     var xhr = new XMLHttpRequest();

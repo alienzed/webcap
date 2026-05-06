@@ -66,45 +66,36 @@ function showContextMenu(clientX, clientY, actions) {
   if (customRenderers.length) {
     var customContainer = document.createElement('div');
     customContainer.style.marginTop = '8px';
-    // If this is the flag color row, use the same palette as media.js
-    // Palette: green: #43aa8b, yellow: #ffd166, orange: #f8961e, red: #f94144
-    var flagColors = [
-      { color: '#f94144', key: 'red' },
-      { color: '#43aa8b', key: 'green' },
-      { color: '#ffd166', key: 'yellow' },
-      { color: '#f8961e', key: 'orange' }
-    ];
+    // Use the central palette from constants.js (fail fast if missing)
     if (customRenderers.length === 1 && customRenderers[0].name === 'flagRowRenderer') {
+      var flagRow = document.createElement('div');
+      flagRow.className = 'flag-row';
       // Render color dots for flags
-      flagColors.forEach(function (flag) {
+      FLAG_COLORS.forEach(function (key) {
         var dot = document.createElement('span');
-        dot.style.display = 'inline-block';
-        dot.style.width = '20px';
-        dot.style.height = '20px';
-        dot.style.borderRadius = '50%';
-        dot.style.background = flag.color;
-        dot.style.margin = '0 8px 0 0';
-        dot.style.verticalAlign = 'middle';
+        dot.className = 'flag-dot flag-dot--' + key;
         dot.style.cursor = 'pointer';
-        dot.title = flag.key.charAt(0).toUpperCase() + flag.key.slice(1);
+        dot.title = key.charAt(0).toUpperCase() + key.slice(1);
         dot.onclick = function (e) {
           e.stopPropagation();
           hideContextMenu();
-          customRenderers[0](flag.key);
+          customRenderers[0](key);
         };
-        customContainer.appendChild(dot);
+        flagRow.appendChild(dot);
       });
       // Add a clear (X) button
       var clearBtn = document.createElement('button');
-      clearBtn.textContent = '×';
-      clearBtn.style.marginLeft = '8px';
-      clearBtn.style.marginBottom = '10px';
+      clearBtn.type = 'button';
+      clearBtn.title = 'Clear Flag';
+      clearBtn.className = 'flag-btn--clear';
+      clearBtn.innerHTML = '<span>×</span>';
       clearBtn.onclick = function (e) {
         e.stopPropagation();
         hideContextMenu();
         customRenderers[0](null);
       };
-      customContainer.appendChild(clearBtn);
+      flagRow.appendChild(clearBtn);
+      customContainer.appendChild(flagRow);
     } else {
       customRenderers.forEach(function (renderFn) {
         renderFn(customContainer);

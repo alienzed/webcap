@@ -19,6 +19,18 @@ function clearEditorAndPreview() {
   if (checklistPanelEl) checklistPanelEl.style.display = 'none';
   state.currentItem = null;
 }
+
+function createFlagAction(itemKey) {
+  function flagRowRenderer(color) {
+    markFlag(itemKey, color);
+  }
+
+  return {
+    label: 'Flag',
+    render: flagRowRenderer
+  };
+}
+
 function wireAllUi() {
   // Autosaving of primer/stats changes (debounced)
   wireStatsPrimerAutoSave();
@@ -242,56 +254,7 @@ function wireAllUi() {
       e.preventDefault();
       if (type === 'folder') {
         var actions = [
-          {
-            label: 'Flag',
-            render: function (container) {
-              // Render a single row of small colored circles for flags
-              var flagColors = [
-                { name: 'Red', color: 'red' },
-                { name: 'Green', color: 'green' },
-                { name: 'Yellow', color: 'yellow' },
-                { name: 'Orange', color: 'orange' }
-              ];
-              var row = document.createElement('div');
-              row.className = 'flag-row';
-              flagColors.forEach(function (flag) {
-                var btn = document.createElement('button');
-                btn.title = flag.name;
-                btn.style.background = flag.color;
-                btn.style.border = '1px solid #bbb';
-                btn.style.width = '14px';
-                btn.style.height = '14px';
-                btn.style.borderRadius = '50%';
-                btn.style.cursor = 'pointer';
-                btn.style.outline = 'none';
-                btn.style.padding = '0';
-                btn.style.margin = '0';
-                btn.onclick = function (e) {
-                  e.stopPropagation();
-                  markFlag(key, flag.color);
-                  hideContextMenu();
-                };
-                row.appendChild(btn);
-              });
-              // Clear button (small gray circle with ×)
-              var clearBtn = document.createElement('button');
-              clearBtn.title = 'Clear Flag';
-              clearBtn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#eee;border:1px solid #bbb;line-height:12px;text-align:center;font-size:12px;color:#666;">×</span>';
-              clearBtn.style.background = 'none';
-              clearBtn.style.border = 'none';
-              clearBtn.style.padding = '0';
-              clearBtn.style.margin = '0';
-              clearBtn.style.cursor = 'pointer';
-              clearBtn.style.outline = 'none';
-              clearBtn.onclick = function (e) {
-                e.stopPropagation();
-                markFlag(key, null);
-                hideContextMenu();
-              };
-              row.appendChild(clearBtn);
-              container.appendChild(row);
-            }
-          },
+          createFlagAction(key),
           {
             label: 'Rename Folder',
             run: function () {
@@ -384,43 +347,7 @@ function wireAllUi() {
         var isInOriginals = (state.folder && state.folder.split(/[\/]/).pop() === 'originals');
         var fileName = mediaItem.fileName;
         // Add flagging for files
-        actions.push({
-          label: 'Flag',
-          render: function (container) {
-            var flagColors = [
-              { name: 'Red', color: 'red' },
-              { name: 'Green', color: 'green' },
-              { name: 'Yellow', color: 'yellow' },
-              { name: 'Orange', color: 'orange' }
-            ];
-            var row = document.createElement('div');
-            row.className = 'flag-row';
-            flagColors.forEach(function (flag) {
-              var btn = document.createElement('button');
-              btn.title = flag.name;
-              btn.className = 'flag-btn';
-              btn.style.background = flag.color;
-              btn.onclick = function (e) {
-                e.stopPropagation();
-                markFlag(key, flag.color);
-                hideContextMenu();
-              };
-              row.appendChild(btn);
-            });
-            // Clear button (small gray circle with ×)
-            var clearBtn = document.createElement('button');
-            clearBtn.title = 'Clear Flag';
-            clearBtn.className = 'flag-btn flag-btn--clear';
-            clearBtn.innerHTML = '<span>×</span>';
-            clearBtn.onclick = function (e) {
-              e.stopPropagation();
-              markFlag(key, null);
-              hideContextMenu();
-            };
-            row.appendChild(clearBtn);
-            container.appendChild(row);
-          }
-        });
+        actions.push(createFlagAction(key));
         actions.push({
           label: 'Open in Explorer',
           run: function () {

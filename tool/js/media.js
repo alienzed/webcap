@@ -331,20 +331,13 @@ async function renderFileList() {
   var matchCount = 0;
 
   // Modern color palette for flags
-  var FLAG_COLOR_MAP = {
-    green: '#43aa8b',   // teal green
-    yellow: '#ffd166',  // soft gold
-    orange: '#f8961e',  // warm orange
-    red: '#f94144'      // soft red
-  };
+  // Use centralized FLAG_COLOR_MAP from constants.js
   for (var i = 0; i < state.childFolders.length; ++i) {
     var folderItem = state.childFolders[i];
     var flagColor = state.flags && state.flags[folderItem.name];
     var colorDot = '';
     if (flagColor) {
-      var mappedColor = FLAG_COLOR_MAP[flagColor] || flagColor;
-      var dotStyle = 'display:inline-block;width:12px;height:12px;border-radius:50%;background:' + mappedColor + ';margin-left:8px;';
-      colorDot = '<span style="' + dotStyle + '"></span>';
+      colorDot = '<span class="flag-dot flag-dot--' + flagColor + '" style="margin-left:8px;"></span>';
     }
     var label = '🗀 ' + folderItem.name;
     var row = document.createElement('div');
@@ -382,9 +375,7 @@ async function renderFileList() {
     var flagColor = state.flags && state.flags[mediaItem.key];
     var colorDot = '';
     if (flagColor) {
-      var mappedColor = FLAG_COLOR_MAP[flagColor] || flagColor;
-      var dotStyle = 'display:inline-block;width:12px;height:12px;border-radius:50%;background:' + mappedColor + ';margin-left:8px;';
-      colorDot = '<span style="' + dotStyle + '"></span>';
+      colorDot = '<span class="flag-dot flag-dot--' + flagColor + '" style="margin-left:8px;"></span>';
     }
     var displayText = mediaItem.label;
     var row = document.createElement('div');
@@ -395,4 +386,44 @@ async function renderFileList() {
     ui.mediaListEl.appendChild(row);
     matchCount++;
   });
+}
+
+// File/Folder Flags
+function markFlag(itemKey, color) {
+  debugLog('[markFlag] itemKey:', itemKey, 'color:', color, 'state.folder:', state.folder);
+  if (color) {
+    state.flags[itemKey] = color;
+  } else {
+    delete state.flags[itemKey];
+  }
+  saveFlags();
+  // Update only the flag dot in the DOM for the affected item
+  // Use centralized FLAG_COLOR_MAP from constants.js
+  // Try both media and folder
+  var sel = '[data-key="' + itemKey.replace(/"/g, '\"') + '"]';
+  var itemEls = Array.prototype.slice.call(document.querySelectorAll('.media-item' + sel));
+  if (!itemEls.length) {
+    // Try folder only
+    itemEls = Array.prototype.slice.call(document.querySelectorAll('.folder-item' + sel));
+  }
+  itemEls.forEach(function(row) {
+    // Remove any existing flag dot
+    var dots = row.querySelectorAll('.flag-dot');
+    dots.forEach(function(dot) { dot.parentNode.removeChild(dot); });
+    // Add new dot if color is set
+    if (color) {
+      var dot = document.createElement('span');
+      dot.className = 'flag-dot flag-dot--' + color;
+      row.querySelector('div').appendChild(dot);
+    }
+  });
+  // Do NOT refresh the directory or clear selection
+}
+
+function saveFlags() {
+  // Save the full folder state (including flags, reviewedKeys, stats, primer, etc.)
+  var folderPath = state.folder || '';
+  var snapshot = snapshotFolderStateFromDom();
+  debugLog('[saveFlags] folderPath:', folderPath, 'snapshot:', snapshot);
+  writeFolderStateFile(folderPath, snapshot);
 }

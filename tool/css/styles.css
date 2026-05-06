@@ -534,8 +534,8 @@ iframe {
 /* Flag/context menu buttons */
 .flag-btn {
   border: 1px solid #bbb;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   cursor: pointer;
   outline: none;
@@ -555,14 +555,14 @@ iframe {
 
 .flag-btn--clear span {
   display: inline-block;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #eee;
   border: 1px solid #ddd;
   line-height: 18px;
   text-align: center;
-  font-size: 12px;
+  font-size: 18px;
   color: #666;
 }
 

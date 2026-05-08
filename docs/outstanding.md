@@ -5,13 +5,11 @@ If complete and confirmed, move to Completed section
 
 
 ## Bugs
-
-
+- Prune works well, BUT the caption and preview remain, we should either select the next/adjacent item or clear.
+- Config files do not seem to be autosaving
 
 ## Enhancements
-- Contents checkboxes or something above the caption text editor, to allow me to set conditions for reviewed status, maybe reviewed is couple with another status "complete" where I have things like "hair color?, lighting? etc..." checkboxes or a nifty list I can use to validate things. This is useful because sometimes half way through captioning I notice I may have forgotten to add tokens for something meaningful, but it's easy to get distracted as moving through files.
-- Prune now uses a pruned_ prefix in the originals folder (not a separate folder). All collision and backup logic is handled there. (Current design; see prune.md)
-- Make colors in context menu bigger
+
 
 ## Backlog
 - Many operations on files/folders will refresh the entire directory. For prune and rename, only the affected item is now updated (no full refresh). Other operations may still refresh the directory; consider further optimization if needed.
@@ -23,7 +21,6 @@ If complete and confirmed, move to Completed section
 ## Requires validation
 - Prune now removes only the item from state/items and DOM, not a full refresh.
 - Prune uses pruned_ prefix in originals, not a separate folder (see prune.md for details).
-
 - Reset Review state (contextual menu option on Current folder only)
 - F2 to rename
 - When a caption is missing, the item gets a yellowish background to reflect this, however, after saving a proper caption, the background does not change. (Fixed: background now updates correctly after saving a caption)
@@ -32,7 +29,11 @@ If complete and confirmed, move to Completed section
 - Captions save even if not changed, seems suboptimal.
 - Review and Filter only seem to work on the initially loaded set of captions. (Fixed: state.items is updated after every save, so review/filter/rare-token features now reflect edits immediately)
 - Make it so that the primer caption alone doesn't get saved. (Currently only implemented for autosave; manual saves still save primer-only captions. Needs fix.)
+- Caption Requirements
+- Prune now uses a pruned_ prefix in the originals folder (not a separate folder). All collision and backup logic is handled there. (Current design; see prune.md)
+- Prune works well, BUT the caption and preview remain, we should either select the next/adjacent item or clear.
 
 
 ## Complete
 - After a rename, the item gets reselected after refresh (pendingSelectFileName logic implemented).
+- Make colors in context menu bigger

@@ -99,12 +99,7 @@ function wireAllUi() {
     }
   });
 
-  // Autosave config files as you type (not for captions)
-  ui.editorEl.addEventListener('input', function() {
-    if (state.currentConfigFile) {
-      debouncedConfigAutosave();
-    }
-  });
+  // (Removed redundant/broken config autosave handler; handled by handleEditorInputAutosave)
   // Current folder row context menu handler
   if (ui.currentFolderRow) {
     ui.currentFolderRow.oncontextmenu = function (e) {

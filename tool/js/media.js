@@ -25,27 +25,31 @@ pruneMedia = async function (mediaItem) {
       return;
     }
     setStatus('Media pruned: ' + mediaItem.key);
-    // Remove pruned item from state.items and DOM instead of refreshing directory
+    var nextItem = null;
+    var prunedWasCurrent = !!(state.currentItem && (state.currentItem.key === mediaItem.key || state.currentItem.fileName === mediaItem.key));
+    // Remove pruned item from state.items instead of refreshing the directory.
     if (window.state && Array.isArray(state.items)) {
       var idx = state.items.findIndex(function(item) {
         return item && (item.key === mediaItem.key || item.fileName === mediaItem.key);
       });
       if (idx !== -1) {
         state.items.splice(idx, 1);
+        if (prunedWasCurrent && state.items.length) {
+          nextItem = state.items[idx] || state.items[idx - 1] || null;
+        }
       }
     }
-    // Remove from DOM
-    if (ui && ui.mediaListEl) {
-      var itemEl = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + mediaItem.key + '"]');
-      if (itemEl && itemEl.parentNode) {
-        itemEl.parentNode.removeChild(itemEl);
-      }
-    }
-    // Optionally: clear editor if current item was pruned
-    if (state.currentItem && (state.currentItem.key === mediaItem.key || state.currentItem.fileName === mediaItem.key)) {
-      if (ui && ui.editorEl) ui.editorEl.value = '';
+    if (prunedWasCurrent) {
       state.currentItem = null;
-      window.renderChecklistPanel();
+      if (nextItem) {
+        selectPathMedia(nextItem);
+      } else {
+        clearEditorAndPreview();
+        window.renderChecklistPanel();
+        renderFileList();
+      }
+    } else {
+      renderFileList();
     }
   } catch (err) {
     setStatus('Prune error: ' + (err && err.message ? err.message : err));

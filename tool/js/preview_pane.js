@@ -371,7 +371,7 @@ function loadConfigFileToEditor(fileName) {
       // Set editor content and update state
       ui.editorEl.value = xhr.responseText;
       ui.editorEl.removeAttribute('readonly'); // Ensure editor is editable for config files
-      state.currentConfigFile = fileName;
+      state.currentConfigFile = { folder: folder, file: fileName };
       state.currentCaptionFile = null;
       setStatus('Editing config: ' + fileName);
     } else {

@@ -135,10 +135,14 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
         setStatus('Saved: ' + (media || '').replace(/\.[^.]+$/, '.txt'));
         // Toggle empty-caption class on the relevant media item if key provided
         if (ui && ui.mediaListEl && mediaKey) {
-          if (text && text.trim().length > 0) {
-            itemEl.classList.remove('empty-caption');
+          if (itemEl){            
+            if (text && text.trim().length > 0) {
+              itemEl.classList.remove('empty-caption');
+            } else {
+              itemEl.classList.add('empty-caption');
+            }
           } else {
-            itemEl.classList.add('empty-caption');
+            setStatus('saveCaptionDirect: No media item element found for key: ' + mediaKey);
           }
         }
         // --- Carefully update state.items with the new caption (match by fileName only) ---

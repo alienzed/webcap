@@ -1,102 +1,170 @@
-import os
-import shutil
-import requests
+import json
 from pathlib import Path
 
-BASE_URL = "http://127.0.0.1:5000"
-FS_ROOT = r"C:/Users/mschmid/Documents/repos/training"
-TEST_FOLDER = os.path.join(FS_ROOT, "test_prune_restore")
-ORIGINALS = os.path.join(TEST_FOLDER, "originals")
-MEDIA1 = "test1.mp4"
-MEDIA2 = "test2.mp4"
-CAPTION1 = "test1.txt"
-CAPTION2 = "test2.txt"
+import pytest
 
-# Setup test folder
-os.makedirs(TEST_FOLDER, exist_ok=True)
-with open(os.path.join(TEST_FOLDER, MEDIA1), "wb") as f:
-    f.write(b"media1-data")
-with open(os.path.join(TEST_FOLDER, MEDIA2), "wb") as f:
-    f.write(b"media2-data")
-with open(os.path.join(TEST_FOLDER, CAPTION1), "w", encoding="utf-8") as f:
-    f.write("caption1-data")
-with open(os.path.join(TEST_FOLDER, CAPTION2), "w", encoding="utf-8") as f:
-    f.write("caption2-data")
+import tool.server.app as app_module
 
-# Clean originals
-if os.path.exists(ORIGINALS):
-    shutil.rmtree(ORIGINALS)
-os.makedirs(ORIGINALS, exist_ok=True)
 
-def post(endpoint, data):
-    r = requests.post(BASE_URL + endpoint, json=data)
-    try:
-        return r.status_code, r.json()
-    except Exception:
-        return r.status_code, r.text
+@pytest.fixture
+def isolated_fs_root(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    fs_root.mkdir()
 
-def test_prune_restore():
-    print("1. Prune MEDIA1")
-    code, resp = post("/media/prune", {"folder": TEST_FOLDER, "media": MEDIA1})
-    print(code, resp)
-    assert code == 200
-    assert os.path.exists(os.path.join(ORIGINALS, "pruned_test1.mp4"))
-    assert os.path.exists(os.path.join(ORIGINALS, "pruned_test1.txt"))
-    assert not os.path.exists(os.path.join(TEST_FOLDER, MEDIA1))
-    assert not os.path.exists(os.path.join(TEST_FOLDER, CAPTION1))
+    def _safe_join(rel_path):
+        rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
+        if rel.startswith("/"):
+            rel = rel[1:]
+        return (fs_root / rel).resolve()
 
-    print("2. Prune MEDIA1 again (should fail)")
-    code, resp = post("/media/prune", {"folder": TEST_FOLDER, "media": MEDIA1})
-    print(code, resp)
-    assert code == 404
+    monkeypatch.setattr(app_module, "safe_join_fs_root", _safe_join)
+    monkeypatch.setattr(app_module, "_resolve_folder", _safe_join)
+    return fs_root
 
-    print("3. Prune MEDIA2 (collision test)")
-    shutil.copy2(os.path.join(ORIGINALS, "pruned_test1.mp4"), os.path.join(TEST_FOLDER, MEDIA1))
-    shutil.copy2(os.path.join(ORIGINALS, "pruned_test1.txt"), os.path.join(TEST_FOLDER, CAPTION1))
-    code, resp = post("/media/prune", {"folder": TEST_FOLDER, "media": MEDIA1})
-    print(code, resp)
-    assert code == 200
-    assert os.path.exists(os.path.join(ORIGINALS, "pruned_test1-1.mp4"))
-    assert os.path.exists(os.path.join(ORIGINALS, "pruned_test1-1.txt"))
 
-    print("4. Restore pruned_test1.mp4")
-    code, resp = post("/media/restore", {"folder": TEST_FOLDER, "fileName": "pruned_test1.mp4"})
-    print(code, resp)
-    assert code == 200
-    assert os.path.exists(os.path.join(TEST_FOLDER, "test1.mp4"))
-    assert os.path.exists(os.path.join(TEST_FOLDER, "test1.txt"))
+@pytest.fixture
+def client(isolated_fs_root):
+    return app_module.app.test_client()
 
-    print("5. Restore pruned_test1.mp4 again (should fail)")
-    code, resp = post("/media/restore", {"folder": TEST_FOLDER, "fileName": "pruned_test1.mp4"})
-    print(code, resp)
-    assert code == 409
 
-    print("6. Restore pruned_test1-1.mp4 (should restore as test1-1.mp4)")
-    code, resp = post("/media/restore", {"folder": TEST_FOLDER, "fileName": "pruned_test1-1.mp4"})
-    print(code, resp)
-    assert code == 200
-    assert os.path.exists(os.path.join(TEST_FOLDER, "test1-1.mp4"))
-    assert os.path.exists(os.path.join(TEST_FOLDER, "test1-1.txt"))
+def write_bytes(path: Path, data: bytes):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
 
-    print("7. Prune MEDIA2 (no caption)")
-    with open(os.path.join(TEST_FOLDER, MEDIA2), "wb") as f:
-        f.write(b"media2-data")
-    if os.path.exists(os.path.join(TEST_FOLDER, CAPTION2)):
-        os.remove(os.path.join(TEST_FOLDER, CAPTION2))
-    code, resp = post("/media/prune", {"folder": TEST_FOLDER, "media": MEDIA2})
-    print(code, resp)
-    assert code == 200
-    assert os.path.exists(os.path.join(ORIGINALS, "pruned_test2.mp4"))
-    assert not os.path.exists(os.path.join(ORIGINALS, "pruned_test2.txt"))
 
-    print("8. Restore pruned_test2.mp4 (no caption)")
-    code, resp = post("/media/restore", {"folder": TEST_FOLDER, "fileName": "pruned_test2.mp4"})
-    print(code, resp)
-    assert code == 200
-    assert os.path.exists(os.path.join(TEST_FOLDER, "test2.mp4"))
-    assert not os.path.exists(os.path.join(TEST_FOLDER, "test2.txt"))
+def write_text(path: Path, data: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(data, encoding="utf-8")
 
-    print("All tests passed.")
 
-if __name__ == "__main__":
-    test_prune_restore()
+def test_prune_restore_collision_and_caption_behavior(client, isolated_fs_root):
+    set_folder_rel = "set_a"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+
+    write_bytes(set_folder / "test1.mp4", b"media1-data")
+    write_text(set_folder / "test1.txt", "caption1-data")
+    write_bytes(set_folder / "test2.mp4", b"media2-data")
+    write_text(set_folder / "test2.txt", "caption2-data")
+
+    r = client.post("/media/prune", json={"folder": set_folder_rel, "media": "test1.mp4"})
+    assert r.status_code == 200
+    assert (set_folder / "originals" / "pruned_test1.mp4").exists()
+    assert (set_folder / "originals" / "pruned_test1.txt").exists()
+    assert not (set_folder / "test1.mp4").exists()
+    assert not (set_folder / "test1.txt").exists()
+
+    r = client.post("/media/prune", json={"folder": set_folder_rel, "media": "test1.mp4"})
+    assert r.status_code == 404
+
+    write_bytes(set_folder / "test1.mp4", b"media1-data-v2")
+    write_text(set_folder / "test1.txt", "caption1-data-v2")
+    r = client.post("/media/prune", json={"folder": set_folder_rel, "media": "test1.mp4"})
+    assert r.status_code == 200
+    assert (set_folder / "originals" / "pruned_test1-1.mp4").exists()
+    assert (set_folder / "originals" / "pruned_test1-1.txt").exists()
+
+    r = client.post("/media/restore", json={"folder": set_folder_rel, "fileName": "pruned_test1.mp4"})
+    assert r.status_code == 200
+    assert (set_folder / "test1.mp4").exists()
+    assert (set_folder / "test1.txt").exists()
+
+    r = client.post("/media/restore", json={"folder": set_folder_rel, "fileName": "pruned_test1.mp4"})
+    assert r.status_code == 409
+
+    r = client.post("/media/restore", json={"folder": set_folder_rel, "fileName": "pruned_test1-1.mp4"})
+    assert r.status_code == 200
+    assert (set_folder / "test1-1.mp4").exists()
+    assert (set_folder / "test1-1.txt").exists()
+
+    (set_folder / "test2.txt").unlink()
+    r = client.post("/media/prune", json={"folder": set_folder_rel, "media": "test2.mp4"})
+    assert r.status_code == 200
+    assert (set_folder / "originals" / "pruned_test2.mp4").exists()
+    assert not (set_folder / "originals" / "pruned_test2.txt").exists()
+
+    r = client.post("/media/restore", json={"folder": set_folder_rel, "fileName": "pruned_test2.mp4"})
+    assert r.status_code == 200
+    assert (set_folder / "test2.mp4").exists()
+    assert not (set_folder / "test2.txt").exists()
+
+
+def test_reset_overwrites_media_and_preserves_existing_caption(client, isolated_fs_root):
+    set_folder_rel = "set_b"
+    set_folder = isolated_fs_root / set_folder_rel
+    originals = set_folder / "originals"
+    originals.mkdir(parents=True)
+
+    write_bytes(originals / "clip.mp4", b"original-bytes")
+    write_text(originals / "clip.txt", "original-caption")
+    write_bytes(set_folder / "clip.mp4", b"edited-bytes")
+    write_text(set_folder / "clip.txt", "edited-caption")
+
+    r = client.post("/media/reset", json={"folder": set_folder_rel, "fileName": "clip.mp4"})
+    assert r.status_code == 200
+    assert (set_folder / "clip.mp4").read_bytes() == b"original-bytes"
+    assert (set_folder / "clip.txt").read_text(encoding="utf-8") == "edited-caption"
+
+    r = client.post("/media/reset", json={"folder": set_folder_rel, "fileName": "missing.mp4"})
+    assert r.status_code == 404
+
+
+def test_rename_file_renames_sidecar_and_updates_reviewed_keys(client, isolated_fs_root):
+    set_folder_rel = "set_c"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+
+    write_bytes(set_folder / "old.mp4", b"media")
+    write_text(set_folder / "old.txt", "caption")
+    write_bytes(set_folder / "target.mp4", b"other")
+    write_text(
+        set_folder / ".webcap_state.json",
+        json.dumps({"reviewedKeys": ["old.mp4", "other.mp4"]}, indent=2),
+    )
+
+    r = client.post(
+        "/fs/rename",
+        json={"folder": set_folder_rel, "oldFile": "old.mp4", "newFile": "new.mp4"},
+    )
+    assert r.status_code == 200
+    assert not (set_folder / "old.mp4").exists()
+    assert (set_folder / "new.mp4").exists()
+    assert not (set_folder / "old.txt").exists()
+    assert (set_folder / "new.txt").exists()
+
+    state = json.loads((set_folder / ".webcap_state.json").read_text(encoding="utf-8"))
+    assert "new.mp4" in state["reviewedKeys"]
+    assert "old.mp4" not in state["reviewedKeys"]
+
+    r = client.post(
+        "/fs/rename",
+        json={"folder": set_folder_rel, "oldFile": "new.mp4", "newFile": "target.mp4"},
+    )
+    assert r.status_code == 409
+
+    r = client.post(
+        "/fs/rename",
+        json={"folder": set_folder_rel, "oldFile": "missing.mp4", "newFile": "another.mp4"},
+    )
+    assert r.status_code == 404
+
+
+def test_rename_folder_and_reserved_name_guard(client, isolated_fs_root):
+    set_folder_rel = "set_d"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+    (set_folder / "old_folder").mkdir()
+
+    r = client.post(
+        "/fs/rename",
+        json={"folder": set_folder_rel, "old_name": "old_folder", "new_name": "renamed_folder"},
+    )
+    assert r.status_code == 200
+    assert not (set_folder / "old_folder").exists()
+    assert (set_folder / "renamed_folder").exists()
+
+    r = client.post(
+        "/fs/rename",
+        json={"folder": set_folder_rel, "old_name": "renamed_folder", "new_name": "originals"},
+    )
+    assert r.status_code == 400

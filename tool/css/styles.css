@@ -811,6 +811,75 @@ iframe {
   margin-top: 0;
 }
 
+.caption-helper-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.caption-helper-tab-btn {
+  border: 1px solid #d9dde3;
+  background: #f3f5f8;
+  color: #5d6672;
+  border-radius: 5px;
+  padding: 3px 8px;
+  line-height: 1.1;
+  font-size: 12px;
+}
+
+.caption-helper-tab-btn.active {
+  background: #e8edf3;
+  color: #36414f;
+  border-color: #c6cdd7;
+}
+
+.caption-helper-tab-pane {
+  display: block;
+  min-height: 120px;
+}
+
+#phrase-copy-items {
+  column-count: 2;
+  column-gap: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+#phrase-copy-add-input {
+  min-height: 28px;
+  font-size: 12px;
+  padding: 5px 7px;
+}
+
+@media (max-width: 900px) {
+  #phrase-copy-items {
+    column-count: 1;
+  }
+}
+
+#phrase-copy-items .row-inline {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-bottom: 4px;
+  break-inside: avoid;
+}
+
+.phrase-copy-item-btn {
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+}
+
+#set-notes-editor {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  font-family: Consolas, monospace;
+  font-size: 13px;
+}
+
 #caption-checklist-panel .checklist-input-row input[type="text"] {
   width: 20ch;
   min-width: 80px;
@@ -820,6 +889,7 @@ iframe {
 
 #caption-checklist-panel .checklist-input-row button {
   min-width: 28px;
+  font-size: 12px;
 }
 /* Checklist panel is hidden by default */
 #caption-checklist-panel {

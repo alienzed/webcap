@@ -37,5 +37,5 @@ A vertical panel for quickly copying preset or user-added words/phrases (e.g., a
 
 - No fallback logic or error guards—fail loudly if state or UI is out of sync.
 - Minimal, deterministic, and linear JS.
-- No async unless required for safety.
+- Use async where it is the natural fit (for example clipboard or network calls), but keep implementation direct and minimal.
 - UI and state must always be in sync.

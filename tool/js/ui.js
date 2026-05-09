@@ -332,6 +332,7 @@ function refreshCurrentDirectory() {
           var folderState = resp.folder_state || {};
           if (Object.keys(folderState).length) applyFolderStateToDom(folderState);
           window.loadChecklistFromFolderState(folderState);
+          window.loadCaptionHelpersFromFolderState(folderState);
           state.reviewedSet = state.reviewedSet || new Set();
           renderFileList(ui.filterEl.value);
           

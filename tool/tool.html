@@ -81,11 +81,28 @@
                   <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
                   <div id="caption-checklist-panel" class="checklist-panel" style="display:none;">
                       <button id="checklist-close-btn" title="Close checklist" class="checklist-close-btn">×</button>
-                      <div class="checklist-input-row">
-                          <input id="checklist-add-input" type="text" class="form-control" placeholder="Add requirement...">
-                          <button id="checklist-add-btn">+</button>
+                      <div id="caption-helper-tabs" class="caption-helper-tabs">
+                          <button id="caption-helper-tab-requirements-btn" class="caption-helper-tab-btn active" data-caption-helper-tab="requirements" type="button">Requirements</button>
+                          <button id="caption-helper-tab-phrases-btn" class="caption-helper-tab-btn" data-caption-helper-tab="phrases" type="button">Phrases</button>
+                          <button id="caption-helper-tab-notes-btn" class="caption-helper-tab-btn" data-caption-helper-tab="notes" type="button">Set Notes</button>
                       </div>
-                      <div id="checklist-items"></div>
+                      <div id="caption-helper-tab-requirements" class="caption-helper-tab-pane">
+                          <div class="checklist-input-row">
+                              <input id="checklist-add-input" type="text" class="form-control" placeholder="Add requirement...">
+                              <button id="checklist-add-btn" type="button">+</button>
+                          </div>
+                          <div id="checklist-items"></div>
+                      </div>
+                      <div id="caption-helper-tab-phrases" class="caption-helper-tab-pane hidden">
+                          <div class="checklist-input-row">
+                              <input id="phrase-copy-add-input" type="text" class="form-control" placeholder="Add phrase...">
+                              <button id="phrase-copy-add-btn" type="button">+</button>
+                          </div>
+                          <div id="phrase-copy-items"></div>
+                      </div>
+                      <div id="caption-helper-tab-notes" class="caption-helper-tab-pane hidden">
+                          <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
+                      </div>
                   </div>
                 </div>
                 <div id="console-panel"></div>
@@ -108,6 +125,7 @@
         <script src="/static/js/folder_state.js"></script>
         <script src="/static/js/editor.js"></script>
         <script src="/static/js/checklist.js"></script>
+        <script src="/static/js/caption_helpers.js"></script>
         <script src="/static/js/main.js"></script>
     </body>
 </html>

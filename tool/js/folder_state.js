@@ -26,7 +26,9 @@ function sanitizeFolderState(data) {
     reviewedKeys: reviewedKeys,
     flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {},
     caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : undefined,
-    caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : undefined
+    caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : undefined,
+    caption_phrases: Array.isArray(src.caption_phrases) ? src.caption_phrases.slice() : undefined,
+    caption_set_notes: String(src.caption_set_notes || '')
   };
 }
 
@@ -75,7 +77,9 @@ function snapshotFolderStateFromDom() {
     reviewedKeys: Array.from(state.reviewedSet || []).sort(),
     flags: (typeof state.flags === 'object' && state.flags) ? state.flags : {},
     caption_requirements: (typeof window.checklistItems !== 'undefined') ? window.checklistItems.slice() : undefined,
-    caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined
+    caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined,
+    caption_phrases: window.captionHelperPhrases.slice(),
+    caption_set_notes: String(window.captionHelperNotes || '')
   });
 }
 

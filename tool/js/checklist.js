@@ -29,7 +29,7 @@ function renderChecklistPanel() {
     setChecklistPanelVisible(false);
     return;
   }
-  setChecklistPanelVisible(!!checklistItems.length);
+  setChecklistPanelVisible(true);
   itemsDiv.innerHTML = '';
   checklistItems.sort(checklistSort);
   var checkedMap = checklistCheckedByMedia[state.currentItem.key] || {};

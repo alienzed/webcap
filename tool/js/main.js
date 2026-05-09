@@ -60,6 +60,7 @@ function wireAllUi() {
 
   checklistPanelEl = document.getElementById('caption-checklist-panel');
   setChecklistPanelVisible(false);
+  wireCaptionHelpersUi();
   var addInput = document.getElementById('checklist-add-input');
   var addBtn = document.getElementById('checklist-add-btn');
   if (addBtn && addInput) {

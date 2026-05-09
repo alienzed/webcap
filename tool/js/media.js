@@ -25,7 +25,6 @@ pruneMedia = async function (mediaItem) {
       return;
     }
     setStatus('Media pruned: ' + mediaItem.key);
-    var nextItem = null;
     var prunedWasCurrent = !!(state.currentItem && (state.currentItem.key === mediaItem.key || state.currentItem.fileName === mediaItem.key));
     // Remove pruned item from state.items instead of refreshing the directory.
     if (window.state && Array.isArray(state.items)) {
@@ -34,20 +33,13 @@ pruneMedia = async function (mediaItem) {
       });
       if (idx !== -1) {
         state.items.splice(idx, 1);
-        if (prunedWasCurrent && state.items.length) {
-          nextItem = state.items[idx] || state.items[idx - 1] || null;
-        }
       }
     }
     if (prunedWasCurrent) {
       state.currentItem = null;
-      if (nextItem) {
-        selectPathMedia(nextItem);
-      } else {
-        clearEditorAndPreview();
-        window.renderChecklistPanel();
-        renderFileList();
-      }
+      clearEditorAndPreview();
+      window.renderChecklistPanel();
+      renderFileList();
     } else {
       renderFileList();
     }

@@ -13,7 +13,7 @@ A simple, persistent text editor for jotting down freeform notes about the curre
 - No auto-save on blur, no explicit save button.
 - No formatting, no rich text, no extra features.
 - No import/export/reset.
-- No async unless required for safety.
+- Use async where it is the natural fit, but keep implementation direct and minimal.
 - No fallback logic; fail loudly if state or UI is out of sync.
 
 ---

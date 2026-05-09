@@ -14,8 +14,10 @@ If complete and confirmed, move to Completed section
  - Set Notes. A third tab alongside Caption Requirements and Phrase Copy for free style notes about the set.
 
 
+
 ## Backlog
 - Many operations on files/folders will refresh the entire directory. For prune and rename, only the affected item is now updated (no full refresh). Other operations may still refresh the directory; consider further optimization if needed.
+- [Future] Allow placing .txt files (e.g., expressions.txt, places.txt, lighting.txt) in a folder to auto-populate additional phrase tabs. Each file is a list of phrases (one per line). Not implemented yet.
 
 ## To think about more / Not clearly necessary
 - Up / Down keys to browse while media list is focused (lost when editing of course...)

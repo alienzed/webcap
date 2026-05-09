@@ -441,6 +441,10 @@ def deface():
         ensure_original_by_hash(file_path, originals_dir)
         # Run deface with --output to overwrite input
         deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1', str(file_path), '--output', str(file_path)]
+        yield f'[DEFACE] Command: {deface_cmd}\n'
+        yield f'[DEFACE] CWD: {os.getcwd()}\n'
+        yield f'[DEFACE] PATH: {os.environ.get("PATH", "")}\n'
+        # Optionally log more env vars if needed
         proc = subprocess.Popen(deface_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         for line in proc.stdout:
             yield line

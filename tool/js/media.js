@@ -264,7 +264,9 @@ async function renameMedia(mediaItem, oldFile, newFile) {
 
 function renderPathPreview(folder, mediaName) {
   var ext = getFileExtension(mediaName);
-  var mediaUrl = '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(mediaName);
+  // Add cache-busting timestamp
+  var ts = Date.now();
+  var mediaUrl = '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(mediaName) + '&t=' + ts;
   renderPreviewHtml(!!IMAGE_EXTENSIONS[ext], mediaUrl);
 }
 

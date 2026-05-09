@@ -125,6 +125,7 @@ function wireAllUi() {
         {
           label: 'Deface',
           run: function () {
+            clearEditorAndPreview();
             setStatus('Defacing folder media...');
             var folderPath = state.folder || '';
             streamPreviewFromFetch(
@@ -417,6 +418,7 @@ function wireAllUi() {
             actions.push({
               label: 'Deface...',
               run: function () {
+                clearEditorAndPreview();
                 var defaultThresh = '0.4';
                 var t = prompt('Deface: Enter threshold (-t, 0.0-1.0)', defaultThresh);
                 if (t === null) return;

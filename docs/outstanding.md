@@ -7,8 +7,11 @@ If complete and confirmed, move to Completed section
 ## Bugs
 - Prune works well, BUT the caption and preview remain, we should either select the next/adjacent item or clear.
 - Config files do not seem to be autosaving
+- upon save of a previous empty caption, it takes a directory refresh for the missing state to clear
 
 ## Enhancements
+ - One thing I might find useful would be a vertical text area with words/phrases I can copy/paste from. Sometimes when going through a set I choose adjectives to add and I need to add these to many captions, but much like the captionr requirements, it's very easy to get side tracked... with that said, a similar interface could be cool here, like a preset list of constants that I can add to. This screen wouldn't be checkboxes though, it'd be click to copy, since some will be multiple words, many even phrases, so highlighting them manually, copying and pasting would be inefficient.
+ - Set Notes. A third tab alongside Caption Requirements and Phrase Copy for free style notes about the set.
 
 
 ## Backlog

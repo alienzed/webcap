@@ -68,15 +68,3 @@ Longer delays increase loss window if the app/tab/process exits before timer fir
 
 Only one fallback guard is required: if neither caption nor config target can be resolved at input time, skip save.
 
-## Consequences
-
-- All explicit `savePathCaption()` calls that exist purely as pre-operation safety flushes become redundant and should be removed.
-- `saveCurrentEditorContent` / Ctrl+S remains available and should continue to work.
-
-## Files to change
-
-| File | Change |
-|---|---|
-| `tool/js/main.js` | Replace separate config autosave listener with unified per-target autosave listener in `wireAllUi()`; preserve Ctrl+S call to `saveCurrentEditorContent`; remove explicit `savePathCaption()` calls used as safety flushes |
-| `tool/js/ui.js` | Remove `savePathCaption()` call in `runReview()` |
-| `tool/js/media.js` | Remove `await savePathCaption()` in `resetMediaItem()` |

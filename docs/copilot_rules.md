@@ -1,33 +1,26 @@
-# WebCap — Rules & Guardrails
 
-This document defines all safety, mutation, and coding rules for the WebCap project. It is referenced by the main spec and must be followed for all development and maintenance.
+# WebCap — Rules & Guardrails (Condensed)
 
 ---
 
-## 1. Safety & Mutation Rules
-- No destructive filesystem operations without explicit user action and recoverability.
-- All destructive actions (rename, prune, reset) must ensure a copy exists in the `originals` folder before removal or overwrite. Reversibility is guaranteed by the presence of the original in `originals`.
-- No permanent delete workflow in the UI.
-- Combined review text is never written to disk as a media caption.
+## 1. Safety & Mutation
+- All destructive actions (rename, prune, reset) must be explicitly triggered and fully reversible (originals always preserved).
+- No destructive operation is allowed without user intent and recoverability.
 - All mutations are explicit and require user confirmation or context menu action.
-- UI does not require everything to be async, but safety does matter.
 
 ---
 
-## 2. Coding & Architectural Guidelines
-- No database dependency; all state is file-based.
-- Keep implementation simple, explicit, and minimal.
-- Use plain global variables and functions for all state and logic. Do not use IIFE, encapsulation, or modular patterns. If a global name collision occurs, it should throw an error and be fixed explicitly. This is intentional for maximal debuggability and clarity.
-- Prefer modular files over large, mixed-condition files.
-- Reuse shared helpers where behavior is identical.
-- Avoid new cross-module coupling unless needed for UX continuity.
-- No arbitrary code execution; only hardcoded scripts and backend routes are allowed.
-- All arguments to scripts and mutations are constructed explicitly in code.
+## 2. Coding & Architecture
+- State is file-based; no database.
+- Use plain global variables and functions—no modules, encapsulation, or async unless necessary for safety.
+- Keep code simple, explicit, and minimal. Prefer modular files, but avoid unnecessary coupling.
+- No arbitrary code execution; only hardcoded scripts and backend routes.
+- All arguments to scripts/mutations are constructed explicitly in code.
 
 ---
 
 ## 3. UX Principles
-- Minimal, context-aware UI; avoid clutter and unnecessary buttons.
+- Minimal, context-aware UI; avoid clutter.
 - All output and errors are visible and actionable.
 - Busy/locked state is clearly indicated during mutations or script runs.
 - No manual command typing for script actions; all arguments are inferred from context.
@@ -37,10 +30,11 @@ This document defines all safety, mutation, and coding rules for the WebCap proj
 ## 4. Non-Negotiables
 - No regressions.
 - App must remain portable (Python + browser only).
-- Minimize destructive filesystem operations.
 - Maintainability and clarity are prioritized over scalability or flexibility.
 
 ---
 
-## 5. Error Visibility
-- All errors must always be visible in the browser console. The status bar may show user-facing status or error summaries, but must never suppress or swallow errors. If an error is caught, it must also be logged to the console for debugging.
+## 5. Error Handling
+- All errors must be visible in the browser console.
+- **Critical errors** (invariant violations, impossible states, or integrity threats) must break execution—never caught or logged.
+- Non-critical errors may be logged for debugging, but never swallowed or ignored.

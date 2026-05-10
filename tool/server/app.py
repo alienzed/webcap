@@ -13,6 +13,7 @@ from .media_metadata import update_media_metadata
 from .config import safe_join_fs_root, FS_ROOT, FS_DEBUG, fill_template_placeholders
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
+from .crop_ops import crop_image_in_place
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -260,6 +261,25 @@ def caption_reset():
     except Exception as e:
         if FS_DEBUG:
             print("[caption_reset] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/media/crop", methods=["POST"])
+def media_crop():
+    data = request.get_json(silent=True) or {}
+    folder = data.get("folder", "").strip()
+    file_name = (data.get("fileName") or data.get("media") or "").strip()
+    if not file_name:
+        return jsonify({"error": "Missing required parameters"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        result = crop_image_in_place(folder_path, file_name, data.get("crop"))
+        return jsonify({"ok": True, **result})
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        if FS_DEBUG:
+            print("[media_crop] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 
@@ -705,4 +725,3 @@ def maybe_create_config_files(folder_path):
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
-

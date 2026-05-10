@@ -6,6 +6,7 @@
         <title>WebCap</title>
         <link rel="stylesheet" href="/static/css/bootstrap.min.css">
         <link rel="stylesheet" href="/static/css/styles.css">
+        <link rel="stylesheet" href="/static/vendor/cropperjs/dist/cropper.min.css">
     </head>
     <body>
         <div class="app">
@@ -114,13 +115,37 @@
               <button id="focus-set-exit-btn" type="button" style="display:none">Exit Set</button>
             </div>
         </div>
-        <!-- JS load order: constants.js, console_panel.js, common.js, caption_core.js, caption_ui.js, media_list.js, preview_pane.js, main.js -->
+        <div id="crop-modal" class="crop-modal hidden" aria-hidden="true">
+            <div class="crop-modal-dialog">
+                <div class="crop-modal-header">
+                    <strong id="crop-modal-title">Crop image</strong>
+                    <button id="crop-cancel-x" type="button" title="Close">x</button>
+                </div>
+                <div class="crop-ratio-row">
+                    <button type="button" class="crop-ratio-btn active" data-ratio="1">1:1</button>
+                    <button type="button" class="crop-ratio-btn" data-ratio="1.3333333333">4:3</button>
+                    <button type="button" class="crop-ratio-btn" data-ratio="1.7777777778">16:9</button>
+                    <button type="button" class="crop-ratio-btn" data-ratio="0.5625">9:16</button>
+                </div>
+                <div class="crop-image-wrap">
+                    <img id="crop-image" alt="Crop preview">
+                </div>
+                <div id="crop-status" class="crop-status"></div>
+                <div class="crop-actions">
+                    <button id="crop-apply-btn" type="button">Apply</button>
+                    <button id="crop-cancel-btn" type="button">Cancel</button>
+                </div>
+            </div>
+        </div>
+        <!-- JS load order: shared globals first, feature files, then main.js wiring -->
         <script src="/static/js/constants.js"></script>
         <script src="/static/js/common.js"></script>
         <script src="/static/js/console_panel.js"></script>
         <script src="/static/js/ui.js"></script>
         <script src="/static/js/preview_pane.js"></script>
         <script src="/static/js/media.js"></script>
+        <script src="/static/vendor/cropperjs/dist/cropper.min.js"></script>
+        <script src="/static/js/crop.js"></script>
         <script src="/static/js/stats.js"></script>
         <script src="/static/js/folder_state.js"></script>
         <script src="/static/js/editor.js"></script>

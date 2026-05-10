@@ -11,7 +11,8 @@ If complete and confirmed, move to Completed section
 
 ## Enhancements
  - One thing I might find useful would be a vertical text area with words/phrases I can copy/paste from. Sometimes when going through a set I choose adjectives to add and I need to add these to many captions, but much like the captionr requirements, it's very easy to get side tracked... with that said, a similar interface could be cool here, like a preset list of constants that I can add to. This screen wouldn't be checkboxes though, it'd be click to copy, since some will be multiple words, many even phrases, so highlighting them manually, copying and pasting would be inefficient.
- - Set Notes. A third tab alongside Caption Requirements and Phrase Copy for free style notes about the set.
+ - Dataset infered number of samples, MegaFramePixels, if we want to get really crafty, try to estimate VRAM, step time...
+ - A way to crop images to preset AR.
 
 
 
@@ -24,6 +25,7 @@ If complete and confirmed, move to Completed section
 
 
 ## Requires validation
+ - Set Notes. A third tab alongside Caption Requirements and Phrase Copy for free style notes about the set.
 - Prune now removes only the item from state/items and DOM, not a full refresh.
 - Prune uses pruned_ prefix in originals, not a separate folder (see prune.md for details).
 - Reset Review state (contextual menu option on Current folder only)

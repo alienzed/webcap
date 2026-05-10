@@ -414,6 +414,14 @@ function wireAllUi() {
                 });
             }
           });
+          if (typeof isCroppableImageFile === 'function' && isCroppableImageFile(fileName)) {
+            actions.push({
+              label: 'Crop...',
+              run: function () {
+                openCropModal(mediaItem);
+              }
+            });
+          }
           var ext = (fileName || '').split('.').pop().toLowerCase();
           if (MEDIA_EXTENSIONS['.' + ext]) {
             actions.push({

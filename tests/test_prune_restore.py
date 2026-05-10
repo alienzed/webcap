@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 import tool.server.app as app_module
 
@@ -166,5 +167,64 @@ def test_rename_folder_and_reserved_name_guard(client, isolated_fs_root):
     r = client.post(
         "/fs/rename",
         json={"folder": set_folder_rel, "old_name": "renamed_folder", "new_name": "originals"},
+    )
+    assert r.status_code == 400
+
+
+def test_crop_image_replaces_media_and_preserves_caption(client, isolated_fs_root):
+    set_folder_rel = "set_crop"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+
+    Image.new("RGB", (100, 80), "blue").save(set_folder / "photo.jpg")
+    write_text(set_folder / "photo.txt", "caption stays")
+
+    r = client.post(
+        "/media/crop",
+        json={
+            "folder": set_folder_rel,
+            "fileName": "photo.jpg",
+            "crop": {"x": 10, "y": 5, "width": 30, "height": 30},
+        },
+    )
+    assert r.status_code == 200
+    assert Image.open(set_folder / "photo.jpg").size == (30, 30)
+    assert Image.open(set_folder / "originals" / "photo.jpg").size == (100, 80)
+    assert (set_folder / "photo.txt").read_text(encoding="utf-8") == "caption stays"
+
+
+def test_crop_rejects_out_of_bounds_without_changing_file(client, isolated_fs_root):
+    set_folder_rel = "set_crop_invalid"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+
+    Image.new("RGB", (40, 40), "red").save(set_folder / "photo.jpg")
+    before = (set_folder / "photo.jpg").read_bytes()
+
+    r = client.post(
+        "/media/crop",
+        json={
+            "folder": set_folder_rel,
+            "fileName": "photo.jpg",
+            "crop": {"x": 20, "y": 20, "width": 30, "height": 30},
+        },
+    )
+    assert r.status_code == 400
+    assert (set_folder / "photo.jpg").read_bytes() == before
+
+
+def test_crop_rejects_video_files(client, isolated_fs_root):
+    set_folder_rel = "set_crop_video"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+    write_bytes(set_folder / "clip.mp4", b"video")
+
+    r = client.post(
+        "/media/crop",
+        json={
+            "folder": set_folder_rel,
+            "fileName": "clip.mp4",
+            "crop": {"x": 0, "y": 0, "width": 10, "height": 10},
+        },
     )
     assert r.status_code == 400

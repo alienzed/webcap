@@ -135,6 +135,14 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
         setStatus('Saved: ' + (media || '').replace(/\.[^.]+$/, '.txt'));
         // Toggle empty-caption class on the relevant media item if key provided
         if (ui && ui.mediaListEl && mediaKey) {
+          var itemEl = null;
+          var itemEls = ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]');
+          for (var j = 0; j < itemEls.length; j++) {
+            if (itemEls[j].getAttribute('data-key') === mediaKey) {
+              itemEl = itemEls[j];
+              break;
+            }
+          }
           if (itemEl){            
             if (text && text.trim().length > 0) {
               itemEl.classList.remove('empty-caption');

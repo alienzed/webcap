@@ -13,6 +13,9 @@ If complete and confirmed, move to Completed section
 ## Enhancements
  - Dataset infered number of samples, MegaFramePixels, if we want to get really crafty, try to estimate VRAM, step time...
  - Refactor app.py to split routes from heavy logic
+ - Generate appropriate config files based on set metadata
+ - Try to automate Training Run Start
+ - The caption requirements/phrases/set notes are great... I'm actually thinking that maybe when the screen is wide enough, these don't need to be tabs at all, but can take up 1/3 of that space each. Requirements and phrases actually work/look better vertically anyway.
 
 
 

@@ -72,6 +72,7 @@ function wireAllUi() {
       for (var k in checklistCheckedByMedia) {
         if (checklistCheckedByMedia[k]) checklistCheckedByMedia[k][val] = false;
       }
+      syncReviewedFromChecklistAll();
       saveChecklistToFolderState();
       renderChecklistPanel();
       addInput.value = '';
@@ -415,6 +416,12 @@ function wireAllUi() {
             }
           });
           if (typeof isCroppableImageFile === 'function' && isCroppableImageFile(fileName)) {
+            actions.push({
+              label: 'Duplicate Image',
+              run: function () {
+                duplicateImageItem(mediaItem);
+              }
+            });
             actions.push({
               label: 'Crop...',
               run: function () {

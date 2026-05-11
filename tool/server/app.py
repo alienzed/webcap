@@ -153,7 +153,6 @@ def fs_rename():
         folder_path = safe_join_fs_root(folder)
         old_path = folder_path / old_name
         new_path = folder_path / new_name
-        print(f"[fs_rename] old_path={old_path}, new_path={new_path}")
         if not old_path.exists():
             print("[fs_rename] Source does not exist:", old_path)
             return jsonify({"error": "Source does not exist"}), 404
@@ -166,7 +165,6 @@ def fs_rename():
             if old_name in ("originals", ".", "..") or new_name in ("originals", ".", ".."):
                 return jsonify({"error": "Invalid folder name"}), 400
             old_path.rename(new_path)
-            print(f"[fs_rename] Renamed folder {old_path} -> {new_path}")
             return jsonify({"ok": True})
         # File renaming logic
         elif old_path.is_file():
@@ -175,40 +173,33 @@ def fs_rename():
             old_orig_media = originals_path / old_name if originals_path.exists() else None
             new_orig_media = originals_path / new_name if originals_path.exists() else None
             if old_orig_media and old_orig_media.exists() and new_orig_media and new_orig_media.exists():
-                print(f"[fs_rename] Originals collision: {old_orig_media} exists and {new_orig_media} already exists")
                 return jsonify({"error": "Target name already exists in originals folder"}), 409
+
+            # Preflight sidecar caption collisions before any rename mutation
+            old_caption = folder_path / (Path(old_name).stem + ".txt")
+            new_caption = folder_path / (Path(new_name).stem + ".txt")
+            if old_caption.exists() and new_caption.exists():
+                return jsonify({"error": f"Rename blocked: unexpected existing caption target: {new_caption}"}), 409
+
+            old_orig_caption = originals_path / (Path(old_name).stem + ".txt") if originals_path.exists() else None
+            new_orig_caption = originals_path / (Path(new_name).stem + ".txt") if originals_path.exists() else None
+            if old_orig_caption and old_orig_caption.exists() and new_orig_caption and new_orig_caption.exists():
+                return jsonify({"error": f"Rename blocked: unexpected existing originals caption target: {new_orig_caption}"}), 409
             
             # Rename set media file
             old_path.rename(new_path)
-            print(f"[fs_rename] Renamed file {old_path} -> {new_path}")
             
             # Rename caption if present (sidecar .txt)
-            old_caption = folder_path / (Path(old_name).stem + ".txt")
-            new_caption = folder_path / (Path(new_name).stem + ".txt")
-            print(f"[fs_rename] Caption rename check: old_caption={old_caption}, new_caption={new_caption}")
-            if not old_caption.exists():
-                print(f"[fs_rename] Caption file does not exist: {old_caption}")
-            elif new_caption.exists():
-                print(f"[fs_rename] Target caption already exists: {new_caption}")
-            else:
+            if old_caption.exists():
                 old_caption.rename(new_caption)
-                print(f"[fs_rename] Renamed caption {old_caption} -> {new_caption}")
             
             # Rename canonical original media in originals if present
             if old_orig_media and old_orig_media.exists():
                 old_orig_media.rename(new_orig_media)
-                print(f"[fs_rename] Renamed original media {old_orig_media} -> {new_orig_media}")
             
             # Rename canonical original sidecar caption in originals if present
-            if originals_path.exists():
-                old_orig_caption = originals_path / (Path(old_name).stem + ".txt")
-                new_orig_caption = originals_path / (Path(new_name).stem + ".txt")
-                if old_orig_caption.exists():
-                    if not new_orig_caption.exists():
-                        old_orig_caption.rename(new_orig_caption)
-                        print(f"[fs_rename] Renamed original caption {old_orig_caption} -> {new_orig_caption}")
-                    else:
-                        print(f"[fs_rename] Target original caption already exists: {new_orig_caption}")
+            if old_orig_caption and old_orig_caption.exists():
+                old_orig_caption.rename(new_orig_caption)
 
             # Update reviewedKeys in .webcap_state.json if present
             state_path = folder_path / ".webcap_state.json"
@@ -454,6 +445,58 @@ def duplicate_folder():
 
     shutil.copytree(str(src_path), str(dst_path))
     return jsonify({'success': True, 'dst': str(dst_path)})
+
+
+@app.route('/fs/duplicate_image', methods=['POST'])
+def duplicate_image():
+    data = request.get_json(silent=True) or {}
+    src_rel = (data.get('src') or '').strip()
+    if not src_rel:
+        return jsonify({'error': 'Missing source path'}), 400
+    try:
+        src_path = safe_join_fs_root(src_rel)
+    except Exception as e:
+        return jsonify({'error': f'Invalid source path: {e}'}), 400
+
+    if not src_path.exists() or not src_path.is_file():
+        return jsonify({'error': 'Source image does not exist'}), 404
+    if src_path.parent.name.lower() == 'originals':
+        return jsonify({'error': 'Duplicate Image is not allowed in originals folder'}), 400
+
+    image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
+    ext = src_path.suffix.lower()
+    if ext not in image_exts:
+        return jsonify({'error': 'Duplicate Image only supports still image files'}), 400
+
+    stem = src_path.stem
+    parent = src_path.parent
+    i = 1
+    while True:
+        if i == 1:
+            dst_name = f"{stem} copy{ext}"
+        else:
+            dst_name = f"{stem} copy {i}{ext}"
+        dst_path = parent / dst_name
+        if not dst_path.exists():
+            break
+        i += 1
+
+    shutil.copy2(str(src_path), str(dst_path))
+    try:
+        os.chmod(dst_path, 0o644)
+    except Exception:
+        pass
+
+    src_caption = src_path.with_suffix('.txt')
+    dst_caption = dst_path.with_suffix('.txt')
+    if src_caption.exists() and src_caption.is_file() and not dst_caption.exists():
+        shutil.copy2(str(src_caption), str(dst_caption))
+        try:
+            os.chmod(dst_caption, 0o644)
+        except Exception:
+            pass
+
+    return jsonify({'success': True, 'dst': str(dst_path), 'dstName': dst_name})
 
 # Unified deface endpoint
 @app.route('/fs/deface', methods=['POST'])

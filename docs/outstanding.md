@@ -8,13 +8,13 @@ If complete and confirmed, move to Completed section
 - Prune works well, BUT the caption and preview remain, we should either select the next/adjacent item or clear.
 - Config files do not seem to be autosaving
 - upon save of a previous empty caption, it takes a directory refresh for the missing state to clear - still broken
-- autoset may require some adjustments, especially for images.
+
 - status bar and console toggle should be fixed to the bottom of the left side panel, always visible... the rest of that panel can scroll behind it, this is a definition of intent, the fix itself is open to discussion.
 
 ## Enhancements
- - One thing I might find useful would be a vertical text area with words/phrases I can copy/paste from. Sometimes when going through a set I choose adjectives to add and I need to add these to many captions, but much like the captionr requirements, it's very easy to get side tracked... with that said, a similar interface could be cool here, like a preset list of constants that I can add to. This screen wouldn't be checkboxes though, it'd be click to copy, since some will be multiple words, many even phrases, so highlighting them manually, copying and pasting would be inefficient.
+
  - Dataset infered number of samples, MegaFramePixels, if we want to get really crafty, try to estimate VRAM, step time...
- - A way to crop images to preset AR.
+ - Refactor app.py
 
 
 
@@ -27,7 +27,10 @@ If complete and confirmed, move to Completed section
 
 
 ## Requires validation
- - Set Notes. A third tab alongside Caption Requirements and Phrase Copy for free style notes about the set.
+- One thing I might find useful would be a vertical text area with words/phrases I can copy/paste from. Sometimes when going through a set I choose adjectives to add and I need to add these to many captions, but much like the captionr requirements, it's very easy to get side tracked... with that said, a similar interface could be cool here, like a preset list of constants that I can add to. This screen wouldn't be checkboxes though, it'd be click to copy, since some will be multiple words, many even phrases, so highlighting them manually, copying and pasting would be inefficient.
+- A way to crop images to preset AR.
+- autoset may require some adjustments, especially for images.
+- Set Notes. A third tab alongside Caption Requirements and Phrase Copy for free style notes about the set.
 - Prune now removes only the item from state/items and DOM, not a full refresh.
 - Prune uses pruned_ prefix in originals, not a separate folder (see prune.md for details).
 - Reset Review state (contextual menu option on Current folder only)
@@ -38,11 +41,11 @@ If complete and confirmed, move to Completed section
 - Captions save even if not changed, seems suboptimal.
 - Review and Filter only seem to work on the initially loaded set of captions. (Fixed: state.items is updated after every save, so review/filter/rare-token features now reflect edits immediately)
 - Make it so that the primer caption alone doesn't get saved. (Currently only implemented for autosave; manual saves still save primer-only captions. Needs fix.)
-- Caption Requirements
-- Prune now uses a pruned_ prefix in the originals folder (not a separate folder). All collision and backup logic is handled there. (Current design; see prune.md)
 - Prune works well, BUT the caption and preview remain, we should either select the next/adjacent item or clear.
 
 
 ## Complete
 - After a rename, the item gets reselected after refresh (pendingSelectFileName logic implemented).
 - Make colors in context menu bigger
+- Prune now uses a pruned_ prefix in the originals folder (not a separate folder). All collision and backup logic is handled there. (Current design; see prune.md)
+- Caption Requirements

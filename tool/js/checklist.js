@@ -20,6 +20,40 @@ function setChecklistPanelVisible(visible) {
   }
 }
 
+function checklistAllCheckedForMedia(mediaKey) {
+  if (!mediaKey || !checklistItems || !checklistItems.length) return false;
+  var checkedMap = checklistCheckedByMedia[mediaKey] || {};
+  for (var i = 0; i < checklistItems.length; i++) {
+    if (!checkedMap[checklistItems[i]]) return false;
+  }
+  return true;
+}
+
+function setReviewedRowClass(mediaKey, reviewed) {
+  var mediaListEl = ui && ui.mediaListEl;
+  if (!mediaListEl || !mediaKey) return;
+  var row = mediaListEl.querySelector('[data-type="media"][data-key="' + mediaKey + '"]');
+  if (!row) return;
+  row.classList.toggle('reviewed', !!reviewed);
+}
+
+function syncReviewedFromChecklist(mediaKey) {
+  if (!mediaKey) return;
+  var reviewed = checklistAllCheckedForMedia(mediaKey);
+  if (reviewed) state.reviewedSet.add(mediaKey);
+  else state.reviewedSet.delete(mediaKey);
+  setReviewedRowClass(mediaKey, reviewed);
+}
+
+function syncReviewedFromChecklistAll() {
+  if (!state || !Array.isArray(state.items)) return;
+  for (var i = 0; i < state.items.length; i++) {
+    var item = state.items[i];
+    if (!item || !item.key) continue;
+    syncReviewedFromChecklist(item.key);
+  }
+}
+
 function renderChecklistPanel() {
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   var itemsDiv = document.getElementById('checklist-items');
@@ -48,6 +82,7 @@ function renderChecklistPanel() {
         var mediaKey = state.currentItem.key;
         if (!checklistCheckedByMedia[mediaKey]) checklistCheckedByMedia[mediaKey] = {};
         checklistCheckedByMedia[mediaKey][item] = this.checked;
+        syncReviewedFromChecklist(mediaKey);
         debouncedChecklistSave(saveChecklistToFolderState);
       };
     })(item);
@@ -63,6 +98,7 @@ function renderChecklistPanel() {
         for (var k in checklistCheckedByMedia) {
           if (checklistCheckedByMedia[k]) delete checklistCheckedByMedia[k][item];
         }
+        syncReviewedFromChecklistAll();
         saveChecklistToFolderState();
         renderChecklistPanel();
       };
@@ -91,5 +127,6 @@ function loadChecklistFromFolderState(folderState) {
     checklistCheckedByMedia = {};
   }
   checklistItems.sort(checklistSort);
+  syncReviewedFromChecklistAll();
   renderChecklistPanel();
 }

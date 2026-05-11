@@ -69,14 +69,18 @@ def test_prune_restore_collision_and_caption_behavior(client, isolated_fs_root):
     assert r.status_code == 200
     assert (set_folder / "test1.mp4").exists()
     assert (set_folder / "test1.txt").exists()
+    assert not (set_folder / "originals" / "pruned_test1.mp4").exists()
+    assert not (set_folder / "originals" / "pruned_test1.txt").exists()
 
     r = client.post("/media/restore", json={"folder": set_folder_rel, "fileName": "pruned_test1.mp4"})
-    assert r.status_code == 409
+    assert r.status_code == 404
 
     r = client.post("/media/restore", json={"folder": set_folder_rel, "fileName": "pruned_test1-1.mp4"})
     assert r.status_code == 200
     assert (set_folder / "test1-1.mp4").exists()
     assert (set_folder / "test1-1.txt").exists()
+    assert not (set_folder / "originals" / "pruned_test1-1.mp4").exists()
+    assert not (set_folder / "originals" / "pruned_test1-1.txt").exists()
 
     (set_folder / "test2.txt").unlink()
     r = client.post("/media/prune", json={"folder": set_folder_rel, "media": "test2.mp4"})
@@ -88,6 +92,7 @@ def test_prune_restore_collision_and_caption_behavior(client, isolated_fs_root):
     assert r.status_code == 200
     assert (set_folder / "test2.mp4").exists()
     assert not (set_folder / "test2.txt").exists()
+    assert not (set_folder / "originals" / "pruned_test2.mp4").exists()
 
 
 def test_reset_overwrites_media_and_preserves_existing_caption(client, isolated_fs_root):

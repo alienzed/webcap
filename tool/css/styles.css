@@ -988,6 +988,12 @@ iframe {
   color: var(--muted);
 }
 
+.crop-size-readout {
+  min-height: 18px;
+  font-size: 12px;
+  color: #111827;
+}
+
 .crop-status.error {
   color: #b91c1c;
 }

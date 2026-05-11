@@ -80,8 +80,9 @@ def restore_original_media(folder_path, file_name):
     folder_path = Path(folder_path).resolve()
     originals_dir = folder_path / 'originals'
     orig_media_path = originals_dir / file_name
+    is_pruned = file_name.startswith("pruned_")
     # Remove pruned_ prefix if present for destination
-    if file_name.startswith("pruned_"):
+    if is_pruned:
         dest_file_name = file_name[len("pruned_"):]
         # Also handle -1, -2, etc. (pruned_name-1.ext -> name-1.ext)
         # This is handled by just removing the prefix
@@ -92,7 +93,10 @@ def restore_original_media(folder_path, file_name):
         return "not_found"
     if dest_media_path.exists():
         return "exists"
-    shutil.copy2(orig_media_path, dest_media_path)
+    if is_pruned:
+        shutil.move(str(orig_media_path), str(dest_media_path))
+    else:
+        shutil.copy2(orig_media_path, dest_media_path)
     safe_chmod(dest_media_path, 0o644)
     # Restore caption file if present (sidecar .txt)
     caption_name = Path(file_name).stem + '.txt'
@@ -100,7 +104,10 @@ def restore_original_media(folder_path, file_name):
     orig_caption_path = originals_dir / caption_name
     dest_caption_path = folder_path / dest_caption_name
     if orig_caption_path.exists():
-        shutil.copy2(orig_caption_path, dest_caption_path)
+        if is_pruned:
+            shutil.move(str(orig_caption_path), str(dest_caption_path))
+        else:
+            shutil.copy2(orig_caption_path, dest_caption_path)
         safe_chmod(dest_caption_path, 0o644)
     return "ok"
 

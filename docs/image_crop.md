@@ -36,10 +36,21 @@ This is not a general image-editing workflow. V1 is intentionally bare bones.
 - Do not show crop UI unless the user chooses `Crop...`.
 - Keep the modal simple:
   - image area
+  - live selection size readout in pixels (`W x H px`)
   - aspect ratio buttons
   - `Apply`
   - `Cancel`
   - minimal status/error text
+
+## Pixel Readout (New Requirement)
+
+- Crop modal should display the current selected crop size in pixels.
+- Readout updates live while dragging/resizing the crop box.
+- Value format: `<width> x <height> px`.
+- Width and height should be integer pixel values (same rounding intent as backend crop values).
+- Initial readout should appear when the crop modal opens.
+- If crop box is reset/changed by aspect-ratio buttons, readout must immediately reflect new selection.
+- Readout is informational only (no direct editing fields in V1).
 
 ## Technical Direction
 
@@ -55,6 +66,7 @@ This is not a general image-editing workflow. V1 is intentionally bare bones.
 - No batch crop.
 - No freeform custom ratios.
 - No preset management.
+- No manual pixel input boxes.
 - No upscaling.
 - No export settings.
 - No caption duplication or caption changes.
@@ -67,6 +79,14 @@ This is not a general image-editing workflow. V1 is intentionally bare bones.
 - Cancel closes the modal without changes.
 - Failed crop leaves the current file as-is and shows an actionable error.
 - Unsupported image formats should fail cleanly rather than guessing.
+- Readout should never display `NaN`/blank while the modal is active.
+
+## Acceptance Checklist
+
+- [ ] Crop modal shows live pixel readout (`W x H px`).
+- [ ] Readout changes continuously while dragging crop handles.
+- [ ] Readout updates when user changes aspect ratio preset.
+- [ ] Readout values match cropped output dimensions after Apply.
 
 ## Implementation Touchpoints
 

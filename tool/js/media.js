@@ -48,6 +48,42 @@ pruneMedia = async function (mediaItem) {
   }
 };
 
+function duplicateImageItem(mediaItem) {
+  if (!state.folder || !mediaItem || !mediaItem.fileName) {
+    setStatus('No image selected for duplicate');
+    return;
+  }
+  setStatus('Duplicating image: ' + mediaItem.fileName + ' ...');
+  var srcPath = (state.folder ? state.folder + '/' : '') + mediaItem.fileName;
+  fetch('/fs/duplicate_image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ src: srcPath })
+  })
+    .then(function (resp) {
+      return resp.json().then(function (data) {
+        return { status: resp.status, data: data };
+      });
+    })
+    .then(function (res) {
+      if (res.status === 200 && res.data && res.data.success) {
+        var newName = (res.data && res.data.dstName) ? res.data.dstName : '';
+        if (newName) {
+          state.pendingSelectFileName = newName;
+          setStatus('Duplicated image: ' + mediaItem.fileName + ' -> ' + newName);
+        } else {
+          setStatus('Duplicated image: ' + mediaItem.fileName);
+        }
+        refreshCurrentDirectory();
+        return;
+      }
+      setStatus((res.data && res.data.error) ? res.data.error : 'Duplicate image failed');
+    })
+    .catch(function (err) {
+      setStatus('Duplicate image failed: ' + (err && err.message ? err.message : err));
+    });
+}
+
 async function restoreMediaItem(mediaItem) {
   if (!mediaItem) {
     setStatus('No media item to restore');

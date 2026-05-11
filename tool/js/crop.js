@@ -28,6 +28,18 @@ function setCropBusy(isBusy) {
   if (applyBtn) applyBtn.disabled = cropBusy;
 }
 
+function setCropSizeReadout(width, height) {
+  var readoutEl = getCropEl('crop-size-readout');
+  if (!readoutEl) return;
+  var w = Number(width);
+  var h = Number(height);
+  if (!isFinite(w) || !isFinite(h) || w < 0 || h < 0) {
+    readoutEl.textContent = '0 x 0 px';
+    return;
+  }
+  readoutEl.textContent = Math.round(w) + ' x ' + Math.round(h) + ' px';
+}
+
 function destroyCropper() {
   if (cropperInstance) {
     cropperInstance.destroy();
@@ -52,6 +64,7 @@ function closeCropModal() {
   setCropStatus('', false);
   var imageEl = getCropEl('crop-image');
   if (imageEl) imageEl.removeAttribute('src');
+  setCropSizeReadout(0, 0);
   var modal = getCropEl('crop-modal');
   if (modal) {
     modal.classList.add('hidden');
@@ -79,6 +92,7 @@ function openCropModal(mediaItem) {
   cropTargetItem = mediaItem;
   setCropBusy(false);
   setCropAspectRatio(1);
+  setCropSizeReadout(0, 0);
   setCropStatus('Loading image...', false);
   titleEl.textContent = 'Crop image: ' + mediaItem.fileName;
   modal.classList.remove('hidden');
@@ -100,7 +114,13 @@ function openCropModal(mediaItem) {
       rotatable: false,
       cropBoxMovable: true,
       cropBoxResizable: true,
+      crop: function (event) {
+        var detail = event && event.detail ? event.detail : {};
+        setCropSizeReadout(detail.width, detail.height);
+      },
       ready: function () {
+        var data = cropperInstance.getData(true);
+        setCropSizeReadout(data.width, data.height);
         setCropStatus('', false);
       }
     });

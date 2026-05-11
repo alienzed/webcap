@@ -119,7 +119,7 @@ async function resetMediaItem(mediaItem) {
     return;
   }
   var fileName = mediaItem.fileName;
-  var confirmed = confirm('Reset this media file and its caption to the original version?\n\n' + fileName);
+  var confirmed = confirm('Reset this media file to the original version?\n\n' + fileName);
   if (!confirmed) {
     return;
   }

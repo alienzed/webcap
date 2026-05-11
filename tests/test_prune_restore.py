@@ -228,3 +228,100 @@ def test_crop_rejects_video_files(client, isolated_fs_root):
         },
     )
     assert r.status_code == 400
+
+
+def test_baseline_only_backup_immutable_canonicals(client, isolated_fs_root):
+    """Test that repeated directory loads do not replace canonical originals."""
+    set_folder_rel = "set_baseline"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+
+    # First directory load backs up original
+    write_bytes(set_folder / "video.mp4", b"original-content")
+    r = client.get(f"/fs/describe?path={set_folder_rel}")
+    assert r.status_code == 200
+    assert (set_folder / "originals" / "video.mp4").exists()
+    original_hash = (set_folder / "originals" / "video.mp4").read_bytes()
+
+    # Edit the working file
+    write_bytes(set_folder / "video.mp4", b"edited-content-v1")
+
+    # Second directory load should NOT replace canonical
+    r = client.get(f"/fs/describe?path={set_folder_rel}")
+    assert r.status_code == 200
+    assert (set_folder / "originals" / "video.mp4").read_bytes() == original_hash
+    # No suffix files should be created
+    assert not (set_folder / "originals" / "video-1.mp4").exists()
+
+    # Edit again
+    write_bytes(set_folder / "video.mp4", b"edited-content-v2")
+
+    # Third directory load should still keep canonical unchanged
+    r = client.get(f"/fs/describe?path={set_folder_rel}")
+    assert r.status_code == 200
+    assert (set_folder / "originals" / "video.mp4").read_bytes() == original_hash
+    assert not (set_folder / "originals" / "video-1.mp4").exists()
+
+
+def test_rename_collision_in_originals_fails_safely(client, isolated_fs_root):
+    """Test that renaming to a name that already exists in originals fails safely."""
+    set_folder_rel = "set_rename_collision"
+    set_folder = isolated_fs_root / set_folder_rel
+    originals = set_folder / "originals"
+    originals.mkdir(parents=True)
+
+    # Set up: originals has photo-1.mp4 and photo.mp4 exists in set
+    write_bytes(originals / "photo.mp4", b"original-photo")
+    write_bytes(originals / "photo-1.mp4", b"old-version")
+    write_bytes(set_folder / "clip.mp4", b"clip-data")
+
+    # Try to rename clip.mp4 to photo.mp4 when originals/photo.mp4 already exists
+    r = client.post(
+        "/fs/rename",
+        json={"folder": set_folder_rel, "oldFile": "clip.mp4", "newFile": "photo.mp4"},
+    )
+    # Should fail because originals/photo.mp4 would collide
+    assert r.status_code == 409
+    # Set file should not have been renamed
+    assert (set_folder / "clip.mp4").exists()
+    assert not (set_folder / "photo.mp4").exists()
+
+
+def test_rename_with_originals_renames_both_media_and_caption(client, isolated_fs_root):
+    """Test that renaming also renames the canonical original and its caption."""
+    set_folder_rel = "set_rename_originals"
+    set_folder = isolated_fs_root / set_folder_rel
+    originals = set_folder / "originals"
+    originals.mkdir(parents=True)
+
+    # Set up original and set files
+    write_bytes(originals / "old_video.mp4", b"original-video")
+    write_text(originals / "old_video.txt", "original caption")
+    write_bytes(set_folder / "old_video.mp4", b"edited-video")
+    write_text(set_folder / "old_video.txt", "edited caption")
+
+    # Rename
+    r = client.post(
+        "/fs/rename",
+        json={"folder": set_folder_rel, "oldFile": "old_video.mp4", "newFile": "new_video.mp4"},
+    )
+    assert r.status_code == 200
+
+    # Check set folder was renamed
+    assert not (set_folder / "old_video.mp4").exists()
+    assert (set_folder / "new_video.mp4").exists()
+    assert not (set_folder / "old_video.txt").exists()
+    assert (set_folder / "new_video.txt").exists()
+
+    # Check originals folder was renamed
+    assert not (originals / "old_video.mp4").exists()
+    assert (originals / "new_video.mp4").exists()
+    assert not (originals / "old_video.txt").exists()
+    assert (originals / "new_video.txt").exists()
+
+    # Verify reset still works after rename
+    r = client.post("/media/reset", json={"folder": set_folder_rel, "fileName": "new_video.mp4"})
+    assert r.status_code == 200
+    assert (set_folder / "new_video.mp4").read_bytes() == b"original-video"
+    # Existing caption in set should be preserved
+    assert (set_folder / "new_video.txt").read_text(encoding="utf-8") == "edited caption"

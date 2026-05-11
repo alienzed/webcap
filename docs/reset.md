@@ -2,8 +2,9 @@
 
 ## Definition (from spec)
 - Only available for files in set folders with an equivalent original.
-- Overwrites the main file with the original, regardless of current content.
+- Overwrites the main file with the canonical original, regardless of current content.
 - Always overwrites, but only if the original exists.
+- Reset target is deterministic: `<folder>/originals/<fileName>`.
 
 ## UI/UX
 - Reset is shown in the context menu for files in set folders (not in originals).
@@ -18,11 +19,17 @@
   - On error, displays error message.
 - **Backend:**
   - Receives POST /media/reset with folder and fileName.
-  - Looks for the file in <folder>/originals/<fileName>.
+  - Looks for the file in `<folder>/originals/<fileName>`.
   - If not found, returns 404.
-  - If found, copies original to <folder>/<fileName> (overwriting).
+  - If found, copies canonical original to `<folder>/<fileName>` (overwriting).
   - Does not alter originals.
   - Returns success or error.
+
+## Originals Contract
+- `originals` stores baseline originals only.
+- Directory-load consistency checks back up only missing canonical names.
+- Edited variants are not auto-copied into `originals`.
+- This keeps Reset semantics stable over time.
 
 ## Validation Checklist
 - [ ] Reset only available for files in set folders (not originals).

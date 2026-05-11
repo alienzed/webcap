@@ -17,6 +17,8 @@ The rename feature allows users to rename files and folders within a dataset usi
   - The frontend sends a POST request to `/fs/rename` with the folder, old name, and new name.
   - The backend validates parameters, checks for existence, and performs the rename.
   - For files, if a sidecar caption exists, it is renamed as well.
+  - For files, if a matching canonical original exists in `originals`, that original is renamed to the new media name so Reset keeps working.
+  - For files, if a matching canonical original sidecar exists in `originals`, it is renamed to match the new media stem.
   - For folders, the rename is performed unless the folder is protected.
   - If the file is listed in `reviewedKeys` in `.webcap_state.json`, the entry is updated to the new name.
 - **Reversibility:**
@@ -27,10 +29,16 @@ The rename feature allows users to rename files and folders within a dataset usi
 - **Payload:** `{ folder, old_name, new_name }`
 - **Behavior:**
   - Validates input and checks for protected names.
-  - Renames file or folder.
-  - Renames sidecar caption if present.
+  - Preflight collision checks:
+    - Fail if target file already exists in set folder.
+    - Fail if old canonical original exists in `originals` but target name already exists in `originals`.
+  - If all checks pass, atomically rename:
+    - File in set folder from old_name to new_name.
+    - Sidecar caption in set folder if present (same stem logic).
+    - Canonical original media in `originals` if present (old_name → new_name).
+    - Canonical original sidecar caption in `originals` if present.
   - Updates `reviewedKeys` in `.webcap_state.json` if needed.
-  - Returns error if source does not exist or target already exists.
+  - Returns error if source does not exist, target already exists, or collision detected in originals.
 
 ## Frontend Logic
 - **File:** `tool/js/media.js`
@@ -46,6 +54,11 @@ The rename feature allows users to rename files and folders within a dataset usi
 - All mutations are explicit and recoverable.
 - No rename is allowed for protected folders or reserved names.
 - All state changes are reflected in `.webcap_state.json`.
+
+## Reset Compatibility Requirement
+- File rename in a set folder must not break Reset.
+- After rename, the file remains resettable via `<folder>/originals/<newFileName>`.
+- Rename must fail safely on collisions rather than creating ambiguous reset targets.
 
 ## Alignment with Spec
 - Context menu supports Rename for files/folders except protected ones.

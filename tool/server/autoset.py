@@ -543,19 +543,29 @@ def choose_image_bucket_resolution(
 
 #     return reg, high
 
-def pick_image_buckets_for_ar(images, ar_label: str, target_ar: float):
+def pick_image_buckets_for_ar(images, ar_label: str, target_ar: float, max_dim: int = None):
     """
     Single-tier image bucketing (fast + swap-safe).
+    
+    Args:
+        images: list of (path, w, h) tuples for this AR
+        ar_label: AR class label
+        target_ar: target aspect ratio
+        max_dim: optional maximum dimension constraint; defaults to IMG_REGULAR_MAX_DIM
+    
     Returns:
       (regular_images, regular_bucket), (high_images(empty), None)
     """
+    if max_dim is None:
+        max_dim = IMG_REGULAR_MAX_DIM
+    
     reg = images
     reg_bucket = choose_image_bucket_resolution(
         ar_label=ar_label,
         target_ar=target_ar,
         images=reg,
         coverage_threshold=IMG_COVERAGE,
-        max_dim=IMG_REGULAR_MAX_DIM,
+        max_dim=max_dim,
     )
     return (reg, reg_bucket), ([], None)
 
@@ -608,6 +618,47 @@ def select_eval_clips(ar_clips):
         eval_selection[ar] = sorted_clips[:quota]
 
     return eval_selection
+
+
+# -------------------------
+# Compute dynamic image max dimension per AR
+# -------------------------
+
+def compute_dynamic_image_max_dim(images_ar, min_floor=512, max_ceil=1024):
+    """
+    Compute a reasonable max_dim for image bucket selection based on actual source resolutions.
+    
+    Strategy:
+    - Extract max(w,h) for each image in the AR
+    - Use 75th percentile to avoid outlier inflation
+    - Snap to nearest 32-pixel boundary
+    - Clamp to [min_floor, max_ceil] to stay swap-safe
+    
+    Args:
+        images_ar: list of (path, w, h) tuples
+        min_floor: minimum max_dim to enforce (default 512)
+        max_ceil: maximum max_dim to allow (default 1024)
+    
+    Returns:
+        int: computed max_dim for this AR
+    """
+    if not images_ar:
+        return min_floor
+    
+    # Extract max dimension (long edge) for each image
+    max_dims = [max(w, h) for (_, w, h) in images_ar]
+    
+    # Use 75th percentile to represent typical large images, avoiding outliers
+    idx_75 = int(len(max_dims) * 0.75)
+    sorted_dims = sorted(max_dims)
+    percentile_75 = sorted_dims[min(idx_75, len(sorted_dims) - 1)]
+    
+    # Round up to nearest 32-pixel boundary for WAN compatibility
+    rounded = int(math.ceil(percentile_75 / 32.0) * 32)
+    
+    # Clamp to safe range
+    result = max(min_floor, min(rounded, max_ceil))
+    return result
 
 
 # -------------------------
@@ -746,6 +797,16 @@ def main():
     toml_lines = ["enable_ar_bucket = true\n"]
     bucket_json = {}
     image_plan = {}
+
+    # Compute dynamic image max_dim per AR (based on 75th percentile of source resolutions)
+    image_max_dims = {}
+    for ar_label, items in ar_images.items():
+        if items:
+            max_dim = compute_dynamic_image_max_dim(items)
+            image_max_dims[ar_label] = max_dim
+            print(f"[INFO] AR={ar_label}: dynamic image max_dim={max_dim} (computed from {len(items)} images)")
+        else:
+            image_max_dims[ar_label] = IMG_REGULAR_MAX_DIM
 
     # -------------------------
     # Bucket selection per AR
@@ -1098,17 +1159,20 @@ def main():
         reg_images = []
         hi_images = []
         if images_ar:
+            dynamic_max_dim = image_max_dims.get(ar_label, IMG_REGULAR_MAX_DIM)
             (reg_images, image_bucket_regular), (hi_images, image_bucket_highres) = pick_image_buckets_for_ar(
                 images=images_ar,
                 ar_label=ar_label,
                 target_ar=target_ar,
+                max_dim=dynamic_max_dim,
             )
 
             if image_bucket_regular:
                 iw, ih = image_bucket_regular
                 # Emit commented alternatives for image bucket
                 cands = generate_candidate_resolutions_for_ar(target_ar, ar_label)
-                filtered = [ (w,h,a) for (w,h,a) in cands if within_wan_caps(ar_label,w,h) and max(w,h) <= IMG_REGULAR_MAX_DIM ]
+                dynamic_max_dim = image_max_dims.get(ar_label, IMG_REGULAR_MAX_DIM)
+                filtered = [ (w,h,a) for (w,h,a) in cands if within_wan_caps(ar_label,w,h) and max(w,h) <= dynamic_max_dim ]
                 alt_line = None
                 if filtered:
                     min_w, min_h, _ = filtered[-1]

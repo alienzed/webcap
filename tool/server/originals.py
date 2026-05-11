@@ -41,7 +41,8 @@ def ensure_originals_folder(folder_path):
 
 def copy_media_to_originals(folder_path):
     """
-    Copy all media files in folder_path to originals/ if not already present (by name and hash).
+    Back up all media files in folder_path to originals/ if canonical name not already present.
+    Baseline-only: no rotation of existing originals, no edited-version tracking.
     folder_path: absolute or relative path to the folder
     """
     folder_path = Path(folder_path).resolve()
@@ -52,14 +53,22 @@ def copy_media_to_originals(folder_path):
         return  # Do not create originals folder if no media files
     originals_dir = ensure_originals_folder(folder_path)
     for entry in media_files:
-        rotate_on_collision(entry, originals_dir)
+        ensure_canonical_exists(entry, originals_dir)
 
 def ensure_original_by_hash(src_path, originals_dir):
     """
-    Ensure src_path is backed up in originals_dir per rotate-on-collision spec (single-file entry point).
-    See rotate_on_collision for details.
+    Ensure src_path is backed up in originals_dir as baseline-only (single-file entry point).
+    If canonical name does not exist in originals, copy once. Otherwise do nothing.
     """
-    return rotate_on_collision(src_path, originals_dir)
+    src_path = Path(src_path)
+    originals_dir = Path(originals_dir)
+    canonical = originals_dir / src_path.name
+    if not canonical.exists():
+        shutil.copy2(src_path, canonical)
+        safe_chmod(canonical, 0o644)
+        return canonical
+    # Canonical already exists; do nothing (baseline stays immutable)
+    return canonical
 
 def restore_original_media(folder_path, file_name):
     """
@@ -117,37 +126,20 @@ def restore_original_media_video_only(folder_path, file_name):
         safe_chmod(dest_caption_path, 0o644)
     return True
 
-def rotate_on_collision(src_path, originals_dir):
+def ensure_canonical_exists(src_path, originals_dir):
     """
-    Ensure src_path is backed up in originals_dir per rotate-on-collision spec:
-    - If name does not exist, copy as canonical.
-    - If name exists and hash matches, do nothing.
-    - If name exists and hash differs, rotate old to unique name, copy new as canonical.
-    Returns the path to the canonical file in originals_dir.
+    Ensure canonical name exists in originals_dir as immutable baseline.
+    - If canonical name does not exist, copy once.
+    - If canonical name exists, do nothing.
+    Returns path to canonical file, or None if copy failed.
     """
     src_path = Path(src_path)
     originals_dir = Path(originals_dir)
     canonical = originals_dir / src_path.name
     if not canonical.exists():
-        shutil.copy2(src_path, canonical)
-        safe_chmod(canonical, 0o644)
-        return canonical
-    # Exists: check hash
-    src_hash = file_hash(src_path)
-    canon_hash = file_hash(canonical)
-    if src_hash == canon_hash:
-        return canonical
-    # Name collision, different content: rotate
-    base = src_path.stem
-    ext = src_path.suffix
-    i = 1
-    while True:
-        rotated = originals_dir / f"{base}-{i}{ext}"
-        if not rotated.exists():
-            canonical.rename(rotated)
-            safe_chmod(rotated, 0o644)
-            break
-        i += 1
-    shutil.copy2(src_path, canonical)
-    safe_chmod(canonical, 0o644)
+        try:
+            shutil.copy2(src_path, canonical)
+            safe_chmod(canonical, 0o644)
+        except Exception:
+            return None
     return canonical

@@ -170,8 +170,18 @@ def fs_rename():
             return jsonify({"ok": True})
         # File renaming logic
         elif old_path.is_file():
+            # Check for originals collision before any mutation
+            originals_path = folder_path / "originals"
+            old_orig_media = originals_path / old_name if originals_path.exists() else None
+            new_orig_media = originals_path / new_name if originals_path.exists() else None
+            if old_orig_media and old_orig_media.exists() and new_orig_media and new_orig_media.exists():
+                print(f"[fs_rename] Originals collision: {old_orig_media} exists and {new_orig_media} already exists")
+                return jsonify({"error": "Target name already exists in originals folder"}), 409
+            
+            # Rename set media file
             old_path.rename(new_path)
             print(f"[fs_rename] Renamed file {old_path} -> {new_path}")
+            
             # Rename caption if present (sidecar .txt)
             old_caption = folder_path / (Path(old_name).stem + ".txt")
             new_caption = folder_path / (Path(new_name).stem + ".txt")
@@ -183,6 +193,22 @@ def fs_rename():
             else:
                 old_caption.rename(new_caption)
                 print(f"[fs_rename] Renamed caption {old_caption} -> {new_caption}")
+            
+            # Rename canonical original media in originals if present
+            if old_orig_media and old_orig_media.exists():
+                old_orig_media.rename(new_orig_media)
+                print(f"[fs_rename] Renamed original media {old_orig_media} -> {new_orig_media}")
+            
+            # Rename canonical original sidecar caption in originals if present
+            if originals_path.exists():
+                old_orig_caption = originals_path / (Path(old_name).stem + ".txt")
+                new_orig_caption = originals_path / (Path(new_name).stem + ".txt")
+                if old_orig_caption.exists():
+                    if not new_orig_caption.exists():
+                        old_orig_caption.rename(new_orig_caption)
+                        print(f"[fs_rename] Renamed original caption {old_orig_caption} -> {new_orig_caption}")
+                    else:
+                        print(f"[fs_rename] Target original caption already exists: {new_orig_caption}")
 
             # Update reviewedKeys in .webcap_state.json if present
             state_path = folder_path / ".webcap_state.json"

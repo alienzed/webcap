@@ -7,14 +7,12 @@ If complete and confirmed, move to Completed section
 ## Bugs
 - Prune works well, BUT the caption and preview remain, we should either select the next/adjacent item or clear.
 - Config files do not seem to be autosaving
-- upon save of a previous empty caption, it takes a directory refresh for the missing state to clear - still broken
-
+- config files seem to be getting the wrong path, it's missing a directory in my one failed use case
 - status bar and console toggle should be fixed to the bottom of the left side panel, always visible... the rest of that panel can scroll behind it, this is a definition of intent, the fix itself is open to discussion.
 
 ## Enhancements
-
  - Dataset infered number of samples, MegaFramePixels, if we want to get really crafty, try to estimate VRAM, step time...
- - Refactor app.py
+ - Refactor app.py to split routes from heavy logic
 
 
 
@@ -27,6 +25,7 @@ If complete and confirmed, move to Completed section
 
 
 ## Requires validation
+- upon save of a previous empty caption, it takes a directory refresh for the missing state to clear - still broken
 - One thing I might find useful would be a vertical text area with words/phrases I can copy/paste from. Sometimes when going through a set I choose adjectives to add and I need to add these to many captions, but much like the captionr requirements, it's very easy to get side tracked... with that said, a similar interface could be cool here, like a preset list of constants that I can add to. This screen wouldn't be checkboxes though, it'd be click to copy, since some will be multiple words, many even phrases, so highlighting them manually, copying and pasting would be inefficient.
 - A way to crop images to preset AR.
 - autoset may require some adjustments, especially for images.

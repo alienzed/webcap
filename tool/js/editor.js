@@ -44,8 +44,10 @@ function handleEditorInputAutosave(e) {
 
     // Capture snapshot at event time
     var snapshot = {
+        endpoint: target.endpoint,
         folder: (target.payload && target.payload.folder) || '',
         media: (target.payload && target.payload.media) || '',
+        file: (target.payload && target.payload.file) || '',
         text: (target.payload && typeof target.payload.text === 'string' ? target.payload.text : ''),
         mediaKey: (state.currentItem && state.currentItem.key) || undefined
     };
@@ -58,17 +60,31 @@ function handleEditorInputAutosave(e) {
     }
     autosaveTimers[target.key] = setTimeout(function() {
         debugLog('[autosave] Debounce fired for', target.key, 'with snapshot:', JSON.stringify(snapshot));
-        // Prevent saving if editor contains only the primer caption
-        var primer = '';
-        if (snapshot.media) {
-            primer = buildAutoPrimer(snapshot.media);
+        
+        // Caption autosave
+        if (snapshot.endpoint === '/caption/save') {
+            // Prevent saving if editor contains only the primer caption
+            var primer = '';
+            if (snapshot.media) {
+                primer = buildAutoPrimer(snapshot.media);
+            }
+            if (primer && snapshot.text.trim() === primer.trim()) {
+                debugLog('[autosave] Skipped save: editor contains only primer caption');
+            } else {
+                debugLog('[autosave] Saving caption:', JSON.stringify({folder: snapshot.folder, media: snapshot.media, text: snapshot.text, mediaKey: snapshot.mediaKey}));
+                saveCaptionDirect(snapshot.folder, snapshot.media, snapshot.text, snapshot.mediaKey)
+                  .then(function() {
+                    debugLog('[autosave] Save succeeded');
+                  })
+                  .catch(function(err) {
+                    debugLog('[autosave] Save failed:', err);
+                  });
+            }
         }
-        // Compare trimmed values
-        if (primer && snapshot.text.trim() === primer.trim()) {
-            debugLog('[autosave] Skipped save: editor contains only primer caption');
-        } else {
-            debugLog('[autosave] Saving:', JSON.stringify({folder: snapshot.folder, media: snapshot.media, text: snapshot.text, mediaKey: snapshot.mediaKey}));
-            saveCaptionDirect(snapshot.folder, snapshot.media, snapshot.text, snapshot.mediaKey)
+        // Config autosave
+        else if (snapshot.endpoint === '/fs/save_config') {
+            debugLog('[autosave] Saving config:', JSON.stringify({folder: snapshot.folder, file: snapshot.file, text: snapshot.text}));
+            saveConfigDirect(snapshot.folder, snapshot.file, snapshot.text)
               .then(function() {
                 debugLog('[autosave] Save succeeded');
               })
@@ -76,6 +92,7 @@ function handleEditorInputAutosave(e) {
                 debugLog('[autosave] Save failed:', err);
               });
         }
+        
         // Optionally: cleanup
         delete autosaveTimers[target.key];
         delete autosavePayloads[target.key];

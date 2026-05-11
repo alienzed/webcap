@@ -155,6 +155,24 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
   });
 }
 
+// Save config file directly (for autosave and manual save from preview pane)
+function saveConfigDirect(folder, file, text) {
+  return new Promise(function (resolve, reject) {
+    HttpModule.postJson('/fs/save_config', {
+      folder: folder,
+      file: file,
+      text: text || ''
+    }, function(status, responseText) {
+      if (status === 200) {
+        setStatus('Config saved.');
+        resolve();
+        return;
+      }
+      reject(new Error(getErrorMessage(responseText, 'Could not save config')));
+    });
+  });
+}
+
 // Save caption text for the current media item (fully global, fail-loudly)
 function savePathCaption() {
   var mediaItem = state.currentItem;

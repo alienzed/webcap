@@ -400,7 +400,7 @@ function saveCurrentEditorContent() {
         setStatus('Config save failed (' + xhr.status + ')');
       }
     };
-    xhr.send(JSON.stringify({folder: folder, file: file, text: text}));
+    xhr.send(JSON.stringify({folder: folder, file: file.file, text: text}));
     return;
   }
   // Otherwise, save caption as usual

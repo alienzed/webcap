@@ -779,11 +779,16 @@ def maybe_create_config_files(folder_path):
         dest = folder / name
         src = templates_dir / name
         if not dest.exists() and src.exists():
+            try:
+                dataset_rel = folder.relative_to(FS_ROOT).as_posix()
+            except Exception:
+                dataset_rel = folder.name
             # Read template as text
             with open(src, "r", encoding="utf-8") as f:
                 template_text = f.read()
-            # Fill placeholders using folder name as dataset
-            filled_text = fill_template_placeholders(template_text, folder.name)
+            # Fill placeholders using folder path relative to FS root as dataset
+            # so nested dataset folders keep their full structure.
+            filled_text = fill_template_placeholders(template_text, dataset_rel)
             # Write to destination
             with open(dest, "w", encoding="utf-8") as f:
                 f.write(filled_text)

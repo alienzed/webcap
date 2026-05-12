@@ -117,10 +117,15 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   }).then(function(response) {
+    var ok = response.ok;
     if (!response.body || typeof ReadableStream === 'undefined') {
       response.text().then(function (text) {
         appendToConsolePanel(text.replace(/</g, '<').replace(/>/g, '>'));
-        if (onDone) onDone();
+        if (ok) {
+          if (onDone) onDone();
+        } else {
+          if (onError) onError(text || response.statusText);
+        }
       });
       return;
     }
@@ -130,11 +135,16 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
     function readChunk() {
       reader.read().then(function (result) {
         if (result.done) {
-          // Final output
-          if (output) {
-            appendToConsolePanel(output.replace(/</g, '<').replace(/>/g, '>'));
+          var tail = decoder.decode();
+          if (tail) {
+            output += tail;
+            appendToConsolePanel(tail.replace(/</g, '<').replace(/>/g, '>'));
           }
-          if (onDone) onDone();
+          if (ok) {
+            if (onDone) onDone();
+          } else {
+            if (onError) onError(output || response.statusText);
+          }
           return;
         }
         var chunk = decoder.decode(result.value, { stream: true });
@@ -167,17 +177,94 @@ function renderMediaMetadataPanel(folder, doc) {
       try {
         var data = JSON.parse(xhr.responseText);
         if (!Array.isArray(data)) throw new Error('Malformed metadata');
-        var cols = ['file','resolution','fps','aspect','size','bitrate','codec','color','duration','frames'];
-        var colLabels = {file:'File',resolution:'Resolution',fps:'FPS',aspect:'Aspect',size:'Size',bitrate:'Bitrate',codec:'Codec',color:'Color',duration:'Duration',frames:'Frames'};
-        var html = '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
-        data.forEach(function(row){
-          html += '<tr>' + cols.map(function(c){
-            var val = row[c] !== undefined ? String(row[c]) : '-';
-            return '<td>' + escapeHtml(val) + '</td>';
-          }).join('') + '</tr>';
-        });
-        html += '</tbody></table>';
-        panel.innerHTML = html;
+
+        // UI: AR grouping toggle
+        var arToggleId = 'ar-group-toggle';
+        // Only render toggle and table inside the panel, never outside
+        panel.innerHTML = '' +
+          '<div style="margin-bottom:6px;">' +
+            '<label style="font-size:13px;display:inline-flex;align-items:center;gap:4px;">' +
+              '<input type="checkbox" id="' + arToggleId + '" style="vertical-align:middle;">' +
+              'Group by Aspect Ratio' +
+            '</label>' +
+          '</div>' +
+          '<div id="ar-group-table"></div>';
+        var tableDiv = panel.querySelector('#ar-group-table');
+        if (!tableDiv) return;
+
+
+        // Helper: map AR string/float to bucket
+        function mapAspectRatio(aspect) {
+          // Accepts e.g. "1:1", "16:9", "4:3", "9:16", or float string
+          if (!aspect) return 'Unknown';
+          var norm = String(aspect).replace(/\s/g, '');
+          if (norm === '1:1' || norm === 'square') return 'square';
+          if (norm === '4:3') return '4:3';
+          if (norm === '16:9') return '16:9';
+          if (norm === '9:16') return '9:16';
+          // Try to parse float
+          var val = 0;
+          if (/^[0-9.]+$/.test(norm)) val = parseFloat(norm);
+          else if (/^([0-9]+):([0-9]+)$/.test(norm)) {
+            var m = norm.match(/^([0-9]+):([0-9]+)$/);
+            val = parseInt(m[1],10) / parseInt(m[2],10);
+          }
+          // Map to nearest bucket
+          if (Math.abs(val - 1.0) < 0.05) return 'square';
+          if (Math.abs(val - 4/3) < 0.05) return '4:3';
+          if (Math.abs(val - 16/9) < 0.05) return '16:9';
+          if (Math.abs(val - 9/16) < 0.05) return '9:16';
+          return 'Unknown';
+        }
+
+        function renderTable(groupByAR) {
+          var cols = ['file','resolution','fps','aspect','size','bitrate','codec','duration','frames'];
+          var colLabels = {file:'File',resolution:'Resolution',fps:'FPS',aspect:'Aspect',size:'Size',bitrate:'Bitrate',codec:'Codec',duration:'Duration',frames:'Frames'};
+          var html = '';
+          if (groupByAR) {
+            // Group rows by AR bucket
+            var arGroups = {};
+            data.forEach(function(row){
+              var ar = mapAspectRatio(row.aspect);
+              if (!arGroups[ar]) arGroups[ar] = [];
+              arGroups[ar].push(row);
+            });
+            // Only show supported buckets in order
+            var bucketOrder = ['square','4:3','16:9','9:16','Unknown'];
+            bucketOrder.forEach(function(ar){
+              if (!arGroups[ar] || !arGroups[ar].length) return;
+              html += '<div style="margin:8px 0 2px 0;font-weight:bold;">Aspect Ratio: ' + escapeHtml(ar) + ' (' + arGroups[ar].length + ')</div>';
+              html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
+              arGroups[ar].forEach(function(row){
+                html += '<tr>' + cols.map(function(c){
+                  var val = row[c] !== undefined ? String(row[c]) : '-';
+                  return '<td>' + escapeHtml(val) + '</td>';
+                }).join('') + '</tr>';
+              });
+              html += '</tbody></table>';
+            });
+          } else {
+            html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
+            data.forEach(function(row){
+              html += '<tr>' + cols.map(function(c){
+                var val = row[c] !== undefined ? String(row[c]) : '-';
+                return '<td>' + escapeHtml(val) + '</td>';
+              }).join('') + '</tr>';
+            });
+            html += '</tbody></table>';
+          }
+          tableDiv.innerHTML = html;
+        }
+
+        // Initial render (ungrouped)
+        renderTable(false);
+        // Wire up toggle
+        var arToggle = doc.getElementById(arToggleId);
+        if (arToggle) {
+          arToggle.onchange = function() {
+            renderTable(arToggle.checked);
+          };
+        }
       } catch(e) {
         panel.textContent = 'Failed to parse media metadata: ' + (e && e.message ? e.message : e);
       }
@@ -363,6 +450,20 @@ window.addEventListener('message', function(event) {
 function loadConfigFileToEditor(fileName) {
   setStatus('Loading config: ' + fileName);
   var folder = state.folder || '';
+  var keepReviewPreview = false;
+  if (ui && ui.previewEl) {
+    var previewDoc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
+    keepReviewPreview = !!(previewDoc && previewDoc.getElementById && previewDoc.getElementById('config-panel'));
+  }
+  state.currentItem = null;
+  if (!keepReviewPreview) {
+    clearEditorAndPreview();
+    renderChecklistPanel();
+  } else if (state.objectUrl) {
+    URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl = '';
+  }
+  renderFileList(ui.filterEl.value);
   var xhr = new XMLHttpRequest();
   xhr.open('GET', '/fs/read_config?folder=' + encodeURIComponent(folder) + '&file=' + encodeURIComponent(fileName));
   xhr.onreadystatechange = function() {

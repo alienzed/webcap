@@ -1,19 +1,18 @@
 import os
-import sys
 import json
 from flask import Response, stream_with_context
-import subprocess
 import traceback
 import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
 
-from .media_metadata import update_media_metadata
 from .config import safe_join_fs_root, FS_ROOT, FS_DEBUG, fill_template_placeholders
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
-from .crop_ops import crop_image_in_place
+from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, rename_response
+from .media import media_crop_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
+from .run_ops import autoset_run_response, generate_dataset_config_response, train_run_response
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -81,9 +80,6 @@ def fs_read():
 def fs_root():
     return jsonify({"root": str(FS_ROOT)})
 
-def resolve_python_executable():
-    return sys.executable
-
 @app.route("/")
 def index():
     return send_from_directory(TOOL_DIR, "tool.html")
@@ -140,363 +136,62 @@ def caption_media_route():
 @app.route("/fs/rename", methods=["POST"])
 def fs_rename():
     data = request.get_json(silent=True) or {}
-    print("[fs_rename] Incoming data:", data)
-    folder = data.get("folder", "").strip()
-    old_name = data.get("oldFile") or data.get("old_name") or ""
-    new_name = data.get("newFile") or data.get("new_name") or ""
-    old_name = old_name.strip()
-    new_name = new_name.strip()
-    if not old_name or not new_name:
-        print("[fs_rename] Missing required parameters:", folder, old_name, new_name)
-        return jsonify({"error": "Missing required parameters"}), 400
-    try:
-        folder_path = safe_join_fs_root(folder)
-        old_path = folder_path / old_name
-        new_path = folder_path / new_name
-        if not old_path.exists():
-            print("[fs_rename] Source does not exist:", old_path)
-            return jsonify({"error": "Source does not exist"}), 404
-        if new_path.exists():
-            print("[fs_rename] Target already exists:", new_path)
-            return jsonify({"error": "Target already exists"}), 409
-        # Folder renaming logic
-        if old_path.is_dir():
-            # Disallow reserved names
-            if old_name in ("originals", ".", "..") or new_name in ("originals", ".", ".."):
-                return jsonify({"error": "Invalid folder name"}), 400
-            old_path.rename(new_path)
-            return jsonify({"ok": True})
-        # File renaming logic
-        elif old_path.is_file():
-            # Check for originals collision before any mutation
-            originals_path = folder_path / "originals"
-            old_orig_media = originals_path / old_name if originals_path.exists() else None
-            new_orig_media = originals_path / new_name if originals_path.exists() else None
-            if old_orig_media and old_orig_media.exists() and new_orig_media and new_orig_media.exists():
-                return jsonify({"error": "Target name already exists in originals folder"}), 409
-
-            # Preflight sidecar caption collisions before any rename mutation
-            old_caption = folder_path / (Path(old_name).stem + ".txt")
-            new_caption = folder_path / (Path(new_name).stem + ".txt")
-            if old_caption.exists() and new_caption.exists():
-                return jsonify({"error": f"Rename blocked: unexpected existing caption target: {new_caption}"}), 409
-
-            old_orig_caption = originals_path / (Path(old_name).stem + ".txt") if originals_path.exists() else None
-            new_orig_caption = originals_path / (Path(new_name).stem + ".txt") if originals_path.exists() else None
-            if old_orig_caption and old_orig_caption.exists() and new_orig_caption and new_orig_caption.exists():
-                return jsonify({"error": f"Rename blocked: unexpected existing originals caption target: {new_orig_caption}"}), 409
-            
-            # Rename set media file
-            old_path.rename(new_path)
-            
-            # Rename caption if present (sidecar .txt)
-            if old_caption.exists():
-                old_caption.rename(new_caption)
-            
-            # Rename canonical original media in originals if present
-            if old_orig_media and old_orig_media.exists():
-                old_orig_media.rename(new_orig_media)
-            
-            # Rename canonical original sidecar caption in originals if present
-            if old_orig_caption and old_orig_caption.exists():
-                old_orig_caption.rename(new_orig_caption)
-
-            # Update reviewedKeys in .webcap_state.json if present
-            state_path = folder_path / ".webcap_state.json"
-            if state_path.exists() and state_path.is_file():
-                try:
-                    with open(state_path, "r", encoding="utf-8") as f:
-                        folder_state = json.load(f)
-                    if (
-                        isinstance(folder_state, dict)
-                        and "reviewedKeys" in folder_state
-                        and isinstance(folder_state["reviewedKeys"], list)
-                    ):
-                        changed = False
-                        new_keys = []
-                        for k in folder_state["reviewedKeys"]:
-                            if k == old_name:
-                                new_keys.append(new_name)
-                                changed = True
-                            else:
-                                new_keys.append(k)
-                        if changed:
-                            folder_state["reviewedKeys"] = new_keys
-                            with open(state_path, "w", encoding="utf-8") as f:
-                                json.dump(folder_state, f, indent=2)
-                            print(f"[fs_rename] Updated reviewedKeys in {state_path}")
-                except Exception as e:
-                    print(f"[fs_rename] Could not update reviewedKeys: {e}")
-            return jsonify({"ok": True})
-        else:
-            print("[fs_rename] Source is neither file nor folder:", old_path)
-            return jsonify({"error": "Source is neither file nor folder"}), 400
-    except Exception as e:
-        print("[fs_rename] ERROR:", e)
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
+    return rename_response(data)
 
 @app.route("/media/restore", methods=["POST"])
 def caption_restore():
     data = request.get_json(silent=True) or {}
-    print("[caption_restore] Incoming data:", data)
-    folder = data.get("folder", "").strip()
-    file_name = data.get("fileName", "").strip()
-    if not folder or not file_name:
-        print("[caption_restore] Missing required parameters:", folder, file_name)
-        return jsonify({"error": "Missing required parameters"}), 400
-    try:
-        folder_path = safe_join_fs_root(folder)
-        from .originals import restore_original_media
-        result = restore_original_media(folder_path, file_name)
-        if result == "not_found":
-            return jsonify({"error": "Original media not found in originals"}), 404
-        if result == "exists":
-            return jsonify({"error": "Media file already exists in set; restore will not overwrite."}), 409
-        return jsonify({"ok": True})
-    except Exception as e:
-        if FS_DEBUG:
-            print("[caption_restore] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
+    return media_restore_response(data)
     
 # Reset media file to original from 'originals' folder
 @app.route("/media/reset", methods=["POST"])
 def caption_reset():
     data = request.get_json(silent=True) or {}
-    folder = data.get("folder", "").strip()
-    file_name = data.get("fileName", "").strip()
-    if not folder or not file_name:
-        return jsonify({"error": "Missing required parameters"}), 400
-    try:
-        folder_path = safe_join_fs_root(folder)
-        from .originals import restore_original_media_video_only
-        ok = restore_original_media_video_only(folder_path, file_name)
-        if not ok:
-            return jsonify({"error": "Original media not found in originals"}), 404
-        return jsonify({"ok": True})
-    except Exception as e:
-        if FS_DEBUG:
-            print("[caption_reset] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
+    return media_reset_response(data)
 
 @app.route("/media/crop", methods=["POST"])
 def media_crop():
     data = request.get_json(silent=True) or {}
-    folder = data.get("folder", "").strip()
-    file_name = (data.get("fileName") or data.get("media") or "").strip()
-    if not file_name:
-        return jsonify({"error": "Missing required parameters"}), 400
-    try:
-        folder_path = safe_join_fs_root(folder)
-        result = crop_image_in_place(folder_path, file_name, data.get("crop"))
-        return jsonify({"ok": True, **result})
-    except FileNotFoundError as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        if FS_DEBUG:
-            print("[media_crop] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
+    return media_crop_response(data)
 
 @app.route("/media/prune", methods=["POST"])
 def caption_prune():
     data = request.get_json(silent=True) or {}
-    folder = data.get("folder", "").strip()
-    file_name = data.get("media", "").strip()
-    if not folder or not file_name:
-        return jsonify({"error": "Missing required parameters"}), 400
-    try:
-        folder_path = safe_join_fs_root(folder)
-        originals_path = folder_path / "originals"
-        originals_path.mkdir(exist_ok=True)
-        src_media = folder_path / file_name
-        if not src_media.exists() or not src_media.is_file():
-            return jsonify({"error": "Media file not found"}), 404
-
-        # Determine destination name in originals, handle conflicts by hash and renaming
-
-
-        def find_unique_pruned_name(base_name, ext, src_path, originals_path):
-            # Always use pruned_ prefix, always rotate if exists
-            candidate = originals_path / (f"pruned_{base_name}{ext}")
-            if not candidate.exists():
-                return candidate.name
-            i = 1
-            while True:
-                candidate = originals_path / (f"pruned_{base_name}-{i}{ext}")
-                if not candidate.exists():
-                    return candidate.name
-                i += 1
-
-        base = Path(file_name).stem
-        ext = Path(file_name).suffix
-        from tool.server.originals import file_hash
-        dst_media_name = find_unique_pruned_name(base, ext, src_media, originals_path)
-        dst_media = originals_path / dst_media_name
-
-
-        # Move to originals/pruned_<filename> (rotate if needed, use shutil.move for robustness)
-        import shutil
-        if dst_media.exists():
-            # Should not happen due to rotation, but double-check
-            raise Exception(f"Destination already exists: {dst_media}")
-        shutil.move(str(src_media), str(dst_media))
-
-
-        # Always move/copy the latest caption to originals, using same base name as pruned media
-        src_caption = folder_path / (Path(file_name).stem + ".txt")
-        dst_caption = originals_path / (Path(dst_media_name).stem + ".txt")
-        if src_caption.exists():
-            with open(src_caption, "r", encoding="utf-8") as fsrc, open(dst_caption, "w", encoding="utf-8") as fdst:
-                fdst.write(fsrc.read())
-            try:
-                os.chmod(dst_caption, 0o644)
-            except Exception:
-                pass
-            src_caption.unlink()
-
-        return jsonify({"ok": True})
-    except Exception as e:
-        if FS_DEBUG:
-            print("[caption_prune] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
+    return media_prune_response(data)
 
 # Minimal streaming endpoint for autoset.py
 @app.route("/fs/autoset_run", methods=["POST"])
 def autoset_run():
     data = request.get_json(silent=True) or {}
     folder = data.get("folder", "").strip()
-    if not folder:
-        return jsonify({"error": "Missing folder argument"}), 400
-    try:
-        folder_path = safe_join_fs_root(folder)
-        if not folder_path.exists() or not folder_path.is_dir():
-            return jsonify({"error": f"Folder does not exist: {folder}"}), 404
-        # Use the same Python executable as the server
-        python_exe = resolve_python_executable()
-        autoset_path = str(ROOT / "tool" / "server" / "autoset.py")
-        cmd = [python_exe, autoset_path, "--master", str(folder_path)]
+    return autoset_run_response(folder)
 
-        def copy_auto_to_hi_lo(current_folder):
-            import shutil, os
-            auto_path = os.path.join(current_folder, 'auto_dataset', 'dataset.auto.toml')
-            hi_path = os.path.join(current_folder, 'dataset.hi.toml')
-            lo_path = os.path.join(current_folder, 'dataset.lo.toml')
-            try:
-                if not os.path.exists(auto_path):
-                    print(f"[autoset] {auto_path} not found, skipping hi/lo copy.")
-                    return "dataset.auto.toml not found, skipping hi/lo copy."
-                shutil.copyfile(auto_path, hi_path)
-                os.chmod(hi_path, 0o644)
-                shutil.copyfile(auto_path, lo_path)
-                os.chmod(lo_path, 0o644)
-                print(f"[autoset] Copied {auto_path} to {hi_path} and {lo_path}.")
-                return "Copied dataset.auto.toml to hi/lo."
-            except Exception as e:
-                print(f"[autoset] Error copying auto.toml to hi/lo: {e}")
-                return f"Error copying auto.toml to hi/lo: {e}"
+@app.route("/fs/generate_dataset_config", methods=["POST"])
+def generate_dataset_config_route():
+    data = request.get_json(silent=True) or {}
+    folder = data.get("folder", "").strip()
+    return generate_dataset_config_response(folder)
 
-        def generate():
-            try:
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, universal_newlines=True)
-                for line in proc.stdout:
-                    yield line
-                proc.stdout.close()
-                proc.wait()
-                # After autoset completes, attempt the copy
-                msg = copy_auto_to_hi_lo(str(folder_path))
-                yield f"[autoset] {msg}\n"
-            except Exception as e:
-                yield f"[ERROR] {e}\n"
-        return Response(stream_with_context(generate()), mimetype="text/plain")
-    except Exception as e:
-        if FS_DEBUG:
-            print("[autoset_run] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
+
+@app.route("/fs/train_run", methods=["POST"])
+def train_run_route():
+    data = request.get_json(silent=True) or {}
+    folder = (data.get("folder") or "").strip()
+    return train_run_response(folder)
     
 
 @app.route('/fs/duplicate_folder', methods=['POST'])
-def duplicate_folder():
+def duplicate_folder(): 
     data = request.get_json()
     src_rel = data.get('src')
-    try:
-        src_path = safe_join_fs_root(src_rel)
-    except Exception as e:
-        return jsonify({'error': f'Invalid source path: {e}'}), 400
-    if not src_rel or not src_path.exists() or not src_path.is_dir():
-        return jsonify({'error': 'Source folder does not exist'}), 400
-
-    base = src_path.name
-    parent = src_path.parent
-    # Find a new folder name like "folder copy", "folder copy 2", etc.
-    i = 1
-    while True:
-        if i == 1:
-            dst_path = parent / f"{base} copy"
-        else:
-            dst_path = parent / f"{base} copy {i}"
-        if not dst_path.exists():
-            break
-        i += 1
-
-    shutil.copytree(str(src_path), str(dst_path))
-    return jsonify({'success': True, 'dst': str(dst_path)})
+    return duplicate_folder_response(src_rel)
 
 
 @app.route('/fs/duplicate_image', methods=['POST'])
 def duplicate_image():
     data = request.get_json(silent=True) or {}
     src_rel = (data.get('src') or '').strip()
-    if not src_rel:
-        return jsonify({'error': 'Missing source path'}), 400
-    try:
-        src_path = safe_join_fs_root(src_rel)
-    except Exception as e:
-        return jsonify({'error': f'Invalid source path: {e}'}), 400
-
-    if not src_path.exists() or not src_path.is_file():
-        return jsonify({'error': 'Source image does not exist'}), 404
-    if src_path.parent.name.lower() == 'originals':
-        return jsonify({'error': 'Duplicate Image is not allowed in originals folder'}), 400
-
-    image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
-    ext = src_path.suffix.lower()
-    if ext not in image_exts:
-        return jsonify({'error': 'Duplicate Image only supports still image files'}), 400
-
-    stem = src_path.stem
-    parent = src_path.parent
-    i = 1
-    while True:
-        if i == 1:
-            dst_name = f"{stem} copy{ext}"
-        else:
-            dst_name = f"{stem} copy {i}{ext}"
-        dst_path = parent / dst_name
-        if not dst_path.exists():
-            break
-        i += 1
-
-    shutil.copy2(str(src_path), str(dst_path))
-    try:
-        os.chmod(dst_path, 0o644)
-    except Exception:
-        pass
-
-    src_caption = src_path.with_suffix('.txt')
-    dst_caption = dst_path.with_suffix('.txt')
-    if src_caption.exists() and src_caption.is_file() and not dst_caption.exists():
-        shutil.copy2(str(src_caption), str(dst_caption))
-        try:
-            os.chmod(dst_caption, 0o644)
-        except Exception:
-            pass
-
-    return jsonify({'success': True, 'dst': str(dst_path), 'dstName': dst_name})
+    return duplicate_image_response(src_rel)
 
 # Unified deface endpoint
 @app.route('/fs/deface', methods=['POST'])
@@ -639,33 +334,7 @@ def fs_describe():
 @app.route("/fs/media_metadata", methods=["GET"])
 def fs_media_metadata():
     rel_path = request.args.get("folder", "").strip()
-    try:
-        folder_path = safe_join_fs_root(rel_path)
-        if not folder_path.exists() or not folder_path.is_dir():
-            return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
-        metadata_dict = update_media_metadata(folder_path)
-        # Convert dict of {filename: metadata} to list of records for the frontend table
-        metadata_list = []
-        for filename, info in metadata_dict.items():
-            record = {
-                "file": filename,
-                "resolution": info.get("resolution", "-"),
-                "fps": f"{info['fps']:.2f}" if info.get("fps") else "-",
-                "aspect": info.get("aspect_ratio", "-"),
-                "size": f"{info['size'] / (1024*1024):.2f} MB" if info.get("size") else "-",
-                "bitrate": f"{info['bitrate']} kbps" if info.get("bitrate") else "-",
-                "codec": info.get("codec", "-"),
-                "color": info.get("color_space", "-"),
-                "duration": f"{info['duration']:.2f}s" if info.get("duration") else "-",
-                "frames": info.get("frame_count", "-")
-            }
-            metadata_list.append(record)
-        return jsonify(metadata_list)
-    except Exception as e:
-        if FS_DEBUG:
-            print("[fs_media_metadata] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 400
+    return media_metadata_response(rel_path)
     
 from .config import list_toml_files, read_toml_file, save_toml_file
 # --- Config file API ---
@@ -713,58 +382,7 @@ def save_config():
 def open_in_explorer():
     data = request.get_json(silent=True) or {}
     rel_path = data.get("path", "").strip()
-    print("[open_in_explorer] Received rel_path:", rel_path)
-    if not rel_path:
-        print("[open_in_explorer] ERROR: Missing path")
-        return jsonify({"error": "Missing path"}), 400
-    try:
-        abs_path = safe_join_fs_root(rel_path)
-        print("[open_in_explorer] Resolved abs_path:", abs_path)
-        if not abs_path.exists():
-            print("[open_in_explorer] ERROR: Path does not exist:", abs_path)
-            return jsonify({"error": "Path does not exist"}), 404
-        # --- WSL/Windows-aware fallback ---
-        def is_wsl():
-            try:
-                with open("/proc/version", "r") as f:
-                    if "Microsoft" in f.read():
-                        return True
-            except Exception:
-                pass
-            return os.environ.get("WSLENV") is not None
-
-        if abs_path.is_file():
-            if sys.platform.startswith("win"):
-                quoted = str(abs_path).replace('/', '\\')
-                subprocess.Popen(["explorer", f"/select,{quoted}"])
-            elif sys.platform.startswith("darwin"):
-                subprocess.Popen(["open", "-R", str(abs_path)])
-            elif is_wsl():
-                # Open parent folder and select file in Windows Explorer from WSL
-                # Use Windows path format
-                win_path = str(abs_path).replace("/mnt/c/", "C:/").replace("/", "\\")
-                parent = str(abs_path.parent).replace("/mnt/c/", "C:/").replace("/", "\\")
-                # Try to select the file if possible
-                subprocess.Popen(["powershell.exe", "/c", f'start explorer.exe /select,\"{win_path}\"']) 
-            else:
-                subprocess.Popen(["xdg-open", str(abs_path.parent)])
-        else:
-            if sys.platform.startswith("win"):
-                os.startfile(str(abs_path))
-            elif sys.platform.startswith("darwin"):
-                subprocess.Popen(["open", str(abs_path)])
-            elif is_wsl():
-                # Open folder in Windows Explorer from WSL
-                win_path = str(abs_path).replace("/mnt/c/", "C:/").replace("/", "\\")
-                subprocess.Popen(["powershell.exe", "/c", f'start explorer.exe \"{win_path}\"'])
-            else:
-                subprocess.Popen(["xdg-open", str(abs_path)])
-        return jsonify({"ok": True})
-    except Exception as e:
-        if FS_DEBUG:
-            print("[open_in_explorer] ERROR:", e)
-            traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    return open_in_explorer_response(rel_path)
     
 def maybe_create_config_files(folder_path):
     folder = Path(folder_path)

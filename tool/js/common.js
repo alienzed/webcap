@@ -190,5 +190,11 @@ function savePathCaption() {
     debugLog('[savePathCaption] Skipped save: editor contains only primer caption');
     return Promise.resolve();
   }
+  // Skip saving if caption hasn't changed
+  var currentCaption = mediaItem.caption || '';
+  if (editorValue === currentCaption) {
+    debugLog('[savePathCaption] Skipped save: caption unchanged');
+    return Promise.resolve();
+  }
   return saveCaptionDirect(state.folder, mediaItem.fileName, editorValue, mediaItem.key);
 }

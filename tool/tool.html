@@ -11,103 +11,158 @@
     <body>
         <div class="app">
             <div class="panel stack">
-                <div id="caption-filter-row" class="filter-row">
-                    <input id="media-filter" type="search" placeholder="filter">
-                </div>
-                <div id="caption-filter-count"></div>
-                <div class="media-list-wrapper">
-                    <button id="refresh-btn" type="button" title="Refresh directory" class="refresh-btn-square floating-refresh">↻</button>
-                    <div id="media-list-header">
-                        <div id="up-one-directory-row" class="media-item folder-item header-item" data-type="up" style="display:none">
-                            <div>⬆ Up One Directory</div>
-                        </div>
-                        <div id="current-folder-row" class="media-item folder-item header-item current-folder-item current-folder-bordered" data-type="current-folder">
-                            <div>🗁 <span id="current-folder-label"></span></div>
-                        </div>
+                <div class="panel-scrollable">
+                    <div id="caption-filter-row" class="filter-row">
+                        <input id="media-filter" type="search" placeholder="filter">
                     </div>
-                    <div id="media-list" class="media-list with-stats-pane"></div>
-                </div>
-                <button id="focus-set-exit-btn" type="button" class="m8y" style="display:none">Exit Set</button>
-                <button id="review-captions-btn" type="button" class="m8y">Review Captions</button>
-                <div id="caption-stats-pane">
+                    <div id="caption-filter-count"></div>
+                    <div class="media-list-wrapper">
+                        <button
+                            id="refresh-btn"
+                            type="button"
+                            title="Refresh directory"
+                            class="refresh-btn-square floating-refresh"
+                        >↻</button>
+                        <div id="media-list-header">
+                            <div
+                                id="up-one-directory-row"
+                                class="media-item folder-item header-item"
+                                data-type="up"
+                                style="display:none"
+                            >
+                                <div>⬆ Up One Directory</div>
+                            </div>
+                            <div id="current-folder-row" class="media-item folder-item header-item current-folder-item current-folder-bordered" data-type="current-folder">
+                                <div>🗁
+                                    <span id="current-folder-label"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="media-list" class="media-list with-stats-pane"></div>
+                    </div>
+                    <button
+                        id="focus-set-exit-btn"
+                        type="button"
+                        class="m8y"
+                        style="display:none"
+                    >Exit Set</button>
+                    <details id="primer-details" class="d-none">
+                        <summary>
+                            <strong>Template Primer</strong>
+                        </summary>
+                        <div class="stats-controls">
+                            <label>Template (multiline, placeholders like {subject})</label>
+                            <textarea id="primer-template" rows="4" placeholder="{subject}
+                                  {view}
+                                  {lighting}"></textarea>
+                            <label>Defaults (key=value per line)</label>
+                            <textarea id="primer-defaults" rows="3" placeholder="lighting=soft light"></textarea>
+                            <label>Filename mappings (file:token =&gt; key=value)</label>
+                            <textarea id="primer-mappings" rows="4" placeholder="file:fd =&gt; view=face down
+                                  file:woman =&gt; subject=woman"></textarea>
+                            <div class="small">Applies automatically when a caption is empty.</div>
+                        </div>
+                    </details>
                     <div class="stats-panel">
-                        <details id="stats-details">
+                        <button id="review-captions-btn" type="button" class="m8y">Review Captions</button>
+                        <details id="cation-review">
                             <summary>
-                                <strong>Stats &amp; Validation</strong>
+                                <strong>Caption Review</strong>
                             </summary>
                             <div class="stats-controls">
                                 <label>Required key phrase</label>
                                 <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
                                 <label>Balance phrases (one per line)</label>
                                 <textarea id="stats-phrases" rows="4" placeholder="face down
-                                  face up
-                                  front view
-                                  back view">
-                                </textarea>
+                                face up
+                                front view
+                                back view"></textarea>
                                 <label>Rules (file:token =&gt; phrase or caption:phrase =&gt; phrase)</label>
                                 <textarea id="stats-token-rules" rows="4" placeholder="fd =&gt; face down
-                                  file:fu =&gt; face up
-                                  caption:front view =&gt; face">
-                                </textarea>
-                            </div>
-                        </details>
-                        <details id="primer-details">
-                            <summary>
-                                <strong>Template Primer</strong>
-                            </summary>
-                            <div class="stats-controls">
-                                <label>Template (multiline, placeholders like {subject})</label>
-                                <textarea id="primer-template" rows="4" placeholder="{subject}
-                                  {view}
-                                  {lighting}">
-                                </textarea>
-                                <label>Defaults (key=value per line)</label>
-                                <textarea id="primer-defaults" rows="3" placeholder="lighting=soft light"></textarea>
-                                <label>Filename mappings (file:token =&gt; key=value)</label>
-                                <textarea id="primer-mappings" rows="4" placeholder="file:fd =&gt; view=face down
-                                  file:woman =&gt; subject=woman">
-                                </textarea>
-                                <div class="small">Applies automatically when a caption is empty.</div>
+                                file:fu =&gt; face up
+                                caption:front view =&gt; face"></textarea>
                             </div>
                         </details>
                     </div>
+                    <details id="training-details">
+                        <summary>
+                            <strong>Training</strong>
+                        </summary>
+                        <div class="training-controls">
+                            <div id="training-config-list" class="training-config-list">No config files.</div>
+                            <div class="training-actions">
+                                <button id="training-generate-btn" type="button" class="m8y training-btn">Generate Config</button>
+                                <button id="training-train-btn" type="button" class="m8y training-btn">Train</button>
+                            </div>
+                        </div>
+                    </details>
                 </div>
                 <div id="status" class="status status-bar">
                     <span id="status-text" class="flex1"></span>
-                    <button id="console-toggle-btn" type="button" title="Show/hide console" class="console-toggle-btn">&#x25B2;</button>
+                    <button
+                        id="console-toggle-btn"
+                        type="button"
+                        title="Show/hide console"
+                        class="console-toggle-btn"
+                    >&#x25B2;</button>
                 </div>
             </div>
             <div class="panel editor-panel">
                 <div class="editor-wrapper">
-                  <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
-                  <div id="caption-checklist-panel" class="checklist-panel" style="display:none;">
-                      <button id="checklist-close-btn" title="Close checklist" class="checklist-close-btn">×</button>
-                      <div id="caption-helper-tabs" class="caption-helper-tabs">
-                          <button id="caption-helper-tab-requirements-btn" class="caption-helper-tab-btn active" data-caption-helper-tab="requirements" type="button">Requirements</button>
-                          <button id="caption-helper-tab-phrases-btn" class="caption-helper-tab-btn" data-caption-helper-tab="phrases" type="button">Phrases</button>
-                          <button id="caption-helper-tab-notes-btn" class="caption-helper-tab-btn" data-caption-helper-tab="notes" type="button">Set Notes</button>
-                      </div>
-                      <div id="caption-helper-tab-requirements" class="caption-helper-tab-pane">
-                          <div class="caption-helper-section-title">Requirements</div>
-                          <div class="checklist-input-row">
-                              <input id="checklist-add-input" type="text" class="form-control" placeholder="Add requirement...">
-                              <button id="checklist-add-btn" type="button">+</button>
-                          </div>
-                          <div id="checklist-items"></div>
-                      </div>
-                      <div id="caption-helper-tab-phrases" class="caption-helper-tab-pane hidden">
-                          <div class="caption-helper-section-title">Phrases</div>
-                          <div class="checklist-input-row">
-                              <input id="phrase-copy-add-input" type="text" class="form-control" placeholder="Add phrase...">
-                              <button id="phrase-copy-add-btn" type="button">+</button>
-                          </div>
-                          <div id="phrase-copy-items"></div>
-                      </div>
-                      <div id="caption-helper-tab-notes" class="caption-helper-tab-pane hidden">
-                          <div class="caption-helper-section-title">Set Notes</div>
-                          <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
-                      </div>
-                  </div>
+                    <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
+                    <div id="caption-checklist-panel" class="checklist-panel" style="display:none;">
+                        <button id="checklist-close-btn" title="Close checklist" class="checklist-close-btn">×</button>
+                        <div id="caption-helper-tabs" class="caption-helper-tabs">
+                            <button
+                                id="caption-helper-tab-requirements-btn"
+                                class="caption-helper-tab-btn active"
+                                data-caption-helper-tab="requirements"
+                                type="button"
+                            >Requirements</button>
+                            <button
+                                id="caption-helper-tab-phrases-btn"
+                                class="caption-helper-tab-btn"
+                                data-caption-helper-tab="phrases"
+                                type="button"
+                            >Phrases</button>
+                            <button
+                                id="caption-helper-tab-notes-btn"
+                                class="caption-helper-tab-btn"
+                                data-caption-helper-tab="notes"
+                                type="button"
+                            >Set Notes</button>
+                        </div>
+                        <div id="caption-helper-tab-requirements" class="caption-helper-tab-pane">
+                            <div class="caption-helper-section-title">Requirements</div>
+                            <div class="checklist-input-row">
+                                <input
+                                    id="checklist-add-input"
+                                    type="text"
+                                    class="form-control"
+                                    placeholder="Add requirement..."
+                                >
+                                <button id="checklist-add-btn" type="button">+</button>
+                            </div>
+                            <div id="checklist-items"></div>
+                        </div>
+                        <div id="caption-helper-tab-phrases" class="caption-helper-tab-pane hidden">
+                            <div class="caption-helper-section-title">Phrases</div>
+                            <div class="checklist-input-row">
+                                <input
+                                    id="phrase-copy-add-input"
+                                    type="text"
+                                    class="form-control"
+                                    placeholder="Add phrase..."
+                                >
+                                <button id="phrase-copy-add-btn" type="button">+</button>
+                            </div>
+                            <div id="phrase-copy-items"></div>
+                        </div>
+                        <div id="caption-helper-tab-notes" class="caption-helper-tab-pane hidden">
+                            <div class="caption-helper-section-title">Set Notes</div>
+                            <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
+                        </div>
+                    </div>
                 </div>
                 <div id="console-panel"></div>
             </div>
@@ -115,7 +170,7 @@
                 <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
             </div>
             <div id="caption-list-actions" class="caption-list-actions">
-              <button id="focus-set-exit-btn" type="button" style="display:none">Exit Set</button>
+                <button id="focus-set-exit-btn" type="button" style="display:none">Exit Set</button>
             </div>
         </div>
         <div id="crop-modal" class="crop-modal hidden" aria-hidden="true">

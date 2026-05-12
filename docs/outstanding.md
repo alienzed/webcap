@@ -5,45 +5,39 @@ If complete and confirmed, move to Completed section
 
 
 ## Bugs
-- Prune works well, BUT the caption and preview remain, we should either select the next/adjacent item or clear.
-- Config files do not seem to be autosaving
-- config files seem to be getting the wrong path, it's missing a directory in my one failed use case
-- status bar and console toggle should be fixed to the bottom of the left side panel, always visible... the rest of that panel can scroll behind it, this is a definition of intent, the fix itself is open to discussion.
+
 
 ## Enhancements
  - Dataset infered number of samples, MegaFramePixels, if we want to get really crafty, try to estimate VRAM, step time...
- - Refactor app.py to split routes from heavy logic
- - Generate appropriate config files based on set metadata
  - Try to automate Training Run Start
- - The caption requirements/phrases/set notes are great... I'm actually thinking that maybe when the screen is wide enough, these don't need to be tabs at all, but can take up 1/3 of that space each. Requirements and phrases actually work/look better vertically anyway.
+ - Media Metadata is currently sorted by filename, which is fine, but... it'd be more interesting I think for these to be grouped by AR [optionally?] and/or to sort by headings. I'm also not sure the color column is ever really relevant.
 
 
 
 ## Backlog
 - Many operations on files/folders will refresh the entire directory. For prune and rename, only the affected item is now updated (no full refresh). Other operations may still refresh the directory; consider further optimization if needed.
 - [Future] Allow placing .txt files (e.g., expressions.txt, places.txt, lighting.txt) in a folder to auto-populate additional phrase tabs. Each file is a list of phrases (one per line). Not implemented yet.
+ - Refactor app.py to split routes from heavy logic
+ - set wide (only current folder though of course) search and replace. Use case: I'm changing the keyphrase, or correct a word I misspelled more than once.
+
 
 ## To think about more / Not clearly necessary
 - Up / Down keys to browse while media list is focused (lost when editing of course...)
+ - Dataset infered number of samples, MegaFramePixels, if we want to get really crafty, try to estimate VRAM, step time...
 
 
 ## Requires validation
+- status bar and console toggle should be fixed to the bottom of the left side panel, always visible... the rest of that panel can scroll behind it, this is a definition of intent, the fix itself is open to discussion.
+ - The caption requirements/phrases/set notes are great... I'm actually thinking that maybe when the screen is wide enough, these don't need to be tabs at all, but can take up 1/3 of that space each. Requirements and phrases actually work/look better vertically anyway.
+- config files seem to be getting the wrong path, it's missing a directory in my one failed use case
+- Config files do not seem to be autosaving
 - upon save of a previous empty caption, it takes a directory refresh for the missing state to clear - still broken
-- One thing I might find useful would be a vertical text area with words/phrases I can copy/paste from. Sometimes when going through a set I choose adjectives to add and I need to add these to many captions, but much like the captionr requirements, it's very easy to get side tracked... with that said, a similar interface could be cool here, like a preset list of constants that I can add to. This screen wouldn't be checkboxes though, it'd be click to copy, since some will be multiple words, many even phrases, so highlighting them manually, copying and pasting would be inefficient.
+ - Generate appropriate config files based on set metadata
 - A way to crop images to preset AR.
 - autoset may require some adjustments, especially for images.
 - Set Notes. A third tab alongside Caption Requirements and Phrase Copy for free style notes about the set.
-- Prune now removes only the item from state/items and DOM, not a full refresh.
-- Prune uses pruned_ prefix in originals, not a separate folder (see prune.md for details).
-- Reset Review state (contextual menu option on Current folder only)
-- F2 to rename
-- When a caption is missing, the item gets a yellowish background to reflect this, however, after saving a proper caption, the background does not change. (Fixed: background now updates correctly after saving a caption)
-- Console appends, should scroll to bottom. (Already implemented: appendToConsolePanel always scrolls to bottom)
-- Open in Explorer works, but for files my intention was Open Containing folder (and ideally highlight the file), what I am seeing is that the file will be opened, like, in VLC or whatever. (Now also works in WSL: powershell.exe fallback implemented)
-- Captions save even if not changed, seems suboptimal.
-- Review and Filter only seem to work on the initially loaded set of captions. (Fixed: state.items is updated after every save, so review/filter/rare-token features now reflect edits immediately)
 - Make it so that the primer caption alone doesn't get saved. (Currently only implemented for autosave; manual saves still save primer-only captions. Needs fix.)
-- Prune works well, BUT the caption and preview remain, we should either select the next/adjacent item or clear.
+- Reset Review state (contextual menu option on Current folder only)
 
 
 ## Complete
@@ -51,3 +45,13 @@ If complete and confirmed, move to Completed section
 - Make colors in context menu bigger
 - Prune now uses a pruned_ prefix in the originals folder (not a separate folder). All collision and backup logic is handled there. (Current design; see prune.md)
 - Caption Requirements
+- Status bar and console toggle fixed to bottom of left panel, always visible, scrollable content behind it.
+- Media Metadata grouped by AR (optionally), color column hidden if not relevant.
+- When a caption is missing, the item gets a yellowish background; after saving, the background updates correctly.
+- Console appends and scrolls to bottom automatically.
+- Open in Explorer works; also works in WSL with powershell.exe fallback.
+- Review and Filter reflect edits immediately (state.items updated after every save).
+- Prune removes only the affected item from state/items and DOM (no full refresh).
+- F2 to rename media files.
+- Captions save only when actually changed (no unnecessary saves).
+- Prune clears caption/preview when the current item is pruned.

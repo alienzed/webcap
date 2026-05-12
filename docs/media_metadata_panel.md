@@ -13,7 +13,6 @@ Display clip metadata (resolution, duration, frame count) for all media in the c
     - Size (bytes or MB)
     - Bitrate (kbps or Mbps)
     - Codec (e.g., h264, hevc)
-    - Color space (e.g., yuv420p)
     - Duration (seconds, 1 decimal)
     - Frame count
   - For images:
@@ -48,8 +47,7 @@ Display clip metadata (resolution, duration, frame count) for all media in the c
     "frame_count": 360,
     "fps": 29.97,
     "bitrate": 1200000,
-    "codec": "h264",
-    "color_space": "yuv420p"
+    "codec": "h264"
   },
   "img1.png": {
     "mtime": 1713981000,
@@ -62,10 +60,10 @@ Display clip metadata (resolution, duration, frame count) for all media in the c
 
 ### Table Layout (Frontend)
 
-| File (Resolution) | FPS | Aspect | Size | Bitrate | Codec | Color | Duration | Frames |
-|-------------------|-----|--------|------|---------|-------|-------|----------|--------|
-| ztd2.mp4 (1920x1080) | 29.97 | 16:9 | 12.3 MB | 1200 kbps | h264 | yuv420p | 12.3 | 360 |
-| img1.png (1024x768) |     | 4:3   | 229 KB|         |       |       |          |      |
+| File (Resolution) | FPS | Aspect | Size | Bitrate | Codec | Duration | Frames |
+|-------------------|-----|--------|------|---------|-------|----------|--------|
+| ztd2.mp4 (1920x1080) | 29.97 | 16:9 | 12.3 MB | 1200 kbps | h264 | 12.3 | 360 |
+| img1.png (1024x768) |     | 4:3   | 229 KB|         |       |          |      |
 
 *For images, leave video-only columns blank or omit them.*
 

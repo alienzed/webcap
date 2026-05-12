@@ -20,6 +20,16 @@ function clearEditorAndPreview() {
   state.currentItem = null;
 }
 
+function clearSelection() {
+  if (state.objectUrl) {
+    URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl = '';
+  }
+  state.currentItem = null;
+  state.currentConfigFile = null;
+  renderFileList(ui.filterEl.value);
+}
+
 function createFlagAction(itemKey) {
   function flagRowRenderer(color) {
     markFlag(itemKey, color);
@@ -125,6 +135,28 @@ function wireAllUi() {
           }
         },
         {
+          label: 'Generate Dataset Configs',
+          run: function () {
+            state.currentConfigFile = null;
+            state.currentItem = null;
+            clearEditorAndPreview();
+            renderChecklistPanel();
+            renderFileList(ui.filterEl.value);
+            setStatus('Generating dataset configs...');
+            streamPreviewFromFetch(
+              '/fs/generate_dataset_config',
+              { folder: state.folder },
+              ui,
+              function () {
+                setStatus('Dataset configs generated.');
+              },
+              function (err) {
+                setStatus('Dataset config generation failed: ' + err);
+              }
+            );
+          }
+        },
+        {
           label: 'Deface',
           run: function () {
             clearEditorAndPreview();
@@ -193,6 +225,64 @@ function wireAllUi() {
   if (ui.reviewBtn) {
     ui.reviewBtn.onclick = function () {
       runReview();
+    };
+  }
+
+  var trainingGenerateBtn = document.getElementById('training-generate-btn');
+  if (trainingGenerateBtn) {
+    trainingGenerateBtn.onclick = function () {
+      if (!state.folder) {
+        setStatus('No folder selected for config generation.');
+        return;
+      }
+      state.currentConfigFile = null;
+      state.currentItem = null;
+      clearEditorAndPreview();
+      renderChecklistPanel();
+      renderFileList(ui.filterEl.value);
+      setStatus('Generating dataset configs...');
+      streamPreviewFromFetch(
+        '/fs/generate_dataset_config',
+        { folder: state.folder },
+        ui,
+        function () {
+          if (typeof refreshTrainingConfigList === 'function') {
+            refreshTrainingConfigList();
+          }
+          if (state.currentConfigFile) {
+            ui.editorEl.value = '';
+            setStatus('Dataset configs generated. Please reload the config file to see changes.');
+            state.currentConfigFile = null;
+          } else {
+            setStatus('Dataset configs generated.');
+          }
+        },
+        function (err) {
+          setStatus('Dataset config generation failed: ' + err);
+        }
+      );
+    };
+  }
+
+  var trainingTrainBtn = document.getElementById('training-train-btn');
+  if (trainingTrainBtn) {
+    trainingTrainBtn.onclick = function () {
+      if (!state.folder) {
+        setStatus('No folder selected for training.');
+        return;
+      }
+      setStatus('Starting training runs...');
+      streamPreviewFromFetch(
+        '/fs/train_run',
+        { folder: state.folder },
+        ui,
+        function () {
+          setStatus('Training runs finished.');
+        },
+        function (err) {
+          setStatus('Training failed: ' + err);
+        }
+      );
     };
   }
 

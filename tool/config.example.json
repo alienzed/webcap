@@ -3,5 +3,11 @@
     "root": "C:\\path\\to\\training\\root",
     "models": "C:\\path\\to\\model\\root\\models"
   },
+  "training": {
+    "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
+    "activate_script": "dp-clean/bin/activate",
+    "config_hi": "confighi.toml",
+    "config_lo": "configlo.toml"
+  },
   "debug": true
 }

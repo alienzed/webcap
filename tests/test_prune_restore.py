@@ -5,6 +5,8 @@ import pytest
 from PIL import Image
 
 import tool.server.app as app_module
+import tool.server.file_ops as file_ops_module
+import tool.server.media as media_module
 
 
 @pytest.fixture
@@ -20,6 +22,8 @@ def isolated_fs_root(tmp_path, monkeypatch):
 
     monkeypatch.setattr(app_module, "safe_join_fs_root", _safe_join)
     monkeypatch.setattr(app_module, "_resolve_folder", _safe_join)
+    monkeypatch.setattr(file_ops_module, "safe_join_fs_root", _safe_join)
+    monkeypatch.setattr(media_module, "safe_join_fs_root", _safe_join)
     return fs_root
 
 

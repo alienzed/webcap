@@ -36,6 +36,13 @@ function ensureContextMenu() {
           .catch(function(err) { setStatus(ui, String(err && err.message ? err.message : err)); });
       }
     }
+    // F2: Rename selected media item
+    if (e.key === 'F2') {
+      e.preventDefault();
+      if (state && state.currentItem && state.currentItem.type === 'media') {
+        promptRenameMedia(state.currentItem);
+      }
+    }
   });
   addEventListener('scroll', hideContextMenu, true);
 
@@ -195,7 +202,7 @@ function runReview() {
   renderChecklistPanel();
   ui.editorEl.setAttribute('readonly', 'readonly');
   renderFileList(ui.filterEl.value);
-  var details = document.getElementById('stats-details');
+  var details = document.getElementById('cation-review');
   if (details) {
     details.open = true;
   }
@@ -276,6 +283,50 @@ function applyTokenFilter(token) {
   }
 }
 
+function refreshTrainingConfigList() {
+  var listEl = document.getElementById('training-config-list');
+  if (!listEl) return;
+  if (!state.folder) {
+    listEl.textContent = 'No folder selected.';
+    return;
+  }
+  listEl.textContent = 'Loading...';
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/fs/list_config?folder=' + encodeURIComponent(state.folder));
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status !== 200) {
+      listEl.textContent = 'No config files.';
+      return;
+    }
+    try {
+      var resp = JSON.parse(xhr.responseText);
+      var files = Array.isArray(resp.files) ? resp.files : [];
+      if (!files.length) {
+        listEl.textContent = 'No config files.';
+        return;
+      }
+      listEl.innerHTML = files.map(function (f) {
+        return '<button type="button" class="training-config-link" data-file="' + encodeURIComponent(f) + '">' + escapeHtml(f) + '</button>';
+      }).join('');
+      Array.prototype.forEach.call(listEl.querySelectorAll('.training-config-link'), function (btn) {
+        btn.onclick = function () {
+          var fileName = decodeURIComponent(btn.getAttribute('data-file') || '');
+          if (!fileName) return;
+          if (typeof loadConfigFileToEditor === 'function') {
+            loadConfigFileToEditor(fileName);
+          } else {
+            setStatus('Config editor loader unavailable.');
+          }
+        };
+      });
+    } catch (e) {
+      listEl.textContent = 'No config files.';
+    }
+  };
+  xhr.send();
+}
+
 // Directory listing now uses backend /fs/list
 function refreshCurrentDirectory() {
   var path = state.folder || '';
@@ -349,6 +400,7 @@ function refreshCurrentDirectory() {
             }
           }
           setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
+          refreshTrainingConfigList();
           // If a file was just renamed, reselect it
           if (window.state && state.pendingSelectFileName) {
             var fname = state.pendingSelectFileName;
@@ -360,12 +412,14 @@ function refreshCurrentDirectory() {
           state.childFolders = [];
           state.items = [];
           renderFileList(ui.filterEl.value);
+          refreshTrainingConfigList();
         }
       } else {
         setStatus('Error loading folder: ' + xhr.status);
         state.childFolders = [];
         state.items = [];
         renderFileList(ui.filterEl.value);
+        refreshTrainingConfigList();
       }
     }
   };

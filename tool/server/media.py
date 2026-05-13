@@ -177,6 +177,8 @@ def media_crop_response(data):
     try:
         folder_path = safe_join_fs_root(folder)
         result = crop_image_in_place(folder_path, file_name, data.get("crop"))
+        # Keep cached media_metadata.json in sync immediately after in-place crop.
+        update_media_metadata(folder_path)
         return jsonify({"ok": True, **result})
     except FileNotFoundError as e:
         return jsonify({"error": str(e)}), 404

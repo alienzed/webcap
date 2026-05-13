@@ -26,18 +26,29 @@ ALT_MAX_SQUARE_DIM = 1024
 ALT_MAX_NON_SQUARE_LONG = 1536
 ALT_MAX_NON_SQUARE_SHORT = 1024
 
+PREP_MANIFEST_NAME = "prep_manifest.json"
+VIDEO_FRAME_CANDIDATES = [49, 45, 41, 37, 33]
+MIN_VIDEO_FRAMES_FOR_STATS = 16
+VIDEO_COVERAGE = 0.85
+VIDEO_MFP_LIMIT = 12000
+VIDEO_DETAIL_FRAMES = 13
+VIDEO_DETAIL_MIN_COVERAGE = 0.35
+VIDEO_DETAIL_MIN_SUPPORT = 2
+
 
 def generate_dataset_configs(folder_path: Path):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
-    auto_toml = dataset_root / "dataset.auto.toml"
-    if not auto_toml.exists():
-        raise FileNotFoundError(f"Missing autoset TOML: {auto_toml}")
+    manifest_path = dataset_root / PREP_MANIFEST_NAME
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing prep manifest: {manifest_path}")
 
+    manifest = load_prep_manifest(manifest_path)
     lines = []
-    lines.append(f"[INFO] Reading autoset TOML: {auto_toml}")
-    video_blocks = extract_video_blocks(auto_toml.read_text(encoding="utf-8"))
-    lines.append(f"[INFO] Copied {len(video_blocks)} video directory block(s) from autoset.")
+    lines.append(f"[INFO] Reading prep manifest: {manifest_path}")
+
+    video_blocks = build_video_blocks(dataset_root, manifest.get("videos", []), lines)
+    lines.append(f"[INFO] Built {len(video_blocks)} video directory block(s).")
 
     image_dirs = find_image_dirs(dataset_root)
     lines.append(f"[INFO] Found {len(image_dirs)} prepared image folder(s).")
@@ -85,34 +96,211 @@ def generate_dataset_configs(folder_path: Path):
     return "\n".join(lines) + "\n"
 
 
-def extract_video_blocks(toml_text: str):
+def load_prep_manifest(manifest_path: Path):
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("Prep manifest is not an object.")
+    videos = data.get("videos", [])
+    images = data.get("images", [])
+    if not isinstance(videos, list):
+        raise ValueError("Prep manifest videos must be a list.")
+    if not isinstance(images, list):
+        raise ValueError("Prep manifest images must be a list.")
+    return data
+
+
+def build_video_blocks(dataset_root: Path, videos, lines):
+    grouped = {key: [] for key in AR_CLASSES}
+    for row in videos:
+        if not isinstance(row, dict):
+            continue
+        ar_label = str(row.get("ar") or "").strip()
+        if ar_label not in grouped:
+            continue
+        width = to_pos_int(row.get("width"))
+        height = to_pos_int(row.get("height"))
+        frames = coerce_frames(row)
+        prepared_path = str(row.get("prepared_path") or "").strip()
+        if not width or not height or not prepared_path:
+            continue
+        abs_prepared = dataset_root / prepared_path
+        if not abs_prepared.exists():
+            continue
+        grouped[ar_label].append({
+            "width": width,
+            "height": height,
+            "frames": frames,
+            "path": abs_prepared,
+        })
+
     blocks = []
-    current = []
-    for line in toml_text.splitlines():
-        if line.strip() == "[[directory]]":
-            if current:
-                blocks.append(current)
-            current = [line]
-        elif current:
-            current.append(line)
-    if current:
-        blocks.append(current)
+    for ar_label in AR_CLASSES.keys():
+        clips = grouped.get(ar_label, [])
+        if not clips:
+            continue
+        usable_for_frames = [c for c in clips if c["frames"] is not None and c["frames"] >= MIN_VIDEO_FRAMES_FOR_STATS]
+        if not usable_for_frames:
+            lines.append(f"[WARN] {ar_label}: no clips with usable frame metadata.")
+            continue
 
-    video_blocks = []
-    for block in blocks:
-        if block_has_group(block, "videos"):
-            video_blocks.append("\n".join(block).rstrip())
-    return video_blocks
+        frame_counts = [c["frames"] for c in usable_for_frames]
+        motion_frames = select_frames_with_fallback(frame_counts, VIDEO_FRAME_CANDIDATES, VIDEO_COVERAGE)
+        if not motion_frames:
+            lines.append(f"[WARN] {ar_label}: unable to choose motion frame count.")
+            continue
+
+        motion = choose_video_bucket_resolution(
+            ar_label,
+            usable_for_frames,
+            motion_frames,
+            VIDEO_COVERAGE,
+            VIDEO_MFP_LIMIT,
+        )
+        if not motion:
+            lines.append(f"[WARN] {ar_label}: unable to choose motion bucket resolution.")
+            continue
+
+        buckets = [(motion["width"], motion["height"], motion_frames)]
+        lines.append(
+            f"[INFO] {ar_label}: motion bucket {motion['width']}x{motion['height']} @ {motion_frames} "
+            f"(support {motion['support']}/{motion['total']})"
+        )
+
+        detail = choose_video_detail_bucket(ar_label, usable_for_frames, motion["width"], motion["height"])
+        if detail:
+            detail_tuple = (detail["width"], detail["height"], VIDEO_DETAIL_FRAMES)
+            if detail_tuple not in buckets:
+                buckets.append(detail_tuple)
+                lines.append(
+                    f"[INFO] {ar_label}: detail bucket {detail['width']}x{detail['height']} @ {VIDEO_DETAIL_FRAMES} "
+                    f"(support {detail['support']}/{detail['total']})"
+                )
+
+        buckets.sort(key=lambda item: item[2], reverse=True)
+        dir_path = (dataset_root / ar_label).as_posix()
+        blocks.append(render_video_block(dir_path, buckets))
+    return blocks
 
 
-def block_has_group(block, group_name):
-    needle1 = f'group = "{group_name}"'
-    needle2 = f"group = '{group_name}'"
-    for line in block:
-        text = line.strip()
-        if text == needle1 or text == needle2:
-            return True
-    return False
+def to_pos_int(value):
+    try:
+        parsed = int(value)
+    except Exception:
+        return None
+    return parsed if parsed > 0 else None
+
+
+def coerce_frames(record):
+    frames = to_pos_int(record.get("frames"))
+    if frames:
+        return frames
+    fps = record.get("fps")
+    duration = record.get("duration")
+    if fps is None or duration is None:
+        return None
+    try:
+        estimate = int(round(float(fps) * float(duration)))
+    except Exception:
+        return None
+    return estimate if estimate > 0 else None
+
+
+def select_frames_with_fallback(frame_counts, candidates, coverage_threshold):
+    eligible = [f for f in frame_counts if f >= MIN_VIDEO_FRAMES_FOR_STATS]
+    if not eligible:
+        return None
+    total = len(eligible)
+    for cand in candidates:
+        support = sum(1 for f in eligible if f >= cand)
+        if support <= 0:
+            continue
+        if (support / float(total)) >= coverage_threshold:
+            return cand
+    for cand in candidates:
+        if any(f >= cand for f in eligible):
+            return cand
+    return None
+
+
+def choose_video_bucket_resolution(ar_label: str, clips, frames: int, coverage_threshold: float, mfp_limit: int):
+    candidates = generate_candidates(ar_label)
+    if not candidates:
+        return None
+    usable = [clip for clip in clips if clip["frames"] is not None and clip["frames"] >= frames]
+    if not usable:
+        return None
+    total = len(usable)
+    best = None
+    for (w, h, area) in candidates:
+        if mfp(w, h, frames) > mfp_limit:
+            continue
+        support = 0
+        for clip in usable:
+            if clip["width"] >= w and clip["height"] >= h:
+                support += 1
+        if support <= 0:
+            continue
+        frac = support / float(total)
+        entry = {"width": w, "height": h, "area": area, "support": support, "total": total, "coverage": frac}
+        if frac >= coverage_threshold:
+            return entry
+        if best is None:
+            best = entry
+            continue
+        if entry["coverage"] > best["coverage"] or (
+            entry["coverage"] == best["coverage"] and entry["area"] > best["area"]
+        ):
+            best = entry
+    return best
+
+
+def choose_video_detail_bucket(ar_label: str, clips, motion_w: int, motion_h: int):
+    candidates = generate_candidates(ar_label)
+    if not candidates:
+        return None
+    motion_area = motion_w * motion_h
+    usable = [clip for clip in clips if clip["frames"] is not None and clip["frames"] >= VIDEO_DETAIL_FRAMES]
+    if not usable:
+        return None
+    total = len(usable)
+    best = None
+    for (w, h, area) in candidates:
+        if area <= motion_area:
+            continue
+        if mfp(w, h, VIDEO_DETAIL_FRAMES) > VIDEO_MFP_LIMIT:
+            continue
+        support = 0
+        for clip in usable:
+            if clip["width"] >= w and clip["height"] >= h:
+                support += 1
+        if support < VIDEO_DETAIL_MIN_SUPPORT:
+            continue
+        frac = support / float(total)
+        if frac < VIDEO_DETAIL_MIN_COVERAGE:
+            continue
+        entry = {"width": w, "height": h, "area": area, "support": support, "total": total, "coverage": frac}
+        if best is None:
+            best = entry
+            continue
+        if entry["area"] > best["area"] or (
+            entry["area"] == best["area"] and entry["coverage"] > best["coverage"]
+        ):
+            best = entry
+    return best
+
+
+def render_video_block(dir_path: str, buckets):
+    lines = [
+        "[[directory]]",
+        f'path = "{dir_path}"',
+        "num_repeats = 2",
+        'group = "videos"',
+        "size_buckets = [",
+    ]
+    for (w, h, frames) in buckets:
+        lines.append(f"  [{w}, {h}, {frames}],")
+    lines.append("]")
+    return "\n".join(lines)
 
 
 def find_image_dirs(dataset_root: Path):
@@ -200,19 +388,17 @@ def generate_candidates_with_caps(ar_label: str, max_square_dim: int, max_long: 
         candidates.sort(key=lambda item: item[2], reverse=True)
         return candidates
 
-    # Fallback path if we ever opt back into tolerant generation.
+    seen = set()
+    if target_ar >= 1:
+        for w in range(256, max_long + 1, 32):
+            ideal_h = w / target_ar
+            for h in snap_32_options(ideal_h):
+                add_candidate(candidates, seen, target_ar, w, h, max_long, max_short)
     else:
-        seen = set()
-        if target_ar >= 1:
-            for w in range(256, max_long + 1, 32):
-                ideal_h = w / target_ar
-                for h in snap_32_options(ideal_h):
-                    add_candidate(candidates, seen, target_ar, w, h, max_long, max_short)
-        else:
-            for h in range(256, max_long + 1, 32):
-                ideal_w = target_ar * h
-                for w in snap_32_options(ideal_w):
-                    add_candidate(candidates, seen, target_ar, w, h, max_long, max_short)
+        for h in range(256, max_long + 1, 32):
+            ideal_w = target_ar * h
+            for w in snap_32_options(ideal_w):
+                add_candidate(candidates, seen, target_ar, w, h, max_long, max_short)
     candidates.sort(key=lambda item: item[2], reverse=True)
     return candidates
 
@@ -273,7 +459,7 @@ def pick_image_buckets(ar_label: str, images):
         if not any(width >= w and height >= h for (w, h, _) in candidates):
             unsupported.append(images[i][0])
 
-    best_primary = None  # (coverage, area, w, h)
+    best_primary = None
     for (w, h, area) in candidates:
         entry = (support[(w, h)], area, w, h)
         if best_primary is None or entry[0] > best_primary[0] or (entry[0] == best_primary[0] and entry[1] > best_primary[1]):
@@ -287,7 +473,7 @@ def pick_image_buckets(ar_label: str, images):
         return selected, unsupported
 
     p_w, p_h = primary
-    best_second = None  # (area, coverage, w, h)
+    best_second = None
     for (w, h, area) in candidates:
         if (w, h) == primary:
             continue

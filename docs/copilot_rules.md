@@ -38,3 +38,4 @@
 - All errors must be visible in the browser console.
 - **Critical errors** (invariant violations, impossible states, or integrity threats) must break execution—never caught or logged.
 - Non-critical errors may be logged for debugging, but never swallowed or ignored.
+- Nothing intentionally coded is optional. No optional dependency guards (`if (typeof fn === 'function')`), no feature flags, no silent skips. If something is coded, it is required and must fail loudly if missing.

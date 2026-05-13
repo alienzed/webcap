@@ -195,7 +195,7 @@ function buildSelectedMediaStatus(mediaItem) {
     suffix = parts.length > 1 ? parts.pop() : '';
   }
   var status = 'Selected: ' + mediaItem.label + (suffix ? ' (' + suffix + ')' : '');
-  if (typeof getResolutionForMedia === 'function' && mediaItem && mediaItem.fileName) {
+  if (mediaItem && mediaItem.fileName) {
     var resolution = getResolutionForMedia(mediaItem.fileName);
     if (resolution) {
       status += ' | ' + resolution;
@@ -270,9 +270,7 @@ function promptRenameMedia(mediaItem) {
       if (Array.isArray(captionItemTagsByMedia[oldFile])) {
         captionItemTagsByMedia[newFile] = captionItemTagsByMedia[oldFile].slice();
         delete captionItemTagsByMedia[oldFile];
-        if (typeof saveItemTagsToFolderState === 'function') {
-          saveItemTagsToFolderState();
-        }
+        saveItemTagsToFolderState();
       }
     }
     setStatus('Renamed: ' + oldFile + ' -> ' + newFile);
@@ -387,9 +385,7 @@ async function renderFileList() {
       var fileName = (item.fileName || '').toLowerCase();
       var caption = (item.caption || '').toLowerCase();
       var tags = '';
-      if (typeof getTagsForMediaKey === 'function') {
-        tags = getTagsForMediaKey(item.key).join(' ').toLowerCase();
-      }
+      tags = getTagsForMediaKey(item.key).join(' ').toLowerCase();
       return label.indexOf(q) !== -1 || fileName.indexOf(q) !== -1 || caption.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
     });
   }

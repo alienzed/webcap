@@ -156,6 +156,7 @@ function applyCrop() {
     if (status === 200) {
       closeCropModal();
       setStatus('Cropped: ' + fileName);
+      refreshMediaResolutionCache();
       if (state.currentItem && state.currentItem.fileName === fileName) {
         renderPathPreview(state.folder || '', fileName);
       }

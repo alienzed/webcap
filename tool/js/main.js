@@ -77,9 +77,7 @@ function runPrepareDatasetForCurrentFolder() {
     ui,
     function () {
       setStatus('Dataset preparation finished.');
-      if (typeof refreshTrainingConfigList === 'function') {
-        refreshTrainingConfigList();
-      }
+      refreshTrainingConfigList();
     },
     function (err) {
       setStatus('Dataset preparation failed: ' + err);
@@ -156,9 +154,7 @@ function wireAllUi() {
   checklistPanelEl = document.getElementById('caption-checklist-panel');
   setChecklistPanelVisible(false);
   wireCaptionHelpersUi();
-  if (typeof wireItemDetailsUi === 'function') {
-    wireItemDetailsUi();
-  }
+  wireItemDetailsUi();
   wireSidebarTabs();
   var addInput = document.getElementById('checklist-add-input');
   var addBtn = document.getElementById('checklist-add-btn');
@@ -324,9 +320,7 @@ function wireAllUi() {
         { folder: state.folder },
         ui,
         function () {
-          if (typeof refreshTrainingConfigList === 'function') {
-            refreshTrainingConfigList();
-          }
+          refreshTrainingConfigList();
           if (state.currentConfigFile) {
             ui.editorEl.value = '';
             setStatus('Dataset configs generated. Please reload the config file to see changes.');
@@ -590,7 +584,7 @@ function wireAllUi() {
                 });
             }
           });
-          if (typeof isCroppableImageFile === 'function' && isCroppableImageFile(fileName)) {
+          if (isCroppableImageFile(fileName)) {
             actions.push({
               label: 'Duplicate Image',
               run: function () {
@@ -651,7 +645,7 @@ function wireAllUi() {
   // Stats Run button
   if (ui.statsRunBtn) {
     ui.statsRunBtn.onclick = function () {
-      if (typeof runReview === 'function') runReview();
+      runReview();
     };
   }
   document.querySelectorAll(".fail-link").forEach(function(btn){

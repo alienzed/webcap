@@ -249,14 +249,7 @@ function runReview() {
   renderChecklistPanel();
   ui.editorEl.setAttribute('readonly', 'readonly');
   renderFileList(ui.filterEl.value);
-  if (typeof setSidebarTab === 'function') {
-    setSidebarTab('review');
-  } else {
-    var details = document.getElementById('cation-review');
-    if (details) {
-      details.open = true;
-    }
-  }
+  setSidebarTab('review');
   var runSeq = (state.reviewSeq || 0) + 1;
   state.reviewSeq = runSeq;
   setStatus('Building combined captions and stats...');
@@ -400,11 +393,7 @@ function refreshTrainingConfigList() {
         btn.onclick = function () {
           var fileName = decodeURIComponent(btn.getAttribute('data-file') || '');
           if (!fileName) return;
-          if (typeof loadConfigFileToEditor === 'function') {
-            loadConfigFileToEditor(fileName);
-          } else {
-            setStatus('Config editor loader unavailable.');
-          }
+          loadConfigFileToEditor(fileName);
         };
       });
     } catch (e) {
@@ -471,14 +460,10 @@ function refreshCurrentDirectory() {
           // --- Load and apply folder state fields ---
           var folderState = resp.folder_state || {};
           if (Object.keys(folderState).length) applyFolderStateToDom(folderState);
-          window.loadChecklistFromFolderState(folderState);
-          window.loadCaptionHelpersFromFolderState(folderState);
-          if (typeof window.loadItemTagsFromFolderState === 'function') {
-            window.loadItemTagsFromFolderState(folderState);
-          }
-          if (typeof window.refreshMediaResolutionCache === 'function') {
-            window.refreshMediaResolutionCache();
-          }
+          loadChecklistFromFolderState(folderState);
+          loadCaptionHelpersFromFolderState(folderState);
+          loadItemTagsFromFolderState(folderState);
+          refreshMediaResolutionCache();
           state.reviewedSet = state.reviewedSet || new Set();
           renderFileList(ui.filterEl.value);
           

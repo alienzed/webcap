@@ -1368,10 +1368,12 @@ iframe {
 }
 
 .crop-modal-dialog {
-  width: min(920px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  width: calc(100vw - 24px);
+  height: calc(100vh - 24px);
+  max-width: none;
+  max-height: none;
   background: #fff;
-  border-radius: 8px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
   padding: 12px;
@@ -1411,7 +1413,8 @@ iframe {
 }
 
 .crop-image-wrap {
-  height: min(68vh, 640px);
+  flex: 1 1 auto;
+  min-height: 0;
   background: #111;
   display: flex;
   align-items: center;

@@ -11,7 +11,7 @@ from flask import Response, jsonify, stream_with_context
 
 from .config import FS_DEBUG, config, safe_join_fs_root
 from .dataset_config import generate_dataset_configs
-from . import autoset as autoset_module
+from .dataset_prep import prepare_dataset
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -40,7 +40,7 @@ def _run_prepare_dataset(folder_path: Path, output_queue):
     writer = _QueueWriter(output_queue)
     try:
         with redirect_stdout(writer), redirect_stderr(writer):
-            autoset_module.main(["--master", str(folder_path)])
+            writer.write(prepare_dataset(folder_path, target_fps=16))
     except Exception as e:
         writer.write(f"[ERROR] {e}\n")
         if FS_DEBUG:

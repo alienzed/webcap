@@ -32,8 +32,8 @@ function ensureContextMenu() {
       if (document.activeElement === ui.editorEl && !ui.editorEl.readOnly) {
         e.preventDefault();
         saveCurrentCaption(ui, state)
-          .then(function() { setStatus(ui, 'Saved (CTRL+S)'); })
-          .catch(function(err) { setStatus(ui, String(err && err.message ? err.message : err)); });
+          .then(function() { setStatus('Saved (CTRL+S)'); })
+          .catch(function(err) { setStatus(String(err && err.message ? err.message : err)); });
       }
     }
     // F2: Rename selected media item
@@ -189,7 +189,54 @@ function wireReviewActions() {
   });
 }
 
+function updateReviewButtonAvailability() {
+  if (!ui.reviewBtn) return;
+  var availability = getReviewAvailability();
+  ui.reviewBtn.disabled = false;
+  ui.reviewBtn.classList.toggle('hidden', !availability.enabled);
+  ui.reviewBtn.title = availability.message;
+}
+
+function updateSetFolderScopedUi() {
+  var inSetFolder = isSetFolderContext(state.folder, state.items);
+  var workspace = document.getElementById('sidebar-workspace');
+  if (workspace) {
+    workspace.classList.toggle('hidden', !inSetFolder);
+    return;
+  }
+  var sectionIds = ['primer-details', 'cation-review', 'training-details'];
+  for (var i = 0; i < sectionIds.length; i++) {
+    var el = document.getElementById(sectionIds[i]);
+    if (el) el.classList.toggle('hidden', !inSetFolder);
+  }
+}
+
+function getReviewAvailability() {
+  if (!isSetFolderPath(state.folder)) {
+    return {
+      enabled: false,
+      message: "Review Captions is only available inside a set folder"
+    };
+  }
+  if (!Array.isArray(state.items) || !state.items.length) {
+    return {
+      enabled: false,
+      message: "Review Captions requires at least one media file in this set folder"
+    };
+  }
+  return {
+    enabled: true,
+    message: 'Review captions in this set folder'
+  };
+}
+
 function runReview() {
+  var availability = getReviewAvailability();
+  if (!availability.enabled) {
+    setStatus(availability.message + '.');
+    updateReviewButtonAvailability();
+    return;
+  }
   if (!state.items.length) {
     setStatus('No media files loaded');
     return;
@@ -202,9 +249,13 @@ function runReview() {
   renderChecklistPanel();
   ui.editorEl.setAttribute('readonly', 'readonly');
   renderFileList(ui.filterEl.value);
-  var details = document.getElementById('cation-review');
-  if (details) {
-    details.open = true;
+  if (typeof setSidebarTab === 'function') {
+    setSidebarTab('review');
+  } else {
+    var details = document.getElementById('cation-review');
+    if (details) {
+      details.open = true;
+    }
   }
   var runSeq = (state.reviewSeq || 0) + 1;
   state.reviewSeq = runSeq;
@@ -283,6 +334,31 @@ function applyTokenFilter(token) {
   }
 }
 
+function classifyTrainingConfigFile(fileName) {
+  var lower = String(fileName || '').toLowerCase();
+  if (/(^|[._-])hi([._-]|$)/.test(lower)) return 'hi';
+  if (/(^|[._-])lo([._-]|$)/.test(lower)) return 'lo';
+  var hasHi = lower.indexOf('hi') !== -1;
+  var hasLo = lower.indexOf('lo') !== -1;
+  if (hasHi && !hasLo) return 'hi';
+  if (hasLo && !hasHi) return 'lo';
+  return 'lo';
+}
+
+function buildTrainingConfigColumnHtml(title, files) {
+  var buttons = files.map(function (f) {
+    return '<button type="button" class="training-config-link" data-file="' + encodeURIComponent(f) + '">' + escapeHtml(f) + '</button>';
+  }).join('');
+  if (!buttons) {
+    buttons = '<div class="training-config-empty">No files</div>';
+  }
+  return '' +
+    '<div class="training-config-col">' +
+    '<div class="training-config-col-title">' + title + '</div>' +
+    buttons +
+    '</div>';
+}
+
 function refreshTrainingConfigList() {
   var listEl = document.getElementById('training-config-list');
   if (!listEl) return;
@@ -306,9 +382,20 @@ function refreshTrainingConfigList() {
         listEl.textContent = 'No config files.';
         return;
       }
-      listEl.innerHTML = files.map(function (f) {
-        return '<button type="button" class="training-config-link" data-file="' + encodeURIComponent(f) + '">' + escapeHtml(f) + '</button>';
-      }).join('');
+      files.sort(function (a, b) {
+        return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
+      });
+      var hiFiles = [];
+      var loFiles = [];
+      files.forEach(function (f) {
+        if (classifyTrainingConfigFile(f) === 'hi') hiFiles.push(f);
+        else loFiles.push(f);
+      });
+      listEl.innerHTML = '' +
+        '<div class="training-config-grid">' +
+        buildTrainingConfigColumnHtml('High Noise', hiFiles) +
+        buildTrainingConfigColumnHtml('Low Noise', loFiles) +
+        '</div>';
       Array.prototype.forEach.call(listEl.querySelectorAll('.training-config-link'), function (btn) {
         btn.onclick = function () {
           var fileName = decodeURIComponent(btn.getAttribute('data-file') || '');
@@ -330,6 +417,8 @@ function refreshTrainingConfigList() {
 // Directory listing now uses backend /fs/list
 function refreshCurrentDirectory() {
   var path = state.folder || '';
+  updateSetFolderScopedUi();
+  updateReviewButtonAvailability();
   debugLog('[webcap] refreshCurrentDirectory: called with path', path);
   // Ensure dirStack is initialized with root if empty or at root
   if (!state.dirStack || !Array.isArray(state.dirStack)) {
@@ -384,6 +473,12 @@ function refreshCurrentDirectory() {
           if (Object.keys(folderState).length) applyFolderStateToDom(folderState);
           window.loadChecklistFromFolderState(folderState);
           window.loadCaptionHelpersFromFolderState(folderState);
+          if (typeof window.loadItemTagsFromFolderState === 'function') {
+            window.loadItemTagsFromFolderState(folderState);
+          }
+          if (typeof window.refreshMediaResolutionCache === 'function') {
+            window.refreshMediaResolutionCache();
+          }
           state.reviewedSet = state.reviewedSet || new Set();
           renderFileList(ui.filterEl.value);
           
@@ -421,6 +516,8 @@ function refreshCurrentDirectory() {
         renderFileList(ui.filterEl.value);
         refreshTrainingConfigList();
       }
+      updateSetFolderScopedUi();
+      updateReviewButtonAvailability();
     }
   };
   xhr.send();

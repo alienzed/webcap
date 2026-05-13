@@ -40,62 +40,102 @@
                         </div>
                         <div id="media-list" class="media-list with-stats-pane"></div>
                     </div>
-                    <button
-                        id="focus-set-exit-btn"
-                        type="button"
-                        class="m8y"
-                        style="display:none"
-                    >Exit Set</button>
-                    <details id="primer-details" class="d-none">
-                        <summary>
-                            <strong>Template Primer</strong>
-                        </summary>
-                        <div class="stats-controls">
-                            <label>Template (multiline, placeholders like {subject})</label>
-                            <textarea id="primer-template" rows="4" placeholder="{subject}
-                                  {view}
-                                  {lighting}"></textarea>
-                            <label>Defaults (key=value per line)</label>
-                            <textarea id="primer-defaults" rows="3" placeholder="lighting=soft light"></textarea>
-                            <label>Filename mappings (file:token =&gt; key=value)</label>
-                            <textarea id="primer-mappings" rows="4" placeholder="file:fd =&gt; view=face down
-                                  file:woman =&gt; subject=woman"></textarea>
-                            <div class="small">Applies automatically when a caption is empty.</div>
+                    <div class="stats-panel">                        
+                        <button
+                            id="focus-set-exit-btn"
+                            type="button"
+                            class="m8y"
+                            style="display:none"
+                        >Exit Set</button>
+                        <div class="sidebar-action-strip">
+                            <button
+                                id="review-captions-btn"
+                                type="button"
+                                class="review-captions-btn hidden"
+                            ><span class="btn-glyph" aria-hidden="true">&#9654;</span><span>Review Captions</span></button>
                         </div>
-                    </details>
-                    <div class="stats-panel">
-                        <button id="review-captions-btn" type="button" class="m8y">Review Captions</button>
-                        <details id="cation-review">
-                            <summary>
-                                <strong>Caption Review</strong>
-                            </summary>
-                            <div class="stats-controls">
-                                <label>Required key phrase</label>
-                                <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
-                                <label>Balance phrases (one per line)</label>
-                                <textarea id="stats-phrases" rows="4" placeholder="face down
-                                face up
-                                front view
-                                back view"></textarea>
-                                <label>Rules (file:token =&gt; phrase or caption:phrase =&gt; phrase)</label>
-                                <textarea id="stats-token-rules" rows="4" placeholder="fd =&gt; face down
-                                file:fu =&gt; face up
-                                caption:front view =&gt; face"></textarea>
+                        <div id="sidebar-workspace" class="sidebar-workspace hidden">
+                            <div class="sidebar-tabs" role="tablist" aria-label="Set tools">
+                                <button
+                                    id="sidebar-tab-config-btn"
+                                    type="button"
+                                    class="sidebar-tab-btn"
+                                    data-sidebar-tab="config"
+                                    role="tab"
+                                    aria-selected="false"
+                                    aria-controls="primer-details"
+                                    tabindex="-1"
+                                >Config</button>
+                                <button
+                                    id="sidebar-tab-review-btn"
+                                    type="button"
+                                    class="sidebar-tab-btn active"
+                                    data-sidebar-tab="review"
+                                    role="tab"
+                                    aria-selected="true"
+                                    aria-controls="cation-review"
+                                >Review</button>
+                                <button
+                                    id="sidebar-tab-train-btn"
+                                    type="button"
+                                    class="sidebar-tab-btn"
+                                    data-sidebar-tab="train"
+                                    role="tab"
+                                    aria-selected="false"
+                                    aria-controls="training-details"
+                                    tabindex="-1"
+                                >Train</button>
                             </div>
-                        </details>
+                            <div id="primer-details" class="sidebar-tab-pane hidden" role="tabpanel" aria-labelledby="sidebar-tab-config-btn" aria-hidden="true">
+                                <div class="stats-controls">
+                                    <label>Caption Template (multiline, placeholders like {subject})</label>
+                                    <textarea id="primer-template" rows="4" placeholder="{subject}
+                                          {view}
+                                          {lighting}"></textarea>
+                                    <label>Set Notes</label>
+                                    <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
+                                    <details class="config-advanced">
+                                        <summary>Advanced</summary>
+                                        <div class="config-advanced-fields">
+                                            <label>Defaults (key=value per line)</label>
+                                            <textarea id="primer-defaults" rows="3" placeholder="lighting=soft light"></textarea>
+                                            <label>Filename mappings (file:token =&gt; key=value)</label>
+                                            <textarea id="primer-mappings" rows="4" placeholder="file:fd =&gt; view=face down
+                                                  file:woman =&gt; subject=woman"></textarea>
+                                            <div class="small">Applies automatically when a caption is empty.</div>
+                                        </div>
+                                    </details>
+                                </div>
+                            </div>
+                            <div id="cation-review" class="sidebar-tab-pane" role="tabpanel" aria-labelledby="sidebar-tab-review-btn" aria-hidden="false">
+                                <div class="stats-controls">
+                                    <label>Required key phrase</label>
+                                    <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
+                                    <label>Balance phrases (one per line)</label>
+                                    <textarea id="stats-phrases" rows="4" placeholder="face down
+                                    face up
+                                    front view
+                                    back view"></textarea>
+                                    <label>Rules (file:token =&gt; phrase or caption:phrase =&gt; phrase)</label>
+                                    <textarea id="stats-token-rules" rows="4" placeholder="fd =&gt; face down
+                                    file:fu =&gt; face up
+                                    caption:front view =&gt; face"></textarea>
+                                </div>
+                            </div>
+                            <div id="training-details" class="sidebar-tab-pane hidden" role="tabpanel" aria-labelledby="sidebar-tab-train-btn" aria-hidden="true">
+                                <div class="training-controls">
+                                    <div id="training-config-list" class="training-config-list">No config files.</div>
+                                    <div class="training-actions">
+                                        <button id="training-prepare-dataset-btn" type="button" class="training-btn training-autoset-btn" title="Sorts the files into Aspect Ratio folders while converting video to 16fps."><span class="btn-glyph" aria-hidden="true">&#8635;</span><span>Prepare Dataset</span></button>
+                                        <div class="training-actions-secondary">
+                                            <button id="training-generate-btn" type="button" class="training-btn" title="Generate config files"><span class="btn-glyph" aria-hidden="true">&#9881;</span><span>Generate</span></button>
+                                            <button id="training-train-btn" type="button" class="training-btn" title="Run training"><span class="btn-glyph" aria-hidden="true">&#9002;</span><span>Train</span></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <details id="training-details">
-                        <summary>
-                            <strong>Training</strong>
-                        </summary>
-                        <div class="training-controls">
-                            <div id="training-config-list" class="training-config-list">No config files.</div>
-                            <div class="training-actions">
-                                <button id="training-generate-btn" type="button" class="m8y training-btn">Generate Config</button>
-                                <button id="training-train-btn" type="button" class="m8y training-btn">Train</button>
-                            </div>
-                        </div>
-                    </details>
                 </div>
                 <div id="status" class="status status-bar">
                     <span id="status-text" class="flex1"></span>
@@ -126,11 +166,17 @@
                                 type="button"
                             >Phrases</button>
                             <button
-                                id="caption-helper-tab-notes-btn"
+                                id="caption-helper-tab-tags-btn"
                                 class="caption-helper-tab-btn"
-                                data-caption-helper-tab="notes"
+                                data-caption-helper-tab="tags"
                                 type="button"
-                            >Set Notes</button>
+                            >Tags</button>
+                            <button
+                                id="caption-helper-tab-metadata-btn"
+                                class="caption-helper-tab-btn"
+                                data-caption-helper-tab="metadata"
+                                type="button"
+                            >Metadata</button>
                         </div>
                         <div id="caption-helper-tab-requirements" class="caption-helper-tab-pane">
                             <div class="caption-helper-section-title">Requirements</div>
@@ -158,9 +204,17 @@
                             </div>
                             <div id="phrase-copy-items"></div>
                         </div>
-                        <div id="caption-helper-tab-notes" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title">Set Notes</div>
-                            <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
+                        <div id="caption-helper-tab-tags" class="caption-helper-tab-pane hidden">
+                            <div class="caption-helper-section-title">Tags</div>
+                            <div class="checklist-input-row">
+                                <input id="item-tag-add-input" type="text" class="form-control" placeholder="Add tag...">
+                                <button id="item-tag-add-btn" type="button">+</button>
+                            </div>
+                            <div id="item-tags-list"></div>
+                        </div>
+                        <div id="caption-helper-tab-metadata" class="caption-helper-tab-pane hidden">
+                            <div class="caption-helper-section-title">Metadata</div>
+                            <div id="item-metadata-list"></div>
                         </div>
                     </div>
                 </div>
@@ -210,6 +264,7 @@
         <script src="/static/js/editor.js"></script>
         <script src="/static/js/checklist.js"></script>
         <script src="/static/js/caption_helpers.js"></script>
+        <script src="/static/js/item_details.js"></script>
         <script src="/static/js/main.js"></script>
     </body>
 </html>

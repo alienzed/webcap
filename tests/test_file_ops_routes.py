@@ -87,3 +87,31 @@ def test_duplicate_image_route_blocks_originals(tmp_path, monkeypatch):
     assert response.status_code == 400
     payload = response.get_json()
     assert "not allowed in originals folder" in payload["error"]
+
+
+def test_open_in_explorer_selects_windows_file_with_spaces(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    media_path = fs_root / "set d" / "photo one.png"
+    write_image(media_path)
+    calls = []
+
+    def safe_join(rel_path):
+        rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
+        if rel.startswith("/"):
+            rel = rel[1:]
+        return (fs_root / rel).resolve()
+
+    def fake_popen(args):
+        calls.append(args)
+
+    monkeypatch.setattr(file_ops_module, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(file_ops_module.sys, "platform", "win32")
+    monkeypatch.setattr(file_ops_module.subprocess, "Popen", fake_popen)
+    monkeypatch.setenv("WINDIR", str(tmp_path / "missing_windows"))
+
+    client = app_module.app.test_client()
+    response = client.post("/fs/open_in_explorer", json={"path": "set d/photo one.png"})
+
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+    assert calls == [["explorer.exe", f'/select,"{str(media_path.resolve()).replace("/", "\\")}"']]

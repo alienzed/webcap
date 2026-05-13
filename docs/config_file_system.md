@@ -3,7 +3,7 @@
 ## **Config File Handling in Media List**
 
 ### **Integration with Media List**
-- Configuration files (`configlo.toml`, `confighi.toml`, `dataset.lo.toml`, `dataset.hi.toml`) are treated as valid entries alongside media files.
+- Configuration files (`config.lo.toml`, `config.hi.toml`, `dataset.lo.toml`, `dataset.hi.toml`) are treated as valid entries alongside media files.
 - These files are identified by their names and added to the `items` array with the `kind` property set to `'config'`.
 
 ### **Sorting and Rendering**
@@ -24,7 +24,7 @@
 
 ### **Template Usage**
 - Templates for the configuration files are fetched from `/templates/default/`.
-- For `configlo.toml` and `confighi.toml`, the `dataset` path is dynamically substituted into the template content.
+- For `config.lo.toml` and `config.hi.toml`, the `dataset` path is dynamically substituted into the template content.
 
 ### **Error Handling**
 - The function gracefully handles errors during file checks, template fetching, and file writing, ensuring the process continues for other files.

@@ -106,6 +106,12 @@ function renderChecklistPanel() {
     row.appendChild(rmBtn);
     itemsDiv.appendChild(row);
   }
+  if (typeof renderItemTagsPanel === 'function') {
+    renderItemTagsPanel();
+  }
+  if (typeof renderItemMetadataPanel === 'function') {
+    renderItemMetadataPanel();
+  }
 }
 
 function saveChecklistToFolderState() {

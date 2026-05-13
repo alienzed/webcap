@@ -1,7 +1,5 @@
 // Per-target debounce timers
 var autosaveTimers = {};
-// Per-target payload snapshots
-var autosavePayloads = {};
 
 // Helper: get current autosave target key and payload
 function getAutosaveTargetAndPayload() {
@@ -95,19 +93,5 @@ function handleEditorInputAutosave(e) {
         
         // Optionally: cleanup
         delete autosaveTimers[target.key];
-        delete autosavePayloads[target.key];
     }, 1000); // 1000ms debounce; adjust as needed
-}
-
-// Called whenever the preview pane is cleared or replaced
-function clearEditorAndPreview() {
-  ui.editorEl.value = '';
-  if (state.objectUrl) {
-    URL.revokeObjectURL(state.objectUrl);
-    state.objectUrl = '';
-  }
-  var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
-  doc.open();
-  doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">No media to preview.</body></html>');
-  doc.close();
 }

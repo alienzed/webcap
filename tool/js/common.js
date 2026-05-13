@@ -43,6 +43,29 @@ function normalizeFolderInput(value) {
   return text;
 }
 
+function isBlacklistedSetSubfolderName(name) {
+  var n = String(name || '').toLowerCase();
+  return n === 'originals' || n === 'auto_dataset';
+}
+
+// Path-only check: non-root folder path that does not include known
+// system subfolders (originals/auto_dataset) at any level.
+function isSetFolderPath(path) {
+  var value = String(path || '').trim();
+  if (!value) return false;
+  var parts = value.split(/[\\/]/).filter(Boolean).map(function (p) { return p.toLowerCase(); });
+  if (!parts.length) return false;
+  return !parts.some(isBlacklistedSetSubfolderName);
+}
+
+// Runtime "set context" check used by UI availability rules.
+// A folder is actionable as a set only if it passes the path check and
+// currently has media items loaded.
+function isSetFolderContext(path, mediaItems) {
+  if (!isSetFolderPath(path)) return false;
+  return Array.isArray(mediaItems) && mediaItems.length > 0;
+}
+
 function getFileExtension(name) {
   var idx = name.lastIndexOf('.');
   if (idx === -1) {
@@ -197,4 +220,18 @@ function savePathCaption() {
     return Promise.resolve();
   }
   return saveCaptionDirect(state.folder, mediaItem.fileName, editorValue, mediaItem.key);
+}
+
+// Legacy/manual save entrypoint used by multiple UI paths.
+// Returns a Promise and supports both caption and config editor modes.
+function saveCurrentCaption() {
+  if (state.currentConfigFile && state.currentConfigFile.file) {
+    var cfgFolder = state.currentConfigFile.folder || state.folder || '';
+    return saveConfigDirect(cfgFolder, state.currentConfigFile.file, ui.editorEl.value || '');
+  }
+  try {
+    return Promise.resolve(savePathCaption());
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }

@@ -111,6 +111,15 @@ async function restoreMediaItem(mediaItem) {
     if (xhr.readyState === 4) {
       if (xhr.status === 200) {
         setStatus('Restored from originals: ' + fileName + '. Open parent folder to view.');
+        // Remove restored item from the current list immediately (no full refresh).
+        if (window.state && Array.isArray(state.items)) {
+          var idx = state.items.findIndex(function (item) {
+            return item && (item.key === mediaItem.key || item.fileName === mediaItem.fileName);
+          });
+          if (idx !== -1) {
+            state.items.splice(idx, 1);
+          }
+        }
       } else {
         var msg = 'Restore failed';
         try {
@@ -137,13 +146,11 @@ async function restoreMediaItem(mediaItem) {
           state.focusSet = null;
         }
       }
-      if (state.scheduleFolderStateSave) {
-        state.scheduleFolderStateSave();
-      }
       if (state.currentItem && state.currentItem.key === mediaItem.key) {
-        state.currentItem = null;
+        clearEditorAndPreview();
         window.renderChecklistPanel();
       }
+      renderFileList();
     }
   };
   xhr.send(JSON.stringify({ folder: folder, fileName: fileName }));
@@ -181,6 +188,22 @@ async function resetMediaItem(mediaItem) {
   xhr.send(JSON.stringify({ folder: folder, fileName: fileName }));
 }
 
+function buildSelectedMediaStatus(mediaItem) {
+  var suffix = '';
+  if (mediaItem && mediaItem.fileName) {
+    var parts = mediaItem.fileName.split('.');
+    suffix = parts.length > 1 ? parts.pop() : '';
+  }
+  var status = 'Selected: ' + mediaItem.label + (suffix ? ' (' + suffix + ')' : '');
+  if (typeof getResolutionForMedia === 'function' && mediaItem && mediaItem.fileName) {
+    var resolution = getResolutionForMedia(mediaItem.fileName);
+    if (resolution) {
+      status += ' | ' + resolution;
+    }
+  }
+  return status;
+}
+
 function selectPathMedia(mediaItem) {
   return new Promise(function (resolve, reject) {
     // Set currentItem before any UI update
@@ -210,8 +233,7 @@ function selectPathMedia(mediaItem) {
       } else {
         ui.editorEl.value = text;
       }
-      var suffix = mediaItem.fileName.split('.').pop();
-      setStatus('Selected: ' + mediaItem.label + ' (' + suffix + ')');
+      setStatus(buildSelectedMediaStatus(mediaItem));
       renderChecklistPanel();
       // Re-render list to show selection
       renderFileList();
@@ -244,6 +266,15 @@ function promptRenameMedia(mediaItem) {
     return;
   }
   renameMedia(mediaItem, oldFile, newFile).then(function () {
+    if (typeof captionItemTagsByMedia === 'object' && captionItemTagsByMedia) {
+      if (Array.isArray(captionItemTagsByMedia[oldFile])) {
+        captionItemTagsByMedia[newFile] = captionItemTagsByMedia[oldFile].slice();
+        delete captionItemTagsByMedia[oldFile];
+        if (typeof saveItemTagsToFolderState === 'function') {
+          saveItemTagsToFolderState();
+        }
+      }
+    }
     setStatus('Renamed: ' + oldFile + ' -> ' + newFile);
     // Store the new filename to reselect after refresh
     window.state = window.state || {};
@@ -355,7 +386,11 @@ async function renderFileList() {
       var label = (item.label || '').toLowerCase();
       var fileName = (item.fileName || '').toLowerCase();
       var caption = (item.caption || '').toLowerCase();
-      return label.indexOf(q) !== -1 || fileName.indexOf(q) !== -1 || caption.indexOf(q) !== -1;
+      var tags = '';
+      if (typeof getTagsForMediaKey === 'function') {
+        tags = getTagsForMediaKey(item.key).join(' ').toLowerCase();
+      }
+      return label.indexOf(q) !== -1 || fileName.indexOf(q) !== -1 || caption.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
     });
   }
   // Show count of matching media items

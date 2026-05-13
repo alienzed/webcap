@@ -26,8 +26,8 @@ Add these fields in `tool/config.json` (example in `tool/config.example.json`):
 
 - `training.diffusion_pipe_wsl`: absolute WSL path to diffusion-pipe folder.
 - `training.activate_script`: activation script relative to diffusion-pipe folder (default: `dp-clean/bin/activate`).
-- `training.config_hi`: HI config filename in the selected set folder (default: `confighi.toml`).
-- `training.config_lo`: LO config filename in the selected set folder (default: `configlo.toml`).
+- `training.config_hi`: HI config filename in the selected set folder (default: `config.hi.toml`).
+- `training.config_lo`: LO config filename in the selected set folder (default: `config.lo.toml`).
 
 ## Notes
 

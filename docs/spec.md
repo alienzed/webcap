@@ -78,7 +78,7 @@ See `copilot_rules.md` for all safety, mutation, and coding rules.
 
 ### Config File Creation
 
-- **Purpose:** Each set folder must contain four configuration files: `configlo.toml`, `confighi.toml`, `dataset.lo.toml`, and `dataset.hi.toml`. These are required for downstream processing and are treated as first-class entries in the media list.
+- **Purpose:** Each set folder must contain four configuration files: `config.lo.toml`, `config.hi.toml`, `dataset.lo.toml`, and `dataset.hi.toml`. These are required for downstream processing and are treated as first-class entries in the media list.
 - **Automatic Creation:** The app ensures these config files are present as follows:
   - On every folder load (when the folder is described or listed in the UI), the backend checks if the folder is a valid set folder (not `originals`, not `auto_dataset`, not empty of media files).
   - If at least one media file is present, the backend checks for each config file and copies it from the templates directory if missing.
@@ -126,7 +126,7 @@ See `copilot_rules.md` for all safety, mutation, and coding rules.
 - **Recovery:** Reloading a set folder restores missing originals if media files are present.
 
 ### 6.2. Config File Creation
-- **Purpose:** Each set folder must have `configlo.toml`, `confighi.toml`, `dataset.lo.toml`, `dataset.hi.toml` for downstream processing.
+- **Purpose:** Each set folder must have `config.lo.toml`, `config.hi.toml`, `dataset.lo.toml`, `dataset.hi.toml` for downstream processing.
 - **Automatic Creation:** On folder load, backend copies missing config files from templates if media files exist.
 - **No Manual Management:** App guarantees presence/correctness; templates are copied as-is.
 

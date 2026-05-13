@@ -11,6 +11,16 @@ function sanitizeFolderState(data) {
   var primer = src.primer || {};
   var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
   reviewedKeys = reviewedKeys.map(function (key) { return String(key || ''); }).filter(Boolean);
+  var tagMap = {};
+  if (typeof src.caption_tags_by_media === 'object' && src.caption_tags_by_media) {
+    Object.keys(src.caption_tags_by_media).forEach(function (mediaKey) {
+      var list = Array.isArray(src.caption_tags_by_media[mediaKey]) ? src.caption_tags_by_media[mediaKey] : [];
+      var clean = list.map(function (v) { return String(v || '').trim(); }).filter(Boolean);
+      if (clean.length) {
+        tagMap[String(mediaKey || '')] = clean;
+      }
+    });
+  }
   return {
     version: FOLDER_STATE_VERSION,
     stats: {
@@ -28,7 +38,8 @@ function sanitizeFolderState(data) {
     caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : undefined,
     caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : undefined,
     caption_phrases: Array.isArray(src.caption_phrases) ? src.caption_phrases.slice() : undefined,
-    caption_set_notes: String(src.caption_set_notes || '')
+    caption_set_notes: String(src.caption_set_notes || ''),
+    caption_tags_by_media: tagMap
   };
 }
 
@@ -70,16 +81,38 @@ function snapshotFolderStateFromDom() {
   // so they are persisted. This function must snapshot ALL fields that should be saved.
   var stats = getOptionsFromDom();
   var primer = statsGetPrimerOptionsFromDom();
+  var mediaKeys = new Set((state.items || []).map(function (item) { return item && item.key; }).filter(Boolean));
+  var folderKeys = new Set((state.childFolders || []).map(function (item) { return item && item.name; }).filter(Boolean));
+  var validFlagKeys = new Set(Array.from(mediaKeys));
+  folderKeys.forEach(function (k) { validFlagKeys.add(k); });
+  var reviewedKeys = Array.from(state.reviewedSet || []).filter(function (k) { return mediaKeys.has(k); }).sort();
+  var flags = {};
+  var srcFlags = (typeof state.flags === 'object' && state.flags) ? state.flags : {};
+  Object.keys(srcFlags).forEach(function (k) {
+    if (validFlagKeys.has(k)) flags[k] = srcFlags[k];
+  });
+  var tagsByMedia = {};
+  var srcTagsByMedia = (typeof window.captionItemTagsByMedia === 'object' && window.captionItemTagsByMedia)
+    ? window.captionItemTagsByMedia
+    : {};
+  Object.keys(srcTagsByMedia).forEach(function (k) {
+    if (!mediaKeys.has(k)) return;
+    var list = Array.isArray(srcTagsByMedia[k]) ? srcTagsByMedia[k] : [];
+    if (list.length) {
+      tagsByMedia[k] = list.slice();
+    }
+  });
   // Add new fields here as needed
   return sanitizeFolderState({
     stats: stats,
     primer: primer,
-    reviewedKeys: Array.from(state.reviewedSet || []).sort(),
-    flags: (typeof state.flags === 'object' && state.flags) ? state.flags : {},
+    reviewedKeys: reviewedKeys,
+    flags: flags,
     caption_requirements: (typeof window.checklistItems !== 'undefined') ? window.checklistItems.slice() : undefined,
     caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined,
     caption_phrases: window.captionHelperPhrases.slice(),
-    caption_set_notes: String(window.captionHelperNotes || '')
+    caption_set_notes: String(window.captionHelperNotes || ''),
+    caption_tags_by_media: tagsByMedia
   });
 }
 
@@ -145,55 +178,6 @@ async function saveFolderStateForCurrentRoot() {
   await writeFolderStateFile(folderPath, snapshot);
 }
 
-
-/**
- * Setup folder state persistence by binding input events to save the state.
- * 
- * @param {object} ui - The global UI object containing references to DOM elements
- *  
- */
-function setupFolderStatePersistence() {
-  var saveLater = debounceCreate(300);
-  state.scheduleFolderStateSave = function () {
-    saveLater(function () {
-      saveFolderStateForCurrentRoot().catch(function (err) {
-        setStatus(String(err && err.message ? err.message : err));
-      });
-    });
-  };
-  var ids = [
-    'stats-required-phrase',
-    'stats-phrases',
-    'stats-token-rules',
-    'primer-template',
-    'primer-defaults',
-    'primer-mappings'
-  ];
-
-  ids.forEach(function (id) {
-    var el = document.getElementById(id);
-    if (!el || el.__folderStateBound) {
-      return;
-    }
-    el.__folderStateBound = true;
-    el.addEventListener('input', function () {
-      state.scheduleFolderStateSave();
-    });
-  });
-}
-
-function setupFolderStateReset() {
-  var btn = document.getElementById('folder-settings-reset-btn');
-  if (!btn || btn.__folderResetBound) {
-    return;
-  }
-  btn.__folderResetBound = true;
-  btn.addEventListener('click', function () {
-    resetFolderState().catch(function (err) {
-      setStatus(String(err && err.message ? err.message : err));
-    });
-  });
-}
 
 function captionCacheKey(mediaItem) {
   return 'path:' + (state.folder || '') + ':' + mediaItem.fileName;

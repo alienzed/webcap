@@ -2,17 +2,55 @@ import shlex
 import subprocess
 import sys
 import traceback
+import queue
+import threading
+from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
 from flask import Response, jsonify, stream_with_context
 
 from .config import FS_DEBUG, config, safe_join_fs_root
 from .dataset_config import generate_dataset_configs
+from . import autoset as autoset_module
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def autoset_run_response(folder: str):
+class _QueueWriter:
+    def __init__(self, output_queue):
+        self._queue = output_queue
+        self._buffer = ""
+
+    def write(self, text):
+        if not text:
+            return 0
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            self._queue.put(line + "\n")
+        return len(text)
+
+    def flush(self):
+        if self._buffer:
+            self._queue.put(self._buffer)
+            self._buffer = ""
+
+
+def _run_prepare_dataset(folder_path: Path, output_queue):
+    writer = _QueueWriter(output_queue)
+    try:
+        with redirect_stdout(writer), redirect_stderr(writer):
+            autoset_module.main(["--master", str(folder_path)])
+    except Exception as e:
+        writer.write(f"[ERROR] {e}\n")
+        if FS_DEBUG:
+            writer.write(traceback.format_exc() + "\n")
+    finally:
+        writer.flush()
+        output_queue.put(None)
+
+
+def prepare_dataset_response(folder: str):
     if not folder:
         return jsonify({"error": "Missing folder argument"}), 400
     try:
@@ -20,33 +58,33 @@ def autoset_run_response(folder: str):
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {folder}"}), 404
 
-        python_exe = sys.executable
-        autoset_path = str(ROOT / "tool" / "server" / "autoset.py")
-        cmd = [python_exe, autoset_path, "--master", str(folder_path)]
-
         def generate():
-            try:
-                proc = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    bufsize=1,
-                    universal_newlines=True,
-                )
-                for line in proc.stdout:
-                    yield line
-                proc.stdout.close()
-                proc.wait()
-                yield "[autoset] Finished. dataset.hi.toml and dataset.lo.toml were not modified.\n"
-            except Exception as e:
-                yield f"[ERROR] {e}\n"
+            output_queue = queue.Queue()
+            thread = threading.Thread(
+                target=_run_prepare_dataset,
+                args=(folder_path, output_queue),
+                daemon=True,
+            )
+            thread.start()
+            while True:
+                chunk = output_queue.get()
+                if chunk is None:
+                    break
+                yield chunk
+            thread.join()
+            yield "[prepare-dataset] Finished. dataset.hi.toml and dataset.lo.toml were not modified.\n"
 
         return Response(stream_with_context(generate()), mimetype="text/plain")
     except Exception as e:
         if FS_DEBUG:
-            print("[autoset_run] ERROR:", e)
+            print("[prepare_dataset] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
+
+
+def autoset_run_response(folder: str):
+    # Legacy alias kept for context-menu compatibility.
+    return prepare_dataset_response(folder)
 
 
 def generate_dataset_config_response(folder: str):
@@ -81,8 +119,8 @@ def train_run_response(folder: str):
     training_cfg = config.get("training", {}) if isinstance(config, dict) else {}
     diffusion_pipe_wsl = (training_cfg.get("diffusion_pipe_wsl") or "").strip()
     activate_script = (training_cfg.get("activate_script") or "dp-clean/bin/activate").strip()
-    hi_name = (training_cfg.get("config_hi") or "confighi.toml").strip()
-    lo_name = (training_cfg.get("config_lo") or "configlo.toml").strip()
+    hi_name = (training_cfg.get("config_hi") or "config.hi.toml").strip()
+    lo_name = (training_cfg.get("config_lo") or "config.lo.toml").strip()
 
     if not diffusion_pipe_wsl:
         return Response("[ERROR] Missing training.diffusion_pipe_wsl in config.json\n", status=400, mimetype="text/plain")

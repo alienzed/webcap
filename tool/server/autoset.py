@@ -665,7 +665,7 @@ def compute_dynamic_image_max_dim(images_ar, min_floor=512, max_ceil=1024):
 # MAIN SCRIPT
 # -------------------------
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Automatic dataset.auto.toml generator for WAN/diffusion-pipe."
     )
@@ -687,7 +687,7 @@ def main():
                         help='Recursively scan subdirectories for videos and images (default: single folder only).')
     parser.add_argument('--verbose', action='store_true',
                         help='Write detailed JSON outputs (wan_auto_buckets.json, resolution_rankings.json).')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     target_fps = args.target_fps   # 16 by default, 24 if the user supplied it
 

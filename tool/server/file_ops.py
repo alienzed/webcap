@@ -193,10 +193,20 @@ def open_in_explorer_response(rel_path):
                 pass
             return os.environ.get("WSLENV") is not None
 
+        def windows_explorer_exe():
+            windir = os.environ.get("WINDIR")
+            if windir:
+                explorer_path = Path(windir) / "explorer.exe"
+                if explorer_path.exists():
+                    return str(explorer_path)
+            return "explorer.exe"
+
+        def windows_path(path):
+            return str(path).replace("/", "\\")
+
         if abs_path.is_file():
             if sys.platform.startswith("win"):
-                quoted = str(abs_path).replace("/", "\\")
-                subprocess.Popen(["explorer", f"/select,{quoted}"])
+                subprocess.Popen([windows_explorer_exe(), f'/select,"{windows_path(abs_path)}"'])
             elif sys.platform.startswith("darwin"):
                 subprocess.Popen(["open", "-R", str(abs_path)])
             elif is_wsl():

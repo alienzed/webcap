@@ -41,6 +41,91 @@ function createFlagAction(itemKey) {
   };
 }
 
+function runAutosetForCurrentFolder() {
+  if (!state.folder) {
+    setStatus('No folder selected for autoset.');
+    return;
+  }
+  setStatus('Running autoset...');
+  streamPreviewFromFetch(
+    '/fs/autoset_run',
+    { folder: state.folder },
+    ui,
+    function () {
+      setStatus('Autoset finished.');
+    },
+    function (err) {
+      setStatus('Autoset failed: ' + err);
+    }
+  );
+}
+
+function runPrepareDatasetForCurrentFolder() {
+  if (!state.folder) {
+    setStatus('No folder selected for dataset preparation.');
+    return;
+  }
+  state.currentConfigFile = null;
+  state.currentItem = null;
+  clearEditorAndPreview();
+  renderChecklistPanel();
+  renderFileList(ui.filterEl.value);
+  setStatus('Preparing dataset...');
+  streamPreviewFromFetch(
+    '/fs/prepare_dataset',
+    { folder: state.folder },
+    ui,
+    function () {
+      setStatus('Dataset preparation finished.');
+      if (typeof refreshTrainingConfigList === 'function') {
+        refreshTrainingConfigList();
+      }
+    },
+    function (err) {
+      setStatus('Dataset preparation failed: ' + err);
+    }
+  );
+}
+
+var sidebarActiveTab = 'review';
+
+function setSidebarTab(tabName) {
+  var tabs = {
+    config: { buttonId: 'sidebar-tab-config-btn', paneId: 'primer-details' },
+    review: { buttonId: 'sidebar-tab-review-btn', paneId: 'cation-review' },
+    train: { buttonId: 'sidebar-tab-train-btn', paneId: 'training-details' }
+  };
+  var activeName = tabs[tabName] ? tabName : 'review';
+  sidebarActiveTab = activeName;
+
+  Object.keys(tabs).forEach(function (name) {
+    var tab = tabs[name];
+    var btn = document.getElementById(tab.buttonId);
+    var pane = document.getElementById(tab.paneId);
+    var active = name === activeName;
+    if (btn) {
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      btn.tabIndex = active ? 0 : -1;
+    }
+    if (pane) {
+      pane.classList.toggle('hidden', !active);
+      pane.setAttribute('aria-hidden', active ? 'false' : 'true');
+    }
+  });
+}
+
+function wireSidebarTabs() {
+  var buttons = document.querySelectorAll('[data-sidebar-tab]');
+  if (!buttons.length) return;
+  Array.prototype.forEach.call(buttons, function (btn) {
+    btn.onclick = function () {
+      setSidebarTab(btn.getAttribute('data-sidebar-tab'));
+    };
+  });
+  setSidebarTab(sidebarActiveTab);
+}
+
 function wireAllUi() {
   // Autosaving of primer/stats changes (debounced)
   wireStatsPrimerAutoSave();
@@ -71,6 +156,10 @@ function wireAllUi() {
   checklistPanelEl = document.getElementById('caption-checklist-panel');
   setChecklistPanelVisible(false);
   wireCaptionHelpersUi();
+  if (typeof wireItemDetailsUi === 'function') {
+    wireItemDetailsUi();
+  }
+  wireSidebarTabs();
   var addInput = document.getElementById('checklist-add-input');
   var addBtn = document.getElementById('checklist-add-btn');
   if (addBtn && addInput) {
@@ -120,18 +209,7 @@ function wireAllUi() {
         {
           label: 'Run Autoset',
           run: function () {
-            setStatus('Running autoset...');
-            streamPreviewFromFetch(
-              '/fs/autoset_run',
-              { folder: state.folder },
-              ui,
-              function () {
-                setStatus('Autoset finished.');
-              },
-              function (err) {
-                setStatus('Autoset failed: ' + err);
-              }
-            );
+            runAutosetForCurrentFolder();
           }
         },
         {
@@ -264,6 +342,13 @@ function wireAllUi() {
     };
   }
 
+  var trainingPrepareDatasetBtn = document.getElementById('training-prepare-dataset-btn');
+  if (trainingPrepareDatasetBtn) {
+    trainingPrepareDatasetBtn.onclick = function () {
+      runPrepareDatasetForCurrentFolder();
+    };
+  }
+
   var trainingTrainBtn = document.getElementById('training-train-btn');
   if (trainingTrainBtn) {
     trainingTrainBtn.onclick = function () {
@@ -355,7 +440,7 @@ function wireAllUi() {
                 return;
               }
               // Compute parent path (without trailing slash, never including the folder itself)
-              var parentPath = state.folder ? state.folder.replace(/\/+ $/, '') : '';
+              var parentPath = state.folder ? state.folder.replace(/\/+$/, '') : '';
               // If in root, parentPath is ''
               fetch('/fs/rename', {
                 method: 'POST',

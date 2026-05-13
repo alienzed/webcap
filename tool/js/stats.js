@@ -237,28 +237,6 @@ function compute(items, options) {
   };
 }
 
-function getOptionsFromDom() {
-  var requiredPhraseEl = document.getElementById('stats-required-phrase');
-  var phrasesEl = document.getElementById('stats-phrases');
-  var tokenRulesEl = document.getElementById('stats-token-rules');
-  return {
-    requiredPhrase: requiredPhraseEl ? requiredPhraseEl.value : '',
-    phrases: phrasesEl ? phrasesEl.value : '',
-    tokenRules: tokenRulesEl ? tokenRulesEl.value : ''
-  };
-}
-
-function statsGetPrimerOptionsFromDom() {
-  var templateEl = document.getElementById('primer-template');
-  var defaultsEl = document.getElementById('primer-defaults');
-  var mappingsEl = document.getElementById('primer-mappings');
-  return {
-    template: templateEl ? templateEl.value : '',
-    defaults: defaultsEl ? defaultsEl.value : '',
-    mappings: mappingsEl ? mappingsEl.value : ''
-  };
-}
-
 function buildCombinedCaptionsText(items) {
   if (!items.length) {
     return '';

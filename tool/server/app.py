@@ -12,7 +12,7 @@ from .caption_ops import _resolve_folder, list_media_files, load_caption_text, s
 from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, rename_response
 from .media import media_crop_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
-from .run_ops import autoset_run_response, generate_dataset_config_response, train_run_response
+from .run_ops import autoset_run_response, prepare_dataset_response, generate_dataset_config_response, train_run_response
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -165,6 +165,12 @@ def autoset_run():
     data = request.get_json(silent=True) or {}
     folder = data.get("folder", "").strip()
     return autoset_run_response(folder)
+
+@app.route("/fs/prepare_dataset", methods=["POST"])
+def prepare_dataset_route():
+    data = request.get_json(silent=True) or {}
+    folder = data.get("folder", "").strip()
+    return prepare_dataset_response(folder)
 
 @app.route("/fs/generate_dataset_config", methods=["POST"])
 def generate_dataset_config_route():
@@ -391,7 +397,7 @@ def maybe_create_config_files(folder_path):
     media_files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_ALL_EXTS]
     if not media_files:
         return
-    templates = ["confighi.toml", "configlo.toml", "dataset.hi.toml", "dataset.lo.toml"]
+    templates = ["config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"]
     templates_dir = TOOL_DIR / "templates"
     for name in templates:
         dest = folder / name

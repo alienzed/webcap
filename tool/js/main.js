@@ -46,13 +46,13 @@ function runAutosetForCurrentFolder() {
     setStatus('No folder selected for autoset.');
     return;
   }
-  setStatus('Running autoset...');
+  setStatus('Running legacy autoset...');
   streamPreviewFromFetch(
     '/fs/autoset_run',
     { folder: state.folder },
     ui,
     function () {
-      setStatus('Autoset finished.');
+      setStatus('Legacy autoset finished.');
     },
     function (err) {
       setStatus('Autoset failed: ' + err);
@@ -83,6 +83,60 @@ function runPrepareDatasetForCurrentFolder() {
       setStatus('Dataset preparation failed: ' + err);
     }
   );
+}
+
+function isEditableElement(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  var tag = (el.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select';
+}
+
+function moveSelectedMediaByOffset(offset) {
+  if (!offset || !state.currentItem || !state.currentItem.fileName || !ui.mediaListEl) {
+    return false;
+  }
+  var rows = Array.prototype.slice.call(
+    ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]')
+  );
+  if (!rows.length) {
+    return false;
+  }
+  var currentKey = state.currentItem.key;
+  var idx = rows.findIndex(function (row) {
+    return row.getAttribute('data-key') === currentKey;
+  });
+  if (idx === -1) {
+    return false;
+  }
+  var nextIdx = idx + offset;
+  if (nextIdx < 0 || nextIdx >= rows.length) {
+    return false;
+  }
+  var nextKey = rows[nextIdx].getAttribute('data-key');
+  if (!nextKey || nextKey === currentKey) {
+    return false;
+  }
+  var nextItem = state.items.find(function (item) {
+    return item && item.key === nextKey;
+  });
+  if (!nextItem) {
+    return false;
+  }
+
+  var goNext = function () {
+    selectPathMedia(nextItem).catch(function (err) {
+      setStatus(String(err && err.message ? err.message : err));
+    });
+  };
+  if (state.currentItem && state.currentItem.fileName) {
+    savePathCaption().then(goNext).catch(function (err) {
+      setStatus(String(err && err.message ? err.message : err));
+    });
+  } else {
+    goNext();
+  }
+  return true;
 }
 
 var sidebarActiveTab = 'review';
@@ -156,6 +210,9 @@ function wireAllUi() {
   wireCaptionHelpersUi();
   wireItemDetailsUi();
   wireSidebarTabs();
+  if (typeof wireAppSettingsUi === 'function') {
+    wireAppSettingsUi();
+  }
   var addInput = document.getElementById('checklist-add-input');
   var addBtn = document.getElementById('checklist-add-btn');
   if (addBtn && addInput) {
@@ -195,6 +252,16 @@ function wireAllUi() {
       }
     }
   });
+  document.addEventListener('keydown', function (e) {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    if (!state.currentItem || !state.currentItem.fileName) return;
+    if (isEditableElement(document.activeElement)) return;
+    var handled = moveSelectedMediaByOffset(e.key === 'ArrowUp' ? -1 : 1);
+    if (handled) {
+      e.preventDefault();
+    }
+  });
 
   // (Removed redundant/broken config autosave handler; handled by handleEditorInputAutosave)
   // Current folder row context menu handler
@@ -203,7 +270,7 @@ function wireAllUi() {
       e.preventDefault();
       var actions = [
         {
-          label: 'Run Autoset',
+          label: 'Run Autoset (Legacy)',
           run: function () {
             runAutosetForCurrentFolder();
           }
@@ -350,16 +417,16 @@ function wireAllUi() {
         setStatus('No folder selected for training.');
         return;
       }
-      setStatus('Starting training runs...');
+      setStatus('Printing training commands...');
       streamPreviewFromFetch(
         '/fs/train_run',
         { folder: state.folder },
         ui,
         function () {
-          setStatus('Training runs finished.');
+          setStatus('Training command preview finished.');
         },
         function (err) {
-          setStatus('Training failed: ' + err);
+          setStatus('Training command preview failed: ' + err);
         }
       );
     };

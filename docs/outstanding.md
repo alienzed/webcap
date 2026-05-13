@@ -38,6 +38,7 @@ If complete and confirmed, move to Completed section.
 - Many operations on files/folders will refresh the entire directory. For prune and rename, only the affected item is now updated (no full refresh). Other operations may still refresh the directory; consider further optimization if needed.
 - [Future] Allow placing .txt files (e.g., expressions.txt, places.txt, lighting.txt) in a folder to auto-populate additional phrase tabs. Each file is a list of phrases (one per line). Not implemented yet.
 - Set-wide (only current folder) search and replace. Use case: changing keyphrase or correcting a repeated typo.
+- Persist last selected working directory between refresh/restart (optional toggle in settings, with safe fallback when root/folder no longer exists).
 
 ## To think about more / Not clearly necessary
 - Up / Down keys to browse while media list is focused (lost when editing of course...).

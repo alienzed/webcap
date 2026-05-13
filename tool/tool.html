@@ -12,6 +12,34 @@
         <div class="app">
             <div class="panel stack">
                 <div class="panel-scrollable">
+                    <div id="utility-bar" class="utility-bar">
+                        <button id="utility-current-path-btn" type="button" class="utility-btn utility-path-btn" title="">
+                            <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M3 10.5L12 3l9 7.5"></path>
+                                <path d="M6.5 9.5V20h11V9.5"></path>
+                            </svg>
+                        </button>
+                        <div class="utility-spacer"></div>
+                        <button id="utility-settings-btn" type="button" class="utility-btn utility-icon-btn" title="App settings">
+                            <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5z"></path>
+                                <path d="M19.02 10.94l1.23-.95-1.5-2.6-1.52.54a6.98 6.98 0 0 0-1.47-.86l-.25-1.6h-3l-.25 1.6c-.52.18-1.02.47-1.47.86l-1.52-.54-1.5 2.6 1.23.95a6.9 6.9 0 0 0 0 1.72l-1.23.95 1.5 2.6 1.52-.54c.45.39.95.68 1.47.86l.25 1.6h3l.25-1.6c.52-.18 1.02-.47 1.47-.86l1.52.54 1.5-2.6-1.23-.95a6.9 6.9 0 0 0 0-1.72z"></path>
+                            </svg>
+                        </button>
+                        <button id="utility-reboot-btn" type="button" class="utility-btn utility-icon-btn" title="Reload config settings">
+                            <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M3 12a9 9 0 1 0 3-6.71"></path>
+                                <path d="M3 4v5h5"></path>
+                            </svg>
+                        </button>
+                        <button id="utility-help-btn" type="button" class="utility-btn utility-icon-btn" title="Open help">
+                            <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"></circle>
+                                <path d="M9.75 9.75a2.25 2.25 0 0 1 4.02 1.37c0 1.5-1.77 1.88-1.77 3.13"></path>
+                                <path d="M12 16.75h.01"></path>
+                            </svg>
+                        </button>
+                    </div>
                     <div id="caption-filter-row" class="filter-row">
                         <input id="media-filter" type="search" placeholder="filter">
                     </div>
@@ -22,7 +50,7 @@
                             type="button"
                             title="Refresh directory"
                             class="refresh-btn-square floating-refresh"
-                        >↻</button>
+                        >&#8635;</button>
                         <div id="media-list-header">
                             <div
                                 id="up-one-directory-row"
@@ -30,17 +58,17 @@
                                 data-type="up"
                                 style="display:none"
                             >
-                                <div>⬆ Up One Directory</div>
+                                <div>&uarr; Up One Directory</div>
                             </div>
                             <div id="current-folder-row" class="media-item folder-item header-item current-folder-item current-folder-bordered" data-type="current-folder">
-                                <div>🗁
+                                <div>&#128193;
                                     <span id="current-folder-label"></span>
                                 </div>
                             </div>
                         </div>
                         <div id="media-list" class="media-list with-stats-pane"></div>
                     </div>
-                    <div class="stats-panel">                        
+                    <div class="stats-panel">
                         <button
                             id="focus-set-exit-btn"
                             type="button"
@@ -151,7 +179,7 @@
                 <div class="editor-wrapper">
                     <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
                     <div id="caption-checklist-panel" class="checklist-panel" style="display:none;">
-                        <button id="checklist-close-btn" title="Close checklist" class="checklist-close-btn">×</button>
+                        <button id="checklist-close-btn" title="Close checklist" class="checklist-close-btn">&times;</button>
                         <div id="caption-helper-tabs" class="caption-helper-tabs">
                             <button
                                 id="caption-helper-tab-requirements-btn"
@@ -250,6 +278,47 @@
                 </div>
             </div>
         </div>
+        <div id="app-settings-modal" class="app-settings-modal hidden" aria-hidden="true">
+            <div class="app-settings-dialog">
+                <div class="app-settings-header">
+                    <strong>App Settings</strong>
+                    <button id="app-settings-close-btn" type="button" title="Close">x</button>
+                </div>
+                <div class="app-settings-grid">
+                    <label for="app-settings-filesystem-root">Filesystem Root</label>
+                    <input id="app-settings-filesystem-root" type="text" placeholder="C:\path\to\training">
+
+                    <label for="app-settings-filesystem-models">Models Root</label>
+                    <input id="app-settings-filesystem-models" type="text" placeholder="C:\path\to\models">
+
+                    <label for="app-settings-training-diffusion-pipe-wsl">Diffusion Pipe WSL</label>
+                    <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/home/user/diffusion-pipe">
+
+                    <label for="app-settings-training-activate-script">Activate Script</label>
+                    <input id="app-settings-training-activate-script" type="text" placeholder="dp-clean/bin/activate">
+
+                    <label for="app-settings-training-config-hi">Train Config (HI)</label>
+                    <input id="app-settings-training-config-hi" type="text" placeholder="config.hi.toml">
+
+                    <label for="app-settings-training-config-lo">Train Config (LO)</label>
+                    <input id="app-settings-training-config-lo" type="text" placeholder="config.lo.toml">
+                </div>
+                <label class="app-settings-debug-row">
+                    <input id="app-settings-debug" type="checkbox">
+                    <span>Debug mode</span>
+                </label>
+                <details class="app-settings-advanced">
+                    <summary>Advanced JSON</summary>
+                    <textarea id="app-settings-json" rows="10" spellcheck="false"></textarea>
+                </details>
+                <div id="app-settings-status" class="app-settings-status"></div>
+                <div class="app-settings-actions">
+                    <button id="app-settings-save-btn" type="button">Save</button>
+                    <button id="app-settings-save-reload-btn" type="button">Save + Reboot</button>
+                    <button id="app-settings-cancel-btn" type="button">Cancel</button>
+                </div>
+            </div>
+        </div>
         <!-- JS load order: shared globals first, feature files, then main.js wiring -->
         <script src="/static/js/constants.js"></script>
         <script src="/static/js/common.js"></script>
@@ -265,6 +334,7 @@
         <script src="/static/js/checklist.js"></script>
         <script src="/static/js/caption_helpers.js"></script>
         <script src="/static/js/item_details.js"></script>
+        <script src="/static/js/app_settings.js"></script>
         <script src="/static/js/main.js"></script>
     </body>
 </html>

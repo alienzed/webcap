@@ -6,12 +6,85 @@ Centralized config and root path logic for the backend.
 
 from pathlib import Path
 import json
+import copy
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
-with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-    config = json.load(f)
-FS_ROOT = Path(config['filesystem']['root'])
-FS_DEBUG = config.get('debug', False)
+
+config = {}
+FS_ROOT = Path(".")
+FS_DEBUG = False
+
+
+def _as_clean_str(value, field_name):
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"Missing or empty {field_name}")
+    return text
+
+
+def validate_config_payload(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("Config must be a JSON object.")
+
+    out = copy.deepcopy(payload)
+    filesystem = out.get("filesystem")
+    if not isinstance(filesystem, dict):
+        raise ValueError("Config.filesystem must be an object.")
+
+    root = _as_clean_str(filesystem.get("root"), "filesystem.root")
+    models = str(filesystem.get("models") or "").strip()
+    out["filesystem"] = {
+        "root": root,
+        "models": models,
+    }
+
+    out["debug"] = bool(out.get("debug", False))
+
+    training = out.get("training")
+    if training is None:
+        training = {}
+    if not isinstance(training, dict):
+        raise ValueError("Config.training must be an object when provided.")
+    normalized_training = {}
+    for key in ("diffusion_pipe_wsl", "activate_script", "config_hi", "config_lo"):
+        if key in training:
+            normalized_training[key] = str(training.get(key) or "").strip()
+    if normalized_training:
+        out["training"] = normalized_training
+    elif "training" in out:
+        out["training"] = {}
+
+    return out
+
+
+def load_config_from_disk():
+    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+        raw = json.load(f)
+    return validate_config_payload(raw)
+
+
+def save_config_to_disk(payload):
+    normalized = validate_config_payload(payload)
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+        json.dump(normalized, f, indent=2)
+        f.write("\n")
+    return normalized
+
+
+def reload_runtime_config():
+    global config, FS_ROOT, FS_DEBUG
+    loaded = load_config_from_disk()
+    config = loaded
+    FS_ROOT = Path(config['filesystem']['root'])
+    FS_DEBUG = bool(config.get('debug', False))
+    return config
+
+
+def get_config_snapshot():
+    return copy.deepcopy(config)
+
+
+reload_runtime_config()
 
 def safe_join_fs_root(rel_path):
     rel_path = rel_path.strip().replace('..', '').replace('\\', '/').replace('//', '/')

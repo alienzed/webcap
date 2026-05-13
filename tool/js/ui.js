@@ -406,6 +406,7 @@ function refreshTrainingConfigList() {
 // Directory listing now uses backend /fs/list
 function refreshCurrentDirectory() {
   var path = state.folder || '';
+  updateUtilityPathLabel(path);
   updateSetFolderScopedUi();
   updateReviewButtonAvailability();
   debugLog('[webcap] refreshCurrentDirectory: called with path', path);
@@ -478,6 +479,9 @@ function refreshCurrentDirectory() {
             } else {
               currentLabel.textContent = (typeof ROOT_FOLDER_LABEL === 'string' && ROOT_FOLDER_LABEL.length) ? ROOT_FOLDER_LABEL : 'root';
             }
+          }
+          if (typeof updateUtilityPathLabel === 'function') {
+            updateUtilityPathLabel(state.folder || '');
           }
           setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
           refreshTrainingConfigList();

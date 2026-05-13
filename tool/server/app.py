@@ -7,7 +7,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
 
-from .config import safe_join_fs_root, FS_ROOT, FS_DEBUG, fill_template_placeholders
+from . import config as app_config
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, rename_response
@@ -23,6 +23,10 @@ CSS_DIR = TOOL_DIR / "css"
 TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
+
+# Aliases kept for readability in route handlers.
+safe_join_fs_root = app_config.safe_join_fs_root
+fill_template_placeholders = app_config.fill_template_placeholders
 
 @app.route("/fs/folder_state/save", methods=["POST"])
 def folder_state_save():
@@ -55,7 +59,7 @@ def folder_state_save():
             print("[folder_state_save] Could not read back file:", e)
         return jsonify({"ok": True})
     except Exception as e:
-        if FS_DEBUG:
+        if app_config.FS_DEBUG:
             # print("[folder_state_save] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
@@ -71,14 +75,14 @@ def fs_read():
         with open(abs_path, "r", encoding="utf-8") as f:
             return f.read()
     except Exception as e:
-        if FS_DEBUG:
+        if app_config.FS_DEBUG:
             # print("[fs_read] ERROR:", e)
             traceback.print_exc()
         return ("", 400)
 
 @app.route("/fs/root", methods=["GET"])
 def fs_root():
-    return jsonify({"root": str(FS_ROOT)})
+    return jsonify({"root": str(app_config.FS_ROOT)})
 
 @app.route("/")
 def index():
@@ -97,6 +101,49 @@ def static_files(filename):
     if filename.startswith("templates/"):
         return send_from_directory(TEMPLATES_DIR, filename[10:])
     return send_from_directory(TOOL_DIR, filename)
+
+
+@app.route("/app/config", methods=["GET"])
+def app_config_get():
+    return jsonify(app_config.get_config_snapshot())
+
+
+@app.route("/app/config", methods=["POST"])
+def app_config_save():
+    data = request.get_json(silent=True)
+    try:
+        saved = app_config.save_config_to_disk(data)
+        return jsonify({"ok": True, "config": saved})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        if app_config.FS_DEBUG:
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/app/reboot", methods=["POST"])
+def app_reboot():
+    try:
+        loaded = app_config.reload_runtime_config()
+        return jsonify({
+            "ok": True,
+            "message": "Runtime configuration reloaded.",
+            "config": loaded,
+        })
+    except Exception as e:
+        if app_config.FS_DEBUG:
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/app/help_readme", methods=["GET"])
+def app_help_readme():
+    readme_path = ROOT / "README.md"
+    if not readme_path.exists() or not readme_path.is_file():
+        return Response("README.md not found.\n", status=404, mimetype="text/plain")
+    text = readme_path.read_text(encoding="utf-8")
+    return Response(text, mimetype="text/plain")
 
 @app.route("/caption/load", methods=["GET"])
 def caption_load_route():
@@ -331,7 +378,7 @@ def fs_describe():
             "folder_state": folder_state  # full .webcap_state.json
         })
     except Exception as e:
-        if FS_DEBUG:
+        if app_config.FS_DEBUG:
             print("[fs_describe] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
@@ -351,7 +398,7 @@ def list_config():
         files = list_toml_files(folder)
         return jsonify({"files": files})
     except Exception as e:
-        if FS_DEBUG:
+        if app_config.FS_DEBUG:
             print("[list_config] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
@@ -364,7 +411,7 @@ def read_config():
         text = read_toml_file(folder, filename)
         return Response(text, mimetype="text/plain")
     except Exception as e:
-        if FS_DEBUG:
+        if app_config.FS_DEBUG:
             print("[read_config] ERROR:", e)
             traceback.print_exc()
         return Response("", status=400)
@@ -379,7 +426,7 @@ def save_config():
         save_toml_file(folder, filename, text)
         return jsonify({"ok": True})
     except Exception as e:
-        if FS_DEBUG:
+        if app_config.FS_DEBUG:
             print("[save_config] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
@@ -404,7 +451,7 @@ def maybe_create_config_files(folder_path):
         src = templates_dir / name
         if not dest.exists() and src.exists():
             try:
-                dataset_rel = folder.relative_to(FS_ROOT).as_posix()
+                dataset_rel = folder.relative_to(app_config.FS_ROOT).as_posix()
             except Exception:
                 dataset_rel = folder.name
             # Read template as text

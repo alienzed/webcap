@@ -22,11 +22,29 @@ ui = {
   captionFilterCount: document.getElementById('caption-filter-count'),
   statusEl: document.getElementById('status-text'),
   refreshBtn: document.getElementById('refresh-btn'),
+  utilityCurrentPathBtn: document.getElementById('utility-current-path-btn'),
+  utilitySettingsBtn: document.getElementById('utility-settings-btn'),
+  utilityRebootBtn: document.getElementById('utility-reboot-btn'),
+  utilityHelpBtn: document.getElementById('utility-help-btn'),
   reviewBtn: document.getElementById('review-captions-btn'),
   upRow: document.getElementById('up-one-directory-row'),
   focusSetExitBtn: document.getElementById('focus-set-exit-btn'),
   currentFolderRow: document.getElementById('current-folder-row'),
   consolePanelEl: document.getElementById('console-panel'),
+  appSettingsModalEl: document.getElementById('app-settings-modal'),
+  appSettingsCloseBtn: document.getElementById('app-settings-close-btn'),
+  appSettingsCancelBtn: document.getElementById('app-settings-cancel-btn'),
+  appSettingsSaveBtn: document.getElementById('app-settings-save-btn'),
+  appSettingsSaveReloadBtn: document.getElementById('app-settings-save-reload-btn'),
+  appSettingsStatusEl: document.getElementById('app-settings-status'),
+  appSettingsRootEl: document.getElementById('app-settings-filesystem-root'),
+  appSettingsModelsEl: document.getElementById('app-settings-filesystem-models'),
+  appSettingsTrainingDiffusionPipeWslEl: document.getElementById('app-settings-training-diffusion-pipe-wsl'),
+  appSettingsTrainingActivateScriptEl: document.getElementById('app-settings-training-activate-script'),
+  appSettingsTrainingConfigHiEl: document.getElementById('app-settings-training-config-hi'),
+  appSettingsTrainingConfigLoEl: document.getElementById('app-settings-training-config-lo'),
+  appSettingsDebugEl: document.getElementById('app-settings-debug'),
+  appSettingsJsonEl: document.getElementById('app-settings-json'),
 };
 
 const DEFAULT_CHECKLIST_ITEMS = [
@@ -55,6 +73,7 @@ var MEDIA_EXTENSIONS = {
 
 // Global variable for the root folder label (set from config)
 var ROOT_FOLDER_LABEL = '/';
+var ROOT_FOLDER_PATH = '';
 
 // Tokens in this blacklist will be ignored when counting frequency for stats/primer purposes. This is a simple way to filter out common stop words without needing a full NLP pipeline. The list can be expanded as needed.
 var TOKEN_BLACKLIST = {

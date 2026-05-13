@@ -1,31 +1,18 @@
 
 from pathlib import Path
 from flask import send_from_directory
-import json
 import os
 
-# Load FS_ROOT from config.json
-CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
-with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-    config = json.load(f)
-FS_ROOT = Path(config['filesystem']['root'])
-
-# Minimal safe join (strip .., normalize, join to FS_ROOT)
-def safe_join_fs_root(rel_path):
-    rel_path = rel_path.strip().replace('..', '').replace('\\', '/').replace('//', '/')
-    if rel_path.startswith('/'):
-        rel_path = rel_path[1:]
-    abs_path = (FS_ROOT / rel_path).resolve()
-    return abs_path
+from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
 
 def _resolve_folder(folder: str) -> Path:
     folder = (folder or '').strip()
     if not folder:
         # Treat empty string as root
-        path = FS_ROOT
+        path = app_config.FS_ROOT
     else:
-        path = safe_join_fs_root(folder)
+        path = app_config.safe_join_fs_root(folder)
     if not path.exists() or not path.is_dir():
         raise ValueError('Folder does not exist')
     return path

@@ -1,120 +1,231 @@
 # WebCap
 
-Media caption editing and review with side-by-side preview, robust file-based state, and atomic backend operations.
-
----
+WebCap is a local-first media curation and captioning tool for training-set workflows.
+It focuses on fast iteration, explicit mutations, and reversible file operations.
 
 ## Requirements
 
 - Python 3.10+
-- pip (Python package manager)
-- [ffmpeg](https://ffmpeg.org/) (must be in your PATH)
-- [deface](https://github.com/alienzed/deface) (optional, for video anonymization; must be in your PATH)
+- `pip`
+- `ffmpeg` in `PATH` (required for metadata and media tooling)
+- `deface` in `PATH` (optional, only needed if you use deface actions)
 
-## Installation
+## Install
 
-1. **Clone this repository**
-   ```bash
-   git clone https://github.com/alienzed/webcap.git
-   cd webcap
-   ```
-2. **Install Python dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **(Optional) Install system dependencies**
-   - [ffmpeg](https://ffmpeg.org/download.html): Download and add to your PATH.
-   - [deface](https://github.com/alienzed/deface): Install and add to your PATH if you want to use the deface feature.
+1. Clone and enter the repo.
 
+```bash
+git clone https://github.com/alienzed/webcap.git
+cd webcap
+```
+
+2. Install Python dependencies.
+
+```bash
+pip install -r requirements.txt
+```
+
+## Configure
+
+Primary config file: `tool/config.json`
+
+Minimum required shape:
+
+```json
+{
+  "filesystem": {
+    "root": "C:/path/to/sets",
+    "models": "C:/path/to/models"
+  },
+  "debug": false,
+  "training": {
+    "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
+    "activate_script": "dp-clean/bin/activate",
+    "config_hi": "config.hi.toml",
+    "config_lo": "config.lo.toml"
+  }
+}
+```
+
+Notes:
+- `filesystem.root` is required.
+- Training values are used by command preview in the Training tab.
+- You can also edit these settings from the in-app Settings modal.
+
+## Run
+
+```bash
+python -m tool.server.app
+```
+
+Open:
+- http://127.0.0.1:5000/
+
+## Workflow Overview
+
+1. Open a set folder.
+2. Curate files (rename/prune/reset/restore/crop/deface as needed).
+3. Write and refine captions while previewing media.
+4. Review captions and metadata.
+5. Run dataset prep and generate config artifacts.
+6. Preview concrete HI/LO training commands.
+7. Execute training externally.
+
+## Mini How-To: Core Features
+
+### 1. Browse folders and select media
+
+1. Use the left panel to navigate folders.
+2. Click a media file to load preview and caption.
+3. Use `ArrowUp` / `ArrowDown` to move between media items when focus is not in an input/textarea.
+
+### 2. Edit captions
+
+1. Select a media file.
+2. Edit text in the center editor.
+3. Autosave writes a `.txt` beside the media file.
+4. `Ctrl+S` / `Cmd+S` triggers explicit save from the editor.
+
+### 3. Mark reviewed state
+
+1. Double-click a media row to toggle reviewed on/off.
+2. Reviewed state persists in `.webcap_state.json` for that folder.
+3. To clear all reviewed state in current folder: right-click current folder row, then choose `Reset Reviewed`.
+
+### 4. File operations (safe and explicit)
+
+Right-click a media item for operations:
+- `Rename`
+- `Prune` (moves media to `originals` with collision-safe naming)
+- `Reset` (overwrite current file with original backup)
+- `Restore` (from `originals` view)
+- `Duplicate Image`
+- `Crop...`
+- `Deface...`
+
+Right-click a folder for operations:
+- `Rename Folder`
+- `Duplicate Folder`
+- `Open in Explorer`
+
+### 5. Deface media
+
+Per file:
+1. Right-click media file.
+2. Choose `Deface...`.
+3. Enter threshold (`0.0` to `1.0`, default `0.4`).
+
+Per folder:
+1. Right-click current folder row.
+2. Choose `Deface`.
+
+Behavior:
+- Originals are backed up before overwrite.
+- Output streams to console panel.
+
+### 6. Review captions and metadata
+
+1. Use `Review Captions` / review pane actions.
+2. Review output appears in the right preview pane.
+3. Metadata is served from `media_metadata.json` (auto-updated by backend as files change).
+
+### 7. Training prep hub
+
+In the Training tab:
+
+1. `Prepare Dataset` to run dataset preparation pipeline.
+2. `Generate Dataset Configs` to (re)generate config artifacts for the set.
+3. `Train` to print resolved HI/LO training commands (preview only).
+
+Important:
+- Training command execution is currently disabled in-app.
+- WebCap prints concrete commands so you can run them externally.
+
+### 8. Legacy autoset
+
+Use when needed for older flow compatibility:
+
+1. Right-click current folder row.
+2. Choose `Run Autoset (Legacy)`.
+
+This streams legacy autoset output to the console panel.
+
+### 9. App settings and runtime reload
+
+Utility bar buttons (top-left area):
+- Home/path button: shows current folder path in tooltip.
+- Gear button: open App Settings modal.
+- Reboot button: reload runtime config from `tool/config.json`.
+- `?` button: load this README into preview pane.
+
+Settings modal flow:
+1. Open settings (`gear`).
+2. Edit fields or advanced JSON.
+3. Click `Save` to write file.
+4. Click `Save + Reboot` (or utility reboot) to apply runtime changes immediately.
+
+## State and Artifacts
+
+- Folder state: `.webcap_state.json`
+- Captions: adjacent `.txt` files per media file
+- Metadata cache/report: `media_metadata.json`
+- Originals backup folder: `originals/`
+- Generated configs use templates from `tool/templates/`
+
+## Backend Endpoints (high level)
+
+- Config/runtime: `/app/config`, `/app/reboot`, `/app/help_readme`
+- Folder/media: `/fs/describe`, `/caption/load`, `/caption/save`, `/caption/media`
+- Mutations: `/media/prune`, `/media/reset`, `/media/restore`, `/media/crop`, `/fs/deface`
+- Training prep: `/fs/prepare_dataset`, `/fs/generate_dataset_config`, `/fs/train_run`, `/fs/autoset_run`
 
 ## Tests
 
-Automated tests are located in the `tests/` folder at the project root. These scripts validate core backend features (such as prune/restore) and should be run after major changes:
+Current test files:
+- `tests/test_dataset_config.py`
+- `tests/test_file_ops_routes.py`
+- `tests/test_prune_restore.py`
 
-```
+Quick run examples:
+
+```bash
 python tests/test_prune_restore.py
+python tests/test_file_ops_routes.py
+python tests/test_dataset_config.py
 ```
-
-## Configuration
-
-- Edit `tool/config.json` to set your filesystem root and other options.
-  - Example:
-    ```json
-    {
-      "filesystem": {
-        "root": "C:/path/to/your/media"
-      }
-    }
-    ```
-
-## Running the App
-
-1. **Start the backend server:**
-   ```bash
-   python -m tool.server.app
-   ```
-2. **Open your browser to:**
-   [http://127.0.0.1:5000/](http://127.0.0.1:5000/)
-
----
-
-## Usage
-
-### Basic Workflow
-1. **Navigate folders:** Use the sidebar folder list to browse and select your media directory. You can also enter a path manually if needed to load media files.
-2. **Select a media file** from the left list.
-3. **Edit the caption** in the center pane. Captions autosave to `.txt` files next to the media.
-4. **Preview** the media and caption in the right pane.
-5. **Mark files as reviewed** by double-clicking them in the list (turns green). Reviewed state is saved and persists.
-6. **Stats and Primer**: Edit stats and primer fields at the top; changes are auto-saved.
-7. **Prune, Restore, Deface**: Use context menus for advanced file operations. All destructive actions are atomic and safe.
-
-### Features
-- **Autoset dataset prep:** Instantly prepares your media folder for WAN/diffusion-pipe training. Autoset scans your videos and images, analyzes resolutions and aspect ratios, and automatically creates optimal training buckets and a ready-to-use `dataset.auto.toml` config. It ensures all usable clips are included, avoids upscaling, and saves hours of manual sorting. Perfect for efficient, VRAM-aware dataset setup.
-- **Atomic backend:** All state and file operations are atomic and fail loudly—no silent errors or fallbacks.
-- **File-based state:** All state is stored in `.webcap_state.json` in each folder. No database required.
-- **Reviewed state:** Mark/unmark files as reviewed; state is always in sync with real files.
-- **Stats/Primer:** Edit and auto-save stats and primer fields for each folder.
-- **Prune/Restore/Deface:** Safely prune, restore, or anonymize media files with one click.
-- **No modules:** All frontend code is global, explicit, grouped by feature for maximum predictability.
-
-### Project Structure
-- `tool/tool.html` — Main UI HTML
-- `tool/js/` — All frontend JavaScript (global, non-modular)
-- `tool/server/` — Python Flask backend
-- `tool/config.json` — Filesystem root and config
-- `tool/css/` — CSS (Bootstrap and custom styles)
-- `templates/` — TOML templates for config and dataset
-
----
 
 ## Troubleshooting
 
-- **No media appears:**
-  - Check your `tool/config.json` filesystem root path.
-  - Ensure your media files are in a supported format (`.mp4`, `.webm`, `.ogg`, images).
-- **State not saving:**
-  - Make sure you see network requests to `/fs/folder_state/save` after edits.
-  - Check for errors in the browser console and backend terminal.
-- **Deface/prune/restore not working:**
-  - Ensure `deface` and `ffmpeg` are installed and in your PATH.
-  - Check backend logs for error messages.
-- **Fail loudly:**
-  - The app is designed to crash on missing dependencies or logic errors. Fix the root cause and reload.
+### No media appears
 
-## FAQ
+- Verify `filesystem.root` in `tool/config.json`.
+- Ensure files are supported media extensions.
+- Check backend terminal for path or permission errors.
 
-**Q: Can I use this on a network drive or external disk?**
-A: Yes, as long as the path is set correctly in `tool/config.json` and the server has access.
+### Settings saved but not applied
 
-**Q: Where is my data stored?**
-A: All state is stored in `.webcap_state.json` in each folder. Captions are plain `.txt` files next to media.
+- Use `Save + Reboot` in settings modal, or click utility reboot button.
 
-**Q: How do I reset or clear state?**
-A: Delete the `.webcap_state.json` file in the folder. The app will recreate it as needed.
+### Training preview has warnings
 
----
+- Check `training.diffusion_pipe_wsl`, `training.config_hi`, `training.config_lo` in config.
+- Ensure config files exist in the selected folder.
+
+### Deface fails
+
+- Ensure `deface` executable is installed and visible in `PATH`.
+- Confirm ffmpeg/ffprobe tooling is available.
+
+## Project Structure
+
+- `tool/tool.html`: main UI layout
+- `tool/js/`: frontend scripts (global, feature-split)
+- `tool/css/`: styles
+- `tool/server/`: Flask backend and file operations
+- `tool/templates/`: dataset/config templates
+- `docs/`: feature specs and workflow notes
+- `tests/`: backend validation scripts
 
 ## License
 
-MIT License. See LICENSE file for details.
+MIT. See `LICENSE` if present in your distribution.

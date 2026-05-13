@@ -10,6 +10,7 @@ try {
     var config = JSON.parse(xhr.responseText);
     if (config && config.filesystem && config.filesystem.root) {
       var rootPath = config.filesystem.root;
+      ROOT_FOLDER_PATH = String(rootPath || '');
       // Use last segment of root path as label
       ROOT_FOLDER_LABEL = String(rootPath).replace(/[\\/]+$/, '').split(/[\\/]/).pop();
     }

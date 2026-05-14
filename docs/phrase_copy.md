@@ -1,7 +1,7 @@
-# Phrase Copy Panel
+# Phrase Helper Panel
 
 ## Purpose
-A vertical panel for quickly copying preset or user-added words/phrases (e.g., adjectives, short phrases) to the clipboard for use in captions. Designed for speed and minimal distraction during captioning.
+A vertical panel for quickly inserting or copying preset/user-added words and phrases for use in captions. Designed for speed and minimal distraction during captioning.
 
 ---
 
@@ -16,8 +16,11 @@ A vertical panel for quickly copying preset or user-added words/phrases (e.g., a
   - The panel is part of a tabbed interface with the caption requirements panel (Tab 1: Requirements, Tab 2: Phrases).
   - A floating toggle button (top right of the editor) collapses/expands the panel (optional).
 - **Interaction:**
-  - Each phrase is a single-line button or text element.
-  - Clicking a phrase copies it to the clipboard (no checkboxes, no drag/drop).
+  - Each phrase is shown as a button.
+  - Clicking the phrase inserts it into the caption at the cursor.
+  - Inserted phrases are spaced so they do not stick to adjacent caption text.
+  - A small `Copy` button copies the phrase to the clipboard.
+  - No checkboxes, no drag/drop.
   - Add/remove phrases on the fly (mirroring caption requirements UI, but simpler).
 - **Persistence:**
   - Phrase list is saved per-folder in folder state (just an array of strings).

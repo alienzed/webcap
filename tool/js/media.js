@@ -254,42 +254,47 @@ function getAdvancedFlagFilterValue() {
 
 function selectPathMedia(mediaItem) {
   return new Promise(function (resolve, reject) {
-    // Set currentItem before any UI update
-    state.currentItem = mediaItem;
-    // Always ensure editor is editable
-    ui.editorEl.removeAttribute('readonly');
-    renderPathPreview(state.folder, mediaItem.fileName);
-    HttpModule.get('/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), function (status, responseText) {
-      var text = '';
-      if (status !== 200) {
-        renderFileList();
-        reject(new Error('Failed to load caption for ' + mediaItem.fileName));
-        return;
-      }
-      try {
-        var data = JSON.parse(responseText);
-        text = data.caption || '';
-      } catch (e) {
-        ui.editorEl.value = '';
-        setStatus('Error parsing caption: ' + e);
-        renderFileList();
-        reject(e);
-        return;
-      }
-      // If caption is missing or empty, auto-populate with primer/template if available
-      if (!(text || '').trim()) {
-        var primerText = buildAutoPrimer(mediaItem.fileName);
-        ui.editorEl.value = primerText || '';
-      } else {
-        ui.editorEl.value = text;
-      }
-      setStatus(buildSelectedMediaStatus(mediaItem));
-      renderChecklistPanel();
-      // Re-render list to show selection
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), false);
+    try {
+      xhr.send(null);
+    } catch (err) {
       renderFileList();
-      scrollCurrentMediaRowIntoView();
-      resolve(mediaItem);
-    });
+      reject(err);
+      return;
+    }
+
+    var text = '';
+    if (xhr.status !== 200) {
+      renderFileList();
+      reject(new Error('Failed to load caption for ' + mediaItem.fileName));
+      return;
+    }
+    try {
+      var data = JSON.parse(xhr.responseText);
+      text = data.caption || '';
+    } catch (e) {
+      setStatus('Error parsing caption: ' + e);
+      renderFileList();
+      reject(e);
+      return;
+    }
+    // Load before committing selection so the editor and save target change together.
+    var nextEditorValue = text;
+    if (!(text || '').trim()) {
+      var primerText = buildAutoPrimer(mediaItem.fileName);
+      nextEditorValue = primerText || '';
+    }
+    state.currentItem = mediaItem;
+    ui.editorEl.removeAttribute('readonly');
+    ui.editorEl.value = nextEditorValue;
+    renderPathPreview(state.folder, mediaItem.fileName);
+    setStatus(buildSelectedMediaStatus(mediaItem));
+    renderChecklistPanel();
+    // Re-render list to show selection
+    renderFileList();
+    scrollCurrentMediaRowIntoView();
+    resolve(mediaItem);
   });
 }
 

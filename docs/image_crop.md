@@ -19,7 +19,7 @@ This is not a general image-editing workflow. V1 is intentionally bare bones.
 - User adjusts the crop box.
 - User clicks `Apply`.
 - WebCap crops the working media file in place.
-- Modal closes and the preview refreshes.
+- Modal closes, the folder reloads, and the cropped file is reselected.
 
 ## Safety Model
 

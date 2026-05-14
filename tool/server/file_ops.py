@@ -230,3 +230,25 @@ def open_in_explorer_response(rel_path):
             print("[open_in_explorer] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+def open_in_vscode_response(rel_path):
+    rel_path = (rel_path or "").strip()
+    print("[open_in_vscode] Received rel_path:", rel_path)
+    try:
+        abs_path = safe_join_fs_root(rel_path)
+        print("[open_in_vscode] Resolved abs_path:", abs_path)
+        if not abs_path.exists() or not abs_path.is_dir():
+            return jsonify({"error": "Folder does not exist"}), 404
+
+        code_cmd = shutil.which("code") or shutil.which("code.cmd")
+        if not code_cmd:
+            return jsonify({"error": "VS Code command not found. In VS Code, run 'Shell Command: Install code command in PATH'."}), 404
+
+        subprocess.Popen([code_cmd, str(abs_path)])
+        return jsonify({"ok": True})
+    except Exception as e:
+        if FS_DEBUG:
+            print("[open_in_vscode] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 500

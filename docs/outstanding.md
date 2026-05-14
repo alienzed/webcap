@@ -41,21 +41,29 @@ This file tracks implemented work vs outstanding items.
 - Media list polish:
   - Selected row now auto-scrolls into view after keyboard navigation, prune-next selection, and direct file selection.
 
-## Outstanding (Active)
+## 1.0 Candidate
+- No active blockers tracked for 1.0.
+- Train action remains command-preview only by design.
+- Legacy autoset remains available by design.
+
+## Enhancements
+- Set-wide search/replace for captions in the current folder only, with preview/confirmation before writing.
+- 1.1 caption highlighting: hover requirements/phrases to highlight matching words or phrases in the editor.
+- Review duplicate-token detection inside a single caption.
 - Validate training command preview behavior when config keys are missing (should still provide useful output where possible).
 
 ## Stabilization Mode
-- App is in lock-in mode: resist new feature work and prioritize targeted bug/regression fixes.
+- App is in 1.0 lock-in mode: resist new feature work and prioritize targeted bug/regression fixes.
 
 ## Backlog (Do Not Implement Yet)
 - Persist last selected working directory between refresh/restart (optional toggle in settings; safe fallback when missing).
 - Create new sibling set folder from filtered/selected/rated items (including originals + folder metadata copy semantics).
-- Set-wide search/replace (current folder only).
 - Optional phrase-tab auto-population from local `.txt` files (e.g., `expressions.txt`, `places.txt`, `lighting.txt`).
 - Dataset inferred sample/megaframe/VRAM/time estimation.
 - Further reduce full-directory refreshes for operations that can be local DOM/state updates.
 
 ## Nice to Haves (Out of Scope for Now)
+- Video crop/clip workflow, likely via a modal backed by a mature lightweight library/tool rather than custom in-app editing.
 - In-app training execution/orchestration for long-running jobs.
 - TensorBoard lifecycle helpers.
 - Broader multi-hour process orchestration in app.

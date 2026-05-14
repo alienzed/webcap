@@ -22,8 +22,35 @@ function openPathInExplorer(relativePath) {
   });
 }
 
+function openFolderInVsCode(relativePath) {
+  fetch('/fs/open_in_vscode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: relativePath || '' })
+  })
+  .then(function(resp) {
+    if (!resp.ok) {
+      return resp.json().then(function(data) {
+        throw new Error(data && data.error ? data.error : 'Failed to open folder in VS Code');
+      }).catch(function() {
+        throw new Error('Failed to open folder in VS Code');
+      });
+    }
+    setStatus('Opened current folder in VS Code.');
+  })
+  .catch(function(err) {
+    alert('Open in VS Code failed: ' + (err && err.message ? err.message : err));
+  });
+}
+
 function buildCurrentFolderContextActions() {
   return [
+    {
+      label: 'Open Folder in VS Code',
+      run: function () {
+        openFolderInVsCode(state.folder || '');
+      }
+    },
     {
       label: 'Run Autoset (Legacy)',
       run: function () {

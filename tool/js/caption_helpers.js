@@ -51,6 +51,31 @@ function saveCaptionHelpersToFolderState() {
   writeFolderStateFile(state.folder, snapshot);
 }
 
+function insertCaptionPhraseAtCursor(text) {
+  if (!ui || !ui.editorEl) return;
+  if (ui.editorEl.readOnly) {
+    setStatus('Cannot insert while editor is read-only.');
+    return;
+  }
+  var phrase = String(text || '').trim();
+  if (!phrase) return;
+  var editor = ui.editorEl;
+  var value = editor.value || '';
+  var start = typeof editor.selectionStart === 'number' ? editor.selectionStart : value.length;
+  var end = typeof editor.selectionEnd === 'number' ? editor.selectionEnd : value.length;
+  var before = value.slice(0, start).replace(/[ \t]+$/, '');
+  var after = value.slice(end).replace(/^[ \t]+/, '');
+  var leading = before && !/\s$/.test(before) ? ' ' : '';
+  var trailing = after && /^\s/.test(after) ? '' : ' ';
+  var insertion = leading + phrase + trailing;
+  editor.value = before + insertion + after;
+  var caret = before.length + insertion.length;
+  editor.focus();
+  editor.setSelectionRange(caret, caret);
+  editor.dispatchEvent(new Event('input', { bubbles: true }));
+  setStatus('Inserted phrase at cursor.');
+}
+
 function renderPhraseCopyPanel() {
   var container = document.getElementById('phrase-copy-items');
   container.innerHTML = '';
@@ -61,10 +86,21 @@ function renderPhraseCopyPanel() {
     var row = document.createElement('div');
     row.className = 'row-inline phrase-row-inline';
 
+    var phraseBtn = document.createElement('button');
+    phraseBtn.type = 'button';
+    phraseBtn.className = 'phrase-copy-item-btn';
+    phraseBtn.title = 'Insert at cursor';
+    phraseBtn.textContent = phrase;
+    (function (text) {
+      phraseBtn.onclick = function () {
+        insertCaptionPhraseAtCursor(text);
+      };
+    })(phrase);
+
     var copyBtn = document.createElement('button');
     copyBtn.type = 'button';
-    copyBtn.className = 'phrase-copy-item-btn';
-    copyBtn.textContent = phrase;
+    copyBtn.title = 'Copy phrase';
+    copyBtn.textContent = 'Copy';
     (function (text) {
       copyBtn.onclick = function () {
         navigator.clipboard.writeText(text);
@@ -72,33 +108,9 @@ function renderPhraseCopyPanel() {
       };
     })(phrase);
 
-    var insertBtn = document.createElement('button');
-    insertBtn.type = 'button';
-    insertBtn.title = 'Insert at cursor';
-    insertBtn.textContent = '↑';
-    (function (text) {
-      insertBtn.onclick = function () {
-        if (!ui || !ui.editorEl) return;
-        if (ui.editorEl.readOnly) {
-          setStatus('Cannot insert while editor is read-only.');
-          return;
-        }
-        var editor = ui.editorEl;
-        var value = editor.value || '';
-        var start = typeof editor.selectionStart === 'number' ? editor.selectionStart : value.length;
-        var end = typeof editor.selectionEnd === 'number' ? editor.selectionEnd : value.length;
-        editor.value = value.slice(0, start) + text + value.slice(end);
-        var caret = start + text.length;
-        editor.focus();
-        editor.setSelectionRange(caret, caret);
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
-        setStatus('Inserted phrase at cursor.');
-      };
-    })(phrase);
-
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.textContent = '×';
+    removeBtn.textContent = 'X';
     (function (idx) {
       removeBtn.onclick = function () {
         captionHelperPhrases.splice(idx, 1);
@@ -107,8 +119,8 @@ function renderPhraseCopyPanel() {
       };
     })(i);
 
+    row.appendChild(phraseBtn);
     row.appendChild(copyBtn);
-    row.appendChild(insertBtn);
     row.appendChild(removeBtn);
     container.appendChild(row);
   }

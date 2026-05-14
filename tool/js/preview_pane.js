@@ -153,6 +153,34 @@ function renderMediaMetadataPanel(folder, doc) {
         var tableDiv = panel.querySelector('#ar-group-table');
         if (!tableDiv) return;
 
+        function metadataCellHtml(row, column) {
+          var val = row[column] !== undefined ? String(row[column]) : '-';
+          if (column === 'file') {
+            return '<td><button class="fail-link metadata-file-link" data-file="' + encodeURIComponent(val) + '">' + escapeHtml(val) + '</button></td>';
+          }
+          if (column === 'aspect' && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(val)) {
+            return '<td class="metadata-value-error" title="Aspect ratio is outside supported buckets (square, 4:3, 16:9, 9:16).">' + escapeHtml(val) + '</td>';
+          }
+          return '<td>' + escapeHtml(val) + '</td>';
+        }
+
+        function wireMetadataFileLinks() {
+          Array.prototype.forEach.call(tableDiv.querySelectorAll('.metadata-file-link'), function(btn) {
+            btn.onclick = function () {
+              var fileName = decodeURIComponent(btn.getAttribute('data-file') || '');
+              if (!fileName) return;
+              if (window.parent && window.parent.postMessage) {
+                window.parent.postMessage({
+                  type: 'caption-review-select',
+                  fileName: fileName,
+                  focusFiles: [fileName],
+                  focusSource: 'Media Metadata'
+                }, '*');
+              }
+            };
+          });
+        }
+
         function renderTable(groupByAR) {
           var cols = ['file','resolution','fps','aspect','size','bitrate','codec','duration','frames'];
           var colLabels = {file:'File',resolution:'Resolution',fps:'FPS',aspect:'Aspect',size:'Size',bitrate:'Bitrate',codec:'Codec',duration:'Duration',frames:'Frames'};
@@ -172,30 +200,19 @@ function renderMediaMetadataPanel(folder, doc) {
               html += '<div style="margin:8px 0 2px 0;font-weight:bold;">Aspect Ratio: ' + escapeHtml(ar) + ' (' + arGroups[ar].length + ')</div>';
               html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
               arGroups[ar].forEach(function(row){
-                html += '<tr>' + cols.map(function(c){
-                  var val = row[c] !== undefined ? String(row[c]) : '-';
-                  if (c === 'aspect' && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(val)) {
-                    return '<td class="metadata-value-error" title="Aspect ratio is outside supported buckets (square, 4:3, 16:9, 9:16).">' + escapeHtml(val) + '</td>';
-                  }
-                  return '<td>' + escapeHtml(val) + '</td>';
-                }).join('') + '</tr>';
+                html += '<tr>' + cols.map(function(c){ return metadataCellHtml(row, c); }).join('') + '</tr>';
               });
               html += '</tbody></table>';
             });
           } else {
             html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
             data.forEach(function(row){
-              html += '<tr>' + cols.map(function(c){
-                var val = row[c] !== undefined ? String(row[c]) : '-';
-                if (c === 'aspect' && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(val)) {
-                  return '<td class="metadata-value-error" title="Aspect ratio is outside supported buckets (square, 4:3, 16:9, 9:16).">' + escapeHtml(val) + '</td>';
-                }
-                return '<td>' + escapeHtml(val) + '</td>';
-              }).join('') + '</tr>';
+              html += '<tr>' + cols.map(function(c){ return metadataCellHtml(row, c); }).join('') + '</tr>';
             });
             html += '</tbody></table>';
           }
           tableDiv.innerHTML = html;
+          wireMetadataFileLinks();
         }
 
         // Initial render (ungrouped)

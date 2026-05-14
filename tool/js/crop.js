@@ -157,9 +157,8 @@ function applyCrop() {
       closeCropModal();
       setStatus('Cropped: ' + fileName);
       refreshMediaResolutionCache();
-      if (state.currentItem && state.currentItem.fileName === fileName) {
-        renderPathPreview(state.folder || '', fileName);
-      }
+      state.pendingSelectFileName = fileName;
+      refreshCurrentDirectory();
       return;
     }
 

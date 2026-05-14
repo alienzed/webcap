@@ -139,6 +139,33 @@ def test_open_in_explorer_selects_windows_file_with_spaces(tmp_path, monkeypatch
     assert calls == [["explorer.exe", f'/select,"{str(media_path.resolve()).replace("/", "\\")}"']]
 
 
+def test_open_in_vscode_opens_current_folder(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set g"
+    set_dir.mkdir(parents=True)
+    calls = []
+
+    def safe_join(rel_path):
+        rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
+        if rel.startswith("/"):
+            rel = rel[1:]
+        return (fs_root / rel).resolve()
+
+    def fake_popen(args):
+        calls.append(args)
+
+    monkeypatch.setattr(file_ops_module, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(file_ops_module.shutil, "which", lambda name: "C:/bin/code.cmd" if name == "code" else None)
+    monkeypatch.setattr(file_ops_module.subprocess, "Popen", fake_popen)
+
+    client = app_module.app.test_client()
+    response = client.post("/fs/open_in_vscode", json={"path": "set g"})
+
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+    assert calls == [["C:/bin/code.cmd", str(set_dir.resolve())]]
+
+
 def test_fs_describe_does_not_auto_create_config_files(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_e"

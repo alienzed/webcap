@@ -26,20 +26,32 @@ pruneMedia = async function (mediaItem) {
     }
     setStatus('Media pruned: ' + mediaItem.key);
     var prunedWasCurrent = !!(state.currentItem && (state.currentItem.key === mediaItem.key || state.currentItem.fileName === mediaItem.key));
+    var nextItemToSelect = null;
     // Remove pruned item from state.items instead of refreshing the directory.
     if (window.state && Array.isArray(state.items)) {
       var idx = state.items.findIndex(function(item) {
         return item && (item.key === mediaItem.key || item.fileName === mediaItem.key);
       });
       if (idx !== -1) {
+        if (prunedWasCurrent && (idx + 1) < state.items.length) {
+          nextItemToSelect = state.items[idx + 1];
+        }
         state.items.splice(idx, 1);
       }
+    }
+    if (state.ratings && Object.prototype.hasOwnProperty.call(state.ratings, mediaItem.key)) {
+      delete state.ratings[mediaItem.key];
+      saveFolderStateForCurrentRoot();
     }
     if (prunedWasCurrent) {
       state.currentItem = null;
       clearEditorAndPreview();
       window.renderChecklistPanel();
       renderFileList();
+      if (nextItemToSelect) {
+        // Best-effort next-item selection; silent no-op on failure.
+        selectPathMedia(nextItemToSelect).catch(function () {});
+      }
     } else {
       renderFileList();
     }
@@ -150,6 +162,10 @@ async function restoreMediaItem(mediaItem) {
         clearEditorAndPreview();
         window.renderChecklistPanel();
       }
+      if (state.ratings && Object.prototype.hasOwnProperty.call(state.ratings, mediaItem.key)) {
+        delete state.ratings[mediaItem.key];
+        saveFolderStateForCurrentRoot();
+      }
       renderFileList();
     }
   };
@@ -202,6 +218,20 @@ function buildSelectedMediaStatus(mediaItem) {
     }
   }
   return status;
+}
+
+function getAdvancedMinStarsThreshold() {
+  if (!ui.advancedFilterMinStarsEl) return null;
+  var raw = String(ui.advancedFilterMinStarsEl.value || '').trim();
+  if (!raw.length) return null;
+  var n = Number(raw);
+  if (!isFinite(n)) return null;
+  return Math.max(0, Math.min(4, Math.round(n)));
+}
+
+function getAdvancedFlagFilterValue() {
+  if (!ui.advancedFilterFlagEl) return '';
+  return String(ui.advancedFilterFlagEl.value || '').trim().toLowerCase();
 }
 
 function selectPathMedia(mediaItem) {
@@ -272,6 +302,11 @@ function promptRenameMedia(mediaItem) {
         delete captionItemTagsByMedia[oldFile];
         saveItemTagsToFolderState();
       }
+    }
+    if (state.ratings && Object.prototype.hasOwnProperty.call(state.ratings, oldFile)) {
+      state.ratings[newFile] = state.ratings[oldFile];
+      delete state.ratings[oldFile];
+      saveFolderStateForCurrentRoot();
     }
     setStatus('Renamed: ' + oldFile + ' -> ' + newFile);
     // Store the new filename to reselect after refresh
@@ -368,6 +403,9 @@ async function renderFileList() {
   var renderSeq = ++state.listRenderSeq;
   ui.mediaListEl.innerHTML = '';
   var mediaItems = state.items;
+  var missingCaptionsOnly = !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked);
+  var minStarsThreshold = getAdvancedMinStarsThreshold();
+  var flagFilterValue = getAdvancedFlagFilterValue();
   // Focus set logic (if active)
   if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
     var allow = {};
@@ -387,6 +425,26 @@ async function renderFileList() {
       var tags = '';
       tags = getTagsForMediaKey(item.key).join(' ').toLowerCase();
       return label.indexOf(q) !== -1 || fileName.indexOf(q) !== -1 || caption.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
+    });
+  }
+  if (missingCaptionsOnly) {
+    mediaItems = mediaItems.filter(function (item) {
+      return !item.hasCaption;
+    });
+  }
+  if (minStarsThreshold !== null) {
+    mediaItems = mediaItems.filter(function (item) {
+      var rating = (typeof getRatingForMediaKey === 'function') ? getRatingForMediaKey(item.key) : 0;
+      return rating > minStarsThreshold;
+    });
+  }
+  if (flagFilterValue) {
+    mediaItems = mediaItems.filter(function (item) {
+      var itemFlag = String((state.flags && state.flags[item.key]) || '').toLowerCase();
+      if (flagFilterValue === 'any') {
+        return !!itemFlag;
+      }
+      return itemFlag === flagFilterValue;
     });
   }
   // Show count of matching media items

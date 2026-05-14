@@ -21,6 +21,15 @@ function sanitizeFolderState(data) {
       }
     });
   }
+  var ratingsByMedia = {};
+  if (typeof src.ratings_by_media === 'object' && src.ratings_by_media) {
+    Object.keys(src.ratings_by_media).forEach(function (mediaKey) {
+      var n = Number(src.ratings_by_media[mediaKey]);
+      if (!isFinite(n)) return;
+      var rating = Math.max(1, Math.min(5, Math.round(n)));
+      ratingsByMedia[String(mediaKey || '')] = rating;
+    });
+  }
   return {
     version: FOLDER_STATE_VERSION,
     stats: {
@@ -39,7 +48,8 @@ function sanitizeFolderState(data) {
     caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : undefined,
     caption_phrases: Array.isArray(src.caption_phrases) ? src.caption_phrases.slice() : undefined,
     caption_set_notes: String(src.caption_set_notes || ''),
-    caption_tags_by_media: tagMap
+    caption_tags_by_media: tagMap,
+    ratings_by_media: ratingsByMedia
   };
 }
 
@@ -102,6 +112,15 @@ function snapshotFolderStateFromDom() {
       tagsByMedia[k] = list.slice();
     }
   });
+  var ratingsByMedia = {};
+  var srcRatingsByMedia = (typeof state.ratings === 'object' && state.ratings) ? state.ratings : {};
+  Object.keys(srcRatingsByMedia).forEach(function (k) {
+    if (!mediaKeys.has(k)) return;
+    var n = Number(srcRatingsByMedia[k]);
+    if (!isFinite(n)) return;
+    var rating = Math.max(1, Math.min(5, Math.round(n)));
+    ratingsByMedia[k] = rating;
+  });
   // Add new fields here as needed
   return sanitizeFolderState({
     stats: stats,
@@ -112,7 +131,8 @@ function snapshotFolderStateFromDom() {
     caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined,
     caption_phrases: window.captionHelperPhrases.slice(),
     caption_set_notes: String(window.captionHelperNotes || ''),
-    caption_tags_by_media: tagsByMedia
+    caption_tags_by_media: tagsByMedia,
+    ratings_by_media: ratingsByMedia
   });
 }
 
@@ -135,6 +155,9 @@ function applyFolderStateToDom(folderState) {
   if (clean.flags) {
     state.flags = clean.flags;
   }
+  state.ratings = (clean && clean.ratings_by_media && typeof clean.ratings_by_media === 'object')
+    ? clean.ratings_by_media
+    : {};
   // Restore stats and primer fields to DOM
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
   var phrasesEl = document.getElementById('stats-phrases');

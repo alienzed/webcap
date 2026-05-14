@@ -460,7 +460,7 @@ function refreshCurrentDirectory() {
           });
           // --- Load and apply folder state fields ---
           var folderState = resp.folder_state || {};
-          if (Object.keys(folderState).length) applyFolderStateToDom(folderState);
+          applyFolderStateToDom(folderState);
           loadChecklistFromFolderState(folderState);
           loadCaptionHelpersFromFolderState(folderState);
           loadItemTagsFromFolderState(folderState);
@@ -520,6 +520,21 @@ function clearFocusSet() {
 // Ensure live filtering as you type
 if (ui.filterEl) {
   ui.filterEl.addEventListener('input', function () {
+    renderFileList();
+  });
+}
+if (ui.advancedFilterMissingCaptionsEl) {
+  ui.advancedFilterMissingCaptionsEl.addEventListener('change', function () {
+    renderFileList();
+  });
+}
+if (ui.advancedFilterMinStarsEl) {
+  ui.advancedFilterMinStarsEl.addEventListener('change', function () {
+    renderFileList();
+  });
+}
+if (ui.advancedFilterFlagEl) {
+  ui.advancedFilterFlagEl.addEventListener('change', function () {
     renderFileList();
   });
 }

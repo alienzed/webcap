@@ -1,74 +1,56 @@
-This file details bugs, enhancements and feature requests.
+This file tracks implemented work vs outstanding items.
 
-Review for safety, anticipate regressions, think of multiple ways of achieving these and suggest the most minimal less impactful option.
-If complete and confirmed, move to Completed section.
+## Implemented
+- Utility bar introduced (path tooltip button, settings, reboot/reload-config, help).
+- App settings modal can edit and save `config.json`; reboot reloads runtime config.
+- Training area updates:
+  - Config files shown in grouped HI/LO columns.
+  - `Generate` and `Prepare Dataset` remain explicit actions.
+  - Train action currently prints command preview to console (not owning full run lifecycle).
+  - Legacy autoset remains available from current-folder context menu.
+- Keyboard/media navigation:
+  - `ArrowUp` / `ArrowDown` selects previous/next media when a media item is selected.
+  - `Delete` triggers prune prompt/action for selected media.
+  - After prune, next item selection is attempted (silent no-op at end of list).
+- Metadata/rating updates:
+  - 5-star rating row added as first line in Metadata tab (click to set 1..5).
+  - `1..5` keyboard shortcuts set selected media star rating.
+  - Ratings persist in folder state (`ratings_by_media`).
+  - Metadata fields `Bitrate` and `Color` are commented out (non-destructive hide).
+- Advanced filters added (chevron beside filter input):
+  - Missing captions only.
+  - Stars filter (`> N`).
+  - Flag filter.
+- Existing confirmed behavior retained:
+  - Rename reselection via `pendingSelectFileName`.
+  - Prune backup behavior (`pruned_` in `originals`).
+  - Missing-caption highlighting + clear-on-save refresh in list.
+  - Context menu flag dots resized/improved.
+  - Console auto-append and auto-scroll.
+  - Open in Explorer support.
+  - Captions save only when changed.
 
-## Bugs
+## Outstanding (Active)
+- Keep selected media row scrolled into view after keyboard navigation and prune-next selection.
+- Revisit automatic config creation-on-folder-load behavior; prefer explicit generation where possible.
+- Validate training command preview behavior when config keys are missing (should still provide useful output where possible).
+- Primer-only caption guard: ensure manual saves also block saving primer-only content.
 
-## Enhancements
-- Training section should become the explicit prep hub:
-  - Add `Run Autoset` as a first-class button in Training while keeping the folder context-menu action.
-  - Show config files in HI/LO grouped columns for faster scan and editing flow.
-  - Keep `Generate Config` explicit; avoid hidden assumptions about when files mutate.
-- Training command generation and inspection:
-  - Generate and print concrete HI/LO training commands to console (resolved paths/config refs).
-  - Validate config wiring before printing commands (e.g., config->dataset references).
-- Config artifact lifecycle cleanup:
-  - Revisit automatic config creation-on-folder-load behavior now that config generation is first-class.
-  - Prefer explicit generation/update actions over implicit mutation during folder navigation.
-- Media metadata report enhancements:
-  - Optionally group metadata by AR and/or sortable headings.
-  - Within groups, allow sorting by resolution (smallest to largest).
-- Tags are currently available but lower priority:
-  - Keep stable, but do not prioritize expanding tag features until a clear workflow need appears.
-
-## Cleanup Candidates
-- Consolidate set-context gating behavior around one shared helper (`isSetFolderContext`) and remove stale duplicated checks.
-- Remove/retire disabled-only UX paths where visibility gating is now the intended behavior.
-- Audit legacy folder-load side effects (especially training/config related) and keep only those clearly required for safety.
-- Consider de-emphasizing optional UI features (like tags) if they remain unused and add cognitive load.
+## Backlog (Do Not Implement Yet)
+- Persist last selected working directory between refresh/restart (optional toggle in settings; safe fallback when missing).
+- Create new sibling set folder from filtered/selected/rated items (including originals + folder metadata copy semantics).
+- Set-wide search/replace (current folder only).
+- Optional phrase-tab auto-population from local `.txt` files (e.g., `expressions.txt`, `places.txt`, `lighting.txt`).
+- Dataset inferred sample/megaframe/VRAM/time estimation.
+- Further reduce full-directory refreshes for operations that can be local DOM/state updates.
 
 ## Nice to Haves (Out of Scope for Now)
-- In-app training execution/lifecycle management (launching long runs from WebCap/WSL directly).
-- TensorBoard lifecycle helpers (start service, open browser tab, monitor state).
-- Broader in-app process orchestration for multi-hour jobs.
+- In-app training execution/orchestration for long-running jobs.
+- TensorBoard lifecycle helpers.
+- Broader multi-hour process orchestration in app.
 
-## Backlog - Do not implement these yet
-- Dataset infered number of samples, MegaFramePixels, if we want to get really crafty, try to estimate VRAM, step time...
-- Many operations on files/folders will refresh the entire directory. For prune and rename, only the affected item is now updated (no full refresh). Other operations may still refresh the directory; consider further optimization if needed.
-- [Future] Allow placing .txt files (e.g., expressions.txt, places.txt, lighting.txt) in a folder to auto-populate additional phrase tabs. Each file is a list of phrases (one per line). Not implemented yet.
-- Set-wide (only current folder) search and replace. Use case: changing keyphrase or correcting a repeated typo.
-- Persist last selected working directory between refresh/restart (optional toggle in settings, with safe fallback when root/folder no longer exists).
-
-## To think about more / Not clearly necessary
-- Up / Down keys to browse while media list is focused (lost when editing of course...).
-- Dataset infered number of samples, MegaFramePixels, if we want to get really crafty, try to estimate VRAM, step time...
-
-## Requires validation
-- Refactor app.py to split routes from heavy logic.
-- Status bar and console toggle should be fixed to the bottom of the left side panel, always visible; the rest of that panel can scroll behind it.
-- Caption requirements/phrases/tags should render as 3 columns on wide screens and tabs on narrower screens.
-- Config files seem to be getting the wrong path in at least one failed use case.
-- Config files do not seem to be autosaving.
-- Upon save of a previous empty caption, it takes a directory refresh for the missing state to clear.
-- Generate appropriate config files based on set metadata.
-- A way to crop images to preset AR.
-- Autoset may require some adjustments, especially for images.
-- Make it so that the primer caption alone doesn't get saved. (Currently only implemented for autosave; manual saves still save primer-only captions. Needs fix.)
-- Reset Review state (contextual menu option on Current folder only).
-
-## Complete
-- After a rename, the item gets reselected after refresh (pendingSelectFileName logic implemented).
-- Make colors in context menu bigger.
-- Prune now uses a pruned_ prefix in the originals folder (not a separate folder). All collision and backup logic is handled there. (Current design; see prune.md)
-- Caption Requirements.
-- Status bar and console toggle fixed to bottom of left panel, always visible, scrollable content behind it.
-- Media Metadata grouped by AR (optionally), color column hidden if not relevant.
-- When a caption is missing, the item gets a yellowish background; after saving, the background updates correctly.
-- Console appends and scrolls to bottom automatically.
-- Open in Explorer works; also works in WSL with powershell.exe fallback.
-- Review and Filter reflect edits immediately (state.items updated after every save).
-- Prune removes only the affected item from state/items and DOM (no full refresh).
-- F2 to rename media files.
-- Captions save only when actually changed (no unnecessary saves).
-- Prune clears caption/preview when the current item is pruned.
+## Cleanup Candidates
+- Consolidate set-context gating around shared helper usage and remove stale checks.
+- Remove legacy/disabled UX paths that are now superseded by visibility gating.
+- Audit remaining folder-load side effects and trim non-essential mutation paths.
+- Reassess optional tag UX if it continues to add more cognitive load than value.

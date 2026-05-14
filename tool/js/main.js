@@ -262,6 +262,38 @@ function wireAllUi() {
       e.preventDefault();
     }
   });
+  document.addEventListener('keydown', function (e) {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.key !== 'Delete') return;
+    if (!state.currentItem || !state.currentItem.fileName) return;
+    if (isEditableElement(document.activeElement)) return;
+    var inOriginals = state.folder && state.folder.split(/[\/]/).pop() === 'originals';
+    if (inOriginals) return;
+    e.preventDefault();
+    pruneMedia(state.currentItem).catch(function (err) {
+      setStatus(String(err && err.message ? err.message : err));
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (!state.currentItem || !state.currentItem.fileName) return;
+    if (isEditableElement(document.activeElement)) return;
+    if (!/^[1-5]$/.test(e.key)) return;
+    if (typeof setRatingForMediaKey !== 'function') return;
+    e.preventDefault();
+    var rating = Number(e.key);
+    setRatingForMediaKey(state.currentItem.key, rating);
+    setStatus('Rating set: ' + rating + ' stars');
+  });
+
+  if (ui.advancedFilterToggleBtn && ui.advancedFilterPanel) {
+    ui.advancedFilterToggleBtn.onclick = function () {
+      var isHidden = ui.advancedFilterPanel.classList.contains('hidden');
+      ui.advancedFilterPanel.classList.toggle('hidden', !isHidden);
+      ui.advancedFilterToggleBtn.classList.toggle('expanded', isHidden);
+      ui.advancedFilterToggleBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+    };
+  }
 
   // (Removed redundant/broken config autosave handler; handled by handleEditorInputAutosave)
   // Current folder row context menu handler

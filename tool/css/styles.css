@@ -349,6 +349,79 @@ iframe {
   align-items: center;
 }
 
+.advanced-filter-toggle-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid #b8c3d1;
+  background: #f9fbfd;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.advanced-filter-toggle-btn:hover {
+  background: #ffffff;
+  border-color: #9aa9bc;
+  color: #111827;
+}
+
+.advanced-filter-toggle-icon {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  transition: transform 0.15s ease;
+}
+
+.advanced-filter-toggle-btn.expanded .advanced-filter-toggle-icon {
+  transform: rotate(180deg);
+}
+
+.advanced-filter-panel {
+  margin-top: 5px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #f8fafc;
+  padding: 7px 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.advanced-filter-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+}
+
+.advanced-filter-row input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.advanced-filter-row select {
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: #fff;
+  color: #334155;
+}
+
 .utility-bar {
   display: flex;
   align-items: center;
@@ -1303,6 +1376,36 @@ iframe {
   overflow-y: auto;
   font-size: 12px;
   color: #5d6672;
+}
+
+.item-metadata-stars-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid #eef1f5;
+  padding: 1px 0 4px 0;
+  margin-bottom: 2px;
+}
+
+.item-metadata-star-btn {
+  border: none;
+  background: transparent;
+  color: #c4ccd7;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  font-size: 15px;
+  border-radius: 2px;
+}
+
+.item-metadata-star-btn:hover {
+  background: #eef2f7;
+  color: #a5afbc;
+}
+
+.item-metadata-star-btn.active {
+  color: #d97718;
 }
 
 .item-metadata-row {

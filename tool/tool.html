@@ -42,6 +42,46 @@
                     </div>
                     <div id="caption-filter-row" class="filter-row">
                         <input id="media-filter" type="search" placeholder="filter">
+                        <button
+                            id="advanced-filter-toggle-btn"
+                            type="button"
+                            class="advanced-filter-toggle-btn"
+                            title="Advanced filters"
+                            aria-expanded="false"
+                        >
+                            <svg class="advanced-filter-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M6 9l6 6 6-6"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="advanced-filter-panel" class="advanced-filter-panel hidden">
+                        <label class="advanced-filter-row">
+                            <input id="advanced-filter-missing-captions" type="checkbox">
+                            <span>Missing captions only</span>
+                        </label>
+                        <label class="advanced-filter-row">
+                            <span>Stars</span>
+                            <select id="advanced-filter-min-stars">
+                                <option value="">&mdash;</option>
+                                <option value="0">&gt; 0</option>
+                                <option value="1">&gt; 1</option>
+                                <option value="2">&gt; 2</option>
+                                <option value="3">&gt; 3</option>
+                                <option value="4">&gt; 4</option>
+                            </select>
+                        </label>
+                        <label class="advanced-filter-row">
+                            <span>Flag</span>
+                            <select id="advanced-filter-flag">
+                                <option value="">Any</option>
+                                <option value="any">Flagged</option>
+                                <option value="red">Red</option>
+                                <option value="green">Green</option>
+                                <option value="blue">Blue</option>
+                                <option value="yellow">Yellow</option>
+                                <option value="orange">Orange</option>
+                            </select>
+                        </label>
                     </div>
                     <div id="caption-filter-count"></div>
                     <div class="media-list-wrapper">
@@ -72,9 +112,9 @@
                         <button
                             id="focus-set-exit-btn"
                             type="button"
-                            class="m8y"
+                            class="review-captions-btn"
                             style="display:none"
-                        >Exit Set</button>
+                        ><span class="btn-glyph" aria-hidden="true">x</span><span>Exit Set</span></button>
                         <div class="sidebar-action-strip">
                             <button
                                 id="review-captions-btn"
@@ -252,7 +292,7 @@
                 <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
             </div>
             <div id="caption-list-actions" class="caption-list-actions">
-                <button id="focus-set-exit-btn" type="button" style="display:none">Exit Set</button>
+                <button id="focus-set-exit-btn" type="button" class="review-captions-btn" style="display:none"><span class="btn-glyph" aria-hidden="true">x</span><span>Exit Set</span></button>
             </div>
         </div>
         <div id="crop-modal" class="crop-modal hidden" aria-hidden="true">

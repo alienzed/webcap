@@ -11,7 +11,8 @@ state = {
   listRenderSeq: 0,
   reviewedSet: new Set(),
   focusSet: null,
-  flags: {} // key: file or folder name, value: color string (red/yellow/orange/green)
+  flags: {}, // key: file or folder name, value: color string (red/yellow/orange/green)
+  ratings: {} // key: media file name, value: integer 1..5
 };
 // Define global UI object (all static elements)
 ui = {
@@ -19,6 +20,11 @@ ui = {
   previewEl: document.getElementById('preview'),
   mediaListEl: document.getElementById('media-list'),
   filterEl: document.getElementById('media-filter'),
+  advancedFilterToggleBtn: document.getElementById('advanced-filter-toggle-btn'),
+  advancedFilterPanel: document.getElementById('advanced-filter-panel'),
+  advancedFilterMissingCaptionsEl: document.getElementById('advanced-filter-missing-captions'),
+  advancedFilterMinStarsEl: document.getElementById('advanced-filter-min-stars'),
+  advancedFilterFlagEl: document.getElementById('advanced-filter-flag'),
   captionFilterCount: document.getElementById('caption-filter-count'),
   statusEl: document.getElementById('status-text'),
   refreshBtn: document.getElementById('refresh-btn'),
@@ -111,5 +117,6 @@ var TOKEN_BLACKLIST = {
   that: true,
   these: true,
   those: true,
+  does: true,
   and: true
 };

@@ -3,6 +3,7 @@ var captionItemTagsByMedia = {};
 var mediaResolutionByFile = {};
 var mediaMetadataByFile = {};
 var debouncedItemTagsSave = debounceCreate(300);
+var debouncedItemRatingSave = debounceCreate(250);
 
 function normalizeItemTag(text) {
   return String(text || '').trim().replace(/\s+/g, ' ');
@@ -17,6 +18,41 @@ function getResolutionForMedia(fileName) {
   return mediaResolutionByFile[fileName] || '';
 }
 
+function normalizeRatingValue(value) {
+  var n = Number(value);
+  if (!isFinite(n)) return 0;
+  var rating = Math.round(n);
+  if (rating < 0) rating = 0;
+  if (rating > 5) rating = 5;
+  return rating;
+}
+
+function getRatingForMediaKey(mediaKey) {
+  if (!mediaKey || !state || typeof state.ratings !== 'object' || !state.ratings) return 0;
+  return normalizeRatingValue(state.ratings[mediaKey]);
+}
+
+function saveItemRatingsToFolderState() {
+  var snapshot = snapshotFolderStateFromDom();
+  writeFolderStateFile(state.folder, snapshot);
+}
+
+function setRatingForMediaKey(mediaKey, rating) {
+  if (!mediaKey) return;
+  if (!state.ratings || typeof state.ratings !== 'object') {
+    state.ratings = {};
+  }
+  var next = normalizeRatingValue(rating);
+  if (next <= 0) {
+    delete state.ratings[mediaKey];
+  } else {
+    state.ratings[mediaKey] = next;
+  }
+  debouncedItemRatingSave(saveItemRatingsToFolderState);
+  renderItemMetadataPanel();
+  renderFileList();
+}
+
 function renderItemMetadataPanel() {
   var listEl = document.getElementById('item-metadata-list');
   if (!listEl) return;
@@ -25,9 +61,32 @@ function renderItemMetadataPanel() {
     listEl.textContent = 'Select a media item.';
     return;
   }
+
+  var currentMediaKey = state.currentItem.key || state.currentItem.fileName;
+  var currentRating = getRatingForMediaKey(currentMediaKey);
+  var starsRow = document.createElement('div');
+  starsRow.className = 'item-metadata-stars-row';
+  for (var s = 1; s <= 5; s++) {
+    (function (value) {
+      var starBtn = document.createElement('button');
+      starBtn.type = 'button';
+      starBtn.className = 'item-metadata-star-btn' + (value <= currentRating ? ' active' : '');
+      starBtn.setAttribute('aria-label', 'Set rating to ' + value + ' stars');
+      starBtn.title = 'Set rating to ' + value + ' stars';
+      starBtn.textContent = value <= currentRating ? '\u2605' : '\u2606';
+      starBtn.onclick = function () {
+        setRatingForMediaKey(currentMediaKey, value);
+      };
+      starsRow.appendChild(starBtn);
+    })(s);
+  }
+  listEl.appendChild(starsRow);
+
   var row = mediaMetadataByFile[state.currentItem.fileName];
   if (!row) {
-    listEl.textContent = 'Metadata unavailable.';
+    var unavailable = document.createElement('div');
+    unavailable.textContent = 'Metadata unavailable.';
+    listEl.appendChild(unavailable);
     return;
   }
   var fieldOrder = [
@@ -38,8 +97,8 @@ function renderItemMetadataPanel() {
     ['duration', 'Duration'],
     ['frames', 'Frames'],
     ['codec', 'Codec'],
-    ['bitrate', 'Bitrate'],
-    ['color', 'Color'],
+    // ['bitrate', 'Bitrate'],
+    // ['color', 'Color'],
   ];
   var hasAny = false;
   for (var i = 0; i < fieldOrder.length; i++) {
@@ -61,7 +120,9 @@ function renderItemMetadataPanel() {
     listEl.appendChild(itemRow);
   }
   if (!hasAny) {
-    listEl.textContent = 'Metadata unavailable.';
+    var unavailable2 = document.createElement('div');
+    unavailable2.textContent = 'Metadata unavailable.';
+    listEl.appendChild(unavailable2);
   }
 }
 

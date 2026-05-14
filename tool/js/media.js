@@ -213,6 +213,7 @@ async function resetMediaItem(mediaItem) {
     if (xhr.readyState === 4) {
       if (xhr.status === 200) {
         setStatus('Reset to original: ' + fileName);
+        state.pendingSelectFileName = fileName;
         refreshCurrentDirectory();
       } else {
         setStatus('Reset failed: ' + xhr.responseText);

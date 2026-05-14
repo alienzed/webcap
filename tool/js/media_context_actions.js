@@ -223,6 +223,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
         .then(function (res) {
           if (res.status === 200 && res.data && res.data.ok) {
             setStatus('File reset to original.');
+            state.pendingSelectFileName = mediaItem.fileName;
             refreshCurrentDirectory();
           } else {
             setStatus((res.data && res.data.error) ? res.data.error : 'Reset failed');

@@ -344,6 +344,25 @@ function wireAllUi() {
     }
     setStatus('Rating set: ' + rating + ' stars');
   });
+  document.addEventListener('keydown', function (e) {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (!state.currentItem || !state.currentItem.fileName) return;
+    if (isEditableElement(document.activeElement)) return;
+    if (typeof markFlag !== 'function') return;
+    var key = String(e.key || '').toLowerCase();
+    var colorByKey = {
+      g: 'green',
+      y: 'yellow',
+      o: 'orange',
+      b: 'blue',
+      r: 'red'
+    };
+    var color = colorByKey[key];
+    if (!color) return;
+    e.preventDefault();
+    markFlag(state.currentItem.key, color);
+    setStatus('Flag set: ' + color);
+  });
 
   if (ui.advancedFilterToggleBtn && ui.advancedFilterPanel) {
     ui.advancedFilterToggleBtn.onclick = function () {

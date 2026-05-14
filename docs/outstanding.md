@@ -16,6 +16,7 @@ This file tracks implemented work vs outstanding items.
   - 5-star rating row added as first line in Metadata tab (click to set 1..5).
   - `1..5` keyboard shortcuts set selected media star rating.
   - `0` keyboard shortcut clears/unsets rating.
+  - `G`/`Y`/`O`/`B`/`R` keyboard shortcuts set selected media flag color (green/yellow/orange/blue/red).
   - Ratings persist in folder state (`ratings_by_media`).
   - Metadata fields `Bitrate` and `Color` are commented out (non-destructive hide).
 - Advanced filters added (chevron beside filter input):
@@ -48,9 +49,21 @@ This file tracks implemented work vs outstanding items.
 
 ## Enhancements
 - Set-wide search/replace for captions in the current folder only, with preview/confirmation before writing.
-- 1.1 caption highlighting: hover requirements/phrases to highlight matching words or phrases in the editor.
+- Reset should reselect the item.
 - Review duplicate-token detection inside a single caption.
 - Validate training command preview behavior when config keys are missing (should still provide useful output where possible).
+
+## 1.1 Ideas
+- Caption highlighting: hover requirements/phrases to highlight matching words or phrases in the editor.
+- We have caption requirements. We need a concept of Set Requirements, ideally self counting. For example, a good character LORA includes:
+    6 front face close-ups
+    6 three-quarter face close-ups
+    3 side/profile shots
+    6 head-and-shoulders
+    5 half-body
+    3 full-body
+    3 expressive/candid shots
+  It would be awesome to get a bird's eye view of where my set is relative this.
 
 ## Stabilization Mode
 - App is in 1.0 lock-in mode: resist new feature work and prioritize targeted bug/regression fixes.

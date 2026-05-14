@@ -60,16 +60,48 @@ function runAutosetForCurrentFolder() {
   );
 }
 
-function runPrepareDatasetForCurrentFolder() {
-  if (!state.folder) {
-    setStatus('No folder selected for dataset preparation.');
-    return;
-  }
+function ensureFolderSelected(missingStatus) {
+  if (state.folder) return true;
+  setStatus(missingStatus || 'No folder selected.');
+  return false;
+}
+
+function resetSelectionForFolderAction() {
   state.currentConfigFile = null;
   state.currentItem = null;
   clearEditorAndPreview();
   renderChecklistPanel();
   renderFileList(ui.filterEl.value);
+}
+
+function runGenerateDatasetConfigsForCurrentFolder(onSuccess) {
+  if (!ensureFolderSelected('No folder selected for config generation.')) {
+    return;
+  }
+  resetSelectionForFolderAction();
+  setStatus('Generating dataset configs...');
+  streamPreviewFromFetch(
+    '/fs/generate_dataset_config',
+    { folder: state.folder },
+    ui,
+    function () {
+      if (typeof onSuccess === 'function') {
+        onSuccess();
+        return;
+      }
+      setStatus('Dataset configs generated.');
+    },
+    function (err) {
+      setStatus('Dataset config generation failed: ' + err);
+    }
+  );
+}
+
+function runPrepareDatasetForCurrentFolder() {
+  if (!ensureFolderSelected('No folder selected for dataset preparation.')) {
+    return;
+  }
+  resetSelectionForFolderAction();
   setStatus('Preparing dataset...');
   streamPreviewFromFetch(
     '/fs/prepare_dataset',
@@ -295,483 +327,9 @@ function wireAllUi() {
     };
   }
 
-  // (Removed redundant/broken config autosave handler; handled by handleEditorInputAutosave)
-  // Current folder row context menu handler
-  if (ui.currentFolderRow) {
-    ui.currentFolderRow.oncontextmenu = function (e) {
-      e.preventDefault();
-      var actions = [
-        {
-          label: 'Run Autoset (Legacy)',
-          run: function () {
-            runAutosetForCurrentFolder();
-          }
-        },
-        {
-          label: 'Generate Dataset Configs',
-          run: function () {
-            state.currentConfigFile = null;
-            state.currentItem = null;
-            clearEditorAndPreview();
-            renderChecklistPanel();
-            renderFileList(ui.filterEl.value);
-            setStatus('Generating dataset configs...');
-            streamPreviewFromFetch(
-              '/fs/generate_dataset_config',
-              { folder: state.folder },
-              ui,
-              function () {
-                setStatus('Dataset configs generated.');
-              },
-              function (err) {
-                setStatus('Dataset config generation failed: ' + err);
-              }
-            );
-          }
-        },
-        {
-          label: 'Deface',
-          run: function () {
-            clearEditorAndPreview();
-            setStatus('Defacing folder media...');
-            var folderPath = state.folder || '';
-            streamPreviewFromFetch(
-              '/fs/deface',
-              { folder: folderPath },
-              ui,
-              function () {
-                setStatus('Defacing finished.');
-                refreshCurrentDirectory();
-              },
-              function (err) {
-                setStatus('Defacing failed: ' + err);
-              }
-            );
-          }
-        },
-        {
-          label: 'Reset Reviewed',
-          run: function () {
-            if (!confirm('Clear all reviewed state for this folder?')) return;
-            state.reviewedSet = new Set();
-            var rows = ui.mediaListEl.querySelectorAll('.media-item.reviewed');
-            for (var i = 0; i < rows.length; i++) {
-              rows[i].classList.remove('reviewed');
-            }
-            saveFolderStateForCurrentRoot();
-            setStatus('Reviewed state cleared.');
-          }
-        }
-      ];
-      showContextMenu(e.clientX, e.clientY, actions);
-    };
+  if (typeof wireMainUiEvents === 'function') {
+    wireMainUiEvents();
   }
-  // Media List double-click handler for toggling reviewed state
-  if (ui.mediaListEl) {
-    ui.mediaListEl.ondblclick = function (e) {
-      var row = e.target.closest('.media-item');
-      if (!row) return;
-      var type = row.getAttribute('data-type');
-      var key = row.getAttribute('data-key');
-      if (type === 'media') {
-        var mediaItem = state.items.find(function (item) { return item.key === key; });
-        if (!mediaItem) return;
-        if (state.reviewedSet.has(mediaItem.key)) {
-          state.reviewedSet.delete(mediaItem.key);
-          row.classList.remove('reviewed');
-        } else {
-          state.reviewedSet.add(mediaItem.key);
-          row.classList.add('reviewed');
-        }
-        saveFolderStateForCurrentRoot();
-      }
-    };
-  }
-  // Refresh button
-  if (ui.refreshBtn) {
-    ui.refreshBtn.onclick = function () {
-      refreshCurrentDirectory();
-    };
-  }
-
-  // Review Captions button
-  if (ui.reviewBtn) {
-    ui.reviewBtn.onclick = function () {
-      runReview();
-    };
-  }
-
-  var trainingGenerateBtn = document.getElementById('training-generate-btn');
-  if (trainingGenerateBtn) {
-    trainingGenerateBtn.onclick = function () {
-      if (!state.folder) {
-        setStatus('No folder selected for config generation.');
-        return;
-      }
-      state.currentConfigFile = null;
-      state.currentItem = null;
-      clearEditorAndPreview();
-      renderChecklistPanel();
-      renderFileList(ui.filterEl.value);
-      setStatus('Generating dataset configs...');
-      streamPreviewFromFetch(
-        '/fs/generate_dataset_config',
-        { folder: state.folder },
-        ui,
-        function () {
-          refreshTrainingConfigList();
-          if (state.currentConfigFile) {
-            ui.editorEl.value = '';
-            setStatus('Dataset configs generated. Please reload the config file to see changes.');
-            state.currentConfigFile = null;
-          } else {
-            setStatus('Dataset configs generated.');
-          }
-        },
-        function (err) {
-          setStatus('Dataset config generation failed: ' + err);
-        }
-      );
-    };
-  }
-
-  var trainingPrepareDatasetBtn = document.getElementById('training-prepare-dataset-btn');
-  if (trainingPrepareDatasetBtn) {
-    trainingPrepareDatasetBtn.onclick = function () {
-      runPrepareDatasetForCurrentFolder();
-    };
-  }
-
-  var trainingTrainBtn = document.getElementById('training-train-btn');
-  if (trainingTrainBtn) {
-    trainingTrainBtn.onclick = function () {
-      if (!state.folder) {
-        setStatus('No folder selected for training.');
-        return;
-      }
-      setStatus('Printing training commands...');
-      streamPreviewFromFetch(
-        '/fs/train_run',
-        { folder: state.folder },
-        ui,
-        function () {
-          setStatus('Training command preview finished.');
-        },
-        function (err) {
-          setStatus('Training command preview failed: ' + err);
-        }
-      );
-    };
-  }
-
-  // Up One Directory button
-  if (ui.upRow) {
-    ui.upRow.onclick = function () {
-      navigateUp();
-    };
-  }
-
-  // Media List click handler
-  if (ui.mediaListEl) {
-    ui.mediaListEl.onclick = function (e) {
-      var row = e.target.closest('.media-item');
-      if (!row) return;
-      var type = row.getAttribute('data-type');
-      var key = row.getAttribute('data-key');
-      if (type === 'up') {
-        navigateUp();
-      } else if (type === 'folder') {
-        state.folder = (state.folder ? state.folder + '/' : '') + key;
-        if (state.dirStack.length) {
-          state.dirStack.push({ name: key });
-        }
-        state.currentItem = null;
-        clearEditorAndPreview();
-        refreshCurrentDirectory();
-      } else if (type === 'media') {
-        var mediaItem = state.items.find(function (item) { return item.key === key; });
-        if (!mediaItem) return;
-        if (state.currentItem && state.currentItem.key === mediaItem.key) return;
-        if (state.currentItem && state.currentItem.fileName) {
-          savePathCaption().then(function () {
-            selectPathMedia(mediaItem);
-          }).catch(function (err) {
-            setStatus(String(err && err.message ? err.message : err));
-          });
-        } else {
-          selectPathMedia(mediaItem);
-        }
-      }
-    };
-
-    var ctBtn = document.getElementById('console-toggle-btn');
-    ctBtn.onclick = function() {
-      toggleConsolePanel();
-      // Change arrow direction
-      ctBtn.innerHTML = (ui.consolePanelEl.style.display === 'none' || !ui.consolePanelEl.style.display) ? '&#x25B2;' : '&#x25BC;';
-    };
-
-    // Media List context menu handler (moved from media_list.js)
-    ui.mediaListEl.oncontextmenu = function (e) {
-      var row = e.target.closest('.media-item');
-      if (!row) return;
-      var type = row.getAttribute('data-type');
-      var key = row.getAttribute('data-key');
-      e.preventDefault();
-      if (type === 'folder') {
-        var actions = [
-          createFlagAction(key),
-          {
-            label: 'Rename Folder',
-            run: function () {
-              var oldName = key;
-              var newName = prompt('Rename folder', oldName);
-              if (newName === null) return;
-              newName = String(newName || '').trim();
-              if (!newName || newName === oldName || newName === '.' || newName === '..' || /[\\/]/.test(newName)) {
-                setStatus('Invalid folder name');
-                return;
-              }
-              // Compute parent path (without trailing slash, never including the folder itself)
-              var parentPath = state.folder ? state.folder.replace(/\/+$/, '') : '';
-              // If in root, parentPath is ''
-              fetch('/fs/rename', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  folder: parentPath,
-                  old_name: oldName,
-                  new_name: newName
-                })
-              })
-                .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
-                .then(function (res) {
-                  if (res.status === 200 && res.data && !res.data.error) {
-                    setStatus('Renamed folder: ' + oldName + ' -> ' + newName);
-                    refreshCurrentDirectory();
-                  } else {
-                    setStatus((res.data && res.data.error) ? res.data.error : 'Rename failed');
-                  }
-                })
-                .catch(function (err) {
-                  setStatus('Rename failed: ' + err);
-                });
-            }
-          },
-          {
-            label: 'Duplicate Folder',
-            run: function () {
-              setStatus('Duplicating folder...');
-              var folderPath = (state.folder ? state.folder + '/' : '') + key;
-              fetch('/fs/duplicate_folder', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ src: folderPath })
-              })
-                .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
-                .then(function (res) {
-                  if (res.status === 200 && res.data && res.data.success) {
-                    setStatus('Duplicated folder: ' + key);
-                    refreshCurrentDirectory();
-                  } else {
-                    setStatus((res.data && res.data.error) ? res.data.error : 'Duplicate failed');
-                  }
-                })
-                .catch(function (err) {
-                  setStatus('Duplicate failed: ' + err);
-                });
-            }
-          }
-        ];
-        actions.push({
-          label: 'Open in Explorer',
-          run: function () {
-            fetch('/fs/open_in_explorer', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + key })
-            })
-            .then(function(resp) {
-              if (!resp.ok) {
-                return resp.json().then(function(data) {
-                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
-                }).catch(function() {
-                  throw new Error('Failed to open in explorer');
-                });
-              }
-            })
-            .catch(function(err) {
-              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
-            });
-          }
-        });
-        showContextMenu(e.clientX, e.clientY, actions);
-      } else if (type === 'media') {
-        var mediaItem = state.items.find(function (item) { return item.key === key; });
-        if (!mediaItem) return;
-        var actions = [];
-        var isInOriginals = (state.folder && state.folder.split(/[\/]/).pop() === 'originals');
-        var fileName = mediaItem.fileName;
-        // Add flagging for files
-        actions.push(createFlagAction(key));
-        actions.push({
-          label: 'Open in Explorer',
-          run: function () {
-            fetch('/fs/open_in_explorer', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: (state.folder ? state.folder + '/' : '') + key })
-            })
-            .then(function(resp) {
-              if (!resp.ok) {
-                return resp.json().then(function(data) {
-                  throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
-                }).catch(function() {
-                  throw new Error('Failed to open in explorer');
-                });
-              }
-            })
-            .catch(function(err) {
-              alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
-            });
-          }
-        });
-        if (isInOriginals) {
-          actions.push({
-            label: 'Restore',
-            run: function () {
-              restoreMediaItem(mediaItem);
-            }
-          });
-        } else {
-          actions.push({
-            label: 'Rename',
-            run: function () {
-              promptRenameMedia(mediaItem, ui, state);
-            }
-          });
-          actions.push({
-            label: 'Prune',
-            run: function () {
-              pruneMedia(mediaItem).catch(function (err) {
-                setStatus(String(err && err.message ? err.message : err));
-              });
-            }
-          });
-          actions.push({
-            label: 'Reset',
-            run: function () {
-              if (!confirm('Reset this file to the original version? This will overwrite the current file but leave the caption unchanged.')) return;
-              setStatus('Resetting file...');
-              var filePath = (state.folder ? state.folder : '') || '';
-              fetch('/media/reset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ folder: filePath, fileName: mediaItem.fileName })
-              })
-                .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
-                .then(function (res) {
-                  if (res.status === 200 && res.data && res.data.ok) {
-                    setStatus('File reset to original.');
-                    refreshCurrentDirectory();
-                  } else {
-                    setStatus((res.data && res.data.error) ? res.data.error : 'Reset failed');
-                  }
-                })
-                .catch(function (err) {
-                  setStatus('Reset failed: ' + err);
-                });
-            }
-          });
-          if (isCroppableImageFile(fileName)) {
-            actions.push({
-              label: 'Duplicate Image',
-              run: function () {
-                duplicateImageItem(mediaItem);
-              }
-            });
-            actions.push({
-              label: 'Crop...',
-              run: function () {
-                openCropModal(mediaItem);
-              }
-            });
-          }
-          var ext = (fileName || '').split('.').pop().toLowerCase();
-          if (MEDIA_EXTENSIONS['.' + ext]) {
-            actions.push({
-              label: 'Deface...',
-              run: function () {
-                clearEditorAndPreview();
-                var defaultThresh = '0.4';
-                var t = prompt('Deface: Enter threshold (-t, 0.0-1.0)', defaultThresh);
-                if (t === null) return;
-                t = String(t).trim();
-                if (!/^0(\.\d+)?|1(\.0+)?$/.test(t)) {
-                  setStatus('Invalid threshold');
-                  return;
-                }
-                setStatus('Defacing file...');
-                var filePath = (state.folder ? state.folder + '/' : '') + mediaItem.fileName;
-                streamPreviewFromFetch(
-                  '/fs/deface',
-                  { file: filePath, thresh: t },
-                  ui,
-                  function () {
-                    setStatus('Defacing finished.');
-                  }
-                );
-              }
-            });
-          }
-        }
-        showContextMenu(e.clientX, e.clientY, actions);
-      }
-    };
-  }
-
-  // Focus Set Exit button
-  if (ui.focusSetExitBtn) {
-    ui.focusSetExitBtn.onclick = function () {
-      state.focusSet = null;
-      if (ui.editorEl) ui.editorEl.removeAttribute('readonly');
-      clearEditorAndPreview();
-      refreshCurrentDirectory();
-      ui.focusSetExitBtn.style.display = 'none';
-    };
-  }
-
-  // Stats Run button
-  if (ui.statsRunBtn) {
-    ui.statsRunBtn.onclick = function () {
-      runReview();
-    };
-  }
-  document.querySelectorAll(".fail-link").forEach(function(btn){
-      btn.addEventListener("click",function(){
-          var f=btn.getAttribute("data-file")||"";
-          var focus=btn.getAttribute("data-focus")||"";
-          var source=btn.getAttribute("data-source")||"";
-          var files=[];
-          if(focus){files=decodeURIComponent(focus).split("\n").filter(Boolean);}
-          if(parent&&parent.postMessage){
-              parent.postMessage({
-                  type:"caption-review-select",
-                  fileName:decodeURIComponent(f),
-                  focusFiles:files,
-                  focusSource:decodeURIComponent(source||"")
-              },"*");
-          }
-      });
-  });
-  document.querySelectorAll(".token-link").forEach(function(btn){
-      btn.addEventListener("click",function(){
-          var t=btn.getAttribute("data-token")||"";
-          if(parent&&parent.postMessage){
-              parent.postMessage({type:"caption-review-token",token:decodeURIComponent(t)},"*");
-          }
-      });
-  });
 
 }
 

@@ -166,6 +166,8 @@ function updateUtilityPathLabel(pathText) {
     tooltipPath = tooltipPath ? (rootLabel + '/' + tooltipPath) : rootLabel;
   }
   ui.utilityCurrentPathBtn.title = tooltipPath ? ('Current folder: ' + tooltipPath) : 'Current folder';
+  refreshUtilityPathFlyout();
+
 }
 
 function openHelpReadmeInPreview() {
@@ -205,8 +207,9 @@ function wireAppSettingsUi() {
   }
   if (ui.utilityCurrentPathBtn) {
     ui.utilityCurrentPathBtn.onclick = function () {
-      if (!state.folder) return;
-      refreshCurrentDirectory();
+      if (typeof toggleUtilityPathFlyout === 'function') {
+        toggleUtilityPathFlyout();
+      }
     };
   }
 

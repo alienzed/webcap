@@ -19,6 +19,7 @@
                                 <path d="M6.5 9.5V20h11V9.5"></path>
                             </svg>
                         </button>
+                        <div id="utility-path-flyout" class="utility-path-flyout"></div>
                         <div class="utility-spacer"></div>
                         <button id="utility-settings-btn" type="button" class="utility-btn utility-icon-btn" title="App settings">
                             <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -86,20 +87,18 @@
                     <div id="caption-filter-count"></div>
                     <div class="media-list-wrapper">
                         <button
+                            id="up-one-directory-btn"
+                            type="button"
+                            title="Up one directory"
+                            class="refresh-btn-square floating-up hidden"
+                        >&#8593;</button>
+                        <button
                             id="refresh-btn"
                             type="button"
                             title="Refresh directory"
                             class="refresh-btn-square floating-refresh"
                         >&#8635;</button>
                         <div id="media-list-header">
-                            <div
-                                id="up-one-directory-row"
-                                class="media-item folder-item header-item"
-                                data-type="up"
-                                style="display:none"
-                            >
-                                <div>&uarr; Up One Directory</div>
-                            </div>
                             <div id="current-folder-row" class="media-item folder-item header-item current-folder-item current-folder-bordered" data-type="current-folder">
                                 <div>&#128193;
                                     <span id="current-folder-label"></span>

@@ -75,6 +75,38 @@ function getFileExtension(name) {
   return name.slice(idx).toLowerCase();
 }
 
+function mapAspectRatioToBucket(aspect) {
+  if (!aspect) return 'Unknown';
+  var norm = String(aspect).replace(/\s/g, '').toLowerCase();
+  if (norm === '1:1' || norm === 'square') return 'square';
+  if (norm === '4:3') return '4:3';
+  if (norm === '16:9') return '16:9';
+  if (norm === '9:16') return '9:16';
+
+  var val = 0;
+  if (/^[0-9.]+$/.test(norm)) {
+    val = parseFloat(norm);
+  } else {
+    var match = norm.match(/^([0-9]*\.?[0-9]+):([0-9]*\.?[0-9]+)$/);
+    if (match) {
+      var left = parseFloat(match[1]);
+      var right = parseFloat(match[2]);
+      if (right > 0) val = left / right;
+    }
+  }
+  if (!isFinite(val) || val <= 0) return 'Unknown';
+
+  if (Math.abs(val - 1.0) < 0.05) return 'square';
+  if (Math.abs(val - (4 / 3)) < 0.05) return '4:3';
+  if (Math.abs(val - (16 / 9)) < 0.05) return '16:9';
+  if (Math.abs(val - (9 / 16)) < 0.05) return '9:16';
+  return 'Unknown';
+}
+
+function hasSupportedAspectBucket(aspect) {
+  return mapAspectRatioToBucket(aspect) !== 'Unknown';
+}
+
 function getErrorMessage(responseText, fallback) {
   try {
     var data = JSON.parse(responseText);

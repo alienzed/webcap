@@ -7,7 +7,7 @@ pruneMedia = async function (mediaItem) {
     setStatus('No folder or media selected for prune');
     return;
   }
-  var confirmed = confirm('Permanently remove this media file?\n\n' + mediaItem.key + '\n\nThis cannot be undone.');
+  var confirmed = confirm('Remove this media file from the current set?\n\n' + mediaItem.key + '\n\nYou can restore it later from originals.');
   if (!confirmed) {
     setStatus('Prune cancelled');
     return;
@@ -318,20 +318,28 @@ function promptRenameMedia(mediaItem) {
   });
 }
 
+function navigateToDirStackIndex(targetIndex) {
+  if (!state.dirStack || !state.dirStack.length) {
+    return;
+  }
+  var idx = Number(targetIndex);
+  if (!isFinite(idx)) return;
+  idx = Math.max(0, Math.min(state.dirStack.length - 1, Math.floor(idx)));
+  state.dirStack = state.dirStack.slice(0, idx + 1);
+  state.folder = state.dirStack.slice(1).map(function (entry) { return entry.name; }).join('/');
+  // Clear current selection and editor/preview
+  state.currentItem = null;
+  clearEditorAndPreview();
+  refreshCurrentDirectory();
+}
+
 // Backend-based navigation up
 function navigateUp() {
   if (!state.dirStack || state.dirStack.length <= 1) {
     setStatus('Already at selected root folder');
     return;
   }
-  state.dirStack.pop();
-  // Rebuild state.folder from dirStack (excluding root)
-  var folder = state.dirStack.slice(1).map(function (entry) { return entry.name; }).join('/');
-  state.folder = folder;
-  // Clear current selection and editor/preview
-  state.currentItem = null;
-  clearEditorAndPreview();
-  refreshCurrentDirectory();
+  navigateToDirStackIndex(state.dirStack.length - 2);
 }
 
 async function renameMedia(mediaItem, oldFile, newFile) {

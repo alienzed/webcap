@@ -470,7 +470,10 @@ function refreshCurrentDirectory() {
           
           // --- Static header toggling (display only, wiring in main.js) ---
           var upRow = document.getElementById('up-one-directory-row');
-          if (upRow) upRow.style.display = state.dirStack.length > 1 ? '' : 'none';
+          if (upRow) upRow.style.display = 'none';
+          if (ui.upBtn) {
+            ui.upBtn.classList.toggle('hidden', !(state.dirStack.length > 1));
+          }
           var currentLabel = document.getElementById('current-folder-label');
           if (currentLabel) {
             var folder = state.folder || '';
@@ -495,6 +498,7 @@ function refreshCurrentDirectory() {
           setStatus('Error parsing folder list: ' + (e && e.message ? e.message : e));
           state.childFolders = [];
           state.items = [];
+          if (ui.upBtn) ui.upBtn.classList.add('hidden');
           renderFileList(ui.filterEl.value);
           refreshTrainingConfigList();
         }
@@ -502,6 +506,7 @@ function refreshCurrentDirectory() {
         setStatus('Error loading folder: ' + xhr.status);
         state.childFolders = [];
         state.items = [];
+        if (ui.upBtn) ui.upBtn.classList.add('hidden');
         renderFileList(ui.filterEl.value);
         refreshTrainingConfigList();
       }

@@ -3,6 +3,97 @@ function handleCurrentFolderRowContextMenu(e) {
   showContextMenu(e.clientX, e.clientY, buildCurrentFolderContextActions());
 }
 
+var utilityPathFlyoutOpen = false;
+
+function buildUtilityPathSegments() {
+  var stack = (state.dirStack && state.dirStack.length) ? state.dirStack.slice() : [{ name: '' }];
+  if (!stack.length) stack = [{ name: '' }];
+  return stack.map(function (entry, idx) {
+    if (idx === 0) {
+      return String(ROOT_FOLDER_LABEL || 'root');
+    }
+    return String((entry && entry.name) || '');
+  });
+}
+
+function closeUtilityPathFlyout() {
+  utilityPathFlyoutOpen = false;
+  if (ui.utilityPathFlyoutEl) {
+    ui.utilityPathFlyoutEl.classList.remove('open');
+  }
+  if (ui.utilityCurrentPathBtn) {
+    ui.utilityCurrentPathBtn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function refreshUtilityPathFlyout() {
+  if (!utilityPathFlyoutOpen || !ui.utilityPathFlyoutEl) return;
+  renderUtilityPathFlyout();
+}
+
+function renderUtilityPathFlyout() {
+  if (!ui.utilityPathFlyoutEl) return;
+  var flyout = ui.utilityPathFlyoutEl;
+  flyout.innerHTML = '';
+  var labels = buildUtilityPathSegments();
+  for (var i = 0; i < labels.length; i++) {
+    (function (idx) {
+      var segmentBtn = document.createElement('button');
+      segmentBtn.type = 'button';
+      segmentBtn.className = 'utility-path-segment' + (idx === labels.length - 1 ? ' current' : '');
+      segmentBtn.textContent = labels[idx] || '/';
+      segmentBtn.title = labels[idx] || '/';
+      segmentBtn.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof navigateToDirStackIndex === 'function') {
+          navigateToDirStackIndex(idx);
+        }
+        closeUtilityPathFlyout();
+      };
+      flyout.appendChild(segmentBtn);
+      if (idx < labels.length - 1) {
+        var separator = document.createElement('span');
+        separator.className = 'utility-path-separator';
+        separator.textContent = '›';
+        flyout.appendChild(separator);
+      }
+    })(i);
+  }
+}
+
+function toggleUtilityPathFlyout() {
+  if (!ui.utilityCurrentPathBtn || !ui.utilityPathFlyoutEl) return;
+  utilityPathFlyoutOpen = !utilityPathFlyoutOpen;
+  if (utilityPathFlyoutOpen) {
+    renderUtilityPathFlyout();
+    ui.utilityPathFlyoutEl.classList.add('open');
+    ui.utilityCurrentPathBtn.setAttribute('aria-expanded', 'true');
+    return;
+  }
+  closeUtilityPathFlyout();
+}
+
+function wireUtilityPathFlyout() {
+  if (!ui.utilityCurrentPathBtn || !ui.utilityPathFlyoutEl) return;
+  if (ui.utilityCurrentPathBtn.__pathFlyoutWired) return;
+  ui.utilityCurrentPathBtn.__pathFlyoutWired = true;
+  ui.utilityCurrentPathBtn.setAttribute('aria-expanded', 'false');
+  document.addEventListener('click', function (e) {
+    if (!utilityPathFlyoutOpen) return;
+    var target = e.target;
+    var inButton = ui.utilityCurrentPathBtn.contains(target);
+    var inFlyout = ui.utilityPathFlyoutEl.contains(target);
+    if (inButton || inFlyout) return;
+    closeUtilityPathFlyout();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeUtilityPathFlyout();
+    }
+  });
+}
+
 function handleMediaListDoubleClick(e) {
   var row = e.target.closest('.media-item');
   if (!row) return;
@@ -142,7 +233,11 @@ function wireMiscActionButtons() {
     };
   }
 
-  if (ui.upRow) {
+  if (ui.upBtn) {
+    ui.upBtn.onclick = function () {
+      navigateUp();
+    };
+  } else if (ui.upRow) {
     ui.upRow.onclick = function () {
       navigateUp();
     };
@@ -194,6 +289,7 @@ function wireReportLinks() {
 }
 
 function wireMainUiEvents() {
+  wireUtilityPathFlyout();
   if (ui.currentFolderRow) {
     ui.currentFolderRow.oncontextmenu = handleCurrentFolderRowContextMenu;
   }

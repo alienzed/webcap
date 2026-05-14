@@ -153,31 +153,6 @@ function renderMediaMetadataPanel(folder, doc) {
         var tableDiv = panel.querySelector('#ar-group-table');
         if (!tableDiv) return;
 
-
-        // Helper: map AR string/float to bucket
-        function mapAspectRatio(aspect) {
-          // Accepts e.g. "1:1", "16:9", "4:3", "9:16", or float string
-          if (!aspect) return 'Unknown';
-          var norm = String(aspect).replace(/\s/g, '');
-          if (norm === '1:1' || norm === 'square') return 'square';
-          if (norm === '4:3') return '4:3';
-          if (norm === '16:9') return '16:9';
-          if (norm === '9:16') return '9:16';
-          // Try to parse float
-          var val = 0;
-          if (/^[0-9.]+$/.test(norm)) val = parseFloat(norm);
-          else if (/^([0-9]+):([0-9]+)$/.test(norm)) {
-            var m = norm.match(/^([0-9]+):([0-9]+)$/);
-            val = parseInt(m[1],10) / parseInt(m[2],10);
-          }
-          // Map to nearest bucket
-          if (Math.abs(val - 1.0) < 0.05) return 'square';
-          if (Math.abs(val - 4/3) < 0.05) return '4:3';
-          if (Math.abs(val - 16/9) < 0.05) return '16:9';
-          if (Math.abs(val - 9/16) < 0.05) return '9:16';
-          return 'Unknown';
-        }
-
         function renderTable(groupByAR) {
           var cols = ['file','resolution','fps','aspect','size','bitrate','codec','duration','frames'];
           var colLabels = {file:'File',resolution:'Resolution',fps:'FPS',aspect:'Aspect',size:'Size',bitrate:'Bitrate',codec:'Codec',duration:'Duration',frames:'Frames'};
@@ -186,7 +161,7 @@ function renderMediaMetadataPanel(folder, doc) {
             // Group rows by AR bucket
             var arGroups = {};
             data.forEach(function(row){
-              var ar = mapAspectRatio(row.aspect);
+              var ar = mapAspectRatioToBucket(row.aspect);
               if (!arGroups[ar]) arGroups[ar] = [];
               arGroups[ar].push(row);
             });
@@ -199,6 +174,9 @@ function renderMediaMetadataPanel(folder, doc) {
               arGroups[ar].forEach(function(row){
                 html += '<tr>' + cols.map(function(c){
                   var val = row[c] !== undefined ? String(row[c]) : '-';
+                  if (c === 'aspect' && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(val)) {
+                    return '<td class="metadata-value-error" title="Aspect ratio is outside supported buckets (square, 4:3, 16:9, 9:16).">' + escapeHtml(val) + '</td>';
+                  }
                   return '<td>' + escapeHtml(val) + '</td>';
                 }).join('') + '</tr>';
               });
@@ -209,6 +187,9 @@ function renderMediaMetadataPanel(folder, doc) {
             data.forEach(function(row){
               html += '<tr>' + cols.map(function(c){
                 var val = row[c] !== undefined ? String(row[c]) : '-';
+                if (c === 'aspect' && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(val)) {
+                  return '<td class="metadata-value-error" title="Aspect ratio is outside supported buckets (square, 4:3, 16:9, 9:16).">' + escapeHtml(val) + '</td>';
+                }
                 return '<td>' + escapeHtml(val) + '</td>';
               }).join('') + '</tr>';
             });

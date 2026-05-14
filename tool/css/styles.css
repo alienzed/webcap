@@ -443,6 +443,41 @@ iframe {
   color: #334155;
 }
 
+.flag-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.flag-filter-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  cursor: pointer;
+}
+
+.flag-filter-choice input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.flag-filter-choice .flag-dot {
+  margin-left: 0;
+  opacity: 0.42;
+  transform: scale(0.82);
+  transition: opacity 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.flag-filter-choice input[type="checkbox"]:checked + .flag-dot {
+  opacity: 1;
+  transform: scale(1);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #334155;
+}
+
 .utility-bar {
   display: flex;
   align-items: center;

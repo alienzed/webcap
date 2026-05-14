@@ -224,6 +224,30 @@ function getReviewAvailability() {
   };
 }
 
+function clearMediaFiltersForGeneratedDataset(path) {
+  var value = String(path || '');
+  var isGeneratedDatasetPath = value.split(/[\\/]/).some(function (part) {
+    return part.toLowerCase() === 'auto_dataset';
+  });
+  if (!isGeneratedDatasetPath) {
+    state.autoDatasetFilterResetPath = '';
+    return;
+  }
+  if (state.autoDatasetFilterResetPath === value) {
+    return;
+  }
+  state.autoDatasetFilterResetPath = value;
+  if (ui.filterEl) ui.filterEl.value = '';
+  if (ui.advancedFilterMissingCaptionsEl) ui.advancedFilterMissingCaptionsEl.checked = false;
+  if (ui.advancedFilterReviewedEl) ui.advancedFilterReviewedEl.checked = false;
+  if (ui.advancedFilterMinStarsEl) ui.advancedFilterMinStarsEl.value = '';
+  if (ui.advancedFilterFlagEl) {
+    Array.prototype.forEach.call(ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]'), function (input) {
+      input.checked = false;
+    });
+  }
+}
+
 function runReview() {
   var availability = getReviewAvailability();
   if (!availability.enabled) {
@@ -421,6 +445,7 @@ function refreshCurrentDirectory() {
   }
   var last = state.dirStack && state.dirStack.length ? state.dirStack[state.dirStack.length - 1].name : '';
   debugLog('[webcap] refreshCurrentDirectory: requesting /fs/describe', path);
+  clearMediaFiltersForGeneratedDataset(path);
 
   var url = '/fs/describe' + (path ? ('?path=' + encodeURIComponent(path)) : '');
   // Clear current selection and editor/preview on folder change

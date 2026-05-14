@@ -249,7 +249,15 @@ function getAdvancedMinStarsThreshold() {
 
 function getAdvancedFlagFilterValue() {
   if (!ui.advancedFilterFlagEl) return '';
-  return String(ui.advancedFilterFlagEl.value || '').trim().toLowerCase();
+  return getAdvancedFlagFilterValues().join(',');
+}
+
+function getAdvancedFlagFilterValues() {
+  if (!ui.advancedFilterFlagEl) return [];
+  var inputs = ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]:checked');
+  return Array.prototype.map.call(inputs, function (input) {
+    return String(input.value || '').trim().toLowerCase();
+  }).filter(Boolean);
 }
 
 function selectPathMedia(mediaItem) {
@@ -441,7 +449,7 @@ async function renderFileList() {
   var missingCaptionsOnly = !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked);
   var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
   var minStarsThreshold = getAdvancedMinStarsThreshold();
-  var flagFilterValue = getAdvancedFlagFilterValue();
+  var flagFilterValues = getAdvancedFlagFilterValues();
   // Focus set logic (if active)
   if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
     var allow = {};
@@ -479,13 +487,13 @@ async function renderFileList() {
       return rating > minStarsThreshold;
     });
   }
-  if (flagFilterValue) {
+  if (flagFilterValues.length) {
     mediaItems = mediaItems.filter(function (item) {
       var itemFlag = String((state.flags && state.flags[item.key]) || '').toLowerCase();
-      if (flagFilterValue === 'any') {
+      if (flagFilterValues.indexOf('any') !== -1) {
         return !!itemFlag;
       }
-      return itemFlag === flagFilterValue;
+      return flagFilterValues.indexOf(itemFlag) !== -1;
     });
   }
   // Show count of matching media items

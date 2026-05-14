@@ -22,7 +22,7 @@ This file tracks implemented work vs outstanding items.
   - Missing captions only.
   - Reviewed only.
   - Stars filter (`> N`).
-  - Flag filter.
+  - Cumulative flag filter.
 - Existing confirmed behavior retained:
   - Rename reselection via `pendingSelectFileName`.
   - Prune backup behavior (`pruned_` in `originals`).

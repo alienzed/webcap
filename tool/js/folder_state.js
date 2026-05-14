@@ -202,10 +202,6 @@ async function saveFolderStateForCurrentRoot() {
 }
 
 
-function captionCacheKey(mediaItem) {
-  return 'path:' + (state.folder || '') + ':' + mediaItem.fileName;
-}
-
 function renderMultilineTemplate(template, values) {
   var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function (_, rawKey) {
     var key = String(rawKey || '').toLowerCase();
@@ -321,26 +317,4 @@ function renderTemplate(template, values) {
     .trim();
 
   return rendered;
-}
-
-function buildPrimer(fileName, rulesText) {
-  var cfg = parseRules(rulesText);
-  if (!cfg.template) {
-    return '';
-  }
-
-  var fileNorm = String(fileName || '').toLowerCase();
-  var values = {};
-
-  Object.keys(cfg.defaults).forEach(function (key) {
-    values[key] = cfg.defaults[key];
-  });
-
-  cfg.assignments.forEach(function (rule) {
-    if (fileNorm.indexOf(rule.trigger) !== -1) {
-      values[rule.key] = rule.value;
-    }
-  });
-
-  return renderTemplate(cfg.template, values);
 }

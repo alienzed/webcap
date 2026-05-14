@@ -1,5 +1,7 @@
 import json
+import hashlib
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
@@ -16,7 +18,10 @@ AR_TOL = 0.05
 MAX_SQUARE_DIM = 768
 MAX_NON_SQUARE_LONG = 1280
 MAX_NON_SQUARE_SHORT = 768
-MAX_IMAGE_MFP = 720
+# Keep image buckets a bit more conservative than the full 720 ceiling.
+# This avoids selecting edge-case high-res non-square buckets that are often
+# slightly larger than desired in practice (e.g. 992x736, 640x1152).
+MAX_IMAGE_MFP = 600
 MIN_IMAGE_SIDE = 320
 ALT_MIN_IMAGE_SIDE = 320
 MAX_SELECTED_IMAGE_BUCKETS = 2
@@ -85,7 +90,8 @@ def generate_dataset_configs(folder_path: Path):
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     lines.append(f"[INFO] Wrote metadata cache: {metadata_path}")
 
-    text = render_dataset_toml(video_blocks, image_blocks)
+    snapshot_lines = build_selection_snapshot_comment_lines(folder, dataset_root, manifest)
+    text = render_dataset_toml(video_blocks, image_blocks, snapshot_lines)
     hi_path = folder / "dataset.hi.toml"
     lo_path = folder / "dataset.lo.toml"
     hi_path.write_text(text, encoding="utf-8")
@@ -344,16 +350,6 @@ def generate_candidates(ar_label: str):
     )
 
 
-def generate_alternative_candidates(ar_label: str):
-    return generate_candidates_with_caps(
-        ar_label,
-        ALT_MAX_SQUARE_DIM,
-        ALT_MAX_NON_SQUARE_LONG,
-        ALT_MAX_NON_SQUARE_SHORT,
-        canonical_only=True,
-    )
-
-
 def generate_candidates_with_caps(ar_label: str, max_square_dim: int, max_long: int, max_short: int, canonical_only: bool):
     target_ar = AR_CLASSES[ar_label]
     candidates = []
@@ -548,8 +544,111 @@ def candidate_for_short_side(ar_label: str, short_side: int):
     return (w, h)
 
 
-def render_dataset_toml(video_blocks, image_blocks):
+def normalize_snapshot_caption(text):
+    return " ".join(str(text or "").replace("\r\n", " ").replace("\n", " ").split())
+
+
+def escape_comment_value(value):
+    text = normalize_snapshot_caption(value)
+    text = text.replace("#", "\\#")
+    return text
+
+
+def build_selection_snapshot_comment_lines(folder: Path, dataset_root: Path, manifest):
+    selection = manifest.get("selection")
+    if not isinstance(selection, dict):
+        raise RuntimeError("Prep manifest is missing required selection metadata.")
+
+    mode = str(selection.get("mode") or "").strip()
+    if mode not in ("all", "visible_subset"):
+        raise RuntimeError(f"Invalid selection mode in prep manifest: {mode}")
+    selected_count = selection.get("selected_count")
+    total_count = selection.get("total_count")
+    selected_files = selection.get("selected_files")
+    criteria = selection.get("criteria")
+    if not isinstance(selected_count, int) or selected_count < 0:
+        raise RuntimeError("Prep manifest has invalid selection.selected_count.")
+    if not isinstance(total_count, int) or total_count < 0:
+        raise RuntimeError("Prep manifest has invalid selection.total_count.")
+    if not isinstance(selected_files, list):
+        raise RuntimeError("Prep manifest has invalid selection.selected_files.")
+    if not isinstance(criteria, dict):
+        raise RuntimeError("Prep manifest has invalid selection.criteria.")
+
+    prepared_entries = []
+    for row in (manifest.get("videos") or []):
+        if not isinstance(row, dict):
+            continue
+        prepared_entries.append(row)
+    for row in (manifest.get("images") or []):
+        if not isinstance(row, dict):
+            continue
+        prepared_entries.append(row)
+    if not prepared_entries:
+        raise RuntimeError("Prep manifest contains no prepared media entries for snapshot.")
+
+    grouped = {}
+    trained_files_for_hash = []
+    for row in prepared_entries:
+        file_name = str(row.get("file") or "").strip()
+        prepared_rel = str(row.get("prepared_path") or "").strip()
+        if not file_name or not prepared_rel:
+            raise RuntimeError("Prep manifest contains malformed prepared media entry.")
+        media_path = dataset_root / prepared_rel
+        caption_path = media_path.with_suffix(".txt")
+        if not caption_path.exists() or not caption_path.is_file():
+            raise RuntimeError(f"Prepared caption file missing for media: {prepared_rel}")
+        caption_text = normalize_snapshot_caption(caption_path.read_text(encoding="utf-8"))
+        if not caption_text:
+            raise RuntimeError(f"Prepared caption text is empty for media: {prepared_rel}")
+        bucket = Path(prepared_rel).parent.as_posix() or "."
+        grouped.setdefault(bucket, []).append((file_name, caption_text))
+        trained_files_for_hash.append(file_name)
+
+    for bucket_name in list(grouped.keys()):
+        grouped[bucket_name] = sorted(grouped[bucket_name], key=lambda item: item[0].lower())
+    bucket_names = sorted(grouped.keys(), key=lambda name: name.lower())
+    trained_files_sorted = sorted(trained_files_for_hash, key=lambda name: name.lower())
+    selection_hash_input = "\n".join(trained_files_sorted).encode("utf-8")
+    selection_hash = hashlib.sha256(selection_hash_input).hexdigest()
+
+    lines = []
+    lines.append("# --- webcap selection snapshot v1 ---")
+    lines.append(f"# snapshot.generated_at: {datetime.now(timezone.utc).isoformat()}")
+    source_folder_value = criteria.get("source_folder") if isinstance(criteria, dict) else None
+    if not source_folder_value:
+        source_folder_value = folder.as_posix()
+    lines.append(f"# snapshot.source_folder: {escape_comment_value(source_folder_value)}")
+    lines.append(f"# snapshot.prepared_mode: {mode}")
+    lines.append(f"# snapshot.selected_count: {selected_count}")
+    lines.append(f"# snapshot.total_count: {total_count}")
+    lines.append(f"# snapshot.prepared_count: {len(trained_files_sorted)}")
+    lines.append(f"# snapshot.selection_hash: sha256:{selection_hash}")
+    lines.append("# snapshot.criteria.begin: true")
+    for key in sorted(criteria.keys(), key=lambda k: str(k).lower()):
+        value = criteria.get(key)
+        lines.append(f"# criteria.{key}: {escape_comment_value(value)}")
+    lines.append("# snapshot.criteria.end: true")
+    lines.append("# snapshot.files.begin: true")
+    for bucket_name in bucket_names:
+        lines.append(f"# bucket: {escape_comment_value(bucket_name)}")
+        for file_name, caption_text in grouped[bucket_name]:
+            lines.append(
+                "# file: "
+                + escape_comment_value(file_name)
+                + " | caption: "
+                + escape_comment_value(caption_text)
+            )
+    lines.append("# snapshot.files.end: true")
+    lines.append("# --- end webcap selection snapshot ---")
+    return lines
+
+
+def render_dataset_toml(video_blocks, image_blocks, snapshot_lines=None):
     chunks = ["enable_ar_bucket = true"]
     chunks.extend(video_blocks)
     chunks.extend(image_blocks)
-    return "\n\n".join(chunks).rstrip() + "\n"
+    body = "\n\n".join(chunks).rstrip() + "\n"
+    if not snapshot_lines:
+        return body
+    return "\n".join(snapshot_lines).rstrip() + "\n\n" + body

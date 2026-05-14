@@ -1,4 +1,4 @@
-// Global functions: hideContextMenu, ensureContextMenu, showContextMenu, ensureFocusSetExitButton, refreshFocusSetUi, clearFocusSet, activateFocusSet, wireReviewActions, runReview, selectByFileName, applyTokenFilter, refreshCurrentDirectory
+// Global functions: hideContextMenu, ensureContextMenu, showContextMenu, clearFocusSet, activateFocusSet, wireReviewActions, runReview, selectByFileName, applyTokenFilter, refreshCurrentDirectory
 
 var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;
 var contextMenuEl = null;
@@ -161,13 +161,7 @@ function activateFocusSet(fileNames, source) {
 
 // Review/stats bridge for caption mode.
 function wireReviewActions() {
-  // Wire up Review Captions button and stats-run button to runReview
-  var reviewBtn = document.getElementById('review-captions-btn');
-  if (reviewBtn) {
-    reviewBtn.onclick = function () {
-      runReview();
-    };
-  }
+  // Wire up stats-run button to runReview
   var runBtn = document.getElementById('stats-run-btn');
   if (runBtn) {
     runBtn.onclick = function () {
@@ -303,7 +297,9 @@ function selectByFileName(fileName, focusFiles, focusSource) {
     }
 
     selectPathMedia(target).then(function () {
-      //scrollToCurrentRow();
+      if (typeof scrollCurrentMediaRowIntoView === 'function') {
+        scrollCurrentMediaRowIntoView();
+      }
     }).catch(function (err) {
       setStatus(String(err && err.message ? err.message : err));
     });
@@ -530,6 +526,11 @@ if (ui.filterEl) {
 }
 if (ui.advancedFilterMissingCaptionsEl) {
   ui.advancedFilterMissingCaptionsEl.addEventListener('change', function () {
+    renderFileList();
+  });
+}
+if (ui.advancedFilterReviewedEl) {
+  ui.advancedFilterReviewedEl.addEventListener('change', function () {
     renderFileList();
   });
 }

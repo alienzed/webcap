@@ -61,6 +61,10 @@
                             <span>Missing captions only</span>
                         </label>
                         <label class="advanced-filter-row">
+                            <input id="advanced-filter-reviewed" type="checkbox">
+                            <span>Reviewed only</span>
+                        </label>
+                        <label class="advanced-filter-row">
                             <span>Stars</span>
                             <select id="advanced-filter-min-stars">
                                 <option value="">&mdash;</option>
@@ -84,7 +88,11 @@
                             </select>
                         </label>
                     </div>
-                    <div id="caption-filter-count"></div>
+                    <div id="caption-filter-count">
+                        <span id="caption-filter-count-text"></span>
+                        <span id="caption-filter-count-separator" class="hidden"> - </span>
+                        <button id="caption-filter-prepare-link" type="button" class="caption-filter-prepare-link hidden">Prepare</button>
+                    </div>
                     <div class="media-list-wrapper">
                         <button
                             id="up-one-directory-btn"

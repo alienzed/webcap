@@ -15,10 +15,12 @@ This file tracks implemented work vs outstanding items.
 - Metadata/rating updates:
   - 5-star rating row added as first line in Metadata tab (click to set 1..5).
   - `1..5` keyboard shortcuts set selected media star rating.
+  - `0` keyboard shortcut clears/unsets rating.
   - Ratings persist in folder state (`ratings_by_media`).
   - Metadata fields `Bitrate` and `Color` are commented out (non-destructive hide).
 - Advanced filters added (chevron beside filter input):
   - Missing captions only.
+  - Reviewed only.
   - Stars filter (`> N`).
   - Flag filter.
 - Existing confirmed behavior retained:
@@ -29,12 +31,21 @@ This file tracks implemented work vs outstanding items.
   - Console auto-append and auto-scroll.
   - Open in Explorer support.
   - Captions save only when changed.
+- Selection-driven dataset preparation and snapshotting:
+  - Prepare can run on visible subset with explicit partial-set confirmation.
+  - Prepare records strict selection metadata in `auto_dataset/prep_manifest.json`.
+  - Generate prepends structured selection snapshot comments to dataset TOMLs.
+- Config behavior updates:
+  - Config templates are created at Generate time, not on directory load.
+  - Settings modal now reads saved config from disk on load.
+- Media list polish:
+  - Selected row now auto-scrolls into view after keyboard navigation, prune-next selection, and direct file selection.
 
 ## Outstanding (Active)
-- Keep selected media row scrolled into view after keyboard navigation and prune-next selection.
-- Revisit automatic config creation-on-folder-load behavior; prefer explicit generation where possible.
 - Validate training command preview behavior when config keys are missing (should still provide useful output where possible).
-- Primer-only caption guard: ensure manual saves also block saving primer-only content.
+
+## Stabilization Mode
+- App is in lock-in mode: resist new feature work and prioritize targeted bug/regression fixes.
 
 ## Backlog (Do Not Implement Yet)
 - Persist last selected working directory between refresh/restart (optional toggle in settings; safe fallback when missing).

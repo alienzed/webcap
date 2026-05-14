@@ -58,11 +58,34 @@ def clean_caption_text(text):
 def copy_clean_caption(source_media_path: Path, dest_dir: Path):
     source_caption = source_media_path.with_suffix(".txt")
     if not source_caption.exists() or not source_caption.is_file():
-        return False
+        raise RuntimeError(f"Missing caption file for media: {source_media_path.name}")
     cleaned = clean_caption_text(source_caption.read_text(encoding="utf-8"))
+    if not cleaned:
+        raise RuntimeError(f"Empty caption text for media: {source_media_path.name}")
     dest_caption = dest_dir / source_caption.name
     dest_caption.write_text(cleaned, encoding="utf-8")
-    return True
+    return cleaned
+
+
+def normalize_selected_media(selected_media):
+    if selected_media is None:
+        return None
+    if not isinstance(selected_media, list):
+        raise RuntimeError("selected_media must be a list of filenames.")
+    out = []
+    seen = set()
+    for raw in selected_media:
+        name = str(raw or "").strip()
+        if not name:
+            continue
+        if "/" in name or "\\" in name or ".." in name:
+            raise RuntimeError(f"Invalid selected media filename: {name}")
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(name)
+    return out
 
 
 def convert_video_to_fps(src_path: Path, dst_path: Path, target_fps: int):
@@ -100,7 +123,7 @@ def convert_video_to_fps(src_path: Path, dst_path: Path, target_fps: int):
         raise RuntimeError(f"ffmpeg failed for {src_path.name}: {stderr}")
 
 
-def prepare_dataset(folder_path: Path, target_fps: int = 16):
+def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None, selection_criteria=None, total_media_count=None):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
     lines = []
@@ -120,13 +143,55 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16):
         "videos": [],
         "images": [],
         "skipped": [],
+        "selection": {},
     }
 
     file_names = sorted([p.name for p in folder.iterdir() if p.is_file()], key=lambda name: name.lower())
+    media_file_names = [name for name in file_names if (folder / name).suffix.lower() in VIDEO_EXTS or (folder / name).suffix.lower() in IMAGE_EXTS]
+    computed_total_media_count = len(media_file_names)
+    normalized_selected_media = normalize_selected_media(selected_media)
+    if normalized_selected_media is None:
+        selected_file_names = list(media_file_names)
+    else:
+        media_lookup = {name.lower(): name for name in media_file_names}
+        missing = [name for name in normalized_selected_media if name.lower() not in media_lookup]
+        if missing:
+            raise RuntimeError("Selected media not found in folder: " + ", ".join(missing))
+        selected_file_names = sorted(
+            [media_lookup[name.lower()] for name in normalized_selected_media],
+            key=lambda name: name.lower(),
+        )
+    if not selected_file_names:
+        raise RuntimeError("No selected media items to prepare.")
+    selected_set = set(selected_file_names)
+
+    final_total_media_count = computed_total_media_count
+    if total_media_count is not None:
+        try:
+            reported_total = int(total_media_count)
+            if reported_total > 0:
+                final_total_media_count = reported_total
+        except Exception:
+            pass
+    selection_mode = "all" if len(selected_file_names) >= computed_total_media_count else "visible_subset"
+    criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+    manifest["selection"] = {
+        "mode": selection_mode,
+        "selected_files": selected_file_names,
+        "selected_count": len(selected_file_names),
+        "total_count": int(final_total_media_count),
+        "criteria": criteria,
+    }
+    lines.append(
+        f"[INFO] Selection mode: {selection_mode} ({len(selected_file_names)} of {final_total_media_count} media files)"
+    )
+
     for file_name in file_names:
         src = folder / file_name
         ext = src.suffix.lower()
         if ext not in VIDEO_EXTS and ext not in IMAGE_EXTS:
+            continue
+        if file_name not in selected_set:
             continue
 
         info = metadata.get(file_name) or {}
@@ -169,7 +234,7 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16):
             else:
                 shutil.copy2(src, dest_path)
                 action = "copied"
-            caption_written = copy_clean_caption(src, dest_dir)
+            copy_clean_caption(src, dest_dir)
             manifest["videos"].append({
                 "file": file_name,
                 "ar": ar_label,
@@ -179,19 +244,19 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16):
                 "frames": info.get("frame_count"),
                 "duration": info.get("duration"),
                 "prepared_path": f"{dest_dir_name}/{src.name}",
-                "caption": bool(caption_written),
+                "caption": True,
                 "action": action,
             })
         else:
             shutil.copy2(src, dest_path)
-            caption_written = copy_clean_caption(src, dest_dir)
+            copy_clean_caption(src, dest_dir)
             manifest["images"].append({
                 "file": file_name,
                 "ar": ar_label,
                 "width": int(width),
                 "height": int(height),
                 "prepared_path": f"{dest_dir_name}/{src.name}",
-                "caption": bool(caption_written),
+                "caption": True,
             })
 
     manifest_path = dataset_root / PREP_MANIFEST_NAME

@@ -101,11 +101,46 @@ function runPrepareDatasetForCurrentFolder() {
   if (!ensureFolderSelected('No folder selected for dataset preparation.')) {
     return;
   }
+  var visibleRows = Array.prototype.slice.call(
+    ui.mediaListEl ? ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]') : []
+  );
+  var selectedMedia = visibleRows
+    .map(function (row) { return String(row.getAttribute('data-key') || '').trim(); })
+    .filter(Boolean);
+  var totalMediaCount = Array.isArray(state.items) ? state.items.length : 0;
+  if (!selectedMedia.length) {
+    setStatus('No visible media items to prepare.');
+    return;
+  }
+  if (totalMediaCount > 0 && selectedMedia.length < totalMediaCount) {
+    var confirmText = 'Prepare visible subset only? (' + selectedMedia.length + ' of ' + totalMediaCount + ' media items)';
+    if (!confirm(confirmText)) {
+      setStatus('Dataset preparation cancelled.');
+      return;
+    }
+  }
+  var minStars = (typeof getAdvancedMinStarsThreshold === 'function') ? getAdvancedMinStarsThreshold() : null;
+  var flagValue = (typeof getAdvancedFlagFilterValue === 'function') ? getAdvancedFlagFilterValue() : '';
+  var criteria = {
+    source_folder: String(state.folder || ''),
+    filter_text: String((ui.filterEl && ui.filterEl.value) || '').trim(),
+    missing_captions_only: !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked),
+    reviewed_only: !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked),
+    min_stars_gt: minStars === null ? '' : String(minStars),
+    flag_filter: String(flagValue || ''),
+    focus_set_active: !!(state.focusSet && state.focusSet.keys && state.focusSet.keys.length),
+    focus_set_source: String((state.focusSet && state.focusSet.source) || ''),
+  };
   resetSelectionForFolderAction();
   setStatus('Preparing dataset...');
   streamPreviewFromFetch(
     '/fs/prepare_dataset',
-    { folder: state.folder },
+    {
+      folder: state.folder,
+      selected_media: selectedMedia,
+      total_media_count: totalMediaCount,
+      selection_criteria: criteria
+    },
     ui,
     function () {
       setStatus('Dataset preparation finished.');
@@ -214,20 +249,8 @@ function wireAllUi() {
   // Autosaving of primer/stats changes (debounced)
   wireStatsPrimerAutoSave();
 
-  // Ignore CTRL+S/CMD+S in caption editor (prevent browser save)
-  ui.editorEl.addEventListener('keydown', function(e) {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
-      e.preventDefault();
-      // Optionally, show a tooltip or status message here if desired
-      setStatus('Caption saved.');
-    }
-  });
   // Wire up review actions (if stats.js is loaded)
   wireReviewActions();
-  // Run Report Button
-  ui.reviewBtn.onclick = function () {
-    runReview();
-  };
   
   // Wire up CTRL+S/CMD+S to new save logic
   ui.editorEl.addEventListener('keydown', function(e) {
@@ -310,11 +333,15 @@ function wireAllUi() {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (!state.currentItem || !state.currentItem.fileName) return;
     if (isEditableElement(document.activeElement)) return;
-    if (!/^[1-5]$/.test(e.key)) return;
+    if (!/^[0-5]$/.test(e.key)) return;
     if (typeof setRatingForMediaKey !== 'function') return;
     e.preventDefault();
     var rating = Number(e.key);
     setRatingForMediaKey(state.currentItem.key, rating);
+    if (rating <= 0) {
+      setStatus('Rating cleared');
+      return;
+    }
     setStatus('Rating set: ' + rating + ' stars');
   });
 

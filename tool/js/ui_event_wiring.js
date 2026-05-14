@@ -221,6 +221,12 @@ function wireTrainingButtons() {
 }
 
 function wireMiscActionButtons() {
+  if (ui.captionFilterPrepareLinkEl) {
+    ui.captionFilterPrepareLinkEl.onclick = function () {
+      runPrepareDatasetForCurrentFolder();
+    };
+  }
+
   if (ui.refreshBtn) {
     ui.refreshBtn.onclick = function () {
       refreshCurrentDirectory();

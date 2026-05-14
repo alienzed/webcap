@@ -33,17 +33,6 @@ function setStatus(text) {
   appendToConsolePanel(text || '');
 }
 
-function normalizeFolderInput(value) {
-  var text = String(value || '').trim();
-  if (!text) {
-    return '';
-  }
-  if (text.length >= 2 && text[0] === '"' && text[text.length - 1] === '"') {
-    text = text.slice(1, -1).trim();
-  }
-  return text;
-}
-
 function isBlacklistedSetSubfolderName(name) {
   var n = String(name || '').toLowerCase();
   return n === 'originals' || n === 'auto_dataset';

@@ -16,37 +16,63 @@ def write_image(path: Path, size):
 def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     set_folder = tmp_path / "set"
     auto_dataset = set_folder / "auto_dataset"
+    square = auto_dataset / "square"
     square_img = auto_dataset / "square_img"
+    square.mkdir(parents=True)
     square_img.mkdir(parents=True)
 
-    (auto_dataset / "dataset.auto.toml").write_text(
-        "\n".join([
-            "enable_ar_bucket = true",
-            "",
-            "[[directory]]",
-            f'path = "{(auto_dataset / "square").as_posix()}"',
-            "num_repeats = 2",
-            'group = "videos"',
-            "size_buckets = [",
-            "  [512, 512, 33],",
-            "]",
-            "",
-            "[[directory]]",
-            f'path = "{square_img.as_posix()}"',
-            "num_repeats = 1",
-            'group = "images"',
-            "size_buckets = [",
-            "  [256, 256, 1],",
-            "]",
-        ]),
-        encoding="utf-8",
-    )
+    (square / "clip.mp4").write_bytes(b"video")
+    (square / "clip.txt").write_text("video caption", encoding="utf-8")
 
     write_image(square_img / "high_a.png", (768, 768))
     write_image(square_img / "high_b.png", (768, 768))
     write_image(square_img / "mid_a.png", (512, 512))
     write_image(square_img / "mid_b.png", (512, 512))
     write_image(square_img / "low.png", (256, 256))
+    (square_img / "high_a.txt").write_text("high a", encoding="utf-8")
+    (square_img / "high_b.txt").write_text("high b", encoding="utf-8")
+    (square_img / "mid_a.txt").write_text("mid a", encoding="utf-8")
+    (square_img / "mid_b.txt").write_text("mid b", encoding="utf-8")
+    (square_img / "low.txt").write_text("low", encoding="utf-8")
+
+    (auto_dataset / "prep_manifest.json").write_text(
+        """
+{
+  "version": 1,
+  "target_fps": 16,
+  "videos": [
+    {
+      "file": "clip.mp4",
+      "ar": "square",
+      "width": 512,
+      "height": 512,
+      "fps": 16,
+      "frames": 33,
+      "duration": 2.0,
+      "prepared_path": "square/clip.mp4",
+      "caption": true,
+      "action": "copied"
+    }
+  ],
+  "images": [
+    {"file": "high_a.png", "ar": "square", "width": 768, "height": 768, "prepared_path": "square_img/high_a.png", "caption": true},
+    {"file": "high_b.png", "ar": "square", "width": 768, "height": 768, "prepared_path": "square_img/high_b.png", "caption": true},
+    {"file": "mid_a.png", "ar": "square", "width": 512, "height": 512, "prepared_path": "square_img/mid_a.png", "caption": true},
+    {"file": "mid_b.png", "ar": "square", "width": 512, "height": 512, "prepared_path": "square_img/mid_b.png", "caption": true},
+    {"file": "low.png", "ar": "square", "width": 256, "height": 256, "prepared_path": "square_img/low.png", "caption": true}
+  ],
+  "skipped": [],
+  "selection": {
+    "mode": "all",
+    "selected_files": ["clip.mp4", "high_a.png", "high_b.png", "mid_a.png", "mid_b.png", "low.png"],
+    "selected_count": 6,
+    "total_count": 6,
+    "criteria": {"source_folder": "set"}
+  }
+}
+        """.strip(),
+        encoding="utf-8",
+    )
 
     report = generate_dataset_configs(set_folder)
 
@@ -60,21 +86,21 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert "  [512, 512, 1]," in hi_text
     assert "  [768, 768, 1]," in hi_text
     assert "  [256, 256, 1]," not in hi_text
-    assert "Copied 1 video directory block" in report
-    assert "selected image bucket(s): 512x512, 768x768" in report
+    assert "[INFO] Built 1 video directory block(s)." in report
+    assert "[INFO] square_img: selected image bucket(s): 512x512, 768x768" in report
     assert (auto_dataset / "webcap_dataset_metadata.json").exists()
 
 
-def test_generate_dataset_configs_fails_without_autoset_toml(tmp_path):
+def test_generate_dataset_configs_fails_without_prep_manifest(tmp_path):
     set_folder = tmp_path / "set"
     (set_folder / "auto_dataset").mkdir(parents=True)
 
     try:
         generate_dataset_configs(set_folder)
     except FileNotFoundError as exc:
-        assert "dataset.auto.toml" in str(exc)
+        assert "prep_manifest.json" in str(exc)
     else:
-        raise AssertionError("generate_dataset_configs should fail without dataset.auto.toml")
+        raise AssertionError("generate_dataset_configs should fail without prep_manifest.json")
 
 
 def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
@@ -91,23 +117,49 @@ def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
         return (fs_root / rel).resolve()
 
     monkeypatch.setattr(app_module, "safe_join_fs_root", safe_join)
-    monkeypatch.setattr(run_ops_module, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(app_module.app_config, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(run_ops_module.app_config, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
 
-    (auto_dataset / "dataset.auto.toml").write_text(
-        "\n".join([
-            "enable_ar_bucket = true",
-            "",
-            "[[directory]]",
-            f'path = "{(auto_dataset / "169").as_posix()}"',
-            "num_repeats = 2",
-            'group = "videos"',
-            "size_buckets = [",
-            "  [640, 352, 33],",
-            "]",
-        ]),
+    (auto_dataset / "169").mkdir(parents=True, exist_ok=True)
+    (auto_dataset / "169" / "clip.mp4").write_bytes(b"video")
+    (auto_dataset / "169" / "clip.txt").write_text("video caption", encoding="utf-8")
+    write_image(square_img / "img.png", (512, 512))
+    (square_img / "img.txt").write_text("img caption", encoding="utf-8")
+    (auto_dataset / "prep_manifest.json").write_text(
+        """
+{
+  "version": 1,
+  "target_fps": 16,
+  "videos": [
+    {
+      "file": "clip.mp4",
+      "ar": "169",
+      "width": 640,
+      "height": 352,
+      "fps": 16,
+      "frames": 33,
+      "duration": 2.0,
+      "prepared_path": "169/clip.mp4",
+      "caption": true,
+      "action": "copied"
+    }
+  ],
+  "images": [
+    {"file": "img.png", "ar": "square", "width": 512, "height": 512, "prepared_path": "square_img/img.png", "caption": true}
+  ],
+  "skipped": [],
+  "selection": {
+    "mode": "all",
+    "selected_files": ["clip.mp4", "img.png"],
+    "selected_count": 2,
+    "total_count": 2,
+    "criteria": {"source_folder": "set"}
+  }
+}
+        """.strip(),
         encoding="utf-8",
     )
-    write_image(square_img / "img.png", (512, 512))
 
     client = app_module.app.test_client()
     response = client.post("/fs/generate_dataset_config", json={"folder": "set"})
@@ -153,7 +205,7 @@ def test_selected_image_buckets_respect_image_mfp_limit():
     buckets, unsupported = pick_image_buckets("916", images)
 
     assert unsupported == []
-    assert buckets == [(640, 1152)]
+    assert buckets == [(576, 1024)]
 
 
 def test_pick_image_buckets_prefers_full_coverage_then_detail():

@@ -105,7 +105,13 @@ def static_files(filename):
 
 @app.route("/app/config", methods=["GET"])
 def app_config_get():
-    return jsonify(app_config.get_config_snapshot())
+    try:
+        # Return the on-disk config so the settings modal always reflects the
+        # latest saved values, even before runtime reboot/reload.
+        return jsonify(app_config.load_config_from_disk())
+    except Exception:
+        # Fallback to runtime snapshot if disk read fails for any reason.
+        return jsonify(app_config.get_config_snapshot())
 
 
 @app.route("/app/config", methods=["POST"])
@@ -217,12 +223,22 @@ def autoset_run():
 def prepare_dataset_route():
     data = request.get_json(silent=True) or {}
     folder = data.get("folder", "").strip()
-    return prepare_dataset_response(folder)
+    selected_media = data.get("selected_media")
+    selection_criteria = data.get("selection_criteria")
+    total_media_count = data.get("total_media_count")
+    return prepare_dataset_response(folder, selected_media, selection_criteria, total_media_count)
 
 @app.route("/fs/generate_dataset_config", methods=["POST"])
 def generate_dataset_config_route():
     data = request.get_json(silent=True) or {}
     folder = data.get("folder", "").strip()
+    try:
+        folder_path = safe_join_fs_root(folder)
+        if folder_path.exists() and folder_path.is_dir():
+            maybe_create_config_files(folder_path)
+    except Exception:
+        # Let downstream route handler return canonical error responses.
+        pass
     return generate_dataset_config_response(folder)
 
 
@@ -323,7 +339,6 @@ def fs_describe():
         dir_path = safe_join_fs_root(rel_path)
         if not dir_path.exists() or not dir_path.is_dir():
             return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
-        maybe_create_config_files(dir_path)
         copy_media_to_originals(dir_path)
 
         # List folders and files (with metadata)

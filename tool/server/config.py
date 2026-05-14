@@ -7,6 +7,7 @@ Centralized config and root path logic for the backend.
 from pathlib import Path
 import json
 import copy
+import re
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
 
@@ -136,12 +137,23 @@ def fill_template_placeholders(toml_text, dataset_name):
     """
     Replace placeholders in TOML templates with config values and dataset name.
     """
-    training_root = str(config['filesystem']['root']).replace('\\', '/')
-    models_root = str(config['filesystem'].get('models', '')).replace('\\', '/')
+    def normalize_template_path(value, trim_edges):
+        text = str(value or "").strip().replace("\\", "/")
+        text = re.sub(r"/{2,}", "/", text)
+        if trim_edges:
+            text = text.strip("/")
+        else:
+            if text not in ("", "/") and not re.match(r"^[A-Za-z]:/$", text):
+                text = text.rstrip("/")
+        return text
+
+    training_root = normalize_template_path(config['filesystem']['root'], trim_edges=False)
+    models_root = normalize_template_path(config['filesystem'].get('models', ''), trim_edges=False)
+    dataset_rel = normalize_template_path(dataset_name, trim_edges=True)
     replacements = {
         '{TRAINING_ROOT}': training_root,
         '{MODELS_ROOT}': models_root,
-        '{DATASET}': dataset_name
+        '{DATASET}': dataset_rel
     }
     for key, value in replacements.items():
         toml_text = toml_text.replace(key, value)

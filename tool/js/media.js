@@ -1,6 +1,24 @@
 // media.js
 // Global functions: restoreMediaItem, resetMediaItem, selectPathMedia, promptRenameMedia, navigateUp, renameMedia, renderPathPreview
 
+function scrollCurrentMediaRowIntoView() {
+  if (!ui || !ui.mediaListEl || !state || !state.currentItem || !state.currentItem.key) {
+    return;
+  }
+  var rows = ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]');
+  var target = null;
+  for (var i = 0; i < rows.length; i += 1) {
+    if (rows[i].getAttribute('data-key') === state.currentItem.key) {
+      target = rows[i];
+      break;
+    }
+  }
+  if (!target) {
+    return;
+  }
+  target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
 pruneMedia = async function (mediaItem) {
   // Confirm before pruning
   if (!state.folder || !mediaItem || !mediaItem.key) {
@@ -245,6 +263,7 @@ function selectPathMedia(mediaItem) {
       var text = '';
       if (status !== 200) {
         renderFileList();
+        reject(new Error('Failed to load caption for ' + mediaItem.fileName));
         return;
       }
       try {
@@ -254,6 +273,7 @@ function selectPathMedia(mediaItem) {
         ui.editorEl.value = '';
         setStatus('Error parsing caption: ' + e);
         renderFileList();
+        reject(e);
         return;
       }
       // If caption is missing or empty, auto-populate with primer/template if available
@@ -267,6 +287,8 @@ function selectPathMedia(mediaItem) {
       renderChecklistPanel();
       // Re-render list to show selection
       renderFileList();
+      scrollCurrentMediaRowIntoView();
+      resolve(mediaItem);
     });
   });
 }
@@ -412,6 +434,7 @@ async function renderFileList() {
   ui.mediaListEl.innerHTML = '';
   var mediaItems = state.items;
   var missingCaptionsOnly = !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked);
+  var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
   var minStarsThreshold = getAdvancedMinStarsThreshold();
   var flagFilterValue = getAdvancedFlagFilterValue();
   // Focus set logic (if active)
@@ -440,6 +463,11 @@ async function renderFileList() {
       return !item.hasCaption;
     });
   }
+  if (reviewedOnly) {
+    mediaItems = mediaItems.filter(function (item) {
+      return !!(state.reviewedSet && state.reviewedSet.has(item.key));
+    });
+  }
   if (minStarsThreshold !== null) {
     mediaItems = mediaItems.filter(function (item) {
       var rating = (typeof getRatingForMediaKey === 'function') ? getRatingForMediaKey(item.key) : 0;
@@ -456,7 +484,19 @@ async function renderFileList() {
     });
   }
   // Show count of matching media items
-  ui.captionFilterCount.textContent = mediaItems.length + (mediaItems.length === 1 ? ' item matches the filter' : ' items match the filter');
+  var countText = mediaItems.length + (mediaItems.length === 1 ? ' item matches the filter' : ' items match the filter');
+  if (ui.captionFilterCountTextEl) {
+    ui.captionFilterCountTextEl.textContent = countText;
+  } else if (ui.captionFilterCount) {
+    ui.captionFilterCount.textContent = countText;
+  }
+  var showPrepareQuickLink = !!(ui.captionFilterPrepareLinkEl && state.folder && mediaItems.length > 0);
+  if (ui.captionFilterCountSeparatorEl) {
+    ui.captionFilterCountSeparatorEl.classList.toggle('hidden', !showPrepareQuickLink);
+  }
+  if (ui.captionFilterPrepareLinkEl) {
+    ui.captionFilterPrepareLinkEl.classList.toggle('hidden', !showPrepareQuickLink);
+  }
 
 
   var matchCount = 0;

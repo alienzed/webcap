@@ -114,7 +114,7 @@ def rename_response(data):
             originals_path = folder_path / "originals"
             old_orig_media = originals_path / old_name if originals_path.exists() else None
             new_orig_media = originals_path / new_name if originals_path.exists() else None
-            if old_orig_media and old_orig_media.exists() and new_orig_media and new_orig_media.exists():
+            if new_orig_media and new_orig_media.exists():
                 return jsonify({"error": "Target name already exists in originals folder"}), 409
 
             old_caption = folder_path / (Path(old_name).stem + ".txt")

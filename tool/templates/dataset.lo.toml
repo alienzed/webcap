@@ -10,7 +10,7 @@ size_buckets = [
 ]
 
 [[directory]]
-path = "/mnt/w/training/massage/v3/auto_dataset/square"
+path = "{TRAINING_ROOT}/{DATASET}/auto_dataset/square"
 num_repeats = 1
 group = "videos"
 size_buckets = [
@@ -28,7 +28,7 @@ size_buckets = [
 ]
 
 [[directory]]
-path = "/mnt/w/training/massage/v3/auto_dataset/169"
+path = "{TRAINING_ROOT}/{DATASET}/auto_dataset/169"
 num_repeats = 1
 group = "videos"
 size_buckets = [

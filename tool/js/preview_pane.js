@@ -158,8 +158,15 @@ function renderMediaMetadataPanel(folder, doc) {
           if (column === 'file') {
             return '<td><button class="fail-link metadata-file-link" data-file="' + encodeURIComponent(val) + '">' + escapeHtml(val) + '</button></td>';
           }
-          if (column === 'aspect' && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(val)) {
-            return '<td class="metadata-value-error" title="Aspect ratio is outside supported buckets (square, 4:3, 16:9, 9:16).">' + escapeHtml(val) + '</td>';
+          if (column === 'aspect') {
+            var isSupported = hasSupportedAspectBucket(val);
+            if (isSupported) {
+              var bucket = typeof mapAspectRatioBucket === 'function' ? mapAspectRatioBucket(val) : val;
+              var displayText = bucket !== val ? val + ' (' + bucket + ')' : val;
+              return '<td class="metadata-value-ok" style="color: green;" title="Supported aspect ratio: ' + bucket + '.">' + escapeHtml(displayText) + '</td>';
+            } else {
+              return '<td class="metadata-value-error" title="Aspect ratio is outside supported buckets (square, 4:3, 16:9, 9:16).">' + escapeHtml(val) + '</td>';
+            }
           }
           return '<td>' + escapeHtml(val) + '</td>';
         }
@@ -305,6 +312,18 @@ function renderReportPreview(report) {
       '<div class="small">"' + escapeHtml(sample) + '"</div></li>';
   }).join('') : '<li style="color:#777;">No duplicate captions detected.</li>';
 
+  var similarCaption = (report.similarCaptions || []).map(function (row) { return row.fileName; });
+  var similarRows = report.similarCaptions && report.similarCaptions.length ? report.similarCaptions.map(function (group) {
+    var groupFocus = encodeFocus(group.files || []);
+    var shown = group.files.slice(0, 4).map(function (fileName) {
+      return '<button class="fail-link" data-file="' + encodeURIComponent(fileName) + '" data-focus="' + groupFocus +
+        '" data-source="' + encodeURIComponent('Similar Captions') + '">' + escapeHtml(fileName) + '</button>';
+    }).join(', ');
+    var extra = group.files.length > 4 ? ' +' + (group.files.length - 4) + ' more' : '';
+    return '<li><strong>' + group.similarity + '% match, ' + group.files.length + ' files:</strong> ' + shown + extra +
+      '<div class="small">"' + escapeHtml(group.sample) + '"</div></li>';
+  }).join('') : '<li style="color:#777;">No similar captions detected.</li>';
+
   var shortOutlierRows = report.shortOutliers && report.shortOutliers.length ? report.shortOutliers.map(function (row) {
     return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '" data-focus="' +
       encodeFocus(shortOutlierFocus) + '" data-source="' + encodeURIComponent('Length Outliers (Bottom 5%)') + '">' +
@@ -339,6 +358,7 @@ function renderReportPreview(report) {
     '<div class="row">' +
     '<div class="card"><h3>Validation Failures</h3><ul>' + failRows + '</ul></div>' +
     '<div class="card"><h3>Duplicate Captions</h3><ul>' + duplicateRows + '</ul></div>' +
+    '<div class="card"><h3>Similar Captions (80%+)</h3><ul>' + similarRows + '</ul></div>' +
     '</div>' +
     '<div class="row">' +
     '<div class="card"><h3>Shortest Captions</h3><ul>' + shortestRows + '</ul></div>' +

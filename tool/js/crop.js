@@ -157,8 +157,10 @@ function applyCrop() {
       closeCropModal();
       setStatus('Cropped: ' + fileName);
       refreshMediaResolutionCache();
-      state.pendingSelectFileName = fileName;
-      refreshCurrentDirectory();
+      // Reload preview for the current item (file was mutated in place)
+      if (state.currentItem && state.currentItem.fileName === fileName) {
+        selectPathMedia(state.currentItem).catch(function () {});
+      }
       return;
     }
 

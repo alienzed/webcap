@@ -34,6 +34,14 @@ function getAutosaveTargetAndPayload() {
 
 // Main autosave input handler
 function handleEditorInputAutosave(e) {
+        // Always refresh live highlight UI while typing.
+        if (typeof renderChecklistPanel === 'function') {
+            renderChecklistPanel();
+        }
+        if (typeof renderPhraseCopyPanel === 'function') {
+            renderPhraseCopyPanel();
+        }
+
     var target = getAutosaveTargetAndPayload();
     if (!target) {
         debugLog('[autosave] No valid target, skipping.');

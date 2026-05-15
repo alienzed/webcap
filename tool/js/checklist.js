@@ -4,9 +4,26 @@ var checklistPanelEl = null;
 var checklistItems = DEFAULT_CHECKLIST_ITEMS.slice(); // Current folder's requirements
 var checklistCheckedByMedia = {}; // { mediaKey: { item: true/false, ... } }
 var debouncedChecklistSave = debounceCreate(400); // Debounce saves for checkbox changes
+var checklistKeywordsByItem = {}; // { requirement: "keyword1, keyword2, ..." }
 
 function checklistSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
+}
+
+function requirementKeywordsMatch(requirementLabel, captionText) {
+  var keywords = checklistKeywordsByItem[requirementLabel];
+  if (!keywords) return false;
+  
+  var keywordList = keywords.split(',').map(function(k) { return k.trim().toLowerCase(); }).filter(Boolean);
+  if (!keywordList.length) return false;
+  
+  var captionLower = String(captionText || '').toLowerCase();
+  for (var i = 0; i < keywordList.length; i++) {
+    if (captionLower.indexOf(keywordList[i]) !== -1) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function setChecklistPanelVisible(visible) {
@@ -89,6 +106,13 @@ function renderChecklistPanel() {
     label.appendChild(cb);
     label.appendChild(document.createTextNode(' ' + item));
     row.appendChild(label);
+    // Use live editor text first so highlight updates while typing.
+    var captionText = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
+      ? ui.editorEl.value
+      : (state.currentItem.caption || '');
+    if (requirementKeywordsMatch(item, captionText)) {
+      row.classList.add('checklist-item-matched');
+    }
     // Remove button
     var rmBtn = document.createElement('button');
     rmBtn.textContent = '×';
@@ -114,6 +138,7 @@ function saveChecklistToFolderState() {
   var snapshot = snapshotFolderStateFromDom();
   snapshot.caption_requirements = checklistItems.slice();
   snapshot.caption_requirements_checked = JSON.parse(JSON.stringify(checklistCheckedByMedia));
+  snapshot.caption_requirement_keywords = JSON.parse(JSON.stringify(checklistKeywordsByItem));
   writeFolderStateFile(state.folder, snapshot);
 }
 
@@ -128,7 +153,85 @@ function loadChecklistFromFolderState(folderState) {
   } else {
     checklistCheckedByMedia = {};
   }
+  if (folderState.caption_requirement_keywords && typeof folderState.caption_requirement_keywords === 'object') {
+    checklistKeywordsByItem = JSON.parse(JSON.stringify(folderState.caption_requirement_keywords));
+  } else {
+    checklistKeywordsByItem = {};
+  }
   checklistItems.sort(checklistSort);
   syncReviewedFromChecklistAll();
   renderChecklistPanel();
 }
+
+function renderChecklistKeywordsModal() {
+  var listDiv = document.getElementById('checklist-keywords-modal-body') || document.getElementById('checklist-keywords-list');
+  if (!listDiv) return;
+  listDiv.innerHTML = '';
+  
+  checklistItems.sort(checklistSort);
+  for (var i = 0; i < checklistItems.length; i++) {
+    var requirement = checklistItems[i];
+    var keywords = checklistKeywordsByItem[requirement] || '';
+    
+    var row = document.createElement('div');
+    row.className = 'modal-body-row';
+    
+    var label = document.createElement('div');
+    label.className = 'modal-body-row-label';
+    label.textContent = requirement;
+    row.appendChild(label);
+    
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'comma-separated keywords';
+    input.value = keywords;
+    input.dataset.requirement = requirement;
+    input.onchange = function() {
+      checklistKeywordsByItem[this.dataset.requirement] = this.value;
+      saveChecklistToFolderState();
+      renderChecklistPanel();
+    };
+    row.appendChild(input);
+    listDiv.appendChild(row);
+  }
+}
+
+function openChecklistKeywordsModal() {
+  renderChecklistKeywordsModal();
+  var modal = document.getElementById('checklist-keywords-modal');
+  var overlay = document.getElementById('modal-overlay');
+  if (modal) modal.classList.remove('hidden');
+  if (overlay) overlay.classList.remove('hidden');
+}
+
+function closeChecklistKeywordsModal() {
+  var modal = document.getElementById('checklist-keywords-modal');
+  var overlay = document.getElementById('modal-overlay');
+  if (modal) modal.classList.add('hidden');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+// Wire up modal buttons
+if (document.getElementById('checklist-settings-btn')) {
+  document.getElementById('checklist-settings-btn').addEventListener('click', openChecklistKeywordsModal);
+}
+
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.dataset.closeModal === 'checklist-keywords-modal') {
+    closeChecklistKeywordsModal();
+  }
+});
+
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.id === 'modal-overlay') {
+    closeChecklistKeywordsModal();
+  }
+});
+
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.id === 'checklist-keywords-save-btn') {
+    saveChecklistToFolderState();
+    renderChecklistPanel();
+    closeChecklistKeywordsModal();
+  }
+});

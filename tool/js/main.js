@@ -206,7 +206,7 @@ function moveSelectedMediaByOffset(offset) {
   return true;
 }
 
-var sidebarActiveTab = 'review';
+var sidebarActiveTab = 'config';
 
 function setSidebarTab(tabName) {
   var tabs = {

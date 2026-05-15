@@ -569,3 +569,32 @@ if (ui.advancedFilterFlagEl) {
     renderFileList();
   });
 }
+if (ui.captionFilterClearAllBtn) {
+  ui.captionFilterClearAllBtn.addEventListener('click', function () {
+    // Clear text filter
+    if (ui.filterEl) {
+      ui.filterEl.value = '';
+    }
+    // Clear advanced filters
+    if (ui.advancedFilterMissingCaptionsEl) {
+      ui.advancedFilterMissingCaptionsEl.checked = false;
+    }
+    if (ui.advancedFilterReviewedEl) {
+      ui.advancedFilterReviewedEl.checked = false;
+    }
+    if (ui.advancedFilterMinStarsEl) {
+      ui.advancedFilterMinStarsEl.value = '';
+    }
+    if (ui.advancedFilterFlagEl) {
+      var checkboxes = ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]');
+      for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = false;
+      }
+    }
+    if (ui.advancedFilterInvalidArEl) {
+      ui.advancedFilterInvalidArEl.checked = false;
+    }
+    // Re-render the file list
+    renderFileList();
+  });
+}

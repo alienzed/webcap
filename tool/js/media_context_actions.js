@@ -223,8 +223,8 @@ function buildMediaContextMenuActions(mediaItem, key) {
         .then(function (res) {
           if (res.status === 200 && res.data && res.data.ok) {
             setStatus('File reset to original.');
-            state.pendingSelectFileName = mediaItem.fileName;
-            refreshCurrentDirectory();
+            refreshMediaResolutionCache();
+            selectPathMedia(mediaItem).catch(function () {});
           } else {
             setStatus((res.data && res.data.error) ? res.data.error : 'Reset failed');
           }
@@ -272,6 +272,11 @@ function buildMediaContextMenuActions(mediaItem, key) {
           ui,
           function () {
             setStatus('Defacing finished.');
+            refreshMediaResolutionCache();
+            // Reload preview for the current item (file was mutated in place)
+            if (state.currentItem && state.currentItem.fileName === mediaItem.fileName) {
+              selectPathMedia(state.currentItem).catch(function () {});
+            }
           }
         );
       }

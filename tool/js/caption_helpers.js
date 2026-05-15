@@ -61,6 +61,15 @@ function insertCaptionPhraseAtCursor(text) {
   if (!phrase) return;
   var editor = ui.editorEl;
   var value = editor.value || '';
+  
+  // Check if phrase already exists (case-insensitive word-boundary match)
+  var escapedPhrase = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  var existingPattern = new RegExp('\\b' + escapedPhrase + '\\b', 'i');
+  if (existingPattern.test(value)) {
+    setStatus('Phrase already exists in caption.');
+    return;
+  }
+  
   var start = typeof editor.selectionStart === 'number' ? editor.selectionStart : value.length;
   var end = typeof editor.selectionEnd === 'number' ? editor.selectionEnd : value.length;
   var before = value.slice(0, start).replace(/[ \t]+$/, '');
@@ -78,8 +87,17 @@ function insertCaptionPhraseAtCursor(text) {
 
 function renderPhraseCopyPanel() {
   var container = document.getElementById('phrase-copy-items');
+  if (!container) return;
   container.innerHTML = '';
   captionHelperPhrases.sort(captionHelperSort);
+
+  var captionLower = '';
+  var liveCaption = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
+    ? ui.editorEl.value
+    : (state && state.currentItem && typeof state.currentItem.caption === 'string' ? state.currentItem.caption : '');
+  if (liveCaption) {
+    captionLower = String(liveCaption).toLowerCase();
+  }
 
   for (var i = 0; i < captionHelperPhrases.length; i++) {
     var phrase = captionHelperPhrases[i];
@@ -91,6 +109,9 @@ function renderPhraseCopyPanel() {
     phraseBtn.className = 'phrase-copy-item-btn';
     phraseBtn.title = 'Insert at cursor';
     phraseBtn.textContent = phrase;
+    if (captionLower && phrase && captionLower.indexOf(String(phrase).toLowerCase()) !== -1) {
+      phraseBtn.classList.add('phrase-copy-item-matched');
+    }
     (function (text) {
       phraseBtn.onclick = function () {
         insertCaptionPhraseAtCursor(text);
@@ -100,7 +121,7 @@ function renderPhraseCopyPanel() {
     var copyBtn = document.createElement('button');
     copyBtn.type = 'button';
     copyBtn.title = 'Copy phrase';
-    copyBtn.textContent = 'Copy';
+    copyBtn.textContent = '📋';
     (function (text) {
       copyBtn.onclick = function () {
         navigator.clipboard.writeText(text);
@@ -145,8 +166,16 @@ function wireCaptionHelpersUi() {
   var phraseAddBtn = document.getElementById('phrase-copy-add-btn');
   var notesEditor = document.getElementById('set-notes-editor');
 
-  requirementsBtn.onclick = function () { setCaptionHelperTab('requirements'); };
-  phrasesBtn.onclick = function () { setCaptionHelperTab('phrases'); };
+  requirementsBtn.onclick = function () {
+    setCaptionHelperTab('requirements');
+    if (typeof renderChecklistPanel === 'function') {
+      renderChecklistPanel();
+    }
+  };
+  phrasesBtn.onclick = function () {
+    setCaptionHelperTab('phrases');
+    renderPhraseCopyPanel();
+  };
   if (tagsBtn) {
     tagsBtn.onclick = function () { setCaptionHelperTab('tags'); };
   }

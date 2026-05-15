@@ -85,6 +85,77 @@ function computeLengthInsights(captionRows) {
   };
 }
 
+function levenshteinDistance(a, b) {
+  // Compute edit distance between two strings
+  var aLen = a.length;
+  var bLen = b.length;
+  var matrix = [];
+  for (var i = 0; i <= aLen; i++) {
+    matrix[i] = [i];
+  }
+  for (var j = 0; j <= bLen; j++) {
+    matrix[0][j] = j;
+  }
+  for (var i = 1; i <= aLen; i++) {
+    for (var j = 1; j <= bLen; j++) {
+      var cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,     // deletion
+        matrix[i][j - 1] + 1,     // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+  return matrix[aLen][bLen];
+}
+
+function captionSimilarity(a, b) {
+  // Return similarity as percentage (0-100)
+  var maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 100;
+  var distance = levenshteinDistance(a, b);
+  return Math.round(((maxLen - distance) / maxLen) * 1000) / 10;
+}
+
+function computeSimilarCaptions(captionRows, threshold) {
+  // Find similar caption pairs above threshold (e.g., 80%)
+  if (!captionRows.length) return [];
+  var threshold_pct = threshold || 80;
+  var groups = [];
+  var processed = {};
+  
+  for (var i = 0; i < captionRows.length; i++) {
+    var caption_a = captionRows[i].caption;
+    if (!caption_a || processed[i]) continue;
+    
+    var similar = [{ fileName: captionRows[i].fileName, caption: caption_a }];
+    
+    for (var j = i + 1; j < captionRows.length; j++) {
+      var caption_b = captionRows[j].caption;
+      if (!caption_b || processed[j]) continue;
+      
+      var similarity = captionSimilarity(caption_a, caption_b);
+      if (similarity >= threshold_pct) {
+        similar.push({ fileName: captionRows[j].fileName, caption: caption_b });
+        processed[j] = true;
+      }
+    }
+    
+    if (similar.length > 1) {
+      groups.push({
+        similarity: Math.round(captionSimilarity(caption_a, similar[1].caption) * 10) / 10,
+        sample: caption_a.length > 120 ? caption_a.slice(0, 117) + '...' : caption_a,
+        files: similar.map(function (s) { return s.fileName; })
+      });
+      processed[i] = true;
+    }
+  }
+  
+  return groups.sort(function (a, b) {
+    return b.similarity - a.similarity || a.files[0].localeCompare(b.files[0]);
+  }).slice(0, 15);
+}
+
 function computeDuplicateInsights(duplicatesMap) {
   return Object.keys(duplicatesMap)
     .map(function (key) {
@@ -177,6 +248,7 @@ function compute(items, options) {
     if (trimmed) {
       var row = {
         fileName: item.fileName,
+        caption: trimmed,
         charCount: caption.length,
         tokenCount: tokenize(caption).length
       };
@@ -216,6 +288,7 @@ function compute(items, options) {
   var requiredPercent = total ? Math.round((requiredHits / total) * 1000) / 10 : 0;
   var lengthInsights = computeLengthInsights(captionRows);
   var duplicateCaptions = computeDuplicateInsights(duplicatesMap);
+  var similarCaptions = computeSimilarCaptions(captionRows, 80);
 
   return {
     total: total,
@@ -232,6 +305,7 @@ function compute(items, options) {
     shortOutliers: lengthInsights.shortOutliers,
     longOutliers: lengthInsights.longOutliers,
     duplicateCaptions: duplicateCaptions,
+    similarCaptions: similarCaptions,
     topTokens: topTokens,
     rareTokens: rareTokens
   };

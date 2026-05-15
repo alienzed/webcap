@@ -213,8 +213,8 @@ async function resetMediaItem(mediaItem) {
     if (xhr.readyState === 4) {
       if (xhr.status === 200) {
         setStatus('Reset to original: ' + fileName);
-        state.pendingSelectFileName = fileName;
-        refreshCurrentDirectory();
+        refreshMediaResolutionCache();
+        selectPathMedia(mediaItem).catch(function () {});
       } else {
         setStatus('Reset failed: ' + xhr.responseText);
       }
@@ -300,6 +300,9 @@ function selectPathMedia(mediaItem) {
     renderPathPreview(state.folder, mediaItem.fileName);
     setStatus(buildSelectedMediaStatus(mediaItem));
     renderChecklistPanel();
+    if (typeof renderPhraseCopyPanel === 'function') {
+      renderPhraseCopyPanel();
+    }
     // Re-render list to show selection
     renderFileList();
     scrollCurrentMediaRowIntoView();
@@ -345,10 +348,14 @@ function promptRenameMedia(mediaItem) {
       saveFolderStateForCurrentRoot();
     }
     setStatus('Renamed: ' + oldFile + ' -> ' + newFile);
-    // Store the new filename to reselect after refresh
-    window.state = window.state || {};
-    state.pendingSelectFileName = newFile;
-    refreshCurrentDirectory();
+    // Update the current item's fileName and reload preview
+    if (state.currentItem && state.currentItem.fileName === oldFile) {
+      state.currentItem.fileName = newFile;
+      selectPathMedia(state.currentItem).catch(function () {});
+    } else {
+      // If item not currently selected, just refresh list to show new name
+      renderFileList();
+    }
   }).catch(function (err) {
     setStatus((err && err.message) ? err.message : ('Rename failed: ' + err));
   });
@@ -495,6 +502,14 @@ async function renderFileList() {
         return !!itemFlag;
       }
       return flagFilterValues.indexOf(itemFlag) !== -1;
+    });
+  }
+  var showInvalidArOnly = !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked);
+  if (showInvalidArOnly) {
+    mediaItems = mediaItems.filter(function (item) {
+      var ar = String((item.aspect_ratio || item.ar) || '').trim();
+      if (!ar) return false;
+      return !(typeof hasSupportedAspectBucket === 'function' && hasSupportedAspectBucket(ar));
     });
   }
   // Show count of matching media items

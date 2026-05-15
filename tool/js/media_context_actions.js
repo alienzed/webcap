@@ -175,6 +175,8 @@ function buildMediaContextMenuActions(mediaItem, key) {
   var actions = [];
   var isInOriginals = (state.folder && state.folder.split(/[\/]/).pop() === 'originals');
   var fileName = mediaItem.fileName;
+  var ext = (fileName || '').split('.').pop().toLowerCase();
+  var isVideoFile = ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'avi', 'm4v'].indexOf(ext) !== -1;
 
   actions.push(createFlagAction(key));
   actions.push({
@@ -250,7 +252,6 @@ function buildMediaContextMenuActions(mediaItem, key) {
     });
   }
 
-  var ext = (fileName || '').split('.').pop().toLowerCase();
   if (MEDIA_EXTENSIONS['.' + ext]) {
     actions.push({
       label: 'Deface...',
@@ -279,6 +280,17 @@ function buildMediaContextMenuActions(mediaItem, key) {
             }
           }
         );
+      }
+    });
+  }
+
+  // Only show 'Clip...' for videos in src_videos folder
+  var folder = (typeof state !== 'undefined' && state.folder) ? String(state.folder) : '';
+  if (isVideoFile && /\bsrc_videos(\\|\/|$)/i.test(folder)) {
+    actions.push({
+      label: 'Clip...',
+      run: function () {
+        openVideoClipModal(mediaItem);
       }
     });
   }

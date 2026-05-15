@@ -10,12 +10,12 @@ This is a source-to-training-clip workflow, not a general video editor. V1 is in
 
 The safest way to build this is in phases, with a deliberately small V1 and the rest documented as V2.
 
-- Phase 1: source video -> exported clip, using video playback for start time selection, a fixed aspect ratio crop box on a placeholder sized to the video, duration, filename, and export.
+- Phase 1: source video -> exported clip, using video playback for start time selection, a crop UI that can be simplified if needed, duration, filename, and export.
 - Phase 2: editing ergonomics and polish only if V1 is stable.
 
 The point of the split is to keep the first implementation small enough that the backend and modal wiring can be verified before any more interactive complexity is added.
 
-If a sub-feature starts pushing toward hundreds of lines of new code, stop and check whether the repo already has a helper or whether a small third-party package would do the job better. The Cropper.js result in this app is the bar: if a library makes the implementation smaller, safer, and more reliable, prefer that over building a large custom editor.
+If a sub-feature starts pushing toward hundreds of lines of new code, stop and check whether the repo already has a helper or whether a small third-party package would do the job better. Crop and clip are separate concerns that can share one modal, but V1 should preserve video playback/scrubbing even if crop has to be simplified or deferred.
 
 ## Code Paths To Reuse
 
@@ -45,7 +45,7 @@ This repo already gives us the primitives we need; the new feature should mostly
 - Context menu shows `Clip...` for video files only.
 - A modal opens with a video player for the source video.
 - User chooses an aspect ratio preset for the crop box.
-- User positions/resizes the crop box using the existing Cropper.js-based crop interaction pattern from the image crop feature, but over a placeholder that matches the video’s native dimensions rather than over the video itself.
+- User positions/resizes the crop box using the existing Cropper.js-based crop interaction pattern from the image crop feature, but over a placeholder that matches the video’s native dimensions rather than over the video itself, if that can be done without interfering with playback.
 - User finds the start position by playing and scrubbing the video in the modal. Precise controls may still exist for frame stepping or numeric start time entry, but the video player is the primary way to pick the clip point.
 - User enters duration.
 - User enters an output filename.
@@ -77,8 +77,8 @@ This repo already gives us the primitives we need; the new feature should mostly
 - Clip export lives entirely in a modal (`id="video-clip-modal"`).
 - The modal shows:
   - An HTML5 `<video>` element for playback, scrubbing, and start time selection. The user can play, pause, and scrub through the video to find the desired start time for the clip.
-  - The Cropper.js-based crop interaction pattern, initialized on a transparent PNG, blank canvas, or placeholder image matching the video’s native resolution. The cropper is used only to define the crop rectangle and does not need to overlay the video or change when the video frame changes.
-  - The crop rectangle is always relative to the video’s native resolution and can be set once or adjusted as needed, independent of video playback.
+  - A crop surface that may be a transparent overlay or blank canvas matching the video’s native resolution, if that keeps playback usable. If the overlay risks blocking playback or scrubbing, V1 can reduce or defer cropping rather than compromise the video player.
+  - The crop rectangle, when present, is always relative to the video’s native resolution and is independent of video playback.
   - A duration number field.
   - A live pixel readout of the current crop selection (`W × H px`), updating as the rectangle is adjusted.
   - An output filename text input, pre-populated as `<source_stem>_clip`.
@@ -87,13 +87,13 @@ This repo already gives us the primitives we need; the new feature should mostly
   - Minimal status/error text area.
 - Do not add clip or flip controls to the normal preview pane.
 
-The cropper and video playback are decoupled: the cropper is for rectangle selection only, and the video element is for finding the start time. No backend still frame extraction is needed for scrubbing or playback. The only requirement is that the cropper’s coordinate system matches the video’s native resolution.
+The cropper and video playback are decoupled: the video element is for finding the start time, and crop is a secondary feature that should not interfere with playback. No backend still frame extraction is needed for scrubbing or playback. The only requirement is that any crop UI, if present in V1, uses the video’s native dimensions.
 
 The crop interaction should stay close to the existing image crop UX if that keeps the implementation compact. If a tiny helper or existing library reduces the amount of custom UI code, use it.
 
 ## Technical Direction
 
--- **Backend**: New file `tool/server/video_clip_ops.py`.
+- **Backend**: New file `tool/server/video_clip_ops.py`.
   - `clip_video(source_path, set_folder, output_name, start_sec, duration_sec, crop_rect)` — runs a single FFmpeg subprocess for trim + crop in one pass. Follows the `subprocess.run([...], capture_output=True, text=True)` pattern from `dataset_prep.py`. Non-zero returncode raises `RuntimeError`.
   - Output is MP4/H.264. Source container is not preserved.
   - Backend should do basic validation only: non-empty filename, no path traversal, source file exists, crop values are sane, and writes stay in the set folder.
@@ -102,10 +102,9 @@ The crop interaction should stay close to the existing image crop UX if that kee
 ### Practical Complexity Notes
 
 - The clip export itself is straightforward once the ffmpeg command is fixed; the main risk is input normalization, overwrite confirmation, and error reporting.
-- Fixed-aspect crop using an existing helper/library is the lowest-risk path. If Cropper.js can be reused directly, that is preferable to writing custom drag logic.
+- Fixed-aspect crop using an existing helper/library is the lowest-risk path, but it is acceptable for V1 to simplify or postpone crop if that is what keeps playback reliable.
 - Start selection by frame-step buttons or numeric inputs is lower risk than timeline mouse dragging and gives the user more control.
-- A small backend still-frame helper is the cleanest way to make the modal stable across browsers.
-- The displayed crop target should follow the chosen start time, because the first frame may not represent the material the user actually wants to clip.
+- The video player is the critical part of the modal; crop must not block it.
 
 ### Recommended Backend Command Shape
 
@@ -116,7 +115,6 @@ The crop interaction should stay close to the existing image crop UX if that kee
 
 - **Routes**:
   - `POST /media/video_clip` → `clip_video`
-  - `POST /media/video_still` → still-frame helper/route
 - **Frontend**: New file `tool/js/video_clip.js`.
   - Plain global variables for modal state.
   - `openVideoClipModal(mediaItem)` — loads the source video into the modal player, sets crop ratio, initializes start time and duration controls, and opens the modal.
@@ -165,13 +163,14 @@ The crop interaction should stay close to the existing image crop UX if that kee
 - FFmpeg not available: `RuntimeError` propagates, error shown in modal status area.
 - Crop inputs are invalid: fail loudly rather than silently adjusting them.
 - User navigates away while modal is open: modal state is abandoned; no partial write.
-- Backend still-frame helper cannot decode a frame: show the backend error and leave the source untouched.
+- Crop UI cannot initialize: show the error and leave the source untouched.
 
 ## V1 Acceptance Checklist
 
 - [ ] `Clip...` appears in context menu only for video files inside `src_videos`.
 - [ ] Modal opens.
 - [ ] Video playback is available in the modal.
+- [ ] If crop is present in V1, it does not block video playback or scrubbing.
 - [ ] User can select a fixed aspect-ratio crop.
 - [ ] User can choose start position with precise controls.
 - [ ] User can set duration.
@@ -193,7 +192,7 @@ The crop interaction should stay close to the existing image crop UX if that kee
 ## Implementation Touchpoints
 
 - `tool/js/video_clip.js` — new file: all clip/flip modal JS.
-- `tool/server/video_clip_ops.py` — new file: `clip_video` and the still-frame helper used by the modal.
+- `tool/server/video_clip_ops.py` — new file: `clip_video` and any minimal helpers needed for export-time crop handling.
 - `tool/server/app.py` — add the V1 route registration(s), import from `video_clip_ops`.
 - `tool/tool.html` — add `video-clip-modal` markup, include `video_clip.js`, and reuse the existing Cropper.js assets if the modal piggybacks on that library.
 - `tool/js/media_context_actions.js` — add the `Clip...` entry for source videos.

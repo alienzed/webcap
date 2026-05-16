@@ -1,4 +1,11 @@
-// (REMOVED: wireCropModalApplyButton and videoClipPendingCrop to avoid breaking image crop modal)
+var videoClipTargetItem = null;
+var videoClipCropper = null;
+var videoClipCropBusy = false;
+var videoClipCropRatio = 1;
+var videoClipCropEnabled = false;
+var videoClipSourceResolution = null;
+var videoClipPendingCrop = null;
+
 // --- Extract frame and open crop modal ---
 function extractFrameAndOpenCropModal() {
   var videoEl = getVideoClipEl('video-clip-video');
@@ -45,12 +52,7 @@ function wireCropThisFrameButton() {
 // video_clip.js
 // Video clip modal: playback + start time + duration + aspect-ratio crop export.
 
-var videoClipTargetItem = null;
-var videoClipCropper = null;
-var videoClipCropBusy = false;
-var videoClipCropRatio = 1;
-var videoClipCropEnabled = false;
-var videoClipSourceResolution = null;
+
 
 function getVideoClipEl(id) {
   return document.getElementById(id);

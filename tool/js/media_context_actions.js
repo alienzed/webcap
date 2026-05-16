@@ -284,6 +284,36 @@ function buildMediaContextMenuActions(mediaItem, key) {
     });
   }
 
+
+  // Add 'Flip Horizontal' for all video files
+  if (isVideoFile) {
+    actions.push({
+      label: 'Flip Horizontal',
+      run: function () {
+        if (!confirm('Flip this video horizontally? This will overwrite the file.')) return;
+        setStatus('Flipping video...');
+        fetch('/media/flip_horizontal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder: state.folder, fileName: mediaItem.fileName })
+        })
+          .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
+          .then(function (res) {
+            if (res.status === 200 && res.data && res.data.ok) {
+              setStatus('Video flipped.');
+              refreshMediaResolutionCache();
+              selectPathMedia(mediaItem).catch(function () {});
+            } else {
+              setStatus((res.data && res.data.error) ? res.data.error : 'Flip failed');
+            }
+          })
+          .catch(function (err) {
+            setStatus('Flip failed: ' + (err && err.message ? err.message : err));
+          });
+      }
+    });
+  }
+
   // Only show 'Clip...' for videos in src_videos folder
   var folder = (typeof state !== 'undefined' && state.folder) ? String(state.folder) : '';
   if (isVideoFile && /\bsrc_videos(\\|\/|$)/i.test(folder)) {

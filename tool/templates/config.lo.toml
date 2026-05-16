@@ -1,14 +1,14 @@
 output_dir = "{TRAINING_ROOT}/output/runs"
 dataset    = "{TRAINING_ROOT}/{DATASET}/dataset.lo.toml"
 
-epochs = 150
+epochs = 120
 save_every_n_epochs = 1
 
 micro_batch_size_per_gpu = 1
 pipeline_stages = 1
 gradient_accumulation_steps = 1
 gradient_clipping = 1.0
-warmup_steps = 200
+warmup_steps = 100
 
 checkpoint_every_n_epochs = 3
 activation_checkpointing = true

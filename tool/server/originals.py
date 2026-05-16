@@ -16,8 +16,11 @@ MEDIA_ALL_EXTS = {
     '.mpg', '.mpeg', '.wmv'
 }
 
-def is_blacklisted(folder_name):
-    return folder_name.lower() in BLACKLISTED_FOLDERS
+
+def is_blacklisted_path(folder_path):
+    """Return True if any part of the path is blacklisted (originals, auto_dataset)."""
+    folder_path = Path(folder_path).resolve()
+    return any(part.lower() in BLACKLISTED_FOLDERS for part in folder_path.parts)
 
 def file_hash(path, block_size=65536):
     """Return SHA256 hash of a file."""
@@ -33,11 +36,16 @@ def safe_chmod(path, mode):
     except Exception:
         pass
 
+
 def ensure_originals_folder(folder_path):
     folder_path = Path(folder_path).resolve()
+    if is_blacklisted_path(folder_path):
+        # Never create originals in blacklisted folders or their subfolders
+        return None
     originals_dir = folder_path / 'originals'
     originals_dir.mkdir(parents=True, exist_ok=True)
     return originals_dir
+
 
 def copy_media_to_originals(folder_path):
     """
@@ -46,12 +54,14 @@ def copy_media_to_originals(folder_path):
     folder_path: absolute or relative path to the folder
     """
     folder_path = Path(folder_path).resolve()
-    if is_blacklisted(folder_path.name):
-        return  # Never process blacklisted folders
+    if is_blacklisted_path(folder_path):
+        return  # Never process blacklisted folders or their subfolders
     media_files = [entry for entry in folder_path.iterdir() if entry.is_file() and entry.suffix.lower() in MEDIA_ALL_EXTS]
     if not media_files:
         return  # Do not create originals folder if no media files
     originals_dir = ensure_originals_folder(folder_path)
+    if originals_dir is None:
+        return
     for entry in media_files:
         ensure_canonical_exists(entry, originals_dir)
 

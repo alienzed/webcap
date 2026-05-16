@@ -1,3 +1,50 @@
+def media_flip_horizontal_response(data):
+    data = data or {}
+    folder = data.get("folder", "").strip()
+    file_name = (data.get("fileName") or data.get("media") or "").strip()
+    if not folder or not file_name:
+        return jsonify({"error": "Missing required parameters"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        src_media = folder_path / file_name
+        if not src_media.exists() or not src_media.is_file():
+            return jsonify({"error": "Media file not found"}), 404
+        ext = src_media.suffix.lower()
+        if ext not in {".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v", ".ogg", ".wmv", ".mpg", ".mpeg"}:
+            return jsonify({"error": "Flip is only available for video files"}), 400
+        # Write to temp file, then replace original
+        tmp_path = src_media.with_suffix(src_media.suffix + ".tmp")
+        cmd = [
+            "ffmpeg", "-y", "-i", str(src_media),
+            "-vf", "hflip",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-an",
+            str(tmp_path)
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            stderr = (proc.stderr or proc.stdout or "").strip()
+            if tmp_path.exists():
+                try: tmp_path.unlink()
+                except Exception: pass
+            return jsonify({"error": "ffmpeg failed: " + stderr}), 400
+        # Atomically replace original
+        try:
+            os.replace(tmp_path, src_media)
+        except Exception as e:
+            if tmp_path.exists():
+                try: tmp_path.unlink()
+                except Exception: pass
+            return jsonify({"error": "Failed to replace original: " + str(e)}), 500
+        update_media_metadata(folder_path)
+        return jsonify({"ok": True})
+    except Exception as e:
+        if FS_DEBUG:
+            print("[media_flip_horizontal] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
 import json
 import os
 import shutil

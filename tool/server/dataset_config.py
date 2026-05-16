@@ -303,8 +303,54 @@ def render_video_block(dir_path: str, buckets):
         'group = "videos"',
         "size_buckets = [",
     ]
+
+def video_alternatives(selected_w: int, selected_h: int, selected_frames: int):
+    # 2-3 lower and 2-3 higher valid buckets by area, same frame count
+    short_side = min(selected_w, selected_h)
+    offsets = [-96, -64, -32, 32, 64, 96]
+    alts = []
+    for offset in offsets:
+        dim = short_side + offset
+        # Use AR from selected bucket
+        ar = selected_w / selected_h
+        if ar >= 1:
+            h = dim
+            w = int(round(h * ar))
+        else:
+            w = dim
+            h = int(round(w / ar))
+        # Snap to nearest 32
+        w = (w + 16) // 32 * 32
+        h = (h + 16) // 32 * 32
+        # Skip invalid or duplicate
+        if w < 256 or h < 256:
+            continue
+        if (w, h, selected_frames) == (selected_w, selected_h, selected_frames):
+            continue
+        if (w, h, selected_frames) in alts:
+            continue
+        alts.append((w, h, selected_frames))
+    # Only return up to 3 lower and 3 higher, sorted by short_side distance
+    lower = [alt for alt in alts if min(alt[:2]) < short_side]
+    higher = [alt for alt in alts if min(alt[:2]) > short_side]
+    lower = sorted(lower, key=lambda x: abs(min(x[:2]) - short_side))[:3]
+    higher = sorted(higher, key=lambda x: abs(min(x[:2]) - short_side))[:3]
+    return lower + higher
+
+def render_video_block(dir_path: str, buckets):
+    lines = [
+        "[[directory]]",
+        f'path = "{dir_path}"',
+        "num_repeats = 2",
+        'group = "videos"',
+        "size_buckets = [",
+    ]
     for (w, h, frames) in buckets:
-        lines.append(f"  [{w}, {h}, {frames}],")
+        alts = video_alternatives(w, h, frames)
+        mfp_val = (w * h * frames) / 1_000_000
+        if alts:
+            lines.append("# Alternatives: " + ", ".join(f"[{aw}, {ah}, {af}]" for (aw, ah, af) in alts))
+        lines.append(f"  [{w}, {h}, {frames}],  # MegaFramePixels: {mfp_val:.2f}M")
     lines.append("]")
     return "\n".join(lines)
 
@@ -504,21 +550,30 @@ def render_image_block(image_dir: Path, ar_label: str, buckets):
     ]
     for w, h in buckets:
         alts = image_alternatives(ar_label, w, h)
+        mfp_val = (w * h * 1) / 1_000_000
         if alts:
             lines.append("# Alternatives: " + ", ".join(f"[{aw}, {ah}, 1]" for (aw, ah) in alts))
-        lines.append(f"  [{w}, {h}, 1],")
+        lines.append(f"  [{w}, {h}, 1],  # MegaFramePixels: {mfp_val:.2f}M")
     lines.append("]")
     return "\n".join(lines)
 
 
 def image_alternatives(ar_label: str, selected_w: int, selected_h: int):
     short_side = min(selected_w, selected_h)
+    # 2-3 lower, 2-3 higher
+    offsets = [-96, -64, -32, 32, 64, 96]
     alts = []
-    for dim in (short_side - 64, short_side - 32, short_side + 32, short_side + 64):
+    for offset in offsets:
+        dim = short_side + offset
         alt = candidate_for_short_side(ar_label, dim)
-        if alt and alt != (selected_w, selected_h):
+        if alt and alt != (selected_w, selected_h) and alt not in alts:
             alts.append(alt)
-    return alts
+    # Only return up to 3 lower and 3 higher, sorted by short_side distance
+    lower = [alt for alt in alts if min(alt) < short_side]
+    higher = [alt for alt in alts if min(alt) > short_side]
+    lower = sorted(lower, key=lambda x: abs(min(x) - short_side))[:3]
+    higher = sorted(higher, key=lambda x: abs(min(x) - short_side))[:3]
+    return lower + higher
 
 
 def candidate_for_short_side(ar_label: str, short_side: int):
@@ -633,11 +688,10 @@ def build_selection_snapshot_comment_lines(folder: Path, dataset_root: Path, man
     for bucket_name in bucket_names:
         lines.append(f"# bucket: {escape_comment_value(bucket_name)}")
         for file_name, caption_text in grouped[bucket_name]:
+            # Only print file name, omit caption text
             lines.append(
-                "# file: "
-                + escape_comment_value(file_name)
-                + " | caption: "
-                + escape_comment_value(caption_text)
+                "# file: " + escape_comment_value(file_name)
+                # + " | caption: " + escape_comment_value(caption_text)
             )
     lines.append("# snapshot.files.end: true")
     lines.append("# --- end webcap selection snapshot ---")

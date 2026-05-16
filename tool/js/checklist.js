@@ -163,33 +163,33 @@ function loadChecklistFromFolderState(folderState) {
   renderChecklistPanel();
 }
 
+
+// Temporary object for modal edits
+var checklistKeywordsModalTemp = null;
+
 function renderChecklistKeywordsModal() {
   var listDiv = document.getElementById('checklist-keywords-modal-body') || document.getElementById('checklist-keywords-list');
   if (!listDiv) return;
   listDiv.innerHTML = '';
-  
+  // Copy current keywords to temp object for editing
+  checklistKeywordsModalTemp = JSON.parse(JSON.stringify(checklistKeywordsByItem));
   checklistItems.sort(checklistSort);
   for (var i = 0; i < checklistItems.length; i++) {
     var requirement = checklistItems[i];
-    var keywords = checklistKeywordsByItem[requirement] || '';
-    
+    var keywords = checklistKeywordsModalTemp[requirement] || '';
     var row = document.createElement('div');
     row.className = 'modal-body-row';
-    
     var label = document.createElement('div');
     label.className = 'modal-body-row-label';
     label.textContent = requirement;
     row.appendChild(label);
-    
     var input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'comma-separated keywords';
     input.value = keywords;
     input.dataset.requirement = requirement;
     input.onchange = function() {
-      checklistKeywordsByItem[this.dataset.requirement] = this.value;
-      saveChecklistToFolderState();
-      renderChecklistPanel();
+      checklistKeywordsModalTemp[this.dataset.requirement] = this.value;
     };
     row.appendChild(input);
     listDiv.appendChild(row);
@@ -228,10 +228,24 @@ document.addEventListener('click', function(e) {
   }
 });
 
+
 document.addEventListener('click', function(e) {
   if (e.target && e.target.id === 'checklist-keywords-save-btn') {
+    // Save changes from temp to real object
+    checklistKeywordsByItem = JSON.parse(JSON.stringify(checklistKeywordsModalTemp || {}));
     saveChecklistToFolderState();
     renderChecklistPanel();
     closeChecklistKeywordsModal();
+    checklistKeywordsModalTemp = null;
+  }
+});
+
+// Discard changes on cancel/close
+function discardChecklistKeywordsModalTemp() {
+  checklistKeywordsModalTemp = null;
+}
+document.addEventListener('click', function(e) {
+  if (e.target && (e.target.dataset.closeModal === 'checklist-keywords-modal' || e.target.id === 'modal-overlay')) {
+    discardChecklistKeywordsModalTemp();
   }
 });

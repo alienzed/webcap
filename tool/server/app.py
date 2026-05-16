@@ -2,16 +2,14 @@ import os
 import json
 from flask import Response, stream_with_context
 import traceback
-import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
-
 from . import config as app_config
-from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
+from .caption_ops import _resolve_folder, load_caption_text, save_caption_text, serve_media_file
 from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, open_in_vscode_response, rename_response
-from .media import media_crop_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
+from .media import media_crop_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response, media_flip_horizontal_response
 from .video_clip_ops import clip_video_response
 from .run_ops import autoset_run_response, prepare_dataset_response, generate_dataset_config_response, train_run_response
 
@@ -495,6 +493,12 @@ def maybe_create_config_files(folder_path):
                 os.chmod(dest, 0o644)
             except Exception:
                 pass
+
+# Flip horizontal for video files
+@app.route("/media/flip_horizontal", methods=["POST"])
+def media_flip_horizontal():
+    data = request.get_json(silent=True) or {}
+    return media_flip_horizontal_response(data)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

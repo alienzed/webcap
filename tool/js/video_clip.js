@@ -6,16 +6,12 @@ function wireCropModalApplyButton() {
   var cropModal = document.getElementById('crop-modal');
   if (!applyBtn || !cropModal) return;
   applyBtn.onclick = function() {
+    // Only handle image crop here; video crop uses its own handler
     if (!window.cropperInstance) return;
     var data = window.cropperInstance.getData(true);
-    // Store for export
-    videoClipPendingCrop = {
-      x: Math.round(data.x),
-      y: Math.round(data.y),
-      width: Math.round(data.width),
-      height: Math.round(data.height)
-    };
-    var msg = 'Crop: x=' + videoClipPendingCrop.x + ', y=' + videoClipPendingCrop.y + ', w=' + videoClipPendingCrop.width + ', h=' + videoClipPendingCrop.height;
+    // Store for export (image crop only)
+    videoClipPendingCrop = null;
+    var msg = 'Crop: x=' + Math.round(data.x) + ', y=' + Math.round(data.y) + ', w=' + Math.round(data.width) + ', h=' + Math.round(data.height);
     setStatus(msg);
     // Hide crop modal
     cropModal.classList.add('hidden');
@@ -24,19 +20,22 @@ function wireCropModalApplyButton() {
     window.cropperInstance = null;
   };
 }
+
+
+// Ensure openVideoClipModal is globally accessible
+window.openVideoClipModal = openVideoClipModal;
 // --- Extract frame and open crop modal ---
 function extractFrameAndOpenCropModal() {
-  var videoEl = getVideoClipEl('video-clip-video');
-  if (!videoEl) throw new Error('Missing required element: video-clip-video');
-  if (!videoEl.videoWidth || !videoEl.videoHeight) throw new Error('Video element has no video loaded');
-  var w = videoEl.videoWidth;
-  var h = videoEl.videoHeight;
-  var canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  var ctx = canvas.getContext('2d');
-  ctx.drawImage(videoEl, 0, 0, w, h);
-  var dataUrl = canvas.toDataURL('image/png');
+  var canvasEl = getVideoClipEl('video-clip-canvas');
+  if (!canvasEl) throw new Error('Missing required element: video-clip-canvas');
+  var w = canvasEl.width;
+  var h = canvasEl.height;
+  var tempCanvas = document.createElement('canvas');
+  tempCanvas.width = w;
+  tempCanvas.height = h;
+  var ctx = tempCanvas.getContext('2d');
+  ctx.drawImage(canvasEl, 0, 0, w, h);
+  var dataUrl = tempCanvas.toDataURL('image/png');
   // Open crop modal and set image
   var cropModal = document.getElementById('crop-modal');
   var cropImg = document.getElementById('crop-image');
@@ -48,7 +47,7 @@ function extractFrameAndOpenCropModal() {
       window.cropperInstance.destroy();
     }
     window.cropperInstance = new Cropper(cropImg, {
-      aspectRatio: videoClipCropRatio,
+      aspectRatio: 1, // Always 1 for image crop
       viewMode: 1,
       dragMode: 'move',
       autoCropArea: 0.9,
@@ -93,24 +92,25 @@ function wireCropThisFrameButton() {
   if (!videoModal) throw new Error('Missing required element: video-clip-modal');
   var panel = videoModal.querySelector('.video-clip-player-panel');
   if (!panel) throw new Error('Missing required element: video-clip-player-panel');
-  var btn = document.createElement('button');
-  btn.id = 'video-clip-extract-frame-btn';
-  btn.type = 'button';
-  btn.textContent = 'Crop This Frame';
-  btn.style.margin = '8px 0';
-  btn.disabled = true;
+  var btn = document.getElementById('video-clip-extract-frame-btn');
   btn.onclick = extractFrameAndOpenCropModal;
-  panel.appendChild(btn);
-  // Enable button when video is ready
-  var videoEl = getVideoClipEl('video-clip-video');
-  if (!videoEl) throw new Error('Missing required element: video-clip-video');
-  videoEl.addEventListener('loadedmetadata', function() {
-    btn.disabled = false;
-  });
-  // Defensive: if video is already loaded
-  if (videoEl.readyState >= 1) {
-    btn.disabled = false;
-  }
+  // btn.id = 'video-clip-extract-frame-btn';
+  // btn.type = 'button';
+  // btn.textContent = 'Crop';
+  // btn.style.margin = '8px 0';
+  // btn.disabled = true;
+  // btn.onclick = extractFrameAndOpenCropModal;
+  // panel.appendChild(btn);
+  // // Enable button when video is ready
+  // var videoEl = getVideoClipEl('video-clip-video');
+  // if (!videoEl) throw new Error('Missing required element: video-clip-video');
+  // videoEl.addEventListener('loadedmetadata', function() {
+  //   btn.disabled = false;
+  // });
+  // // Defensive: if video is already loaded
+  // if (videoEl.readyState >= 1) {
+  //   btn.disabled = false;
+  // }
 }
 // video_clip.js
 // Video clip modal: playback + start time + duration + aspect-ratio crop export.
@@ -121,6 +121,7 @@ var videoClipCropBusy = false;
 var videoClipCropRatio = 1;
 var videoClipCropEnabled = false;
 var videoClipSourceResolution = null;
+var videoClipFramePlayer = null;
 
 function getVideoClipEl(id) {
   return document.getElementById(id);
@@ -227,11 +228,12 @@ function closeVideoClipModal() {
     modal.setAttribute('aria-hidden', 'true');
   }
 
-  var videoEl = getVideoClipEl('video-clip-video');
-  if (videoEl) {
-    try { videoEl.pause(); } catch (e) {}
-    videoEl.removeAttribute('src');
-    videoEl.load();
+  var canvasEl = getVideoClipEl('video-clip-canvas');
+  if (canvasEl && videoClipFramePlayer) {
+    videoClipFramePlayer.pause();
+    videoClipFramePlayer.frames = [];
+    videoClipFramePlayer.ready = false;
+    videoClipFramePlayer.currentFrame = 0;
   }
 
   var cropWrap = getVideoClipEl('video-clip-crop-wrap');
@@ -245,67 +247,21 @@ function initializeVideoClipCropSurface(mediaItem) {
   if (typeof Cropper !== 'function') {
     throw new Error('Cropper.js is not loaded');
   }
-  var videoEl = getVideoClipEl('video-clip-video');
+  var canvasEl = getVideoClipEl('video-clip-canvas');
   var img = getVideoClipEl('video-clip-crop-image');
-  if (!videoEl || !img) throw new Error('Video or overlay element not found');
+  if (!canvasEl || !img) throw new Error('Canvas or overlay element not found');
   destroyVideoClipCropper();
   setVideoClipSizeReadout(0, 0);
-  // Defensive: Wait for video metadata
-  function onVideoReady() {
-    var vw = videoEl.videoWidth;
-    var vh = videoEl.videoHeight;
-    if (!vw || !vh) return; // Not ready yet
-    // Generate SVG overlay matching video pixel size
-    img.src = buildBlankSvgDataUrl(vw, vh);
-    img.classList.remove('hidden');
-    // Wait for overlay image to load
-    img.onload = function() {
-      alignOverlayToVideo();
-      // Wait for layout
-      requestAnimationFrame(function() {
-        destroyVideoClipCropper();
-        videoClipCropper = new Cropper(img, {
-          aspectRatio: videoClipCropRatio,
-          viewMode: 1,
-          dragMode: 'move',
-          autoCropArea: 0.9,
-          background: false,
-          responsive: true,
-          movable: true,
-          zoomable: true,
-          scalable: false,
-          rotatable: false,
-          cropBoxMovable: true,
-          cropBoxResizable: true,
-          crop: function (event) {
-            var detail = event && event.detail ? event.detail : {};
-            setVideoClipSizeReadout(detail.width, detail.height);
-          },
-          ready: function () {
-            var data = videoClipCropper.getData(true);
-            setVideoClipSizeReadout(data.width, data.height);
-          }
-        });
-      });
-    };
-    // Listen for resize events
-    window.addEventListener('resize', alignOverlayToVideo);
-    // Defensive: Remove listeners on modal close
-    var modal = document.getElementById('video-clip-modal');
-    if (modal) {
-      modal.addEventListener('transitionend', function cleanup() {
-        if (modal.classList.contains('hidden')) {
-          window.removeEventListener('resize', alignOverlayToVideo);
-          modal.removeEventListener('transitionend', cleanup);
-        }
-      });
-    }
-  }
-  // Defensive: Only run when video is visible and has size
-  function alignOverlayToVideo() {
-    var rect = videoEl.getBoundingClientRect();
-    var parentRect = videoEl.parentElement.getBoundingClientRect();
-    // Set both intrinsic and rendered size
+  // Use canvas size for overlay
+  var cw = canvasEl.width;
+  var ch = canvasEl.height;
+  if (!cw || !ch) return;
+  img.src = buildBlankSvgDataUrl(cw, ch);
+  img.classList.remove('hidden');
+  img.onload = function() {
+    // Align overlay to canvas
+    var rect = canvasEl.getBoundingClientRect();
+    var parentRect = canvasEl.parentElement.getBoundingClientRect();
     img.width = Math.round(rect.width);
     img.height = Math.round(rect.height);
     img.style.position = 'absolute';
@@ -315,16 +271,30 @@ function initializeVideoClipCropSurface(mediaItem) {
     img.style.height = rect.height + 'px';
     img.style.pointerEvents = 'auto';
     img.style.zIndex = 10;
-  }
-  if (videoEl.readyState >= 1) {
-    onVideoReady();
-  } else {
-    videoEl.addEventListener('loadedmetadata', onVideoReady, { once: true });
-  }
-  window.addEventListener('resize', syncVideoClipCropOverlayToVideo);
-  var videoEl = getVideoClipEl('video-clip-video');
-  if (videoEl) videoEl.addEventListener('loadedmetadata', syncVideoClipCropOverlayToVideo);
-  setTimeout(syncVideoClipCropOverlayToVideo, 100);
+    destroyVideoClipCropper();
+    videoClipCropper = new Cropper(img, {
+      aspectRatio: videoClipCropRatio,
+      viewMode: 1,
+      dragMode: 'move',
+      autoCropArea: 0.9,
+      background: false,
+      responsive: true,
+      movable: true,
+      zoomable: true,
+      scalable: false,
+      rotatable: false,
+      cropBoxMovable: true,
+      cropBoxResizable: true,
+      crop: function (event) {
+        var detail = event && event.detail ? event.detail : {};
+        setVideoClipSizeReadout(detail.width, detail.height);
+      },
+      ready: function () {
+        var data = videoClipCropper.getData(true);
+        setVideoClipSizeReadout(data.width, data.height);
+      }
+    });
+  };
 }
 
 function toggleVideoClipCropMode() {
@@ -353,7 +323,7 @@ function toggleVideoClipCropMode() {
 }
 
 function openVideoClipModal(mediaItem) {
-  setStatus('[VideoClip] Opening video clip modal for', mediaItem.fileName);
+  setStatus('[VideoClip] Opening video clip modal for ' + mediaItem.fileName);
   if (!mediaItem || !mediaItem.fileName || !isVideoFileName(mediaItem.fileName)) {
     setStatus('Clip is only available for video files.');
     return;
@@ -367,7 +337,7 @@ function openVideoClipModal(mediaItem) {
 
   var modal = getVideoClipEl('video-clip-modal');
   var titleEl = getVideoClipEl('video-clip-title');
-  var videoEl = getVideoClipEl('video-clip-video');
+  var canvasEl = getVideoClipEl('video-clip-canvas');
   var outputEl = getVideoClipEl('video-clip-output-input');
   var startEl = getVideoClipEl('video-clip-start-input');
   var durationEl = getVideoClipEl('video-clip-duration-input');
@@ -375,7 +345,7 @@ function openVideoClipModal(mediaItem) {
   var cropWrap = getVideoClipEl('video-clip-crop-wrap');
   var cropToggleBtn = getVideoClipEl('video-clip-crop-toggle-btn');
 
-  if (!modal || !titleEl || !videoEl || !outputEl || !startEl || !durationEl || !currentTimeEl) {
+  if (!modal || !titleEl || !canvasEl || !outputEl || !startEl || !durationEl || !currentTimeEl) {
     throw new Error('Video clip modal is missing required elements');
   }
 
@@ -396,30 +366,36 @@ function openVideoClipModal(mediaItem) {
   durationEl.value = '2.0';
   currentTimeEl.textContent = '0.000';
 
-  titleEl.textContent = 'Clip video: ' + mediaItem.fileName;
+  titleEl.textContent = mediaItem.fileName;
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
 
+  // Load video file via XHR as Blob
   var src = '/caption/media?folder=' + encodeURIComponent(state.folder || '') + '&media=' + encodeURIComponent(mediaItem.fileName) + '&t=' + Date.now();
-  videoEl.src = src;
-  videoEl.onloadedmetadata = function () {
-    var d = Number(videoEl.duration);
-    if (isFinite(d) && d > 0) {
-      durationEl.value = String(Math.max(0.2, Math.min(2.0, d)).toFixed(3));
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', src, true);
+  xhr.responseType = 'blob';
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      var file = new File([xhr.response], mediaItem.fileName, { type: xhr.response.type || 'video/mp4' });
+      if (window.FramePlayer) {
+        videoClipFramePlayer = Object.create(FramePlayer);
+        videoClipFramePlayer.canvas = canvasEl;
+        videoClipFramePlayer.load(file, function() {
+          setStatus('Frame-accurate stepping ready.');
+          videoClipSourceResolution = { width: canvasEl.width, height: canvasEl.height };
+        }, function(err) {
+          setStatus('FramePlayer error: ' + err);
+        });
+      }
+    } else {
+      setStatus('Failed to load video for frame stepping.');
     }
-    var vw = Number(videoEl.videoWidth || 0);
-    var vh = Number(videoEl.videoHeight || 0);
-    if (isFinite(vw) && isFinite(vh) && vw > 0 && vh > 0) {
-      videoClipSourceResolution = { width: Math.round(vw), height: Math.round(vh) };
-    }
-    // No autoplay for video clip modal
   };
-  videoEl.ontimeupdate = function () {
-    currentTimeEl.textContent = Number(videoEl.currentTime || 0).toFixed(3);
+  xhr.onerror = function() {
+    setStatus('Failed to load video for frame stepping.');
   };
-  videoEl.onerror = function () {
-    setStatus('Video failed to load. The codec may be unsupported in browser playback.');
-  };
+  xhr.send();
 }
 
 function getVideoClipPayload(overwrite) {
@@ -427,12 +403,11 @@ function getVideoClipPayload(overwrite) {
     throw new Error('No video clip target selected');
   }
 
-  var videoEl = getVideoClipEl('video-clip-video');
   var outputEl = getVideoClipEl('video-clip-output-input');
   var startEl = getVideoClipEl('video-clip-start-input');
   var durationEl = getVideoClipEl('video-clip-duration-input');
 
-  if (!videoEl || !outputEl || !startEl || !durationEl) {
+  if (!outputEl || !startEl || !durationEl) {
     throw new Error('Video clip form elements are missing');
   }
 
@@ -556,7 +531,6 @@ function wireVideoClipModal() {
   var cancelX = getVideoClipEl('video-clip-cancel-x');
   var useCurrentBtn = getVideoClipEl('video-clip-use-current-btn');
   var startEl = getVideoClipEl('video-clip-start-input');
-  var videoEl = getVideoClipEl('video-clip-video');
   var cropToggleBtn = getVideoClipEl('video-clip-crop-toggle-btn');
 
   if (exportBtn) exportBtn.onclick = function () { applyVideoClip(false); };
@@ -564,17 +538,21 @@ function wireVideoClipModal() {
   if (cancelX) cancelX.onclick = closeVideoClipModal;
   if (cropToggleBtn) cropToggleBtn.onclick = toggleVideoClipCropMode;
 
-  if (useCurrentBtn && startEl && videoEl) {
+  if (useCurrentBtn && startEl) {
     useCurrentBtn.onclick = function () {
-      startEl.value = Number(videoEl.currentTime || 0).toFixed(3);
+      if (videoClipFramePlayer && videoClipFramePlayer.ready) {
+        startEl.value = (videoClipFramePlayer.currentFrame / videoClipFramePlayer.frameRate).toFixed(3);
+      }
     };
   }
 
-  if (startEl && videoEl) {
+  if (startEl) {
     startEl.addEventListener('change', function () {
       var v = Number(startEl.value);
       if (!isFinite(v) || v < 0) return;
-      try { videoEl.currentTime = v; } catch (e) {}
+      if (videoClipFramePlayer && videoClipFramePlayer.ready) {
+        videoClipFramePlayer.showFrame(Math.round(v * videoClipFramePlayer.frameRate));
+      }
     });
   }
 
@@ -584,21 +562,122 @@ function wireVideoClipModal() {
     };
   });
 
-  document.addEventListener('keydown', function (e) {
-    var modal = getVideoClipEl('video-clip-modal');
-    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
-      closeVideoClipModal();
-    }
+    document.addEventListener('keydown', function (e) {
+      var modal = getVideoClipEl('video-clip-modal');
+      if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+        closeVideoClipModal();
+      }
+      if (!modal || modal.classList.contains('hidden')) return;
+      if (e.key === 'Escape') {
+        closeVideoClipModal();
+        return;
+      }
+      if (videoClipFramePlayer && videoClipFramePlayer.ready) {
+        if (e.key === 'ArrowLeft') {
+          videoClipFramePlayer.stepBackward();
+          e.preventDefault();
+          return;
+        } else if (e.key === 'ArrowRight') {
+          videoClipFramePlayer.stepForward();
+          e.preventDefault();
+          return;
+        } else if (e.key === ' ') {
+          if (videoClipFramePlayer.playing) {
+            videoClipFramePlayer.pause();
+          } else {
+            videoClipFramePlayer.play();
+          }
+          e.preventDefault();
+          return;
+        }
+      }
+    });
+}
+
+// --- FrameStepper integration ---
+var frameStepper = null;
+var frameStepperCanvas = null;
+
+function setupFrameStepperUI() {
+  // Insert a canvas for frame rendering if not present
+  var modal = getVideoClipEl('video-clip-modal');
+  if (!modal) return;
+  var panel = modal.querySelector('.video-clip-player-panel');
+  if (!panel) return;
+  var existing = document.getElementById('frame-stepper-canvas');
+  if (!existing) {
+    var canvas = document.createElement('canvas');
+    canvas.id = 'frame-stepper-canvas';
+    canvas.width = 640;
+    canvas.height = 360;
+    canvas.style.display = 'block';
+    canvas.style.background = '#000';
+    canvas.style.margin = '8px auto';
+    panel.insertBefore(canvas, panel.firstChild);
+    frameStepperCanvas = canvas;
+  } else {
+    frameStepperCanvas = existing;
+  }
+}
+
+function enableFrameStepping(file) {
+  setupFrameStepperUI();
+  frameStepper = new window.FrameStepper(frameStepperCanvas);
+  frameStepper.load(file).then(function() {
+    setStatus('Frame stepping ready.');
+  }).catch(function(e) {
+    setStatus('Frame stepping failed: ' + e);
+    frameStepper = null;
   });
 }
+
+// Patch openVideoClipModal to use already loaded video data for FrameStepper
+var _orig_openVideoClipModal = openVideoClipModal;
+openVideoClipModal = function(mediaItem) {
+  _orig_openVideoClipModal(mediaItem);
+  // If FrameStepper is available and video data is loaded, use it
+  // Assume video data is available as a Blob or ArrayBuffer in mediaItem.blob or mediaItem.arrayBuffer
+  if (window.FrameStepper && mediaItem && (mediaItem.blob || mediaItem.arrayBuffer)) {
+    setupFrameStepperUI();
+    frameStepper = new window.FrameStepper(frameStepperCanvas);
+    // Convert Blob to File if needed
+    var fileLike;
+    if (mediaItem.blob) {
+      fileLike = new File([mediaItem.blob], mediaItem.fileName || 'video.mp4', { type: mediaItem.blob.type || 'video/mp4' });
+    } else if (mediaItem.arrayBuffer) {
+      fileLike = new File([mediaItem.arrayBuffer], mediaItem.fileName || 'video.mp4', { type: 'video/mp4' });
+    }
+    frameStepper.load(fileLike).then(function() {
+      setStatus('Frame stepping ready.');
+    }).catch(function(e) {
+      setStatus('Frame stepping failed: ' + e);
+      frameStepper = null;
+    });
+  }
+}
+
+// Patch keydown handler for frame stepping
+document.addEventListener('keydown', function (e) {
+  var modal = getVideoClipEl('video-clip-modal');
+  if (!modal || modal.classList.contains('hidden')) return;
+  if (frameStepper && frameStepper.ready) {
+    if (e.key === 'ArrowLeft') {
+      frameStepper.stepBackward();
+      e.preventDefault();
+      return;
+    } else if (e.key === 'ArrowRight') {
+      frameStepper.stepForward();
+      e.preventDefault();
+      return;
+    }
+  }
+});
 
 addEventListener('DOMContentLoaded', function() {
   wireVideoClipModal();
   wireCropThisFrameButton();
   wireCropModalApplyButton();
 });
-
-// --- Overlay sync helper ---
 
 
 // --- PATCH: update initializeVideoClipCropSurface to sync overlay ---
@@ -653,16 +732,4 @@ initializeVideoClipCropSurface = function(mediaItem) {
 
 };
 
-// --- PATCH: update destroyVideoClipCropper to clean up overlay ---
-var _orig_destroyVideoClipCropper = destroyVideoClipCropper;
-destroyVideoClipCropper = function() {
-  if (videoClipCropper) {
-    videoClipCropper.destroy();
-    videoClipCropper = null;
-  }
-  var img = getVideoClipEl('video-clip-crop-image');
-  if (img) {
-    img.classList.add('hidden');
-  }
 
-};

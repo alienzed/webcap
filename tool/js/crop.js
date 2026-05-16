@@ -1,18 +1,35 @@
-// crop.js
-// Plain global crop modal helpers. Keep this small and isolated.
+function destroyCropper() {
+  if (cropperInstance) {
+    cropperInstance.destroy();
+    cropperInstance = null;
+  }
+}
 
+// --- Crop modal globals ---
 var cropperInstance = null;
 var cropTargetItem = null;
 var cropActiveRatio = 1;
 var cropBusy = false;
-var CROPPABLE_IMAGE_EXTENSIONS = { '.jpg': true, '.jpeg': true, '.png': true, '.webp': true, '.bmp': true };
 
+var CROPPABLE_IMAGE_EXTENSIONS = { '.jpg': true, '.jpeg': true, '.png': true, '.webp': true, '.bmp': true };
+function getFileExtension(fileName) {
+  var idx = (fileName || '').lastIndexOf('.');
+  return idx !== -1 ? fileName.slice(idx).toLowerCase() : '';
+}
 function isCroppableImageFile(fileName) {
   return !!CROPPABLE_IMAGE_EXTENSIONS[getFileExtension(fileName || '')];
 }
+window.isCroppableImageFile = isCroppableImageFile;
 
 function getCropEl(id) {
   return document.getElementById(id);
+}
+
+function destroyCropper() {
+  if (cropperInstance) {
+    cropperInstance.destroy();
+    cropperInstance = null;
+  }
 }
 
 function setCropStatus(text, isError) {
@@ -20,12 +37,6 @@ function setCropStatus(text, isError) {
   if (!statusEl) return;
   statusEl.textContent = text || '';
   statusEl.classList.toggle('error', !!isError);
-}
-
-function setCropBusy(isBusy) {
-  cropBusy = !!isBusy;
-  var applyBtn = getCropEl('crop-apply-btn');
-  if (applyBtn) applyBtn.disabled = cropBusy;
 }
 
 function setCropSizeReadout(width, height) {
@@ -40,11 +51,10 @@ function setCropSizeReadout(width, height) {
   readoutEl.textContent = Math.round(w) + ' x ' + Math.round(h) + ' px';
 }
 
-function destroyCropper() {
-  if (cropperInstance) {
-    cropperInstance.destroy();
-    cropperInstance = null;
-  }
+function setCropBusy(isBusy) {
+  cropBusy = !!isBusy;
+  var applyBtn = getCropEl('crop-apply-btn');
+  if (applyBtn) applyBtn.disabled = cropBusy;
 }
 
 function setCropAspectRatio(ratio) {
@@ -72,37 +82,24 @@ function closeCropModal() {
   }
 }
 
-function openCropModal(mediaItem) {
-  if (!mediaItem || !mediaItem.fileName || !isCroppableImageFile(mediaItem.fileName)) {
-    setStatus('Crop is only available for still image files.');
-    return;
-  }
-  if (typeof Cropper !== 'function') {
-    throw new Error('Cropper.js is not loaded');
-  }
-
+// --- Shared modal/Cropper setup ---
+function setupCropModal(imageSrc, aspectRatio, onReady, onApply) {
   var modal = getCropEl('crop-modal');
   var imageEl = getCropEl('crop-image');
   var titleEl = getCropEl('crop-modal-title');
-  if (!modal || !imageEl || !titleEl) {
-    throw new Error('Crop modal is missing from the page');
-  }
-
+  var applyBtn = getCropEl('crop-apply-btn');
+  if (!modal || !imageEl || !titleEl || !applyBtn) throw new Error('Crop modal is missing from the page');
   destroyCropper();
-  cropTargetItem = mediaItem;
   setCropBusy(false);
-  setCropAspectRatio(1);
+  setCropAspectRatio(aspectRatio || 1);
   setCropSizeReadout(0, 0);
   setCropStatus('Loading image...', false);
-  titleEl.textContent = 'Crop image: ' + mediaItem.fileName;
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
-
   imageEl.onload = function () {
-    if (!cropTargetItem || cropTargetItem.fileName !== mediaItem.fileName) return;
     destroyCropper();
     cropperInstance = new Cropper(imageEl, {
-      aspectRatio: cropActiveRatio,
+      aspectRatio: aspectRatio || 1,
       viewMode: 1,
       dragMode: 'move',
       autoCropArea: 0.9,
@@ -122,60 +119,17 @@ function openCropModal(mediaItem) {
         var data = cropperInstance.getData(true);
         setCropSizeReadout(data.width, data.height);
         setCropStatus('', false);
+        if (onReady) onReady();
       }
     });
   };
   imageEl.onerror = function () {
-    console.error('Crop image failed to load:', mediaItem.fileName);
     setCropStatus('Image failed to load.', true);
   };
-  imageEl.src = '/caption/media?folder=' + encodeURIComponent(state.folder || '') +
-    '&media=' + encodeURIComponent(mediaItem.fileName) +
-    '&t=' + Date.now();
-}
-
-function applyCrop() {
-  if (cropBusy || !cropTargetItem || !cropperInstance) return;
-  var fileName = cropTargetItem.fileName;
-  var cropData = cropperInstance.getData(true);
-
-  setCropBusy(true);
-  setCropStatus('Applying crop...', false);
-
-  HttpModule.postJson('/media/crop', {
-    folder: state.folder || '',
-    fileName: fileName,
-    crop: {
-      x: cropData.x,
-      y: cropData.y,
-      width: cropData.width,
-      height: cropData.height
-    }
-  }, function (status, responseText) {
-    setCropBusy(false);
-    if (status === 200) {
-      closeCropModal();
-      setStatus('Cropped: ' + fileName);
-      refreshMediaResolutionCache();
-      // Reload preview for the current item (file was mutated in place)
-      if (state.currentItem && state.currentItem.fileName === fileName) {
-        selectPathMedia(state.currentItem).catch(function () {});
-      }
-      return;
-    }
-
-    var message = getErrorMessage(responseText, 'Crop failed');
-    console.error('Crop failed:', message);
-    setCropStatus(message, true);
-    setStatus('Crop failed: ' + message);
-  });
-}
-
-function wireCropModal() {
-  var applyBtn = getCropEl('crop-apply-btn');
+  applyBtn.onclick = onApply;
+  // Cancel/close wiring
   var cancelBtn = getCropEl('crop-cancel-btn');
   var cancelX = getCropEl('crop-cancel-x');
-  if (applyBtn) applyBtn.onclick = applyCrop;
   if (cancelBtn) cancelBtn.onclick = closeCropModal;
   if (cancelX) cancelX.onclick = closeCropModal;
   Array.prototype.forEach.call(document.querySelectorAll('.crop-ratio-btn'), function (btn) {
@@ -189,6 +143,70 @@ function wireCropModal() {
       closeCropModal();
     }
   });
+  imageEl.src = imageSrc;
 }
 
-addEventListener('DOMContentLoaded', wireCropModal);
+// --- Image crop entry point ---
+function openImageCropModal(mediaItem) {
+  if (!mediaItem || !mediaItem.fileName || !isCroppableImageFile(mediaItem.fileName)) {
+    setStatus('Crop is only available for still image files.');
+    return;
+  }
+  cropTargetItem = mediaItem;
+  var folder = state.folder || '';
+  var imageSrc = '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(mediaItem.fileName) + '&t=' + Date.now();
+  var aspect = 1;
+  setupCropModal(imageSrc, aspect, function() {
+    // ready
+    getCropEl('crop-modal-title').textContent = 'Crop image: ' + mediaItem.fileName;
+  }, function() {
+    // Apply handler for image
+    if (cropBusy || !cropTargetItem || !cropperInstance) return;
+    var fileName = cropTargetItem.fileName;
+    var cropData = cropperInstance.getData(true);
+    setCropBusy(true);
+    setCropStatus('Applying crop...', false);
+    HttpModule.postJson('/media/crop', {
+      folder: state.folder || '',
+      fileName: fileName,
+      crop: {
+        x: cropData.x,
+        y: cropData.y,
+        width: cropData.width,
+        height: cropData.height
+      }
+    }, function (status, responseText) {
+      setCropBusy(false);
+      if (status === 200) {
+        closeCropModal();
+        setStatus('Cropped: ' + fileName);
+        refreshMediaResolutionCache();
+        if (state.currentItem && state.currentItem.fileName === fileName) {
+          selectPathMedia(state.currentItem).catch(function () {});
+        }
+        return;
+      }
+      var message = getErrorMessage(responseText, 'Crop failed');
+      setCropStatus(message, true);
+      setStatus('Crop failed: ' + message);
+    });
+  });
+}
+
+// --- Video crop entry point ---
+function openVideoCropModal(dataUrl, aspect, onCrop) {
+  setupCropModal(dataUrl, aspect, function() {
+    getCropEl('crop-modal-title').textContent = 'Crop video frame';
+  }, function() {
+    // Apply handler for video
+    if (!cropperInstance) return;
+    var data = cropperInstance.getData(true);
+    if (typeof onCrop === 'function') onCrop({
+      x: Math.round(data.x),
+      y: Math.round(data.y),
+      width: Math.round(data.width),
+      height: Math.round(data.height)
+    });
+    closeCropModal();
+  });
+}

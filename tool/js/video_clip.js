@@ -1,29 +1,4 @@
-// Store crop modal crop data for export
-var videoClipPendingCrop = null;
-// --- Wire up crop modal Apply button ---
-function wireCropModalApplyButton() {
-  var applyBtn = document.getElementById('crop-apply-btn');
-  var cropModal = document.getElementById('crop-modal');
-  if (!applyBtn || !cropModal) return;
-  applyBtn.onclick = function() {
-    if (!window.cropperInstance) return;
-    var data = window.cropperInstance.getData(true);
-    // Store for export
-    videoClipPendingCrop = {
-      x: Math.round(data.x),
-      y: Math.round(data.y),
-      width: Math.round(data.width),
-      height: Math.round(data.height)
-    };
-    var msg = 'Crop: x=' + videoClipPendingCrop.x + ', y=' + videoClipPendingCrop.y + ', w=' + videoClipPendingCrop.width + ', h=' + videoClipPendingCrop.height;
-    setStatus(msg);
-    // Hide crop modal
-    cropModal.classList.add('hidden');
-    cropModal.setAttribute('aria-hidden', 'true');
-    window.cropperInstance.destroy();
-    window.cropperInstance = null;
-  };
-}
+// (REMOVED: wireCropModalApplyButton and videoClipPendingCrop to avoid breaking image crop modal)
 // --- Extract frame and open crop modal ---
 function extractFrameAndOpenCropModal() {
   var videoEl = getVideoClipEl('video-clip-video');
@@ -37,55 +12,10 @@ function extractFrameAndOpenCropModal() {
   var ctx = canvas.getContext('2d');
   ctx.drawImage(videoEl, 0, 0, w, h);
   var dataUrl = canvas.toDataURL('image/png');
-  // Open crop modal and set image
-  var cropModal = document.getElementById('crop-modal');
-  var cropImg = document.getElementById('crop-image');
-  if (!cropModal) throw new Error('Missing required element: crop-modal');
-  if (!cropImg) throw new Error('Missing required element: crop-image');
-  cropImg.src = dataUrl;
-  cropImg.onload = function() {
-    if (window.cropperInstance) {
-      window.cropperInstance.destroy();
-    }
-    window.cropperInstance = new Cropper(cropImg, {
-      aspectRatio: videoClipCropRatio,
-      viewMode: 1,
-      dragMode: 'move',
-      autoCropArea: 0.9,
-      background: false,
-      responsive: true,
-      movable: true,
-      zoomable: true,
-      scalable: false,
-      rotatable: false,
-      cropBoxMovable: true,
-      cropBoxResizable: true,
-      crop: function (event) {
-        var detail = event && event.detail ? event.detail : {};
-        var readoutEl = document.getElementById('crop-size-readout');
-        if (readoutEl) {
-          var w = Number(detail.width);
-          var h = Number(detail.height);
-          var x = Number(detail.x);
-          var y = Number(detail.y);
-          if (!isFinite(w) || !isFinite(h) || w < 0 || h < 0) {
-            readoutEl.textContent = '0 x 0 px';
-          } else {
-            readoutEl.textContent = Math.round(w) + ' x ' + Math.round(h) + ' px  [' + Math.round(x) + ', ' + Math.round(y) + ']';
-          }
-        }
-      },
-      ready: function () {
-        var data = window.cropperInstance.getData(true);
-        var readoutEl = document.getElementById('crop-size-readout');
-        if (readoutEl) {
-          readoutEl.textContent = Math.round(data.width) + ' x ' + Math.round(data.height) + ' px';
-        }
-      }
-    });
-  };
-  cropModal.classList.remove('hidden');
-  cropModal.setAttribute('aria-hidden', 'false');
+  openVideoCropModal(dataUrl, videoClipCropRatio, function(crop) {
+    window.videoClipPendingCrop = crop;
+    setStatus('Crop: x=' + crop.x + ', y=' + crop.y + ', w=' + crop.width + ', h=' + crop.height);
+  });
 }
 // --- Wire up Crop This Frame button ---
 function wireCropThisFrameButton() {
@@ -595,7 +525,6 @@ function wireVideoClipModal() {
 addEventListener('DOMContentLoaded', function() {
   wireVideoClipModal();
   wireCropThisFrameButton();
-  wireCropModalApplyButton();
 });
 
 // --- Overlay sync helper ---

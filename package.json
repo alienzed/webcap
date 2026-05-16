@@ -1,0 +1,27 @@
+{
+  "name": "webcap",
+  "version": "1.0.0",
+  "description": "WebCap is a local-first media curation and captioning tool for training-set workflows. It focuses on fast iteration, explicit mutations, and reversible file operations.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alienzed/webcap.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/alienzed/webcap/issues"
+  },
+  "homepage": "https://github.com/alienzed/webcap#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.8.0"
+  }
+}

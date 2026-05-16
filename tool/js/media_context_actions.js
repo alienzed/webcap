@@ -247,7 +247,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
     actions.push({
       label: 'Crop...',
       run: function () {
-        openCropModal(mediaItem);
+        openImageCropModal(mediaItem.fileName);
       }
     });
   }

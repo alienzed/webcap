@@ -7,10 +7,14 @@ This file tracks implemented work vs outstanding items.
 - Legacy autoset remains available by design.
 
 ## Enhancements
+- Complete the bucket mode logic
 - Review duplicate-token detection inside a single caption.
 - Validate training command preview behavior when config keys are missing (should still provide useful output where possible).
 - Maintain flags and metadata when Pruning/restoring/renaming.
 - Print MegaFramePixels value next to bucket as comment.
+- A way to filter for unstarred (frankly the current star filter isn't optimal, it'd be nice to see like Only 2stars. less than 3 stars, etc...)
+- Enhance drag-and-drop import behavior when working inside a set folder: make the full app frame act as a drop zone, then classify dropped files automatically. Images and short videos under 10 seconds should be imported directly into the active set folder and handled by the existing originals/backups logic. Longer videos should be treated as temporary source material instead: place them in src_videos rather than the set folder, do not include them in originals/backups, and re-encode them on import into an editor-friendly format for clipping, ideally constant 16 fps, browser-compatible H.264, even dimensions, and dense/all-I-frame keyframes for reliable frame stepping and crop selection. This keeps set folders limited to actual reusable assets while allowing large source videos to exist only as disposable clipping material.
+- The ability to rotate images (and videos?)
 
 ## 1.1 Ideas
 - We have caption requirements. We need a concept of Set Requirements, ideally self counting. For example, a good character LORA includes:

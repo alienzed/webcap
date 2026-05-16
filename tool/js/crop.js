@@ -1,5 +1,64 @@
+
 // crop.js
 // Plain global crop modal helpers. Keep this small and isolated.
+
+// Dedicated image crop entry point (robust, isolated)
+function openImageCropModal(fileNameOrUrl) {
+  var fileName = fileNameOrUrl;
+  var isDataUrl = typeof fileNameOrUrl === 'string' && fileNameOrUrl.startsWith('data:');
+  var modal = getCropEl('crop-modal');
+  var imageEl = getCropEl('crop-image');
+  var titleEl = getCropEl('crop-modal-title');
+  if (!modal || !imageEl || !titleEl) {
+    throw new Error('Crop modal is missing from the page');
+  }
+  destroyCropper();
+  cropTargetItem = { fileName: fileNameOrUrl };
+  setCropBusy(false);
+  setCropAspectRatio(1);
+  setCropSizeReadout(0, 0);
+  setCropStatus('Loading image...', false);
+  titleEl.textContent = 'Crop image: ' + (isDataUrl ? '' : fileNameOrUrl);
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+
+  imageEl.onload = function () {
+    destroyCropper();
+    cropperInstance = new Cropper(imageEl, {
+      aspectRatio: cropActiveRatio,
+      viewMode: 1,
+      dragMode: 'move',
+      autoCropArea: 0.9,
+      background: false,
+      responsive: true,
+      movable: true,
+      zoomable: true,
+      scalable: false,
+      rotatable: false,
+      cropBoxMovable: true,
+      cropBoxResizable: true,
+      crop: function (event) {
+        var detail = event && event.detail ? event.detail : {};
+        setCropSizeReadout(detail.width, detail.height);
+      },
+      ready: function () {
+        var data = cropperInstance.getData(true);
+        setCropSizeReadout(data.width, data.height);
+        setCropStatus('', false);
+      }
+    });
+  };
+  imageEl.onerror = function () {
+    setCropStatus('Image failed to load.', true);
+  };
+  if (isDataUrl) {
+    imageEl.src = fileNameOrUrl;
+  } else {
+    imageEl.src = '/caption/media?folder=' + encodeURIComponent(state.folder || '') +
+      '&media=' + encodeURIComponent(fileNameOrUrl) +
+      '&t=' + Date.now();
+  }
+}
 
 var cropperInstance = null;
 var cropTargetItem = null;
@@ -72,67 +131,8 @@ function closeCropModal() {
   }
 }
 
-function openCropModal(mediaItem) {
-  if (!mediaItem || !mediaItem.fileName || !isCroppableImageFile(mediaItem.fileName)) {
-    setStatus('Crop is only available for still image files.');
-    return;
-  }
-  if (typeof Cropper !== 'function') {
-    throw new Error('Cropper.js is not loaded');
-  }
 
-  var modal = getCropEl('crop-modal');
-  var imageEl = getCropEl('crop-image');
-  var titleEl = getCropEl('crop-modal-title');
-  if (!modal || !imageEl || !titleEl) {
-    throw new Error('Crop modal is missing from the page');
-  }
-
-  destroyCropper();
-  cropTargetItem = mediaItem;
-  setCropBusy(false);
-  setCropAspectRatio(1);
-  setCropSizeReadout(0, 0);
-  setCropStatus('Loading image...', false);
-  titleEl.textContent = 'Crop image: ' + mediaItem.fileName;
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
-
-  imageEl.onload = function () {
-    if (!cropTargetItem || cropTargetItem.fileName !== mediaItem.fileName) return;
-    destroyCropper();
-    cropperInstance = new Cropper(imageEl, {
-      aspectRatio: cropActiveRatio,
-      viewMode: 1,
-      dragMode: 'move',
-      autoCropArea: 0.9,
-      background: false,
-      responsive: true,
-      movable: true,
-      zoomable: true,
-      scalable: false,
-      rotatable: false,
-      cropBoxMovable: true,
-      cropBoxResizable: true,
-      crop: function (event) {
-        var detail = event && event.detail ? event.detail : {};
-        setCropSizeReadout(detail.width, detail.height);
-      },
-      ready: function () {
-        var data = cropperInstance.getData(true);
-        setCropSizeReadout(data.width, data.height);
-        setCropStatus('', false);
-      }
-    });
-  };
-  imageEl.onerror = function () {
-    console.error('Crop image failed to load:', mediaItem.fileName);
-    setCropStatus('Image failed to load.', true);
-  };
-  imageEl.src = '/caption/media?folder=' + encodeURIComponent(state.folder || '') +
-    '&media=' + encodeURIComponent(mediaItem.fileName) +
-    '&t=' + Date.now();
-}
+// openCropModal is now reserved for video cropping or advanced use only.
 
 function applyCrop() {
   if (cropBusy || !cropTargetItem || !cropperInstance) return;

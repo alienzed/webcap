@@ -21,6 +21,24 @@ function wireCropModalApplyButton() {
   };
 }
 
+// --- Wire up video crop overlay Apply button ---
+function wireVideoClipCropApplyButton() {
+  var applyBtn = document.getElementById('video-clip-crop-apply-btn');
+  if (!applyBtn) return;
+  applyBtn.onclick = function() {
+    if (!videoClipCropper) return;
+    var data = videoClipCropper.getData(true);
+    videoClipPendingCrop = {
+      x: data.x,
+      y: data.y,
+      width: data.width,
+      height: data.height
+    };
+    setStatus('Crop: x=' + Math.round(data.x) + ', y=' + Math.round(data.y) + ', w=' + Math.round(data.width) + ', h=' + Math.round(data.height));
+    destroyVideoClipCropper();
+    setVideoClipSizeReadout(0, 0);
+  };
+}
 
 // Ensure openVideoClipModal is globally accessible
 window.openVideoClipModal = openVideoClipModal;
@@ -86,6 +104,7 @@ function extractFrameAndOpenCropModal() {
   cropModal.classList.remove('hidden');
   cropModal.setAttribute('aria-hidden', 'false');
 }
+
 // --- Wire up Crop This Frame button ---
 function wireCropThisFrameButton() {
   var videoModal = getVideoClipEl('video-clip-modal');
@@ -93,7 +112,7 @@ function wireCropThisFrameButton() {
   var panel = videoModal.querySelector('.video-clip-player-panel');
   if (!panel) throw new Error('Missing required element: video-clip-player-panel');
   var btn = document.getElementById('video-clip-extract-frame-btn');
-  btn.onclick = extractFrameAndOpenCropModal;
+  btn.onclick = extractFrameAndShowOverlayCropper;
   // btn.id = 'video-clip-extract-frame-btn';
   // btn.type = 'button';
   // btn.textContent = 'Crop';
@@ -112,6 +131,7 @@ function wireCropThisFrameButton() {
   //   btn.disabled = false;
   // }
 }
+
 // video_clip.js
 // Video clip modal: playback + start time + duration + aspect-ratio crop export.
 
@@ -247,9 +267,57 @@ function initializeVideoClipCropSurface(mediaItem) {
   if (typeof Cropper !== 'function') {
     throw new Error('Cropper.js is not loaded');
   }
+  var res = getVideoClipResolution(mediaItem.fileName);
+  if (!res) {
+    throw new Error('Video resolution metadata is unavailable. Reload folder and try again.');
+  }
+  var img = getVideoClipEl('video-clip-crop-image');
+  if (!img) throw new Error('Video clip crop image element not found');
+  destroyVideoClipCropper();
+  setVideoClipSizeReadout(0, 0);
+  img.classList.remove('hidden');
+  img.src = buildBlankSvgDataUrl(res.width, res.height);
+  function syncAndInitCropper() {
+    // Ensure overlay <img> matches rendered video size
+    var videoEl = getVideoClipEl('video-clip-video');
+    if (videoEl && img) {
+      var rect = videoEl.getBoundingClientRect();
+      img.setAttribute('width', Math.round(rect.width));
+      img.setAttribute('height', Math.round(rect.height));
+    }
+    destroyVideoClipCropper();
+    videoClipCropper = new Cropper(img, {
+      aspectRatio: videoClipCropRatio,
+      viewMode: 1,
+      dragMode: 'move',
+      autoCropArea: 0.9,
+      background: false,
+      responsive: true,
+      movable: true,
+      zoomable: true,
+      scalable: false,
+      rotatable: false,
+      cropBoxMovable: true,
+      cropBoxResizable: true,
+      crop: function (event) {
+        var detail = event && event.detail ? event.detail : {};
+        setVideoClipSizeReadout(detail.width, detail.height);
+      },
+      ready: function () {
+        var data = videoClipCropper.getData(true);
+        setVideoClipSizeReadout(data.width, data.height);
+      }
+    });
+  }
+  img.onload = syncAndInitCropper;
+
+};
+// (removed stray code block delimiters and comments)
+// Video cropping uses only the overlay cropper, not the image crop modal
+function extractFrameAndShowOverlayCropper() {
   var canvasEl = getVideoClipEl('video-clip-canvas');
   var img = getVideoClipEl('video-clip-crop-image');
-  if (!canvasEl || !img) throw new Error('Canvas or overlay element not found');
+  if (!canvasEl || !img) throw new Error('Missing required element for video cropping');
   destroyVideoClipCropper();
   setVideoClipSizeReadout(0, 0);
   // Use canvas size for overlay
@@ -297,439 +365,12 @@ function initializeVideoClipCropSurface(mediaItem) {
   };
 }
 
-function toggleVideoClipCropMode() {
-  var img = getVideoClipEl('video-clip-crop-image');
-  var btn = getVideoClipEl('video-clip-crop-toggle-btn');
-  if (!img || !btn || !videoClipTargetItem) return;
-
-  videoClipCropEnabled = !videoClipCropEnabled;
-  if (videoClipCropEnabled) {
-    btn.textContent = 'Hide Crop Tool';
-    try {
-      initializeVideoClipCropSurface(videoClipTargetItem);
-      setStatus('');
-    } catch (e) {
-      videoClipCropEnabled = false;
-      img.classList.add('hidden');
-      btn.textContent = 'Set Crop Tool';
-      setStatus(String(e && e.message ? e.message : e));
-    }
-    return;
-  }
-
-  btn.textContent = 'Set Crop Tool';
-  destroyVideoClipCropper();
-  setVideoClipSizeReadout(0, 0);
-}
-
-function openVideoClipModal(mediaItem) {
-  setStatus('[VideoClip] Opening video clip modal for ' + mediaItem.fileName);
-  if (!mediaItem || !mediaItem.fileName || !isVideoFileName(mediaItem.fileName)) {
-    setStatus('Clip is only available for video files.');
-    return;
-  }
-  // Restrict to src_videos folder only
-  var folder = (typeof state !== 'undefined' && state.folder) ? String(state.folder) : '';
-  if (!/\bsrc_videos(\\|\/|$)/i.test(folder)) {
-    setStatus('Clip is only available for videos inside the src_videos folder.');
-    return;
-  }
-
-  var modal = getVideoClipEl('video-clip-modal');
-  var titleEl = getVideoClipEl('video-clip-title');
-  var canvasEl = getVideoClipEl('video-clip-canvas');
-  var outputEl = getVideoClipEl('video-clip-output-input');
-  var startEl = getVideoClipEl('video-clip-start-input');
-  var durationEl = getVideoClipEl('video-clip-duration-input');
-  var currentTimeEl = getVideoClipEl('video-clip-current-time');
-  var cropWrap = getVideoClipEl('video-clip-crop-wrap');
-  var cropToggleBtn = getVideoClipEl('video-clip-crop-toggle-btn');
-
-  if (!modal || !titleEl || !canvasEl || !outputEl || !startEl || !durationEl || !currentTimeEl) {
-    throw new Error('Video clip modal is missing required elements');
-  }
-
-  destroyVideoClipCropper();
-  videoClipTargetItem = mediaItem;
-  videoClipCropEnabled = false;
-  setVideoClipBusy(false);
-  setStatus('');
-  setVideoClipSizeReadout(0, 0);
-  setVideoClipRatio(1);
-
-  if (cropWrap) cropWrap.classList.add('hidden');
-  if (cropToggleBtn) cropToggleBtn.textContent = 'Set Crop Tool';
-
-  var stem = mediaItem.fileName.replace(/\.[^.]+$/, '');
-  outputEl.value = stem + '_clip';
-  startEl.value = '0';
-  durationEl.value = '2.0';
-  currentTimeEl.textContent = '0.000';
-
-  titleEl.textContent = mediaItem.fileName;
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
-
-  // Load video file via XHR as Blob
-  var src = '/caption/media?folder=' + encodeURIComponent(state.folder || '') + '&media=' + encodeURIComponent(mediaItem.fileName) + '&t=' + Date.now();
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', src, true);
-  xhr.responseType = 'blob';
-  xhr.onload = function() {
-    if (xhr.status === 200) {
-      var file = new File([xhr.response], mediaItem.fileName, { type: xhr.response.type || 'video/mp4' });
-      if (window.FramePlayer) {
-        videoClipFramePlayer = Object.create(FramePlayer);
-        videoClipFramePlayer.canvas = canvasEl;
-        videoClipFramePlayer.load(file, function() {
-          setStatus('Frame-accurate stepping ready.');
-          videoClipSourceResolution = { width: canvasEl.width, height: canvasEl.height };
-        }, function(err) {
-          setStatus('FramePlayer error: ' + err);
-        });
-      }
-    } else {
-      setStatus('Failed to load video for frame stepping.');
-    }
-  };
-  xhr.onerror = function() {
-    setStatus('Failed to load video for frame stepping.');
-  };
-  xhr.send();
-}
-
-function getVideoClipPayload(overwrite) {
-  if (!videoClipTargetItem || !videoClipTargetItem.fileName) {
-    throw new Error('No video clip target selected');
-  }
-
-  var outputEl = getVideoClipEl('video-clip-output-input');
-  var startEl = getVideoClipEl('video-clip-start-input');
-  var durationEl = getVideoClipEl('video-clip-duration-input');
-
-  if (!outputEl || !startEl || !durationEl) {
-    throw new Error('Video clip form elements are missing');
-  }
-
-  var outputName = String(outputEl.value || '').trim();
-  if (!outputName) {
-    throw new Error('Output name is required');
-  }
-
-  var startSec = Number(startEl.value);
-  if (!isFinite(startSec) || startSec < 0) {
-    throw new Error('Start time must be >= 0');
-  }
-
-  var durationSec = Number(durationEl.value);
-  if (!isFinite(durationSec) || durationSec <= 0) {
-    throw new Error('Duration must be > 0');
-  }
-
-  var cropData = null;
-  if (videoClipPendingCrop) {
-    cropData = videoClipPendingCrop;
-  } else if (videoClipCropper) {
-    var data = videoClipCropper.getData(true);
-    cropData = {
-      x: data.x,
-      y: data.y,
-      width: data.width,
-      height: data.height
-    };
-  } else {
-    var res = getVideoClipResolution(videoClipTargetItem.fileName);
-    if (!res) {
-      throw new Error('Crop is required and video resolution metadata is unavailable');
-    }
-    var ratio = videoClipCropRatio || 1;
-    var sourceW = res.width;
-    var sourceH = res.height;
-    var widthFromHeight = sourceH * ratio;
-    var cropW = widthFromHeight <= sourceW ? widthFromHeight : sourceW;
-    var cropH = cropW / ratio;
-    if (cropH > sourceH) {
-      cropH = sourceH;
-      cropW = cropH * ratio;
-    }
-    var cropX = (sourceW - cropW) / 2;
-    var cropY = (sourceH - cropH) / 2;
-    cropData = {
-      x: cropX,
-      y: cropY,
-      width: cropW,
-      height: cropH
-    };
-  }
-  videoClipPendingCrop = null;
-
-  return {
-    folder: state.folder || '',
-    fileName: videoClipTargetItem.fileName,
-    outputName: outputName,
-    startSec: startSec,
-    durationSec: durationSec,
-    crop: cropData,
-    overwrite: !!overwrite
-  };
-}
-
-function applyVideoClip(overwrite) {
-  if (videoClipCropBusy) return;
-
-  var payload;
-  try {
-    payload = getVideoClipPayload(overwrite);
-  } catch (e) {
-    setStatus(String(e && e.message ? e.message : e));
-    return;
-  }
-
-  setVideoClipBusy(true);
-  setStatus('Exporting clip to: ' + payload.outputName);
-  if (window.console && console.log) {
-    console.log('[VideoClip] Export payload:', payload);
-  }
-
-  HttpModule.postJson('/media/video_clip', payload, function (status, responseText) {
-    setVideoClipBusy(false);
-    if (window.console && console.log) {
-      console.log('[VideoClip] Export response:', status, responseText);
-    }
-    if (status === 200) {
-      closeVideoClipModal();
-      setStatus('Clip exported: ' + payload.outputName);
-      if (window.console && console.log) {
-        console.log('[VideoClip] Exported:', payload.outputName);
-      }
-      refreshCurrentDirectory();
-      return;
-    }
-    var message = getErrorMessage(responseText, 'Clip export failed');
-    var data = null;
-    try { data = JSON.parse(responseText); } catch (e) {}
-    if (status === 409 && data && data.requiresOverwrite) {
-      var overwriteConfirmed = confirm('Output file exists. Overwrite?\n\n' + data.outputName);
-      if (overwriteConfirmed) {
-        applyVideoClip(true);
-        return;
-      }
-      setStatus('Export cancelled.');
-      return;
-    }
-    setStatus(message);
-    setStatus('Clip export failed: ' + message);
-    if (window.console && console.error) {
-      console.error('[VideoClip] Export failed:', message, payload, responseText);
-    }
-  });
-}
-
-function wireVideoClipModal() {
-  var exportBtn = getVideoClipEl('video-clip-export-btn');
-  var cancelBtn = getVideoClipEl('video-clip-cancel-btn');
-  var cancelX = getVideoClipEl('video-clip-cancel-x');
-  var useCurrentBtn = getVideoClipEl('video-clip-use-current-btn');
-  var startEl = getVideoClipEl('video-clip-start-input');
-  var cropToggleBtn = getVideoClipEl('video-clip-crop-toggle-btn');
-
-  if (exportBtn) exportBtn.onclick = function () { applyVideoClip(false); };
-  if (cancelBtn) cancelBtn.onclick = closeVideoClipModal;
-  if (cancelX) cancelX.onclick = closeVideoClipModal;
-  if (cropToggleBtn) cropToggleBtn.onclick = toggleVideoClipCropMode;
-
-  if (useCurrentBtn && startEl) {
-    useCurrentBtn.onclick = function () {
-      if (videoClipFramePlayer && videoClipFramePlayer.ready) {
-        startEl.value = (videoClipFramePlayer.currentFrame / videoClipFramePlayer.frameRate).toFixed(3);
-      }
-    };
-  }
-
-  if (startEl) {
-    startEl.addEventListener('change', function () {
-      var v = Number(startEl.value);
-      if (!isFinite(v) || v < 0) return;
-      if (videoClipFramePlayer && videoClipFramePlayer.ready) {
-        videoClipFramePlayer.showFrame(Math.round(v * videoClipFramePlayer.frameRate));
-      }
-    });
-  }
-
-  Array.prototype.forEach.call(document.querySelectorAll('.video-clip-ratio-btn'), function (btn) {
-    btn.onclick = function () {
-      setVideoClipRatio(Number(btn.getAttribute('data-ratio')) || 1);
-    };
-  });
-
-    document.addEventListener('keydown', function (e) {
-      var modal = getVideoClipEl('video-clip-modal');
-      if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
-        closeVideoClipModal();
-      }
-      if (!modal || modal.classList.contains('hidden')) return;
-      if (e.key === 'Escape') {
-        closeVideoClipModal();
-        return;
-      }
-      if (videoClipFramePlayer && videoClipFramePlayer.ready) {
-        if (e.key === 'ArrowLeft') {
-          videoClipFramePlayer.stepBackward();
-          e.preventDefault();
-          return;
-        } else if (e.key === 'ArrowRight') {
-          videoClipFramePlayer.stepForward();
-          e.preventDefault();
-          return;
-        } else if (e.key === ' ') {
-          if (videoClipFramePlayer.playing) {
-            videoClipFramePlayer.pause();
-          } else {
-            videoClipFramePlayer.play();
-          }
-          e.preventDefault();
-          return;
-        }
-      }
-    });
-}
-
-// --- FrameStepper integration ---
-var frameStepper = null;
-var frameStepperCanvas = null;
-
-function setupFrameStepperUI() {
-  // Insert a canvas for frame rendering if not present
-  var modal = getVideoClipEl('video-clip-modal');
-  if (!modal) return;
-  var panel = modal.querySelector('.video-clip-player-panel');
-  if (!panel) return;
-  var existing = document.getElementById('frame-stepper-canvas');
-  if (!existing) {
-    var canvas = document.createElement('canvas');
-    canvas.id = 'frame-stepper-canvas';
-    canvas.width = 640;
-    canvas.height = 360;
-    canvas.style.display = 'block';
-    canvas.style.background = '#000';
-    canvas.style.margin = '8px auto';
-    panel.insertBefore(canvas, panel.firstChild);
-    frameStepperCanvas = canvas;
-  } else {
-    frameStepperCanvas = existing;
-  }
-}
-
-function enableFrameStepping(file) {
-  setupFrameStepperUI();
-  frameStepper = new window.FrameStepper(frameStepperCanvas);
-  frameStepper.load(file).then(function() {
-    setStatus('Frame stepping ready.');
-  }).catch(function(e) {
-    setStatus('Frame stepping failed: ' + e);
-    frameStepper = null;
-  });
-}
-
-// Patch openVideoClipModal to use already loaded video data for FrameStepper
-var _orig_openVideoClipModal = openVideoClipModal;
-openVideoClipModal = function(mediaItem) {
-  _orig_openVideoClipModal(mediaItem);
-  // If FrameStepper is available and video data is loaded, use it
-  // Assume video data is available as a Blob or ArrayBuffer in mediaItem.blob or mediaItem.arrayBuffer
-  if (window.FrameStepper && mediaItem && (mediaItem.blob || mediaItem.arrayBuffer)) {
-    setupFrameStepperUI();
-    frameStepper = new window.FrameStepper(frameStepperCanvas);
-    // Convert Blob to File if needed
-    var fileLike;
-    if (mediaItem.blob) {
-      fileLike = new File([mediaItem.blob], mediaItem.fileName || 'video.mp4', { type: mediaItem.blob.type || 'video/mp4' });
-    } else if (mediaItem.arrayBuffer) {
-      fileLike = new File([mediaItem.arrayBuffer], mediaItem.fileName || 'video.mp4', { type: 'video/mp4' });
-    }
-    frameStepper.load(fileLike).then(function() {
-      setStatus('Frame stepping ready.');
-    }).catch(function(e) {
-      setStatus('Frame stepping failed: ' + e);
-      frameStepper = null;
-    });
-  }
-}
-
-// Patch keydown handler for frame stepping
-document.addEventListener('keydown', function (e) {
-  var modal = getVideoClipEl('video-clip-modal');
-  if (!modal || modal.classList.contains('hidden')) return;
-  if (frameStepper && frameStepper.ready) {
-    if (e.key === 'ArrowLeft') {
-      frameStepper.stepBackward();
-      e.preventDefault();
-      return;
-    } else if (e.key === 'ArrowRight') {
-      frameStepper.stepForward();
-      e.preventDefault();
-      return;
-    }
-  }
-});
-
+// Patch: wire up the video crop overlay apply button and crop this frame button
 addEventListener('DOMContentLoaded', function() {
   wireVideoClipModal();
-  wireCropThisFrameButton();
-  wireCropModalApplyButton();
+  var btn = document.getElementById('video-clip-extract-frame-btn');
+  if (btn) btn.onclick = extractFrameAndShowOverlayCropper;
+  wireVideoClipCropApplyButton();
 });
-
-
-// --- PATCH: update initializeVideoClipCropSurface to sync overlay ---
-var _orig_initializeVideoClipCropSurface = initializeVideoClipCropSurface;
-initializeVideoClipCropSurface = function(mediaItem) {
-  if (typeof Cropper !== 'function') {
-    throw new Error('Cropper.js is not loaded');
-  }
-  var res = getVideoClipResolution(mediaItem.fileName);
-  if (!res) {
-    throw new Error('Video resolution metadata is unavailable. Reload folder and try again.');
-  }
-  var img = getVideoClipEl('video-clip-crop-image');
-  if (!img) throw new Error('Video clip crop image element not found');
-  destroyVideoClipCropper();
-  setVideoClipSizeReadout(0, 0);
-  img.classList.remove('hidden');
-  img.src = buildBlankSvgDataUrl(res.width, res.height);
-  function syncAndInitCropper() {
-    // Ensure overlay <img> matches rendered video size
-    var videoEl = getVideoClipEl('video-clip-video');
-    if (videoEl && img) {
-      var rect = videoEl.getBoundingClientRect();
-      img.setAttribute('width', Math.round(rect.width));
-      img.setAttribute('height', Math.round(rect.height));
-    }
-    destroyVideoClipCropper();
-    videoClipCropper = new Cropper(img, {
-      aspectRatio: videoClipCropRatio,
-      viewMode: 1,
-      dragMode: 'move',
-      autoCropArea: 0.9,
-      background: false,
-      responsive: true,
-      movable: true,
-      zoomable: true,
-      scalable: false,
-      rotatable: false,
-      cropBoxMovable: true,
-      cropBoxResizable: true,
-      crop: function (event) {
-        var detail = event && event.detail ? event.detail : {};
-        setVideoClipSizeReadout(detail.width, detail.height);
-      },
-      ready: function () {
-        var data = videoClipCropper.getData(true);
-        setVideoClipSizeReadout(data.width, data.height);
-      }
-    });
-  }
-  img.onload = syncAndInitCropper;
-
-};
 
 

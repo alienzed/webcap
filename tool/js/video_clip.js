@@ -504,6 +504,16 @@ function wireVideoClipModal() {
     };
   }
 
+  var outputEl = getVideoClipEl('video-clip-output-input');
+  if (outputEl) {
+    outputEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyVideoClip(false);
+      }
+    });
+  }
+
   if (startEl && videoEl) {
     startEl.addEventListener('change', function () {
       var v = Number(startEl.value);

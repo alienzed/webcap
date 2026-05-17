@@ -259,11 +259,7 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply, options) {
       rotatable: cropRotationEnabled,
       cropBoxMovable: true,
       cropBoxResizable: true,
-      cropmove: function () {
-        applyCropSoftMagnet();
-      },
       crop: function (event) {
-        if (cropMagnetApplying) return;
         var detail = event && event.detail ? event.detail : {};
         setCropSizeReadout(detail.width, detail.height);
       },

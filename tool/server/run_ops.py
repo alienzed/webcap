@@ -1,3 +1,4 @@
+import os
 import shlex
 import subprocess
 import sys
@@ -15,6 +16,7 @@ from . import config as app_config
 from . import autoset as autoset_module
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
+from .originals import MEDIA_ALL_EXTS
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -248,6 +250,35 @@ def _to_wsl_path(path_obj: Path):
     return out
 
 
+def _create_missing_config_files(folder_path: Path):
+    if folder_path.name in ("originals", "auto_dataset"):
+        return
+    media_files = [f for f in folder_path.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_ALL_EXTS]
+    if not media_files:
+        return
+
+    templates = ["config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"]
+    templates_dir = ROOT / "tool" / "templates"
+    for name in templates:
+        dest = folder_path / name
+        src = templates_dir / name
+        if not dest.exists() and src.exists():
+            try:
+                dataset_rel = folder_path.relative_to(app_config.FS_ROOT).as_posix()
+            except Exception:
+                dataset_rel = folder_path.name
+            template_text = src.read_text(encoding="utf-8")
+            try:
+                filled_text = app_config.fill_template_placeholders(template_text, dataset_rel)
+            except Exception:
+                filled_text = template_text
+            dest.write_text(filled_text, encoding="utf-8")
+            try:
+                os.chmod(dest, 0o644)
+            except Exception:
+                pass
+
+
 def train_run_response(folder: str):
     if not folder:
         return Response("[ERROR] Missing folder argument\n", status=400, mimetype="text/plain")
@@ -257,6 +288,7 @@ def train_run_response(folder: str):
     diffusion_pipe_wsl = (training_cfg.get("diffusion_pipe_wsl") or "").strip()
     hi_name = (training_cfg.get("config_hi") or "config.hi.toml").strip()
     lo_name = (training_cfg.get("config_lo") or "config.lo.toml").strip()
+    mode = str(training_cfg.get("mode") or "normal").strip().lower()
 
     try:
         folder_path = app_config.safe_join_fs_root(folder)
@@ -266,10 +298,44 @@ def train_run_response(folder: str):
         warnings = []
         hi_path = folder_path / hi_name
         lo_path = folder_path / lo_name
-        if not hi_path.exists() or not hi_path.is_file():
-            warnings.append(f"[WARN] Missing config file: {hi_name}")
-        if not lo_path.exists() or not lo_path.is_file():
-            warnings.append(f"[WARN] Missing config file: {lo_name}")
+        dataset_hi_path = folder_path / "dataset.hi.toml"
+        dataset_lo_path = folder_path / "dataset.lo.toml"
+        missing_hi = not hi_path.exists() or not hi_path.is_file()
+        missing_lo = not lo_path.exists() or not lo_path.is_file()
+        missing_dataset_hi = not dataset_hi_path.exists() or not dataset_hi_path.is_file()
+        missing_dataset_lo = not dataset_lo_path.exists() or not dataset_lo_path.is_file()
+
+        if missing_hi or missing_lo or missing_dataset_hi or missing_dataset_lo:
+            warnings.append("[INFO] Missing training config or dataset files; auto-running Generate Dataset Configs.")
+            _create_missing_config_files(folder_path)
+            prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
+            if not prep_manifest_path.exists():
+                warnings.append("[INFO] Missing prep manifest; auto-running Prepare Dataset once.")
+                prep_text = prepare_dataset(folder_path, target_fps=16)
+                if prep_text:
+                    warnings.append(str(prep_text).rstrip())
+            try:
+                gen_text = generate_dataset_configs(folder_path, mode=mode)
+                if gen_text:
+                    warnings.append(str(gen_text).rstrip())
+            except FileNotFoundError as e:
+                return Response(
+                    "[ERROR] Train failed while auto-generating configs: " + str(e) + "\n",
+                    status=500,
+                    mimetype="text/plain",
+                )
+            missing_hi = not hi_path.exists() or not hi_path.is_file()
+            missing_lo = not lo_path.exists() or not lo_path.is_file()
+            missing_dataset_hi = not dataset_hi_path.exists() or not dataset_hi_path.is_file()
+            missing_dataset_lo = not dataset_lo_path.exists() or not dataset_lo_path.is_file()
+            if missing_hi:
+                warnings.append(f"[WARN] Config file still missing after generate: {hi_name}")
+            if missing_lo:
+                warnings.append(f"[WARN] Config file still missing after generate: {lo_name}")
+            if missing_dataset_hi:
+                warnings.append("[WARN] Dataset HI config still missing after generate: dataset.hi.toml")
+            if missing_dataset_lo:
+                warnings.append("[WARN] Dataset LO config still missing after generate: dataset.lo.toml")
 
         try:
             hi_wsl = _to_wsl_path(hi_path)

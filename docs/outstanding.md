@@ -1,16 +1,11 @@
 This file tracks implemented work vs outstanding items.
 
-
-## 1.0 Candidate
-- No active blockers tracked for 1.0.
-- Train action remains command-preview only by design.
-- Legacy autoset remains available by design.
+## Bugs
+<!-- Implemented: caption requirement persistence bug fixed. -->
 
 ## Enhancements
-- Review duplicate-token detection inside a single caption.
-- Validate training command preview behavior when config keys are missing (should still provide useful output where possible).
-- Maintain flags and metadata when Pruning/restoring/renaming.
-- Print MegaFramePixels value next to bucket as comment.
+- Dataset inferred sample/megaframe/VRAM/time estimation.
+  - Interesting, but intentionally deferred for now (quota-sensitive).
 
 ## 1.1 Ideas
 - We have caption requirements. We need a concept of Set Requirements, ideally self counting. For example, a good character LORA includes:
@@ -22,18 +17,21 @@ This file tracks implemented work vs outstanding items.
     3 full-body
     3 expressive/candid shots
   It would be awesome to get a bird's eye view of where my set is relative this.
-- **Save/load sets as packages:** Instead of only writing selection/caption info as comments in config files, support saving and restoring sets (including selection, captions, flags, ratings, etc.) as explicit package files. This would allow fast recovery, sharing, and reproducibility, and could enable advanced features like unpruning files or resetting captions when loading a saved set.
+  Parked long-term (no immediate pain).
 
 ## Stabilization Mode
 - App is in 1.0 lock-in mode: resist new feature work and prioritize targeted bug/regression fixes.
 
 ## Backlog (Do Not Implement Yet)
+- Parked long-term; no immediate pain.
 - Persist last selected working directory between refresh/restart (optional toggle in settings; safe fallback when missing).
-- Create new sibling set folder from filtered/selected/rated items (including originals + folder metadata copy semantics).
-- Optional phrase-tab auto-population from local `.txt` files (e.g., `expressions.txt`, `places.txt`, `lighting.txt`).
-- Dataset inferred sample/megaframe/VRAM/time estimation.
+- **Save/load sets as packages:** Instead of only writing selection/caption info as comments in config files, support saving and restoring sets (including selection, captions, flags, ratings, etc.) as explicit package files. This would allow fast recovery, sharing, and reproducibility, and could enable advanced features like unpruning files or resetting captions when loading a saved set.
 
 ## Nice to Haves (Out of Scope for Now)
+- Validate training command preview behavior when config keys are missing (should still provide useful output where possible).
+- Maintain flags and metadata when Pruning/restoring/renaming.
+- Review duplicate-token detection inside a single caption.
+- Audit remaining folder-load side effects and trim non-essential mutation paths.
 - Video crop/clip workflow, likely via a modal backed by a mature lightweight library/tool rather than custom in-app editing.
 - In-app training execution/orchestration for long-running jobs.
 - TensorBoard lifecycle helpers.
@@ -42,12 +40,26 @@ This file tracks implemented work vs outstanding items.
 
 ## Cleanup Candidates
 - Consolidate set-context gating around shared helper usage and remove stale checks.
-- Remove legacy/disabled UX paths that are now superseded by visibility gating.
-- Audit remaining folder-load side effects and trim non-essential mutation paths.
-- Reassess optional tag UX if it continues to add more cognitive load than value.
 
 
 ## Implemented
+- Legacy/superseded UX cleanup pass:
+  - Removed duplicate `focus-set-exit-btn` markup path.
+  - Removed dead `up-one-directory-row` wiring and stale references.
+  - Simplified set-workspace visibility gating to the canonical `sidebar-workspace` path.
+- Opening a config file now closes the status console panel.
+- Image transforms for still images:
+  - Rotate Left 90 deg
+  - Rotate Right 90 deg
+  - Flip Vertical
+  - Flip Horizontal
+- Crop modal supports arbitrary image rotation angle (slider/input + reset) and persists rotated crop output.
+- Phrase actions are toggle-based: clicking a matched phrase removes it; otherwise inserts at cursor.
+- Cropper selection includes soft snap toward an 8px grid; finalized crop dimensions are snapped/clamped for safer outputs.
+- Review captions operates on the currently visible/filtered set.
+- Persist caption requirement keywords in folder state (`tool/js/folder_state.js`).
+- Review captions now runs on the current filtered view (uses `tool/js/media.js` and `tool/js/ui.js`).
+- Print MegaFramePixels value next to bucket as comment.
 - Utility bar introduced (path tooltip button, settings, reboot/reload-config, help).
 - App settings modal can edit and save `config.json`; reboot reloads runtime config.
 - Training area updates:
@@ -101,9 +113,9 @@ This file tracks implemented work vs outstanding items.
   - Unsupported aspect ratios shown in red.
   - Supported aspect ratios shown in green, with bucket name in parenthesis if it differs from native value (e.g., "1.78 (16:9)").
 - Training mode selector in app settings:
-  - Three radio button options: POC (30 min), Normal (2-6h, default), Quality (6-12h+).
+  - Two radio button options: POC (30 min), Normal (2-6h, default).
   - Mode persisted in config and available to backend Generate logic.
-  - Next: implement backend generation logic per mode with mode-specific resolutions and sample counts.
+  - Legacy `quality` values are normalized to `normal` for compatibility.
 - Phrase auto-insert duplicate detection:
   - Phrase insertion now checks for existing exact phrase (case-insensitive word-boundary match).
   - If phrase already exists, shows status "Phrase already exists in caption." and skips insertion.
@@ -119,7 +131,7 @@ This file tracks implemented work vs outstanding items.
   - Shows similarity percentage, file count, and sample text for each group.
   - Clickable file links in similar groups trigger focus set selection like duplicate captions.
 - Caption requirement keyword highlighting:
-  - Settings button (⚙) in Requirements tab opens modal for configuring keywords per requirement.
+  - Settings button (gear icon) in Requirements tab opens modal for configuring keywords per requirement.
   - Users enter comma-separated keywords for each requirement; stored in folder_state.json.
   - When editing captions, requirements with matched keywords show green background highlight.
   - Highlight updates live as caption text changes.
@@ -130,3 +142,4 @@ This file tracks implemented work vs outstanding items.
 - Video: V2 features and polish tracked (see video_clip.md).
 - Config snapshot: Only file names are printed, not full captions.
 - Caption highlighting: hover requirements/phrases to highlight matching words or phrases in the editor.
+

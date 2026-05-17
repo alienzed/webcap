@@ -51,25 +51,36 @@ function saveCaptionHelpersToFolderState() {
   writeFolderStateFile(state.folder, snapshot);
 }
 
+function captionPhraseBoundaryPattern(phrase) {
+  var escapedPhrase = String(phrase || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!escapedPhrase) return null;
+  return new RegExp('\\b' + escapedPhrase + '\\b', 'i');
+}
+
+function captionContainsPhrase(value, phrase) {
+  var pattern = captionPhraseBoundaryPattern(phrase);
+  return !!(pattern && pattern.test(String(value || '')));
+}
+
+function joinCaptionParts(before, after) {
+  if (before && after) {
+    return before.replace(/[ \t]+$/, '') + ' ' + after.replace(/^[ \t]+/, '');
+  }
+  if (before) return before.replace(/[ \t]+$/, '');
+  if (after) return after.replace(/^[ \t]+/, '');
+  return '';
+}
+
 function insertCaptionPhraseAtCursor(text) {
-  if (!ui || !ui.editorEl) return;
+  if (!ui || !ui.editorEl) return false;
   if (ui.editorEl.readOnly) {
     setStatus('Cannot insert while editor is read-only.');
-    return;
+    return false;
   }
   var phrase = String(text || '').trim();
-  if (!phrase) return;
+  if (!phrase) return false;
   var editor = ui.editorEl;
   var value = editor.value || '';
-  
-  // Check if phrase already exists (case-insensitive word-boundary match)
-  var escapedPhrase = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  var existingPattern = new RegExp('\\b' + escapedPhrase + '\\b', 'i');
-  if (existingPattern.test(value)) {
-    setStatus('Phrase already exists in caption.');
-    return;
-  }
-  
   var start = typeof editor.selectionStart === 'number' ? editor.selectionStart : value.length;
   var end = typeof editor.selectionEnd === 'number' ? editor.selectionEnd : value.length;
   var before = value.slice(0, start).replace(/[ \t]+$/, '');
@@ -83,6 +94,45 @@ function insertCaptionPhraseAtCursor(text) {
   editor.setSelectionRange(caret, caret);
   editor.dispatchEvent(new Event('input', { bubbles: true }));
   setStatus('Inserted phrase at cursor.');
+  return true;
+}
+
+function removeCaptionPhraseFromCaption(text) {
+  if (!ui || !ui.editorEl) return false;
+  if (ui.editorEl.readOnly) {
+    setStatus('Cannot edit while editor is read-only.');
+    return false;
+  }
+  var phrase = String(text || '').trim();
+  if (!phrase) return false;
+  var editor = ui.editorEl;
+  var value = editor.value || '';
+  var pattern = captionPhraseBoundaryPattern(phrase);
+  if (!pattern) return false;
+  var match = pattern.exec(value);
+  if (!match) return false;
+
+  var start = match.index;
+  var end = start + match[0].length;
+  var nextValue = joinCaptionParts(value.slice(0, start), value.slice(end));
+  editor.value = nextValue;
+  var caret = Math.min(start, nextValue.length);
+  editor.focus();
+  editor.setSelectionRange(caret, caret);
+  editor.dispatchEvent(new Event('input', { bubbles: true }));
+  setStatus('Removed phrase from caption.');
+  return true;
+}
+
+function toggleCaptionPhraseAtCursor(text) {
+  var phrase = String(text || '').trim();
+  if (!phrase || !ui || !ui.editorEl) return;
+  var value = ui.editorEl.value || '';
+  if (captionContainsPhrase(value, phrase)) {
+    removeCaptionPhraseFromCaption(phrase);
+    return;
+  }
+  insertCaptionPhraseAtCursor(phrase);
 }
 
 function renderPhraseCopyPanel() {
@@ -91,30 +141,27 @@ function renderPhraseCopyPanel() {
   container.innerHTML = '';
   captionHelperPhrases.sort(captionHelperSort);
 
-  var captionLower = '';
   var liveCaption = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
     ? ui.editorEl.value
     : (state && state.currentItem && typeof state.currentItem.caption === 'string' ? state.currentItem.caption : '');
-  if (liveCaption) {
-    captionLower = String(liveCaption).toLowerCase();
-  }
 
   for (var i = 0; i < captionHelperPhrases.length; i++) {
     var phrase = captionHelperPhrases[i];
+    var isMatched = !!(phrase && captionContainsPhrase(liveCaption, phrase));
     var row = document.createElement('div');
     row.className = 'row-inline phrase-row-inline';
 
     var phraseBtn = document.createElement('button');
     phraseBtn.type = 'button';
     phraseBtn.className = 'phrase-copy-item-btn';
-    phraseBtn.title = 'Insert at cursor';
+    phraseBtn.title = isMatched ? 'Remove from caption' : 'Insert at cursor';
     phraseBtn.textContent = phrase;
-    if (captionLower && phrase && captionLower.indexOf(String(phrase).toLowerCase()) !== -1) {
+    if (isMatched) {
       phraseBtn.classList.add('phrase-copy-item-matched');
     }
     (function (text) {
       phraseBtn.onclick = function () {
-        insertCaptionPhraseAtCursor(text);
+        toggleCaptionPhraseAtCursor(text);
       };
     })(phrase);
 

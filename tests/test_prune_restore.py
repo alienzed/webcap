@@ -239,6 +239,77 @@ def test_crop_rejects_video_files(client, isolated_fs_root):
     assert r.status_code == 400
 
 
+@pytest.mark.parametrize(
+    "operation,transpose_mode",
+    [
+        ("rotate_left_90", Image.Transpose.ROTATE_90),
+        ("rotate_right_90", Image.Transpose.ROTATE_270),
+        ("flip_vertical", Image.Transpose.FLIP_TOP_BOTTOM),
+        ("flip_horizontal", Image.Transpose.FLIP_LEFT_RIGHT),
+    ],
+)
+def test_image_transform_overwrites_media_and_preserves_caption(
+    client, isolated_fs_root, operation, transpose_mode
+):
+    set_folder_rel = "set_image_transform"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True, exist_ok=True)
+
+    src = Image.new("RGB", (3, 2))
+    src.putdata(
+        [
+            (255, 0, 0),
+            (0, 255, 0),
+            (0, 0, 255),
+            (255, 255, 0),
+            (255, 0, 255),
+            (0, 255, 255),
+        ]
+    )
+    src.save(set_folder / "photo.png")
+    write_text(set_folder / "photo.txt", "caption stays")
+
+    expected = src.transpose(transpose_mode)
+    r = client.post(
+        "/media/image_transform",
+        json={
+            "folder": set_folder_rel,
+            "fileName": "photo.png",
+            "operation": operation,
+        },
+    )
+    assert r.status_code == 200
+
+    transformed = Image.open(set_folder / "photo.png").convert("RGB")
+    original_copy = Image.open(set_folder / "originals" / "photo.png").convert("RGB")
+
+    assert transformed.size == expected.size
+    assert list(transformed.getdata()) == list(expected.getdata())
+    assert original_copy.size == src.size
+    assert list(original_copy.getdata()) == list(src.getdata())
+    assert (set_folder / "photo.txt").read_text(encoding="utf-8") == "caption stays"
+
+
+def test_image_transform_rejects_invalid_operation(client, isolated_fs_root):
+    set_folder_rel = "set_image_transform_invalid"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+
+    Image.new("RGB", (10, 10), "orange").save(set_folder / "photo.png")
+    before = (set_folder / "photo.png").read_bytes()
+
+    r = client.post(
+        "/media/image_transform",
+        json={
+            "folder": set_folder_rel,
+            "fileName": "photo.png",
+            "operation": "spin_around",
+        },
+    )
+    assert r.status_code == 400
+    assert (set_folder / "photo.png").read_bytes() == before
+
+
 def test_baseline_only_backup_immutable_canonicals(client, isolated_fs_root):
     """Test that repeated directory loads do not replace canonical originals."""
     set_folder_rel = "set_baseline"

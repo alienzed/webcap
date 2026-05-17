@@ -114,6 +114,65 @@ function duplicateImageItem(mediaItem) {
     });
 }
 
+/**
+ * Return the array of media items after applying the current UI filters.
+ * If ignoreFocusSet is true, the focus set will be ignored and filters applied to full folder.
+ */
+function getFilteredMediaItems(ignoreFocusSet) {
+  var q = (ui.filterEl && ui.filterEl.value) ? ui.filterEl.value.toLowerCase() : '';
+  var mediaItems = Array.isArray(state.items) ? state.items.slice() : [];
+  var missingCaptionsOnly = !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked);
+  var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
+  var minStarsThreshold = getAdvancedMinStarsThreshold();
+  var flagFilterValues = getAdvancedFlagFilterValues();
+
+  // Apply focus set only when not ignoring it
+  if (!ignoreFocusSet && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+    var allow = {};
+    state.focusSet.keys.forEach(function (key) { allow[key] = true; });
+    mediaItems = mediaItems.filter(function (item) { return !!allow[item.key]; });
+  }
+
+  // Filter logic (by label, fileName, or caption)
+  if (q) {
+    mediaItems = mediaItems.filter(function (item) {
+      var label = (item.label || '').toLowerCase();
+      var fileName = (item.fileName || '').toLowerCase();
+      var caption = (item.caption || '').toLowerCase();
+      var tags = getTagsForMediaKey(item.key).join(' ').toLowerCase();
+      return label.indexOf(q) !== -1 || fileName.indexOf(q) !== -1 || caption.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
+    });
+  }
+  if (missingCaptionsOnly) {
+    mediaItems = mediaItems.filter(function (item) { return !item.hasCaption; });
+  }
+  if (reviewedOnly) {
+    mediaItems = mediaItems.filter(function (item) { return !!(state.reviewedSet && state.reviewedSet.has(item.key)); });
+  }
+  if (minStarsThreshold !== null) {
+    mediaItems = mediaItems.filter(function (item) {
+      var rating = (typeof getRatingForMediaKey === 'function') ? getRatingForMediaKey(item.key) : 0;
+      return rating > minStarsThreshold;
+    });
+  }
+  if (flagFilterValues.length) {
+    mediaItems = mediaItems.filter(function (item) {
+      var itemFlag = String((state.flags && state.flags[item.key]) || '').toLowerCase();
+      if (flagFilterValues.indexOf('any') !== -1) return !!itemFlag;
+      return flagFilterValues.indexOf(itemFlag) !== -1;
+    });
+  }
+  var showInvalidArOnly = !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked);
+  if (showInvalidArOnly) {
+    mediaItems = mediaItems.filter(function (item) {
+      var ar = String((item.aspect_ratio || item.ar) || '').trim();
+      if (!ar) return false;
+      return !(typeof hasSupportedAspectBucket === 'function' && hasSupportedAspectBucket(ar));
+    });
+  }
+  return mediaItems;
+}
+
 async function restoreMediaItem(mediaItem) {
   if (!mediaItem) {
     setStatus('No media item to restore');
@@ -373,6 +432,9 @@ function navigateToDirStackIndex(targetIndex) {
   // Clear current selection and editor/preview
   state.currentItem = null;
   clearEditorAndPreview();
+  if (typeof clearCaptionFilterInputs === 'function') {
+    clearCaptionFilterInputs();
+  }
   refreshCurrentDirectory();
 }
 
@@ -449,69 +511,10 @@ function renderPreviewHtml(isImage, src) {
 }
 
 async function renderFileList() {
-  debugLog('[renderFileList] called. state.items:', state.items, 'state.childFolders:', state.childFolders, 'filterText:', ui.filterEl.value);
-  var q = (ui.filterEl.value || '').toLowerCase();
+  debugLog('[renderFileList] called. state.items:', state.items, 'state.childFolders:', state.childFolders, 'filterText:', ui.filterEl ? ui.filterEl.value : '');
   var renderSeq = ++state.listRenderSeq;
   ui.mediaListEl.innerHTML = '';
-  var mediaItems = state.items;
-  var missingCaptionsOnly = !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked);
-  var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
-  var minStarsThreshold = getAdvancedMinStarsThreshold();
-  var flagFilterValues = getAdvancedFlagFilterValues();
-  // Focus set logic (if active)
-  if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
-    var allow = {};
-    state.focusSet.keys.forEach(function (key) {
-      allow[key] = true;
-    });
-    mediaItems = state.items.filter(function (item) {
-      return !!allow[item.key];
-    });
-  }
-  // Filter logic (by label, fileName, or caption)
-  if (q) {
-    mediaItems = mediaItems.filter(function (item) {
-      var label = (item.label || '').toLowerCase();
-      var fileName = (item.fileName || '').toLowerCase();
-      var caption = (item.caption || '').toLowerCase();
-      var tags = '';
-      tags = getTagsForMediaKey(item.key).join(' ').toLowerCase();
-      return label.indexOf(q) !== -1 || fileName.indexOf(q) !== -1 || caption.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
-    });
-  }
-  if (missingCaptionsOnly) {
-    mediaItems = mediaItems.filter(function (item) {
-      return !item.hasCaption;
-    });
-  }
-  if (reviewedOnly) {
-    mediaItems = mediaItems.filter(function (item) {
-      return !!(state.reviewedSet && state.reviewedSet.has(item.key));
-    });
-  }
-  if (minStarsThreshold !== null) {
-    mediaItems = mediaItems.filter(function (item) {
-      var rating = (typeof getRatingForMediaKey === 'function') ? getRatingForMediaKey(item.key) : 0;
-      return rating > minStarsThreshold;
-    });
-  }
-  if (flagFilterValues.length) {
-    mediaItems = mediaItems.filter(function (item) {
-      var itemFlag = String((state.flags && state.flags[item.key]) || '').toLowerCase();
-      if (flagFilterValues.indexOf('any') !== -1) {
-        return !!itemFlag;
-      }
-      return flagFilterValues.indexOf(itemFlag) !== -1;
-    });
-  }
-  var showInvalidArOnly = !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked);
-  if (showInvalidArOnly) {
-    mediaItems = mediaItems.filter(function (item) {
-      var ar = String((item.aspect_ratio || item.ar) || '').trim();
-      if (!ar) return false;
-      return !(typeof hasSupportedAspectBucket === 'function' && hasSupportedAspectBucket(ar));
-    });
-  }
+  var mediaItems = getFilteredMediaItems(false);
   // Show count of matching media items
   var countText = mediaItems.length + (mediaItems.length === 1 ? ' item matches the filter' : ' items match the filter');
   if (ui.captionFilterCountTextEl) {

@@ -171,6 +171,84 @@ def rename_response(data):
         return jsonify({"error": str(e)}), 400
 
 
+def _is_wsl_runtime():
+    if sys.platform.startswith("win"):
+        return False
+    try:
+        with open("/proc/version", "r", encoding="utf-8") as handle:
+            if "microsoft" in handle.read().lower():
+                return True
+    except Exception:
+        pass
+    return bool(os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSLENV"))
+
+
+def _to_windows_path(path: Path) -> str:
+    resolved = path.resolve()
+    if sys.platform.startswith("win"):
+        return os.path.normpath(str(resolved))
+    try:
+        completed = subprocess.run(
+            ["wslpath", "-w", str(resolved)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        win_path = (completed.stdout or "").strip()
+        if win_path:
+            return win_path
+    except Exception:
+        pass
+    text = str(resolved)
+    if text.startswith("/mnt/") and len(text) > 6:
+        drive = text[5].upper()
+        rest = text[7:].replace("/", "\\")
+        return f"{drive}:\\{rest}"
+    return text.replace("/", "\\")
+
+
+def _windows_explorer_exe():
+    candidates = []
+    if _is_wsl_runtime():
+        candidates.append(Path("/mnt/c/Windows/explorer.exe"))
+    windir = os.environ.get("WINDIR")
+    if windir:
+        candidates.append(Path(windir) / "explorer.exe")
+    candidates.append(Path("explorer.exe"))
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return "explorer.exe"
+
+
+def _launch_windows_explorer(abs_path: Path):
+    win_path = os.path.normpath(_to_windows_path(abs_path))
+    if not win_path:
+        raise ValueError("Empty Windows path")
+
+    explorer = _windows_explorer_exe()
+    print(
+        "[open_in_explorer] Windows reveal:",
+        win_path,
+        "file=" + str(abs_path.is_file()),
+        "wsl=" + str(_is_wsl_runtime()),
+    )
+
+    if abs_path.is_file():
+        if _is_wsl_runtime():
+            subprocess.Popen([explorer, f"/select,{win_path}"])
+            return
+        subprocess.Popen([explorer, "/select,", win_path])
+        return
+
+    if not abs_path.is_dir():
+        raise FileNotFoundError(f"Folder does not exist: {abs_path}")
+    if _is_wsl_runtime():
+        subprocess.Popen([explorer, win_path])
+        return
+    os.startfile(win_path)
+
+
 def open_in_explorer_response(rel_path):
     rel_path = (rel_path or "").strip()
     print("[open_in_explorer] Received rel_path:", rel_path)
@@ -184,51 +262,19 @@ def open_in_explorer_response(rel_path):
             print("[open_in_explorer] ERROR: Path does not exist:", abs_path)
             return jsonify({"error": "Path does not exist"}), 404
 
-        def is_wsl():
-            try:
-                with open("/proc/version", "r") as f:
-                    if "Microsoft" in f.read():
-                        return True
-            except Exception:
-                pass
-            return os.environ.get("WSLENV") is not None
-
-        def windows_explorer_exe():
-            windir = os.environ.get("WINDIR")
-            if windir:
-                explorer_path = Path(windir) / "explorer.exe"
-                if explorer_path.exists():
-                    return str(explorer_path)
-            return "explorer.exe"
-
-        def windows_path(path):
-            return str(path).replace("/", "\\")
-
-        if abs_path.is_file():
-            if sys.platform.startswith("win"):
-                subprocess.Popen([windows_explorer_exe(), f'/select,"{windows_path(abs_path)}"'])
-            elif sys.platform.startswith("darwin"):
+        if sys.platform.startswith("win") or _is_wsl_runtime():
+            _launch_windows_explorer(abs_path)
+        elif sys.platform.startswith("darwin"):
+            if abs_path.is_file():
                 subprocess.Popen(["open", "-R", str(abs_path)])
-            elif is_wsl():
-                win_path = str(abs_path).replace("/mnt/c/", "C:/").replace("/", "\\")
-                subprocess.Popen(["powershell.exe", "/c", f'start explorer.exe /select,\"{win_path}\"'])
             else:
-                subprocess.Popen(["xdg-open", str(abs_path.parent)])
-        else:
-            if sys.platform.startswith("win"):
-                os.startfile(str(abs_path))
-            elif sys.platform.startswith("darwin"):
                 subprocess.Popen(["open", str(abs_path)])
-            elif is_wsl():
-                win_path = str(abs_path).replace("/mnt/c/", "C:/").replace("/", "\\")
-                subprocess.Popen(["powershell.exe", "/c", f'start explorer.exe \"{win_path}\"'])
-            else:
-                subprocess.Popen(["xdg-open", str(abs_path)])
+        else:
+            subprocess.Popen(["xdg-open", str(abs_path if abs_path.is_dir() else abs_path.parent)])
         return jsonify({"ok": True})
     except Exception as e:
-        if FS_DEBUG:
-            print("[open_in_explorer] ERROR:", e)
-            traceback.print_exc()
+        print("[open_in_explorer] ERROR:", e)
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 

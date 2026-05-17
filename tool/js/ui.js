@@ -52,8 +52,30 @@ function ensureContextMenu() {
 function showContextMenu(clientX, clientY, actions) {
   var el = ensureContextMenu();
   el.innerHTML = '';
+  var normalizedActions = [];
+  var sawNonSeparator = false;
+  var pendingSeparator = false;
+  (actions || []).forEach(function (action) {
+    if (!action) return;
+    if (action.separator) {
+      if (sawNonSeparator) pendingSeparator = true;
+      return;
+    }
+    if (pendingSeparator) {
+      normalizedActions.push({ separator: true });
+      pendingSeparator = false;
+    }
+    normalizedActions.push(action);
+    sawNonSeparator = true;
+  });
   var customRenderers = [];
-  actions.forEach(function (action) {
+  normalizedActions.forEach(function (action) {
+    if (action.separator) {
+      var sep = document.createElement('div');
+      sep.className = 'caption-context-menu-separator';
+      el.appendChild(sep);
+      return;
+    }
     if (typeof action.render === 'function') {
       customRenderers.push(action.render);
     } else {
@@ -111,7 +133,7 @@ function showContextMenu(clientX, clientY, actions) {
     el.appendChild(customContainer);
   }
 
-  el.style.display = 'block';
+  el.style.display = 'inline-block';
   el.style.left = clientX + 'px';
   el.style.top = clientY + 'px';
 
@@ -194,15 +216,8 @@ function updateReviewButtonAvailability() {
 function updateSetFolderScopedUi() {
   var inSetFolder = isSetFolderContext(state.folder, state.items);
   var workspace = document.getElementById('sidebar-workspace');
-  if (workspace) {
-    workspace.classList.toggle('hidden', !inSetFolder);
-    return;
-  }
-  var sectionIds = ['primer-details', 'cation-review', 'training-details'];
-  for (var i = 0; i < sectionIds.length; i++) {
-    var el = document.getElementById(sectionIds[i]);
-    if (el) el.classList.toggle('hidden', !inSetFolder);
-  }
+  if (!workspace) return;
+  workspace.classList.toggle('hidden', !inSetFolder);
 }
 
 function getReviewAvailability() {
@@ -224,6 +239,24 @@ function getReviewAvailability() {
   };
 }
 
+function clearCaptionFilterInputs() {
+  if (ui.filterEl) ui.filterEl.value = '';
+  if (ui.advancedFilterMissingCaptionsEl) ui.advancedFilterMissingCaptionsEl.checked = false;
+  if (ui.advancedFilterReviewedEl) ui.advancedFilterReviewedEl.checked = false;
+  if (ui.advancedFilterMinStarsEl) ui.advancedFilterMinStarsEl.value = '';
+  if (ui.advancedFilterFlagEl) {
+    Array.prototype.forEach.call(ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]'), function (input) {
+      input.checked = false;
+    });
+  }
+  if (ui.advancedFilterInvalidArEl) ui.advancedFilterInvalidArEl.checked = false;
+}
+
+function clearCaptionFilters() {
+  clearCaptionFilterInputs();
+  renderFileList();
+}
+
 function clearMediaFiltersForGeneratedDataset(path) {
   var value = String(path || '');
   var isGeneratedDatasetPath = value.split(/[\\/]/).some(function (part) {
@@ -237,15 +270,7 @@ function clearMediaFiltersForGeneratedDataset(path) {
     return;
   }
   state.autoDatasetFilterResetPath = value;
-  if (ui.filterEl) ui.filterEl.value = '';
-  if (ui.advancedFilterMissingCaptionsEl) ui.advancedFilterMissingCaptionsEl.checked = false;
-  if (ui.advancedFilterReviewedEl) ui.advancedFilterReviewedEl.checked = false;
-  if (ui.advancedFilterMinStarsEl) ui.advancedFilterMinStarsEl.value = '';
-  if (ui.advancedFilterFlagEl) {
-    Array.prototype.forEach.call(ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]'), function (input) {
-      input.checked = false;
-    });
-  }
+  clearCaptionFilterInputs();
 }
 
 function runReview() {
@@ -262,7 +287,6 @@ function runReview() {
   if (state.currentItem && state.currentItem.fileName) {
     savePathCaption();
   }
-  clearFocusSet();
   state.currentItem = null;
   renderChecklistPanel();
   ui.editorEl.setAttribute('readonly', 'readonly');
@@ -271,10 +295,17 @@ function runReview() {
   var runSeq = (state.reviewSeq || 0) + 1;
   state.reviewSeq = runSeq;
   setStatus('Building combined captions and stats...');
-  var results = state.items.map(function (item) {
+  var visibleRows = Array.prototype.slice.call(
+    ui.mediaListEl ? ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]') : []
+  );
+  var visibleKeys = visibleRows
+    .map(function (row) { return String(row.getAttribute('data-key') || '').trim(); })
+    .filter(Boolean);
+  var results = visibleKeys.map(function (key) {
+    var item = (state.items || []).find(function (it) { return it && it.key === key; });
     return {
-      fileName: item.fileName,
-      caption: item.caption || ''
+      fileName: item ? item.fileName : key,
+      caption: item ? item.caption || '' : ''
     };
   });
   try {
@@ -490,8 +521,6 @@ function refreshCurrentDirectory() {
           renderFileList(ui.filterEl.value);
           
           // --- Static header toggling (display only, wiring in main.js) ---
-          var upRow = document.getElementById('up-one-directory-row');
-          if (upRow) upRow.style.display = 'none';
           if (ui.upBtn) {
             ui.upBtn.classList.toggle('hidden', !(state.dirStack.length > 1));
           }
@@ -571,30 +600,6 @@ if (ui.advancedFilterFlagEl) {
 }
 if (ui.captionFilterClearAllBtn) {
   ui.captionFilterClearAllBtn.addEventListener('click', function () {
-    // Clear text filter
-    if (ui.filterEl) {
-      ui.filterEl.value = '';
-    }
-    // Clear advanced filters
-    if (ui.advancedFilterMissingCaptionsEl) {
-      ui.advancedFilterMissingCaptionsEl.checked = false;
-    }
-    if (ui.advancedFilterReviewedEl) {
-      ui.advancedFilterReviewedEl.checked = false;
-    }
-    if (ui.advancedFilterMinStarsEl) {
-      ui.advancedFilterMinStarsEl.value = '';
-    }
-    if (ui.advancedFilterFlagEl) {
-      var checkboxes = ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]');
-      for (var i = 0; i < checkboxes.length; i++) {
-        checkboxes[i].checked = false;
-      }
-    }
-    if (ui.advancedFilterInvalidArEl) {
-      ui.advancedFilterInvalidArEl.checked = false;
-    }
-    // Re-render the file list
-    renderFileList();
+    clearCaptionFilters();
   });
 }

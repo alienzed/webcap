@@ -18,7 +18,8 @@
                             id="utility-current-path-btn"
                             type="button"
                             class="utility-btn utility-path-btn"
-                            title=""
+                            title="Current path"
+                            aria-label="Current path"
                         >
                             <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M3 10.5L12 3l9 7.5"></path>
@@ -69,6 +70,7 @@
                             type="button"
                             class="caption-filter-clear-all-btn"
                             title="Clear all filters"
+                            aria-label="Clear all filters"
                         >
                             🗙
                         </button>
@@ -144,12 +146,14 @@
                             id="up-one-directory-btn"
                             type="button"
                             title="Up one directory"
+                            aria-label="Up one directory"
                             class="refresh-btn-square floating-up hidden"
                         >&#8593;</button>
                         <button
                             id="refresh-btn"
                             type="button"
                             title="Refresh directory"
+                            aria-label="Refresh directory"
                             class="refresh-btn-square floating-refresh"
                         >&#8635;</button>
                         <div id="media-list-header">
@@ -309,6 +313,8 @@
                         id="console-toggle-btn"
                         type="button"
                         title="Show/hide console"
+                        aria-label="Show console"
+                        aria-expanded="false"
                         class="console-toggle-btn"
                     >&#x25B2;</button>
                 </div>
@@ -317,7 +323,7 @@
                 <div class="editor-wrapper">
                     <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
                     <div id="caption-checklist-panel" class="checklist-panel" style="display:none;">
-                        <button id="checklist-close-btn" title="Close checklist" class="checklist-close-btn">&times;</button>
+                        <button id="checklist-close-btn" title="Close checklist" aria-label="Close checklist" class="checklist-close-btn">&times;</button>
                         <div id="caption-helper-tabs" class="caption-helper-tabs">
                             <button
                                 id="caption-helper-tab-requirements-btn"
@@ -352,6 +358,7 @@
                                     type="button"
                                     class="checklist-settings-btn"
                                     title="Configure requirement keywords"
+                                    aria-label="Configure requirement keywords"
                                 >⚙</button>
                             </div>
                             <div class="checklist-input-row">
@@ -402,29 +409,24 @@
             <div class="panel">
                 <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
             </div>
-            <div id="caption-list-actions" class="caption-list-actions">
-                <button
-                    id="focus-set-exit-btn"
-                    type="button"
-                    class="review-captions-btn"
-                    style="display:none"
-                >
-                    <span class="btn-glyph" aria-hidden="true">x</span>
-                    <span>Exit Set</span>
-                </button>
-            </div>
         </div>
         <div id="crop-modal" class="crop-modal hidden" aria-hidden="true">
             <div class="crop-modal-dialog">
                 <div class="crop-modal-header">
                     <strong id="crop-modal-title">Crop image</strong>
-                    <button id="crop-cancel-x" type="button" title="Close">x</button>
+                    <button id="crop-cancel-x" type="button" title="Close" aria-label="Close crop modal">x</button>
                 </div>
                 <div class="crop-ratio-row">
                     <button type="button" class="crop-ratio-btn active" data-ratio="1">1:1</button>
                     <button type="button" class="crop-ratio-btn" data-ratio="1.3333333333">4:3</button>
                     <button type="button" class="crop-ratio-btn" data-ratio="1.7777777778">16:9</button>
                     <button type="button" class="crop-ratio-btn" data-ratio="0.5625">9:16</button>
+                </div>
+                <div id="crop-rotate-row" class="crop-rotate-row">
+                    <label for="crop-rotate-slider">Angle</label>
+                    <input id="crop-rotate-slider" type="range" min="-180" max="180" step="0.1" value="0">
+                    <input id="crop-rotate-input" type="number" min="-180" max="180" step="0.1" value="0">
+                    <button id="crop-rotate-reset-btn" type="button">Reset</button>
                 </div>
                 <div class="crop-image-wrap">
                     <img id="crop-image" alt="Crop preview">
@@ -443,7 +445,7 @@
                     <div class="video-clip-player-panel">
                         <div class="crop-modal-header">
                             <strong id="video-clip-title">Clip video</strong>
-                            <button id="video-clip-cancel-x" type="button" title="Close">x</button>
+                            <button id="video-clip-cancel-x" type="button" title="Close" aria-label="Close video clip modal">x</button>
                         </div>
                         <div class="video-clip-player-wrap" style="position:relative;">
                             <video
@@ -464,7 +466,7 @@
                         <div class="video-clip-time-row">
                             <span>Current:
                                 <span id="video-clip-current-time">0.000</span>s</span>
-                            <button id="video-clip-use-current-btn" type="button">Use Current Time</button>
+                            <button id="video-clip-crop-frame-btn" type="button" class="video-clip-extract-frame-btn">Crop This Frame</button>
                         </div>
                     </div>
                     <!-- Removed video-clip-crop-panel: all cropping is now via Crop This Frame and crop modal -->
@@ -478,6 +480,7 @@
                         min="0"
                         value="0"
                     >
+                    <button id="video-clip-use-current-btn" type="button" class="video-clip-inline-btn">Use Current Time</button>
                     <label for="video-clip-duration-input">Duration (sec)</label>
                     <input
                         id="video-clip-duration-input"
@@ -500,7 +503,7 @@
             <div class="app-settings-dialog">
                 <div class="app-settings-header">
                     <strong>App Settings</strong>
-                    <button id="app-settings-close-btn" type="button" title="Close">x</button>
+                    <button id="app-settings-close-btn" type="button" title="Close" aria-label="Close app settings">x</button>
                 </div>
                 <div class="app-settings-grid">
                     <label for="app-settings-filesystem-root">Filesystem Root</label>
@@ -535,15 +538,6 @@
                                 checked
                             >
                             <span>Normal (2-6h)</span>
-                        </label>
-                        <label class="app-settings-radio-label">
-                            <input
-                                id="app-settings-training-mode-quality"
-                                type="radio"
-                                name="training-mode"
-                                value="quality"
-                            >
-                            <span>Quality (6-12h+)</span>
                         </label>
                     </div>
                 </div>

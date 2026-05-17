@@ -1,24 +1,19 @@
 function buildRowRelativePath(key) {
-  return (state.folder ? state.folder + '/' : '') + key;
+  var folder = String(state.folder || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  var name = String(key || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!name) return folder;
+  if (!folder) return name;
+  return folder + '/' + name;
 }
 
 function openPathInExplorer(relativePath) {
-  fetch('/fs/open_in_explorer', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: relativePath || '' })
-  })
-  .then(function(resp) {
-    if (!resp.ok) {
-      return resp.json().then(function(data) {
-        throw new Error(data && data.error ? data.error : 'Failed to open in explorer');
-      }).catch(function() {
-        throw new Error('Failed to open in explorer');
-      });
+  HttpModule.postJson('/fs/open_in_explorer', { path: relativePath || '' }, function (status, responseText) {
+    if (status === 200) return;
+    var message = getErrorMessage(responseText, 'Failed to open in Explorer');
+    if (status === 0) {
+      message = 'Cannot reach WebCap server. Start it with: python -m tool.server.app';
     }
-  })
-  .catch(function(err) {
-    alert('Open in Explorer failed: ' + (err && err.message ? err.message : err));
+    alert(message);
   });
 }
 
@@ -43,8 +38,43 @@ function openFolderInVsCode(relativePath) {
   });
 }
 
+function runImageTransform(mediaItem, operation, label) {
+  if (!mediaItem || !mediaItem.fileName) return;
+  var actionLabel = String(label || 'Transform image');
+  if (!confirm(actionLabel + '?\n\nThis will overwrite the image file.')) return;
+  setStatus(actionLabel + '...');
+  fetch('/media/image_transform', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder: state.folder || '',
+      fileName: mediaItem.fileName,
+      operation: operation
+    })
+  })
+    .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
+    .then(function (res) {
+      if (res.status === 200 && res.data && res.data.ok) {
+        setStatus(actionLabel + ': ' + mediaItem.fileName);
+        refreshMediaResolutionCache();
+        selectPathMedia(mediaItem).catch(function () {});
+      } else {
+        setStatus((res.data && res.data.error) ? res.data.error : (actionLabel + ' failed'));
+      }
+    })
+    .catch(function (err) {
+      setStatus(actionLabel + ' failed: ' + (err && err.message ? err.message : err));
+    });
+}
+
 function buildCurrentFolderContextActions() {
   return [
+    {
+      label: 'Open in Explorer',
+      run: function () {
+        openPathInExplorer(state.folder || '');
+      }
+    },
     {
       label: 'Open Folder in VS Code',
       run: function () {
@@ -180,11 +210,12 @@ function buildMediaContextMenuActions(mediaItem, key) {
 
   actions.push(createFlagAction(key));
   actions.push({
-    label: 'Open in Explorer',
+    label: 'Open Containing Folder',
     run: function () {
       openPathInExplorer(buildRowRelativePath(key));
     }
   });
+  actions.push({ separator: true });
 
   if (isInOriginals) {
     actions.push({
@@ -237,23 +268,9 @@ function buildMediaContextMenuActions(mediaItem, key) {
     }
   });
 
-  if (isCroppableImageFile(fileName)) {
-    actions.push({
-      label: 'Duplicate Image',
-      run: function () {
-        duplicateImageItem(mediaItem);
-      }
-    });
-    actions.push({
-      label: 'Crop...',
-      run: function () {
-        openImageCropModal(mediaItem);
-      }
-    });
-  }
-
+  var defaceAction = null;
   if (MEDIA_EXTENSIONS['.' + ext]) {
-    actions.push({
+    defaceAction = {
       label: 'Deface...',
       run: function () {
         clearEditorAndPreview();
@@ -281,8 +298,51 @@ function buildMediaContextMenuActions(mediaItem, key) {
           }
         );
       }
-    });
+    };
   }
+
+  if (isCroppableImageFile(fileName)) {
+    actions.push({
+      label: 'Duplicate Image',
+      run: function () {
+        duplicateImageItem(mediaItem);
+      }
+    });
+    actions.push({ separator: true });
+    actions.push({
+      label: 'Crop...',
+      run: function () {
+        openImageCropModal(mediaItem);
+      }
+    });
+    actions.push({
+      label: 'Rotate Left 90°',
+      run: function () {
+        runImageTransform(mediaItem, 'rotate_left_90', 'Rotating image left');
+      }
+    });
+    actions.push({
+      label: 'Rotate Right 90°',
+      run: function () {
+        runImageTransform(mediaItem, 'rotate_right_90', 'Rotating image right');
+      }
+    });
+    actions.push({
+      label: 'Flip Vertical',
+      run: function () {
+        runImageTransform(mediaItem, 'flip_vertical', 'Flipping image vertical');
+      }
+    });
+    actions.push({
+      label: 'Flip Horizontal',
+      run: function () {
+        runImageTransform(mediaItem, 'flip_horizontal', 'Flipping image horizontal');
+      }
+    });
+    if (defaceAction) actions.push(defaceAction);
+  }
+
+  if (defaceAction && !isCroppableImageFile(fileName)) actions.push(defaceAction);
 
 
   // Add 'Flip Horizontal' for all video files

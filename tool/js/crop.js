@@ -1,15 +1,14 @@
-function destroyCropper() {
-  if (cropperInstance) {
-    cropperInstance.destroy();
-    cropperInstance = null;
-  }
-}
-
 // --- Crop modal globals ---
 var cropperInstance = null;
 var cropTargetItem = null;
 var cropActiveRatio = 1;
+var cropActiveAngle = 0;
+var cropRotationEnabled = false;
 var cropBusy = false;
+var cropMagnetApplying = false;
+var cropEscapeHandlerBound = false;
+var CROP_MAGNET_GRID = 8;
+var CROP_MAGNET_THRESHOLD = 6;
 
 var CROPPABLE_IMAGE_EXTENSIONS = { '.jpg': true, '.jpeg': true, '.png': true, '.webp': true, '.bmp': true };
 function getFileExtension(fileName) {
@@ -57,6 +56,41 @@ function setCropBusy(isBusy) {
   if (applyBtn) applyBtn.disabled = cropBusy;
 }
 
+function setCropRotationControlsVisible(isVisible) {
+  var row = getCropEl('crop-rotate-row');
+  if (!row) return;
+  row.classList.toggle('hidden', !isVisible);
+}
+
+function normalizeCropAngle(value) {
+  var angle = Number(value);
+  if (!isFinite(angle)) return 0;
+  if (angle > 180) return 180;
+  if (angle < -180) return -180;
+  return angle;
+}
+
+function formatCropAngle(value) {
+  var angle = normalizeCropAngle(value);
+  return String(Math.round(angle * 10) / 10);
+}
+
+function syncCropAngleControls(value) {
+  var slider = getCropEl('crop-rotate-slider');
+  var input = getCropEl('crop-rotate-input');
+  var text = formatCropAngle(value);
+  if (slider) slider.value = text;
+  if (input) input.value = text;
+}
+
+function setCropAngle(value) {
+  cropActiveAngle = normalizeCropAngle(value);
+  syncCropAngleControls(cropActiveAngle);
+  if (cropperInstance && cropRotationEnabled && typeof cropperInstance.rotateTo === 'function') {
+    cropperInstance.rotateTo(cropActiveAngle);
+  }
+}
+
 function setCropAspectRatio(ratio) {
   cropActiveRatio = ratio || 1;
   Array.prototype.forEach.call(document.querySelectorAll('.crop-ratio-btn'), function (btn) {
@@ -67,9 +101,82 @@ function setCropAspectRatio(ratio) {
   }
 }
 
+function magnetNearest(value, grid) {
+  return Math.round(Number(value) / grid) * grid;
+}
+
+function magnetSnapDimension(value, grid, threshold) {
+  var nearest = magnetNearest(value, grid);
+  if (Math.abs(Number(value) - nearest) <= threshold) return nearest;
+  return Number(value);
+}
+
+function applyCropSoftMagnet() {
+  if (!cropperInstance || cropMagnetApplying) return;
+  var data = cropperInstance.getData(true);
+  var ratio = cropActiveRatio > 0 ? cropActiveRatio : 1;
+  var snappedW = magnetSnapDimension(data.width, CROP_MAGNET_GRID, CROP_MAGNET_THRESHOLD);
+  if (snappedW === data.width) {
+    setCropSizeReadout(data.width, data.height);
+    return;
+  }
+  var snappedH = Math.max(CROP_MAGNET_GRID, Math.round(snappedW / ratio));
+  cropMagnetApplying = true;
+  cropperInstance.setData({
+    x: data.x,
+    y: data.y,
+    width: snappedW,
+    height: snappedH
+  });
+  cropMagnetApplying = false;
+  setCropSizeReadout(snappedW, snappedH);
+}
+
+function finalizeCropData(data) {
+  var ratio = cropActiveRatio > 0 ? cropActiveRatio : 1;
+  var width = Math.max(CROP_MAGNET_GRID, magnetNearest(data.width, CROP_MAGNET_GRID));
+  var height = Math.max(CROP_MAGNET_GRID, Math.round(width / ratio));
+  var x = Math.round(data.x);
+  var y = Math.round(data.y);
+
+  if (cropperInstance && typeof cropperInstance.getImageData === 'function') {
+    var imageData = cropperInstance.getImageData() || {};
+    var naturalWidth = Math.max(0, Math.round(Number(imageData.naturalWidth) || 0));
+    var naturalHeight = Math.max(0, Math.round(Number(imageData.naturalHeight) || 0));
+    if (naturalWidth > 0 && naturalHeight > 0) {
+      x = Math.max(0, Math.min(x, Math.max(0, naturalWidth - CROP_MAGNET_GRID)));
+      y = Math.max(0, Math.min(y, Math.max(0, naturalHeight - CROP_MAGNET_GRID)));
+
+      // Keep the snapped box inside bounds by shrinking width to the largest
+      // valid grid step that also satisfies the locked aspect ratio.
+      var maxWidthByBounds = Math.min(naturalWidth - x, (naturalHeight - y) * ratio);
+      var maxWidthGrid = Math.floor(maxWidthByBounds / CROP_MAGNET_GRID) * CROP_MAGNET_GRID;
+      if (maxWidthGrid >= CROP_MAGNET_GRID) {
+        width = Math.min(width, maxWidthGrid);
+        width = Math.max(CROP_MAGNET_GRID, Math.floor(width / CROP_MAGNET_GRID) * CROP_MAGNET_GRID);
+      }
+      height = Math.max(CROP_MAGNET_GRID, Math.floor(width / ratio));
+      while (width > CROP_MAGNET_GRID && (x + width > naturalWidth || y + height > naturalHeight)) {
+        width -= CROP_MAGNET_GRID;
+        height = Math.max(CROP_MAGNET_GRID, Math.floor(width / ratio));
+      }
+    }
+  }
+
+  return {
+    x: x,
+    y: y,
+    width: width,
+    height: height
+  };
+}
+
 function closeCropModal() {
   destroyCropper();
   cropTargetItem = null;
+  cropRotationEnabled = false;
+  setCropRotationControlsVisible(false);
+  setCropAngle(0);
   setCropBusy(false);
   setCropStatus('', false);
   var imageEl = getCropEl('crop-image');
@@ -77,13 +184,49 @@ function closeCropModal() {
   setCropSizeReadout(0, 0);
   var modal = getCropEl('crop-modal');
   if (modal) {
+    if (modal.contains(document.activeElement)) {
+      try { document.activeElement.blur(); } catch (e) {}
+      if ('inert' in modal) {
+        modal.inert = true;
+      }
+    }
     modal.classList.add('hidden');
     modal.setAttribute('aria-hidden', 'true');
   }
 }
 
+function buildCroppedImageDataUrl(cropData) {
+  if (!cropperInstance || typeof cropperInstance.getCroppedCanvas !== 'function') {
+    throw new Error('Cropper is not ready');
+  }
+  cropMagnetApplying = true;
+  cropperInstance.setData(cropData);
+  cropMagnetApplying = false;
+  if (cropRotationEnabled && typeof cropperInstance.rotateTo === 'function') {
+    cropperInstance.rotateTo(cropActiveAngle);
+  }
+  var canvas = cropperInstance.getCroppedCanvas({
+    width: cropData.width,
+    height: cropData.height,
+    imageSmoothingEnabled: true,
+    imageSmoothingQuality: 'high',
+    fillColor: '#000000'
+  });
+  if (!canvas || typeof canvas.toDataURL !== 'function') {
+    throw new Error('Unable to render cropped image');
+  }
+  var dataUrl = canvas.toDataURL('image/png');
+  if (!dataUrl || dataUrl === 'data:,') {
+    throw new Error('Unable to encode cropped image');
+  }
+  return dataUrl;
+}
+
 // --- Shared modal/Cropper setup ---
-function setupCropModal(imageSrc, aspectRatio, onReady, onApply) {
+function setupCropModal(imageSrc, aspectRatio, onReady, onApply, options) {
+  options = options || {};
+  cropRotationEnabled = !!options.rotationEnabled;
+  var initialAngle = normalizeCropAngle(options.initialAngle || 0);
   var modal = getCropEl('crop-modal');
   var imageEl = getCropEl('crop-image');
   var titleEl = getCropEl('crop-modal-title');
@@ -92,9 +235,14 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply) {
   destroyCropper();
   setCropBusy(false);
   setCropAspectRatio(aspectRatio || 1);
+  setCropRotationControlsVisible(cropRotationEnabled);
+  setCropAngle(initialAngle);
   setCropSizeReadout(0, 0);
   setCropStatus('Loading image...', false);
   modal.classList.remove('hidden');
+  if ('inert' in modal) {
+    modal.inert = false;
+  }
   modal.setAttribute('aria-hidden', 'false');
   imageEl.onload = function () {
     destroyCropper();
@@ -108,14 +256,19 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply) {
       movable: true,
       zoomable: true,
       scalable: false,
-      rotatable: false,
+      rotatable: cropRotationEnabled,
       cropBoxMovable: true,
       cropBoxResizable: true,
+      cropmove: function () {
+        applyCropSoftMagnet();
+      },
       crop: function (event) {
+        if (cropMagnetApplying) return;
         var detail = event && event.detail ? event.detail : {};
         setCropSizeReadout(detail.width, detail.height);
       },
       ready: function () {
+        setCropAngle(initialAngle);
         var data = cropperInstance.getData(true);
         setCropSizeReadout(data.width, data.height);
         setCropStatus('', false);
@@ -132,17 +285,44 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply) {
   var cancelX = getCropEl('crop-cancel-x');
   if (cancelBtn) cancelBtn.onclick = closeCropModal;
   if (cancelX) cancelX.onclick = closeCropModal;
+  var rotateSlider = getCropEl('crop-rotate-slider');
+  var rotateInput = getCropEl('crop-rotate-input');
+  var rotateResetBtn = getCropEl('crop-rotate-reset-btn');
+  if (rotateSlider) {
+    rotateSlider.oninput = function () {
+      setCropAngle(rotateSlider.value);
+    };
+  }
+  if (rotateInput) {
+    rotateInput.onchange = function () {
+      setCropAngle(rotateInput.value);
+    };
+    rotateInput.onkeydown = function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        setCropAngle(rotateInput.value);
+      }
+    };
+  }
+  if (rotateResetBtn) {
+    rotateResetBtn.onclick = function () {
+      setCropAngle(0);
+    };
+  }
   Array.prototype.forEach.call(document.querySelectorAll('.crop-ratio-btn'), function (btn) {
     btn.onclick = function () {
       setCropAspectRatio(Number(btn.getAttribute('data-ratio')) || 1);
     };
   });
-  document.addEventListener('keydown', function (e) {
-    var modal = getCropEl('crop-modal');
-    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
-      closeCropModal();
-    }
-  });
+  if (!cropEscapeHandlerBound) {
+    document.addEventListener('keydown', function (e) {
+      var modal = getCropEl('crop-modal');
+      if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+        closeCropModal();
+      }
+    });
+    cropEscapeHandlerBound = true;
+  }
   imageEl.src = imageSrc;
 }
 
@@ -163,18 +343,24 @@ function openImageCropModal(mediaItem) {
     // Apply handler for image
     if (cropBusy || !cropTargetItem || !cropperInstance) return;
     var fileName = cropTargetItem.fileName;
-    var cropData = cropperInstance.getData(true);
+    var cropData = finalizeCropData(cropperInstance.getData(true));
+    var imageDataUrl = null;
+    try {
+      imageDataUrl = buildCroppedImageDataUrl(cropData);
+    } catch (err) {
+      var renderError = err && err.message ? err.message : String(err);
+      setCropStatus(renderError, true);
+      setStatus('Crop failed: ' + renderError);
+      return;
+    }
     setCropBusy(true);
     setCropStatus('Applying crop...', false);
     HttpModule.postJson('/media/crop', {
       folder: state.folder || '',
       fileName: fileName,
-      crop: {
-        x: cropData.x,
-        y: cropData.y,
-        width: cropData.width,
-        height: cropData.height
-      }
+      crop: cropData,
+      angle: cropActiveAngle,
+      imageDataUrl: imageDataUrl
     }, function (status, responseText) {
       setCropBusy(false);
       if (status === 200) {
@@ -190,6 +376,9 @@ function openImageCropModal(mediaItem) {
       setCropStatus(message, true);
       setStatus('Crop failed: ' + message);
     });
+  }, {
+    rotationEnabled: true,
+    initialAngle: 0
   });
 }
 
@@ -200,13 +389,11 @@ function openVideoCropModal(dataUrl, aspect, onCrop) {
   }, function() {
     // Apply handler for video
     if (!cropperInstance) return;
-    var data = cropperInstance.getData(true);
-    if (typeof onCrop === 'function') onCrop({
-      x: Math.round(data.x),
-      y: Math.round(data.y),
-      width: Math.round(data.width),
-      height: Math.round(data.height)
-    });
+    var data = finalizeCropData(cropperInstance.getData(true));
+    if (typeof onCrop === 'function') onCrop(data);
     closeCropModal();
+  }, {
+    rotationEnabled: false,
+    initialAngle: 0
   });
 }

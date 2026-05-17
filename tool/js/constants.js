@@ -41,7 +41,6 @@ ui = {
   utilityRebootBtn: document.getElementById('utility-reboot-btn'),
   utilityHelpBtn: document.getElementById('utility-help-btn'),
   reviewBtn: document.getElementById('review-captions-btn'),
-  upRow: document.getElementById('up-one-directory-row'),
   focusSetExitBtn: document.getElementById('focus-set-exit-btn'),
   currentFolderRow: document.getElementById('current-folder-row'),
   consolePanelEl: document.getElementById('console-panel'),
@@ -66,6 +65,7 @@ ui = {
 
 const DEFAULT_CHECKLIST_ITEMS = [
   "Key Phrase",
+  "Expression",
   "Position",
   "Action",
   "Clothing",
@@ -74,6 +74,18 @@ const DEFAULT_CHECKLIST_ITEMS = [
   "Lighting",
   "Viewpoint",
 ];
+
+const DEFAULT_CHECKLIST_ITEM_KEYWORDS = {
+  "Key Phrase": "",
+  "Expression": "smiling, frowning, surprised, angry, happy, sad, tired, excited, expression",
+  "Position": "left, right, center, top, bottom, foreground, background",
+  "Action": "standing, sitting, running, walking, holding, looking, eating, drinking, touching, rubbing",
+  "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform",
+  "Traits": "lips, make-up, hair",
+  "Setting": "background, theme",
+  "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight",
+  "Viewpoint": "front, side, back, aerial, close-up, wide shot, low angle, high angle"
+};
 
 // Central palette for flag colors (order matters for UI)
 const FLAG_COLORS = ['red', 'green', 'blue', 'yellow', 'orange'];

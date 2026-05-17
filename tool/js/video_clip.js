@@ -26,18 +26,10 @@ function extractFrameAndOpenCropModal() {
 }
 // --- Wire up Crop This Frame button ---
 function wireCropThisFrameButton() {
-  var videoModal = getVideoClipEl('video-clip-modal');
-  if (!videoModal) throw new Error('Missing required element: video-clip-modal');
-  var panel = videoModal.querySelector('.video-clip-player-panel');
-  if (!panel) throw new Error('Missing required element: video-clip-player-panel');
-  var btn = document.createElement('button');
-  btn.id = 'video-clip-extract-frame-btn';
-  btn.type = 'button';
-  btn.textContent = 'Crop This Frame';
-  btn.style.margin = '8px 0';
+  var btn = getVideoClipEl('video-clip-crop-frame-btn');
+  if (!btn) throw new Error('Missing required element: video-clip-crop-frame-btn');
   btn.disabled = true;
   btn.onclick = extractFrameAndOpenCropModal;
-  panel.appendChild(btn);
   // Enable button when video is ready
   var videoEl = getVideoClipEl('video-clip-video');
   if (!videoEl) throw new Error('Missing required element: video-clip-video');
@@ -63,6 +55,12 @@ function setVideoClipBusy(isBusy) {
   videoClipCropBusy = !!isBusy;
   var btn = getVideoClipEl('video-clip-export-btn');
   if (btn) btn.disabled = videoClipCropBusy;
+  var outputEl = getVideoClipEl('video-clip-output-input');
+  if (outputEl) outputEl.disabled = videoClipCropBusy;
+  var startEl = getVideoClipEl('video-clip-start-input');
+  if (startEl) startEl.disabled = videoClipCropBusy;
+  var durationEl = getVideoClipEl('video-clip-duration-input');
+  if (durationEl) durationEl.disabled = videoClipCropBusy;
 }
 
 function setVideoClipSizeReadout(width, height) {
@@ -165,6 +163,8 @@ function closeVideoClipModal() {
     videoEl.removeAttribute('src');
     videoEl.load();
   }
+  var cropFrameBtn = getVideoClipEl('video-clip-crop-frame-btn');
+  if (cropFrameBtn) cropFrameBtn.disabled = true;
 
   var cropWrap = getVideoClipEl('video-clip-crop-wrap');
   if (cropWrap) cropWrap.classList.add('hidden');
@@ -304,6 +304,7 @@ function openVideoClipModal(mediaItem) {
   var startEl = getVideoClipEl('video-clip-start-input');
   var durationEl = getVideoClipEl('video-clip-duration-input');
   var currentTimeEl = getVideoClipEl('video-clip-current-time');
+  var cropFrameBtn = getVideoClipEl('video-clip-crop-frame-btn');
   var cropWrap = getVideoClipEl('video-clip-crop-wrap');
   var cropToggleBtn = getVideoClipEl('video-clip-crop-toggle-btn');
 
@@ -327,6 +328,7 @@ function openVideoClipModal(mediaItem) {
   startEl.value = '0';
   durationEl.value = '2.0';
   currentTimeEl.textContent = '0.000';
+  if (cropFrameBtn) cropFrameBtn.disabled = true;
 
   titleEl.textContent = 'Clip video: ' + mediaItem.fileName;
   modal.classList.remove('hidden');
@@ -454,7 +456,7 @@ function applyVideoClip(overwrite) {
       console.log('[VideoClip] Export response:', status, responseText);
     }
     if (status === 200) {
-      closeVideoClipModal();
+      // Leave modal open so user can create more clips.
       setStatus('Clip exported: ' + payload.outputName);
       if (window.console && console.log) {
         console.log('[VideoClip] Exported:', payload.outputName);

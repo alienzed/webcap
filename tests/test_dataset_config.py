@@ -4,7 +4,14 @@ from PIL import Image
 
 import tool.server.app as app_module
 import tool.server.run_ops as run_ops_module
-from tool.server.dataset_config import generate_candidates, generate_dataset_configs, image_alternatives, pick_image_buckets
+from tool.server.dataset_config import (
+    generate_candidates,
+    generate_image_candidates,
+    generate_dataset_configs,
+    image_alternatives,
+    normalize_training_generate_mode,
+    pick_image_buckets,
+)
 
 
 def write_image(path: Path, size):
@@ -74,7 +81,7 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
         encoding="utf-8",
     )
 
-    report = generate_dataset_configs(set_folder)
+    report = generate_dataset_configs(set_folder, mode="normal")
 
     hi_text = (set_folder / "dataset.hi.toml").read_text(encoding="utf-8")
     lo_text = (set_folder / "dataset.lo.toml").read_text(encoding="utf-8")
@@ -83,11 +90,12 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert 'group = "videos"' in hi_text
     assert "  [512, 512, 33]," in hi_text
     assert hi_text.count('group = "images"') == 1
+    assert "  [256, 256, 1]," in hi_text
     assert "  [512, 512, 1]," in hi_text
-    assert "  [768, 768, 1]," in hi_text
-    assert "  [256, 256, 1]," not in hi_text
+    assert "  [768, 768, 1]," not in hi_text
     assert "[INFO] Built 1 video directory block(s)." in report
-    assert "[INFO] square_img: selected image bucket(s): 512x512, 768x768" in report
+    assert "[INFO] Training generate mode: normal" in report
+    assert "[INFO] square_img: selected image bucket(s): 256x256, 512x512" in report
     assert (auto_dataset / "webcap_dataset_metadata.json").exists()
 
 
@@ -180,18 +188,19 @@ def test_rectangle_image_candidates_allow_long_edge_above_768():
     assert candidates_square[0][:2] == (768, 768)
 
 
-def test_image_alternatives_include_larger_exploration_buckets():
+def test_image_alternatives_include_three_lower_and_three_higher():
     assert image_alternatives("square", 768, 768) == [
+        (672, 672),
         (704, 704),
         (736, 736),
         (800, 800),
         (832, 832),
+        (864, 864),
     ]
     assert image_alternatives("916", 704, 1248) == [
+        (608, 1088),
         (640, 1152),
         (672, 1184),
-        (736, 1312),
-        (768, 1376),
     ]
 
 
@@ -202,10 +211,10 @@ def test_selected_image_buckets_respect_image_mfp_limit():
         ("portrait_c.png", 736, 1312),
     ]
 
-    buckets, unsupported = pick_image_buckets("916", images)
+    buckets, unsupported = pick_image_buckets("916", images, mode="normal")
 
     assert unsupported == []
-    assert buckets == [(576, 1024)]
+    assert buckets == [(384, 688)]
 
 
 def test_pick_image_buckets_prefers_full_coverage_then_detail():
@@ -225,9 +234,9 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
         ("018.jpg", 614, 1091),
         ("020.jpg", 607, 1080),
     ]
-    buckets_916, unsupported_916 = pick_image_buckets("916", images_916)
+    buckets_916, unsupported_916 = pick_image_buckets("916", images_916, mode="normal")
     assert unsupported_916 == []
-    assert buckets_916 == [(480, 864), (576, 1024)]
+    assert buckets_916 == [(384, 672)]
 
     images_square = [
         ("003c.jpg", 544, 544),
@@ -238,6 +247,46 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
         ("015.jpg", 648, 648),
         ("019.jpg", 768, 768),
     ]
-    buckets_square, unsupported_square = pick_image_buckets("square", images_square)
+    buckets_square, unsupported_square = pick_image_buckets("square", images_square, mode="normal")
     assert unsupported_square == []
-    assert buckets_square == [(544, 544), (768, 768)]
+    assert buckets_square == [(512, 512)]
+
+    buckets_square_poc, _ = pick_image_buckets("square", images_square, mode="poc")
+    assert buckets_square_poc == [(384, 384)]
+
+
+def test_normalize_training_generate_mode_maps_quality_to_normal():
+    assert normalize_training_generate_mode("quality") == "normal"
+    assert normalize_training_generate_mode("poc") == "poc"
+
+
+def test_image_candidates_cap_long_edge_at_768():
+    assert generate_image_candidates("169")[0][:2] == (736, 416)
+    assert generate_candidates("169")[0][:2] == (1248, 704)
+
+
+def test_validate_config_payload_persists_training_mode():
+    from tool.server.config import validate_config_payload
+
+    normalized = validate_config_payload({
+        "filesystem": {"root": "C:/sets", "models": ""},
+        "training": {"mode": "poc", "config_hi": "config.hi.toml"},
+    })
+    assert normalized["training"]["mode"] == "poc"
+
+    normalized_quality = validate_config_payload({
+        "filesystem": {"root": "C:/sets", "models": ""},
+        "training": {"mode": "quality"},
+    })
+    assert normalized_quality["training"]["mode"] == "normal"
+
+
+def test_poc_mode_never_emits_second_image_bucket():
+    images = [
+        ("high_a.png", 768, 768),
+        ("high_b.png", 768, 768),
+        ("low.png", 256, 256),
+    ]
+    buckets, unsupported = pick_image_buckets("square", images, mode="poc")
+    assert unsupported == []
+    assert buckets == [(256, 256)]

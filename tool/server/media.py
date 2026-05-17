@@ -55,7 +55,7 @@ from pathlib import Path
 from flask import jsonify
 
 from .config import FS_DEBUG, safe_join_fs_root
-from .crop_ops import crop_image_in_place
+from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
 from .originals import MEDIA_ALL_EXTS, restore_original_media, restore_original_media_video_only
 
 
@@ -223,7 +223,11 @@ def media_crop_response(data):
         return jsonify({"error": "Missing required parameters"}), 400
     try:
         folder_path = safe_join_fs_root(folder)
-        result = crop_image_in_place(folder_path, file_name, data.get("crop"))
+        image_data_url = data.get("imageDataUrl")
+        if image_data_url:
+            result = crop_image_data_url_in_place(folder_path, file_name, image_data_url)
+        else:
+            result = crop_image_in_place(folder_path, file_name, data.get("crop"))
         # Keep cached media_metadata.json in sync immediately after in-place crop.
         update_media_metadata(folder_path)
         return jsonify({"ok": True, **result})
@@ -232,6 +236,27 @@ def media_crop_response(data):
     except Exception as e:
         if FS_DEBUG:
             print("[media_crop] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+
+
+def media_image_transform_response(data):
+    data = data or {}
+    folder = data.get("folder", "").strip()
+    file_name = (data.get("fileName") or data.get("media") or "").strip()
+    operation = data.get("operation")
+    if not file_name or not operation:
+        return jsonify({"error": "Missing required parameters"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        result = transform_image_in_place(folder_path, file_name, operation)
+        update_media_metadata(folder_path)
+        return jsonify({"ok": True, **result})
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        if FS_DEBUG:
+            print("[media_image_transform] ERROR:", e)
             traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 

@@ -11,7 +11,7 @@ from . import config as app_config
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, open_in_vscode_response, rename_response
-from .media import media_crop_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
+from .media import media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response
 from .run_ops import autoset_run_response, prepare_dataset_response, generate_dataset_config_response, train_run_response
 
@@ -207,6 +207,16 @@ def caption_reset():
 def media_crop():
     data = request.get_json(silent=True) or {}
     return media_crop_response(data)
+
+@app.route("/media/flip_horizontal", methods=["POST"])
+def media_flip_horizontal():
+    data = request.get_json(silent=True) or {}
+    return media_flip_horizontal_response(data)
+
+@app.route("/media/image_transform", methods=["POST"])
+def media_image_transform():
+    data = request.get_json(silent=True) or {}
+    return media_image_transform_response(data)
 
 @app.route("/media/prune", methods=["POST"])
 def caption_prune():

@@ -18,30 +18,56 @@ AR_TOL = 0.05
 MAX_SQUARE_DIM = 768
 MAX_NON_SQUARE_LONG = 1280
 MAX_NON_SQUARE_SHORT = 768
-# Keep image buckets a bit more conservative than the full 720 ceiling.
-# This avoids selecting edge-case high-res non-square buckets that are often
-# slightly larger than desired in practice (e.g. 992x736, 640x1152).
+IMAGE_MAX_SQUARE_DIM = 768
+IMAGE_MAX_NON_SQUARE_LONG = 768
+IMAGE_MAX_NON_SQUARE_SHORT = 768
 MAX_IMAGE_MFP = 600
-MIN_IMAGE_SIDE = 320
-ALT_MIN_IMAGE_SIDE = 320
-MAX_SELECTED_IMAGE_BUCKETS = 2
-SECOND_BUCKET_MIN_COVERAGE = 0.40
-MIN_BUCKET_SCALE_GAP = 0.16
+ALT_MIN_IMAGE_SIDE = 256
+NORMAL_SECOND_BUCKET_MIN_COVERAGE = 0.50
+NORMAL_SECOND_BUCKET_MIN_SCALE = 1.25
+NORMAL_SECOND_BUCKET_PRIMARY_SHORT_CAP = 512
 ALT_MAX_SQUARE_DIM = 1024
-ALT_MAX_NON_SQUARE_LONG = 1536
+ALT_MAX_NON_SQUARE_LONG = 1280
 ALT_MAX_NON_SQUARE_SHORT = 1024
+
+TRAINING_MODE_TARGETS = {
+    "poc": {
+        "square": (384, 384),
+        "43": (448, 336),
+        "169": (512, 288),
+        "916": (288, 512),
+    },
+    "normal": {
+        "square": (512, 512),
+        "43": (592, 448),
+        "169": (688, 384),
+        "916": (384, 688),
+    },
+}
 
 PREP_MANIFEST_NAME = "prep_manifest.json"
 VIDEO_FRAME_CANDIDATES = [49, 45, 41, 37, 33]
+VIDEO_FRAME_CANDIDATES_POC = [33, 29, 25, 21, 17]
 MIN_VIDEO_FRAMES_FOR_STATS = 16
 VIDEO_COVERAGE = 0.85
 VIDEO_MFP_LIMIT = 12000
 VIDEO_DETAIL_FRAMES = 13
 VIDEO_DETAIL_MIN_COVERAGE = 0.35
 VIDEO_DETAIL_MIN_SUPPORT = 2
+POC_VIDEO_DETAIL_ENABLED = False
+NORMAL_SECOND_BUCKET_MIN_SCALE_NON_SQUARE = 1.08
 
 
-def generate_dataset_configs(folder_path: Path):
+def normalize_training_generate_mode(mode):
+    text = str(mode or "normal").strip().lower()
+    if text in ("quality",):
+        text = "normal"
+    if text not in TRAINING_MODE_TARGETS:
+        text = "normal"
+    return text
+
+
+def generate_dataset_configs(folder_path: Path, mode: str = "normal"):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
     manifest_path = dataset_root / PREP_MANIFEST_NAME
@@ -49,14 +75,19 @@ def generate_dataset_configs(folder_path: Path):
         raise FileNotFoundError(f"Missing prep manifest: {manifest_path}")
 
     manifest = load_prep_manifest(manifest_path)
+    generate_mode = normalize_training_generate_mode(mode)
     lines = []
     lines.append(f"[INFO] Reading prep manifest: {manifest_path}")
+    lines.append(f"[INFO] Training generate mode: {generate_mode}")
 
-    video_blocks = build_video_blocks(dataset_root, manifest.get("videos", []), lines)
+    video_blocks = build_video_blocks(dataset_root, manifest.get("videos", []), lines, mode=generate_mode)
     lines.append(f"[INFO] Built {len(video_blocks)} video directory block(s).")
+    image_only_set = len(video_blocks) == 0
 
     image_dirs = find_image_dirs(dataset_root)
     lines.append(f"[INFO] Found {len(image_dirs)} prepared image folder(s).")
+    if image_only_set and image_dirs:
+        lines.append("[INFO] Image-only set detected: defaulting image num_repeats to 2.")
 
     metadata = {}
     image_blocks = []
@@ -71,7 +102,7 @@ def generate_dataset_configs(folder_path: Path):
         if not images:
             continue
 
-        buckets, unsupported = pick_image_buckets(ar_label, images)
+        buckets, unsupported = pick_image_buckets(ar_label, images, mode=generate_mode)
         if unsupported:
             lines.append(f"[WARN] {image_dir.name}: {len(unsupported)} image(s) smaller than every valid bucket:")
             for name in unsupported:
@@ -84,7 +115,14 @@ def generate_dataset_configs(folder_path: Path):
             f"[INFO] {image_dir.name}: selected image bucket(s): "
             + ", ".join(f"{w}x{h}" for (w, h) in buckets)
         )
-        image_blocks.append(render_image_block(image_dir, ar_label, buckets))
+        image_blocks.append(
+            render_image_block(
+                image_dir,
+                ar_label,
+                buckets,
+                num_repeats=2 if image_only_set else 1,
+            )
+        )
 
     metadata_path = dataset_root / "webcap_dataset_metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
@@ -115,7 +153,8 @@ def load_prep_manifest(manifest_path: Path):
     return data
 
 
-def build_video_blocks(dataset_root: Path, videos, lines):
+def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal"):
+    generate_mode = normalize_training_generate_mode(mode)
     grouped = {key: [] for key in AR_CLASSES}
     for row in videos:
         if not isinstance(row, dict):
@@ -150,18 +189,31 @@ def build_video_blocks(dataset_root: Path, videos, lines):
             continue
 
         frame_counts = [c["frames"] for c in usable_for_frames]
-        motion_frames = select_frames_with_fallback(frame_counts, VIDEO_FRAME_CANDIDATES, VIDEO_COVERAGE)
+        frame_candidates = VIDEO_FRAME_CANDIDATES_POC if generate_mode == "poc" else VIDEO_FRAME_CANDIDATES
+        motion_frames = select_frames_with_fallback(frame_counts, frame_candidates, VIDEO_COVERAGE)
         if not motion_frames:
             lines.append(f"[WARN] {ar_label}: unable to choose motion frame count.")
             continue
 
-        motion = choose_video_bucket_resolution(
-            ar_label,
-            usable_for_frames,
-            motion_frames,
-            VIDEO_COVERAGE,
-            VIDEO_MFP_LIMIT,
-        )
+        if generate_mode == "poc":
+            target_w, target_h = TRAINING_MODE_TARGETS["poc"][ar_label]
+            motion = choose_video_bucket_resolution_capped(
+                ar_label,
+                usable_for_frames,
+                motion_frames,
+                VIDEO_COVERAGE,
+                VIDEO_MFP_LIMIT,
+                target_w,
+                target_h,
+            )
+        else:
+            motion = choose_video_bucket_resolution(
+                ar_label,
+                usable_for_frames,
+                motion_frames,
+                VIDEO_COVERAGE,
+                VIDEO_MFP_LIMIT,
+            )
         if not motion:
             lines.append(f"[WARN] {ar_label}: unable to choose motion bucket resolution.")
             continue
@@ -172,15 +224,16 @@ def build_video_blocks(dataset_root: Path, videos, lines):
             f"(support {motion['support']}/{motion['total']})"
         )
 
-        detail = choose_video_detail_bucket(ar_label, usable_for_frames, motion["width"], motion["height"])
-        if detail:
-            detail_tuple = (detail["width"], detail["height"], VIDEO_DETAIL_FRAMES)
-            if detail_tuple not in buckets:
-                buckets.append(detail_tuple)
-                lines.append(
-                    f"[INFO] {ar_label}: detail bucket {detail['width']}x{detail['height']} @ {VIDEO_DETAIL_FRAMES} "
-                    f"(support {detail['support']}/{detail['total']})"
-                )
+        if generate_mode != "poc" or POC_VIDEO_DETAIL_ENABLED:
+            detail = choose_video_detail_bucket(ar_label, usable_for_frames, motion["width"], motion["height"])
+            if detail:
+                detail_tuple = (detail["width"], detail["height"], VIDEO_DETAIL_FRAMES)
+                if detail_tuple not in buckets:
+                    buckets.append(detail_tuple)
+                    lines.append(
+                        f"[INFO] {ar_label}: detail bucket {detail['width']}x{detail['height']} @ {VIDEO_DETAIL_FRAMES} "
+                        f"(support {detail['support']}/{detail['total']})"
+                    )
 
         buckets.sort(key=lambda item: item[2], reverse=True)
         dir_path = (dataset_root / ar_label).as_posix()
@@ -260,6 +313,50 @@ def choose_video_bucket_resolution(ar_label: str, clips, frames: int, coverage_t
     return best
 
 
+def choose_video_bucket_resolution_capped(
+    ar_label: str,
+    clips,
+    frames: int,
+    coverage_threshold: float,
+    mfp_limit: int,
+    max_w: int,
+    max_h: int,
+):
+    candidates = [
+        (w, h, area)
+        for (w, h, area) in generate_candidates(ar_label)
+        if w <= max_w and h <= max_h
+    ]
+    if not candidates:
+        return None
+    usable = [clip for clip in clips if clip["frames"] is not None and clip["frames"] >= frames]
+    if not usable:
+        return None
+    total = len(usable)
+    best = None
+    for (w, h, area) in candidates:
+        if mfp(w, h, frames) > mfp_limit:
+            continue
+        support = 0
+        for clip in usable:
+            if clip["width"] >= w and clip["height"] >= h:
+                support += 1
+        if support <= 0:
+            continue
+        frac = support / float(total)
+        entry = {"width": w, "height": h, "area": area, "support": support, "total": total, "coverage": frac}
+        if frac >= coverage_threshold:
+            return entry
+        if best is None:
+            best = entry
+            continue
+        if entry["coverage"] > best["coverage"] or (
+            entry["coverage"] == best["coverage"] and entry["area"] > best["area"]
+        ):
+            best = entry
+    return best
+
+
 def choose_video_detail_bucket(ar_label: str, clips, motion_w: int, motion_h: int):
     candidates = generate_candidates(ar_label)
     if not candidates:
@@ -294,15 +391,6 @@ def choose_video_detail_bucket(ar_label: str, clips, motion_w: int, motion_h: in
             best = entry
     return best
 
-
-def render_video_block(dir_path: str, buckets):
-    lines = [
-        "[[directory]]",
-        f'path = "{dir_path}"',
-        "num_repeats = 2",
-        'group = "videos"',
-        "size_buckets = [",
-    ]
 
 def video_alternatives(selected_w: int, selected_h: int, selected_frames: int):
     # 2-3 lower and 2-3 higher valid buckets by area, same frame count
@@ -396,6 +484,16 @@ def generate_candidates(ar_label: str):
     )
 
 
+def generate_image_candidates(ar_label: str):
+    return generate_candidates_with_caps(
+        ar_label,
+        IMAGE_MAX_SQUARE_DIM,
+        IMAGE_MAX_NON_SQUARE_LONG,
+        IMAGE_MAX_NON_SQUARE_SHORT,
+        canonical_only=True,
+    )
+
+
 def generate_candidates_with_caps(ar_label: str, max_square_dim: int, max_long: int, max_short: int, canonical_only: bool):
     target_ar = AR_CLASSES[ar_label]
     candidates = []
@@ -479,72 +577,109 @@ def add_candidate(candidates, seen, target_ar, w, h, max_long, max_short):
     candidates.append((w, h, w * h))
 
 
-def pick_image_buckets(ar_label: str, images):
-    candidates = generate_candidates(ar_label)
+def pick_image_buckets(ar_label: str, images, mode: str = "normal"):
+    generate_mode = normalize_training_generate_mode(mode)
+    candidates = generate_image_candidates(ar_label)
     if not candidates:
         raise ValueError(f"No image bucket candidates for AR={ar_label}")
     candidates = [
         (w, h, area)
         for (w, h, area) in candidates
-        if min(w, h) >= MIN_IMAGE_SIDE
         if mfp(w, h, 1) <= MAX_IMAGE_MFP
     ]
     if not candidates:
         raise ValueError(f"No image bucket candidates under image mfp limit for AR={ar_label}")
-    total = len(images)
-    support = {}
-    for (w, h, _) in candidates:
-        support[(w, h)] = sum(1 for (_, iw, ih) in images if iw >= w and ih >= h)
+    if not images:
+        return [], []
 
+    supported_images = []
     unsupported = []
-    for i, (_, width, height) in enumerate(images):
-        if not any(width >= w and height >= h for (w, h, _) in candidates):
-            unsupported.append(images[i][0])
+    support = {}
+    for row in images:
+        name, iw, ih = row
+        if any(iw >= w and ih >= h for (w, h, _) in candidates):
+            supported_images.append(row)
+        else:
+            unsupported.append(name)
 
-    best_primary = None
-    for (w, h, area) in candidates:
-        entry = (support[(w, h)], area, w, h)
-        if best_primary is None or entry[0] > best_primary[0] or (entry[0] == best_primary[0] and entry[1] > best_primary[1]):
-            best_primary = entry
-    if not best_primary:
+    total = len(supported_images)
+    if total == 0:
         return [], unsupported
-    primary = (best_primary[2], best_primary[3])
+
+    for (w, h, _) in candidates:
+        support[(w, h)] = sum(1 for (_, iw, ih) in supported_images if iw >= w and ih >= h)
+
+    target_w, target_h = TRAINING_MODE_TARGETS[generate_mode][ar_label]
+    primary = pick_primary_image_bucket(candidates, support, total, target_w, target_h)
+    if not primary:
+        return [], unsupported
 
     selected = [primary]
-    if MAX_SELECTED_IMAGE_BUCKETS <= 1 or total == 0:
-        return selected, unsupported
+    if generate_mode == "normal":
+        second = pick_secondary_image_bucket(candidates, support, total, primary)
+        if second:
+            selected.append(second)
+    return selected, unsupported
 
+
+def pick_primary_image_bucket(candidates, support, total, target_w, target_h):
+    full_coverage = [(w, h, area) for (w, h, area) in candidates if support[(w, h)] == total]
+    if not full_coverage:
+        return None
+
+    at_or_below = [
+        (w, h, area)
+        for (w, h, area) in full_coverage
+        if w <= target_w and h <= target_h
+    ]
+    if at_or_below:
+        best = max(at_or_below, key=lambda item: item[2])
+        return (best[0], best[1])
+    best = max(full_coverage, key=lambda item: item[2])
+    return (best[0], best[1])
+
+
+def pick_secondary_image_bucket(candidates, support, total, primary):
     p_w, p_h = primary
+    primary_short = min(p_w, p_h)
+    if primary_short >= NORMAL_SECOND_BUCKET_PRIMARY_SHORT_CAP:
+        return None
+
+    scale_min = NORMAL_SECOND_BUCKET_MIN_SCALE
+    if p_w != p_h:
+        scale_min = NORMAL_SECOND_BUCKET_MIN_SCALE_NON_SQUARE
+
     best_second = None
     for (w, h, area) in candidates:
         if (w, h) == primary:
             continue
         if w <= p_w or h <= p_h:
             continue
-        short_gap = (min(w, h) - min(p_w, p_h)) / float(min(p_w, p_h))
-        if short_gap < MIN_BUCKET_SCALE_GAP:
+        if min(w, h) < int(math.ceil(primary_short * scale_min)):
             continue
         frac = support[(w, h)] / float(total)
-        if frac < SECOND_BUCKET_MIN_COVERAGE:
+        if frac < NORMAL_SECOND_BUCKET_MIN_COVERAGE:
             continue
-        entry = (area, frac, w, h)
-        if best_second is None or entry[0] > best_second[0] or (entry[0] == best_second[0] and entry[1] > best_second[1]):
-            best_second = entry
+        if best_second is None or area > best_second[0]:
+            best_second = (area, w, h)
 
-    if best_second:
-        selected.append((best_second[2], best_second[3]))
-    return selected, unsupported
+    if not best_second:
+        return None
+    return (best_second[1], best_second[2])
 
 
 def mfp(w: int, h: int, frames: int):
     return (w // 32) * (h // 32) * frames
 
 
-def render_image_block(image_dir: Path, ar_label: str, buckets):
+def render_image_block(image_dir: Path, ar_label: str, buckets, num_repeats: int = 1):
+    repeats = int(num_repeats) if isinstance(num_repeats, int) else 1
+    if repeats < 1:
+        repeats = 1
     lines = [
         "[[directory]]",
         f'path = "{image_dir.as_posix()}"',
-        "num_repeats = 1",
+        f"num_repeats = {repeats}",
         'group = "images"',
         "size_buckets = [",
     ]
@@ -560,8 +695,7 @@ def render_image_block(image_dir: Path, ar_label: str, buckets):
 
 def image_alternatives(ar_label: str, selected_w: int, selected_h: int):
     short_side = min(selected_w, selected_h)
-    # 2-3 lower, 2-3 higher
-    offsets = [-96, -64, -32, 32, 64, 96]
+    offsets = [-128, -96, -64, -32, 32, 64, 96, 128]
     alts = []
     for offset in offsets:
         dim = short_side + offset

@@ -158,7 +158,20 @@ function loadChecklistFromFolderState(folderState) {
   } else {
     checklistKeywordsByItem = {};
   }
+
   checklistItems.sort(checklistSort);
+
+  // Fill missing keyword values for default checklist items.
+  for (var i = 0; i < checklistItems.length; i++) {
+    var requirement = checklistItems[i];
+    if (!checklistKeywordsByItem[requirement] && typeof DEFAULT_CHECKLIST_ITEM_KEYWORDS === 'object') {
+      var defaultKeywords = String(DEFAULT_CHECKLIST_ITEM_KEYWORDS[requirement] || '').trim();
+      if (defaultKeywords) {
+        checklistKeywordsByItem[requirement] = defaultKeywords;
+      }
+    }
+  }
+
   syncReviewedFromChecklistAll();
   renderChecklistPanel();
 }
@@ -166,6 +179,14 @@ function loadChecklistFromFolderState(folderState) {
 
 // Temporary object for modal edits
 var checklistKeywordsModalTemp = null;
+
+function saveChecklistKeywordsModalAndClose() {
+  checklistKeywordsByItem = JSON.parse(JSON.stringify(checklistKeywordsModalTemp || {}));
+  saveChecklistToFolderState();
+  renderChecklistPanel();
+  closeChecklistKeywordsModal();
+  checklistKeywordsModalTemp = null;
+}
 
 function renderChecklistKeywordsModal() {
   var listDiv = document.getElementById('checklist-keywords-modal-body') || document.getElementById('checklist-keywords-list');
@@ -188,8 +209,18 @@ function renderChecklistKeywordsModal() {
     input.placeholder = 'comma-separated keywords';
     input.value = keywords;
     input.dataset.requirement = requirement;
+    input.oninput = function() {
+      checklistKeywordsModalTemp[this.dataset.requirement] = this.value;
+    };
     input.onchange = function() {
       checklistKeywordsModalTemp[this.dataset.requirement] = this.value;
+    };
+    input.onkeydown = function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        checklistKeywordsModalTemp[this.dataset.requirement] = this.value;
+        saveChecklistKeywordsModalAndClose();
+      }
     };
     row.appendChild(input);
     listDiv.appendChild(row);
@@ -231,12 +262,7 @@ document.addEventListener('click', function(e) {
 
 document.addEventListener('click', function(e) {
   if (e.target && e.target.id === 'checklist-keywords-save-btn') {
-    // Save changes from temp to real object
-    checklistKeywordsByItem = JSON.parse(JSON.stringify(checklistKeywordsModalTemp || {}));
-    saveChecklistToFolderState();
-    renderChecklistPanel();
-    closeChecklistKeywordsModal();
-    checklistKeywordsModalTemp = null;
+    saveChecklistKeywordsModalAndClose();
   }
 });
 

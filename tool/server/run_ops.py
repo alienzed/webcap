@@ -4,6 +4,8 @@ import sys
 import traceback
 import queue
 import threading
+import json
+import re
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
@@ -35,6 +37,54 @@ class _QueueWriter:
         if self._buffer:
             self._queue.put(self._buffer)
             self._buffer = ""
+
+
+_MICRO_BATCH_PATTERN = re.compile(r"^(\s*micro_batch_size_per_gpu\s*=\s*)(\d+)(\s*(?:#.*)?)$", re.MULTILINE)
+
+
+def _manifest_is_image_only(manifest_path: Path):
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    if not isinstance(raw, dict):
+        return False
+    videos = raw.get("videos") or []
+    images = raw.get("images") or []
+    if not isinstance(videos, list) or not isinstance(images, list):
+        return False
+
+    def _has_prepared_entries(rows):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if str(row.get("prepared_path") or "").strip():
+                return True
+        return False
+
+    has_videos = _has_prepared_entries(videos)
+    has_images = _has_prepared_entries(images)
+    return has_images and (not has_videos)
+
+
+def _bump_micro_batch_default_if_template_value(config_path: Path):
+    if not config_path.exists() or not config_path.is_file():
+        return False
+    try:
+        original = config_path.read_text(encoding="utf-8")
+    except Exception:
+        return False
+    match = _MICRO_BATCH_PATTERN.search(original)
+    if not match:
+        return False
+    current = int(match.group(2))
+    if current != 1:
+        return False
+    updated = _MICRO_BATCH_PATTERN.sub(r"\g<1>2\g<3>", original, count=1)
+    if updated == original:
+        return False
+    config_path.write_text(updated, encoding="utf-8")
+    return True
 
 
 def _run_prepare_dataset(folder_path: Path, output_queue, selected_media=None, selection_criteria=None, total_media_count=None):
@@ -148,8 +198,40 @@ def generate_dataset_config_response(folder: str):
         folder_path = app_config.safe_join_fs_root(folder)
         if not folder_path.exists() or not folder_path.is_dir():
             return Response(f"[ERROR] Folder does not exist: {folder}\n", status=404, mimetype="text/plain")
-        text = generate_dataset_configs(folder_path)
-        return Response(text, mimetype="text/plain")
+        training = app_config.config.get("training") or {}
+        mode = str(training.get("mode") or "normal").strip().lower()
+        prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
+        auto_prepare_attempted = False
+        prep_log = ""
+        if not prep_manifest_path.exists():
+            auto_prepare_attempted = True
+            prep_log += "[INFO] Missing prep manifest; auto-running Prepare Dataset once.\n"
+            prep_text = prepare_dataset(folder_path, target_fps=16)
+            if prep_text:
+                prep_log += str(prep_text).rstrip() + "\n"
+
+        try:
+            text = generate_dataset_configs(folder_path, mode=mode)
+            image_only = _manifest_is_image_only(prep_manifest_path)
+            if image_only:
+                hi_name = (training.get("config_hi") or "config.hi.toml").strip()
+                lo_name = (training.get("config_lo") or "config.lo.toml").strip()
+                updated = []
+                if _bump_micro_batch_default_if_template_value(folder_path / hi_name):
+                    updated.append(hi_name)
+                if _bump_micro_batch_default_if_template_value(folder_path / lo_name):
+                    updated.append(lo_name)
+                if updated:
+                    text += "[INFO] Image-only set detected: defaulted micro_batch_size_per_gpu to 2 in " + ", ".join(updated) + ".\n"
+            return Response(prep_log + text, mimetype="text/plain")
+        except FileNotFoundError as e:
+            if auto_prepare_attempted:
+                return Response(
+                    prep_log + f"[ERROR] Generate failed after auto-prepare attempt: {e}\n",
+                    status=500,
+                    mimetype="text/plain",
+                )
+            raise
     except Exception as e:
         traceback.print_exc()
         return Response(f"[ERROR] {e}\n", status=500, mimetype="text/plain")
@@ -219,10 +301,8 @@ def train_run_response(folder: str):
                 yield f"[INFO] Config LO: {lo_wsl}\n"
                 for line in warnings:
                     yield line + "\n"
-                yield "[INFO] Command 1:\n"
-                yield cmd1 + "\n"
-                yield "[INFO] Command 2:\n"
-                yield cmd2 + "\n"
+                yield "[INFO] Training commands (single-line chain):\n"
+                yield cmd1 + "; " + cmd2 + "\n"
                 yield "[train] Command preview only; execution is currently disabled.\n"
             except Exception as e:
                 yield f"[ERROR] {e}\n"

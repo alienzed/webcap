@@ -50,6 +50,13 @@ def validate_config_payload(payload):
     for key in ("diffusion_pipe_wsl", "activate_script", "config_hi", "config_lo"):
         if key in training:
             normalized_training[key] = str(training.get(key) or "").strip()
+    if "mode" in training:
+        mode = str(training.get("mode") or "").strip().lower()
+        if mode == "quality":
+            mode = "normal"
+        if mode not in ("poc", "normal"):
+            mode = "normal"
+        normalized_training["mode"] = mode
     if normalized_training:
         out["training"] = normalized_training
     elif "training" in out:

@@ -128,6 +128,7 @@ function handleMediaListClick(e) {
     }
     state.currentItem = null;
     clearEditorAndPreview();
+    clearCaptionFilterInputs();
     refreshCurrentDirectory();
     return;
   }
@@ -166,9 +167,11 @@ function handleMediaListContextMenu(e) {
 function wireConsoleToggleButton() {
   var ctBtn = document.getElementById('console-toggle-btn');
   if (!ctBtn) return;
+  if (typeof syncConsoleToggleButton === 'function') {
+    syncConsoleToggleButton();
+  }
   ctBtn.onclick = function() {
     toggleConsolePanel();
-    ctBtn.innerHTML = (ui.consolePanelEl.style.display === 'none' || !ui.consolePanelEl.style.display) ? '&#x25B2;' : '&#x25BC;';
   };
 }
 
@@ -241,10 +244,6 @@ function wireMiscActionButtons() {
 
   if (ui.upBtn) {
     ui.upBtn.onclick = function () {
-      navigateUp();
-    };
-  } else if (ui.upRow) {
-    ui.upRow.onclick = function () {
       navigateUp();
     };
   }

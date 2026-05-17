@@ -140,14 +140,20 @@ body {
   position: fixed;
   z-index: 2000;
   width: auto !important;
-  min-width: 0 !important;
-  max-width: none !important;
+  min-width: 220px !important;
+  max-width: 360px !important;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
   padding: 4px;
   box-sizing: border-box;
+}
+
+.caption-context-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-soft);
 }
 
 .caption-context-menu .flag-row {
@@ -169,6 +175,7 @@ body {
   border-radius: 6px;
   border: none;
   padding: 8px 10px;
+  white-space: nowrap;
 }
 
 .caption-context-menu-item:hover {

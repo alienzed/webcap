@@ -70,9 +70,14 @@ function renderConfigPanel(doc) {
 }
 // Utility: Stream fetch output to preview pane
 function streamPreviewFromFetch(url, body, ui, onDone, onError) {
-  ui.consolePanelEl.style.display = 'block';
-  var btn = document.getElementById('console-toggle-btn');
-  if (btn) btn.innerHTML = '\u25BC';
+  if (typeof showConsolePanel === 'function') {
+    showConsolePanel();
+  } else {
+    ui.consolePanelEl.style.display = 'block';
+    if (typeof syncConsoleToggleButton === 'function') {
+      syncConsoleToggleButton();
+    }
+  }
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -424,6 +429,15 @@ window.addEventListener('message', function(event) {
 // Loads config file content into the main editor for editing
 function loadConfigFileToEditor(fileName) {
   setStatus('Loading config: ' + fileName);
+  if (typeof hideConsolePanel === 'function') {
+    hideConsolePanel();
+  } else if (ui && ui.consolePanelEl) {
+    ui.consolePanelEl.style.display = 'none';
+  }
+  var consoleToggleBtn = document.getElementById('console-toggle-btn');
+  if (consoleToggleBtn && typeof syncConsoleToggleButton === 'function') {
+    syncConsoleToggleButton();
+  }
   var folder = state.folder || '';
   var keepReviewPreview = false;
   if (ui && ui.previewEl) {

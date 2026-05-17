@@ -1,14 +1,14 @@
 # WebCap
 
-WebCap is a local-first media curation and captioning tool for training-set workflows.
-It focuses on fast iteration, explicit mutations, and reversible file operations.
+WebCap is a local-first media curation and captioning app for training-set workflows.
+It is built for explicit, reversible mutations and fast dataset iteration.
 
 ## Requirements
 
 - Python 3.10+
 - `pip`
-- `ffmpeg` in `PATH` (required for metadata and media tooling)
-- `deface` in `PATH` (optional, only needed if you use deface actions)
+- `ffmpeg` and `ffprobe` in `PATH` (required for media metadata and video features)
+- `deface` in `PATH` (optional, only needed if you use Deface)
 
 ## Install
 
@@ -19,7 +19,7 @@ git clone https://github.com/alienzed/webcap.git
 cd webcap
 ```
 
-2. Install Python dependencies.
+2. Install dependencies.
 
 ```bash
 pip install -r requirements.txt
@@ -29,7 +29,7 @@ pip install -r requirements.txt
 
 Primary config file: `tool/config.json`
 
-Minimum required shape:
+Minimum shape:
 
 ```json
 {
@@ -42,15 +42,16 @@ Minimum required shape:
     "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
     "activate_script": "dp-clean/bin/activate",
     "config_hi": "config.hi.toml",
-    "config_lo": "config.lo.toml"
+    "config_lo": "config.lo.toml",
+    "mode": "normal"
   }
 }
 ```
 
 Notes:
 - `filesystem.root` is required.
-- Training values are used by command preview in the Training tab.
-- You can also edit these settings from the in-app Settings modal.
+- Training mode supports `poc` and `normal`.
+- You can edit config in-app via Settings.
 
 ## Run
 
@@ -59,125 +60,230 @@ python -m tool.server.app
 ```
 
 Open:
-- http://127.0.0.1:5000/
+- <http://127.0.0.1:5000/>
 
-## Workflow Overview
+## UI Map
 
-1. Open a set folder.
-2. Curate files (rename/prune/reset/restore/crop/deface as needed).
-3. Write and refine captions while previewing media.
-4. Review captions and metadata.
-5. Run dataset prep and generate config artifacts.
-6. Preview concrete HI/LO training commands.
-7. Execute training externally.
+- Left panel: folder/media browser, filters, review/train/config sidebars.
+- Center panel: caption/config editor and console panel.
+- Right panel: media preview and review reports.
 
-## Mini How-To: Core Features
+## End-to-End Workflow
 
-### 1. Browse folders and select media
+1. Open a dataset folder.
+2. Filter/select the working subset.
+3. Curate files (rename/prune/reset/restore/crop/transform/deface/clip).
+4. Write captions and use Requirements/Phrases/Tags/Metadata helpers.
+5. Run Review Captions to inspect coverage/quality.
+6. Run Prepare Dataset.
+7. Run Generate.
+8. Run Train to print command preview, then execute externally.
 
-1. Use the left panel to navigate folders.
-2. Click a media file to load preview and caption.
-3. Use `ArrowUp` / `ArrowDown` to move between media items when focus is not in an input/textarea.
+## Feature Guide
 
-### 2. Edit captions
+### 1. Folder navigation
 
-1. Select a media file.
-2. Edit text in the center editor.
-3. Autosave writes a `.txt` beside the media file.
-4. `Ctrl+S` / `Cmd+S` triggers explicit save from the editor.
+- Click folders in the left list to navigate.
+- Use the floating up-arrow to go up one directory.
+- Use the utility path button to open a path flyout and jump to any segment.
+- Right-click current folder row for actions:
+  - Open in Explorer
+  - Open Folder in VS Code
+  - Run Autoset (Legacy)
+  - Generate Dataset Configs
+  - Deface (entire folder)
+  - Reset Reviewed
 
-### 3. Mark reviewed state
+### 2. Media selection and preview
 
-1. Double-click a media row to toggle reviewed on/off.
-2. Reviewed state persists in `.webcap_state.json` for that folder.
-3. To clear all reviewed state in current folder: right-click current folder row, then choose `Reset Reviewed`.
+- Click a media row to load preview and caption.
+- Selection change saves current caption first (when needed), then switches.
+- Selected media status and metadata update live.
 
-### 4. File operations (safe and explicit)
+### 3. Caption editor
 
-Right-click a media item for operations:
-- `Rename`
-- `Prune` (moves media to `originals` with collision-safe naming)
-- `Reset` (overwrite current file with original backup)
-- `Restore` (from `originals` view)
-- `Duplicate Image`
-- `Crop...`
-- `Deface...`
+- Captions are saved beside media as `.txt` files.
+- Autosave runs while typing.
+- `Ctrl+S` / `Cmd+S` performs explicit save.
+- `F2` renames selected media (outside `originals`).
 
-Right-click a folder for operations:
-- `Rename Folder`
-- `Duplicate Folder`
-- `Open in Explorer`
+### 4. Filters and subset selection
 
-### 5. Deface media
+Filter bar supports:
+- Text filter
+- Advanced filters:
+  - Captionless
+  - Reviewed
+  - Stars (`> N`)
+  - Flag color
+  - Invalid AR
+- Clear All resets text + all advanced filters.
 
-Per file:
-1. Right-click media file.
-2. Choose `Deface...`.
-3. Enter threshold (`0.0` to `1.0`, default `0.4`).
+Prepare uses the currently visible media rows as its selection source.
 
-Per folder:
-1. Right-click current folder row.
-2. Choose `Deface`.
+### 5. Review state
+
+- Double-click media row toggles reviewed on/off.
+- Reviewed state persists in folder state.
+- `Reset Reviewed` clears all reviewed marks in the current folder.
+
+### 6. Context-menu media operations
+
+Right-click media item for:
+- Flag assignment
+- Open Containing Folder
+- Rename
+- Prune
+- Reset
+- Duplicate Image (images)
+- Crop (images)
+- Rotate Left 90 deg (images)
+- Rotate Right 90 deg (images)
+- Flip Vertical (images)
+- Flip Horizontal (images and videos)
+- Deface
+- Clip (videos in `src_videos` only)
+
+Safety behavior:
+- Destructive operations require confirmation.
+- Originals are backed up for reversible workflows.
+
+### 7. Crop modal (images)
+
+Crop features:
+- Aspect-ratio presets: `1:1`, `4:3`, `16:9`, `9:16`
+- Soft magnet snap toward an 8px grid while adjusting
+- Finalized crop snapped/clamped to safe bounds
+- Arbitrary angle rotation:
+  - Angle slider (`-180..180`)
+  - Numeric angle input
+  - Reset button
+
+Apply writes the rendered rotated crop output in place.
+
+### 8. Video clip flow
+
+- `Clip...` appears for video files under `src_videos`.
+- Modal supports:
+  - Playback/scrubbing
+  - Start time and duration
+  - Output file name
+  - Crop This Frame (fixed ratio crop via crop modal)
+- Export writes clip into the set and refreshes metadata/list state.
+
+### 9. Caption helper panel
+
+Tabs:
+- Requirements
+- Phrases
+- Tags
+- Metadata
+
+Requirements tab:
+- Add/remove requirements per set.
+- Per-media checkbox state persists.
+- Checklist completion can drive reviewed state.
+- Settings modal lets you assign comma-separated keywords per requirement.
+- Keyword matches highlight requirement rows while editing.
+- Press `Enter` in keyword value fields to save and close modal.
+
+Phrases tab:
+- Add/remove reusable phrases.
+- Click phrase to toggle in current caption:
+  - If present: remove
+  - If missing: insert at cursor
+- Copy button copies phrase to clipboard.
+- Hover highlighting is supported for phrase/requirement matches.
+
+Tags tab:
+- Add/remove per-media tags.
+- Clicking a tag applies it as filter text.
+
+Metadata tab:
+- Per-media star rating (1..5).
+- Key metadata fields (resolution, AR, fps, duration, frames, codec, size).
+- Unsupported AR values are highlighted.
+
+### 10. Keyboard shortcuts
+
+Global shortcuts (when not typing in input/textarea/select):
+- `ArrowUp` / `ArrowDown`: previous/next visible media
+- `Delete`: prune selected media (outside `originals`)
+- `0..5`: set rating (`0` clears)
+- `G`, `Y`, `O`, `B`, `R`: set flag color (green/yellow/orange/blue/red)
+
+Editor shortcuts:
+- `Ctrl+S` / `Cmd+S`: save caption or current config file
+- `F2`: rename selected media (when editor is not focused)
+
+### 11. Review reports
+
+`Review Captions` builds a report in preview pane with:
+- Summary stats
+- Missing required phrase
+- Phrase balance
+- Validation failures from token rules
+- Duplicate captions
+- Similar captions (80%+)
+- Caption length insights and outliers
+- Top/rare token summaries
+- Media metadata table (with optional AR grouping)
+
+Report links can focus the working set to matching files.
+
+### 12. Training tab
+
+Training panel includes:
+- Prepare Dataset
+- Generate
+- Train
 
 Behavior:
-- Originals are backed up before overwrite.
-- Output streams to console panel.
+- Prepare processes selected/visible subset and writes `auto_dataset/prep_manifest.json`.
+- Generate reads prep manifest and writes dataset/config outputs.
+- If prep manifest is missing, Generate auto-runs Prepare once, then retries Generate.
+- Train prints resolved command preview to console (does not run training jobs).
 
-### 6. Review captions and metadata
+### 13. Config file editing in-app
 
-1. Use `Review Captions` / review pane actions.
-2. Review output appears in the right preview pane.
-3. Metadata is served from `media_metadata.json` (auto-updated by backend as files change).
+- Training panel lists config files grouped by High Noise / Low Noise.
+- Clicking a config file opens it in center editor.
+- Opening a config file closes the status console panel.
+- `Ctrl+S` / `Cmd+S` saves config via `/fs/save_config`.
 
-### 7. Training prep hub
+### 14. Utility bar and app settings
 
-In the Training tab:
+Utility buttons:
+- Path/home button: current-path flyout and jump navigation
+- Settings: open app settings modal
+- Reboot: reload runtime config from disk
+- Help: load README into preview pane
 
-1. `Prepare Dataset` to run dataset preparation pipeline.
-2. `Generate Dataset Configs` to (re)generate config artifacts for the set.
-3. `Train` to print resolved HI/LO training commands (preview only).
+Settings modal supports:
+- Filesystem root/models paths
+- Training paths and config filenames
+- Training mode (`poc` / `normal`)
+- Debug mode
+- Advanced JSON editing
+- Save or Save + Reboot
 
-Important:
-- Training command execution is currently disabled in-app.
-- WebCap prints concrete commands so you can run them externally.
+## Data and Artifacts
 
-### 8. Legacy autoset
-
-Use when needed for older flow compatibility:
-
-1. Right-click current folder row.
-2. Choose `Run Autoset (Legacy)`.
-
-This streams legacy autoset output to the console panel.
-
-### 9. App settings and runtime reload
-
-Utility bar buttons (top-left area):
-- Home/path button: shows current folder path in tooltip.
-- Gear button: open App Settings modal.
-- Reboot button: reload runtime config from `tool/config.json`.
-- `?` button: load this README into preview pane.
-
-Settings modal flow:
-1. Open settings (`gear`).
-2. Edit fields or advanced JSON.
-3. Click `Save` to write file.
-4. Click `Save + Reboot` (or utility reboot) to apply runtime changes immediately.
-
-## State and Artifacts
-
+Per set folder:
+- Captions: `<media>.txt`
 - Folder state: `.webcap_state.json`
-- Captions: adjacent `.txt` files per media file
-- Metadata cache/report: `media_metadata.json`
-- Originals backup folder: `originals/`
-- Generated configs use templates from `tool/templates/`
+- Metadata cache: `media_metadata.json`
+- Backups: `originals/`
+- Prepared dataset outputs: `auto_dataset/`
+  - Includes `prep_manifest.json`
 
-## Backend Endpoints (high level)
+## API Endpoints (high level)
 
-- Config/runtime: `/app/config`, `/app/reboot`, `/app/help_readme`
-- Folder/media: `/fs/describe`, `/caption/load`, `/caption/save`, `/caption/media`
-- Mutations: `/media/prune`, `/media/reset`, `/media/restore`, `/media/crop`, `/fs/deface`
-- Training prep: `/fs/prepare_dataset`, `/fs/generate_dataset_config`, `/fs/train_run`, `/fs/autoset_run`
+- App/config: `/app/config`, `/app/reboot`, `/app/help_readme`
+- File system: `/fs/describe`, `/fs/read`, `/fs/list_config`, `/fs/read_config`, `/fs/save_config`, `/fs/rename`, `/fs/open_in_explorer`, `/fs/open_in_vscode`
+- Captions/media: `/caption/load`, `/caption/save`, `/caption/media`, `/fs/media_metadata`
+- Mutations: `/media/prune`, `/media/reset`, `/media/restore`, `/media/crop`, `/media/image_transform`, `/media/flip_horizontal`, `/media/video_clip`, `/fs/deface`
+- Training flow: `/fs/prepare_dataset`, `/fs/generate_dataset_config`, `/fs/train_run`, `/fs/autoset_run`
 
 ## Tests
 
@@ -186,7 +292,7 @@ Current test files:
 - `tests/test_file_ops_routes.py`
 - `tests/test_prune_restore.py`
 
-Quick run examples:
+Quick runs:
 
 ```bash
 python tests/test_prune_restore.py
@@ -198,33 +304,34 @@ python tests/test_dataset_config.py
 
 ### No media appears
 
-- Verify `filesystem.root` in `tool/config.json`.
-- Ensure files are supported media extensions.
-- Check backend terminal for path or permission errors.
+- Check `filesystem.root` in config.
+- Confirm supported media file extensions.
+- Check backend terminal for path/permission errors.
 
-### Settings saved but not applied
+### Generate fails quickly
 
-- Use `Save + Reboot` in settings modal, or click utility reboot button.
+- Ensure folder has media and captions.
+- Run Prepare first, or let Generate auto-prepare if manifest is missing.
+- Inspect console output for prep/generate error details.
 
-### Training preview has warnings
+### Config changes not taking effect
 
-- Check `training.diffusion_pipe_wsl`, `training.config_hi`, `training.config_lo` in config.
-- Ensure config files exist in the selected folder.
+- Use Save + Reboot in Settings, or click utility Reboot.
 
 ### Deface fails
 
-- Ensure `deface` executable is installed and visible in `PATH`.
-- Confirm ffmpeg/ffprobe tooling is available.
+- Verify `deface` is installed and in `PATH`.
+- Verify ffmpeg/ffprobe are available.
 
 ## Project Structure
 
-- `tool/tool.html`: main UI layout
-- `tool/js/`: frontend scripts (global, feature-split)
+- `tool/tool.html`: app shell and modal markup
+- `tool/js/`: frontend logic
 - `tool/css/`: styles
-- `tool/server/`: Flask backend and file operations
-- `tool/templates/`: dataset/config templates
-- `docs/`: feature specs and workflow notes
-- `tests/`: backend validation scripts
+- `tool/server/`: Flask routes and backend operations
+- `tool/templates/`: generated config templates
+- `docs/`: design notes and specs
+- `tests/`: test scripts
 
 ## License
 

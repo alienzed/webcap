@@ -1,11 +1,10 @@
 This file tracks implemented work vs outstanding items.
 
 ## Bugs
-<!-- Implemented: caption requirement persistence bug fixed. -->
+
 
 ## Enhancements
 - Dataset inferred sample/megaframe/VRAM/time estimation.
-  - Interesting, but intentionally deferred for now (quota-sensitive).
 
 ## 1.1 Ideas
 - We have caption requirements. We need a concept of Set Requirements, ideally self counting. For example, a good character LORA includes:

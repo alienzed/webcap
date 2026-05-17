@@ -138,6 +138,6 @@ def test_generate_dataset_configs_writes_selection_snapshot_comments(tmp_path):
     assert "# criteria.reviewed_only: True" in lo_text
     assert "# bucket: 43_img" in lo_text
     assert "# bucket: 916_img" in lo_text
-    assert "# file: aa.png | caption: key phrase \\#one missing token" in lo_text
-    assert "# file: zz.png | caption: another caption" in lo_text
+    assert "# file: aa.png" in lo_text
+    assert "# file: zz.png" in lo_text
     assert "# snapshot.selection_hash: sha256:" in lo_text

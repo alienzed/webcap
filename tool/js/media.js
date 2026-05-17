@@ -1,5 +1,5 @@
 // media.js
-// Global functions: restoreMediaItem, resetMediaItem, selectPathMedia, promptRenameMedia, navigateUp, renameMedia, renderPathPreview
+// Global functions: restoreMediaItem, resetMediaItem, selectPathMedia, promptRenameMedia, navigateUp, renameMedia, renderPathPreview, reselectCurrentMediaFromPreview
 
 function scrollCurrentMediaRowIntoView() {
   if (!ui || !ui.mediaListEl || !state || !state.currentItem || !state.currentItem.key) {
@@ -369,6 +369,29 @@ function selectPathMedia(mediaItem) {
   });
 }
 
+function reselectCurrentMediaFromPreview() {
+  if (!state || !state.currentItem || !ui || !ui.mediaListEl) {
+    return false;
+  }
+  var key = state.currentItem.key;
+  if (!key) {
+    return false;
+  }
+  var row = ui.mediaListEl.querySelector('.media-item[data-type="media"][data-key="' + key.replace(/"/g, '\\"') + '"]');
+  if (!row) {
+    return false;
+  }
+  // Move focus out of editor inputs and back into list context.
+  var activeEl = document.activeElement;
+  if (activeEl && typeof isEditableElement === 'function' && isEditableElement(activeEl)) {
+    try { activeEl.blur(); } catch (_err) {}
+  }
+  if (!row.hasAttribute('tabindex')) row.setAttribute('tabindex', '-1');
+  try { row.focus({ preventScroll: true }); } catch (_focusErr) { try { row.focus(); } catch (_focusErr2) {} }
+  try { row.click(); } catch (_clickErr) {}
+  return true;
+}
+
 function promptRenameMedia(mediaItem) {
   var oldFile = mediaItem.fileName;
   var input = prompt('Rename file', oldFile);
@@ -497,6 +520,14 @@ function renderPreviewHtml(isImage, src) {
     '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
     tag +
     '<script>\n' +
+    'function sendPreviewReselect(){\n' +
+    '  try {\n' +
+    '    if(window.parent && window.parent.postMessage){\n' +
+    '      window.parent.postMessage({ type: "media-preview-reselect" }, "*");\n' +
+    '    }\n' +
+    '  } catch (_err) {}\n' +
+    '}\n' +
+    'document.addEventListener("click", sendPreviewReselect, true);\n' +
     'var video=document.getElementById("media-video");\n' +
     'if(video){\n' +
     '  var error=document.getElementById("video-error");\n' +
@@ -508,6 +539,15 @@ function renderPreviewHtml(isImage, src) {
     '<\/script></body></html>'
   );
   doc.close();
+  // Fallback binding from parent context so reselect still works
+  // even if iframe inline scripts are blocked or not executed.
+  try {
+    doc.addEventListener('click', function () {
+      if (typeof reselectCurrentMediaFromPreview === 'function') {
+        reselectCurrentMediaFromPreview();
+      }
+    }, true);
+  } catch (_bindErr) {}
 }
 
 async function renderFileList() {

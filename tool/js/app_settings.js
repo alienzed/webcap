@@ -17,8 +17,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.activate_script) out.training.activate_script = '';
   if (!out.training.config_hi) out.training.config_hi = '';
   if (!out.training.config_lo) out.training.config_lo = '';
-  if (out.training.mode === 'quality') out.training.mode = 'normal';
-  if (!out.training.mode || ['poc', 'normal'].indexOf(out.training.mode) === -1) out.training.mode = 'normal';
+  if (!out.training.mode || ['poc', 'normal', 'quality'].indexOf(out.training.mode) === -1) out.training.mode = 'normal';
   return out;
 }
 
@@ -37,6 +36,7 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingConfigLoEl) ui.appSettingsTrainingConfigLoEl.value = c.training.config_lo || '';
   var mode = c.training.mode || 'normal';
   if (mode === 'poc' && ui.appSettingsTrainingModePocEl) ui.appSettingsTrainingModePocEl.checked = true;
+  else if (mode === 'quality' && ui.appSettingsTrainingModeQualityEl) ui.appSettingsTrainingModeQualityEl.checked = true;
   else if (ui.appSettingsTrainingModeNormalEl) ui.appSettingsTrainingModeNormalEl.checked = true;
   if (ui.appSettingsDebugEl) ui.appSettingsDebugEl.checked = !!c.debug;
   renderAppSettingsJson(c);
@@ -45,6 +45,7 @@ function fillAppSettingsForm(cfg) {
 function collectAppSettingsFormConfig() {
   var mode = 'normal';
   if (ui.appSettingsTrainingModePocEl && ui.appSettingsTrainingModePocEl.checked) mode = 'poc';
+  if (ui.appSettingsTrainingModeQualityEl && ui.appSettingsTrainingModeQualityEl.checked) mode = 'quality';
   return normalizeAppConfigShape({
     filesystem: {
       root: ui.appSettingsRootEl ? ui.appSettingsRootEl.value : '',
@@ -253,6 +254,9 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingActivateScriptEl,
     ui.appSettingsTrainingConfigHiEl,
     ui.appSettingsTrainingConfigLoEl,
+    ui.appSettingsTrainingModePocEl,
+    ui.appSettingsTrainingModeNormalEl,
+    ui.appSettingsTrainingModeQualityEl,
     ui.appSettingsDebugEl,
   ];
   syncFields.forEach(function (el) {

@@ -195,6 +195,10 @@ function wireReviewActions() {
     if (!data) {
       return;
     }
+    if (data.type === 'media-preview-reselect') {
+      reselectCurrentMediaFromPreview();
+      return;
+    }
     if (data.type === 'caption-review-select') {
       selectByFileName(data.fileName, data.focusFiles, data.focusSource);
       return;

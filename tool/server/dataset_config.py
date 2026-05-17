@@ -43,6 +43,33 @@ TRAINING_MODE_TARGETS = {
         "169": (688, 384),
         "916": (384, 688),
     },
+    "quality": {
+        "square": (768, 768),
+        "43": (1024, 768),
+        "169": (1024, 576),
+        "916": (576, 1024),
+    },
+}
+
+IMAGE_MODE_CAPS = {
+    # Fast, forgiving defaults for quick proofs.
+    "poc": {
+        "square_dim": 512,
+        "non_square_long": 768,
+        "non_square_short": 512,
+    },
+    # Balanced quality while staying within practical local training limits.
+    "normal": {
+        "square_dim": 768,
+        "non_square_long": 1024,
+        "non_square_short": 768,
+    },
+    # Snob mode can stay close to normal; quality bias comes from bucket choice.
+    "quality": {
+        "square_dim": 768,
+        "non_square_long": 1024,
+        "non_square_short": 768,
+    },
 }
 
 PREP_MANIFEST_NAME = "prep_manifest.json"
@@ -60,8 +87,6 @@ NORMAL_SECOND_BUCKET_MIN_SCALE_NON_SQUARE = 1.08
 
 def normalize_training_generate_mode(mode):
     text = str(mode or "normal").strip().lower()
-    if text in ("quality",):
-        text = "normal"
     if text not in TRAINING_MODE_TARGETS:
         text = "normal"
     return text
@@ -484,12 +509,14 @@ def generate_candidates(ar_label: str):
     )
 
 
-def generate_image_candidates(ar_label: str):
+def generate_image_candidates(ar_label: str, mode: str = "normal"):
+    generate_mode = normalize_training_generate_mode(mode)
+    caps = IMAGE_MODE_CAPS.get(generate_mode, IMAGE_MODE_CAPS["normal"])
     return generate_candidates_with_caps(
         ar_label,
-        IMAGE_MAX_SQUARE_DIM,
-        IMAGE_MAX_NON_SQUARE_LONG,
-        IMAGE_MAX_NON_SQUARE_SHORT,
+        caps["square_dim"],
+        caps["non_square_long"],
+        caps["non_square_short"],
         canonical_only=True,
     )
 
@@ -579,7 +606,7 @@ def add_candidate(candidates, seen, target_ar, w, h, max_long, max_short):
 
 def pick_image_buckets(ar_label: str, images, mode: str = "normal"):
     generate_mode = normalize_training_generate_mode(mode)
-    candidates = generate_image_candidates(ar_label)
+    candidates = generate_image_candidates(ar_label, mode=generate_mode)
     if not candidates:
         raise ValueError(f"No image bucket candidates for AR={ar_label}")
     candidates = [
@@ -610,7 +637,7 @@ def pick_image_buckets(ar_label: str, images, mode: str = "normal"):
         support[(w, h)] = sum(1 for (_, iw, ih) in supported_images if iw >= w and ih >= h)
 
     target_w, target_h = TRAINING_MODE_TARGETS[generate_mode][ar_label]
-    primary = pick_primary_image_bucket(candidates, support, total, target_w, target_h)
+    primary = pick_primary_image_bucket(candidates, support, total, target_w, target_h, generate_mode)
     if not primary:
         return [], unsupported
 
@@ -622,19 +649,35 @@ def pick_image_buckets(ar_label: str, images, mode: str = "normal"):
     return selected, unsupported
 
 
-def pick_primary_image_bucket(candidates, support, total, target_w, target_h):
+def pick_primary_image_bucket(candidates, support, total, target_w, target_h, mode):
     full_coverage = [(w, h, area) for (w, h, area) in candidates if support[(w, h)] == total]
     if not full_coverage:
-        return None
+        # Fallback path for constrained datasets: maximize coverage first, then area.
+        best = None
+        for (w, h, area) in candidates:
+            cov = support[(w, h)] / float(total)
+            # Soft target tie-breaker to preserve expected mode behavior.
+            in_target = 1 if (w <= target_w and h <= target_h) else 0
+            entry = (cov, in_target, area, w, h)
+            if best is None or entry > best:
+                best = entry
+        if best is None:
+            return None
+        return (best[3], best[4])
 
-    at_or_below = [
-        (w, h, area)
-        for (w, h, area) in full_coverage
-        if w <= target_w and h <= target_h
-    ]
-    if at_or_below:
-        best = max(at_or_below, key=lambda item: item[2])
-        return (best[0], best[1])
+    # POC prioritizes lower compute: stay near target even with full coverage.
+    if mode == "poc":
+        at_or_below = [
+            (w, h, area)
+            for (w, h, area) in full_coverage
+            if w <= target_w and h <= target_h
+        ]
+        if at_or_below:
+            best = max(at_or_below, key=lambda item: item[2])
+            return (best[0], best[1])
+
+    # Normal/Quality (and POC fallback): for homogeneous/high-support sets,
+    # prioritize the largest fully-supported bucket.
     best = max(full_coverage, key=lambda item: item[2])
     return (best[0], best[1])
 

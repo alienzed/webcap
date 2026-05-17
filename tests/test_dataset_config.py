@@ -190,17 +190,17 @@ def test_rectangle_image_candidates_allow_long_edge_above_768():
 
 def test_image_alternatives_include_three_lower_and_three_higher():
     assert image_alternatives("square", 768, 768) == [
-        (672, 672),
-        (704, 704),
         (736, 736),
+        (704, 704),
+        (672, 672),
         (800, 800),
         (832, 832),
         (864, 864),
     ]
     assert image_alternatives("916", 704, 1248) == [
-        (608, 1088),
-        (640, 1152),
         (672, 1184),
+        (640, 1152),
+        (608, 1088),
     ]
 
 
@@ -214,7 +214,7 @@ def test_selected_image_buckets_respect_image_mfp_limit():
     buckets, unsupported = pick_image_buckets("916", images, mode="normal")
 
     assert unsupported == []
-    assert buckets == [(384, 688)]
+    assert buckets == [(576, 1024)]
 
 
 def test_pick_image_buckets_prefers_full_coverage_then_detail():
@@ -236,7 +236,7 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
     ]
     buckets_916, unsupported_916 = pick_image_buckets("916", images_916, mode="normal")
     assert unsupported_916 == []
-    assert buckets_916 == [(384, 672)]
+    assert buckets_916 == [(480, 864), (576, 1024)]
 
     images_square = [
         ("003c.jpg", 544, 544),
@@ -249,19 +249,20 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
     ]
     buckets_square, unsupported_square = pick_image_buckets("square", images_square, mode="normal")
     assert unsupported_square == []
-    assert buckets_square == [(512, 512)]
+    assert buckets_square == [(544, 544)]
 
     buckets_square_poc, _ = pick_image_buckets("square", images_square, mode="poc")
     assert buckets_square_poc == [(384, 384)]
 
 
-def test_normalize_training_generate_mode_maps_quality_to_normal():
-    assert normalize_training_generate_mode("quality") == "normal"
+def test_normalize_training_generate_mode_keeps_quality_mode():
+    assert normalize_training_generate_mode("quality") == "quality"
     assert normalize_training_generate_mode("poc") == "poc"
 
 
-def test_image_candidates_cap_long_edge_at_768():
-    assert generate_image_candidates("169")[0][:2] == (736, 416)
+def test_image_candidates_use_mode_caps():
+    assert generate_image_candidates("169", mode="normal")[0][:2] == (1024, 576)
+    assert generate_image_candidates("169", mode="poc")[0][:2] == (736, 416)
     assert generate_candidates("169")[0][:2] == (1248, 704)
 
 
@@ -278,7 +279,7 @@ def test_validate_config_payload_persists_training_mode():
         "filesystem": {"root": "C:/sets", "models": ""},
         "training": {"mode": "quality"},
     })
-    assert normalized_quality["training"]["mode"] == "normal"
+    assert normalized_quality["training"]["mode"] == "quality"
 
 
 def test_poc_mode_never_emits_second_image_bucket():

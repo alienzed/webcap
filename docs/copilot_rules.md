@@ -19,7 +19,14 @@
 
 ---
 
-## 3. UX Principles
+## 3. Solution Design Strategy
+- **Default to wiring existing UI elements first.** Before suggesting backend work, WebCodecs APIs, or new infrastructure, check if UI controls already exist. Connect them with minimal event handlers or state updates.
+- **Prefer reversible, one-file changes over architectural proposals.** Single-function additions and event listener wiring are preferred to multi-layer refactoring.
+- **Ask "what's already wired?" not "what should we build?"** The simplest fix is usually connecting pieces that already exist.
+
+---
+
+## 4. UX Principles
 - Minimal, context-aware UI; avoid clutter.
 - All output and errors are visible and actionable.
 - Busy/locked state is clearly indicated during mutations or script runs.
@@ -27,14 +34,14 @@
 
 ---
 
-## 4. Non-Negotiables
+## 5. Non-Negotiables
 - No regressions.
 - App must remain portable (Python + browser only).
 - Maintainability and clarity are prioritized over scalability or flexibility.
 
 ---
 
-## 5. Error Handling
+## 6. Error Handling
 - All errors must be visible in the browser console.
 - **Critical errors** (invariant violations, impossible states, or integrity threats) must break execution—never caught or logged.
 - Non-critical errors may be logged for debugging, but never swallowed or ignored.

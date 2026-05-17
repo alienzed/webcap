@@ -530,8 +530,31 @@ function wireVideoClipModal() {
 
   document.addEventListener('keydown', function (e) {
     var modal = getVideoClipEl('video-clip-modal');
-    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+    if (!modal || modal.classList.contains('hidden')) return;
+    
+    if (e.key === 'Escape') {
       closeVideoClipModal();
+      return;
+    }
+    
+    // Handle arrow keys to increment/decrement start time field
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      var startEl = getVideoClipEl('video-clip-start-input');
+      if (!startEl) return;
+      
+      e.preventDefault();
+      var currentVal = Number(startEl.value) || 0;
+      var step = 0.05;
+      var newVal = e.key === 'ArrowRight' ? currentVal + step : currentVal - step;
+      
+      // Ensure value doesn't go below 0
+      if (newVal < 0) newVal = 0;
+      
+      startEl.value = Number(newVal.toFixed(2));
+      
+      // Trigger change event to update video position
+      var changeEvent = new Event('change', { bubbles: true });
+      startEl.dispatchEvent(changeEvent);
     }
   });
 }

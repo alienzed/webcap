@@ -7,7 +7,7 @@ import shutil
 import hashlib
 
 # Blacklisted folder names (never process or mutate)
-BLACKLISTED_FOLDERS = {'originals', 'auto_dataset'}
+BLACKLISTED_FOLDERS = {'originals', 'auto_dataset', 'src_videos'}
 
 # Supported media extensions (video + image)
 MEDIA_ALL_EXTS = {

@@ -35,7 +35,7 @@ function setStatus(text) {
 
 function isBlacklistedSetSubfolderName(name) {
   var n = String(name || '').toLowerCase();
-  return n === 'originals' || n === 'auto_dataset';
+  return n === 'originals' || n === 'auto_dataset' || n === 'src_videos';
 }
 
 // Path-only check: non-root folder path that does not include known

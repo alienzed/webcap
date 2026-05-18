@@ -54,12 +54,24 @@ function saveCaptionHelpersToFolderState() {
 function captionPhraseBoundaryPattern(phrase) {
   var escapedPhrase = String(phrase || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   if (!escapedPhrase) return null;
-  return new RegExp('\\b' + escapedPhrase + '\\b', 'i');
+  return new RegExp('(^|[^A-Za-z0-9_])(' + escapedPhrase + ')(?=$|[^A-Za-z0-9_])', 'i');
+}
+
+function captionPhraseMatch(value, phrase) {
+  var pattern = captionPhraseBoundaryPattern(phrase);
+  if (!pattern) return null;
+  var text = String(value || '');
+  var match = pattern.exec(text);
+  if (!match) return null;
+  var leading = match[1] || '';
+  var matchedText = match[2] || '';
+  var start = match.index + leading.length;
+  var end = start + matchedText.length;
+  return { start: start, end: end };
 }
 
 function captionContainsPhrase(value, phrase) {
-  var pattern = captionPhraseBoundaryPattern(phrase);
-  return !!(pattern && pattern.test(String(value || '')));
+  return !!captionPhraseMatch(value, phrase);
 }
 
 function joinCaptionParts(before, after) {
@@ -107,13 +119,11 @@ function removeCaptionPhraseFromCaption(text) {
   if (!phrase) return false;
   var editor = ui.editorEl;
   var value = editor.value || '';
-  var pattern = captionPhraseBoundaryPattern(phrase);
-  if (!pattern) return false;
-  var match = pattern.exec(value);
+  var match = captionPhraseMatch(value, phrase);
   if (!match) return false;
 
-  var start = match.index;
-  var end = start + match[0].length;
+  var start = match.start;
+  var end = match.end;
   var nextValue = joinCaptionParts(value.slice(0, start), value.slice(end));
   editor.value = nextValue;
   var caret = Math.min(start, nextValue.length);

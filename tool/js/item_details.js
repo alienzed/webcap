@@ -207,7 +207,7 @@ function renderItemTagsPanel() {
 }
 
 function refreshMediaResolutionCache() {
-  if (!state.folder) {
+  if (!state.folder || !Array.isArray(state.items) || !state.items.length) {
     mediaResolutionByFile = {};
     mediaMetadataByFile = {};
     return;
@@ -243,7 +243,6 @@ function refreshMediaResolutionCache() {
         renderItemMetadataPanel();
         return;
       }
-      setStatus('Metadata ready.');
     } catch (e) {
       mediaResolutionByFile = {};
       mediaMetadataByFile = {};

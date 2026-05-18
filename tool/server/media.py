@@ -321,6 +321,7 @@ def media_metadata_response(rel_path):
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
         metadata_dict = update_media_metadata(folder_path)
+        print(f"[metadata] generated for folder: {rel_path or '.'}")
         metadata_list = []
         for filename, info in metadata_dict.items():
             record = {

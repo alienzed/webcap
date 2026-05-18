@@ -173,6 +173,72 @@ function getFilteredMediaItems(ignoreFocusSet) {
   return mediaItems;
 }
 
+function hasAnyActiveMediaFilter() {
+  var q = (ui.filterEl && ui.filterEl.value) ? String(ui.filterEl.value).trim() : '';
+  if (q) return true;
+  if (ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked) return true;
+  if (ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked) return true;
+  if (ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked) return true;
+  if (ui.advancedFilterMinStarsEl && String(ui.advancedFilterMinStarsEl.value || '').trim()) return true;
+  if (ui.advancedFilterFlagEl && ui.advancedFilterFlagEl.querySelector('input[type="checkbox"]:checked')) return true;
+  return false;
+}
+
+function pickReplacementVisibleMediaItem(currentKey, visibleItems) {
+  if (!Array.isArray(visibleItems) || !visibleItems.length) return null;
+  var allItems = Array.isArray(state.items) ? state.items : [];
+  var orderByKey = {};
+  for (var i = 0; i < allItems.length; i++) {
+    var it = allItems[i];
+    if (it && it.key && orderByKey[it.key] === undefined) {
+      orderByKey[it.key] = i;
+    }
+  }
+  var currentIndex = (currentKey && orderByKey[currentKey] !== undefined) ? orderByKey[currentKey] : -1;
+  if (currentIndex < 0) return visibleItems[0];
+
+  var forward = null;
+  var forwardIndex = Infinity;
+  var backward = null;
+  var backwardIndex = -1;
+  for (var j = 0; j < visibleItems.length; j++) {
+    var candidate = visibleItems[j];
+    if (!candidate || !candidate.key || orderByKey[candidate.key] === undefined) continue;
+    var idx = orderByKey[candidate.key];
+    if (idx > currentIndex && idx < forwardIndex) {
+      forward = candidate;
+      forwardIndex = idx;
+    }
+    if (idx < currentIndex && idx > backwardIndex) {
+      backward = candidate;
+      backwardIndex = idx;
+    }
+  }
+  return forward || backward || visibleItems[0];
+}
+
+function syncSelectionWithVisibleMedia(mediaItems) {
+  if (!state || !state.currentItem || !state.currentItem.key) return;
+  var currentKey = state.currentItem.key;
+  var isVisible = Array.isArray(mediaItems) && mediaItems.some(function (item) {
+    return item && item.key === currentKey;
+  });
+  if (isVisible) return;
+
+  if (!Array.isArray(mediaItems) || !mediaItems.length) {
+    if (typeof clearEditorAndPreview === 'function') clearEditorAndPreview();
+    if (typeof renderChecklistPanel === 'function') renderChecklistPanel();
+    if (typeof renderItemMetadataPanel === 'function') renderItemMetadataPanel();
+    return;
+  }
+
+  var replacement = pickReplacementVisibleMediaItem(currentKey, mediaItems);
+  if (!replacement) return;
+  selectPathMedia(replacement).catch(function (err) {
+    setStatus(String(err && err.message ? err.message : err));
+  });
+}
+
 async function restoreMediaItem(mediaItem) {
   if (!mediaItem) {
     setStatus('No media item to restore');
@@ -555,6 +621,11 @@ async function renderFileList() {
   var renderSeq = ++state.listRenderSeq;
   ui.mediaListEl.innerHTML = '';
   var mediaItems = getFilteredMediaItems(false);
+  var filtersActive = hasAnyActiveMediaFilter();
+  if (ui.captionFilterClearAllBtn) {
+    ui.captionFilterClearAllBtn.classList.toggle('is-active', filtersActive);
+    ui.captionFilterClearAllBtn.setAttribute('aria-pressed', filtersActive ? 'true' : 'false');
+  }
   // Show count of matching media items
   var countText = mediaItems.length + (mediaItems.length === 1 ? ' item matches the filter' : ' items match the filter');
   if (ui.captionFilterCountTextEl) {
@@ -629,6 +700,8 @@ async function renderFileList() {
     ui.mediaListEl.appendChild(row);
     matchCount++;
   });
+
+  syncSelectionWithVisibleMedia(mediaItems);
 }
 
 // File/Folder Flags

@@ -426,6 +426,12 @@ iframe {
   color: #111827;
 }
 
+.caption-filter-clear-all-btn.is-active {
+  background: #eef6ff;
+  border-color: #7ea4cf;
+  color: #1e4f86;
+}
+
 .advanced-filter-toggle-icon {
   width: 13px;
   height: 13px;

@@ -207,11 +207,16 @@ function renderItemTagsPanel() {
 }
 
 function refreshMediaResolutionCache() {
-  if (!state.folder || !Array.isArray(state.items) || !state.items.length) {
+  function clearMetadataCache() {
     mediaResolutionByFile = {};
     mediaMetadataByFile = {};
+  }
+
+  if (!state.folder || !Array.isArray(state.items) || !state.items.length) {
+    clearMetadataCache();
     return;
   }
+
   var requestFolder = state.folder;
   setStatus('Generating metadata...');
   var xhr = new XMLHttpRequest();
@@ -220,8 +225,7 @@ function refreshMediaResolutionCache() {
     if (xhr.readyState !== 4) return;
     if (state.folder !== requestFolder) return;
     if (xhr.status !== 200) {
-      mediaResolutionByFile = {};
-      mediaMetadataByFile = {};
+      clearMetadataCache();
       setStatus('Metadata failed (' + xhr.status + ').');
       return;
     }
@@ -232,7 +236,7 @@ function refreshMediaResolutionCache() {
       (rows || []).forEach(function (row) {
         if (!row || !row.file) return;
         nextMeta[row.file] = row;
-        if (row && row.file && row.resolution && row.resolution !== '-') {
+        if (row.resolution && row.resolution !== '-') {
           next[row.file] = String(row.resolution);
         }
       });
@@ -244,8 +248,7 @@ function refreshMediaResolutionCache() {
         return;
       }
     } catch (e) {
-      mediaResolutionByFile = {};
-      mediaMetadataByFile = {};
+      clearMetadataCache();
       setStatus('Metadata parse failed.');
     }
   };

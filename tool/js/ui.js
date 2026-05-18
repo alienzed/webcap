@@ -325,7 +325,7 @@ function runReview() {
     state.suppressInput = true;
     ui.editorEl.value = buildCombinedCaptionsText(results);
     state.suppressInput = false;
-    renderReportPreview(report);
+    renderReportPreview(report, results.map(function (row) { return row.fileName; }));
     setStatus('Review ready: ' + results.length + ' files');
   } catch (err) {
     setStatus(String(err && err.message ? err.message : err));

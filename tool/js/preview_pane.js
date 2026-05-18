@@ -130,7 +130,7 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
 
 
 // Render media metadata panel into the report iframe
-function renderMediaMetadataPanel(folder, doc) {
+function renderMediaMetadataPanel(folder, doc, scopedFileNames) {
   var panel = doc.getElementById('media-metadata-panel');
   if (!panel) return;
   panel.textContent = 'Loading...';
@@ -143,6 +143,19 @@ function renderMediaMetadataPanel(folder, doc) {
       try {
         var data = JSON.parse(xhr.responseText);
         if (!Array.isArray(data)) throw new Error('Malformed metadata');
+        var allRows = data.slice();
+        var scopedRows = allRows;
+        if (Array.isArray(scopedFileNames)) {
+          var allowed = {};
+          scopedFileNames.forEach(function (name) {
+            var key = String(name || '').trim();
+            if (key) allowed[key] = true;
+          });
+          scopedRows = allRows.filter(function (row) {
+            var fileName = String((row && row.file) || '').trim();
+            return !!allowed[fileName];
+          });
+        }
 
         // UI: AR grouping toggle
         var arToggleId = 'ar-group-toggle';
@@ -154,9 +167,14 @@ function renderMediaMetadataPanel(folder, doc) {
               'Group by Aspect Ratio' +
             '</label>' +
           '</div>' +
+          '<div id="metadata-row-summary" style="margin:0 0 6px 0;font-size:12px;color:#6b7280;"></div>' +
           '<div id="ar-group-table"></div>';
         var tableDiv = panel.querySelector('#ar-group-table');
+        var summaryEl = panel.querySelector('#metadata-row-summary');
         if (!tableDiv) return;
+        if (summaryEl) {
+          summaryEl.textContent = 'Showing ' + scopedRows.length + ' of ' + allRows.length + ' metadata rows';
+        }
 
         function metadataCellHtml(row, column) {
           var val = row[column] !== undefined ? String(row[column]) : '-';
@@ -200,7 +218,7 @@ function renderMediaMetadataPanel(folder, doc) {
           if (groupByAR) {
             // Group rows by AR bucket
             var arGroups = {};
-            data.forEach(function(row){
+            scopedRows.forEach(function(row){
               var ar = mapAspectRatioToBucket(row.aspect);
               if (!arGroups[ar]) arGroups[ar] = [];
               arGroups[ar].push(row);
@@ -218,7 +236,7 @@ function renderMediaMetadataPanel(folder, doc) {
             });
           } else {
             html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
-            data.forEach(function(row){
+            scopedRows.forEach(function(row){
               html += '<tr>' + cols.map(function(c){ return metadataCellHtml(row, c); }).join('') + '</tr>';
             });
             html += '</tbody></table>';
@@ -246,7 +264,7 @@ function renderMediaMetadataPanel(folder, doc) {
   xhr.send();
 }
 
-function renderReportPreview(report) {
+function renderReportPreview(report, reviewedFileNames) {
   function encodeFocus(files) {
     var names = (files || []).map(function (name) { return String(name || ''); }).filter(Boolean);
     return encodeURIComponent(names.join('\n'));
@@ -413,7 +431,7 @@ function renderReportPreview(report) {
     // Render config and media metadata panels after iframe is loaded
     renderConfigPanel(doc);
     if (!parent || !parent.state || !parent.state.folder) return;
-    renderMediaMetadataPanel(parent.state.folder, doc);
+    renderMediaMetadataPanel(parent.state.folder, doc, reviewedFileNames);
   }, 50);
 }
 

@@ -212,13 +212,17 @@ function refreshMediaResolutionCache() {
     mediaMetadataByFile = {};
     return;
   }
+  var requestFolder = state.folder;
+  setStatus('Generating metadata...');
   var xhr = new XMLHttpRequest();
-  xhr.open('GET', '/fs/media_metadata?folder=' + encodeURIComponent(state.folder));
+  xhr.open('GET', '/fs/media_metadata?folder=' + encodeURIComponent(requestFolder));
   xhr.onreadystatechange = function () {
     if (xhr.readyState !== 4) return;
+    if (state.folder !== requestFolder) return;
     if (xhr.status !== 200) {
       mediaResolutionByFile = {};
       mediaMetadataByFile = {};
+      setStatus('Metadata failed (' + xhr.status + ').');
       return;
     }
     try {
@@ -237,10 +241,13 @@ function refreshMediaResolutionCache() {
       if (state.currentItem && typeof buildSelectedMediaStatus === 'function') {
         setStatus(buildSelectedMediaStatus(state.currentItem));
         renderItemMetadataPanel();
+        return;
       }
+      setStatus('Metadata ready.');
     } catch (e) {
       mediaResolutionByFile = {};
       mediaMetadataByFile = {};
+      setStatus('Metadata parse failed.');
     }
   };
   xhr.send();

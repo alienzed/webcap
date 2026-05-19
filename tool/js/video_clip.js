@@ -5,6 +5,7 @@ var videoClipCropRatio = 1;
 var videoClipCropEnabled = false;
 var videoClipSourceResolution = null;
 var videoClipPendingCrop = null;
+var videoClipOverwriteSourceMode = false;
 
 // --- Extract frame and open crop modal ---
 function extractFrameAndOpenCropModal() {
@@ -56,11 +57,16 @@ function setVideoClipBusy(isBusy) {
   var btn = getVideoClipEl('video-clip-export-btn');
   if (btn) btn.disabled = videoClipCropBusy;
   var outputEl = getVideoClipEl('video-clip-output-input');
-  if (outputEl) outputEl.disabled = videoClipCropBusy;
+  if (outputEl) outputEl.disabled = videoClipCropBusy || videoClipOverwriteSourceMode;
   var startEl = getVideoClipEl('video-clip-start-input');
   if (startEl) startEl.disabled = videoClipCropBusy;
   var durationEl = getVideoClipEl('video-clip-duration-input');
   if (durationEl) durationEl.disabled = videoClipCropBusy;
+}
+
+function isVideoClipInSrcVideosFolder() {
+  var folder = (typeof state !== 'undefined' && state.folder) ? String(state.folder) : '';
+  return /\bsrc_videos(\\|\/|$)/i.test(folder);
 }
 
 function setVideoClipSizeReadout(width, height) {
@@ -73,6 +79,18 @@ function setVideoClipSizeReadout(width, height) {
     return;
   }
   readoutEl.textContent = Math.round(w) + ' x ' + Math.round(h) + ' px';
+}
+
+function syncVideoClipStartToPlayhead(decimals) {
+  var startEl = getVideoClipEl('video-clip-start-input');
+  var videoEl = getVideoClipEl('video-clip-video');
+  if (!startEl || !videoEl) return;
+  // Preserve precise manual/nudge start values while paused; only auto-follow during playback.
+  if (videoEl.paused) return;
+  var precision = isFinite(Number(decimals)) ? Number(decimals) : 3;
+  var current = Number(videoEl.currentTime || 0);
+  if (!isFinite(current) || current < 0) current = 0;
+  startEl.value = current.toFixed(precision);
 }
 
 function isVideoFileName(fileName) {
@@ -147,6 +165,7 @@ function closeVideoClipModal() {
   videoClipTargetItem = null;
   videoClipCropEnabled = false;
   videoClipSourceResolution = null;
+  videoClipOverwriteSourceMode = false;
   setVideoClipBusy(false);
   setStatus('');
   setVideoClipSizeReadout(0, 0);
@@ -290,12 +309,6 @@ function openVideoClipModal(mediaItem) {
     setStatus('Clip is only available for video files.');
     return;
   }
-  // Restrict to src_videos folder only
-  var folder = (typeof state !== 'undefined' && state.folder) ? String(state.folder) : '';
-  if (!/\bsrc_videos(\\|\/|$)/i.test(folder)) {
-    setStatus('Clip is only available for videos inside the src_videos folder.');
-    return;
-  }
 
   var modal = getVideoClipEl('video-clip-modal');
   var titleEl = getVideoClipEl('video-clip-title');
@@ -314,6 +327,7 @@ function openVideoClipModal(mediaItem) {
 
   destroyVideoClipCropper();
   videoClipTargetItem = mediaItem;
+  videoClipOverwriteSourceMode = !isVideoClipInSrcVideosFolder();
   videoClipCropEnabled = false;
   setVideoClipBusy(false);
   setStatus('');
@@ -324,13 +338,16 @@ function openVideoClipModal(mediaItem) {
   if (cropToggleBtn) cropToggleBtn.textContent = 'Set Crop Tool';
 
   var stem = mediaItem.fileName.replace(/\.[^.]+$/, '');
-  outputEl.value = stem + '_clip';
+  outputEl.value = videoClipOverwriteSourceMode ? mediaItem.fileName : (stem + '_clip');
+  outputEl.disabled = videoClipOverwriteSourceMode;
   startEl.value = '0';
   durationEl.value = '2.0';
   currentTimeEl.textContent = '0.000';
   if (cropFrameBtn) cropFrameBtn.disabled = true;
 
-  titleEl.textContent = 'Clip video: ' + mediaItem.fileName;
+  titleEl.textContent = videoClipOverwriteSourceMode
+    ? ('Clip video (overwrite source): ' + mediaItem.fileName)
+    : ('Clip video: ' + mediaItem.fileName);
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
 
@@ -346,10 +363,12 @@ function openVideoClipModal(mediaItem) {
     if (isFinite(vw) && isFinite(vh) && vw > 0 && vh > 0) {
       videoClipSourceResolution = { width: Math.round(vw), height: Math.round(vh) };
     }
+    syncVideoClipStartToPlayhead(3);
     // No autoplay for video clip modal
   };
   videoEl.ontimeupdate = function () {
     currentTimeEl.textContent = Number(videoEl.currentTime || 0).toFixed(3);
+    syncVideoClipStartToPlayhead(3);
   };
   videoEl.onerror = function () {
     setStatus('Video failed to load. The codec may be unsupported in browser playback.');
@@ -371,8 +390,11 @@ function getVideoClipPayload(overwrite) {
   }
 
   var outputName = String(outputEl.value || '').trim();
-  if (!outputName) {
+  if (!videoClipOverwriteSourceMode && !outputName) {
     throw new Error('Output name is required');
+  }
+  if (videoClipOverwriteSourceMode) {
+    outputName = String(videoClipTargetItem.fileName || '').trim();
   }
 
   var startSec = Number(startEl.value);
@@ -429,7 +451,8 @@ function getVideoClipPayload(overwrite) {
     startSec: startSec,
     durationSec: durationSec,
     crop: cropData,
-    overwrite: !!overwrite
+    overwrite: !!overwrite,
+    overwriteSource: !!videoClipOverwriteSourceMode
   };
 }
 
@@ -445,7 +468,7 @@ function applyVideoClip(overwrite) {
   }
 
   setVideoClipBusy(true);
-  setStatus('Exporting clip to: ' + payload.outputName);
+  setStatus((payload.overwriteSource ? 'Queueing in-place clip: ' : 'Queueing clip export: ') + payload.outputName);
   if (window.console && console.log) {
     console.log('[VideoClip] Export payload:', payload);
   }
@@ -455,11 +478,12 @@ function applyVideoClip(overwrite) {
     if (window.console && console.log) {
       console.log('[VideoClip] Export response:', status, responseText);
     }
-    if (status === 200) {
+    if (status === 200 || status === 202) {
       // Leave modal open so user can create more clips.
-      setStatus('Clip exported: ' + payload.outputName);
+      var successText = status === 202 ? (payload.overwriteSource ? 'In-place clip queued: ' : 'Clip queued: ') : (payload.overwriteSource ? 'In-place clip exported: ' : 'Clip exported: ');
+      setStatus(successText + payload.outputName);
       if (window.console && console.log) {
-        console.log('[VideoClip] Exported:', payload.outputName);
+        console.log('[VideoClip] Accepted:', payload.outputName);
       }
       refreshCurrentDirectory();
       return;
@@ -474,6 +498,10 @@ function applyVideoClip(overwrite) {
         return;
       }
       setStatus('Export cancelled.');
+      return;
+    }
+    if (status === 409 && data && data.duplicateRequest) {
+      setStatus('Duplicate export ignored.');
       return;
     }
     setStatus(message);
@@ -540,10 +568,11 @@ function wireVideoClipModal() {
     // Handle arrow keys to increment/decrement start time field
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       var startEl = getVideoClipEl('video-clip-start-input');
+      var videoEl = getVideoClipEl('video-clip-video');
       if (!startEl) return;
       
       e.preventDefault();
-      var currentVal = Number(startEl.value) || 0;
+      var currentVal = (videoEl && isFinite(Number(videoEl.currentTime))) ? Number(videoEl.currentTime) : (Number(startEl.value) || 0);
       var step = 0.05;
       var newVal = e.key === 'ArrowRight' ? currentVal + step : currentVal - step;
       

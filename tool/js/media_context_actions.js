@@ -374,9 +374,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
     });
   }
 
-  // Only show 'Clip...' for videos in src_videos folder
-  var folder = (typeof state !== 'undefined' && state.folder) ? String(state.folder) : '';
-  if (isVideoFile && /\bsrc_videos(\\|\/|$)/i.test(folder)) {
+  if (isVideoFile) {
     actions.push({
       label: 'Clip...',
       run: function () {

@@ -31,6 +31,7 @@ This file tracks implemented work vs outstanding items.
 - Maintain flags and metadata when Pruning/restoring/renaming.
 - Review duplicate-token detection inside a single caption.
 - Audit remaining folder-load side effects and trim non-essential mutation paths.
+- Deprecate/remove the Review panel `Config Files` section once a better replacement UX is in place.
 - Video crop/clip workflow, likely via a modal backed by a mature lightweight library/tool rather than custom in-app editing.
 - In-app training execution/orchestration for long-running jobs.
 - TensorBoard lifecycle helpers.
@@ -141,4 +142,3 @@ This file tracks implemented work vs outstanding items.
 - Video: V2 features and polish tracked (see video_clip.md).
 - Config snapshot: Only file names are printed, not full captions.
 - Caption highlighting: hover requirements/phrases to highlight matching words or phrases in the editor.
-

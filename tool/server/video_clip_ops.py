@@ -1,13 +1,29 @@
 import math
+import os
 import subprocess
+import tempfile
+import threading
+import time
+import uuid
+from queue import Queue
 from pathlib import Path
 
 from flask import jsonify
 
 from .config import FS_DEBUG, safe_join_fs_root
 from .media import probe_media_metadata
+from .originals import ensure_original_by_hash, ensure_originals_folder
 
 VIDEO_EXTS = {".mp4", ".webm", ".ogg", ".mov", ".mkv", ".avi", ".m4v", ".wmv", ".mpg", ".mpeg"}
+VIDEO_CLIP_RECENT_DUPLICATE_WINDOW_SEC = 2.0
+VIDEO_CLIP_JOB_RETENTION_SEC = 600.0
+VIDEO_CLIP_MAX_TRACKED_JOBS = 512
+
+_video_clip_queue = Queue()
+_video_clip_jobs = {}
+_video_clip_signatures = {}
+_video_clip_worker = None
+_video_clip_lock = threading.Lock()
 
 
 def _safe_file_name(name):
@@ -138,14 +154,146 @@ def _run_clip_ffmpeg(source_path, out_path, start_sec, duration_sec, crop_rect):
         raise RuntimeError("ffmpeg failed: " + stderr)
 
 
+def _run_clip_ffmpeg_overwrite_source(source_path, start_sec, duration_sec, crop_rect):
+    originals_dir = ensure_originals_folder(source_path.parent)
+    if originals_dir is None:
+        raise RuntimeError("Cannot overwrite source in this folder")
+    ensure_original_by_hash(source_path, originals_dir)
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=source_path.stem + "_clip_tmp_",
+        suffix=(source_path.suffix or ".mp4"),
+        dir=str(source_path.parent),
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        _run_clip_ffmpeg(source_path, tmp_path, start_sec, duration_sec, crop_rect)
+        os.replace(tmp_path, source_path)
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+
+
+def _format_signature(source_path, out_path, start_sec, duration_sec, crop_rect):
+    return "|".join([
+        str(source_path).lower(),
+        str(out_path).lower(),
+        "{:.6f}".format(float(start_sec)),
+        "{:.6f}".format(float(duration_sec)),
+        str(int(crop_rect["x"])),
+        str(int(crop_rect["y"])),
+        str(int(crop_rect["width"])),
+        str(int(crop_rect["height"])),
+    ])
+
+
+def _set_signature_state(signature, status):
+    _video_clip_signatures[signature] = {
+        "status": status,
+        "updatedAt": time.time(),
+    }
+
+
+def _prune_tracking(now_ts):
+    stale_job_ids = []
+    for job_id, job in _video_clip_jobs.items():
+        status = str(job.get("status") or "")
+        updated_at = float(job.get("updatedAt") or job.get("createdAt") or now_ts)
+        if status in ("completed", "failed") and (now_ts - updated_at) > VIDEO_CLIP_JOB_RETENTION_SEC:
+            stale_job_ids.append(job_id)
+    for job_id in stale_job_ids:
+        _video_clip_jobs.pop(job_id, None)
+
+    stale_signatures = []
+    for signature, item in _video_clip_signatures.items():
+        status = str(item.get("status") or "")
+        updated_at = float(item.get("updatedAt") or now_ts)
+        if status in ("completed", "failed") and (now_ts - updated_at) > VIDEO_CLIP_RECENT_DUPLICATE_WINDOW_SEC:
+            stale_signatures.append(signature)
+    for signature in stale_signatures:
+        _video_clip_signatures.pop(signature, None)
+
+    # Keep map bounded under heavy use.
+    if len(_video_clip_jobs) > VIDEO_CLIP_MAX_TRACKED_JOBS:
+        ordered = sorted(
+            _video_clip_jobs.items(),
+            key=lambda kv: float((kv[1] or {}).get("updatedAt") or (kv[1] or {}).get("createdAt") or 0),
+        )
+        to_drop = len(_video_clip_jobs) - VIDEO_CLIP_MAX_TRACKED_JOBS
+        for i in range(max(0, to_drop)):
+            _video_clip_jobs.pop(ordered[i][0], None)
+
+
+def _clip_worker_loop():
+    while True:
+        job_id = _video_clip_queue.get()
+        try:
+            with _video_clip_lock:
+                job = _video_clip_jobs.get(job_id)
+                if not job:
+                    continue
+                job["status"] = "running"
+                job["updatedAt"] = time.time()
+                _set_signature_state(job["signature"], "running")
+
+            if bool(job.get("overwriteSource")):
+                _run_clip_ffmpeg_overwrite_source(
+                    Path(job["sourcePath"]),
+                    float(job["startSec"]),
+                    float(job["durationSec"]),
+                    job["crop"],
+                )
+            else:
+                _run_clip_ffmpeg(
+                    Path(job["sourcePath"]),
+                    Path(job["outputPath"]),
+                    float(job["startSec"]),
+                    float(job["durationSec"]),
+                    job["crop"],
+                )
+
+            with _video_clip_lock:
+                current = _video_clip_jobs.get(job_id)
+                if current:
+                    current["status"] = "completed"
+                    current["updatedAt"] = time.time()
+                _set_signature_state(job["signature"], "completed")
+                _prune_tracking(time.time())
+        except Exception as exc:
+            with _video_clip_lock:
+                current = _video_clip_jobs.get(job_id)
+                if current:
+                    current["status"] = "failed"
+                    current["error"] = str(exc)
+                    current["updatedAt"] = time.time()
+                if job_id in _video_clip_jobs:
+                    _set_signature_state(_video_clip_jobs[job_id]["signature"], "failed")
+                _prune_tracking(time.time())
+        finally:
+            _video_clip_queue.task_done()
+
+
+def _ensure_clip_worker_started():
+    global _video_clip_worker
+    if _video_clip_worker and _video_clip_worker.is_alive():
+        return
+    _video_clip_worker = threading.Thread(target=_clip_worker_loop, name="video-clip-worker", daemon=True)
+    _video_clip_worker.start()
+
+
 def clip_video_response(data):
     data = data or {}
     folder = str(data.get("folder") or "").strip()
     media_name = _safe_media_name(data.get("fileName") or data.get("media") or "")
-    output_name = _normalize_output_name(data.get("outputName") or "")
+    output_name_raw = data.get("outputName") or ""
     start_sec = _parse_positive_float(data.get("startSec"), "Start time")
     requested_duration = _parse_duration(data.get("durationSec"))
     overwrite = bool(data.get("overwrite"))
+    overwrite_source = bool(data.get("overwriteSource"))
 
     if not folder:
         return jsonify({"error": "Missing folder"}), 400
@@ -178,23 +326,66 @@ def clip_video_response(data):
 
         crop_rect = _parse_crop_rect(data.get("crop"), src_w, src_h)
 
-        # If user is inside src_videos, export to the parent set folder.
-        # Otherwise export to the current folder.
-        set_folder = src_folder.parent if src_folder.name.lower() == "src_videos" else src_folder
-        out_path = set_folder / output_name
-        if out_path.exists() and not overwrite:
-            return jsonify({"error": "Output file already exists", "requiresOverwrite": True, "outputName": output_name}), 409
+        in_src_videos = src_folder.name.lower() == "src_videos"
+        if overwrite_source:
+            if in_src_videos:
+                return jsonify({"error": "Source overwrite is not allowed inside src_videos"}), 400
+            output_name = source_path.name
+            out_path = source_path
+        else:
+            # If user is inside src_videos, export to the parent set folder.
+            # Otherwise export to the current folder.
+            output_name = _normalize_output_name(output_name_raw)
+            set_folder = src_folder.parent if in_src_videos else src_folder
+            out_path = set_folder / output_name
+            if out_path.exists() and not overwrite:
+                return jsonify({"error": "Output file already exists", "requiresOverwrite": True, "outputName": output_name}), 409
 
-        _run_clip_ffmpeg(source_path, out_path, start_sec, duration_sec, crop_rect)
+        signature = _format_signature(source_path, out_path, start_sec, duration_sec, crop_rect)
+        now_ts = time.time()
+        with _video_clip_lock:
+            _prune_tracking(now_ts)
+            existing = _video_clip_signatures.get(signature)
+            if existing:
+                existing_status = str(existing.get("status") or "")
+                updated_at = float(existing.get("updatedAt") or now_ts)
+                duplicate_window_active = (now_ts - updated_at) <= VIDEO_CLIP_RECENT_DUPLICATE_WINDOW_SEC
+                if existing_status in ("queued", "running") or (existing_status == "completed" and duplicate_window_active):
+                    return jsonify({
+                        "error": "Duplicate clip export ignored",
+                        "duplicateRequest": True,
+                    }), 409
+
+            job_id = uuid.uuid4().hex[:12]
+            _video_clip_jobs[job_id] = {
+                "id": job_id,
+                "status": "queued",
+                "createdAt": now_ts,
+                "updatedAt": now_ts,
+                "sourcePath": str(source_path),
+                "outputPath": str(out_path),
+                "outputName": output_name,
+                "startSec": start_sec,
+                "durationSec": duration_sec,
+                "crop": crop_rect,
+                "signature": signature,
+                "overwriteSource": overwrite_source,
+            }
+            _set_signature_state(signature, "queued")
+            _ensure_clip_worker_started()
+            _video_clip_queue.put(job_id)
 
         return jsonify({
             "ok": True,
+            "queued": True,
+            "jobId": job_id,
             "outputName": output_name,
             "startSec": start_sec,
             "durationSec": duration_sec,
             "crop": crop_rect,
             "resolution": f"{src_w}x{src_h}",
-        })
+            "overwriteSource": overwrite_source,
+        }), 202
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:

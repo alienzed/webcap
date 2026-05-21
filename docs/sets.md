@@ -1,238 +1,323 @@
-# Sets (Smart + Frozen)
+# Sets (Smart + Workspace)
+
+Last updated: 2026-05-21
 
 ## Goal
 
-Add durable, reusable set workflows without brittle manual folder cloning:
+Add durable, reusable cross-root set workflows without touching source sets directly.
 
-- `Smart Set`: saved query definition (`location + filters`), re-runnable.
-- `Frozen Set`: materialized, self-contained set folder for stable training workflows.
+- `Smart Set`: a named, saved query over `FS_ROOT`.
+- `Workspace`: per-smart-set physical folder for copied items and downstream work.
 
-This feature should support:
-
-- multi-character LoRA subset creation
-- style/media extraction by keyword
-- reusable curation passes over evolving source folders
+This keeps discovery global while edits remain safe and local.
 
 ---
 
-## Definitions
+## Option A: Smart Set + Workspace
 
-### Smart Set
-
-A Smart Set stores *how to find* items, not copied files.
-
-Core properties:
-
-- start location
-- recursive toggle
-- exclusion rules
-- filter criteria
-
-Loading a Smart Set re-applies these rules to current filesystem contents.
-
-### Frozen Set
-
-A Frozen Set stores *actual prepared files* in a dedicated folder.
-
-Core properties:
-
-- source items copied into the Frozen Set folder
-- caption files copied with media
-- `originals/` populated so reset/restore workflows remain available
-- manifest file with provenance and source Smart Set details
-
-Frozen Sets should remain usable even if source folders/filters later change.
+This is the original proposal: a Smart Set owns both the saved query and a dedicated workspace folder for materialized files.
 
 ---
 
-## Scope
+## Core Decisions
 
-### In Scope (v1.1)
+1. Smart Sets are always root-scoped.
+- Query scope is fixed to `FS_ROOT`.
+- No "run from current folder" mode.
+- If created from a subfolder context, `path_include` is pre-seeded with that subfolder path.
 
-- Save, list, load, update, delete Smart Sets
-- Recursive matching option for Smart Sets
-- Default recursive excludes: `auto_dataset`, `originals`
-- Materialize Frozen Set from current Smart Set (or current visible selection)
-- Set Manager UI for lifecycle operations
+2. Default excludes are always applied.
+- `originals`
+- `auto_dataset`
+- `src_videos`
 
-### Out of Scope (initial)
+3. Smart Set is a first-class object, not an unnamed filter session.
+- Name is required.
+- Default placeholder name: `Smart Set YYYY-MM-DD HHmm` (editable).
 
-- complex rule builder UI (nested boolean groups)
-- cross-project/global sharing UI
-- background job queue for huge materializations
+4. Results are explicit-run and paginated.
+- User clicks `Run` to execute.
+- Response includes `total_matches`.
+- List shows page chunks (default `100` items/page) with `Load More`.
+
+5. Query guardrails stay simple.
+- At least one filter is required.
+- If `text` is used, minimum trimmed length is `3`.
+- No primary/secondary filter category logic.
 
 ---
 
-## Data Model
+## UX Workflow (v1)
 
-## Smart Set Record
+1. Create Smart Set
+- Open Smart Set panel.
+- Enter name and filters.
+- If opened from a subfolder, path filter is prefilled to that subfolder.
+- Save.
 
-```json
-{
-  "id": "uuid-or-stable-id",
-  "name": "string",
-  "root_folder": "relative/path/from_fs_root",
-  "recursive": true,
-  "exclude_dirs": ["auto_dataset", "originals"],
-  "filters": {
-    "text": "",
-    "missing_captions_only": false,
-    "reviewed_only": false,
-    "min_stars_gt": "",
-    "flag_filter": "",
-    "invalid_ar_only": false
-  },
-  "notes": "",
-  "created_at": "ISO-8601",
-  "updated_at": "ISO-8601"
-}
-```
+2. Run Smart Set
+- Click `Run`.
+- Show summary (`N matches`, page size shown).
+- Render first page only.
 
-## Frozen Set Manifest
+3. Browse / Continue Curation
+- User can continue filtering/rerunning as needed.
+- Smart Set remains reusable and persistent.
 
-Stored inside Frozen Set folder as `set_manifest.json`.
+4. Prepare / Materialize Path
+- Smart Set query remains the source of discovery.
+- Physical workspace content is created/used for downstream set operations.
+
+---
+
+## Filter Model
+
+Base fields (initial):
+
+- `text`
+- `path_include`
+- `path_exclude`
+- `tag_filter`
+- `missing_captions_only`
+- `reviewed_only`
+- `unrated_only`
+- `min_stars_gt`
+- `exact_stars`
+- `flag_filter`
+- `invalid_ar_only`
+- `media_type` (`image` / `video` / both)
+
+Notes:
+
+- `text` min length rule applies only when text is non-empty.
+- Additional filters can be added without changing storage shape.
+
+---
+
+## Storage Layout (Portable, Per-Set Files)
+
+Smart Sets are stored as one file per set:
+
+- `<FS_ROOT>/_smart_sets/YYYY-MM/<set_slug>/smart_set.json`
+
+Rationale:
+
+- portable per set
+- no shared giant metadata file
+- easy backup/share/archive
+- natural place for per-set workspace artifacts
+
+Creation month (`YYYY-MM`) is fixed at set creation time.
+
+---
+
+## Smart Set Record (Proposed)
 
 ```json
 {
   "version": 1,
-  "kind": "frozen_set",
-  "name": "string",
+  "id": "stable-id",
+  "name": "Smart Set 2026-05-19 1530",
+  "slug": "smart-set-2026-05-19-1530",
+  "scope": {
+    "root": "/",
+    "exclude_dirs": ["originals", "auto_dataset", "src_videos"]
+  },
+  "filters": {
+    "text": "",
+    "path_include": "",
+    "path_exclude": "",
+    "tag_filter": "",
+    "missing_captions_only": false,
+    "reviewed_only": false,
+    "unrated_only": false,
+    "min_stars_gt": "",
+    "exact_stars": [],
+    "flag_filter": "",
+    "invalid_ar_only": false,
+    "media_type": ""
+  },
+  "workspace": {
+    "folder_rel": "_smart_sets/2026-05/smart-set-2026-05-19-1530/workspace"
+  },
   "created_at": "ISO-8601",
+  "updated_at": "ISO-8601",
+  "last_run_at": "ISO-8601"
+}
+```
+
+---
+
+## Query Result Contract (Proposed)
+
+```json
+{
+  "total_matches": 742,
+  "page_size": 100,
+  "items": [],
+  "next_cursor": "opaque-or-null"
+}
+```
+
+Rules:
+
+- Never return all matches at once.
+- `next_cursor = null` means no more pages.
+
+---
+
+## Workspace / Materialization Notes
+
+Workspace is where physical copies live for safe mutation and training prep workflows.
+
+High-level behavior:
+
+1. Smart Set query is discovery.
+2. Workspace holds copied artifacts.
+3. Preparing/training operates on workspace-managed items, not source folders.
+
+Detailed copy-on-first-write behavior is tracked separately and can evolve without changing Smart Set discovery rules.
+
+---
+
+## Option B: Search + Copy to Set
+
+Alternative direction: split discovery from materialization.
+
+Instead of giving every saved query its own special workspace, make search read-only and make copying into a physical set the materialization strategy.
+
+- `Search`: root-wide or scoped query over media files.
+- `Saved Search`: persisted filter definition only; no owned files.
+- `Copy to Set`: explicit operation that copies selected source files into an existing or new physical set folder.
+- `Set`: remains a normal folder that existing webcap workflows already understand.
+
+This keeps Smart Set-style discovery, but avoids introducing a parallel workspace object for v1.
+
+### Option B Workflow
+
+1. Search
+- User opens search panel.
+- User enters filters.
+- Results are explicit-run and paginated.
+- Search results are virtual and read-only.
+
+2. Select Results
+- User selects one or more result items.
+- Each result carries a full source-relative path.
+
+3. Copy to Set
+- User chooses an existing set folder or creates a new one.
+- Selected media files are copied into that set.
+- Matching `.txt` captions are copied with the media file when present.
+- Filename collision behavior must be explicit and reversible.
+
+4. Continue in Normal Set Workflow
+- After copy, the destination folder is just a regular physical set.
+- Captioning, review, ratings, autoset, prepare, config generation, and training operate on the copied files through existing folder-based behavior.
+
+### Option B Data Model
+
+Saved searches store only filter and scope information:
+
+```json
+{
+  "version": 1,
+  "id": "stable-id",
+  "name": "Saved Search 2026-05-21 1530",
+  "scope": {
+    "root": "/",
+    "exclude_dirs": ["originals", "auto_dataset", "src_videos", "_smart_sets"]
+  },
+  "filters": {
+    "text": "",
+    "path_include": "",
+    "path_exclude": "",
+    "tag_filter": "",
+    "missing_captions_only": false,
+    "reviewed_only": false,
+    "unrated_only": false,
+    "min_stars_gt": "",
+    "exact_stars": [],
+    "flag_filter": "",
+    "invalid_ar_only": false,
+    "media_type": ""
+  },
+  "created_at": "ISO-8601",
+  "updated_at": "ISO-8601",
+  "last_run_at": "ISO-8601"
+}
+```
+
+Copy operations should write a manifest into the destination set so source paths are auditable even if copied filenames are path-encoded:
+
+```json
+{
+  "version": 1,
+  "copied_at": "ISO-8601",
   "source": {
-    "smart_set_id": "id-or-null",
-    "root_folder": "relative/path",
-    "recursive": true,
-    "exclude_dirs": ["auto_dataset", "originals"],
-    "filters": {}
+    "type": "saved_search",
+    "id": "stable-id",
+    "name": "Saved Search 2026-05-21 1530"
   },
   "items": [
     {
-      "source_rel_path": "path/to/file.ext",
-      "dest_rel_path": "file.ext",
-      "caption_rel_path": "file.txt",
-      "hash_sha256": "optional"
+      "source_rel": "portraits/session-a/img001.png",
+      "source_caption_rel": "portraits/session-a/img001.txt",
+      "dest_media": "portraits__session-a__img001.png",
+      "dest_caption": "portraits__session-a__img001.txt"
     }
   ]
 }
 ```
 
----
+### Option B API Surface (Proposed)
 
-## Storage Location
+Search:
 
-Smart Set definitions should be stored in one project-visible location under current FS root, not app install dir:
+- `POST /search/run` (paged)
+- `GET /search/saved/list`
+- `POST /search/saved/create`
+- `POST /search/saved/update`
+- `POST /search/saved/delete`
 
-- `<FS_ROOT>/.webcap_sets.json`
+Copy:
 
-Frozen Sets should live under working area, not app-global metadata paths:
+- `POST /sets/copy_items`
+- `POST /sets/create_from_search`
 
-- `<current_working_folder>/_sets/<frozen_set_name>/`
+### Option B Notes
 
-Rationale:
-
-- portable with dataset workspace
-- intuitive ownership
-- easy backup/versioning
-
----
-
-## Recursive Matching Rules
-
-When `recursive=true`:
-
-- include media from all descendant folders
-- skip descendant folders named `auto_dataset` or `originals` by default
-- allow future per-set override of excludes
-
-Key requirement:
-
-- item identity must be path-based (`relative/path/file.ext`), not filename-only, to avoid collisions across subfolders.
+- Search is read-only.
+- Materialization is just copy-to-set.
+- No special `_smart_sets/.../workspace` folder is required for v1.
+- Result identity should be full relative path, not basename.
+- Root-wide metadata filters can read each folder's `.webcap_state.json` during scan and discard it after that folder is evaluated.
+- Pagination controls response size, but `total_matches` still requires evaluating the full scope unless an index is added later.
+- A database/index can remain an optional acceleration layer, not the source of truth.
 
 ---
 
-## Frozen Set Materialization Rules
+## API Surface (Proposed)
 
-When materializing:
-
-1. create target folder under `_sets/`
-2. copy selected media files to Frozen Set root (or deterministic structure)
-3. copy caption `.txt` files
-4. copy source media into `originals/` to preserve reset/restore feature parity
-5. write `set_manifest.json`
-
-Failure policy:
-
-- fail loudly on missing caption/source
-- no partial silent success
-- report copied/skipped counts with reasons
-
----
-
-## API (Proposed)
-
-### Smart Set Lifecycle
+Smart Sets:
 
 - `GET /sets/list`
-- `POST /sets/save`
+- `POST /sets/create`
 - `POST /sets/update`
 - `POST /sets/delete`
-- `POST /sets/apply` (returns resolved selection and filter payload)
+- `POST /sets/run` (paged)
 
-### Frozen Set
+Workspace:
 
-- `POST /sets/materialize_frozen`
-- `GET /sets/frozen/list` (optional initial)
-- `POST /sets/frozen/open` (optional initial)
-
----
-
-## UI (Set Manager)
-
-Add two quick actions in top-left utility area:
-
-- `Save Set`
-- `Load Set`
-
-Also add dedicated Set Manager panel/modal:
-
-- list Smart Sets
-- load/apply
-- edit/update
-- delete
-- materialize Frozen Set
-- open Frozen Set folder
-- show set details (source folder, recursive, filters, notes, last updated)
-
-`Recursive` toggle should be visible near filters and persisted by Smart Set save.
+- `POST /sets/workspace/materialize`
+- `POST /sets/workspace/copy_items`
+- `GET /sets/workspace/status`
 
 ---
 
-## Compatibility Notes
+## Out of Scope (Current)
 
-- Existing Prepare/Generate workflows remain unchanged.
-- Applying a Smart Set should feed current list selection/filter state, not bypass it.
-- Frozen Sets should be immediately compatible with existing review/caption/prepare flows.
-
----
-
-## Delivery Plan
-
-### Phase 1: Smart Sets
-
-- schema + file storage
-- save/list/load/update/delete/apply
-- recursive + excludes
-- path-based selection identity
-
-### Phase 2: Frozen Sets
-
-- materialization endpoint
-- `_sets/` folder output
-- `originals/` parity + manifest
-
-### Phase 3: UX Polish
-
-- Set Manager details and sorting
-- rename/clone set
-- quick stats (item count, last materialized)
-
+- nested boolean rule-builder UI
+- cross-project/global sharing UX
+- background materialization jobs
+- implicit full-root auto-run on keystroke

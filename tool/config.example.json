@@ -5,9 +5,7 @@
   },
   "training": {
     "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
-    "activate_script": "dp-clean/bin/activate",
-    "config_hi": "config.hi.toml",
-    "config_lo": "config.lo.toml"
+    "activate_script": "dp-clean/bin/activate"
   },
   "debug": true
 }

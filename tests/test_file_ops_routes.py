@@ -327,7 +327,7 @@ def test_train_run_auto_generates_missing_configs(tmp_path, monkeypatch):
 
     monkeypatch.setattr(run_ops_module.app_config, "safe_join_fs_root", safe_join)
     monkeypatch.setattr(run_ops_module.app_config, "FS_ROOT", fs_root)
-    monkeypatch.setattr(run_ops_module.app_config, "config", {"training": {"mode": "normal", "config_hi": "config.hi.toml", "config_lo": "config.lo.toml"}})
+    monkeypatch.setattr(run_ops_module.app_config, "config", {"training": {"mode": "normal"}})
 
     client = app_module.app.test_client()
     response = client.post("/fs/train_run", json={"folder": "set_train"})

@@ -41,8 +41,6 @@ Minimum shape:
   "training": {
     "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
     "activate_script": "dp-clean/bin/activate",
-    "config_hi": "config.hi.toml",
-    "config_lo": "config.lo.toml",
     "mode": "normal"
   }
 }
@@ -51,6 +49,7 @@ Minimum shape:
 Notes:
 - `filesystem.root` is required.
 - Training mode supports `poc` and `normal`.
+- Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
 - You can edit config in-app via Settings.
 
 ## Run

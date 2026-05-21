@@ -123,6 +123,7 @@ function getFilteredMediaItems(ignoreFocusSet) {
   var mediaItems = Array.isArray(state.items) ? state.items.slice() : [];
   var missingCaptionsOnly = !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked);
   var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
+  var unratedOnly = !!(ui.advancedFilterUnratedEl && ui.advancedFilterUnratedEl.checked);
   var minStarsThreshold = getAdvancedMinStarsThreshold();
   var flagFilterValues = getAdvancedFlagFilterValues();
 
@@ -148,6 +149,12 @@ function getFilteredMediaItems(ignoreFocusSet) {
   }
   if (reviewedOnly) {
     mediaItems = mediaItems.filter(function (item) { return !!(state.reviewedSet && state.reviewedSet.has(item.key)); });
+  }
+  if (unratedOnly) {
+    mediaItems = mediaItems.filter(function (item) {
+      var rating = (typeof getRatingForMediaKey === 'function') ? getRatingForMediaKey(item.key) : 0;
+      return rating <= 0;
+    });
   }
   if (minStarsThreshold !== null) {
     mediaItems = mediaItems.filter(function (item) {
@@ -178,6 +185,7 @@ function hasAnyActiveMediaFilter() {
   if (q) return true;
   if (ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked) return true;
   if (ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked) return true;
+  if (ui.advancedFilterUnratedEl && ui.advancedFilterUnratedEl.checked) return true;
   if (ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked) return true;
   if (ui.advancedFilterMinStarsEl && String(ui.advancedFilterMinStarsEl.value || '').trim()) return true;
   if (ui.advancedFilterFlagEl && ui.advancedFilterFlagEl.querySelector('input[type="checkbox"]:checked')) return true;

@@ -1,170 +1,73 @@
-# WebCap — Specification
+# WebCap Specification (Current Behavior)
 
-## 1. Purpose & Scope
-A portable, local-first app for media caption curation and review. Focus: explicit, minimal, and safe workflows for efficient, reliable caption editing and dataset review.
+Last updated: 2026-05-19
 
----
+## 1. Scope
+WebCap is a local-first media curation and captioning app for dataset preparation workflows. It focuses on explicit, reversible file mutations and fast iteration on set quality.
 
-## 2. Architecture Overview
-- **Backend:** Python server for file operations, autoset, and review logic.
-- **Frontend:** Modular JavaScript for UI, file operations, and review/stats.
+## 2. Architecture
+1. Backend: Flask routes for filesystem/media operations and dataset workflow actions.
+2. Frontend: plain global JavaScript state and functions (intentionally non-module).
+3. Storage:
+- App config: `tool/config.json`
+- Per-folder state: `.webcap_state.json`
+- Metadata cache: `media_metadata.json`
+- Backup folder: `originals/`
+- Prepare outputs: `auto_dataset/`
 
----
+## 3. Folder Classes
+1. Set folder (normal working folder):
+- Captioning, review, prepare, generate, train preview are available.
+- `originals/` backup behavior applies.
+2. System/source folders:
+- `originals`: backup container, protected semantics.
+- `auto_dataset`: generated artifacts.
+- `src_videos`: source-inspection workspace (metadata and clip flow allowed, set scaffolding excluded).
 
+## 4. Core Workflows
+1. Navigation and selection:
+- Folder browsing and media selection are driven by `/fs/describe`.
+2. Caption editing:
+- Load/save caption sidecars per media.
+- Autosave/manual save flows are supported.
+3. Review:
+- `Review Captions` runs on the current visible/filtered set.
+- Report links can focus file subsets in the UI.
+4. Reversible media mutation:
+- Prune/reset/restore/crop/transform/deface/clip workflows are exposed through context menus and routes.
+- Set-folder mutations rely on `originals/` backups for reversibility.
+5. Dataset prep/generate:
+- Prepare can run on visible subset with selection snapshot metadata.
+- Generate can auto-run Prepare once if prep manifest is missing.
+6. Train:
+- Train route returns command preview text; execution is currently disabled in-app.
 
-## 3. Core Workflows
-- Dataset navigation via backend config path.
-- Per-file caption editing with autosave and media preview.
-- Combined review: aggregate captions, stats, validation, and interactive report.
-- Context menu for all file/folder actions (see Features section).
-- Flagging and review state for workflow management.
-- Folder renaming (except protected folders).
+## 5. State Model (`.webcap_state.json`)
+Primary persisted fields include:
+1. `reviewedKeys`
+2. `flags`
+3. `stats`
+4. `primer`
+5. `caption_requirements`
+6. `caption_requirements_checked`
+7. `caption_requirement_keywords`
+8. `caption_phrases`
+9. `caption_set_notes`
+10. `caption_tags_by_media`
+11. `ratings_by_media`
 
----
+## 6. Config Template Behavior
+1. Config templates are not created on folder load.
+2. Missing config files are created during generate/train paths when needed.
+3. Placeholder substitution uses the configured filesystem/training roots.
 
+## 7. Safety and Guardrails
+1. Explicit user actions for destructive operations.
+2. Backups in `originals/` for set-folder mutation flows.
+3. Protected handling for system folders (`originals`, `auto_dataset`, `src_videos`).
+4. Streaming endpoints surface command output and errors directly.
 
-## 4. UI/UX Principles
-- Minimal, explicit, context-aware UI.
-- Synchronous/blocking actions allowed for correctness.
-- Output and errors are always visible and actionable. Do not hide errors; broken app > hidden errors.
-
-
-## 5. Persistent State (`.webcap_state.json`)
-- Stored per-folder.
-- Fields: `flags`, `reviewedKeys`, `stats`, `primer`.
-- All state changes must be snapshotted/restored explicitly in JS (`snapshotFolderStateFromDom`, `applyFolderStateToDom`).
-- Example structure:
-	```
-	{
-		"flags": { "originals": "red", "myvideo.mp4": "yellow" },
-		"reviewedKeys": ["img1.jpg", "clip2.mp4"],
-		"stats": { ... },
-		"primer": { ... }
-	}
-	```
-
----
-- Deface: anonymize video files via context menu, with threshold prompt.
-
----
-
-## Rules & Guardrails
-See `copilot_rules.md` for all safety, mutation, and coding rules.
-
-
----
-
-## Media Metadata Panel (New Feature)
-
-- When a media file is selected, a small info panel appears below the preview area showing key metadata: duration, resolution, fps, codec, file size, and container format.
-- Metadata is extracted using ffprobe (from ffmpeg) on the backend and returned as part of the media/caption load endpoint.
-- The panel updates on media selection and is always visible when a media file is selected.
-- If metadata is unavailable, fields display "N/A".
-
----
-
-## Originals and Config File Creation Logic (Active Features)
-
-### Originals Folder (Media Backup)
-
-- **Purpose:** The `originals/` folder in each set folder serves as a backup for all media files (video and image) in that set. All destructive or lossy actions (prune, reset, rename, deface, etc.) are reversible by restoring from this folder.
-- **Automatic Creation:** The app automatically creates and maintains the `originals/` folder as follows:
-  - On every folder load (when the folder is described or listed in the UI), the backend checks if the folder is a valid set folder (not `originals`, not `auto_dataset`, not empty of media files).
-  - If at least one media file is present, the backend ensures the `originals/` folder exists and that every media file is backed up there.
-  - If the folder contains no media files, no `originals/` folder is created or modified.
-  - The originals backup is hash-based: files are only copied if missing or if their content has changed.
-- **Protection:** The UI and backend block renaming or deleting the `originals` folder to prevent accidental data loss.
-- **No Manual Management:** Users never need to manually create, move, or manage the `originals/` folder; the app guarantees its correctness and safety.
-
-### Config File Creation
-
-- **Purpose:** Each set folder must contain four configuration files: `config.lo.toml`, `config.hi.toml`, `dataset.lo.toml`, and `dataset.hi.toml`. These are required for downstream processing and are treated as first-class entries in the media list.
-- **Automatic Creation:** The app ensures these config files are present as follows:
-  - On every folder load (when the folder is described or listed in the UI), the backend checks if the folder is a valid set folder (not `originals`, not `auto_dataset`, not empty of media files).
-  - If at least one media file is present, the backend checks for each config file and copies it from the templates directory if missing.
-  - No string substitution or dynamic editing is performed; the template is copied as-is.
-  - If the folder contains no media files, no config files are created or modified.
-- **No Manual Management:** Users never need to manually create or edit these config files; the app guarantees their presence and correctness.
-
-### Summary Table
-
-| Condition on Folder Load         | Action                                                                 |
-|----------------------------------|------------------------------------------------------------------------|
-| Folder is `originals` or `auto_dataset` | No config or originals logic is triggered.                            |
-| Folder contains no media files   | No config files or originals folder are created or modified.           |
-| Folder contains media files      | Originals folder is created/updated and all media files are backed up. |
-|                                  | Config files are created from templates if missing.                    |
-
-### Recovery and Rebuild
-
-- If the `originals/` folder or any config file is deleted or lost, simply reloading the set folder in the app will automatically recreate and repopulate them as described above, provided media files are present.
-- All destructive actions are recoverable via the `originals/` folder; no trash or state file is used.
-
----
-
-## 7. Folder Load Logic Summary
-
-| Condition on Folder Load         | Action                                                                 |
-|----------------------------------|------------------------------------------------------------------------|
-| Folder is `originals` or `auto_dataset` | No config/originals logic triggered.                            |
-| Folder contains no media files   | No config/originals created/modified.                                 |
-| Folder contains media files      | Originals folder and config files created/updated as needed.           |
-
----
-
-## 8. Recovery and Rebuild
-
-- If the `originals/` folder or any config file is deleted or lost, simply reloading the set folder in the app will automatically recreate and repopulate them as described above, provided media files are present.
-- All destructive actions are recoverable via the `originals/` folder; no trash or state file is used.
-## 6. Feature Definitions
-
-### 6.1. Originals Folder (Media Backup)
-- **Purpose:** Backup for all media files in a set folder; enables safe, reversible destructive actions.
-- **Automatic Creation:** On folder load, if media files exist, backend ensures `originals/` exists and all media are backed up (hash-based, only if missing/changed).
-- **Protection:** Cannot rename/delete `originals` folder.
-- **No Manual Management:** App guarantees correctness; user never manages this folder directly.
-- **Recovery:** Reloading a set folder restores missing originals if media files are present.
-
-### 6.2. Config File Creation
-- **Purpose:** Each set folder must have `config.lo.toml`, `config.hi.toml`, `dataset.lo.toml`, `dataset.hi.toml` for downstream processing.
-- **Automatic Creation:** On folder load, backend copies missing config files from templates if media files exist.
-- **No Manual Management:** App guarantees presence/correctness; templates are copied as-is.
-
-### 6.3. Restore
-- **Trigger:** Only for files in `originals` folder (i.e., when the user is viewing the `originals` subfolder of a set folder).
-- **Action:** Copies the selected file **and its caption** (if present) from the current `originals` folder to its parent (set) folder.
-- **Rules:**
-	- The operation is a one-way copy: the file and caption remain in `originals` and are added to the parent folder if and only if they do not already exist there.
-	- **Never overwrites:** If the file (or caption) already exists in the parent folder, display an error and do nothing.
-	- After a successful restore, the UI should notify the user and (optionally) offer to open or refresh the parent folder, but should **not** refresh or alter the current `originals` folder view or state.
-	- No state in the `originals` folder is changed by Restore.
-
-### 6.4. Reset
-- **Trigger:** Only for files in set folders with an equivalent original.
-- **Action:** Overwrites the main file with the original, regardless of current content.
-- **Rules:** Always overwrites, but only if the original exists.
-
-### 6.5. Prune
-- **Action:** Removes the file from the main set.
-- **Recovery:** File is recoverable from `originals` unless it was never backed up.
-
-### 6.6. Rename (File/Folder)
-- **Action:** Rename via context menu.
-- **Rules:** Not available for protected folders (e.g., `originals`).
-
-### 6.7. Deface
-- **Action:** Anonymize video files via context menu, with threshold prompt.
-- **Recovery:** Original is backed up in `originals`.
-
-### 6.8. Flag (Color Marker)
-- **Action:** Set/clear color flag for any file/folder.
-- **Persistence:** Stored in `.webcap_state.json`, visible in UI.
-
-### 6.9. Reviewed State
-- **Action:** Double-click file to toggle reviewed status (green highlight).
-- **Persistence:** Stored in `.webcap_state.json`.
-
-### 6.10. Stats & Primer Fields
-- **Action:** Editable per-folder, auto-saved, used for review/validation.
-
----
+## 8. Current Non-Goals
+1. In-app long-running training orchestration.
+2. TensorBoard lifecycle management.
+3. Broad multi-hour process orchestration.

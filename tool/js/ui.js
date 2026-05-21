@@ -247,6 +247,7 @@ function clearCaptionFilterInputs() {
   if (ui.filterEl) ui.filterEl.value = '';
   if (ui.advancedFilterMissingCaptionsEl) ui.advancedFilterMissingCaptionsEl.checked = false;
   if (ui.advancedFilterReviewedEl) ui.advancedFilterReviewedEl.checked = false;
+  if (ui.advancedFilterUnratedEl) ui.advancedFilterUnratedEl.checked = false;
   if (ui.advancedFilterMinStarsEl) ui.advancedFilterMinStarsEl.value = '';
   if (ui.advancedFilterFlagEl) {
     Array.prototype.forEach.call(ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]'), function (input) {
@@ -592,6 +593,11 @@ if (ui.advancedFilterReviewedEl) {
     renderFileList();
   });
 }
+if (ui.advancedFilterUnratedEl) {
+  ui.advancedFilterUnratedEl.addEventListener('change', function () {
+    renderFileList();
+  });
+}
 if (ui.advancedFilterMinStarsEl) {
   ui.advancedFilterMinStarsEl.addEventListener('change', function () {
     renderFileList();
@@ -599,6 +605,11 @@ if (ui.advancedFilterMinStarsEl) {
 }
 if (ui.advancedFilterFlagEl) {
   ui.advancedFilterFlagEl.addEventListener('change', function () {
+    renderFileList();
+  });
+}
+if (ui.advancedFilterInvalidArEl) {
+  ui.advancedFilterInvalidArEl.addEventListener('change', function () {
     renderFileList();
   });
 }

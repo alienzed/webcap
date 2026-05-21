@@ -427,9 +427,11 @@ iframe {
 }
 
 .caption-filter-clear-all-btn.is-active {
-  background: #eef6ff;
-  border-color: #7ea4cf;
-  color: #1e4f86;
+  background: #d97718;
+  border-color: #9a3412;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(217, 119, 24, 0.38), 0 0 14px rgba(217, 119, 24, 0.35);
+  font-weight: 700;
 }
 
 .advanced-filter-toggle-icon {
@@ -456,6 +458,26 @@ iframe {
   padding: 7px 8px;
   display: grid;
   gap: 6px;
+}
+
+.advanced-filter-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+
+.advanced-filter-check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+}
+
+.advanced-filter-check-row input[type="checkbox"] {
+  width: auto;
+  margin: 0;
 }
 
 .advanced-filter-row {

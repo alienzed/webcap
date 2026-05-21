@@ -1,7 +1,7 @@
 output_dir = "{TRAINING_ROOT}/output/runs"
 dataset    = "{TRAINING_ROOT}/{DATASET}/dataset.lo.toml"
 
-epochs = 120
+epochs = 100
 save_every_n_epochs = 1
 
 micro_batch_size_per_gpu = 1
@@ -10,7 +10,7 @@ gradient_accumulation_steps = 1
 gradient_clipping = 1.0
 warmup_steps = 100
 
-checkpoint_every_n_epochs = 3
+checkpoint_every_n_epochs = 5
 activation_checkpointing = true
 partition_method = "parameters"
 save_dtype = "bfloat16"
@@ -37,7 +37,7 @@ dropout = 0.05
 
 [optimizer]
 type = "AdamW8bitKahan"
-lr = 4e-5
+lr = 3e-5
 betas = [0.9, 0.95]
 weight_decay = 0.0
 stabilize = false

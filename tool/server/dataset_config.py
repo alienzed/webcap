@@ -1,6 +1,7 @@
 import json
 import hashlib
 import math
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -83,6 +84,18 @@ VIDEO_DETAIL_MIN_COVERAGE = 0.35
 VIDEO_DETAIL_MIN_SUPPORT = 2
 POC_VIDEO_DETAIL_ENABLED = False
 NORMAL_SECOND_BUCKET_MIN_SCALE_NON_SQUARE = 1.08
+DEFAULT_HI_EPOCHS = 80
+DEFAULT_LO_EPOCHS = 100
+HI_CONFIG_NAME = "config.hi.toml"
+LO_CONFIG_NAME = "config.lo.toml"
+REPEAT_TARGET_STEPS = {
+    "poc": {"hi": 2200, "lo": 3600},
+    "normal": {"hi": 3800, "lo": 6000},
+    "quality": {"hi": 5200, "lo": 8000},
+}
+VIDEO_DETAIL_REPEAT_WEIGHT = 0.25
+VIDEO_MOTION_REPEAT_WEIGHT = 1.0
+IMAGE_REPEAT_WEIGHT = 1.0
 
 
 def normalize_training_generate_mode(mode):
@@ -90,6 +103,54 @@ def normalize_training_generate_mode(mode):
     if text not in TRAINING_MODE_TARGETS:
         text = "normal"
     return text
+
+
+def repeat_targets_for_mode(mode: str):
+    normalized = normalize_training_generate_mode(mode)
+    targets = REPEAT_TARGET_STEPS[normalized]
+    return int(targets["hi"]), int(targets["lo"])
+
+
+_EPOCHS_PATTERN = re.compile(rb"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
+
+
+def read_epochs_from_training_config(path: Path, fallback: int):
+    if not path.exists() or not path.is_file():
+        return int(fallback)
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return int(fallback)
+    match = _EPOCHS_PATTERN.search(raw)
+    if not match:
+        return int(fallback)
+    return max(1, int(match.group(1)))
+
+
+def solve_repeat_scalar(entries, target_steps: int, epochs: int):
+    base = 0.0
+    for entry in entries:
+        base += float(entry["sample_count"]) * float(entry["repeat_weight"])
+    if base <= 0:
+        return 1, 0.0
+    scalar = int(math.ceil(float(target_steps) / (float(epochs) * base)))
+    if scalar < 1:
+        scalar = 1
+    return scalar, base
+
+
+def build_repeats(entries, scalar: int):
+    repeats = []
+    for entry in entries:
+        repeats.append(max(1, int(math.ceil(float(scalar) * float(entry["repeat_weight"])))))
+    return repeats
+
+
+def estimate_steps(entries, repeats, epochs: int):
+    per_epoch = 0
+    for idx, entry in enumerate(entries):
+        per_epoch += int(entry["sample_count"]) * int(repeats[idx])
+    return int(epochs) * int(per_epoch)
 
 
 def generate_dataset_configs(folder_path: Path, mode: str = "normal"):
@@ -105,17 +166,15 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal"):
     lines.append(f"[INFO] Reading prep manifest: {manifest_path}")
     lines.append(f"[INFO] Training generate mode: {generate_mode}")
 
-    video_blocks = build_video_blocks(dataset_root, manifest.get("videos", []), lines, mode=generate_mode)
-    lines.append(f"[INFO] Built {len(video_blocks)} video directory block(s).")
-    image_only_set = len(video_blocks) == 0
+    video_entries = build_video_blocks(dataset_root, manifest.get("videos", []), lines, mode=generate_mode)
+    lines.append(f"[INFO] Built {len(video_entries)} video directory block(s).")
+    image_only_set = len(video_entries) == 0
 
     image_dirs = find_image_dirs(dataset_root)
     lines.append(f"[INFO] Found {len(image_dirs)} prepared image folder(s).")
-    if image_only_set and image_dirs:
-        lines.append("[INFO] Image-only set detected: defaulting image num_repeats to 2.")
 
     metadata = {}
-    image_blocks = []
+    image_entries = []
     for image_dir in image_dirs:
         ar_label = ar_from_image_dir(image_dir.name)
         images = read_image_metadata(image_dir)
@@ -140,25 +199,51 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal"):
             f"[INFO] {image_dir.name}: selected image bucket(s): "
             + ", ".join(f"{w}x{h}" for (w, h) in buckets)
         )
-        image_blocks.append(
-            render_image_block(
-                image_dir,
-                ar_label,
-                buckets,
-                num_repeats=2 if image_only_set else 1,
-            )
-        )
+        image_entries.append({
+            "kind": "image",
+            "path": image_dir,
+            "ar_label": ar_label,
+            "buckets": buckets,
+            "sample_count": max(1, len(images) - len(unsupported)),
+            "repeat_weight": IMAGE_REPEAT_WEIGHT,
+        })
 
     metadata_path = dataset_root / "webcap_dataset_metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     lines.append(f"[INFO] Wrote metadata cache: {metadata_path}")
 
+    all_entries = []
+    all_entries.extend(video_entries)
+    all_entries.extend(image_entries)
+
+    hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
+    hi_epochs = read_epochs_from_training_config(folder / HI_CONFIG_NAME, DEFAULT_HI_EPOCHS)
+    lo_epochs = read_epochs_from_training_config(folder / LO_CONFIG_NAME, DEFAULT_LO_EPOCHS)
+    hi_scalar, hi_base = solve_repeat_scalar(all_entries, hi_target_steps, hi_epochs)
+    lo_scalar, lo_base = solve_repeat_scalar(all_entries, lo_target_steps, lo_epochs)
+    hi_repeats = build_repeats(all_entries, hi_scalar)
+    lo_repeats = build_repeats(all_entries, lo_scalar)
+    hi_est = estimate_steps(all_entries, hi_repeats, hi_epochs)
+    lo_est = estimate_steps(all_entries, lo_repeats, lo_epochs)
+
+    lines.append(f"[INFO] Repeat targeting HI: target={hi_target_steps}, epochs={hi_epochs}, base={hi_base:.2f}, scalar={hi_scalar}, est_steps={hi_est}")
+    lines.append(f"[INFO] Repeat targeting LO: target={lo_target_steps}, epochs={lo_epochs}, base={lo_base:.2f}, scalar={lo_scalar}, est_steps={lo_est}")
+    if image_only_set:
+        lines.append("[INFO] Image-only set detected: repeats solved from target steps.")
+
+    hi_blocks = []
+    lo_blocks = []
+    for idx, entry in enumerate(all_entries):
+        hi_blocks.append(render_dataset_entry(entry, hi_repeats[idx]))
+        lo_blocks.append(render_dataset_entry(entry, lo_repeats[idx]))
+
     snapshot_lines = build_selection_snapshot_comment_lines(folder, dataset_root, manifest)
-    text = render_dataset_toml(video_blocks, image_blocks, snapshot_lines)
+    hi_text = render_dataset_toml(hi_blocks, snapshot_lines)
+    lo_text = render_dataset_toml(lo_blocks, snapshot_lines)
     hi_path = folder / "dataset.hi.toml"
     lo_path = folder / "dataset.lo.toml"
-    hi_path.write_text(text, encoding="utf-8")
-    lo_path.write_text(text, encoding="utf-8")
+    hi_path.write_text(hi_text, encoding="utf-8")
+    lo_path.write_text(lo_text, encoding="utf-8")
     lines.append(f"[INFO] Wrote {hi_path}")
     lines.append(f"[INFO] Wrote {lo_path}")
 
@@ -203,7 +288,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal"):
             "path": abs_prepared,
         })
 
-    blocks = []
+    entries = []
     for ar_label in AR_CLASSES.keys():
         clips = grouped.get(ar_label, [])
         if not clips:
@@ -243,27 +328,38 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal"):
             lines.append(f"[WARN] {ar_label}: unable to choose motion bucket resolution.")
             continue
 
-        buckets = [(motion["width"], motion["height"], motion_frames)]
+        motion_bucket = (motion["width"], motion["height"], motion_frames)
         lines.append(
             f"[INFO] {ar_label}: motion bucket {motion['width']}x{motion['height']} @ {motion_frames} "
             f"(support {motion['support']}/{motion['total']})"
         )
+        dir_path = (dataset_root / ar_label).as_posix()
+        entries.append({
+            "kind": "video",
+            "role": "motion",
+            "dir_path": dir_path,
+            "buckets": [motion_bucket],
+            "sample_count": motion["support"],
+            "repeat_weight": VIDEO_MOTION_REPEAT_WEIGHT,
+        })
 
         if generate_mode != "poc" or POC_VIDEO_DETAIL_ENABLED:
             detail = choose_video_detail_bucket(ar_label, usable_for_frames, motion["width"], motion["height"])
             if detail:
                 detail_tuple = (detail["width"], detail["height"], VIDEO_DETAIL_FRAMES)
-                if detail_tuple not in buckets:
-                    buckets.append(detail_tuple)
-                    lines.append(
-                        f"[INFO] {ar_label}: detail bucket {detail['width']}x{detail['height']} @ {VIDEO_DETAIL_FRAMES} "
-                        f"(support {detail['support']}/{detail['total']})"
-                    )
-
-        buckets.sort(key=lambda item: item[2], reverse=True)
-        dir_path = (dataset_root / ar_label).as_posix()
-        blocks.append(render_video_block(dir_path, buckets))
-    return blocks
+                lines.append(
+                    f"[INFO] {ar_label}: detail bucket {detail['width']}x{detail['height']} @ {VIDEO_DETAIL_FRAMES} "
+                    f"(support {detail['support']}/{detail['total']})"
+                )
+                entries.append({
+                    "kind": "video",
+                    "role": "detail",
+                    "dir_path": dir_path,
+                    "buckets": [detail_tuple],
+                    "sample_count": detail["support"],
+                    "repeat_weight": VIDEO_DETAIL_REPEAT_WEIGHT,
+                })
+    return entries
 
 
 def to_pos_int(value):
@@ -450,11 +546,14 @@ def video_alternatives(selected_w: int, selected_h: int, selected_frames: int):
     higher = sorted(higher, key=lambda x: abs(min(x[:2]) - short_side))[:3]
     return lower + higher
 
-def render_video_block(dir_path: str, buckets):
+def render_video_block(dir_path: str, buckets, num_repeats: int = 1):
+    repeats = int(num_repeats) if isinstance(num_repeats, int) else 1
+    if repeats < 1:
+        repeats = 1
     lines = [
         "[[directory]]",
         f'path = "{dir_path}"',
-        "num_repeats = 2",
+        f"num_repeats = {repeats}",
         'group = "videos"',
         "size_buckets = [",
     ]
@@ -736,6 +835,15 @@ def render_image_block(image_dir: Path, ar_label: str, buckets, num_repeats: int
     return "\n".join(lines)
 
 
+def render_dataset_entry(entry, num_repeats: int):
+    kind = entry["kind"]
+    if kind == "video":
+        return render_video_block(entry["dir_path"], entry["buckets"], num_repeats=num_repeats)
+    if kind == "image":
+        return render_image_block(entry["path"], entry["ar_label"], entry["buckets"], num_repeats=num_repeats)
+    raise ValueError(f"Unknown dataset entry kind: {kind}")
+
+
 def image_alternatives(ar_label: str, selected_w: int, selected_h: int):
     short_side = min(selected_w, selected_h)
     offsets = [-128, -96, -64, -32, 32, 64, 96, 128]
@@ -875,10 +983,9 @@ def build_selection_snapshot_comment_lines(folder: Path, dataset_root: Path, man
     return lines
 
 
-def render_dataset_toml(video_blocks, image_blocks, snapshot_lines=None):
+def render_dataset_toml(blocks, snapshot_lines=None):
     chunks = ["enable_ar_bucket = true"]
-    chunks.extend(video_blocks)
-    chunks.extend(image_blocks)
+    chunks.extend(blocks)
     body = "\n\n".join(chunks).rstrip() + "\n"
     if not snapshot_lines:
         return body

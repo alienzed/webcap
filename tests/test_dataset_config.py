@@ -11,6 +11,8 @@ from tool.server.dataset_config import (
     image_alternatives,
     normalize_training_generate_mode,
     pick_image_buckets,
+    read_epochs_from_training_config,
+    repeat_targets_for_mode,
 )
 
 
@@ -86,16 +88,20 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     hi_text = (set_folder / "dataset.hi.toml").read_text(encoding="utf-8")
     lo_text = (set_folder / "dataset.lo.toml").read_text(encoding="utf-8")
 
-    assert hi_text == lo_text
+    assert hi_text != lo_text
     assert 'group = "videos"' in hi_text
     assert "  [512, 512, 33]," in hi_text
     assert hi_text.count('group = "images"') == 1
     assert "  [256, 256, 1]," in hi_text
     assert "  [512, 512, 1]," in hi_text
     assert "  [768, 768, 1]," not in hi_text
+    assert "num_repeats = 8" in hi_text
+    assert "num_repeats = 10" in lo_text
     assert "[INFO] Built 1 video directory block(s)." in report
     assert "[INFO] Training generate mode: normal" in report
     assert "[INFO] square_img: selected image bucket(s): 256x256, 512x512" in report
+    assert "[INFO] Repeat targeting HI: target=3800" in report
+    assert "[INFO] Repeat targeting LO: target=6000" in report
     assert (auto_dataset / "webcap_dataset_metadata.json").exists()
 
 
@@ -109,6 +115,77 @@ def test_generate_dataset_configs_fails_without_prep_manifest(tmp_path):
         assert "prep_manifest.json" in str(exc)
     else:
         raise AssertionError("generate_dataset_configs should fail without prep_manifest.json")
+
+
+def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_path):
+    set_folder = tmp_path / "set"
+    auto_dataset = set_folder / "auto_dataset"
+    ar_dir = auto_dataset / "169"
+    ar_dir.mkdir(parents=True)
+
+    (ar_dir / "clip_a.mp4").write_bytes(b"video-a")
+    (ar_dir / "clip_b.mp4").write_bytes(b"video-b")
+    (ar_dir / "clip_a.txt").write_text("clip a caption", encoding="utf-8")
+    (ar_dir / "clip_b.txt").write_text("clip b caption", encoding="utf-8")
+
+    (auto_dataset / "prep_manifest.json").write_text(
+        """
+{
+  "version": 1,
+  "target_fps": 16,
+  "videos": [
+    {
+      "file": "clip_a.mp4",
+      "ar": "169",
+      "width": 1024,
+      "height": 576,
+      "fps": 16,
+      "frames": 49,
+      "duration": 3.0,
+      "prepared_path": "169/clip_a.mp4",
+      "caption": true,
+      "action": "copied"
+    },
+    {
+      "file": "clip_b.mp4",
+      "ar": "169",
+      "width": 1024,
+      "height": 576,
+      "fps": 16,
+      "frames": 49,
+      "duration": 3.0,
+      "prepared_path": "169/clip_b.mp4",
+      "caption": true,
+      "action": "copied"
+    }
+  ],
+  "images": [],
+  "skipped": [],
+  "selection": {
+    "mode": "all",
+    "selected_files": ["clip_a.mp4", "clip_b.mp4"],
+    "selected_count": 2,
+    "total_count": 2,
+    "criteria": {"source_folder": "set"}
+  }
+}
+        """.strip(),
+        encoding="utf-8",
+    )
+
+    report = generate_dataset_configs(set_folder, mode="normal")
+    hi_text = (set_folder / "dataset.hi.toml").read_text(encoding="utf-8")
+    lo_text = (set_folder / "dataset.lo.toml").read_text(encoding="utf-8")
+
+    assert hi_text.count('group = "videos"') == 2
+    assert lo_text.count('group = "videos"') == 2
+    assert "  [640, 352, 49]," in hi_text
+    assert "  [1024, 576, 13]," in hi_text
+    assert "num_repeats = 19" in hi_text
+    assert "num_repeats = 5" in hi_text
+    assert "num_repeats = 24" in lo_text
+    assert "num_repeats = 6" in lo_text
+    assert "[INFO] Built 2 video directory block(s)." in report
 
 
 def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
@@ -271,7 +348,7 @@ def test_validate_config_payload_persists_training_mode():
 
     normalized = validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},
-        "training": {"mode": "poc", "config_hi": "config.hi.toml"},
+        "training": {"mode": "poc"},
     })
     assert normalized["training"]["mode"] == "poc"
 
@@ -291,3 +368,15 @@ def test_poc_mode_never_emits_second_image_bucket():
     buckets, unsupported = pick_image_buckets("square", images, mode="poc")
     assert unsupported == []
     assert buckets == [(256, 256)]
+
+
+def test_repeat_targets_vary_by_mode():
+    assert repeat_targets_for_mode("poc") == (2200, 3600)
+    assert repeat_targets_for_mode("normal") == (3800, 6000)
+    assert repeat_targets_for_mode("quality") == (5200, 8000)
+
+
+def test_read_epochs_from_training_config_handles_non_utf8_bytes(tmp_path):
+    config_path = tmp_path / "config.hi.toml"
+    config_path.write_bytes(b"\xff\xfe\nepochs = 42\n")
+    assert read_epochs_from_training_config(config_path, fallback=80) == 42

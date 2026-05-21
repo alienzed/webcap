@@ -87,14 +87,24 @@
                         </button>
                     </div>
                     <div id="advanced-filter-panel" class="advanced-filter-panel hidden">
-                        <label class="advanced-filter-row">
-                            <input id="advanced-filter-missing-captions" type="checkbox">
-                            <span>Captionless</span>
-                        </label>
-                        <label class="advanced-filter-row">
-                            <input id="advanced-filter-reviewed" type="checkbox">
-                            <span>Reviewed</span>
-                        </label>
+                        <div class="advanced-filter-checkbox-grid">
+                            <label class="advanced-filter-check-row">
+                                <input id="advanced-filter-missing-captions" type="checkbox">
+                                <span>Captionless</span>
+                            </label>
+                            <label class="advanced-filter-check-row">
+                                <input id="advanced-filter-reviewed" type="checkbox">
+                                <span>Reviewed</span>
+                            </label>
+                            <label class="advanced-filter-check-row">
+                                <input id="advanced-filter-invalid-ar" type="checkbox">
+                                <span>Invalid AR</span>
+                            </label>
+                            <label class="advanced-filter-check-row">
+                                <input id="advanced-filter-unrated" type="checkbox">
+                                <span>Unrated</span>
+                            </label>
+                        </div>
                         <label class="advanced-filter-row">
                             <span>Stars</span>
                             <select id="advanced-filter-min-stars">
@@ -130,10 +140,6 @@
                                     <span class="flag-dot flag-dot--orange"></span>
                                 </label>
                             </div>
-                        </label>
-                        <label class="advanced-filter-row">
-                            <input id="advanced-filter-invalid-ar" type="checkbox">
-                            <span>Invalid AR</span>
                         </label>
                     </div>
                     <div id="caption-filter-count">
@@ -482,7 +488,7 @@
                         <input
                             id="video-clip-start-input"
                             type="number"
-                            step="0.05"
+                            step="0.1"
                             min="0"
                             value="0"
                         >
@@ -494,8 +500,8 @@
                         <input
                             id="video-clip-duration-input"
                             type="number"
-                            step="0.01"
-                            min="0.01"
+                            step="0.5"
+                            min="0.1"
                             value="3.0"
                         >
                     </div>
@@ -529,10 +535,6 @@
                     <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/home/user/diffusion-pipe">
                     <label for="app-settings-training-activate-script">Activate Script</label>
                     <input id="app-settings-training-activate-script" type="text" placeholder="dp-clean/bin/activate">
-                    <label for="app-settings-training-config-hi">Train Config (HI)</label>
-                    <input id="app-settings-training-config-hi" type="text" placeholder="config.hi.toml">
-                    <label for="app-settings-training-config-lo">Train Config (LO)</label>
-                    <input id="app-settings-training-config-lo" type="text" placeholder="config.lo.toml">
                     <span>Training Mode</span>
                     <div class="app-settings-radio-group">
                         <label class="app-settings-radio-label">

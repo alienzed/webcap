@@ -1,5 +1,11 @@
 # Video Clip Feature Specification
 
+## Status
+
+- V1 baseline is implemented in app (`Clip...` flow for videos in `src_videos`, export to parent set folder).
+- This document still contains original planning notes plus V2 backlog items.
+- Treat unchecked acceptance boxes below as backlog tracking, not as current implementation truth.
+
 ## Goal
 
 Allow the user to extract a named video clip from a raw source file — trimming time range and cropping to an aspect ratio — and save the result directly into the working set folder for captioning.

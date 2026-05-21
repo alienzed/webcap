@@ -4,6 +4,8 @@
 
 WebCap generates dataset configuration files (dataset.hi.toml, dataset.lo.toml) that define size buckets and training data organization for LoRA training on WAN2.2.
 
+For planned step-targeted repeat defaults, see `docs/repeat_targeting.md`.
+
 The strategy is to:
 - Use fixed, preset resolution pools per aspect ratio (not dynamically generated).
 - Select buckets that are actually supported by media in the folder (coverage-based).

@@ -19,6 +19,8 @@ from .dataset_prep import prepare_dataset
 from .originals import MEDIA_ALL_EXTS
 
 ROOT = Path(__file__).resolve().parents[2]
+HI_CONFIG_NAME = "config.hi.toml"
+LO_CONFIG_NAME = "config.lo.toml"
 
 
 class _QueueWriter:
@@ -216,8 +218,8 @@ def generate_dataset_config_response(folder: str):
             text = generate_dataset_configs(folder_path, mode=mode)
             image_only = _manifest_is_image_only(prep_manifest_path)
             if image_only:
-                hi_name = (training.get("config_hi") or "config.hi.toml").strip()
-                lo_name = (training.get("config_lo") or "config.lo.toml").strip()
+                hi_name = HI_CONFIG_NAME
+                lo_name = LO_CONFIG_NAME
                 updated = []
                 if _bump_micro_batch_default_if_template_value(folder_path / hi_name):
                     updated.append(hi_name)
@@ -286,8 +288,8 @@ def train_run_response(folder: str):
     live_config = app_config.config
     training_cfg = live_config.get("training", {}) if isinstance(live_config, dict) else {}
     diffusion_pipe_wsl = (training_cfg.get("diffusion_pipe_wsl") or "").strip()
-    hi_name = (training_cfg.get("config_hi") or "config.hi.toml").strip()
-    lo_name = (training_cfg.get("config_lo") or "config.lo.toml").strip()
+    hi_name = HI_CONFIG_NAME
+    lo_name = LO_CONFIG_NAME
     mode = str(training_cfg.get("mode") or "normal").strip().lower()
 
     try:

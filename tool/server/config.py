@@ -47,7 +47,7 @@ def validate_config_payload(payload):
     if not isinstance(training, dict):
         raise ValueError("Config.training must be an object when provided.")
     normalized_training = {}
-    for key in ("diffusion_pipe_wsl", "activate_script", "config_hi", "config_lo"):
+    for key in ("diffusion_pipe_wsl", "activate_script"):
         if key in training:
             normalized_training[key] = str(training.get(key) or "").strip()
     if "mode" in training:

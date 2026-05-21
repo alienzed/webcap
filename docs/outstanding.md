@@ -1,4 +1,5 @@
 This file tracks implemented work vs outstanding items.
+Last reviewed: 2026-05-19.
 
 ## Bugs
 
@@ -21,6 +22,11 @@ This file tracks implemented work vs outstanding items.
 ## Stabilization Mode
 - App is in 1.0 lock-in mode: resist new feature work and prioritize targeted bug/regression fixes.
 
+## Documentation Sync Notes
+- `dataset_workflow.md` updated to reflect current in-app clip/crop/deface and `auto_dataset` behavior.
+- `src_videos_semantics.md` updated from proposed to implemented status.
+- `spec.md` refreshed to match current route and workflow behavior.
+
 ## Backlog (Do Not Implement Yet)
 - Parked long-term; no immediate pain.
 - Persist last selected working directory between refresh/restart (optional toggle in settings; safe fallback when missing).
@@ -31,8 +37,7 @@ This file tracks implemented work vs outstanding items.
 - Maintain flags and metadata when Pruning/restoring/renaming.
 - Review duplicate-token detection inside a single caption.
 - Audit remaining folder-load side effects and trim non-essential mutation paths.
-- Deprecate/remove the Review panel `Config Files` section once a better replacement UX is in place.
-- Video crop/clip workflow, likely via a modal backed by a mature lightweight library/tool rather than custom in-app editing.
+- Video clip V2 ergonomics polish (timeline UX, additional controls) as tracked in `video_clip.md`.
 - In-app training execution/orchestration for long-running jobs.
 - TensorBoard lifecycle helpers.
 - Broader multi-hour process orchestration in app.
@@ -115,7 +120,7 @@ This file tracks implemented work vs outstanding items.
 - Training mode selector in app settings:
   - Two radio button options: POC (30 min), Normal (2-6h, default).
   - Mode persisted in config and available to backend Generate logic.
-  - Legacy `quality` values are normalized to `normal` for compatibility.
+  - Quality mode remains supported for generate/train flows.
 - Phrase auto-insert duplicate detection:
   - Phrase insertion now checks for existing exact phrase (case-insensitive word-boundary match).
   - If phrase already exists, shows status "Phrase already exists in caption." and skips insertion.

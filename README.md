@@ -119,6 +119,7 @@ Filter bar supports:
 - Clear All resets text + all advanced filters.
 
 Prepare uses the currently visible media rows as its selection source.
+The filter summary row also shows folder-level rating progress as `Rated A/B` (`A` = items with rating > 0, `B` = total media items in current folder).
 
 ### 5. Review state
 
@@ -150,7 +151,7 @@ Safety behavior:
 ### 7. Crop modal (images)
 
 Crop features:
-- Aspect-ratio presets: `1:1`, `4:3`, `16:9`, `9:16`
+- Aspect-ratio presets: `1:1`, `4:3`, `3:4`, `16:9`, `9:16`
 - Soft magnet snap toward an 8px grid while adjusting
 - Finalized crop snapped/clamped to safe bounds
 - Arbitrary angle rotation:

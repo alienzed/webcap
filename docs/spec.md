@@ -27,6 +27,7 @@ WebCap is a local-first media curation and captioning app for dataset preparatio
 ## 4. Core Workflows
 1. Navigation and selection:
 - Folder browsing and media selection are driven by `/fs/describe`.
+ - Filter summary row shows match count plus folder-level rating progress as `Rated A/B`.
 2. Caption editing:
 - Load/save caption sidecars per media.
 - Autosave/manual save flows are supported.

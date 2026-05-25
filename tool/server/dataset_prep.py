@@ -10,6 +10,7 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 AR_CLASSES = {
     "square": 1.0,
     "43": 4 / 3,
+    "34": 3 / 4,
     "169": 16 / 9,
     "916": 9 / 16,
 }

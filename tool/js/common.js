@@ -69,6 +69,7 @@ function mapAspectRatioToBucket(aspect) {
   var norm = String(aspect).replace(/\s/g, '').toLowerCase();
   if (norm === '1:1' || norm === 'square') return 'square';
   if (norm === '4:3') return '4:3';
+  if (norm === '3:4') return '3:4';
   if (norm === '16:9') return '16:9';
   if (norm === '9:16') return '9:16';
 
@@ -87,6 +88,7 @@ function mapAspectRatioToBucket(aspect) {
 
   if (Math.abs(val - 1.0) < 0.05) return 'square';
   if (Math.abs(val - (4 / 3)) < 0.05) return '4:3';
+  if (Math.abs(val - (3 / 4)) < 0.05) return '3:4';
   if (Math.abs(val - (16 / 9)) < 0.05) return '16:9';
   if (Math.abs(val - (9 / 16)) < 0.05) return '9:16';
   return 'Unknown';

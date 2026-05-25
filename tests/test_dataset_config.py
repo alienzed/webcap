@@ -257,10 +257,12 @@ def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
 
 def test_rectangle_image_candidates_allow_long_edge_above_768():
     candidates_916 = generate_candidates("916")
+    candidates_34 = generate_candidates("34")
     candidates_169 = generate_candidates("169")
     candidates_square = generate_candidates("square")
 
     assert candidates_916[0][:2] == (704, 1248)
+    assert candidates_34[0][:2] == (768, 1024)
     assert candidates_169[0][:2] == (1248, 704)
     assert candidates_square[0][:2] == (768, 768)
 

@@ -117,7 +117,7 @@ function renderItemMetadataPanel() {
     valueEl.textContent = text;
     if (key === 'aspect' && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(text)) {
       valueEl.classList.add('item-metadata-value-error');
-      valueEl.title = 'Aspect ratio is outside supported buckets (square, 4:3, 16:9, 9:16).';
+      valueEl.title = 'Aspect ratio is outside supported buckets (square, 4:3, 3:4, 16:9, 9:16).';
     }
     itemRow.appendChild(labelEl);
     itemRow.appendChild(valueEl);

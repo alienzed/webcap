@@ -188,7 +188,7 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames) {
               var displayText = bucket !== val ? val + ' (' + bucket + ')' : val;
               return '<td class="metadata-value-ok" style="color: green;" title="Supported aspect ratio: ' + bucket + '.">' + escapeHtml(displayText) + '</td>';
             } else {
-              return '<td class="metadata-value-error" title="Aspect ratio is outside supported buckets (square, 4:3, 16:9, 9:16).">' + escapeHtml(val) + '</td>';
+              return '<td class="metadata-value-error" title="Aspect ratio is outside supported buckets (square, 4:3, 3:4, 16:9, 9:16).">' + escapeHtml(val) + '</td>';
             }
           }
           return '<td>' + escapeHtml(val) + '</td>';
@@ -224,7 +224,7 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames) {
               arGroups[ar].push(row);
             });
             // Only show supported buckets in order
-            var bucketOrder = ['square','4:3','16:9','9:16','Unknown'];
+            var bucketOrder = ['square','4:3','3:4','16:9','9:16','Unknown'];
             bucketOrder.forEach(function(ar){
               if (!arGroups[ar] || !arGroups[ar].length) return;
               html += '<div style="margin:8px 0 2px 0;font-weight:bold;">Aspect Ratio: ' + escapeHtml(ar) + ' (' + arGroups[ar].length + ')</div>';

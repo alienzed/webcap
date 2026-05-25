@@ -7,7 +7,7 @@ WAN / diffusion-pipe dataset auto-preparation tool.
 Key behavior:
 - Respects AR snapping:
   - square: w == h, both divisible by 32
-  - 4:3, 16:9, 9:16: w,h divisible by 32, AR within tolerance
+  - 4:3, 3:4, 16:9, 9:16: w,h divisible by 32, AR within tolerance
 - Chooses bucket resolutions by coverage over *actual clip resolutions* (no intentional upscaling).
 - Uses mfp_limit as a ceiling to avoid swapping.
 - Ensures each usable clip appears in at least one bucket (via a fallback bucket if needed).
@@ -83,6 +83,7 @@ IMG_HIGHRES_MAX_DIM = 768   # disabled (kept for compatibility)
 AR_CLASSES = {
     "square": (1.0, "square"),
     "43": (4/3, "43"),
+    "34": (3/4, "34"),
     "169": (16/9, "169"),
     "916": (9/16, "916"),
 }
@@ -99,6 +100,7 @@ MAX_NON_SQUARE_SHORT = 768
 EVAL_BUCKET_CAPS = {
     "square": (512, 512),
     "43":     (640, 480),
+    "34":     (480, 640),
     "169":    (704, 416),
     "916":    (416, 704),
 }

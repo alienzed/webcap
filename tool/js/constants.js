@@ -32,7 +32,7 @@ ui = {
   captionFilterCount: document.getElementById('caption-filter-count'),
   captionFilterCountTextEl: document.getElementById('caption-filter-count-text'),
   captionFilterCountSeparatorEl: document.getElementById('caption-filter-count-separator'),
-  captionFilterPrepareLinkEl: document.getElementById('caption-filter-prepare-link'),
+  captionFilterRatedSummaryEl: document.getElementById('caption-filter-rated-summary'),
   statusEl: document.getElementById('status-text'),
   upBtn: document.getElementById('up-one-directory-btn'),
   refreshBtn: document.getElementById('refresh-btn'),

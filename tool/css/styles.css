@@ -81,18 +81,10 @@ body {
   margin-bottom: 5px;
 }
 
-.caption-filter-prepare-link {
-  border: none;
-  background: transparent;
-  color: #1b65b9;
+.caption-filter-rated-summary {
+  color: var(--muted);
   font-size: 12px;
-  padding: 0;
-  margin: 0;
   line-height: 1.2;
-}
-
-.caption-filter-prepare-link:hover {
-  text-decoration: underline;
 }
 
 /* Media list */

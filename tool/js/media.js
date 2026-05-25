@@ -641,12 +641,23 @@ async function renderFileList() {
   } else if (ui.captionFilterCount) {
     ui.captionFilterCount.textContent = countText;
   }
-  var showPrepareQuickLink = !!(ui.captionFilterPrepareLinkEl && state.folder && mediaItems.length > 0);
+  var folderMediaItems = Array.isArray(state.items) ? state.items : [];
+  var totalMediaCount = folderMediaItems.length;
+  var ratedMediaCount = folderMediaItems.reduce(function (count, item) {
+    var rating = (typeof getRatingForMediaKey === 'function') ? getRatingForMediaKey(item && item.key) : 0;
+    return count + (rating > 0 ? 1 : 0);
+  }, 0);
+  var showRatedSummary = !!(ui.captionFilterRatedSummaryEl && state.folder && totalMediaCount > 0);
   if (ui.captionFilterCountSeparatorEl) {
-    ui.captionFilterCountSeparatorEl.classList.toggle('hidden', !showPrepareQuickLink);
+    ui.captionFilterCountSeparatorEl.classList.toggle('hidden', !showRatedSummary);
   }
-  if (ui.captionFilterPrepareLinkEl) {
-    ui.captionFilterPrepareLinkEl.classList.toggle('hidden', !showPrepareQuickLink);
+  if (ui.captionFilterRatedSummaryEl) {
+    if (showRatedSummary) {
+      ui.captionFilterRatedSummaryEl.textContent = 'Rated ' + ratedMediaCount + '/' + totalMediaCount;
+    } else {
+      ui.captionFilterRatedSummaryEl.textContent = '';
+    }
+    ui.captionFilterRatedSummaryEl.classList.toggle('hidden', !showRatedSummary);
   }
 
 

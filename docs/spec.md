@@ -37,6 +37,10 @@ WebCap is a local-first media curation and captioning app for dataset preparatio
 4. Reversible media mutation:
 - Prune/reset/restore/crop/transform/deface/clip workflows are exposed through context menus and routes.
 - Set-folder mutations rely on `originals/` backups for reversibility.
+ - Preview quick actions:
+ - Images show always-visible `Crop` and `Deface`.
+ - Videos show always-visible `Clip` and `Deface`.
+ - A preview `More` menu preserves full media-list context-menu action parity.
 5. Dataset prep/generate:
 - Prepare can run on visible subset with selection snapshot metadata.
 - Generate can auto-run Prepare once if prep manifest is missing.

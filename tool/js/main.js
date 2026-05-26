@@ -18,6 +18,7 @@ function clearEditorAndPreview() {
   var checklistPanelEl = document.getElementById('caption-checklist-panel');
   if (checklistPanelEl) checklistPanelEl.style.display = 'none';
   state.currentItem = null;
+  updatePreviewActionControls();
 }
 
 function clearSelection() {
@@ -266,6 +267,12 @@ function wireAllUi() {
   setChecklistPanelVisible(false);
   wireCaptionHelpersUi();
   wireItemDetailsUi();
+  if (typeof wirePreviewActionControls === 'function') {
+    wirePreviewActionControls();
+  }
+  if (typeof updatePreviewActionControls === 'function') {
+    updatePreviewActionControls();
+  }
   wireSidebarTabs();
   if (typeof wireAppSettingsUi === 'function') {
     wireAppSettingsUi();

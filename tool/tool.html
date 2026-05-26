@@ -413,7 +413,14 @@
                 <div id="console-panel"></div>
             </div>
             <div class="panel">
-                <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
+                <div id="preview-shell" class="preview-shell">
+                    <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
+                    <div id="preview-actions" class="preview-actions hidden" aria-label="Preview actions">
+                        <button id="preview-action-primary-a" type="button" class="preview-action-btn hidden"></button>
+                        <button id="preview-action-primary-b" type="button" class="preview-action-btn hidden"></button>
+                        <button id="preview-action-more" type="button" class="preview-action-btn hidden">More</button>
+                    </div>
+                </div>
             </div>
         </div>
         <div id="crop-modal" class="crop-modal hidden" aria-hidden="true">

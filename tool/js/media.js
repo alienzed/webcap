@@ -19,6 +19,170 @@ function scrollCurrentMediaRowIntoView() {
   target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
+function isPreviewVideoFileName(fileName) {
+  var name = String(fileName || '');
+  var dot = name.lastIndexOf('.');
+  if (dot < 0) return false;
+  var ext = name.slice(dot).toLowerCase();
+  return ['.mp4', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.m4v'].indexOf(ext) !== -1;
+}
+
+function getPreviewPrimaryActionPlan(fileName) {
+  if (isPreviewVideoFileName(fileName)) {
+    return [
+      { label: 'Clip', actionLabel: 'Clip...' },
+      { label: 'Deface', actionLabel: 'Deface...' }
+    ];
+  }
+  return [
+    { label: 'Crop', actionLabel: 'Crop...' },
+    { label: 'Deface', actionLabel: 'Deface...' }
+  ];
+}
+
+function getPreviewContextActionsForCurrentItem() {
+  if (!state || !state.currentItem || !state.currentItem.fileName) return [];
+  if (typeof buildMediaContextMenuActions !== 'function') return [];
+  var item = state.currentItem;
+  var key = item.key || item.fileName;
+  var actions = buildMediaContextMenuActions(item, key);
+  return Array.isArray(actions) ? actions : [];
+}
+
+function findPreviewActionByLabel(actions, label) {
+  for (var i = 0; i < actions.length; i++) {
+    var action = actions[i];
+    if (!action || action.separator) continue;
+    if (String(action.label || '') !== String(label || '')) continue;
+    return action;
+  }
+  return null;
+}
+
+function hasNonSeparatorActions(actions) {
+  return (actions || []).some(function (action) {
+    return !!(action && !action.separator);
+  });
+}
+
+function filterPreviewSecondaryActions(allActions, usedByLabel) {
+  var out = [];
+  (allActions || []).forEach(function (action) {
+    if (!action) return;
+    if (action.separator) {
+      out.push(action);
+      return;
+    }
+    var label = String(action.label || '');
+    if (usedByLabel[label]) return;
+    out.push(action);
+  });
+  return out;
+}
+
+function runPreviewActionByLabel(label) {
+  var actions = getPreviewContextActionsForCurrentItem();
+  var action = findPreviewActionByLabel(actions, label);
+  if (!action || typeof action.run !== 'function') {
+    setStatus('Action unavailable: ' + label);
+    return;
+  }
+  action.run();
+}
+
+function updatePreviewActionControls() {
+  if (!ui || !ui.previewActionsEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
+
+  var hideAll = function () {
+    ui.previewActionsEl.classList.add('hidden');
+    ui.previewPrimaryActionAEl.classList.add('hidden');
+    ui.previewPrimaryActionBEl.classList.add('hidden');
+    ui.previewMoreActionsEl.classList.add('hidden');
+    ui.previewPrimaryActionAEl.removeAttribute('data-action-label');
+    ui.previewPrimaryActionBEl.removeAttribute('data-action-label');
+  };
+
+  if (!state || !state.currentItem || !state.currentItem.fileName) {
+    hideAll();
+    return;
+  }
+
+  var actions = getPreviewContextActionsForCurrentItem();
+  if (!hasNonSeparatorActions(actions)) {
+    hideAll();
+    return;
+  }
+
+  var plan = getPreviewPrimaryActionPlan(state.currentItem.fileName);
+  var primaryA = findPreviewActionByLabel(actions, plan[0].actionLabel);
+  var primaryB = findPreviewActionByLabel(actions, plan[1].actionLabel);
+  var used = {};
+
+  if (primaryA) {
+    used[plan[0].actionLabel] = true;
+    ui.previewPrimaryActionAEl.textContent = plan[0].label;
+    ui.previewPrimaryActionAEl.setAttribute('data-action-label', plan[0].actionLabel);
+    ui.previewPrimaryActionAEl.classList.remove('hidden');
+  } else {
+    ui.previewPrimaryActionAEl.classList.add('hidden');
+    ui.previewPrimaryActionAEl.removeAttribute('data-action-label');
+  }
+
+  if (primaryB) {
+    used[plan[1].actionLabel] = true;
+    ui.previewPrimaryActionBEl.textContent = plan[1].label;
+    ui.previewPrimaryActionBEl.setAttribute('data-action-label', plan[1].actionLabel);
+    ui.previewPrimaryActionBEl.classList.remove('hidden');
+  } else {
+    ui.previewPrimaryActionBEl.classList.add('hidden');
+    ui.previewPrimaryActionBEl.removeAttribute('data-action-label');
+  }
+
+  var secondaryActions = filterPreviewSecondaryActions(actions, used);
+  var hasMore = hasNonSeparatorActions(secondaryActions);
+  ui.previewMoreActionsEl.classList.toggle('hidden', !hasMore);
+
+  if (primaryA || primaryB || hasMore) {
+    ui.previewActionsEl.classList.remove('hidden');
+  } else {
+    ui.previewActionsEl.classList.add('hidden');
+  }
+}
+
+function wirePreviewActionControls() {
+  if (!ui || !ui.previewActionsEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
+  if (ui.previewActionsEl.__wired) return;
+  ui.previewActionsEl.__wired = true;
+
+  function bindPrimaryButton(btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var actionLabel = String(btn.getAttribute('data-action-label') || '');
+      if (!actionLabel) return;
+      runPreviewActionByLabel(actionLabel);
+    });
+  }
+
+  bindPrimaryButton(ui.previewPrimaryActionAEl);
+  bindPrimaryButton(ui.previewPrimaryActionBEl);
+
+  ui.previewMoreActionsEl.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var actions = getPreviewContextActionsForCurrentItem();
+    var used = {};
+    var aLabel = String(ui.previewPrimaryActionAEl.getAttribute('data-action-label') || '');
+    var bLabel = String(ui.previewPrimaryActionBEl.getAttribute('data-action-label') || '');
+    if (aLabel) used[aLabel] = true;
+    if (bLabel) used[bLabel] = true;
+    var secondaryActions = filterPreviewSecondaryActions(actions, used);
+    if (!hasNonSeparatorActions(secondaryActions)) return;
+    var rect = ui.previewMoreActionsEl.getBoundingClientRect();
+    showContextMenu(rect.left, rect.bottom + 6, secondaryActions);
+  });
+}
+
 
 /**
  * Return the array of media items after applying the current UI filters.
@@ -230,6 +394,7 @@ function selectPathMedia(mediaItem) {
     ui.editorEl.value = nextEditorValue;
     renderPathPreview(state.folder, mediaItem.fileName);
     setStatus(buildSelectedMediaStatus(mediaItem));
+    updatePreviewActionControls();
     renderChecklistPanel();
     if (typeof renderPhraseCopyPanel === 'function') {
       renderPhraseCopyPanel();

@@ -362,6 +362,23 @@ def train_run_response(folder: str):
             'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" '
             'deepspeed --num_gpus=1 train.py --deepspeed --config ' + shlex.quote(lo_wsl)
         )
+        handoff_cmd = (
+            "hi_pid=''; "
+            "handoff(){ "
+            "if [ -n \"$hi_pid\" ] && kill -0 \"$hi_pid\" 2>/dev/null; then "
+            "echo \"[INFO] HI interrupted; handing off to LO...\"; "
+            "kill -INT \"$hi_pid\" 2>/dev/null || true; "
+            "wait \"$hi_pid\" 2>/dev/null || true; "
+            "fi; "
+            "}; "
+            "trap handoff INT; "
+            + cmd1
+            + " & hi_pid=$!; "
+            "wait \"$hi_pid\" || true; "
+            "trap - INT; "
+            + cmd2
+        )
+
         def generate():
             try:
                 yield f"[INFO] Running from: {diffusion_pipe_wsl}\n"
@@ -369,8 +386,8 @@ def train_run_response(folder: str):
                 yield f"[INFO] Config LO: {lo_wsl}\n"
                 for line in warnings:
                     yield line + "\n"
-                yield "[INFO] Training commands (single-line chain):\n"
-                yield cmd1 + "; " + cmd2 + "\n"
+                yield "[INFO] Training commands (Ctrl+C during HI starts LO):\n"
+                yield handoff_cmd + "\n"
                 yield "[train] Command preview only; execution is currently disabled.\n"
             except Exception as e:
                 yield f"[ERROR] {e}\n"

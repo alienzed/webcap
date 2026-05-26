@@ -11,9 +11,9 @@ Purpose: run two diffusion-pipe training passes back-to-back (HI then LO) from t
 
 ## Command Shape
 
-The backend executes this form in WSL:
+Train now previews a handoff-friendly single command (Ctrl+C during HI moves immediately to LO):
 
-NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed --config <HI_CONFIG> ; NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed --config <LO_CONFIG>
+hi_pid=''; handoff(){ if [ -n "$hi_pid" ] && kill -0 "$hi_pid" 2>/dev/null; then echo "[INFO] HI interrupted; handing off to LO..."; kill -INT "$hi_pid" 2>/dev/null || true; wait "$hi_pid" 2>/dev/null || true; fi; }; trap handoff INT; NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed --config <HI_CONFIG> & hi_pid=$!; wait "$hi_pid" || true; trap - INT; NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed --config <LO_CONFIG>
 
 Before that, it runs:
 
@@ -31,5 +31,5 @@ Add these fields in `tool/config.json` (example in `tool/config.example.json`):
 ## Notes
 
 - Train remains explicit/manual: click starts the run sequence.
-- Both runs are chained so LO starts after HI exits.
+- LO starts after HI exits, and if HI is interrupted with Ctrl+C, LO still starts automatically.
 - If either config file is missing, backend returns an error before starting.

@@ -7,6 +7,10 @@ Last reviewed: 2026-05-19.
 ## Enhancements
 - A way to visually show in the media list when an item has a star rating. I'm not sure we NEED to show how many stars, just something that clearly denotes 'this item has a rating'. I was even thinking of having the number of star really really tiny beneath the name, only a few pixels tall, like, that would be enough for my needs. OR, we do the opposite, right now we have a background color for missing captions, maybe there's a way to do something similar for missing rating.
 - Dataset inferred sample/megaframe/VRAM/time estimation.
+- Preview quick actions (pre-implementation decision):
+  - Images: always-visible primary actions are `Crop` and `Deface`.
+  - Videos: always-visible primary actions are `Clip` and `Deface`.
+  - Keep full action parity via a secondary `More/Actions` menu (do not hide capabilities relative to media-list context menu).
 
 ## 1.1 Ideas
 - We have caption requirements. We need a concept of Set Requirements, ideally self counting. For example, a good character LORA includes:

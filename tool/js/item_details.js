@@ -1,9 +1,14 @@
-// Per-item tags and resolution cache
+// Per-item tags and metadata loading
 var captionItemTagsByMedia = {};
-var mediaResolutionByFile = {};
-var mediaMetadataByFile = {};
+var mediaMetadataLoading = false;
 var debouncedItemTagsSave = debounceCreate(300);
 var debouncedItemRatingSave = debounceCreate(250);
+
+function isMediaMetadataLoading() {
+  return !!mediaMetadataLoading;
+}
+
+window.isMediaMetadataLoading = isMediaMetadataLoading;
 
 function normalizeItemTag(text) {
   return String(text || '').trim().replace(/\s+/g, ' ');
@@ -14,8 +19,27 @@ function getTagsForMediaKey(mediaKey) {
   return Array.isArray(tags) ? tags.slice() : [];
 }
 
+function getMediaItemByFileName(fileName) {
+  var target = String(fileName || '');
+  if (!target || typeof state === 'undefined' || !Array.isArray(state.items)) return null;
+  for (var i = 0; i < state.items.length; i++) {
+    var item = state.items[i];
+    if (!item || item.fileName !== target) continue;
+    return item;
+  }
+  return null;
+}
+
+function getMetadataForMedia(fileName) {
+  var item = getMediaItemByFileName(fileName);
+  if (!item || !item.metadata) return null;
+  return item.metadata;
+}
+
 function getResolutionForMedia(fileName) {
-  return mediaResolutionByFile[fileName] || '';
+  var row = getMetadataForMedia(fileName);
+  if (!row || !row.resolution || row.resolution === '-') return '';
+  return String(row.resolution);
 }
 
 function normalizeRatingValue(value) {
@@ -82,7 +106,7 @@ function renderItemMetadataPanel() {
   }
   listEl.appendChild(starsRow);
 
-  var row = mediaMetadataByFile[state.currentItem.fileName];
+  var row = getMetadataForMedia(state.currentItem.fileName);
   if (!row) {
     var unavailable = document.createElement('div');
     unavailable.textContent = 'Metadata unavailable.';
@@ -208,8 +232,13 @@ function renderItemTagsPanel() {
 
 function refreshMediaResolutionCache() {
   function clearMetadataCache() {
-    mediaResolutionByFile = {};
-    mediaMetadataByFile = {};
+    mediaMetadataLoading = false;
+    if (Array.isArray(state.items)) {
+      state.items.forEach(function (item) {
+        if (!item) return;
+        item.metadata = null;
+      });
+    }
   }
 
   if (!state.folder || !Array.isArray(state.items) || !state.items.length) {
@@ -218,36 +247,44 @@ function refreshMediaResolutionCache() {
   }
 
   var requestFolder = state.folder;
+  mediaMetadataLoading = true;
   setStatus('Generating metadata...');
   var xhr = new XMLHttpRequest();
   xhr.open('GET', '/fs/media_metadata?folder=' + encodeURIComponent(requestFolder));
   xhr.onreadystatechange = function () {
     if (xhr.readyState !== 4) return;
-    if (state.folder !== requestFolder) return;
+    if (state.folder !== requestFolder) {
+      mediaMetadataLoading = false;
+      return;
+    }
     if (xhr.status !== 200) {
+      mediaMetadataLoading = false;
       clearMetadataCache();
       setStatus('Metadata failed (' + xhr.status + ').');
       return;
     }
     try {
       var rows = JSON.parse(xhr.responseText);
-      var next = {};
-      var nextMeta = {};
+      var metadataByFile = {};
       (rows || []).forEach(function (row) {
         if (!row || !row.file) return;
-        nextMeta[row.file] = row;
-        if (row.resolution && row.resolution !== '-') {
-          next[row.file] = String(row.resolution);
-        }
+        metadataByFile[row.file] = row;
       });
-      mediaResolutionByFile = next;
-      mediaMetadataByFile = nextMeta;
+      if (Array.isArray(state.items)) {
+        state.items.forEach(function (item) {
+          if (!item || !item.fileName) return;
+          var row = metadataByFile[item.fileName] || null;
+          item.metadata = row;
+        });
+      }
+      mediaMetadataLoading = false;
       if (state.currentItem && typeof buildSelectedMediaStatus === 'function') {
         setStatus(buildSelectedMediaStatus(state.currentItem));
         renderItemMetadataPanel();
         return;
       }
     } catch (e) {
+      mediaMetadataLoading = false;
       clearMetadataCache();
       setStatus('Metadata parse failed.');
     }

@@ -136,6 +136,7 @@ Last reviewed: 2026-05-19.
   - Positioned to the right of Duplicate Captions and Validation Failures on flexible 3-column grid.
   - Shows similarity percentage, file count, and sample text for each group.
   - Clickable file links in similar groups trigger focus set selection like duplicate captions.
+- Filter summary row now shows folder-level rating progress (`Rated A/B`) and no longer exposes the inline `Prepare` quick link.
 - Caption requirement keyword highlighting:
   - Settings button (gear icon) in Requirements tab opens modal for configuring keywords per requirement.
   - Users enter comma-separated keywords for each requirement; stored in folder_state.json.

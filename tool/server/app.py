@@ -87,7 +87,11 @@ def fs_root():
 
 @app.route("/")
 def index():
-    return send_from_directory(TOOL_DIR, "tool.html")
+    tool_html_path = TOOL_DIR / "tool.html"
+    video_clip_modal_path = TEMPLATES_DIR / "video_clip_modal.html"
+    html = tool_html_path.read_text(encoding="utf-8")
+    video_clip_modal = video_clip_modal_path.read_text(encoding="utf-8")
+    return Response(html.replace("<!-- VIDEO_CLIP_MODAL -->", video_clip_modal), mimetype="text/html")
 
 @app.route("/favicon.ico")
 def favicon():

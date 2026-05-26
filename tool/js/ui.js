@@ -39,7 +39,7 @@ function ensureContextMenu() {
     // F2: Rename selected media item
     if (e.key === 'F2') {
       e.preventDefault();
-      if (state && state.currentItem && state.currentItem.type === 'media') {
+      if (state && state.currentItem && state.currentItem.fileName) {
         promptRenameMedia(state.currentItem);
       }
     }
@@ -610,6 +610,13 @@ if (ui.advancedFilterFlagEl) {
 }
 if (ui.advancedFilterInvalidArEl) {
   ui.advancedFilterInvalidArEl.addEventListener('change', function () {
+    if (ui.advancedFilterInvalidArEl.checked
+      && typeof isMediaMetadataLoading === 'function'
+      && isMediaMetadataLoading()) {
+      ui.advancedFilterInvalidArEl.checked = false;
+      setStatus('Invalid AR is unavailable while metadata is generating. Please try again in a moment.');
+      return;
+    }
     renderFileList();
   });
 }

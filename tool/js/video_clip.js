@@ -146,7 +146,7 @@ function getVideoClipResolution(fileName) {
   var text = getResolutionForMedia(fileName);
   var parsed = parseResolutionText(text);
   if (parsed) return parsed;
-  var row = mediaMetadataByFile[fileName];
+  var row = (typeof getMetadataForMedia === 'function') ? getMetadataForMedia(fileName) : null;
   if (row && row.resolution) {
     parsed = parseResolutionText(row.resolution);
     if (parsed) return parsed;

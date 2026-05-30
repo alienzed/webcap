@@ -196,6 +196,8 @@ function getFilteredMediaItems(ignoreFocusSet) {
   var missingCaptionsOnly = !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked);
   var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
   var unratedOnly = !!(ui.advancedFilterUnratedEl && ui.advancedFilterUnratedEl.checked);
+  var unflaggedOnly = !!(ui.advancedFilterUnflaggedEl && ui.advancedFilterUnflaggedEl.checked);
+  var untaggedOnly = !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked);
   var minStarsThreshold = getAdvancedMinStarsThreshold();
   var flagFilterValues = getAdvancedFlagFilterValues();
 
@@ -241,6 +243,17 @@ function getFilteredMediaItems(ignoreFocusSet) {
       return flagFilterValues.indexOf(itemFlag) !== -1;
     });
   }
+  if (unflaggedOnly) {
+    mediaItems = mediaItems.filter(function (item) {
+      var itemFlag = String((state.flags && state.flags[item.key]) || '').toLowerCase().trim();
+      return !itemFlag;
+    });
+  }
+  if (untaggedOnly) {
+    mediaItems = mediaItems.filter(function (item) {
+      return getTagsForMediaKey(item.key).length === 0;
+    });
+  }
   var showInvalidArOnly = !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked);
   if (showInvalidArOnly) {
     mediaItems = mediaItems.filter(function (item) {
@@ -258,6 +271,8 @@ function hasAnyActiveMediaFilter() {
   if (ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked) return true;
   if (ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked) return true;
   if (ui.advancedFilterUnratedEl && ui.advancedFilterUnratedEl.checked) return true;
+  if (ui.advancedFilterUnflaggedEl && ui.advancedFilterUnflaggedEl.checked) return true;
+  if (ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked) return true;
   if (ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked) return true;
   if (ui.advancedFilterMinStarsEl && String(ui.advancedFilterMinStarsEl.value || '').trim()) return true;
   if (ui.advancedFilterFlagEl && ui.advancedFilterFlagEl.querySelector('input[type="checkbox"]:checked')) return true;

@@ -249,6 +249,8 @@ function clearCaptionFilterInputs() {
   if (ui.advancedFilterMissingCaptionsEl) ui.advancedFilterMissingCaptionsEl.checked = false;
   if (ui.advancedFilterReviewedEl) ui.advancedFilterReviewedEl.checked = false;
   if (ui.advancedFilterUnratedEl) ui.advancedFilterUnratedEl.checked = false;
+  if (ui.advancedFilterUnflaggedEl) ui.advancedFilterUnflaggedEl.checked = false;
+  if (ui.advancedFilterUntaggedEl) ui.advancedFilterUntaggedEl.checked = false;
   if (ui.advancedFilterMinStarsEl) ui.advancedFilterMinStarsEl.value = '';
   if (ui.advancedFilterFlagEl) {
     Array.prototype.forEach.call(ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]'), function (input) {
@@ -597,6 +599,16 @@ if (ui.advancedFilterReviewedEl) {
 }
 if (ui.advancedFilterUnratedEl) {
   ui.advancedFilterUnratedEl.addEventListener('change', function () {
+    renderFileList();
+  });
+}
+if (ui.advancedFilterUnflaggedEl) {
+  ui.advancedFilterUnflaggedEl.addEventListener('change', function () {
+    renderFileList();
+  });
+}
+if (ui.advancedFilterUntaggedEl) {
+  ui.advancedFilterUntaggedEl.addEventListener('change', function () {
     renderFileList();
   });
 }

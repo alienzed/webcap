@@ -128,6 +128,8 @@ function runPrepareDatasetForCurrentFolder() {
     missing_captions_only: !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked),
     reviewed_only: !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked),
     unrated_only: !!(ui.advancedFilterUnratedEl && ui.advancedFilterUnratedEl.checked),
+    unflagged_only: !!(ui.advancedFilterUnflaggedEl && ui.advancedFilterUnflaggedEl.checked),
+    untagged_only: !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked),
     invalid_ar_only: !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked),
     min_stars_gt: minStars === null ? '' : String(minStars),
     flag_filter: String(flagValue || ''),

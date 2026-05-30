@@ -37,6 +37,8 @@ ui = {
   advancedFilterFlagEl: document.getElementById('advanced-filter-flag'),
   advancedFilterInvalidArEl: document.getElementById('advanced-filter-invalid-ar'),
   advancedFilterUnratedEl: document.getElementById('advanced-filter-unrated'),
+  advancedFilterUnflaggedEl: document.getElementById('advanced-filter-unflagged'),
+  advancedFilterUntaggedEl: document.getElementById('advanced-filter-untagged'),
   captionFilterCount: document.getElementById('caption-filter-count'),
   captionFilterCountTextEl: document.getElementById('caption-filter-count-text'),
   captionFilterCountSeparatorEl: document.getElementById('caption-filter-count-separator'),

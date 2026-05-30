@@ -175,6 +175,59 @@ function wireConsoleToggleButton() {
   };
 }
 
+function extractTrainingChainCommand(outputText) {
+  if (!outputText) return '';
+  var lines = String(outputText).split(/\r?\n/);
+  for (var i = 0; i < lines.length; i++) {
+    var line = String(lines[i] || '').trim();
+    if (!line) continue;
+    if (line.indexOf(' ; ') === -1) continue;
+    if (line.indexOf('deepspeed --num_gpus=1 train.py --deepspeed --config') === -1) continue;
+    return line;
+  }
+  return '';
+}
+
+function copyTextToClipboard(text, onOk, onErr) {
+  var value = String(text || '');
+  if (!value) {
+    if (onErr) onErr(new Error('Nothing to copy'));
+    return;
+  }
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    navigator.clipboard.writeText(value).then(function () {
+      if (onOk) onOk();
+    }).catch(function () {
+      tryLegacyCopy();
+    });
+    return;
+  }
+  tryLegacyCopy();
+
+  function tryLegacyCopy() {
+    var ta = document.createElement('textarea');
+    ta.value = value;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (_e) {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    if (ok) {
+      if (onOk) onOk();
+      return;
+    }
+    if (onErr) onErr(new Error('Clipboard copy failed'));
+  }
+}
+
 function wireTrainingButtons() {
   var trainingGenerateBtn = document.getElementById('training-generate-btn');
   if (trainingGenerateBtn) {
@@ -208,12 +261,26 @@ function wireTrainingButtons() {
         return;
       }
       setStatus('Printing training commands...');
-      streamPreviewFromFetch(
+      var runPreview = (typeof fetchPreviewText === 'function') ? fetchPreviewText : streamPreviewFromFetch;
+      runPreview(
         '/fs/train_run',
         { folder: state.folder },
         ui,
-        function () {
-          setStatus('Training command preview finished.');
+        function (outputText) {
+          var chainCmd = extractTrainingChainCommand(outputText);
+          if (!chainCmd) {
+            setStatus('Training command preview finished.');
+            return;
+          }
+          copyTextToClipboard(
+            chainCmd,
+            function () {
+              setStatus('Training command preview finished. Chained HI;LO command copied to clipboard.');
+            },
+            function () {
+              setStatus('Training command preview finished. Auto-copy failed; copy command from console.');
+            }
+          );
         },
         function (err) {
           setStatus('Training command preview failed: ' + err);

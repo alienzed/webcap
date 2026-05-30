@@ -368,8 +368,9 @@ def test_train_run_auto_generates_missing_configs(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "[INFO] Training commands (foreground handoff, no background jobs):" in body
-    assert "[INFO] Training commands (single-line chain):" not in body
+    assert "[INFO] Training commands (copy/paste):" in body
+    assert " ; " in body
+    assert "pkill -f 'config\\.hi\\.toml'" in body
     assert (set_dir / "config.hi.toml").exists()
     assert (set_dir / "config.lo.toml").exists()
     assert (set_dir / "dataset.hi.toml").exists()

@@ -88,7 +88,7 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
       response.text().then(function (text) {
         appendToConsolePanel(text.replace(/</g, '<').replace(/>/g, '>'));
         if (ok) {
-          if (onDone) onDone();
+          if (onDone) onDone(text);
         } else {
           if (onError) onError(text || response.statusText);
         }
@@ -107,7 +107,7 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
             appendToConsolePanel(tail.replace(/</g, '<').replace(/>/g, '>'));
           }
           if (ok) {
-            if (onDone) onDone();
+            if (onDone) onDone(output);
           } else {
             if (onError) onError(output || response.statusText);
           }
@@ -124,6 +124,37 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
     readChunk();
   }).catch(function (err) {
     setStatus('Streaming failed: ' + err);
+    if (onError) onError(err);
+  });
+}
+
+// Utility: Fetch full preview output as one payload (no chunk streaming)
+function fetchPreviewText(url, body, ui, onDone, onError) {
+  if (typeof showConsolePanel === 'function') {
+    showConsolePanel();
+  } else {
+    ui.consolePanelEl.style.display = 'block';
+    if (typeof syncConsoleToggleButton === 'function') {
+      syncConsoleToggleButton();
+    }
+  }
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function (response) {
+    return response.text().then(function (text) {
+      if (text) {
+        appendToConsolePanel(text.replace(/</g, '<').replace(/>/g, '>'));
+      }
+      if (response.ok) {
+        if (onDone) onDone(text || '');
+        return;
+      }
+      if (onError) onError(text || response.statusText);
+    });
+  }).catch(function (err) {
+    setStatus('Request failed: ' + err);
     if (onError) onError(err);
   });
 }

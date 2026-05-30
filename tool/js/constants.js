@@ -12,13 +12,17 @@ state = {
   reviewedSet: new Set(),
   focusSet: null,
   flags: {}, // key: file or folder name, value: color string (red/yellow/orange/green)
-  ratings: {} // key: media file name, value: integer 1..5
+  ratings: {}, // key: media file name, value: integer 1..5
+  mutatedSet: new Set(), // key: media file name
+  mutatedByMediaSource: {}, // key: media file name, value: 'best_effort' | 'deterministic'
+  mutationStatusSeq: 0
 };
 // Define global UI object (all static elements)
 ui = {
   editorEl: document.getElementById('editor'),
   previewEl: document.getElementById('preview'),
   previewActionsEl: document.getElementById('preview-actions'),
+  previewMutationIndicatorEl: document.getElementById('preview-mutation-indicator'),
   previewPrimaryActionAEl: document.getElementById('preview-action-primary-a'),
   previewPrimaryActionBEl: document.getElementById('preview-action-primary-b'),
   previewMoreActionsEl: document.getElementById('preview-action-more'),

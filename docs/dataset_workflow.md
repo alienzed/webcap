@@ -21,6 +21,9 @@ Notes:
 Notes:
 - Clip export is non-destructive to source videos.
 - Mutating operations in set folders use `originals/` backups for reversibility.
+- Mutation indicators appear in the media list and preview overlay.
+- Image mutation state is hash-verified against originals for supported formats (`.jpg/.jpeg/.png/.webp`).
+- Video mutation state is best-effort from action success + persisted state.
 
 ---
 

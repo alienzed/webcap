@@ -157,11 +157,27 @@ def rename_response(data):
                                 new_keys.append(k)
                         if changed:
                             folder_state["reviewedKeys"] = new_keys
-                            with open(state_path, "w", encoding="utf-8") as f:
-                                json.dump(folder_state, f, indent=2)
                             print(f"[fs_rename] Updated reviewedKeys in {state_path}")
+                    if (
+                        isinstance(folder_state, dict)
+                        and "mutated_media_keys" in folder_state
+                        and isinstance(folder_state["mutated_media_keys"], list)
+                    ):
+                        changed_mutation = False
+                        next_mutation_keys = []
+                        for key in folder_state["mutated_media_keys"]:
+                            if key == old_name:
+                                next_mutation_keys.append(new_name)
+                                changed_mutation = True
+                            else:
+                                next_mutation_keys.append(key)
+                        if changed_mutation:
+                            folder_state["mutated_media_keys"] = next_mutation_keys
+                            print(f"[fs_rename] Updated mutated_media_keys in {state_path}")
+                    with open(state_path, "w", encoding="utf-8") as f:
+                        json.dump(folder_state, f, indent=2)
                 except Exception as e:
-                    print(f"[fs_rename] Could not update reviewedKeys: {e}")
+                    print(f"[fs_rename] Could not update folder state keys: {e}")
             return jsonify({"ok": True})
         print("[fs_rename] Source is neither file nor folder:", old_path)
         return jsonify({"error": "Source is neither file nor folder"}), 400

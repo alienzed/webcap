@@ -5,6 +5,7 @@ Utility for managing the 'originals' folder for media safety.
 from pathlib import Path
 import shutil
 import hashlib
+import json
 
 # Blacklisted folder names (never process or mutate)
 BLACKLISTED_FOLDERS = {'originals', 'auto_dataset', 'src_videos'}
@@ -15,6 +16,9 @@ MEDIA_ALL_EXTS = {
     '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
     '.mpg', '.mpeg', '.wmv'
 }
+DETERMINISTIC_MUTATION_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
+MEDIA_HASH_INDEX_FILE = 'media_hashes.json'
+MEDIA_HASH_INDEX_VERSION = 1
 
 
 def is_blacklisted_path(folder_path):
@@ -29,6 +33,60 @@ def file_hash(path, block_size=65536):
         for chunk in iter(lambda: f.read(block_size), b''):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _read_media_hash_index(folder_path):
+    path = Path(folder_path) / MEDIA_HASH_INDEX_FILE
+    if not path.exists() or not path.is_file():
+        return {"version": MEDIA_HASH_INDEX_VERSION, "files": {}}
+    try:
+        raw = json.loads(path.read_text(encoding='utf-8'))
+    except Exception:
+        return {"version": MEDIA_HASH_INDEX_VERSION, "files": {}}
+    if not isinstance(raw, dict):
+        return {"version": MEDIA_HASH_INDEX_VERSION, "files": {}}
+    files = raw.get("files")
+    if not isinstance(files, dict):
+        files = {}
+    return {"version": MEDIA_HASH_INDEX_VERSION, "files": files}
+
+
+def _write_media_hash_index(folder_path, index_data):
+    path = Path(folder_path) / MEDIA_HASH_INDEX_FILE
+    payload = {
+        "version": MEDIA_HASH_INDEX_VERSION,
+        "files": index_data.get("files", {})
+    }
+    path.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+    safe_chmod(path, 0o644)
+
+
+def _get_cached_or_compute_sha256(path, index_files, cache_key):
+    path = Path(path)
+    stat = path.stat()
+    key = str(cache_key or path.name)
+    current_size = int(stat.st_size)
+    current_mtime_ns = int(stat.st_mtime_ns)
+    row = index_files.get(key)
+    if isinstance(row, dict):
+        try:
+            cached_size = int(row.get("size", -1))
+        except Exception:
+            cached_size = -1
+        try:
+            cached_mtime_ns = int(row.get("mtime_ns", -1))
+        except Exception:
+            cached_mtime_ns = -1
+        cached_sha = row.get("sha256")
+        if cached_size == current_size and cached_mtime_ns == current_mtime_ns and isinstance(cached_sha, str) and cached_sha:
+            return cached_sha
+    sha = file_hash(path)
+    index_files[key] = {
+        "size": current_size,
+        "mtime_ns": current_mtime_ns,
+        "sha256": sha
+    }
+    return sha
 
 def safe_chmod(path, mode):
     try:
@@ -160,3 +218,49 @@ def ensure_canonical_exists(src_path, originals_dir):
         except Exception:
             return None
     return canonical
+
+
+def image_mutation_status_by_hash(folder_path):
+    """
+    Deterministically report mutation status for still images in `folder_path` by
+    comparing current file hash against `originals/<name>` hash.
+    Returns a dict keyed by media file name.
+    """
+    folder_path = Path(folder_path).resolve()
+    originals_dir = folder_path / 'originals'
+    if not originals_dir.exists() or not originals_dir.is_dir():
+        return {}
+
+    index_data = _read_media_hash_index(folder_path)
+    index_files = index_data.get("files", {})
+    keep_keys = set()
+    status = {}
+
+    for entry in sorted(folder_path.iterdir(), key=lambda p: p.name.lower()):
+        if not entry.is_file():
+            continue
+        if entry.suffix.lower() not in DETERMINISTIC_MUTATION_IMAGE_EXTS:
+            continue
+        original_entry = originals_dir / entry.name
+        if not original_entry.exists() or not original_entry.is_file():
+            continue
+
+        entry_cache_key = entry.name
+        original_cache_key = str(Path('originals') / original_entry.name)
+        current_sha = _get_cached_or_compute_sha256(entry, index_files, entry_cache_key)
+        original_sha = _get_cached_or_compute_sha256(original_entry, index_files, original_cache_key)
+        keep_keys.add(entry_cache_key)
+        keep_keys.add(original_cache_key)
+
+        status[entry.name] = {
+            "mutated": current_sha != original_sha,
+            "deterministic_available": True,
+            "source": "deterministic"
+        }
+
+    stale_keys = [key for key in list(index_files.keys()) if key not in keep_keys]
+    for key in stale_keys:
+        index_files.pop(key, None)
+
+    _write_media_hash_index(folder_path, index_data)
+    return status

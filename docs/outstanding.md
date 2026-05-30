@@ -53,6 +53,12 @@ Last reviewed: 2026-05-19.
 
 
 ## Implemented
+- Mutation indicators:
+  - Media rows now show a mutation badge when media differs from baseline/original.
+  - Preview overlay now shows a `Mutated` indicator for the selected media.
+  - Mutation state persists in folder state (`mutated_media_keys`).
+  - Supported images (`.jpg/.jpeg/.png/.webp`) are reconciled with deterministic hash checks against `originals/`.
+  - Videos remain best-effort mutation tracking (action-sourced + persisted).
 - Legacy/superseded UX cleanup pass:
   - Removed duplicate `focus-set-exit-btn` markup path.
   - Removed dead `up-one-directory-row` wiring and stale references.

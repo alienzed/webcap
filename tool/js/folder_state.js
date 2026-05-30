@@ -36,6 +36,10 @@ function sanitizeFolderState(data) {
       ratingsByMedia[String(mediaKey || '')] = rating;
     });
   }
+  var mutatedMediaKeys = Array.isArray(src.mutated_media_keys) ? src.mutated_media_keys : [];
+  mutatedMediaKeys = Array.from(new Set(mutatedMediaKeys
+    .map(function (key) { return String(key || '').trim(); })
+    .filter(Boolean)));
   return {
     version: FOLDER_STATE_VERSION,
     stats: {
@@ -55,7 +59,8 @@ function sanitizeFolderState(data) {
     caption_phrases: Array.isArray(src.caption_phrases) ? src.caption_phrases.slice() : undefined,
     caption_set_notes: String(src.caption_set_notes || ''),
     caption_tags_by_media: tagMap,
-    ratings_by_media: ratingsByMedia
+    ratings_by_media: ratingsByMedia,
+    mutated_media_keys: mutatedMediaKeys
   };
 }
 
@@ -127,6 +132,10 @@ function snapshotFolderStateFromDom() {
     var rating = Math.max(1, Math.min(5, Math.round(n)));
     ratingsByMedia[k] = rating;
   });
+  var mutatedKeys = Array.from(state.mutatedSet || [])
+    .map(function (k) { return String(k || '').trim(); })
+    .filter(function (k) { return mediaKeys.has(k); })
+    .sort();
   // Add new fields here as needed
   return sanitizeFolderState({
     stats: stats,
@@ -139,7 +148,8 @@ function snapshotFolderStateFromDom() {
     caption_phrases: window.captionHelperPhrases.slice(),
     caption_set_notes: String(window.captionHelperNotes || ''),
     caption_tags_by_media: tagsByMedia,
-    ratings_by_media: ratingsByMedia
+    ratings_by_media: ratingsByMedia,
+    mutated_media_keys: mutatedKeys
   });
 }
 
@@ -165,6 +175,11 @@ function applyFolderStateToDom(folderState) {
   state.ratings = (clean && clean.ratings_by_media && typeof clean.ratings_by_media === 'object')
     ? clean.ratings_by_media
     : {};
+  state.mutatedSet = new Set(Array.isArray(clean.mutated_media_keys) ? clean.mutated_media_keys : []);
+  state.mutatedByMediaSource = {};
+  state.mutatedSet.forEach(function (key) {
+    state.mutatedByMediaSource[key] = 'best_effort';
+  });
   // Restore stats and primer fields to DOM
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
   var phrasesEl = document.getElementById('stats-phrases');

@@ -8,12 +8,14 @@
   - If the canonical name already exists in `originals`, do nothing.
 - Automatic backup of edited/modified versions is intentionally out of scope.
 - Reset/Restore always brings back the canonical original by name.
+- Deterministic mutation verification for images compares working file hash vs `originals/<fileName>` hash.
 
 ## Files/Functions/Variables
 - **originals.py**: Implements all originals logic.
 - **copy_media_to_originals(folder_path)**: Entry point for backing up all media files in a set folder.
 - **safe_chmod(path, mode)**: Ensures safe file permissions.
 - **MEDIA_ALL_EXTS**: Set of supported media extensions.
+- **DETERMINISTIC_MUTATION_IMAGE_EXTS**: Supported deterministic verification formats (`.jpg`, `.jpeg`, `.png`, `.webp`).
 - **originals_dir**: The `originals` subfolder of the set folder.
 
 ## Algorithm (baseline-only backup)
@@ -26,6 +28,16 @@
 ## Reset/Restore Semantics
 - **Reset/Restore** always restores the file in `originals` with the canonical name (e.g., `dp5.mp4`).
 - The canonical original is never moved out of place by backup checks.
+
+## Deterministic Image Mutation Verification
+- Route: `/fs/mutation_status`
+- Scope: still images only (`.jpg`, `.jpeg`, `.png`, `.webp`)
+- Method:
+  - Hash current image bytes (SHA256).
+  - Hash canonical original bytes in `originals/`.
+  - Mark mutated when hashes differ.
+- Cache: `media_hashes.json` stores size + mtime_ns + sha256 to avoid rehashing unchanged files.
+- Video files are intentionally excluded from deterministic hash verification and use best-effort UI state.
 
 ## Exceptions/Edge Cases
 - If a file cannot be read or written, log and skip (never abort the whole operation).

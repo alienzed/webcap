@@ -1,6 +1,6 @@
 # WebCap Specification (Current Behavior)
 
-Last updated: 2026-05-19
+Last updated: 2026-05-30
 
 ## 1. Scope
 WebCap is a local-first media curation and captioning app for dataset preparation workflows. It focuses on explicit, reversible file mutations and fast iteration on set quality.
@@ -37,6 +37,10 @@ WebCap is a local-first media curation and captioning app for dataset preparatio
 4. Reversible media mutation:
 - Prune/reset/restore/crop/transform/deface/clip workflows are exposed through context menus and routes.
 - Set-folder mutations rely on `originals/` backups for reversibility.
+- UI mutation indicator:
+- Media rows and preview actions show `Mutated` state when files differ from their baseline original.
+- Video mutation state is best-effort (action-sourced + persisted).
+- Image mutation state is reconciled by deterministic SHA256 compare (`/fs/mutation_status`) against `originals/<fileName>`.
  - Preview quick actions:
  - Images show always-visible `Crop` and `Deface`.
  - Videos show always-visible `Clip` and `Deface`.
@@ -60,6 +64,7 @@ Primary persisted fields include:
 9. `caption_set_notes`
 10. `caption_tags_by_media`
 11. `ratings_by_media`
+12. `mutated_media_keys`
 
 ## 6. Config Template Behavior
 1. Config templates are not created on folder load.

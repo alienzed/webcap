@@ -445,6 +445,7 @@
                 <div id="preview-shell" class="preview-shell">
                     <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
                     <div id="preview-actions" class="preview-actions hidden" aria-label="Preview actions">
+                        <span id="preview-mutation-indicator" class="preview-mutation-indicator hidden" title="Media differs from original">Mutated</span>
                         <button id="preview-action-primary-a" type="button" class="preview-action-btn hidden"></button>
                         <button id="preview-action-primary-b" type="button" class="preview-action-btn hidden"></button>
                         <button id="preview-action-more" type="button" class="preview-action-btn hidden">More</button>
@@ -616,6 +617,7 @@
         <script src="/static/js/console_panel.js"></script>
         <script src="/static/js/ui.js"></script>
         <script src="/static/js/preview_pane.js"></script>
+        <script src="/static/js/mutation_state.js"></script>
         <script src="/static/js/media.js"></script>
         <script src="/static/js/media_actions.js"></script>
         <script src="/static/js/crop.js"></script>

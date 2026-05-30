@@ -10,12 +10,14 @@
 - Reset is shown in the context menu for files in set folders (not in originals).
 - User is prompted for confirmation before reset.
 - If the original does not exist in originals, display an error and do nothing.
-- After reset, the UI refreshes the current directory and notifies the user.
+- After reset, the current item is reselected and preview reloaded (no full directory reload required).
+- Reset clears the mutation indicator for that media key and persists the updated folder state.
 
 ## Logic Map
 - **Frontend:**
   - Calls backend /media/reset with { folder, fileName }.
-  - Waits for response; on success, refreshes file list and notifies user.
+  - Waits for response; on success, reloads preview for the same media and notifies user.
+  - Clears `mutated_media_keys` entry for that media key and persists folder state.
   - On error, displays error message.
 - **Backend:**
   - Receives POST /media/reset with folder and fileName.
@@ -36,4 +38,5 @@
 - [ ] Always overwrites the file in set folder with the original.
 - [ ] Does nothing if original is missing.
 - [ ] Does not alter or remove from originals.
+- [ ] Clears persisted mutation marker for that media item.
 - [ ] UI and backend error messages are clear and actionable.

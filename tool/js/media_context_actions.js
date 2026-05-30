@@ -56,6 +56,8 @@ function runImageTransform(mediaItem, operation, label) {
     .then(function (res) {
       if (res.status === 200 && res.data && res.data.ok) {
         setStatus(actionLabel + ': ' + mediaItem.fileName);
+        markMediaMutated(mediaItem.key, 'best_effort');
+        saveFolderStateForCurrentRoot();
         refreshMediaResolutionCache();
         selectPathMedia(mediaItem).catch(function () {});
       } else {
@@ -105,6 +107,8 @@ function buildCurrentFolderContextActions() {
           ui,
           function () {
             setStatus('Defacing finished.');
+            markAllCurrentFolderMediaMutated('best_effort');
+            saveFolderStateForCurrentRoot();
             refreshCurrentDirectory();
           },
           function (err) {
@@ -256,6 +260,8 @@ function buildMediaContextMenuActions(mediaItem, key) {
         .then(function (res) {
           if (res.status === 200 && res.data && res.data.ok) {
             setStatus('File reset to original.');
+            clearMediaMutated(mediaItem.key);
+            saveFolderStateForCurrentRoot();
             refreshMediaResolutionCache();
             selectPathMedia(mediaItem).catch(function () {});
           } else {
@@ -290,6 +296,8 @@ function buildMediaContextMenuActions(mediaItem, key) {
           ui,
           function () {
             setStatus('Defacing finished.');
+            markMediaMutated(mediaItem.key, 'best_effort');
+            saveFolderStateForCurrentRoot();
             refreshMediaResolutionCache();
             // Reload preview for the current item (file was mutated in place)
             if (state.currentItem && state.currentItem.fileName === mediaItem.fileName) {
@@ -361,6 +369,8 @@ function buildMediaContextMenuActions(mediaItem, key) {
           .then(function (res) {
             if (res.status === 200 && res.data && res.data.ok) {
               setStatus('Video flipped.');
+              markMediaMutated(mediaItem.key, 'best_effort');
+              saveFolderStateForCurrentRoot();
               refreshMediaResolutionCache();
               selectPathMedia(mediaItem).catch(function () {});
             } else {

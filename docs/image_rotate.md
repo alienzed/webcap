@@ -23,3 +23,5 @@ This feature adds image transformation commands to the image context menu.
 - The feature should be accessible from the same right-click menu used for other image actions.
 - The transformation should be applied to the current image file.
 - If the image is part of a set folder, the rotation should update the media file and preserve any caption or metadata associations.
+- Transform actions mark the media as mutated immediately (best effort) and persist that state.
+- Deterministic hash verification for supported image formats can later confirm/clear mutation state.

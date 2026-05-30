@@ -19,7 +19,9 @@ This is not a general image-editing workflow. V1 is intentionally bare bones.
 - User adjusts the crop box.
 - User clicks `Apply`.
 - WebCap crops the working media file in place.
-- Modal closes, the folder reloads, and the cropped file is reselected.
+- Modal closes and the cropped file is reselected (no full folder reload required).
+- Crop marks the media as mutated immediately (best effort), persisted in folder state.
+- Deterministic image hash verification can later confirm/clear the mutation state.
 
 ## Safety Model
 

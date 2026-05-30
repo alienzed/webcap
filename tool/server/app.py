@@ -9,7 +9,7 @@ import shutil
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
-from .originals import MEDIA_ALL_EXTS, copy_media_to_originals
+from .originals import MEDIA_ALL_EXTS, copy_media_to_originals, image_mutation_status_by_hash
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, open_in_vscode_response, rename_response
 from .media import media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response
@@ -454,6 +454,26 @@ def fs_describe():
 def fs_media_metadata():
     rel_path = request.args.get("folder", "").strip()
     return media_metadata_response(rel_path)
+
+
+@app.route("/fs/mutation_status", methods=["GET"])
+def fs_mutation_status():
+    rel_path = request.args.get("folder", "").strip()
+    try:
+        folder_path = safe_join_fs_root(rel_path)
+        if not folder_path.exists() or not folder_path.is_dir():
+            return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
+        status_by_media = image_mutation_status_by_hash(folder_path)
+        return jsonify({
+            "ok": True,
+            "folder": rel_path,
+            "status_by_media": status_by_media
+        })
+    except Exception as e:
+        if app_config.FS_DEBUG:
+            print("[fs_mutation_status] ERROR:", e)
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
     
 from .config import list_toml_files, read_toml_file, save_toml_file
 # --- Config file API ---

@@ -91,10 +91,11 @@ function runPreviewActionByLabel(label) {
 }
 
 function updatePreviewActionControls() {
-  if (!ui || !ui.previewActionsEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
+  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
 
   var hideAll = function () {
     ui.previewActionsEl.classList.add('hidden');
+    ui.previewMutationIndicatorEl.classList.add('hidden');
     ui.previewPrimaryActionAEl.classList.add('hidden');
     ui.previewPrimaryActionBEl.classList.add('hidden');
     ui.previewMoreActionsEl.classList.add('hidden');
@@ -106,6 +107,7 @@ function updatePreviewActionControls() {
     hideAll();
     return;
   }
+  ui.previewMutationIndicatorEl.classList.toggle('hidden', !isMediaMutated(state.currentItem.key));
 
   var actions = getPreviewContextActionsForCurrentItem();
   if (!hasNonSeparatorActions(actions)) {
@@ -150,7 +152,7 @@ function updatePreviewActionControls() {
 }
 
 function wirePreviewActionControls() {
-  if (!ui || !ui.previewActionsEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
+  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
   if (ui.previewActionsEl.__wired) return;
   ui.previewActionsEl.__wired = true;
 
@@ -583,9 +585,11 @@ async function renderFileList() {
   mediaItems.forEach(function (mediaItem) {
     var isActive = state.currentItem && state.currentItem.key === mediaItem.key;
     var reviewed = state.reviewedSet.has(mediaItem.key);
+    var mutated = isMediaMutated(mediaItem.key);
     var className = 'media-item';
     if (isActive) className += ' active';
     if (reviewed) className += ' reviewed';
+    if (mutated) className += ' mutated-media';
     if (!mediaItem.hasCaption) className += ' empty-caption';
     var icon = '';
     var ext = '';
@@ -607,12 +611,24 @@ async function renderFileList() {
     if (flagColor) {
       colorDot = '<span class="flag-dot flag-dot--' + flagColor + '" style="margin-left:8px;"></span>';
     }
+    var mutationBadge = '';
+    if (mutated) {
+      var mutationSource = getMediaMutationSource(mediaItem.key);
+      var mutationTitle = mutationSource === 'deterministic'
+        ? 'Mutated (deterministic image hash)'
+        : 'Mutated (best effort)';
+      mutationBadge = '<span class="mutation-badge" title="' + escapeHtml(mutationTitle) + '">M</span>';
+    }
     var displayText = mediaItem.label;
     var row = document.createElement('div');
     row.className = className;
     row.setAttribute('data-type', 'media');
     row.setAttribute('data-key', mediaItem.key);
-    row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%">' + icon + '&nbsp;' + escapeHtml(displayText) + colorDot + '</div>';
+    row.innerHTML =
+      '<div class="media-item-main">' +
+        '<span class="media-item-main-label">' + icon + '&nbsp;' + escapeHtml(displayText) + '</span>' +
+        '<span class="media-item-main-right">' + mutationBadge + colorDot + '</span>' +
+      '</div>';
     ui.mediaListEl.appendChild(row);
     matchCount++;
   });

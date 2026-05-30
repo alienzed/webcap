@@ -43,6 +43,9 @@ pruneMedia = async function (mediaItem) {
       delete state.ratings[mediaItem.key];
       saveFolderStateForCurrentRoot();
     }
+    if (clearMediaMutated(mediaItem.key)) {
+      saveFolderStateForCurrentRoot();
+    }
     if (prunedWasCurrent) {
       state.currentItem = null;
       clearEditorAndPreview();
@@ -166,6 +169,9 @@ async function restoreMediaItem(mediaItem) {
         delete state.ratings[mediaItem.key];
         saveFolderStateForCurrentRoot();
       }
+      if (clearMediaMutated(mediaItem.key)) {
+        saveFolderStateForCurrentRoot();
+      }
       renderFileList();
     }
   };
@@ -195,6 +201,8 @@ async function resetMediaItem(mediaItem) {
     if (xhr.readyState === 4) {
       if (xhr.status === 200) {
         setStatus('Reset to original: ' + fileName);
+        clearMediaMutated(mediaItem.key);
+        saveFolderStateForCurrentRoot();
         refreshMediaResolutionCache();
         selectPathMedia(mediaItem).catch(function () {});
       } else {
@@ -240,6 +248,9 @@ function promptRenameMedia(mediaItem) {
     if (state.ratings && Object.prototype.hasOwnProperty.call(state.ratings, oldFile)) {
       state.ratings[newFile] = state.ratings[oldFile];
       delete state.ratings[oldFile];
+      saveFolderStateForCurrentRoot();
+    }
+    if (moveMediaMutationState(oldFile, newFile)) {
       saveFolderStateForCurrentRoot();
     }
     setStatus('Renamed: ' + oldFile + ' -> ' + newFile);

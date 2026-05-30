@@ -525,6 +525,7 @@ function refreshCurrentDirectory() {
           refreshMediaResolutionCache();
           state.reviewedSet = state.reviewedSet || new Set();
           renderFileList(ui.filterEl.value);
+          refreshDeterministicMutationStatus();
           
           // --- Static header toggling (display only, wiring in main.js) ---
           if (ui.upBtn) {

@@ -139,6 +139,9 @@ function saveChecklistToFolderState() {
   snapshot.caption_requirements = checklistItems.slice();
   snapshot.caption_requirements_checked = JSON.parse(JSON.stringify(checklistCheckedByMedia));
   snapshot.caption_requirement_keywords = JSON.parse(JSON.stringify(checklistKeywordsByItem));
+  if (typeof updatePrimerMappingsSummary === 'function') {
+    updatePrimerMappingsSummary();
+  }
   writeFolderStateFile(state.folder, snapshot);
 }
 
@@ -173,6 +176,9 @@ function loadChecklistFromFolderState(folderState) {
   }
 
   syncReviewedFromChecklistAll();
+  if (typeof updatePrimerMappingsSummary === 'function') {
+    updatePrimerMappingsSummary();
+  }
   renderChecklistPanel();
 }
 

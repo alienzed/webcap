@@ -87,6 +87,7 @@ Structured primer mappings and review rules are specified in:
 - `docs/primer_mappings_v2.md`
 
 This defines:
-1. `primer.mappings` structured rows (`scope`, `token`, `key`, `value`, `fallback`, `enabled`)
+1. `primer.mappings` structured rows (`scope`, `token`, `key`, `value`, `enabled`)
 2. `stats.reviewRules` structured rows (`scope`, `trigger`, `required`, `enabled`)
 3. Deterministic evaluation semantics and UI contract.
+4. System defaults for requirements/aliases/scope are centralized in `tool/js/constants.js` under `MAPPINGS_SYSTEM_DEFAULTS`.

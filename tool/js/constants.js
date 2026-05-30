@@ -89,29 +89,45 @@ ui = {
   reviewRulesSaveBtnEl: document.getElementById('review-rules-save-btn'),
 };
 
-const DEFAULT_CHECKLIST_ITEMS = [
-  "Key Phrase",
-  "Expression",
-  "Position",
-  "Action",
-  "Clothing",
-  "Traits",
-  "Setting",
-  "Lighting",
-  "Viewpoint",
-];
-
-const DEFAULT_CHECKLIST_ITEM_KEYWORDS = {
-  "Key Phrase": "",
-  "Expression": "smiling, frowning, surprised, angry, happy, sad, tired, excited, expression",
-  "Position": "left, right, center, top, bottom, foreground, background",
-  "Action": "standing, sitting, running, walking, holding, looking, eating, drinking, touching, rubbing",
-  "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform",
-  "Traits": "lips, make-up, hair",
-  "Setting": "background, theme",
-  "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight",
-  "Viewpoint": "front, side, back, aerial, close-up, wide shot, low angle, high angle"
+// Mappings defaults live in one place so behavior can be reasoned about and tuned consistently.
+const MAPPINGS_SYSTEM_DEFAULTS = {
+  requirements: {
+    items: [
+      "Key Phrase",
+      "Expression",
+      "Position",
+      "Action",
+      "Clothing",
+      "Traits",
+      "Setting",
+      "Lighting",
+      "Viewpoint"
+    ],
+    keywordsByItem: {
+      "Key Phrase": "",
+      "Expression": "smiling, frowning, surprised, angry, happy, sad, tired, excited, expression",
+      "Position": "left, right, center, top, bottom, foreground, background",
+      "Action": "standing, sitting, running, walking, holding, looking, eating, drinking, touching, rubbing",
+      "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform",
+      "Traits": "lips, make-up, hair",
+      "Setting": "background, theme",
+      "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight",
+      "Viewpoint": "front, side, back, aerial, close-up, wide shot, low angle, high angle"
+    }
+  },
+  primer: {
+    requirementDefaultScope: "tag",
+    keyAliases: {
+      "key phrase": "subject",
+      "viewpoint": "view"
+    }
+  }
 };
+
+// Legacy aliases retained to avoid broad churn while we migrate callsites.
+const DEFAULT_CHECKLIST_ITEMS = MAPPINGS_SYSTEM_DEFAULTS.requirements.items;
+const DEFAULT_CHECKLIST_ITEM_KEYWORDS = MAPPINGS_SYSTEM_DEFAULTS.requirements.keywordsByItem;
+const DEFAULT_REQUIREMENT_PRIMER_KEY_ALIASES = MAPPINGS_SYSTEM_DEFAULTS.primer.keyAliases;
 
 // Central palette for flag colors (order matters for UI)
 const FLAG_COLORS = ['red', 'green', 'blue', 'yellow', 'orange'];

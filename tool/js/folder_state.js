@@ -245,6 +245,92 @@ function renderMultilineTemplate(template, values) {
   return rendered;
 }
 
+function normalizeRequirementPrimerKey(requirementLabel) {
+  var label = String(requirementLabel || '').trim();
+  if (!label) return '';
+  var lower = label.toLowerCase();
+  var aliases = DEFAULT_REQUIREMENT_PRIMER_KEY_ALIASES;
+  if (
+    typeof MAPPINGS_SYSTEM_DEFAULTS === 'object' &&
+    MAPPINGS_SYSTEM_DEFAULTS &&
+    MAPPINGS_SYSTEM_DEFAULTS.primer &&
+    typeof MAPPINGS_SYSTEM_DEFAULTS.primer.keyAliases === 'object'
+  ) {
+    aliases = MAPPINGS_SYSTEM_DEFAULTS.primer.keyAliases;
+  }
+  if (
+    typeof aliases === 'object' &&
+    aliases &&
+    aliases[lower]
+  ) {
+    return String(aliases[lower] || '').trim().toLowerCase();
+  }
+  return lower.replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function parseRequirementKeywordList(raw) {
+  return String(raw || '')
+    .split(',')
+    .map(function (part) { return String(part || '').trim(); })
+    .filter(Boolean);
+}
+
+function getRequirementDefaultPrimerMappings() {
+  var requirements = (
+    typeof checklistItems !== 'undefined' &&
+    Array.isArray(checklistItems) &&
+    checklistItems.length
+  )
+    ? checklistItems.slice()
+    : DEFAULT_CHECKLIST_ITEMS.slice();
+  var keywordsByRequirement = (
+    typeof checklistKeywordsByItem === 'object' &&
+    checklistKeywordsByItem
+  )
+    ? checklistKeywordsByItem
+    : {};
+  var rows = [];
+  var seen = {};
+  var requirementScope = 'tag';
+  if (
+    typeof MAPPINGS_SYSTEM_DEFAULTS === 'object' &&
+    MAPPINGS_SYSTEM_DEFAULTS &&
+    MAPPINGS_SYSTEM_DEFAULTS.primer &&
+    MAPPINGS_SYSTEM_DEFAULTS.primer.requirementDefaultScope
+  ) {
+    var configuredScope = String(MAPPINGS_SYSTEM_DEFAULTS.primer.requirementDefaultScope || '').toLowerCase();
+    if (configuredScope === 'file' || configuredScope === 'tag') {
+      requirementScope = configuredScope;
+    }
+  }
+
+  requirements.forEach(function (requirement) {
+    var key = normalizeRequirementPrimerKey(requirement);
+    if (!key) return;
+    var rawKeywords = String(keywordsByRequirement[requirement] || '').trim();
+    if (!rawKeywords && typeof DEFAULT_CHECKLIST_ITEM_KEYWORDS === 'object' && DEFAULT_CHECKLIST_ITEM_KEYWORDS) {
+      rawKeywords = String(DEFAULT_CHECKLIST_ITEM_KEYWORDS[requirement] || '').trim();
+    }
+    var keywords = parseRequirementKeywordList(rawKeywords);
+    keywords.forEach(function (keyword) {
+      var token = String(keyword || '').trim().toLowerCase();
+      if (!token) return;
+      var dedupeKey = key + '::' + token;
+      if (seen[dedupeKey]) return;
+      seen[dedupeKey] = true;
+      rows.push({
+        scope: requirementScope,
+        token: token,
+        key: key,
+        value: keyword,
+        enabled: true
+      });
+    });
+  });
+
+  return rows;
+}
+
 function buildPrimerFromConfig(fileName, mediaKey, config) {
   var template = String(config && config.template || '');
   if (!template.trim()) {
@@ -252,7 +338,10 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
   }
   var values = {};
   var fileNorm = String(fileName || '').toLowerCase();
-  var rows = Array.isArray(config && config.mappings) ? config.mappings : [];
+  var customRows = Array.isArray(config && config.mappings) ? config.mappings : [];
+  var defaultRows = getRequirementDefaultPrimerMappings();
+  // Custom rows win by order; requirement-derived rows fill only when custom rows did not.
+  var rows = customRows.concat(defaultRows);
   var mediaTags = [];
   if (mediaKey && typeof getTagsForMediaKey === 'function') {
     mediaTags = getTagsForMediaKey(mediaKey).map(function (tag) { return String(tag || '').toLowerCase(); });
@@ -265,7 +354,8 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
     var token = String(row.token || '').trim().toLowerCase();
     var key = String(row.key || '').trim().toLowerCase();
     var value = String(row.value || '').trim();
-    if (!token || !key || !value) return;
+    if (!value) value = token;
+    if (!token || !key) return;
     var matched = false;
     if (scope === 'tag') {
       matched = mediaTags.some(function (tagValue) { return tagValue.indexOf(token) !== -1; });

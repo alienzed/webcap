@@ -1,6 +1,6 @@
 # Primer Mappings V2 (Structured, Modal-Based)
 
-Last updated: 2026-05-29
+Last updated: 2026-05-30
 
 ## Goal
 Replace legacy advanced textareas with structured modal editors so primer behavior is discoverable and safe.
@@ -28,11 +28,10 @@ Stored under existing top-level sections:
 ### Mapping Row Shape
 ```json
 {
-  "scope": "file",
+  "scope": "tag",
   "token": "fd",
   "key": "view",
   "value": "face down",
-  "fallback": false,
   "enabled": true
 }
 ```
@@ -59,20 +58,25 @@ Allowed `scope` values:
 
 When auto-primer is generated for an empty caption:
 1. Start with empty key-value map.
-2. Iterate `primer.mappings` top-to-bottom.
-3. Skip rows where `enabled` is false.
-4. A row matches when:
+2. Build effective mapping rows by appending requirement-derived defaults after custom rows:
+- Custom rows: `primer.mappings` (top-to-bottom).
+- Requirement defaults: generated from requirement keyword config (`caption_requirements` + `caption_requirement_keywords`), with key aliases such as `Key Phrase -> subject` and `Viewpoint -> view`. Default scope for these rows is `tag`.
+3. Iterate effective mapping rows top-to-bottom.
+4. Skip rows where `enabled` is false.
+5. A row matches when:
 - `scope=file`: normalized filename contains `token`.
 - `scope=tag`: any assigned tag contains `token` (case-insensitive).
-5. On match:
+6. On match:
 - If key is unset, set `key=value`.
+- If `value` is blank, `token` is used as the value.
 - If key is already set, ignore later rows for that key.
-6. Render `primer.template` using final key-value map.
-7. Unresolved placeholders render as uppercase key text (for example `{view}` -> `VIEW`).
+7. Render `primer.template` using final key-value map.
+8. Unresolved placeholders render as uppercase key text (for example `{view}` -> `VIEW`).
 
 Collision policy:
 1. First matching row per key wins (top-to-bottom order).
-2. No explicit priority field or conflict UI.
+2. Custom mappings always win over requirement defaults because defaults are appended after custom rows.
+3. No explicit priority field or conflict UI.
 
 ## Review Rule Semantics
 
@@ -86,10 +90,10 @@ Review compute uses `stats.reviewRules` rows:
 
 ### Config Tab
 1. `Caption Template` remains direct textarea.
-2. `Advanced` contains `Mappings` section with:
+2. `Mappings` section is always visible under template and includes:
 - `Edit Mappings` button (opens modal).
 - summary line (row count).
-3. `Set Notes` remains visible below `Advanced`.
+3. `Set Notes` remains visible below mappings.
 
 ### Review Tab
 1. `Required key phrase` and `Balance phrases` remain.
@@ -121,6 +125,6 @@ If legacy text fields existed, new saves overwrite with structured state as sour
 ## Test Focus
 
 1. Folder-state save/load preserves `primer.mappings` and `stats.reviewRules`.
-2. Auto-primer generation applies mappings with fallback semantics.
+2. Auto-primer generation applies mappings with custom-first precedence and blank-value token passthrough.
 3. Review compute consumes structured rules and returns expected failures.
 4. Existing review/caption workflows remain functional without legacy textareas.

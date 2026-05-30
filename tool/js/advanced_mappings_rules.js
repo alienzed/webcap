@@ -14,14 +14,13 @@ function normalizeBool(value, defaultValue) {
 
 function normalizePrimerMappingRow(row) {
   var src = row || {};
-  var scope = String(src.scope || 'file').toLowerCase();
-  if (scope !== 'file' && scope !== 'tag') scope = 'file';
+  var scope = String(src.scope || 'tag').toLowerCase();
+  if (scope !== 'file' && scope !== 'tag') scope = 'tag';
   return {
     scope: scope,
     token: String(src.token || '').trim(),
     key: String(src.key || '').trim().toLowerCase(),
     value: String(src.value || '').trim(),
-    fallback: normalizeBool(src.fallback, false),
     enabled: normalizeBool(src.enabled, true)
   };
 }
@@ -40,7 +39,7 @@ function normalizeReviewRuleRow(row) {
 
 function primerMappingRowHasData(row) {
   if (!row) return false;
-  return !!(row.token || row.key || row.value);
+  return !!(row.token || row.key);
 }
 
 function reviewRuleRowHasData(row) {
@@ -49,7 +48,7 @@ function reviewRuleRowHasData(row) {
 }
 
 function isCompletePrimerMappingRow(row) {
-  return !!(row && row.token && row.key && row.value);
+  return !!(row && row.token && row.key);
 }
 
 function isCompleteReviewRuleRow(row) {
@@ -86,7 +85,7 @@ function parseLegacyPrimerMappings(multiline) {
       if (!left || eq <= 0) return null;
       var key = right.slice(0, eq).trim().toLowerCase();
       var value = right.slice(eq + 1).trim();
-      if (!key || !value) return null;
+      if (!key) return null;
       var scope = 'file';
       var token = left;
       var colon = left.indexOf(':');
@@ -103,7 +102,6 @@ function parseLegacyPrimerMappings(multiline) {
         token: token,
         key: key,
         value: value,
-        fallback: false,
         enabled: true
       };
     })
@@ -142,12 +140,11 @@ function triggerAdvancedRulesAutosave() {
 function updatePrimerMappingsSummary() {
   if (!ui || !ui.primerMappingsSummaryEl) return;
   var total = primerMappingsRows.length;
-  var enabled = primerMappingsRows.filter(function (row) { return !!row.enabled; }).length;
   if (!total) {
     ui.primerMappingsSummaryEl.textContent = 'No mappings configured.';
     return;
   }
-  ui.primerMappingsSummaryEl.textContent = total + ' mapping' + (total === 1 ? '' : 's') + ' (' + enabled + ' enabled)';
+  ui.primerMappingsSummaryEl.textContent = total + ' custom mapping' + (total === 1 ? '' : 's');
 }
 
 function updateReviewRulesSummary() {
@@ -237,6 +234,69 @@ function createCheckboxCell(checked, onChange) {
   return createAdvancedCell(input);
 }
 
+function renderAdvancedHelpPreview(title, bodyHtml) {
+  var doc = ui && ui.previewEl ? (ui.previewEl.contentDocument || ui.previewEl.contentdocument) : null;
+  if (!doc) {
+    setStatus('Help preview unavailable.');
+    return;
+  }
+  doc.open();
+  doc.write(
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>' +
+    '<body style="font-family:system-ui;padding:16px;background:#f8fafc;color:#1f2937;line-height:1.4;">' +
+    '<h3 style="margin:0 0 10px 0;">' + escapeHtml(String(title || 'Help')) + '</h3>' +
+    String(bodyHtml || '') +
+    '</body></html>'
+  );
+  doc.close();
+  setStatus('Help loaded.');
+}
+
+function openPrimerMappingsHelpInPreview() {
+  var defaultsTotal = 0;
+  if (typeof getRequirementDefaultPrimerMappings === 'function') {
+    defaultsTotal = getRequirementDefaultPrimerMappings().length;
+  }
+  renderAdvancedHelpPreview(
+    'Mappings Help',
+    '<p style="margin:0 0 10px 0;">Mappings auto-fill parts of your Caption Template for items that do not have a caption yet.</p>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">How It Works</h4>' +
+    '<ol style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;">Write a Caption Template with placeholders like <code>{view}</code> and <code>{lighting}</code>.</li>' +
+    '<li style="margin:0 0 6px 0;">Add mapping rows that connect a trigger (usually a tag) to a placeholder key.</li>' +
+    '<li style="margin:0 0 6px 0;">When a row matches, that placeholder gets filled automatically.</li>' +
+    '</ol>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Fields This Uses</h4>' +
+    '<ul style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;"><strong>Caption Template</strong>: where placeholders are written.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Mappings rows</strong>: your manual mapping rules.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Requirements keywords</strong>: auto default mappings for common terms.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Item tags</strong>: main match source for defaults and tag-scope rows.</li>' +
+    '</ul>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Important Rules</h4>' +
+    '<ul style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;">Manual rows run first, then requirement defaults.</li>' +
+    '<li style="margin:0 0 6px 0;">Current requirement default rows available: <strong>' + defaultsTotal + '</strong>.</li>' +
+    '<li style="margin:0 0 6px 0;">Default scope for new rows is <strong>tag</strong>.</li>' +
+    '<li style="margin:0 0 6px 0;">If Value is blank, Token is used as the value.</li>' +
+    '<li style="margin:0 0 6px 0;">Enabled off means the row is skipped.</li>' +
+    '</ul>'
+  );
+}
+
+function openReviewRulesHelpInPreview() {
+  renderAdvancedHelpPreview(
+    'Rules Help',
+    '<p style="margin:0 0 10px 0;">Rules check caption quality. They do not auto-fill the template.</p>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">How It Works</h4>' +
+    '<ul style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;"><strong>file</strong> scope: if filename has Trigger, caption must include Required Phrase.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>caption</strong> scope: if caption has Trigger, caption must include Required Phrase.</li>' +
+    '<li style="margin:0 0 6px 0;">Enabled off means the rule is skipped.</li>' +
+    '</ul>'
+  );
+}
+
 function renderPrimerMappingsDraft() {
   if (!ui || !ui.primerMappingsModalBodyEl) return;
   var bodyEl = ui.primerMappingsModalBodyEl;
@@ -245,7 +305,7 @@ function renderPrimerMappingsDraft() {
 
   var header = document.createElement('div');
   header.className = 'advanced-grid-row advanced-grid-row-header';
-  ['Scope', 'Token', 'Key', 'Value', 'Fallback', 'Enabled', ''].forEach(function (text) {
+  ['Scope', 'Token', 'Key', 'Value (optional)', 'Enabled', ''].forEach(function (text) {
     var col = document.createElement('div');
     col.className = 'advanced-grid-header-cell';
     col.textContent = text;
@@ -272,10 +332,6 @@ function renderPrimerMappingsDraft() {
     gridRow.appendChild(createAdvancedCell(scope));
 
     if (row.scope === 'tag') {
-      var tokenWrap = document.createElement('div');
-      tokenWrap.style.display = 'flex';
-      tokenWrap.style.flexDirection = 'column';
-      tokenWrap.style.gap = '4px';
       var tokenSelect = document.createElement('select');
       var tokenPlaceholderOpt = document.createElement('option');
       tokenPlaceholderOpt.value = '';
@@ -302,12 +358,7 @@ function renderPrimerMappingsDraft() {
       tokenSelect.addEventListener('change', function () {
         primerMappingsDraftRows[idx].token = tokenSelect.value;
       });
-      var tokenHint = document.createElement('div');
-      tokenHint.className = 'small';
-      tokenHint.textContent = 'Choose an exact catalog term.';
-      tokenWrap.appendChild(tokenSelect);
-      tokenWrap.appendChild(tokenHint);
-      gridRow.appendChild(createAdvancedCell(tokenWrap));
+      gridRow.appendChild(createAdvancedCell(tokenSelect));
     } else {
       var token = document.createElement('input');
       token.type = 'text';
@@ -330,16 +381,13 @@ function renderPrimerMappingsDraft() {
 
     var value = document.createElement('input');
     value.type = 'text';
-    value.placeholder = 'e.g. face down';
+    value.placeholder = 'optional (defaults to token)';
     value.value = row.value;
     value.addEventListener('input', function () {
       primerMappingsDraftRows[idx].value = value.value;
     });
     gridRow.appendChild(createAdvancedCell(value));
 
-    gridRow.appendChild(createCheckboxCell(row.fallback, function (nextValue) {
-      primerMappingsDraftRows[idx].fallback = nextValue;
-    }));
     gridRow.appendChild(createCheckboxCell(row.enabled, function (nextValue) {
       primerMappingsDraftRows[idx].enabled = nextValue;
     }));
@@ -486,6 +534,17 @@ function wireAdvancedMappingsRulesUi() {
   if (!ui) return;
   updatePrimerMappingsSummary();
   updateReviewRulesSummary();
+
+  var mappingsInfoBtn = document.getElementById('primer-mappings-info-btn');
+  if (mappingsInfoBtn && !mappingsInfoBtn.__advancedInfoBound) {
+    mappingsInfoBtn.__advancedInfoBound = true;
+    mappingsInfoBtn.addEventListener('click', openPrimerMappingsHelpInPreview);
+  }
+  var rulesInfoBtn = document.getElementById('review-rules-info-btn');
+  if (rulesInfoBtn && !rulesInfoBtn.__advancedInfoBound) {
+    rulesInfoBtn.__advancedInfoBound = true;
+    rulesInfoBtn.addEventListener('click', openReviewRulesHelpInPreview);
+  }
 
   if (ui.primerMappingsEditBtnEl && !ui.primerMappingsEditBtnEl.__advancedMappingsBound) {
     ui.primerMappingsEditBtnEl.__advancedMappingsBound = true;

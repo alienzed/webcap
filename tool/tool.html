@@ -252,17 +252,20 @@
                                     <textarea id="primer-template" rows="5" placeholder="{subject}
                                           {view}
                                           {lighting}"></textarea>
-                                    <details class="config-advanced">
-                                        <summary>Advanced</summary>
-                                        <div class="config-advanced-fields">
-                                            <label>Mappings</label>
-                                            <div class="stats-advanced-inline-row">
-                                                <button id="primer-mappings-edit-btn" type="button">Edit Mappings</button>
-                                                <span id="primer-mappings-summary" class="small">No mappings configured.</span>
-                                            </div>
-                                            <div class="small">Use rules to assign template placeholders by file token or media tag.</div>
-                                        </div>
-                                    </details>
+                                    <div class="section-label-inline">
+                                        <label>Mappings</label>
+                                        <button
+                                            id="primer-mappings-info-btn"
+                                            type="button"
+                                            class="mini-info-btn"
+                                            title="Mappings help"
+                                            aria-label="Mappings help"
+                                        >i</button>
+                                    </div>
+                                    <div class="stats-advanced-inline-row">
+                                        <button id="primer-mappings-edit-btn" type="button">Edit Mappings</button>
+                                        <span id="primer-mappings-summary" class="small">No mappings configured.</span>
+                                    </div>
                                     <label>Set Notes</label>
                                     <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
                                 </div>
@@ -296,12 +299,20 @@
                                     <details class="config-advanced">
                                         <summary>Advanced</summary>
                                         <div class="config-advanced-fields">
-                                            <label>Rules</label>
+                                            <div class="section-label-inline">
+                                                <label>Rules</label>
+                                                <button
+                                                    id="review-rules-info-btn"
+                                                    type="button"
+                                                    class="mini-info-btn"
+                                                    title="Rules help"
+                                                    aria-label="Rules help"
+                                                >i</button>
+                                            </div>
                                             <div class="stats-advanced-inline-row">
                                                 <button id="review-rules-edit-btn" type="button">Edit Rules</button>
                                                 <span id="review-rules-summary" class="small">No review rules configured.</span>
                                             </div>
-                                            <div class="small">Rules validate caption coverage from filename and caption triggers.</div>
                                         </div>
                                     </details>
                                 </div>
@@ -573,7 +584,6 @@
             </div>
             <div class="modal-body">
                 <div id="primer-mappings-modal-body"></div>
-                <div class="small">Columns: Scope, Token, Key, Value, Fallback, Enabled.</div>
             </div>
             <div class="modal-footer">
                 <button class="btn" id="primer-mappings-save-btn">Save</button>
@@ -593,7 +603,6 @@
             </div>
             <div class="modal-body">
                 <div id="review-rules-modal-body"></div>
-                <div class="small">Columns: Scope, Trigger, Required Phrase, Enabled.</div>
             </div>
             <div class="modal-footer">
                 <button class="btn" id="review-rules-save-btn">Save</button>

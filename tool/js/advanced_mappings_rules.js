@@ -241,6 +241,7 @@ function renderPrimerMappingsDraft() {
   if (!ui || !ui.primerMappingsModalBodyEl) return;
   var bodyEl = ui.primerMappingsModalBodyEl;
   bodyEl.innerHTML = '';
+  var catalogTokens = getCaptionHelperCatalogTerms();
 
   var header = document.createElement('div');
   header.className = 'advanced-grid-row advanced-grid-row-header';
@@ -266,17 +267,57 @@ function renderPrimerMappingsDraft() {
     });
     scope.addEventListener('change', function () {
       primerMappingsDraftRows[idx].scope = scope.value;
+      renderPrimerMappingsDraft();
     });
     gridRow.appendChild(createAdvancedCell(scope));
 
-    var token = document.createElement('input');
-    token.type = 'text';
-    token.placeholder = 'e.g. fd';
-    token.value = row.token;
-    token.addEventListener('input', function () {
-      primerMappingsDraftRows[idx].token = token.value;
-    });
-    gridRow.appendChild(createAdvancedCell(token));
+    if (row.scope === 'tag') {
+      var tokenWrap = document.createElement('div');
+      tokenWrap.style.display = 'flex';
+      tokenWrap.style.flexDirection = 'column';
+      tokenWrap.style.gap = '4px';
+      var tokenSelect = document.createElement('select');
+      var tokenPlaceholderOpt = document.createElement('option');
+      tokenPlaceholderOpt.value = '';
+      tokenPlaceholderOpt.textContent = 'Select tag...';
+      tokenSelect.appendChild(tokenPlaceholderOpt);
+      var seenToken = {};
+      catalogTokens.forEach(function (tokenValue) {
+        var clean = String(tokenValue || '').trim();
+        var low = clean.toLowerCase();
+        if (!clean || seenToken[low]) return;
+        seenToken[low] = true;
+        var opt = document.createElement('option');
+        opt.value = clean;
+        opt.textContent = clean;
+        tokenSelect.appendChild(opt);
+      });
+      if (row.token && !seenToken[String(row.token).toLowerCase()]) {
+        var customOpt = document.createElement('option');
+        customOpt.value = row.token;
+        customOpt.textContent = row.token;
+        tokenSelect.appendChild(customOpt);
+      }
+      tokenSelect.value = row.token || '';
+      tokenSelect.addEventListener('change', function () {
+        primerMappingsDraftRows[idx].token = tokenSelect.value;
+      });
+      var tokenHint = document.createElement('div');
+      tokenHint.className = 'small';
+      tokenHint.textContent = 'Choose an exact catalog term.';
+      tokenWrap.appendChild(tokenSelect);
+      tokenWrap.appendChild(tokenHint);
+      gridRow.appendChild(createAdvancedCell(tokenWrap));
+    } else {
+      var token = document.createElement('input');
+      token.type = 'text';
+      token.placeholder = 'e.g. fd';
+      token.value = row.token;
+      token.addEventListener('input', function () {
+        primerMappingsDraftRows[idx].token = token.value;
+      });
+      gridRow.appendChild(createAdvancedCell(token));
+    }
 
     var key = document.createElement('input');
     key.type = 'text';

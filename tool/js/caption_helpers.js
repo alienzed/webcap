@@ -8,6 +8,88 @@ function captionHelperSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
 }
 
+function normalizeCatalogTerm(text) {
+  return String(text || '').trim().replace(/\s+/g, ' ');
+}
+
+function hasCaptionHelperPhrase(text) {
+  var target = normalizeCatalogTerm(text).toLowerCase();
+  if (!target) return false;
+  for (var i = 0; i < captionHelperPhrases.length; i++) {
+    var current = normalizeCatalogTerm(captionHelperPhrases[i]).toLowerCase();
+    if (current === target) return true;
+  }
+  return false;
+}
+
+function ensureCaptionHelperPhraseInCatalog(text, persistNow, skipRender) {
+  var term = normalizeCatalogTerm(text);
+  if (!term) return false;
+  if (hasCaptionHelperPhrase(term)) return false;
+  captionHelperPhrases.push(term);
+  captionHelperPhrases.sort(captionHelperSort);
+  if (persistNow) {
+    saveCaptionHelpersToFolderState();
+  }
+  if (!skipRender) {
+    renderPhraseCopyPanel();
+  }
+  return true;
+}
+
+function mergeCaptionHelperPhrasesFromTagsMap(tagsMap, persistNow) {
+  var source = (tagsMap && typeof tagsMap === 'object') ? tagsMap : {};
+  var changed = false;
+  Object.keys(source).forEach(function (mediaKey) {
+    var tags = Array.isArray(source[mediaKey]) ? source[mediaKey] : [];
+    tags.forEach(function (tag) {
+      changed = ensureCaptionHelperPhraseInCatalog(tag, false, true) || changed;
+    });
+  });
+  if (changed && persistNow) {
+    saveCaptionHelpersToFolderState();
+  }
+  if (changed) {
+    renderPhraseCopyPanel();
+  }
+  return changed;
+}
+
+function getCaptionHelperCatalogTerms() {
+  var seen = {};
+  var out = [];
+  captionHelperPhrases.forEach(function (phrase) {
+    var clean = normalizeCatalogTerm(phrase);
+    var low = clean.toLowerCase();
+    if (!clean || seen[low]) return;
+    seen[low] = true;
+    out.push(clean);
+  });
+  if (Array.isArray(statsBalancePhrases)) {
+    statsBalancePhrases.forEach(function (phrase) {
+      var clean = normalizeCatalogTerm(phrase);
+      var low = clean.toLowerCase();
+      if (!clean || seen[low]) return;
+      seen[low] = true;
+      out.push(clean);
+    });
+  }
+  if (captionItemTagsByMedia && typeof captionItemTagsByMedia === 'object') {
+    Object.keys(captionItemTagsByMedia).forEach(function (mediaKey) {
+      var tags = Array.isArray(captionItemTagsByMedia[mediaKey]) ? captionItemTagsByMedia[mediaKey] : [];
+      tags.forEach(function (tag) {
+        var clean = normalizeCatalogTerm(tag);
+        var low = clean.toLowerCase();
+        if (!clean || seen[low]) return;
+        seen[low] = true;
+        out.push(clean);
+      });
+    });
+  }
+  out.sort(captionHelperSort);
+  return out;
+}
+
 function setCaptionHelperTab(tabName) {
   if (tabName !== 'requirements' && tabName !== 'phrases' && tabName !== 'tags' && tabName !== 'metadata') {
     tabName = 'requirements';
@@ -21,6 +103,8 @@ function setCaptionHelperTab(tabName) {
   document.getElementById('caption-helper-tab-phrases').classList.add('hidden');
   document.getElementById('caption-helper-tab-tags').classList.add('hidden');
   document.getElementById('caption-helper-tab-metadata').classList.add('hidden');
+  document.getElementById('caption-term-shared-row').classList.add('hidden');
+  document.getElementById('caption-term-results').classList.add('hidden');
 
   if (tabName === 'requirements') {
     document.getElementById('caption-helper-tab-requirements-btn').classList.add('active');
@@ -30,11 +114,13 @@ function setCaptionHelperTab(tabName) {
   if (tabName === 'phrases') {
     document.getElementById('caption-helper-tab-phrases-btn').classList.add('active');
     document.getElementById('caption-helper-tab-phrases').classList.remove('hidden');
+    document.getElementById('caption-term-shared-row').classList.remove('hidden');
     return;
   }
   if (tabName === 'tags') {
     document.getElementById('caption-helper-tab-tags-btn').classList.add('active');
     document.getElementById('caption-helper-tab-tags').classList.remove('hidden');
+    document.getElementById('caption-term-shared-row').classList.remove('hidden');
     return;
   }
   if (tabName === 'metadata') {
@@ -149,14 +235,22 @@ function renderPhraseCopyPanel() {
   var container = document.getElementById('phrase-copy-items');
   if (!container) return;
   container.innerHTML = '';
-  captionHelperPhrases.sort(captionHelperSort);
+  var activePhrases = Array.isArray(statsBalancePhrases) ? statsBalancePhrases.slice() : [];
 
   var liveCaption = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
     ? ui.editorEl.value
     : (state && state.currentItem && typeof state.currentItem.caption === 'string' ? state.currentItem.caption : '');
 
-  for (var i = 0; i < captionHelperPhrases.length; i++) {
-    var phrase = captionHelperPhrases[i];
+  if (!activePhrases.length) {
+    var empty = document.createElement('div');
+    empty.className = 'small';
+    empty.textContent = 'No active phrases. Add terms in Balance phrases.';
+    container.appendChild(empty);
+    return;
+  }
+
+  for (var i = 0; i < activePhrases.length; i++) {
+    var phrase = activePhrases[i];
     var isMatched = !!(phrase && captionContainsPhrase(liveCaption, phrase));
     var row = document.createElement('div');
     row.className = 'row-inline phrase-row-inline';
@@ -191,8 +285,10 @@ function renderPhraseCopyPanel() {
     removeBtn.textContent = 'X';
     (function (idx) {
       removeBtn.onclick = function () {
-        captionHelperPhrases.splice(idx, 1);
-        saveCaptionHelpersToFolderState();
+        var next = statsBalancePhrases.slice();
+        next.splice(idx, 1);
+        setStatsBalancePhrases(next, true);
+        renderStatsBalancePhraseList();
         renderPhraseCopyPanel();
       };
     })(i);
@@ -205,7 +301,10 @@ function renderPhraseCopyPanel() {
 }
 
 function loadCaptionHelpersFromFolderState(folderState) {
-  captionHelperPhrases = (folderState.caption_phrases || []).slice();
+  captionHelperPhrases = [];
+  (folderState.caption_phrases || []).forEach(function (phrase) {
+    ensureCaptionHelperPhraseInCatalog(phrase, false, true);
+  });
   captionHelperNotes = String(folderState.caption_set_notes || '');
   var notesEditor = document.getElementById('set-notes-editor');
   if (notesEditor) {
@@ -219,8 +318,9 @@ function wireCaptionHelpersUi() {
   var phrasesBtn = document.getElementById('caption-helper-tab-phrases-btn');
   var tagsBtn = document.getElementById('caption-helper-tab-tags-btn');
   var metadataBtn = document.getElementById('caption-helper-tab-metadata-btn');
-  var phraseAddInput = document.getElementById('phrase-copy-add-input');
-  var phraseAddBtn = document.getElementById('phrase-copy-add-btn');
+  var sharedInput = document.getElementById('caption-term-input');
+  var sharedApplyBtn = document.getElementById('caption-term-apply-btn');
+  var sharedResults = document.getElementById('caption-term-results');
   var notesEditor = document.getElementById('set-notes-editor');
 
   requirementsBtn.onclick = function () {
@@ -240,20 +340,107 @@ function wireCaptionHelpersUi() {
     metadataBtn.onclick = function () { setCaptionHelperTab('metadata'); };
   }
 
-  phraseAddBtn.onclick = function () {
-    var text = phraseAddInput.value.trim();
-    if (!text || captionHelperPhrases.indexOf(text) !== -1) return;
-    captionHelperPhrases.push(text);
-    phraseAddInput.value = '';
+  function clearSharedResults() {
+    sharedResults.innerHTML = '';
+    sharedResults.classList.add('hidden');
+  }
+
+  function applySharedTerm(rawText) {
+    var text = normalizeCatalogTerm(rawText);
+    if (!text) return;
+    if (!state.currentItem || !state.currentItem.key) {
+      setStatus('Select a media item to add tags.');
+      return;
+    }
+    ensureCaptionHelperPhraseInCatalog(text, false);
+    var alreadyTagged = hasTagForMediaKey(state.currentItem.key, text);
+    if (!alreadyTagged) {
+      addTagToCurrentMedia(text);
+    } else {
+      setStatus('Tag already assigned.');
+    }
     saveCaptionHelpersToFolderState();
     renderPhraseCopyPanel();
-  };
+    sharedInput.value = '';
+    clearSharedResults();
+  }
 
-  phraseAddInput.addEventListener('keydown', function (e) {
+  function renderSharedResults(query) {
+    var q = normalizeCatalogTerm(query).toLowerCase();
+    if (!q) {
+      clearSharedResults();
+      return;
+    }
+    var allTerms = getCaptionHelperCatalogTerms();
+    var exact = [];
+    var startsWith = [];
+    var contains = [];
+    allTerms.forEach(function (term) {
+      var low = term.toLowerCase();
+      if (low === q) {
+        exact.push(term);
+        return;
+      }
+      if (low.indexOf(q) === 0) {
+        startsWith.push(term);
+        return;
+      }
+      if (low.indexOf(q) !== -1) {
+        contains.push(term);
+      }
+    });
+    var ranked = exact.concat(startsWith, contains).slice(0, 12);
+    sharedResults.innerHTML = '';
+    if (!ranked.length) {
+      var createBtn = document.createElement('button');
+      createBtn.type = 'button';
+      createBtn.className = 'phrase-copy-item-btn';
+      createBtn.textContent = 'Create "' + normalizeCatalogTerm(query) + '"';
+      createBtn.onclick = function () {
+        applySharedTerm(query);
+      };
+      sharedResults.appendChild(createBtn);
+      sharedResults.classList.remove('hidden');
+      return;
+    }
+    ranked.forEach(function (term) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'phrase-copy-item-btn';
+      btn.textContent = term;
+      btn.onclick = function () {
+        applySharedTerm(term);
+      };
+      sharedResults.appendChild(btn);
+    });
+    sharedResults.classList.remove('hidden');
+  }
+
+  sharedApplyBtn.onclick = function () {
+    var text = normalizeCatalogTerm(sharedInput.value);
+    if (!text) return;
+    applySharedTerm(text);
+  };
+  sharedInput.addEventListener('input', function () {
+    renderSharedResults(sharedInput.value);
+  });
+  sharedInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      phraseAddBtn.onclick();
+      var text = normalizeCatalogTerm(sharedInput.value);
+      if (!text) return;
+      applySharedTerm(text);
+      return;
     }
+    if (e.key === 'Escape') {
+      clearSharedResults();
+      return;
+    }
+  });
+  sharedInput.addEventListener('blur', function () {
+    setTimeout(function () {
+      clearSharedResults();
+    }, 120);
   });
 
   if (notesEditor) {
@@ -275,3 +462,7 @@ function wireCaptionHelpersUi() {
   setCaptionHelperTab(captionHelperActiveTab);
   renderPhraseCopyPanel();
 }
+
+window.ensureCaptionHelperPhraseInCatalog = ensureCaptionHelperPhraseInCatalog;
+window.mergeCaptionHelperPhrasesFromTagsMap = mergeCaptionHelperPhrasesFromTagsMap;
+window.getCaptionHelperCatalogTerms = getCaptionHelperCatalogTerms;

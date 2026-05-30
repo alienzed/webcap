@@ -244,11 +244,16 @@ function setFilterFromBalancePhrase(phrase) {
 function addBalancePhraseTagToCurrentMedia(phrase) {
   var text = normalizeBalancePhrase(phrase);
   if (!text) return false;
-  if (typeof addTagToCurrentMedia !== 'function') {
-    setStatus('Tag assignment is unavailable.');
+  if (!ui || !ui.editorEl) {
+    setStatus('Caption editor is unavailable.');
     return false;
   }
-  return !!addTagToCurrentMedia(text);
+  if (!state.currentItem || !state.currentItem.key) {
+    setStatus('Select a media item.');
+    return false;
+  }
+  toggleCaptionPhraseAtCursor(text);
+  return true;
 }
 
 function setStatsBalancePhrases(nextPhrases, triggerAutosave) {
@@ -270,6 +275,7 @@ function setStatsBalancePhrases(nextPhrases, triggerAutosave) {
       phrasesEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }
+  renderPhraseCopyPanel();
 }
 
 function loadStatsBalancePhrasesFromTextarea() {
@@ -300,7 +306,7 @@ function renderStatsBalancePhraseList() {
       var phraseBtn = document.createElement('button');
       phraseBtn.type = 'button';
       phraseBtn.className = 'phrase-copy-item-btn';
-      phraseBtn.title = 'Add as tag to current media (Shift+Click: move up)';
+      phraseBtn.title = 'Insert/remove in caption (Shift+Click: move up)';
       phraseBtn.textContent = phrase;
       phraseBtn.onclick = function (ev) {
         if (ev && ev.shiftKey) {

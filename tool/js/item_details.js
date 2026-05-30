@@ -180,6 +180,7 @@ function addTagToMediaKey(mediaKey, tagText) {
   if (exists) return false;
   current.push(tag);
   captionItemTagsByMedia[key] = current;
+  ensureCaptionHelperPhraseInCatalog(tag, true);
   debouncedItemTagsSave(saveItemTagsToFolderState);
   renderItemTagsPanel();
   renderFileList();
@@ -220,6 +221,7 @@ function loadItemTagsFromFolderState(folderState) {
     }
   });
   captionItemTagsByMedia = next;
+  mergeCaptionHelperPhrasesFromTagsMap(captionItemTagsByMedia, false);
   renderItemTagsPanel();
 }
 

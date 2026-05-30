@@ -38,6 +38,7 @@ Last reviewed: 2026-05-19.
 - **Save/load sets as packages:** Instead of only writing selection/caption info as comments in config files, support saving and restoring sets (including selection, captions, flags, ratings, etc.) as explicit package files. This would allow fast recovery, sharing, and reproducibility, and could enable advanced features like unpruning files or resetting captions when loading a saved set.
 
 ## Nice to Haves (Out of Scope for Now)
+- Vocabulary autocomplete from a cross-set master list (no automatic sharing yet; suggestion-only).
 - Validate training command preview behavior when config keys are missing (should still provide useful output where possible).
 - Maintain flags and metadata when Pruning/restoring/renaming.
 - Review duplicate-token detection inside a single caption.

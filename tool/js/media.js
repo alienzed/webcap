@@ -611,14 +611,6 @@ async function renderFileList() {
     if (flagColor) {
       colorDot = '<span class="flag-dot flag-dot--' + flagColor + '" style="margin-left:8px;"></span>';
     }
-    var mutationBadge = '';
-    if (mutated) {
-      var mutationSource = getMediaMutationSource(mediaItem.key);
-      var mutationTitle = mutationSource === 'deterministic'
-        ? 'Mutated (deterministic image hash)'
-        : 'Mutated (best effort)';
-      mutationBadge = '<span class="mutation-badge" title="' + escapeHtml(mutationTitle) + '">M</span>';
-    }
     var displayText = mediaItem.label;
     var row = document.createElement('div');
     row.className = className;
@@ -627,7 +619,7 @@ async function renderFileList() {
     row.innerHTML =
       '<div class="media-item-main">' +
         '<span class="media-item-main-label">' + icon + '&nbsp;' + escapeHtml(displayText) + '</span>' +
-        '<span class="media-item-main-right">' + mutationBadge + colorDot + '</span>' +
+        '<span class="media-item-main-right">' + colorDot + '</span>' +
       '</div>';
     ui.mediaListEl.appendChild(row);
     matchCount++;

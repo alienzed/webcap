@@ -1547,6 +1547,20 @@ iframe {
   margin: 0 0 8px 0;
   letter-spacing: 0.3px;
 }
+.caption-term-shared-row {
+  margin-bottom: 6px;
+}
+.caption-term-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-bottom: 6px;
+}
+.caption-term-results .phrase-copy-item-btn {
+  text-align: left;
+}
 
 #phrase-copy-items {
   column-count: 2;

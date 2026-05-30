@@ -6,13 +6,16 @@ Item tags provide lightweight per-media annotations that are distinct from capti
 
 - Scope: per media item in the current folder.
 - Storage: persisted in `.webcap_state.json` under `caption_tags_by_media`.
-- UI: add/remove tags from the Item Details panel below the caption area.
+- UI:
+  - add tags through the shared term input in the `Phrases`/`Tags` helper tabs
+  - remove tags from the `Tags` panel list for the selected item
 
 ## Behavior
 
 - Tags are stored as a list for each media filename key.
 - Filter includes tags in addition to filename and caption text.
 - Tag text is normalized (trimmed; duplicate tags are ignored case-insensitively).
+- Selecting a tag in the `Tags` panel applies that tag to the filter input.
 
 ## Metadata Display
 

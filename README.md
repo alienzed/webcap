@@ -48,7 +48,7 @@ Minimum shape:
 
 Notes:
 - `filesystem.root` is required.
-- Training mode supports `poc` and `normal`.
+- Training mode supports `poc`, `normal`, and `quality`.
 - Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
 - You can edit config in-app via Settings.
 
@@ -204,6 +204,16 @@ Metadata tab:
 - Key metadata fields (resolution, AR, fps, duration, frames, codec, size).
 - Unsupported AR values are highlighted.
 
+### 9.1 Config tab (caption primer)
+
+- `Caption Template` is the primary primer field.
+- `Set Notes` is available as a separate freeform notes field.
+- `Advanced` contains a structured `Mappings` editor:
+  - Open `Edit Mappings` to manage rows.
+  - Row fields: `Scope` (`file` or `tag`), `Token`, `Key`, `Value`, `Fallback`, `Enabled`.
+  - Primer is built from top-to-bottom row evaluation.
+  - `Fallback` only fills a key if that key is still unset.
+
 ### 10. Keyboard shortcuts
 
 Global shortcuts (when not typing in input/textarea/select):
@@ -222,7 +232,7 @@ Editor shortcuts:
 - Summary stats
 - Missing required phrase
 - Phrase balance
-- Validation failures from token rules
+- Validation failures from structured review rules
 - Duplicate captions
 - Similar captions (80%+)
 - Caption length insights and outliers
@@ -261,8 +271,8 @@ Utility buttons:
 
 Settings modal supports:
 - Filesystem root/models paths
-- Training paths and config filenames
-- Training mode (`poc` / `normal`)
+- Training paths (`diffusion_pipe_wsl`, `activate_script`)
+- Training mode (`poc` / `normal` / `quality`)
 - Debug mode
 - Advanced JSON editing
 - Save or Save + Reboot

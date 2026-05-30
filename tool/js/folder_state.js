@@ -9,6 +9,12 @@ function sanitizeFolderState(data) {
   var src = data || {};
   var stats = src.stats || {};
   var primer = src.primer || {};
+  var reviewRulesValue = Array.isArray(stats.reviewRules)
+    ? JSON.parse(JSON.stringify(stats.reviewRules))
+    : (typeof stats.reviewRules === 'string' ? String(stats.reviewRules) : []);
+  var primerMappingsValue = Array.isArray(primer.mappings)
+    ? JSON.parse(JSON.stringify(primer.mappings))
+    : (typeof primer.mappings === 'string' ? String(primer.mappings) : []);
   var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
   reviewedKeys = reviewedKeys.map(function (key) { return String(key || ''); }).filter(Boolean);
   var tagMap = {};
@@ -35,12 +41,11 @@ function sanitizeFolderState(data) {
     stats: {
       requiredPhrase: String(stats.requiredPhrase || ''),
       phrases: String(stats.phrases || ''),
-      tokenRules: String(stats.tokenRules || '')
+      reviewRules: reviewRulesValue
     },
     primer: {
       template: String(primer.template || ''),
-      defaults: String(primer.defaults || ''),
-      mappings: String(primer.mappings || '')
+      mappings: primerMappingsValue
     },
     reviewedKeys: reviewedKeys,
     flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {},
@@ -163,10 +168,7 @@ function applyFolderStateToDom(folderState) {
   // Restore stats and primer fields to DOM
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
   var phrasesEl = document.getElementById('stats-phrases');
-  var tokenRulesEl = document.getElementById('stats-token-rules');
   var templateEl = document.getElementById('primer-template');
-  var defaultsEl = document.getElementById('primer-defaults');
-  var mappingsEl = document.getElementById('primer-mappings');
 
   if (requiredPhraseEl) {
     requiredPhraseEl.value = clean.stats.requiredPhrase;
@@ -174,17 +176,20 @@ function applyFolderStateToDom(folderState) {
   if (phrasesEl) {
     phrasesEl.value = clean.stats.phrases;
   }
-  if (tokenRulesEl) {
-    tokenRulesEl.value = clean.stats.tokenRules;
+  if (typeof loadStatsBalancePhrasesFromTextarea === 'function') {
+    loadStatsBalancePhrasesFromTextarea();
+  }
+  if (typeof renderStatsBalancePhraseList === 'function') {
+    renderStatsBalancePhraseList();
+  }
+  if (typeof loadReviewRulesRows === 'function') {
+    loadReviewRulesRows(clean.stats.reviewRules);
   }
   if (templateEl) {
     templateEl.value = clean.primer.template;
   }
-  if (defaultsEl) {
-    defaultsEl.value = clean.primer.defaults;
-  }
-  if (mappingsEl) {
-    mappingsEl.value = clean.primer.mappings;
+  if (typeof loadPrimerMappingsRows === 'function') {
+    loadPrimerMappingsRows(clean.primer.mappings);
   }
   // Add new field restoration logic here as needed
 }
@@ -207,7 +212,8 @@ async function saveFolderStateForCurrentRoot() {
 function renderMultilineTemplate(template, values) {
   var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function (_, rawKey) {
     var key = String(rawKey || '').toLowerCase();
-    return values.hasOwnProperty(key) ? values[key] : '';
+    // Keep unresolved placeholders visible and easy to select/edit in textarea workflows.
+    return values.hasOwnProperty(key) ? values[key] : String(rawKey || '').toUpperCase();
   });
 
   rendered = rendered
@@ -220,103 +226,37 @@ function renderMultilineTemplate(template, values) {
   return rendered;
 }
 
-function buildPrimerFromConfig(fileName, config) {
+function buildPrimerFromConfig(fileName, mediaKey, config) {
   var template = String(config && config.template || '');
   if (!template.trim()) {
     return '';
   }
-  // Fallback: treat defaults/mappings as empty
   var values = {};
-  return renderMultilineTemplate(template, values);
-}
-
-function parseRules(multiline) {
-  var template = '';
-  var defaults = {};
-  var assignments = [];
-
-  String(multiline || '')
-    .split(/\r?\n/)
-    .map(function (line) { return line.trim(); })
-    .filter(Boolean)
-    .forEach(function (line) {
-      var lower = line.toLowerCase();
-
-      if (lower.indexOf('template:') === 0) {
-        template = line.slice('template:'.length).trim();
-        return;
-      }
-
-      if (lower.indexOf('default:') === 0) {
-        var defaultPart = line.slice('default:'.length).trim();
-        var eq = defaultPart.indexOf('=');
-        if (eq > 0) {
-          var key = defaultPart.slice(0, eq).trim().toLowerCase();
-          var value = defaultPart.slice(eq + 1).trim();
-          if (key) {
-            defaults[key] = value;
-          }
-        }
-        return;
-      }
-
-      var idx = line.indexOf('=>');
-      if (idx === -1) {
-        return;
-      }
-
-      var left = line.slice(0, idx).trim().toLowerCase();
-      var right = line.slice(idx + 2).trim();
-      var eq = right.indexOf('=');
-      if (!left || !right || eq <= 0) {
-        return;
-      }
-
-      var key = right.slice(0, eq).trim().toLowerCase();
-      var value = right.slice(eq + 1).trim();
-      if (!key || !value) {
-        return;
-      }
-
-      var scope = 'file';
-      var trigger = left;
-      var colon = left.indexOf(':');
-      if (colon > 0) {
-        var prefix = left.slice(0, colon).trim();
-        var scopedTrigger = left.slice(colon + 1).trim();
-        if ((prefix === 'file' || prefix === 'caption') && scopedTrigger) {
-          scope = prefix;
-          trigger = scopedTrigger;
-        }
-      }
-
-      if (scope !== 'file') {
-        return;
-      }
-
-      assignments.push({ trigger: trigger, key: key, value: value });
-    });
-
-  return {
-    template: template,
-    defaults: defaults,
-    assignments: assignments
-  };
-}
-
-function renderTemplate(template, values) {
-  var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function (_, rawKey) {
-    var key = String(rawKey || '').toLowerCase();
-    return values.hasOwnProperty(key) ? values[key] : '';
+  var fileNorm = String(fileName || '').toLowerCase();
+  var rows = Array.isArray(config && config.mappings) ? config.mappings : [];
+  var mediaTags = [];
+  if (mediaKey && typeof getTagsForMediaKey === 'function') {
+    mediaTags = getTagsForMediaKey(mediaKey).map(function (tag) { return String(tag || '').toLowerCase(); });
+  }
+  rows.forEach(function (rawRow) {
+    var row = rawRow || {};
+    var enabled = row.enabled !== false;
+    if (!enabled) return;
+    var scope = String(row.scope || 'file').toLowerCase();
+    var token = String(row.token || '').trim().toLowerCase();
+    var key = String(row.key || '').trim().toLowerCase();
+    var value = String(row.value || '').trim();
+    if (!token || !key || !value) return;
+    var matched = false;
+    if (scope === 'tag') {
+      matched = mediaTags.some(function (tagValue) { return tagValue.indexOf(token) !== -1; });
+    } else {
+      matched = fileNorm.indexOf(token) !== -1;
+    }
+    if (!matched) return;
+    // First matching row for each key wins (top-to-bottom order).
+    if (values.hasOwnProperty(key)) return;
+    values[key] = value;
   });
-
-  rendered = rendered
-    .replace(/\s+/g, ' ')
-    .replace(/\s+,/g, ',')
-    .replace(/,\s*,+/g, ', ')
-    .replace(/^,\s*/, '')
-    .replace(/,\s*$/, '')
-    .trim();
-
-  return rendered;
+  return renderMultilineTemplate(template, values);
 }

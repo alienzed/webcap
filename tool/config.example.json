@@ -7,5 +7,17 @@
     "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
     "activate_script": "dp-clean/bin/activate"
   },
+  "set_destinations": {
+    "presets": [
+      {
+        "label": "Character",
+        "path": "char"
+      },
+      {
+        "label": "Action",
+        "path": "action"
+      }
+    ]
+  },
   "debug": true
 }

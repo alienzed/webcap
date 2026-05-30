@@ -236,6 +236,18 @@ function wireMiscActionButtons() {
     };
   }
 
+  if (ui.createSetFromResultsBtn) {
+    ui.createSetFromResultsBtn.onclick = function () {
+      runCreateSetFromResultsFlow();
+    };
+  }
+
+  if (ui.utilitySmartSetBtn) {
+    ui.utilitySmartSetBtn.onclick = function () {
+      runSmartSetMaterializeFlow();
+    };
+  }
+
   if (ui.upBtn) {
     ui.upBtn.onclick = function () {
       navigateUp();

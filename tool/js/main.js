@@ -251,6 +251,9 @@ function wireSidebarTabs() {
 function wireAllUi() {
   // Autosaving of primer/stats changes (debounced)
   wireStatsPrimerAutoSave();
+  if (typeof wireStatsBalancePhraseUi === 'function') {
+    wireStatsBalancePhraseUi();
+  }
 
   // Wire up review actions (if stats.js is loaded)
   wireReviewActions();
@@ -337,6 +340,27 @@ function wireAllUi() {
     pruneMedia(state.currentItem).catch(function (err) {
       setStatus(String(err && err.message ? err.message : err));
     });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || !e.shiftKey) return;
+    var active = document.activeElement;
+    var allowWhenReadonlyEditor = !!(active === ui.editorEl && ui.editorEl && ui.editorEl.readOnly);
+    if (isEditableElement(active) && !allowWhenReadonlyEditor) return;
+    if (!/^[1-9]$/.test(e.key)) return;
+    if (typeof moveBalancePhraseByHotkeyNumber === 'function') {
+      var moved = moveBalancePhraseByHotkeyNumber(Number(e.key));
+      if (moved) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if (!state.currentItem || !state.currentItem.fileName) return;
+    if (typeof getBalancePhraseByHotkeyNumber !== 'function') return;
+    if (typeof addBalancePhraseTagToCurrentMedia !== 'function') return;
+    var phrase = getBalancePhraseByHotkeyNumber(Number(e.key));
+    if (!phrase) return;
+    e.preventDefault();
+    addBalancePhraseTagToCurrentMedia(phrase);
   });
   document.addEventListener('keydown', function (e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;

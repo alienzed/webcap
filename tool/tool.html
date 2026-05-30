@@ -62,6 +62,14 @@
                                 <path d="M12 16.75h.01"></path>
                             </svg>
                         </button>
+                        <button
+                            id="utility-smart-set-btn"
+                            type="button"
+                            class="utility-btn utility-icon-btn"
+                            title="Materialize Smart Set"
+                        >
+                            Smart
+                        </button>
                     </div>
                     <div id="caption-filter-row" class="filter-row">
                         <input id="media-filter" type="search" placeholder="filter">
@@ -183,6 +191,10 @@
                             <span>Exit Set</span>
                         </button>
                         <div class="sidebar-action-strip">
+                            <button id="create-set-from-results-btn" type="button" class="review-captions-btn hidden">
+                                <span class="btn-glyph" aria-hidden="true">&#8627;</span>
+                                <span>Create Set</span>
+                            </button>
                             <button id="review-captions-btn" type="button" class="review-captions-btn hidden">
                                 <span class="btn-glyph" aria-hidden="true">&#9654;</span>
                                 <span>Review Captions</span>
@@ -228,23 +240,23 @@
                                 aria-hidden="true"
                             >
                                 <div class="stats-controls">
-                                    <label>Caption Template (multiline, placeholders like {subject})</label>
-                                    <textarea id="primer-template" rows="4" placeholder="{subject}
+                                    <label>Caption Template</label>
+                                    <textarea id="primer-template" rows="5" placeholder="{subject}
                                           {view}
                                           {lighting}"></textarea>
-                                    <label>Set Notes</label>
-                                    <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
                                     <details class="config-advanced">
                                         <summary>Advanced</summary>
                                         <div class="config-advanced-fields">
-                                            <label>Defaults (key=value per line)</label>
-                                            <textarea id="primer-defaults" rows="3" placeholder="lighting=soft light"></textarea>
-                                            <label>Filename mappings (file:token =&gt; key=value)</label>
-                                            <textarea id="primer-mappings" rows="4" placeholder="file:fd =&gt; view=face down
-                                                  file:woman =&gt; subject=woman"></textarea>
-                                            <div class="small">Applies automatically when a caption is empty.</div>
+                                            <label>Mappings</label>
+                                            <div class="stats-advanced-inline-row">
+                                                <button id="primer-mappings-edit-btn" type="button">Edit Mappings</button>
+                                                <span id="primer-mappings-summary" class="small">No mappings configured.</span>
+                                            </div>
+                                            <div class="small">Use rules to assign template placeholders by file token or media tag.</div>
                                         </div>
                                     </details>
+                                    <label>Set Notes</label>
+                                    <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
                                 </div>
                             </div>
                             <div
@@ -257,15 +269,32 @@
                                 <div class="stats-controls">
                                     <label>Required key phrase</label>
                                     <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
-                                    <label>Balance phrases (one per line)</label>
-                                    <textarea id="stats-phrases" rows="4" placeholder="face down
+                                    <label>Balance phrases</label>
+                                    <div class="checklist-input-row">
+                                        <input
+                                            id="stats-phrases-add-input"
+                                            type="text"
+                                            class="form-control"
+                                            placeholder="Add balance phrase..."
+                                        >
+                                        <button id="stats-phrases-add-btn" type="button">+</button>
+                                    </div>
+                                    <div id="stats-phrases-items"></div>
+                                    <textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down
                                     face up
                                     front view
                                     back view"></textarea>
-                                    <label>Rules (file:token =&gt; phrase or caption:phrase =&gt; phrase)</label>
-                                    <textarea id="stats-token-rules" rows="4" placeholder="fd =&gt; face down
-                                    file:fu =&gt; face up
-                                    caption:front view =&gt; face"></textarea>
+                                    <details class="config-advanced">
+                                        <summary>Advanced</summary>
+                                        <div class="config-advanced-fields">
+                                            <label>Rules</label>
+                                            <div class="stats-advanced-inline-row">
+                                                <button id="review-rules-edit-btn" type="button">Edit Rules</button>
+                                                <span id="review-rules-summary" class="small">No review rules configured.</span>
+                                            </div>
+                                            <div class="small">Rules validate caption coverage from filename and caption triggers.</div>
+                                        </div>
+                                    </details>
                                 </div>
                             </div>
                             <div
@@ -518,6 +547,47 @@
             </div>
         </div>
         <!-- Checklist Requirements Keywords Modal and Overlay -->
+        <div id="advanced-modal-overlay" class="modal-overlay hidden"></div>
+        <div
+            id="primer-mappings-modal"
+            class="modal hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="primer-mappings-modal-title"
+        >
+            <div class="modal-header">
+                <h3 id="primer-mappings-modal-title">Mappings</h3>
+                <button class="modal-close-btn" data-close-modal="primer-mappings-modal" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="primer-mappings-modal-body"></div>
+                <div class="small">Columns: Scope, Token, Key, Value, Fallback, Enabled.</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="primer-mappings-save-btn">Save</button>
+                <button class="btn" data-close-modal="primer-mappings-modal">Cancel</button>
+            </div>
+        </div>
+        <div
+            id="review-rules-modal"
+            class="modal hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="review-rules-modal-title"
+        >
+            <div class="modal-header">
+                <h3 id="review-rules-modal-title">Review Rules</h3>
+                <button class="modal-close-btn" data-close-modal="review-rules-modal" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="review-rules-modal-body"></div>
+                <div class="small">Columns: Scope, Trigger, Required Phrase, Enabled.</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="review-rules-save-btn">Save</button>
+                <button class="btn" data-close-modal="review-rules-modal">Cancel</button>
+            </div>
+        </div>
         <div id="modal-overlay" class="modal-overlay hidden"></div>
         <div
             id="checklist-keywords-modal"
@@ -552,11 +622,13 @@
         <script src="/static/js/video_clip.js"></script>
         <script src="/static/js/stats.js"></script>
         <script src="/static/js/folder_state.js"></script>
+        <script src="/static/js/advanced_mappings_rules.js"></script>
         <script src="/static/js/editor.js"></script>
         <script src="/static/js/checklist.js"></script>
         <script src="/static/js/caption_helpers.js"></script>
         <script src="/static/js/item_details.js"></script>
         <script src="/static/js/app_settings.js"></script>
+        <script src="/static/js/smart_set.js"></script>
         <script src="/static/js/media_context_actions.js"></script>
         <script src="/static/js/ui_event_wiring.js"></script>
         <script src="/static/js/main.js"></script>

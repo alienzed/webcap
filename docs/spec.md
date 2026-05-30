@@ -76,3 +76,12 @@ Primary persisted fields include:
 1. In-app long-running training orchestration.
 2. TensorBoard lifecycle management.
 3. Broad multi-hour process orchestration.
+
+## 9. Primer Mappings V2
+Structured primer mappings and review rules are specified in:
+- `docs/primer_mappings_v2.md`
+
+This defines:
+1. `primer.mappings` structured rows (`scope`, `token`, `key`, `value`, `fallback`, `enabled`)
+2. `stats.reviewRules` structured rows (`scope`, `trigger`, `required`, `enabled`)
+3. Deterministic evaluation semantics and UI contract.

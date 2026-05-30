@@ -19,6 +19,16 @@ function getTagsForMediaKey(mediaKey) {
   return Array.isArray(tags) ? tags.slice() : [];
 }
 
+function hasTagForMediaKey(mediaKey, tagText) {
+  var target = String(tagText || '').trim().toLowerCase();
+  if (!mediaKey || !target) return false;
+  var tags = getTagsForMediaKey(mediaKey);
+  for (var i = 0; i < tags.length; i++) {
+    if (String(tags[i] || '').trim().toLowerCase() === target) return true;
+  }
+  return false;
+}
+
 function getMediaItemByFileName(fileName) {
   var target = String(fileName || '');
   if (!target || typeof state === 'undefined' || !Array.isArray(state.items)) return null;
@@ -160,6 +170,36 @@ function saveItemTagsToFolderState() {
   writeFolderStateFile(state.folder, snapshot);
 }
 
+function addTagToMediaKey(mediaKey, tagText) {
+  var key = String(mediaKey || '').trim();
+  var tag = normalizeItemTag(tagText);
+  if (!key || !tag) return false;
+  var current = getTagsForMediaKey(key);
+  var low = tag.toLowerCase();
+  var exists = current.some(function (t) { return String(t).toLowerCase() === low; });
+  if (exists) return false;
+  current.push(tag);
+  captionItemTagsByMedia[key] = current;
+  debouncedItemTagsSave(saveItemTagsToFolderState);
+  renderItemTagsPanel();
+  renderFileList();
+  return true;
+}
+
+function addTagToCurrentMedia(tagText) {
+  if (!state.currentItem || !state.currentItem.key) {
+    setStatus('Select a media item to add tags.');
+    return false;
+  }
+  var added = addTagToMediaKey(state.currentItem.key, tagText);
+  if (!added) {
+    setStatus('Tag already assigned.');
+    return false;
+  }
+  setStatus('Tag added: ' + normalizeItemTag(tagText));
+  return true;
+}
+
 function loadItemTagsFromFolderState(folderState) {
   var source = (folderState && typeof folderState.caption_tags_by_media === 'object' && folderState.caption_tags_by_media) || {};
   var next = {};
@@ -299,26 +339,11 @@ function wireItemDetailsUi() {
   addBtn.__itemTagsBound = true;
 
   function addTag() {
-    if (!state.currentItem || !state.currentItem.key) {
-      setStatus('Select a media item to add tags.');
-      return;
-    }
     var tag = normalizeItemTag(addInput.value);
     if (!tag) return;
-    var key = state.currentItem.key;
-    var current = getTagsForMediaKey(key);
-    var low = tag.toLowerCase();
-    var exists = current.some(function (t) { return String(t).toLowerCase() === low; });
-    if (exists) {
-      addInput.value = '';
-      return;
-    }
-    current.push(tag);
-    captionItemTagsByMedia[key] = current;
+    var added = addTagToCurrentMedia(tag);
     addInput.value = '';
-    debouncedItemTagsSave(saveItemTagsToFolderState);
-    renderItemTagsPanel();
-    renderFileList();
+    if (!added) return;
   }
 
   addBtn.onclick = addTag;
@@ -329,3 +354,6 @@ function wireItemDetailsUi() {
     }
   });
 }
+
+window.addTagToCurrentMedia = addTagToCurrentMedia;
+window.hasTagForMediaKey = hasTagForMediaKey;

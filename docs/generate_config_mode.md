@@ -78,9 +78,9 @@ Current Generate path:
 - response wiring: `tool/server/run_ops.py` -> `generate_dataset_configs(...)`
 - generation logic: `tool/server/dataset_config.py`
 
-Important persistence issue to fix before relying on mode:
-- `tool/server/config.py` currently normalizes `training` keys but does not include `mode`.
-- Result: `training.mode` is dropped when saving config unless backend validation is updated.
+Mode persistence status:
+- `tool/server/config.py` normalizes and persists `training.mode`.
+- Allowed values are `poc`, `normal`, `quality` (fallback to `normal`).
 
 ## Required Implementation Changes
 

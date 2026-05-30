@@ -117,12 +117,12 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-function buildAutoPrimer(fileName) {
+function buildAutoPrimer(fileName, mediaKey) {
   var primerOptions = statsGetPrimerOptionsFromDom();
   if (!primerOptions || !primerOptions.template.trim()) {
     return '';
   }
-  return buildPrimerFromConfig(fileName, primerOptions);
+  return buildPrimerFromConfig(fileName, mediaKey, primerOptions);
 }
 function debounceCreate(waitMs) {
   var timer = null;
@@ -230,7 +230,7 @@ function savePathCaption() {
   // Skip saving if editor contains only the primer caption
   var primer = '';
   if (mediaItem.fileName) {
-    primer = buildAutoPrimer(mediaItem.fileName);
+    primer = buildAutoPrimer(mediaItem.fileName, mediaItem.key);
   }
   var editorValue = ui.editorEl.value || '';
   if (primer && editorValue.trim() === primer.trim()) {

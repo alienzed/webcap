@@ -14,6 +14,7 @@ from .file_ops import duplicate_folder_response, duplicate_image_response, open_
 from .media import media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response
 from .run_ops import autoset_run_response, prepare_dataset_response, generate_dataset_config_response, train_run_response
+from .smart_set import create_set_from_results_response, smart_set_materialize_response
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -84,6 +85,23 @@ def fs_read():
 @app.route("/fs/root", methods=["GET"])
 def fs_root():
     return jsonify({"root": str(app_config.FS_ROOT)})
+
+
+@app.route("/fs/path_exists", methods=["GET"])
+def fs_path_exists():
+    rel_path = request.args.get("path", "")
+    try:
+        abs_path = safe_join_fs_root(rel_path)
+        return jsonify(
+            {
+                "ok": True,
+                "exists": bool(abs_path.exists()),
+                "is_dir": bool(abs_path.exists() and abs_path.is_dir()),
+                "is_file": bool(abs_path.exists() and abs_path.is_file()),
+            }
+        )
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
 
 @app.route("/")
 def index():
@@ -282,6 +300,18 @@ def duplicate_image():
     data = request.get_json(silent=True) or {}
     src_rel = (data.get('src') or '').strip()
     return duplicate_image_response(src_rel)
+
+
+@app.route("/fs/smart_set_materialize", methods=["POST"])
+def smart_set_materialize_route():
+    data = request.get_json(silent=True) or {}
+    return smart_set_materialize_response(data)
+
+
+@app.route("/fs/create_set_from_results", methods=["POST"])
+def create_set_from_results_route():
+    data = request.get_json(silent=True) or {}
+    return create_set_from_results_response(data)
 
 # Unified deface endpoint
 @app.route('/fs/deface', methods=['POST'])

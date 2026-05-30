@@ -272,7 +272,9 @@ function renderReportPreview(report, reviewedFileNames) {
 
   var requiredLabel = report.requiredPhrase ? report.requiredPhrase : '(not set)';
   var phraseRows = report.phraseSummary.length ? report.phraseSummary.map(function (row) {
-    return '<tr><td>' + escapeHtml(row.phrase) + '</td><td>' + row.count + '</td><td>' + row.percent + '%</td></tr>';
+    var phrase = String(row.phrase || '');
+    return '<tr><td><button class="balance-phrase-link" data-phrase="' + encodeURIComponent(phrase) + '">' +
+      escapeHtml(phrase) + '</button></td><td>' + row.count + '</td><td>' + row.percent + '%</td></tr>';
   }).join('') : '<tr><td colspan="3" style="color:#777;">No phrases configured.</td></tr>';
 
   var validationFocus = (report.ruleFailures || []).map(function (row) { return row.fileName; });
@@ -425,6 +427,14 @@ function renderReportPreview(report, reviewedFileNames) {
         var t = btn.getAttribute('data-token') || '';
         if (window.parent && window.parent.postMessage) {
           window.parent.postMessage({ type: 'caption-review-token', token: decodeURIComponent(t) }, '*');
+        }
+      });
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll('.balance-phrase-link'), function(btn) {
+      btn.addEventListener('click', function() {
+        var p = btn.getAttribute('data-phrase') || '';
+        if (window.parent && window.parent.postMessage) {
+          window.parent.postMessage({ type: 'caption-review-phrase', phrase: decodeURIComponent(p) }, '*');
         }
       });
     });

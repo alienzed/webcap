@@ -6,7 +6,7 @@ This document provides a comprehensive, rewrite-ready breakdown of the Review fe
 
 ## High-Level Flow
 
-1. **User Action**: User clicks "Review Captions" or "Stats Run" button.
+1. **User Action**: User clicks the "Review Captions" button.
 2. **UI Handler**: `runReview()` (ui.js) collects all media items and captions, gathers review options from the DOM.
 3. **Computation**: Calls `compute()` (stats.js) to analyze captions for required phrases, phrase counts, rule failures, tokens, lengths, and duplicates.
 4. **Report Rendering**: Passes the computed report to `renderReportPreview()` (stats.js), which generates an interactive HTML report in the preview pane.
@@ -19,11 +19,10 @@ This document provides a comprehensive, rewrite-ready breakdown of the Review fe
 
 - **Buttons**:
   - "Review Captions" (`review-captions-btn`)
-  - "Stats Run" (`stats-run-btn`)
 - **Event Wiring**:
-  - Both buttons are wired to call `runReview()`.
+  - Review button is wired to call `runReview()`.
 - **User Actions**:
-  - Clicking either button triggers review computation and report rendering.
+  - Clicking the button triggers review computation and report rendering.
   - Clicking a file/token link in the report triggers a postMessage event to the parent UI.
 
 ---
@@ -92,7 +91,7 @@ This document provides a comprehensive, rewrite-ready breakdown of the Review fe
 **Stats/Computation Layer (stats.js):**
 - `compute(items, options)`: Core computation for review analysis.
 - `renderReportPreview(report)`: Renders the interactive HTML report.
-- `parseTokenRules(multiline)`, `normalize(text)`, `tokenize(text)`, etc.: Helpers.
+- `parseStructuredReviewRules(rows)`, `normalize(text)`, `tokenize(text)`, etc.: Helpers.
 
 **Media/Preview Layer (media.js):**
 - `selectPathMedia(mediaItem)`: Loads and previews a media item.
@@ -114,6 +113,27 @@ This document provides a comprehensive, rewrite-ready breakdown of the Review fe
 - The preview pane is a single iframe reused for both report and media preview.
 - The Review feature is fully decoupled from the backend; it operates on the current in-memory state.
 - All cross-frame communication uses postMessage with explicit message types.
+
+---
+
+## Planned Enhancement: Duplicate File Panel
+
+Add a dedicated `Duplicate Files` panel inside the Review report.
+
+Purpose:
+
+- Centralize duplicate-file detection in one place.
+- Keep Create Set logic simple (no duplicate hash logic required in materialization flow).
+
+Expected behavior:
+
+- Report groups files that are identical binaries.
+- Each group shows clickable file links, matching existing review link behavior (`caption-review-select` flow).
+- Focus set behavior should mirror existing duplicate/similar review sections.
+
+Scope note:
+
+- This is a Review feature enhancement and is intentionally independent from Smart Set / Create Set implementation.
 
 ---
 

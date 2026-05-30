@@ -72,7 +72,7 @@ function handleEditorInputAutosave(e) {
             // Prevent saving if editor contains only the primer caption
             var primer = '';
             if (snapshot.media) {
-                primer = buildAutoPrimer(snapshot.media);
+                primer = buildAutoPrimer(snapshot.media, snapshot.mediaKey);
             }
             if (primer && snapshot.text.trim() === primer.trim()) {
                 debugLog('[autosave] Skipped save: editor contains only primer caption');

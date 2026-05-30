@@ -41,6 +41,32 @@ function parseTokenRules(multiline) {
     .filter(Boolean);
 }
 
+function parseStructuredReviewRules(rows) {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  return rows
+    .map(function (row) {
+      var src = row || {};
+      var scope = String(src.scope || 'file').toLowerCase();
+      if (scope !== 'file' && scope !== 'caption') {
+        scope = 'file';
+      }
+      var trigger = String(src.trigger || '').trim().toLowerCase();
+      var required = String(src.required || '').trim().toLowerCase();
+      var enabled = src.enabled !== false;
+      if (!enabled || !trigger || !required) {
+        return null;
+      }
+      return {
+        scope: scope,
+        trigger: trigger,
+        required: required
+      };
+    })
+    .filter(Boolean);
+}
+
 function normalizedCaptionKey(text) {
   return String(text || '')
     .toLowerCase()
@@ -173,10 +199,206 @@ function parsePhrases(multiline) {
     .filter(Boolean);
 }
 
+var statsBalancePhrases = [];
+
+function normalizeBalancePhrase(text) {
+  return String(text || '').trim().replace(/\s+/g, ' ');
+}
+
+function getBalancePhraseHotkeyLabel(index) {
+  var n = Number(index) + 1;
+  if (n < 1 || n > 9) return '';
+  return '\u21e7' + n;
+}
+
+function moveStatsBalancePhraseByOffset(index, offset) {
+  var idx = Number(index);
+  var step = Number(offset);
+  if (!isFinite(idx) || !isFinite(step)) return false;
+  if (!statsBalancePhrases.length) return false;
+  if (idx < 0 || idx >= statsBalancePhrases.length) return false;
+  var nextIdx = idx + step;
+  if (nextIdx < 0 || nextIdx >= statsBalancePhrases.length) return false;
+  var next = statsBalancePhrases.slice();
+  var tmp = next[idx];
+  next[idx] = next[nextIdx];
+  next[nextIdx] = tmp;
+  setStatsBalancePhrases(next, true);
+  renderStatsBalancePhraseList();
+  return true;
+}
+
+function moveBalancePhraseByHotkeyNumber(n) {
+  var idx = Number(n) - 1;
+  return moveStatsBalancePhraseByOffset(idx, -1);
+}
+
+function setFilterFromBalancePhrase(phrase) {
+  var text = normalizeBalancePhrase(phrase);
+  if (!text || !ui || !ui.filterEl) return;
+  ui.filterEl.value = text;
+  ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
+  setStatus('Filter applied from balance phrase: ' + text);
+}
+
+function addBalancePhraseTagToCurrentMedia(phrase) {
+  var text = normalizeBalancePhrase(phrase);
+  if (!text) return false;
+  if (typeof addTagToCurrentMedia !== 'function') {
+    setStatus('Tag assignment is unavailable.');
+    return false;
+  }
+  return !!addTagToCurrentMedia(text);
+}
+
+function setStatsBalancePhrases(nextPhrases, triggerAutosave) {
+  var seen = {};
+  statsBalancePhrases = (nextPhrases || [])
+    .map(normalizeBalancePhrase)
+    .filter(function (phrase) {
+      if (!phrase) return false;
+      var low = phrase.toLowerCase();
+      if (seen[low]) return false;
+      seen[low] = true;
+      return true;
+    });
+
+  var phrasesEl = ui && ui.statsPhrasesEl ? ui.statsPhrasesEl : document.getElementById('stats-phrases');
+  if (phrasesEl) {
+    phrasesEl.value = statsBalancePhrases.join('\n');
+    if (triggerAutosave) {
+      phrasesEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+}
+
+function loadStatsBalancePhrasesFromTextarea() {
+  var phrasesEl = ui && ui.statsPhrasesEl ? ui.statsPhrasesEl : document.getElementById('stats-phrases');
+  var parsed = parsePhrases(phrasesEl ? phrasesEl.value : '');
+  setStatsBalancePhrases(parsed, false);
+}
+
+function renderStatsBalancePhraseList() {
+  var listEl = ui && ui.statsPhrasesItemsEl ? ui.statsPhrasesItemsEl : document.getElementById('stats-phrases-items');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  if (!statsBalancePhrases.length) {
+    var empty = document.createElement('div');
+    empty.className = 'small';
+    empty.textContent = 'No balance phrases configured.';
+    listEl.appendChild(empty);
+    return;
+  }
+
+  for (var i = 0; i < statsBalancePhrases.length; i++) {
+    (function (idx) {
+      var phrase = statsBalancePhrases[idx];
+      var row = document.createElement('div');
+      row.className = 'row-inline stats-phrase-row';
+
+      var phraseBtn = document.createElement('button');
+      phraseBtn.type = 'button';
+      phraseBtn.className = 'phrase-copy-item-btn';
+      phraseBtn.title = 'Add as tag to current media (Shift+Click: move up)';
+      phraseBtn.textContent = phrase;
+      phraseBtn.onclick = function (ev) {
+        if (ev && ev.shiftKey) {
+          var movedByShift = moveStatsBalancePhraseByOffset(idx, -1);
+          if (movedByShift) {
+            setStatus('Moved phrase up: ' + phrase);
+          }
+          return;
+        }
+        addBalancePhraseTagToCurrentMedia(phrase);
+      };
+
+      var actions = document.createElement('div');
+      actions.className = 'stats-phrase-actions';
+
+      var hotkeyLabel = getBalancePhraseHotkeyLabel(idx);
+      if (hotkeyLabel) {
+        var keyHint = document.createElement('button');
+        keyHint.type = 'button';
+        keyHint.className = 'stats-phrase-keyhint';
+        keyHint.title = 'Move up (Shift+' + (idx + 1) + ')';
+        keyHint.textContent = hotkeyLabel;
+        keyHint.onclick = function () {
+          var movedByHint = moveStatsBalancePhraseByOffset(idx, -1);
+          if (movedByHint) {
+            setStatus('Moved phrase up: ' + phrase);
+          }
+        };
+        actions.appendChild(keyHint);
+      }
+
+      var removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'stats-phrase-mini-btn';
+      removeBtn.title = 'Remove phrase';
+      removeBtn.textContent = 'x';
+      removeBtn.onclick = function () {
+        var next = statsBalancePhrases.slice();
+        next.splice(idx, 1);
+        setStatsBalancePhrases(next, true);
+        renderStatsBalancePhraseList();
+      };
+      actions.appendChild(removeBtn);
+
+      row.appendChild(phraseBtn);
+      row.appendChild(actions);
+      listEl.appendChild(row);
+    })(i);
+  }
+}
+
+function addStatsBalancePhraseFromInput() {
+  var inputEl = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
+  var text = normalizeBalancePhrase(inputEl ? inputEl.value : '');
+  if (!text) return;
+  var exists = statsBalancePhrases.some(function (p) { return String(p).toLowerCase() === text.toLowerCase(); });
+  if (exists) {
+    if (inputEl) inputEl.value = '';
+    return;
+  }
+  var next = statsBalancePhrases.slice();
+  next.push(text);
+  setStatsBalancePhrases(next, true);
+  renderStatsBalancePhraseList();
+  if (inputEl) inputEl.value = '';
+}
+
+function wireStatsBalancePhraseUi() {
+  loadStatsBalancePhrasesFromTextarea();
+  renderStatsBalancePhraseList();
+
+  var addBtn = ui && ui.statsPhrasesAddBtnEl ? ui.statsPhrasesAddBtnEl : document.getElementById('stats-phrases-add-btn');
+  var addInput = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
+  if (addBtn && !addBtn.__statsPhrasesBound) {
+    addBtn.__statsPhrasesBound = true;
+    addBtn.onclick = addStatsBalancePhraseFromInput;
+  }
+  if (addInput && !addInput.__statsPhrasesBound) {
+    addInput.__statsPhrasesBound = true;
+    addInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addStatsBalancePhraseFromInput();
+      }
+    });
+  }
+}
+
+function getBalancePhraseByHotkeyNumber(n) {
+  var idx = Number(n) - 1;
+  if (idx < 0 || idx > 8) return '';
+  return String(statsBalancePhrases[idx] || '');
+}
+
 function compute(items, options) {
   var requiredPhrase = normalize(options && options.requiredPhrase || '').trim();
   var phrases = parsePhrases(options && options.phrases || '');
-  var tokenRules = parseTokenRules(options && options.tokenRules || '');
+  var reviewRules = parseStructuredReviewRules(options && options.reviewRules || []);
 
   var total = items.length;
   var withCaption = 0;
@@ -219,7 +441,7 @@ function compute(items, options) {
       }
     });
 
-    tokenRules.forEach(function (rule) {
+    reviewRules.forEach(function (rule) {
       if (rule.scope === 'caption') {
         if (captionNorm.indexOf(rule.trigger) !== -1 && captionNorm.indexOf(rule.required) === -1) {
           ruleFailures.push({
@@ -324,22 +546,29 @@ function buildCombinedCaptionsText(items) {
 function getOptionsFromDom() {
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
   var phrasesEl = document.getElementById('stats-phrases');
-  var tokenRulesEl = document.getElementById('stats-token-rules');
+  var phrasesValue = Array.isArray(statsBalancePhrases) && statsBalancePhrases.length
+    ? statsBalancePhrases.join('\n')
+    : (phrasesEl ? phrasesEl.value : '');
+  var reviewRulesRows = [];
+  if (typeof getReviewRulesRows === 'function') {
+    reviewRulesRows = getReviewRulesRows();
+  }
   return {
     requiredPhrase: requiredPhraseEl ? requiredPhraseEl.value : '',
-    phrases: phrasesEl ? phrasesEl.value : '',
-    tokenRules: tokenRulesEl ? tokenRulesEl.value : ''
+    phrases: phrasesValue,
+    reviewRules: reviewRulesRows
   };
 }
 
 function statsGetPrimerOptionsFromDom() {
   var templateEl = document.getElementById('primer-template');
-  var defaultsEl = document.getElementById('primer-defaults');
-  var mappingsEl = document.getElementById('primer-mappings');
+  var mappingsRows = [];
+  if (typeof getPrimerMappingsRows === 'function') {
+    mappingsRows = getPrimerMappingsRows();
+  }
   return {
     template: templateEl ? templateEl.value : '',
-    defaults: defaultsEl ? defaultsEl.value : '',
-    mappings: mappingsEl ? mappingsEl.value : ''
+    mappings: mappingsRows
   };
 }
 
@@ -350,10 +579,7 @@ function wireStatsPrimerAutoSave() {
   var statsFields = [
     document.getElementById('stats-required-phrase'),
     document.getElementById('stats-phrases'),
-    document.getElementById('stats-token-rules'),
-    document.getElementById('primer-template'),
-    document.getElementById('primer-defaults'),
-    document.getElementById('primer-mappings')
+    document.getElementById('primer-template')
   ];
   statsFields.forEach(function (el) {
     if (el && !el.__autoSaveBound) {

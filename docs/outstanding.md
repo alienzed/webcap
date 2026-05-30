@@ -148,6 +148,11 @@ Last reviewed: 2026-05-19.
   - Highlight updates live as caption text changes.
   - Manual checkboxes remain fully under user control; highlighting is visual aid only.
   - Case-insensitive substring matching (e.g., "portrait" matches "Portrait photo").
+- Advanced mapping/rules UX refresh:
+  - Review `Rules` moved to structured row editor modal.
+  - Config `Mappings` moved to structured row editor modal.
+  - Legacy advanced textareas removed from active UI.
+  - Folder state now stores `stats.reviewRules` and `primer.mappings` as structured arrays.
 - Video: Flip Horizontal action for any video file (context menu, in-place, no folder reload).
 - Video: Only show 'Clip...' for videos in src_videos folder.
 - Video: V2 features and polish tracked (see video_clip.md).

@@ -183,13 +183,6 @@ function activateFocusSet(fileNames, source) {
 
 // Review/stats bridge for caption mode.
 function wireReviewActions() {
-  // Wire up stats-run button to runReview
-  var runBtn = document.getElementById('stats-run-btn');
-  if (runBtn) {
-    runBtn.onclick = function () {
-      runReview();
-    };
-  }
   addEventListener('message', function (event) {
     var data = event.data;
     if (!data) {
@@ -205,6 +198,14 @@ function wireReviewActions() {
     }
     if (data.type === 'caption-review-token') {
       applyTokenFilter(data.token);
+      return;
+    }
+    if (data.type === 'caption-review-phrase') {
+      if (typeof setFilterFromBalancePhrase === 'function') {
+        setFilterFromBalancePhrase(data.phrase);
+      } else {
+        applyTokenFilter(data.phrase);
+      }
     }
   });
 }
@@ -321,7 +322,7 @@ function runReview() {
     var report = compute(results, {
       requiredPhrase: options.requiredPhrase,
       phrases: options.phrases,
-      tokenRules: options.tokenRules
+      reviewRules: options.reviewRules
     });
     state.suppressInput = true;
     ui.editorEl.value = buildCombinedCaptionsText(results);

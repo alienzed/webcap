@@ -1,47 +1,36 @@
-# Configuration File System Overview
+# Configuration File System Overview (Current Behavior)
 
-## **Config File Handling in Media List**
+## Config File Handling in UI
 
-### **Integration with Media List**
-- Configuration files (`config.lo.toml`, `config.hi.toml`, `dataset.lo.toml`, `dataset.hi.toml`) are treated as valid entries alongside media files.
-- These files are identified by their names and added to the `items` array with the `kind` property set to `'config'`.
+- Config files are **not** mixed into the main media list.
+- The Train panel has a dedicated config list (`training-config-list`) populated via:
+  - `GET /fs/list_config?folder=<current-folder>`
+- Config files are displayed in High Noise / Low Noise columns and can be opened in the editor.
 
-### **Sorting and Rendering**
-- The `items` array, which includes both media and configuration files, is sorted alphabetically by label.
-- The `renderFileList` function displays the items, ensuring configuration files appear in the list.
+## Source of Truth for Config Discovery
 
-### **Event Handling**
-- Clicking a row sets the current item.
-- Double-clicking a folder navigates into it.
+- Backend route: `tool/server/app.py` -> `/fs/list_config`
+- Backend helper: `tool/server/config.py` -> `list_toml_files(folder_path)`
 
----
+This returns `.toml` filenames in the selected folder only.
 
-## **Automatic Config File Creation**
+## Automatic Config File Creation
 
-### **Logic Overview**
-- The `maybeCreateConfigFiles` function ensures the presence of specific configuration files in the current directory.
-- It checks for the existence of each file and creates it if missing.
+- Config templates are **not** created on ordinary folder load (`/fs/describe`).
+- Missing template files are created during dataset-generation/training flows:
+  - `/fs/generate_dataset_config`
+  - `/fs/train_run`
+- Templates come from `tool/templates/` and are written server-side with placeholder substitution via `fill_template_placeholders(...)`.
 
-### **Template Usage**
-- Templates for the configuration files are fetched from `/templates/default/`.
-- For `config.lo.toml` and `config.hi.toml`, the `dataset` path is dynamically substituted into the template content.
+## Editing Flow
 
-### **Error Handling**
-- The function gracefully handles errors during file checks, template fetching, and file writing, ensuring the process continues for other files.
+- Open config file: frontend requests `/fs/read_config`.
+- Save config file: frontend posts `/fs/save_config`.
+- Saving writes the selected TOML file in place.
 
----
+## Summary
 
-## **Key Functions and Methods**
-
-### **`renderFileList`**
-- Responsible for rendering the list of media and configuration files in the UI.
-- Filters items based on user input and displays them in a structured format.
-
-### **`getFileHandle`**
-- Used to check for the existence of files and create them if necessary.
-- Handles errors gracefully to ensure smooth operation.
-
----
-
-## **Conclusion**
-The configuration file system is well-integrated with the media list and ensures that necessary configuration files are always available. The logic is robust, with proper error handling and dynamic template substitution to adapt to different contexts.
+Config editing is intentionally separated from media browsing:
+- media list for media items only
+- train panel for config files
+- config file scaffolding created during generate/train workflows, not directory browsing

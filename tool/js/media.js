@@ -386,7 +386,7 @@ function selectPathMedia(mediaItem) {
     // Load before committing selection so the editor and save target change together.
     var nextEditorValue = text;
     if (!(text || '').trim()) {
-      var primerText = buildAutoPrimer(mediaItem.fileName);
+      var primerText = buildAutoPrimer(mediaItem.fileName, mediaItem.key);
       nextEditorValue = primerText || '';
     }
     state.currentItem = mediaItem;
@@ -526,6 +526,10 @@ async function renderFileList() {
   if (ui.captionFilterClearAllBtn) {
     ui.captionFilterClearAllBtn.classList.toggle('is-active', filtersActive);
     ui.captionFilterClearAllBtn.setAttribute('aria-pressed', filtersActive ? 'true' : 'false');
+  }
+  if (ui.createSetFromResultsBtn) {
+    var showCreateSetBtn = filtersActive && mediaItems.length > 0;
+    ui.createSetFromResultsBtn.classList.toggle('hidden', !showCreateSetBtn);
   }
   // Show count of matching media items
   var countText = mediaItems.length + (mediaItems.length === 1 ? ' item matches the filter' : ' items match the filter');

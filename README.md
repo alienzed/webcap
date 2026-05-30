@@ -213,12 +213,23 @@ Metadata tab:
 ### 9.1 Config tab (caption primer)
 
 - `Caption Template` is the primary primer field.
-- `Set Notes` is available as a separate freeform notes field.
-- `Advanced` contains a structured `Mappings` editor:
+- `Mappings` is always visible under `Caption Template`:
   - Open `Edit Mappings` to manage rows.
-  - Row fields: `Scope` (`file` or `tag`), `Token`, `Key`, `Value`, `Fallback`, `Enabled`.
-  - Primer is built from top-to-bottom row evaluation.
-  - `Fallback` only fills a key if that key is still unset.
+  - Row fields: `Scope` (`file` or `tag`), `Token`, `Key`, `Value (optional)`, `Enabled`.
+  - If `Value` is blank, `Token` is used as the value.
+  - Custom mapping rows are applied before requirement-derived defaults.
+- `Set Notes` is available as a separate freeform notes field.
+
+### 9.2 Review tab
+
+- `Required key phrase`: set one phrase that must appear in each caption.
+- `Balance Phrases`:
+  - Add phrases to track caption variety/coverage across the set.
+  - Click the `i` button for usage help in the preview panel.
+  - Clicking a balance phrase row adds that phrase as a tag to the current media item.
+- `Rules`:
+  - Always visible in Review (no accordion).
+  - Open `Edit Rules` to configure file/caption trigger rules used by Validation Failures in review reports.
 
 ### 10. Keyboard shortcuts
 
@@ -227,6 +238,7 @@ Global shortcuts (when not typing in input/textarea/select):
 - `Delete`: prune selected media (outside `originals`)
 - `0..5`: set rating (`0` clears)
 - `G`, `Y`, `O`, `B`, `R`: set flag color (green/yellow/orange/blue/red)
+- `Shift+1..9`: move quick phrase at slot `N` up one position (Phrases list)
 
 Editor shortcuts:
 - `Ctrl+S` / `Cmd+S`: save caption or current config file

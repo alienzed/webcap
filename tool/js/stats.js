@@ -385,15 +385,46 @@ function renderStatsBalancePhraseResults(query) {
   resultsEl.classList.toggle('hidden', !ranked.length);
 }
 
+function openBalancePhrasesHelpInPreview() {
+  if (typeof renderAdvancedHelpPreview !== 'function') {
+    setStatus('Help preview unavailable.');
+    return;
+  }
+  renderAdvancedHelpPreview(
+    'Balance Phrases Help',
+    '<p style="margin:0 0 10px 0;">Balance phrases help you check caption variety across the set.</p>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">What This Is</h4>' +
+    '<ul style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;">A short list of phrases you care about, like <code>front view</code>, <code>indoor lighting</code>, or <code>close-up</code>.</li>' +
+    '<li style="margin:0 0 6px 0;">Review counts how often each phrase appears in captions.</li>' +
+    '<li style="margin:0 0 6px 0;">This helps you spot gaps before training.</li>' +
+    '</ul>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">How To Use It</h4>' +
+    '<ol style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;">Add phrases from the catalog.</li>' +
+    '<li style="margin:0 0 6px 0;">Run Review Captions and check the Phrase Balance section.</li>' +
+    '<li style="margin:0 0 6px 0;">If a phrase is missing or low, add/edit captions for those examples.</li>' +
+    '<li style="margin:0 0 6px 0;">Repeat until coverage looks balanced for the set.</li>' +
+    '</ol>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Tip</h4>' +
+    '<p style="margin:0;">Click a balance phrase row to add it as a tag to the current media item.</p>'
+  );
+}
+
 function wireStatsBalancePhraseUi() {
   loadStatsBalancePhrasesFromTextarea();
   renderStatsBalancePhraseList();
 
   var addBtn = ui && ui.statsPhrasesAddBtnEl ? ui.statsPhrasesAddBtnEl : document.getElementById('stats-phrases-add-btn');
   var addInput = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
+  var infoBtn = document.getElementById('stats-balance-info-btn');
   if (addBtn && !addBtn.__statsPhrasesBound) {
     addBtn.__statsPhrasesBound = true;
     addBtn.onclick = addStatsBalancePhraseFromInput;
+  }
+  if (infoBtn && !infoBtn.__statsPhrasesBound) {
+    infoBtn.__statsPhrasesBound = true;
+    infoBtn.addEventListener('click', openBalancePhrasesHelpInPreview);
   }
   if (addInput && !addInput.__statsPhrasesBound) {
     addInput.__statsPhrasesBound = true;

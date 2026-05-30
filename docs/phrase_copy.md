@@ -1,7 +1,7 @@
 # Phrase Helper Panel
 
 ## Purpose
-A vertical panel for quickly inserting/removing active phrases in captions. Designed for speed and minimal distraction during captioning while keeping term creation centralized.
+A vertical panel for quickly inserting/removing quick phrases in captions. Designed for speed and minimal distraction during captioning while keeping term creation centralized.
 
 ---
 
@@ -20,6 +20,7 @@ A vertical panel for quickly inserting/removing active phrases in captions. Desi
   - Clicking the phrase toggles it in the caption at the cursor (insert if missing, remove if present).
   - Inserted phrases are spaced so they do not stick to adjacent caption text.
   - A small `Tag` button assigns the phrase as a tag to the current media item.
+  - `Shift+1..9` reorders quick phrases by moving slot `N` up one position.
   - The `X` button removes the phrase from the active shortlist.
   - Term search/create for quick phrases is handled by the `Phrases` input (`Add/search quick phrase...`).
   - Search results support:
@@ -28,16 +29,16 @@ A vertical panel for quickly inserting/removing active phrases in captions. Desi
   - No checkboxes, no drag/drop.
 - **Persistence:**
   - Catalog terms are saved per-folder in `caption_phrases`.
-  - Active shortlist is saved per-folder in `stats.phrases`.
+  - Active shortlist is saved per-folder in `quick_phrases`.
   - No import/export/reset; list is managed in-place.
-- **No keyboard shortcuts, search, or advanced features.**
 
 ---
 
 ## Data Model
 
 - `caption_phrases`: set-local catalog terms.
-- `stats.phrases`: active shortlist used by this panel and phrase-count review.
+- `quick_phrases`: active shortlist used by this panel.
+- `stats.phrases`: review-domain balance phrase list used for phrase-count review.
 - `config.json -> vocabulary` (optional): seeded starter terms shown in shared search/add.
 
 ---

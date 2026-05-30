@@ -96,8 +96,9 @@ Review compute uses `stats.reviewRules` rows:
 3. `Set Notes` remains visible below mappings.
 
 ### Review Tab
-1. `Required key phrase` and `Balance phrases` remain.
-2. `Advanced` contains `Rules` section with:
+1. `Required key phrase` and `Balance Phrases` remain.
+2. `Balance Phrases` includes an `i` help button that opens plain-language usage guidance in preview.
+3. `Rules` section is always visible (no Advanced accordion):
 - `Edit Rules` button (opens modal).
 - summary line (row count).
 

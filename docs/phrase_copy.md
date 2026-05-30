@@ -19,7 +19,7 @@ A vertical panel for quickly inserting/removing active phrases in captions. Desi
   - Each active phrase is shown as a button.
   - Clicking the phrase toggles it in the caption at the cursor (insert if missing, remove if present).
   - Inserted phrases are spaced so they do not stick to adjacent caption text.
-  - A small `Copy` button copies the phrase to the clipboard.
+  - A small `Tag` button assigns the phrase as a tag to the current media item.
   - The `X` button removes the phrase from the active shortlist.
   - Term search/create is handled by the shared term input used by `Phrases` and `Tags`.
   - No checkboxes, no drag/drop.

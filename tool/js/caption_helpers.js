@@ -126,7 +126,13 @@ function setCaptionHelperTab(tabName) {
   if (tabName === 'metadata') {
     document.getElementById('caption-helper-tab-metadata-btn').classList.add('active');
     document.getElementById('caption-helper-tab-metadata').classList.remove('hidden');
-    return;
+  }
+
+  // In wide checklist layout, tabs are visually collapsed into side-by-side columns.
+  // Keep the shared term input visible so tagging remains accessible.
+  var checklistPanel = document.getElementById('caption-checklist-panel');
+  if (window.innerWidth >= 1500 && checklistPanel && checklistPanel.style.display !== 'none') {
+    document.getElementById('caption-term-shared-row').classList.remove('hidden');
   }
 }
 
@@ -269,14 +275,13 @@ function renderPhraseCopyPanel() {
       };
     })(phrase);
 
-    var copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.title = 'Copy phrase';
-    copyBtn.textContent = '📋';
+    var tagBtn = document.createElement('button');
+    tagBtn.type = 'button';
+    tagBtn.title = 'Add as tag to current media';
+    tagBtn.textContent = 'Tag';
     (function (text) {
-      copyBtn.onclick = function () {
-        navigator.clipboard.writeText(text);
-        setStatus('Copied phrase');
+      tagBtn.onclick = function () {
+        addTagToCurrentMedia(text);
       };
     })(phrase);
 
@@ -294,7 +299,7 @@ function renderPhraseCopyPanel() {
     })(i);
 
     row.appendChild(phraseBtn);
-    row.appendChild(copyBtn);
+    row.appendChild(tagBtn);
     row.appendChild(removeBtn);
     container.appendChild(row);
   }

@@ -1840,6 +1840,11 @@ iframe {
     display: none;
   }
 
+  .editor-panel.checklist-visible #caption-checklist-panel #caption-term-shared-row {
+    display: flex !important;
+    grid-column: 2 / span 2;
+  }
+
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tab-pane {
     display: block;
     min-height: 0;

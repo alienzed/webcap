@@ -105,12 +105,12 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
     ],
     keywordsByItem: {
       "Key Phrase": "",
-      "Expression": "smiling, frowning, surprised, angry, happy, sad, tired, excited, expression",
-      "Position": "left, right, center, top, bottom, foreground, background",
+      "Expression": "frowning, surprised, angry, happy, sad, excited, expression, smil",
+      "Position": "standing, kneeling, on all fours, sitting, lying, upside down, kneeling sitting, side sitting, squatting, crouching",
       "Action": "standing, sitting, running, walking, holding, looking, eating, drinking, touching, rubbing",
-      "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform",
-      "Traits": "lips, make-up, hair",
-      "Setting": "background, theme",
+      "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform, skirt, shorts, suit, tie, swimsuit",
+      "Traits": "lips, make-up, hair, eyes, beard, mustache, glasses, hat, skin, nails",
+      "Setting": "background, theme, backdrop",
       "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight",
       "Viewpoint": "front, side, back, aerial, close-up, wide shot, low angle, high angle"
     }

@@ -980,6 +980,10 @@ iframe {
   min-height: 24px;
   font-size: 12px;
   padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--text);
 }
 
 .advanced-grid-cell input[type="checkbox"] {
@@ -1050,6 +1054,14 @@ iframe {
 
 .section-label-inline > label {
   margin: 0;
+}
+
+.stats-controls .section-label-inline {
+  margin-top: 6px;
+}
+
+.stats-controls .section-label-inline:first-child {
+  margin-top: 0;
 }
 
 .mini-info-btn {
@@ -1658,6 +1670,12 @@ iframe {
 
 #phrase-copy-items .phrase-row-inline {
   grid-template-columns: 1fr auto auto;
+}
+
+.phrase-copy-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 #stats-phrases-items {

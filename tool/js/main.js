@@ -349,20 +349,10 @@ function wireAllUi() {
     var allowWhenReadonlyEditor = !!(active === ui.editorEl && ui.editorEl && ui.editorEl.readOnly);
     if (isEditableElement(active) && !allowWhenReadonlyEditor) return;
     if (!/^[1-9]$/.test(e.key)) return;
-    if (typeof moveBalancePhraseByHotkeyNumber === 'function') {
-      var moved = moveBalancePhraseByHotkeyNumber(Number(e.key));
-      if (moved) {
-        e.preventDefault();
-        return;
-      }
-    }
-    if (!state.currentItem || !state.currentItem.fileName) return;
-    if (typeof getBalancePhraseByHotkeyNumber !== 'function') return;
-    if (typeof addBalancePhraseTagToCurrentMedia !== 'function') return;
-    var phrase = getBalancePhraseByHotkeyNumber(Number(e.key));
-    if (!phrase) return;
+    if (typeof moveCaptionQuickPhraseByHotkeyNumber !== 'function') return;
+    var moved = moveCaptionQuickPhraseByHotkeyNumber(Number(e.key));
+    if (!moved) return;
     e.preventDefault();
-    addBalancePhraseTagToCurrentMedia(phrase);
   });
   document.addEventListener('keydown', function (e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;

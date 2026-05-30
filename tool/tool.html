@@ -280,13 +280,13 @@
                                 <div class="stats-controls">
                                     <label>Required key phrase</label>
                                     <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
-                                    <label>Balance phrases</label>
+                                    <label>Balance Phrases</label>
                                     <div class="checklist-input-row stats-balance-input-row term-input-row">
                                         <input
                                             id="stats-phrases-add-input"
                                             type="text"
                                             class="form-control"
-                                            placeholder="Add balance from catalog..."
+                                            placeholder="Add balance phrase from catalog..."
                                         >
                                         <button id="stats-phrases-add-btn" type="button">+</button>
                                         <div id="stats-phrases-add-results" class="caption-term-results hidden"></div>
@@ -296,25 +296,20 @@
                                     face up
                                     front view
                                     back view"></textarea>
-                                    <details class="config-advanced">
-                                        <summary>Advanced</summary>
-                                        <div class="config-advanced-fields">
-                                            <div class="section-label-inline">
-                                                <label>Rules</label>
-                                                <button
-                                                    id="review-rules-info-btn"
-                                                    type="button"
-                                                    class="mini-info-btn"
-                                                    title="Rules help"
-                                                    aria-label="Rules help"
-                                                >i</button>
-                                            </div>
-                                            <div class="stats-advanced-inline-row">
-                                                <button id="review-rules-edit-btn" type="button">Edit Rules</button>
-                                                <span id="review-rules-summary" class="small">No review rules configured.</span>
-                                            </div>
-                                        </div>
-                                    </details>
+                                    <div class="section-label-inline">
+                                        <label>Rules</label>
+                                        <button
+                                            id="review-rules-info-btn"
+                                            type="button"
+                                            class="mini-info-btn"
+                                            title="Rules help"
+                                            aria-label="Rules help"
+                                        >i</button>
+                                    </div>
+                                    <div class="stats-advanced-inline-row">
+                                        <button id="review-rules-edit-btn" type="button">Edit Rules</button>
+                                        <span id="review-rules-summary" class="small">No review rules configured.</span>
+                                    </div>
                                 </div>
                             </div>
                             <div
@@ -585,9 +580,12 @@
             <div class="modal-body">
                 <div id="primer-mappings-modal-body"></div>
             </div>
-            <div class="modal-footer">
-                <button class="btn" id="primer-mappings-save-btn">Save</button>
-                <button class="btn" data-close-modal="primer-mappings-modal">Cancel</button>
+            <div class="modal-footer modal-footer-split">
+                <button class="btn" id="primer-mappings-modal-add-btn" type="button">+ Add mapping</button>
+                <div class="modal-footer-actions">
+                    <button class="btn" id="primer-mappings-save-btn">Save</button>
+                    <button class="btn" data-close-modal="primer-mappings-modal">Cancel</button>
+                </div>
             </div>
         </div>
         <div
@@ -604,9 +602,12 @@
             <div class="modal-body">
                 <div id="review-rules-modal-body"></div>
             </div>
-            <div class="modal-footer">
-                <button class="btn" id="review-rules-save-btn">Save</button>
-                <button class="btn" data-close-modal="review-rules-modal">Cancel</button>
+            <div class="modal-footer modal-footer-split">
+                <button class="btn" id="review-rules-modal-add-btn" type="button">+ Add rule</button>
+                <div class="modal-footer-actions">
+                    <button class="btn" id="review-rules-save-btn">Save</button>
+                    <button class="btn" data-close-modal="review-rules-modal">Cancel</button>
+                </div>
             </div>
         </div>
         <div id="modal-overlay" class="modal-overlay hidden"></div>

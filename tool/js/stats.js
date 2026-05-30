@@ -205,34 +205,6 @@ function normalizeBalancePhrase(text) {
   return String(text || '').trim().replace(/\s+/g, ' ');
 }
 
-function getBalancePhraseHotkeyLabel(index) {
-  var n = Number(index) + 1;
-  if (n < 1 || n > 9) return '';
-  return '\u21e7' + n;
-}
-
-function moveStatsBalancePhraseByOffset(index, offset) {
-  var idx = Number(index);
-  var step = Number(offset);
-  if (!isFinite(idx) || !isFinite(step)) return false;
-  if (!statsBalancePhrases.length) return false;
-  if (idx < 0 || idx >= statsBalancePhrases.length) return false;
-  var nextIdx = idx + step;
-  if (nextIdx < 0 || nextIdx >= statsBalancePhrases.length) return false;
-  var next = statsBalancePhrases.slice();
-  var tmp = next[idx];
-  next[idx] = next[nextIdx];
-  next[nextIdx] = tmp;
-  setStatsBalancePhrases(next, true);
-  renderStatsBalancePhraseList();
-  return true;
-}
-
-function moveBalancePhraseByHotkeyNumber(n) {
-  var idx = Number(n) - 1;
-  return moveStatsBalancePhraseByOffset(idx, -1);
-}
-
 function setFilterFromBalancePhrase(phrase) {
   var text = normalizeBalancePhrase(phrase);
   if (!text || !ui || !ui.filterEl) return;
@@ -244,16 +216,15 @@ function setFilterFromBalancePhrase(phrase) {
 function addBalancePhraseTagToCurrentMedia(phrase) {
   var text = normalizeBalancePhrase(phrase);
   if (!text) return false;
-  if (!ui || !ui.editorEl) {
-    setStatus('Caption editor is unavailable.');
-    return false;
-  }
   if (!state.currentItem || !state.currentItem.key) {
     setStatus('Select a media item.');
     return false;
   }
-  toggleCaptionPhraseAtCursor(text);
-  return true;
+  if (typeof addTagToCurrentMedia !== 'function') {
+    setStatus('Tagging is unavailable.');
+    return false;
+  }
+  return addTagToCurrentMedia(text);
 }
 
 function setStatsBalancePhrases(nextPhrases, triggerAutosave) {
@@ -306,37 +277,14 @@ function renderStatsBalancePhraseList() {
       var phraseBtn = document.createElement('button');
       phraseBtn.type = 'button';
       phraseBtn.className = 'phrase-copy-item-btn';
-      phraseBtn.title = 'Insert/remove in caption (Shift+Click: move up)';
+      phraseBtn.title = 'Add as tag to current media';
       phraseBtn.textContent = phrase;
-      phraseBtn.onclick = function (ev) {
-        if (ev && ev.shiftKey) {
-          var movedByShift = moveStatsBalancePhraseByOffset(idx, -1);
-          if (movedByShift) {
-            setStatus('Moved phrase up: ' + phrase);
-          }
-          return;
-        }
+      phraseBtn.onclick = function () {
         addBalancePhraseTagToCurrentMedia(phrase);
       };
 
       var actions = document.createElement('div');
       actions.className = 'stats-phrase-actions';
-
-      var hotkeyLabel = getBalancePhraseHotkeyLabel(idx);
-      if (hotkeyLabel) {
-        var keyHint = document.createElement('button');
-        keyHint.type = 'button';
-        keyHint.className = 'stats-phrase-keyhint';
-        keyHint.title = 'Move up (Shift+' + (idx + 1) + ')';
-        keyHint.textContent = hotkeyLabel;
-        keyHint.onclick = function () {
-          var movedByHint = moveStatsBalancePhraseByOffset(idx, -1);
-          if (movedByHint) {
-            setStatus('Moved phrase up: ' + phrase);
-          }
-        };
-        actions.appendChild(keyHint);
-      }
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -367,7 +315,7 @@ function addStatsBalancePhraseFromInput() {
     return String(term || '').toLowerCase() === text.toLowerCase();
   });
   if (!inCatalog) {
-    setStatus('Pick an existing catalog term for balance.');
+    setStatus('Pick an existing catalog term for balance phrases.');
     return;
   }
   var exists = statsBalancePhrases.some(function (p) { return String(p).toLowerCase() === text.toLowerCase(); });
@@ -474,12 +422,6 @@ function wireStatsBalancePhraseUi() {
       }, 150);
     });
   }
-}
-
-function getBalancePhraseByHotkeyNumber(n) {
-  var idx = Number(n) - 1;
-  if (idx < 0 || idx > 8) return '';
-  return String(statsBalancePhrases[idx] || '');
 }
 
 function compute(items, options) {

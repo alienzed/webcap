@@ -108,6 +108,20 @@
   text-align: right;
 }
 
+.modal-footer.modal-footer-split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+
+.modal-footer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .modal-footer .btn {
   padding: 6px 12px;
   font-size: 13px;

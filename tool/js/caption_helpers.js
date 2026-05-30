@@ -5,6 +5,34 @@ var captionQuickPhrases = [];
 var captionHelperNotes = '';
 var debouncedSetNotesSave = debounceCreate(500);
 
+function getCaptionQuickPhraseHotkeyLabel(index) {
+  var n = Number(index) + 1;
+  if (n < 1 || n > 9) return '';
+  return '\u21e7' + n;
+}
+
+function moveCaptionQuickPhraseByOffset(index, offset) {
+  var idx = Number(index);
+  var step = Number(offset);
+  if (!isFinite(idx) || !isFinite(step)) return false;
+  if (!Array.isArray(captionQuickPhrases) || !captionQuickPhrases.length) return false;
+  if (idx < 0 || idx >= captionQuickPhrases.length) return false;
+  var nextIdx = idx + step;
+  if (nextIdx < 0 || nextIdx >= captionQuickPhrases.length) return false;
+  var next = captionQuickPhrases.slice();
+  var temp = next[idx];
+  next[idx] = next[nextIdx];
+  next[nextIdx] = temp;
+  setCaptionQuickPhrases(next, true);
+  renderPhraseCopyPanel();
+  return true;
+}
+
+function moveCaptionQuickPhraseByHotkeyNumber(n) {
+  var idx = Number(n) - 1;
+  return moveCaptionQuickPhraseByOffset(idx, -1);
+}
+
 function captionHelperSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
 }
@@ -310,7 +338,8 @@ function renderPhraseCopyPanel() {
   }
 
   for (var i = 0; i < activePhrases.length; i++) {
-    var phrase = activePhrases[i];
+    (function (idx) {
+      var phrase = activePhrases[idx];
     var isMatched = !!(phrase && captionContainsPhrase(liveCaption, phrase));
     var row = document.createElement('div');
     row.className = 'row-inline phrase-row-inline';
@@ -323,38 +352,59 @@ function renderPhraseCopyPanel() {
     if (isMatched) {
       phraseBtn.classList.add('phrase-copy-item-matched');
     }
-    (function (text) {
-      phraseBtn.onclick = function () {
-        toggleCaptionPhraseAtCursor(text);
-      };
-    })(phrase);
+      (function (text) {
+        phraseBtn.onclick = function () {
+          toggleCaptionPhraseAtCursor(text);
+        };
+      })(phrase);
 
     var tagBtn = document.createElement('button');
     tagBtn.type = 'button';
     tagBtn.title = 'Add as tag to current media';
     tagBtn.textContent = 'Tag';
-    (function (text) {
-      tagBtn.onclick = function () {
-        addTagToCurrentMedia(text);
-      };
-    })(phrase);
+      (function (text) {
+        tagBtn.onclick = function () {
+          addTagToCurrentMedia(text);
+        };
+      })(phrase);
+
+      var actions = document.createElement('div');
+      actions.className = 'phrase-copy-actions';
+
+      var hotkeyLabel = getCaptionQuickPhraseHotkeyLabel(idx);
+      if (hotkeyLabel) {
+        var keyHint = document.createElement('button');
+        keyHint.type = 'button';
+        keyHint.className = 'stats-phrase-keyhint';
+        keyHint.title = 'Move up (Shift+' + (idx + 1) + ')';
+        keyHint.textContent = hotkeyLabel;
+        keyHint.onclick = function () {
+          var moved = moveCaptionQuickPhraseByOffset(idx, -1);
+          if (moved) {
+            setStatus('Moved quick phrase up: ' + phrase);
+          }
+        };
+        actions.appendChild(keyHint);
+      }
 
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
+    removeBtn.className = 'stats-phrase-mini-btn';
+    removeBtn.title = 'Remove quick phrase';
     removeBtn.textContent = 'X';
-    (function (idx) {
       removeBtn.onclick = function () {
         var next = captionQuickPhrases.slice();
         next.splice(idx, 1);
         setCaptionQuickPhrases(next, true);
         renderPhraseCopyPanel();
       };
-    })(i);
 
     row.appendChild(phraseBtn);
     row.appendChild(tagBtn);
-    row.appendChild(removeBtn);
+      actions.appendChild(removeBtn);
+      row.appendChild(actions);
     container.appendChild(row);
+    })(i);
   }
 }
 

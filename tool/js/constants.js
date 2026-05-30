@@ -111,8 +111,8 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
       "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform, skirt, shorts, suit, tie, swimsuit",
       "Traits": "lips, make-up, hair, eyes, beard, mustache, glasses, hat, skin, nails",
       "Setting": "background, theme, backdrop",
-      "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight",
-      "Viewpoint": "front, side, back, aerial, close-up, wide shot, low angle, high angle"
+      "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight, candle light, lighting",
+      "Viewpoint": "front, side, back, aerial, overhead, close-up, medium close-up, wide shot, low-angle, high-angle, rear, three-quarter, three-quarter rear, low-position, high-position, rotated view"
     }
   },
   primer: {

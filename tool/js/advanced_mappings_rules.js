@@ -280,7 +280,11 @@ function openPrimerMappingsHelpInPreview() {
     '<li style="margin:0 0 6px 0;">Default scope for new rows is <strong>tag</strong>.</li>' +
     '<li style="margin:0 0 6px 0;">If Value is blank, Token is used as the value.</li>' +
     '<li style="margin:0 0 6px 0;">Enabled off means the row is skipped.</li>' +
-    '</ul>'
+    '</ul>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Simple Example</h4>' +
+    '<p style="margin:0 0 6px 0;">Template has <code>{lighting}</code>.</p>' +
+    '<p style="margin:0 0 6px 0;">Mapping row: scope <strong>tag</strong>, token <code>indoor</code>, key <code>lighting</code>, value <code>indoor lighting</code>.</p>' +
+    '<p style="margin:0;">If item has tag <code>indoor</code>, template fills <code>{lighting}</code> with <code>indoor lighting</code>.</p>'
   );
 }
 
@@ -293,8 +297,22 @@ function openReviewRulesHelpInPreview() {
     '<li style="margin:0 0 6px 0;"><strong>file</strong> scope: if filename has Trigger, caption must include Required Phrase.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>caption</strong> scope: if caption has Trigger, caption must include Required Phrase.</li>' +
     '<li style="margin:0 0 6px 0;">Enabled off means the rule is skipped.</li>' +
-    '</ul>'
+    '</ul>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Simple Example</h4>' +
+    '<p style="margin:0 0 6px 0;">Rule row: scope <strong>file</strong>, trigger <code>closeup</code>, required phrase <code>face</code>.</p>' +
+    '<p style="margin:0 0 6px 0;">If filename includes <code>closeup</code> and caption is missing <code>face</code>, the review report flags it.</p>' +
+    '<p style="margin:0;">This helps catch missing details before training.</p>'
   );
+}
+
+function addPrimerMappingDraftRow() {
+  primerMappingsDraftRows.push(normalizePrimerMappingRow({}));
+  renderPrimerMappingsDraft();
+}
+
+function addReviewRuleDraftRow() {
+  reviewRulesDraftRows.push(normalizeReviewRuleRow({}));
+  renderReviewRulesDraft();
 }
 
 function renderPrimerMappingsDraft() {
@@ -404,16 +422,6 @@ function renderPrimerMappingsDraft() {
     gridRow.appendChild(createAdvancedCell(removeBtn));
     bodyEl.appendChild(gridRow);
   });
-
-  var addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.id = 'primer-mappings-modal-add-btn';
-  addBtn.textContent = '+ Add mapping';
-  addBtn.addEventListener('click', function () {
-    primerMappingsDraftRows.push(normalizePrimerMappingRow({}));
-    renderPrimerMappingsDraft();
-  });
-  bodyEl.appendChild(addBtn);
 }
 
 function renderReviewRulesDraft() {
@@ -483,15 +491,6 @@ function renderReviewRulesDraft() {
     bodyEl.appendChild(gridRow);
   });
 
-  var addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.id = 'review-rules-modal-add-btn';
-  addBtn.textContent = '+ Add rule';
-  addBtn.addEventListener('click', function () {
-    reviewRulesDraftRows.push(normalizeReviewRuleRow({}));
-    renderReviewRulesDraft();
-  });
-  bodyEl.appendChild(addBtn);
 }
 
 function openPrimerMappingsModal() {
@@ -558,9 +557,19 @@ function wireAdvancedMappingsRulesUi() {
     ui.primerMappingsSaveBtnEl.__advancedMappingsBound = true;
     ui.primerMappingsSaveBtnEl.addEventListener('click', savePrimerMappingsModal);
   }
+  var primerMappingsAddBtnEl = document.getElementById('primer-mappings-modal-add-btn');
+  if (primerMappingsAddBtnEl && !primerMappingsAddBtnEl.__advancedMappingsBound) {
+    primerMappingsAddBtnEl.__advancedMappingsBound = true;
+    primerMappingsAddBtnEl.addEventListener('click', addPrimerMappingDraftRow);
+  }
   if (ui.reviewRulesSaveBtnEl && !ui.reviewRulesSaveBtnEl.__advancedRulesBound) {
     ui.reviewRulesSaveBtnEl.__advancedRulesBound = true;
     ui.reviewRulesSaveBtnEl.addEventListener('click', saveReviewRulesModal);
+  }
+  var reviewRulesAddBtnEl = document.getElementById('review-rules-modal-add-btn');
+  if (reviewRulesAddBtnEl && !reviewRulesAddBtnEl.__advancedRulesBound) {
+    reviewRulesAddBtnEl.__advancedRulesBound = true;
+    reviewRulesAddBtnEl.addEventListener('click', addReviewRuleDraftRow);
   }
   if (ui.advancedModalOverlayEl && !ui.advancedModalOverlayEl.__advancedBound) {
     ui.advancedModalOverlayEl.__advancedBound = true;

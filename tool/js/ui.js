@@ -311,9 +311,14 @@ function runReview() {
     .filter(Boolean);
   var results = visibleKeys.map(function (key) {
     var item = (state.items || []).find(function (it) { return it && it.key === key; });
+    var tags = [];
+    if (item && typeof getTagsForMediaKey === 'function') {
+      tags = getTagsForMediaKey(item.key);
+    }
     return {
       fileName: item ? item.fileName : key,
-      caption: item ? item.caption || '' : ''
+      caption: item ? item.caption || '' : '',
+      tags: Array.isArray(tags) ? tags : []
     };
   });
   try {

@@ -641,6 +641,7 @@ async function renderFileList() {
   });
 
   syncSelectionWithVisibleMedia(mediaItems);
+  updatePreviewActionControls();
 }
 
 // File/Folder Flags

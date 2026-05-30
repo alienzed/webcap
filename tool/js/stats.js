@@ -392,11 +392,11 @@ function openBalancePhrasesHelpInPreview() {
   }
   renderAdvancedHelpPreview(
     'Balance Phrases Help',
-    '<p style="margin:0 0 10px 0;">Balance phrases help you check caption variety across the set.</p>' +
+    '<p style="margin:0 0 10px 0;">Balance phrases help you check phrase coverage across the set.</p>' +
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">What This Is</h4>' +
     '<ul style="margin:0 0 8px 18px;padding:0;">' +
     '<li style="margin:0 0 6px 0;">A short list of phrases you care about, like <code>front view</code>, <code>indoor lighting</code>, or <code>close-up</code>.</li>' +
-    '<li style="margin:0 0 6px 0;">Review counts how often each phrase appears in captions.</li>' +
+    '<li style="margin:0 0 6px 0;">Review shows phrase counts in both captions and tags.</li>' +
     '<li style="margin:0 0 6px 0;">This helps you spot gaps before training.</li>' +
     '</ul>' +
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">How To Use It</h4>' +
@@ -466,6 +466,7 @@ function compute(items, options) {
   var requiredHits = 0;
   var requiredMissing = [];
   var phraseCounts = {};
+  var phraseTagCounts = {};
   var ruleFailures = [];
   var tokenCounts = {};
   var captionRows = [];
@@ -473,6 +474,7 @@ function compute(items, options) {
 
   phrases.forEach(function (p) {
     phraseCounts[p] = 0;
+    phraseTagCounts[p] = 0;
   });
 
   items.forEach(function (item) {
@@ -498,6 +500,19 @@ function compute(items, options) {
     phrases.forEach(function (p) {
       if (captionNorm.indexOf(normalize(p)) !== -1) {
         phraseCounts[p] += 1;
+      }
+    });
+
+    var normalizedTags = Array.isArray(item.tags)
+      ? item.tags
+          .map(function (tag) { return normalizeBalancePhrase(tag).toLowerCase(); })
+          .filter(Boolean)
+      : [];
+    phrases.forEach(function (p) {
+      var phraseNorm = normalizeBalancePhrase(p).toLowerCase();
+      if (!phraseNorm) return;
+      if (normalizedTags.indexOf(phraseNorm) !== -1) {
+        phraseTagCounts[p] += 1;
       }
     });
 
@@ -562,9 +577,19 @@ function compute(items, options) {
     .map(function (tok) { return { token: tok, count: tokenCounts[tok] }; });
 
   var phraseSummary = phrases.map(function (p) {
-    var count = phraseCounts[p] || 0;
-    var pct = total ? Math.round((count / total) * 1000) / 10 : 0;
-    return { phrase: p, count: count, percent: pct };
+    var captionCount = phraseCounts[p] || 0;
+    var tagCount = phraseTagCounts[p] || 0;
+    var captionPercent = total ? Math.round((captionCount / total) * 1000) / 10 : 0;
+    var tagPercent = total ? Math.round((tagCount / total) * 1000) / 10 : 0;
+    return {
+      phrase: p,
+      count: captionCount,
+      percent: captionPercent,
+      captionCount: captionCount,
+      tagCount: tagCount,
+      captionPercent: captionPercent,
+      tagPercent: tagPercent
+    };
   });
 
   var requiredPercent = total ? Math.round((requiredHits / total) * 1000) / 10 : 0;

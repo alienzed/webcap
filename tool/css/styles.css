@@ -1547,7 +1547,7 @@ iframe {
   margin: 0 0 8px 0;
   letter-spacing: 0.3px;
 }
-.caption-term-shared-row {
+.term-input-row {
   position: relative;
   margin-bottom: 6px;
 }
@@ -1570,6 +1570,16 @@ iframe {
 }
 .caption-term-results .phrase-copy-item-btn {
   text-align: left;
+}
+.caption-term-result-row {
+  display: flex;
+  gap: 4px;
+}
+.caption-term-result-main {
+  flex: 1;
+}
+.caption-term-result-quick {
+  min-width: 34px;
 }
 
 #phrase-copy-items {

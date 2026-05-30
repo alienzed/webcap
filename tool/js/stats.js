@@ -362,6 +362,14 @@ function addStatsBalancePhraseFromInput() {
   var inputEl = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
   var text = normalizeBalancePhrase(inputEl ? inputEl.value : '');
   if (!text) return;
+  var catalog = (typeof getCaptionHelperCatalogTerms === 'function') ? getCaptionHelperCatalogTerms() : [];
+  var inCatalog = catalog.some(function (term) {
+    return String(term || '').toLowerCase() === text.toLowerCase();
+  });
+  if (!inCatalog) {
+    setStatus('Pick an existing catalog term for balance.');
+    return;
+  }
   var exists = statsBalancePhrases.some(function (p) { return String(p).toLowerCase() === text.toLowerCase(); });
   if (exists) {
     if (inputEl) inputEl.value = '';
@@ -372,6 +380,61 @@ function addStatsBalancePhraseFromInput() {
   setStatsBalancePhrases(next, true);
   renderStatsBalancePhraseList();
   if (inputEl) inputEl.value = '';
+  var resultsEl = document.getElementById('stats-phrases-add-results');
+  if (resultsEl) {
+    resultsEl.innerHTML = '';
+    resultsEl.classList.add('hidden');
+  }
+}
+
+function renderStatsBalancePhraseResults(query) {
+  var resultsEl = document.getElementById('stats-phrases-add-results');
+  if (!resultsEl) return;
+  var q = normalizeBalancePhrase(query).toLowerCase();
+  if (!q) {
+    resultsEl.innerHTML = '';
+    resultsEl.classList.add('hidden');
+    return;
+  }
+  var catalog = (typeof getCaptionHelperCatalogTerms === 'function') ? getCaptionHelperCatalogTerms() : [];
+  var exact = [];
+  var startsWith = [];
+  var contains = [];
+  catalog.forEach(function (term) {
+    var clean = normalizeBalancePhrase(term);
+    var low = clean.toLowerCase();
+    if (!clean) return;
+    if (low === q) {
+      exact.push(clean);
+      return;
+    }
+    if (low.indexOf(q) === 0) {
+      startsWith.push(clean);
+      return;
+    }
+    if (low.indexOf(q) !== -1) contains.push(clean);
+  });
+  var ranked = exact.concat(startsWith, contains).slice(0, 12);
+  resultsEl.innerHTML = '';
+  ranked.forEach(function (term) {
+    var row = document.createElement('div');
+    row.className = 'caption-term-result-row';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'phrase-copy-item-btn caption-term-result-main';
+    btn.textContent = term;
+    btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    btn.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var inputEl = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
+      if (inputEl) inputEl.value = term;
+      addStatsBalancePhraseFromInput();
+    };
+    row.appendChild(btn);
+    resultsEl.appendChild(row);
+  });
+  resultsEl.classList.toggle('hidden', !ranked.length);
 }
 
 function wireStatsBalancePhraseUi() {
@@ -386,11 +449,29 @@ function wireStatsBalancePhraseUi() {
   }
   if (addInput && !addInput.__statsPhrasesBound) {
     addInput.__statsPhrasesBound = true;
+    addInput.addEventListener('input', function () {
+      renderStatsBalancePhraseResults(addInput.value);
+    });
     addInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         addStatsBalancePhraseFromInput();
+      } else if (e.key === 'Escape') {
+        var resultsEl = document.getElementById('stats-phrases-add-results');
+        if (resultsEl) {
+          resultsEl.innerHTML = '';
+          resultsEl.classList.add('hidden');
+        }
       }
+    });
+    addInput.addEventListener('blur', function () {
+      setTimeout(function () {
+        var resultsEl = document.getElementById('stats-phrases-add-results');
+        if (resultsEl) {
+          resultsEl.innerHTML = '';
+          resultsEl.classList.add('hidden');
+        }
+      }, 150);
     });
   }
 }

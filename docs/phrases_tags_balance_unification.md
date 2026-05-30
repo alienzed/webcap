@@ -48,6 +48,52 @@ Explicit non-behaviors:
 - No automatic migration to a new schema in v1.
 - No panel rename in v1.
 
+## Split-Input UX Contract (Next Iteration)
+
+Purpose:
+- Keep one shared catalog backend, but restore intent-specific inputs in each panel.
+- Remove ambiguity from the single shared search box flow.
+
+Panel inputs:
+- `Tags` panel:
+  - own `Add/Search tag...` input
+  - primary action: assign tag to current media item
+  - creation path: if term does not exist, create term and assign tag
+- `Phrases` panel:
+  - own `Add/Search quick phrase...` input
+  - primary action: add term to quicklist (no auto tag assign)
+  - quicklist rows keep caption insert/toggle behavior
+  - row secondary action can still assign tag to current media
+- `Balance` section:
+  - own `Add from catalog...` input
+  - adds selected term to balance phrases list only
+  - no free-typed drift by default; source is catalog terms
+
+Shared catalog model:
+- Single catalog source remains:
+  - `config.json -> vocabulary` (optional)
+  - `caption_phrases` (set-local catalog)
+  - `caption_tags_by_media` union
+- Each panel input queries this shared catalog.
+- Term creation from any panel appends into `caption_phrases`.
+
+Action semantics:
+- Tag assignment is explicit to `Tags` flows (or explicit tag button on phrase row).
+- Quicklist membership is explicit to `Phrases` flows.
+- Balance membership is explicit to `Balance` flows.
+- No implicit cross-add between quicklist and balance lists.
+
+Persistence:
+- `caption_phrases`: catalog
+- `caption_tags_by_media`: item tags
+- `stats.phrases`: balance phrases (review/balance domain)
+- `quick_phrases` (new): quicklist phrases (caption workflow domain)
+
+Non-goals for this iteration:
+- No ranking/popularity logic.
+- No hierarchy in stored tags.
+- No cross-set sync.
+
 ## Current Coupling Points (Must Not Break)
 
 Frontend:

@@ -1,6 +1,7 @@
 // Caption helper tabs: requirements, phrases, and tags (set notes live in Set Config).
 var captionHelperActiveTab = 'requirements';
 var captionHelperPhrases = [];
+var captionQuickPhrases = [];
 var captionHelperNotes = '';
 var debouncedSetNotesSave = debounceCreate(500);
 
@@ -138,7 +139,10 @@ function setCaptionHelperTab(tabName) {
   document.getElementById('caption-helper-tab-phrases').classList.add('hidden');
   document.getElementById('caption-helper-tab-tags').classList.add('hidden');
   document.getElementById('caption-helper-tab-metadata').classList.add('hidden');
-  document.getElementById('caption-term-results').classList.add('hidden');
+  var phraseResults = document.getElementById('phrase-term-results');
+  var tagResults = document.getElementById('tag-term-results');
+  if (phraseResults) phraseResults.classList.add('hidden');
+  if (tagResults) tagResults.classList.add('hidden');
 
   if (tabName === 'requirements') {
     document.getElementById('caption-helper-tab-requirements-btn').classList.add('active');
@@ -165,6 +169,7 @@ function setCaptionHelperTab(tabName) {
 function saveCaptionHelpersToFolderState() {
   var snapshot = snapshotFolderStateFromDom();
   snapshot.caption_phrases = captionHelperPhrases.slice();
+  snapshot.quick_phrases = captionQuickPhrases.slice();
   snapshot.caption_set_notes = captionHelperNotes;
   writeFolderStateFile(state.folder, snapshot);
 }
@@ -263,11 +268,34 @@ function toggleCaptionPhraseAtCursor(text) {
   insertCaptionPhraseAtCursor(phrase);
 }
 
+function setCaptionQuickPhrases(nextPhrases, triggerAutosave) {
+  captionQuickPhrases = (nextPhrases || [])
+    .map(function (phrase) { return normalizeCatalogTerm(phrase); })
+    .filter(Boolean);
+  window.captionQuickPhrases = captionQuickPhrases;
+  if (triggerAutosave) {
+    saveCaptionHelpersToFolderState();
+  }
+}
+
+function addCaptionQuickPhrase(text, triggerAutosave) {
+  var clean = normalizeCatalogTerm(text);
+  if (!clean) return false;
+  var exists = captionQuickPhrases.some(function (p) {
+    return String(p || '').toLowerCase() === clean.toLowerCase();
+  });
+  if (exists) return false;
+  var next = captionQuickPhrases.slice();
+  next.push(clean);
+  setCaptionQuickPhrases(next, triggerAutosave);
+  return true;
+}
+
 function renderPhraseCopyPanel() {
   var container = document.getElementById('phrase-copy-items');
   if (!container) return;
   container.innerHTML = '';
-  var activePhrases = Array.isArray(statsBalancePhrases) ? statsBalancePhrases.slice() : [];
+  var activePhrases = Array.isArray(captionQuickPhrases) ? captionQuickPhrases.slice() : [];
 
   var liveCaption = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
     ? ui.editorEl.value
@@ -276,7 +304,7 @@ function renderPhraseCopyPanel() {
   if (!activePhrases.length) {
     var empty = document.createElement('div');
     empty.className = 'small';
-    empty.textContent = 'No active phrases. Add terms in Balance phrases.';
+    empty.textContent = 'No quick phrases. Add terms from phrase search.';
     container.appendChild(empty);
     return;
   }
@@ -316,10 +344,9 @@ function renderPhraseCopyPanel() {
     removeBtn.textContent = 'X';
     (function (idx) {
       removeBtn.onclick = function () {
-        var next = statsBalancePhrases.slice();
+        var next = captionQuickPhrases.slice();
         next.splice(idx, 1);
-        setStatsBalancePhrases(next, true);
-        renderStatsBalancePhraseList();
+        setCaptionQuickPhrases(next, true);
         renderPhraseCopyPanel();
       };
     })(i);
@@ -336,6 +363,10 @@ function loadCaptionHelpersFromFolderState(folderState) {
   (folderState.caption_phrases || []).forEach(function (phrase) {
     ensureCaptionHelperPhraseInCatalog(phrase, false, true);
   });
+  setCaptionQuickPhrases(Array.isArray(folderState.quick_phrases) ? folderState.quick_phrases : [], false);
+  captionQuickPhrases.forEach(function (phrase) {
+    ensureCaptionHelperPhraseInCatalog(phrase, false, true);
+  });
   captionHelperNotes = String(folderState.caption_set_notes || '');
   var notesEditor = document.getElementById('set-notes-editor');
   if (notesEditor) {
@@ -349,9 +380,12 @@ function wireCaptionHelpersUi() {
   var phrasesBtn = document.getElementById('caption-helper-tab-phrases-btn');
   var tagsBtn = document.getElementById('caption-helper-tab-tags-btn');
   var metadataBtn = document.getElementById('caption-helper-tab-metadata-btn');
-  var sharedInput = document.getElementById('caption-term-input');
-  var sharedApplyBtn = document.getElementById('caption-term-apply-btn');
-  var sharedResults = document.getElementById('caption-term-results');
+  var phraseInput = document.getElementById('phrase-term-input');
+  var phraseApplyBtn = document.getElementById('phrase-term-apply-btn');
+  var phraseResults = document.getElementById('phrase-term-results');
+  var tagInput = document.getElementById('tag-term-input');
+  var tagApplyBtn = document.getElementById('tag-term-apply-btn');
+  var tagResults = document.getElementById('tag-term-results');
   var notesEditor = document.getElementById('set-notes-editor');
 
   requirementsBtn.onclick = function () {
@@ -371,37 +405,15 @@ function wireCaptionHelpersUi() {
     metadataBtn.onclick = function () { setCaptionHelperTab('metadata'); };
   }
 
-  function clearSharedResults() {
-    sharedResults.innerHTML = '';
-    sharedResults.classList.add('hidden');
+  function clearResults(el) {
+    if (!el) return;
+    el.innerHTML = '';
+    el.classList.add('hidden');
   }
 
-  function applySharedTerm(rawText) {
-    var text = normalizeCatalogTerm(rawText);
-    if (!text) return;
-    if (!state.currentItem || !state.currentItem.key) {
-      setStatus('Select a media item to add tags.');
-      return;
-    }
-    ensureCaptionHelperPhraseInCatalog(text, false);
-    var alreadyTagged = hasTagForMediaKey(state.currentItem.key, text);
-    if (!alreadyTagged) {
-      addTagToCurrentMedia(text);
-    } else {
-      setStatus('Tag already assigned.');
-    }
-    saveCaptionHelpersToFolderState();
-    renderPhraseCopyPanel();
-    sharedInput.value = '';
-    clearSharedResults();
-  }
-
-  function renderSharedResults(query) {
+  function rankCatalogTerms(query) {
     var q = normalizeCatalogTerm(query).toLowerCase();
-    if (!q) {
-      clearSharedResults();
-      return;
-    }
+    if (!q) return [];
     var allTerms = getCaptionHelperCatalogTerms();
     var exact = [];
     var startsWith = [];
@@ -420,59 +432,178 @@ function wireCaptionHelpersUi() {
         contains.push(term);
       }
     });
-    var ranked = exact.concat(startsWith, contains).slice(0, 12);
-    sharedResults.innerHTML = '';
-    if (!ranked.length) {
-      var createBtn = document.createElement('button');
-      createBtn.type = 'button';
-      createBtn.className = 'phrase-copy-item-btn';
-      createBtn.textContent = 'Create "' + normalizeCatalogTerm(query) + '"';
-      createBtn.onclick = function () {
-        applySharedTerm(query);
+    return exact.concat(startsWith, contains).slice(0, 12);
+  }
+
+  function buildResultRow(mainText, onMain, secondaryText, onSecondary) {
+    var row = document.createElement('div');
+    row.className = 'caption-term-result-row';
+    var mainBtn = document.createElement('button');
+    mainBtn.type = 'button';
+    mainBtn.className = 'phrase-copy-item-btn caption-term-result-main';
+    mainBtn.textContent = mainText;
+    mainBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    mainBtn.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      onMain();
+    };
+    row.appendChild(mainBtn);
+    if (secondaryText && typeof onSecondary === 'function') {
+      var secondaryBtn = document.createElement('button');
+      secondaryBtn.type = 'button';
+      secondaryBtn.className = 'caption-term-result-quick';
+      secondaryBtn.textContent = secondaryText;
+      secondaryBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      secondaryBtn.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        onSecondary();
       };
-      sharedResults.appendChild(createBtn);
-      sharedResults.classList.remove('hidden');
+      row.appendChild(secondaryBtn);
+    }
+    return row;
+  }
+
+  function applyTagTerm(rawText) {
+    var text = normalizeCatalogTerm(rawText);
+    if (!text) return;
+    if (!state.currentItem || !state.currentItem.key) {
+      setStatus('Select a media item to add tags.');
+      return;
+    }
+    ensureCaptionHelperPhraseInCatalog(text, false);
+    var alreadyTagged = hasTagForMediaKey(state.currentItem.key, text);
+    if (!alreadyTagged) {
+      addTagToCurrentMedia(text);
+    } else {
+      setStatus('Tag already assigned.');
+    }
+    saveCaptionHelpersToFolderState();
+    renderPhraseCopyPanel();
+    if (tagInput) tagInput.value = '';
+    clearResults(tagResults);
+  }
+
+  function applyQuickPhraseTerm(rawText) {
+    var text = normalizeCatalogTerm(rawText);
+    if (!text) return;
+    ensureCaptionHelperPhraseInCatalog(text, false);
+    var added = addCaptionQuickPhrase(text, true);
+    if (!added) {
+      setStatus('Already in quicklist.');
+      return;
+    }
+    renderPhraseCopyPanel();
+    setStatus('Added to quicklist: ' + text);
+    if (phraseInput) phraseInput.value = '';
+    clearResults(phraseResults);
+  }
+
+  function renderPhraseResults(query) {
+    if (!phraseResults) return;
+    var q = normalizeCatalogTerm(query).toLowerCase();
+    if (!q) {
+      clearResults(phraseResults);
+      return;
+    }
+    var ranked = rankCatalogTerms(q);
+    phraseResults.innerHTML = '';
+    if (!ranked.length) {
+      phraseResults.appendChild(buildResultRow(
+        'Create "' + normalizeCatalogTerm(query) + '"',
+        function () { applyQuickPhraseTerm(query); },
+        '\uD83D\uDCCC',
+        function () { applyQuickPhraseTerm(query); }
+      ));
+      phraseResults.classList.remove('hidden');
       return;
     }
     ranked.forEach(function (term) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'phrase-copy-item-btn';
-      btn.textContent = term;
-      btn.onclick = function () {
-        applySharedTerm(term);
-      };
-      sharedResults.appendChild(btn);
+      phraseResults.appendChild(buildResultRow(
+        term,
+        function () { applyQuickPhraseTerm(term); },
+        '\uD83D\uDCCC',
+        function () { applyQuickPhraseTerm(term); }
+      ));
     });
-    sharedResults.classList.remove('hidden');
+    phraseResults.classList.remove('hidden');
   }
 
-  sharedApplyBtn.onclick = function () {
-    var text = normalizeCatalogTerm(sharedInput.value);
-    if (!text) return;
-    applySharedTerm(text);
-  };
-  sharedInput.addEventListener('input', function () {
-    renderSharedResults(sharedInput.value);
-  });
-  sharedInput.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      var text = normalizeCatalogTerm(sharedInput.value);
+  function renderTagResults(query) {
+    if (!tagResults) return;
+    var q = normalizeCatalogTerm(query).toLowerCase();
+    if (!q) {
+      clearResults(tagResults);
+      return;
+    }
+    var ranked = rankCatalogTerms(q);
+    tagResults.innerHTML = '';
+    if (!ranked.length) {
+      tagResults.appendChild(buildResultRow(
+        'Create "' + normalizeCatalogTerm(query) + '"',
+        function () { applyTagTerm(query); }
+      ));
+      tagResults.classList.remove('hidden');
+      return;
+    }
+    ranked.forEach(function (term) {
+      tagResults.appendChild(buildResultRow(term, function () { applyTagTerm(term); }));
+    });
+    tagResults.classList.remove('hidden');
+  }
+
+  if (phraseApplyBtn && phraseInput) {
+    phraseApplyBtn.onclick = function () {
+      var text = normalizeCatalogTerm(phraseInput.value);
       if (!text) return;
-      applySharedTerm(text);
-      return;
-    }
-    if (e.key === 'Escape') {
-      clearSharedResults();
-      return;
-    }
-  });
-  sharedInput.addEventListener('blur', function () {
-    setTimeout(function () {
-      clearSharedResults();
-    }, 120);
-  });
+      applyQuickPhraseTerm(text);
+    };
+    phraseInput.addEventListener('input', function () {
+      renderPhraseResults(phraseInput.value);
+    });
+    phraseInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var text = normalizeCatalogTerm(phraseInput.value);
+        if (!text) return;
+        applyQuickPhraseTerm(text);
+        return;
+      }
+      if (e.key === 'Escape') {
+        clearResults(phraseResults);
+      }
+    });
+    phraseInput.addEventListener('blur', function () {
+      setTimeout(function () { clearResults(phraseResults); }, 150);
+    });
+  }
+
+  if (tagApplyBtn && tagInput) {
+    tagApplyBtn.onclick = function () {
+      var text = normalizeCatalogTerm(tagInput.value);
+      if (!text) return;
+      applyTagTerm(text);
+    };
+    tagInput.addEventListener('input', function () {
+      renderTagResults(tagInput.value);
+    });
+    tagInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var text = normalizeCatalogTerm(tagInput.value);
+        if (!text) return;
+        applyTagTerm(text);
+        return;
+      }
+      if (e.key === 'Escape') {
+        clearResults(tagResults);
+      }
+    });
+    tagInput.addEventListener('blur', function () {
+      setTimeout(function () { clearResults(tagResults); }, 150);
+    });
+  }
 
   if (notesEditor) {
     notesEditor.addEventListener('input', function () {

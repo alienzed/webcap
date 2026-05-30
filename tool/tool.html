@@ -278,14 +278,15 @@
                                     <label>Required key phrase</label>
                                     <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
                                     <label>Balance phrases</label>
-                                    <div class="checklist-input-row">
+                                    <div class="checklist-input-row stats-balance-input-row term-input-row">
                                         <input
                                             id="stats-phrases-add-input"
                                             type="text"
                                             class="form-control"
-                                            placeholder="Add balance phrase..."
+                                            placeholder="Add balance from catalog..."
                                         >
                                         <button id="stats-phrases-add-btn" type="button">+</button>
+                                        <div id="stats-phrases-add-results" class="caption-term-results hidden"></div>
                                     </div>
                                     <div id="stats-phrases-items"></div>
                                     <textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down
@@ -417,20 +418,30 @@
                         </div>
                         <div id="caption-helper-tab-phrases" class="caption-helper-tab-pane hidden">
                             <div class="caption-helper-section-title">Phrases</div>
-                            <div id="caption-term-shared-row" class="checklist-input-row caption-term-shared-row">
+                            <div id="phrase-term-row" class="checklist-input-row caption-term-shared-row term-input-row">
                                 <input
-                                    id="caption-term-input"
+                                    id="phrase-term-input"
                                     type="text"
                                     class="form-control"
-                                    placeholder="Search or add term..."
+                                    placeholder="Add/search quick phrase..."
                                 >
-                                <button id="caption-term-apply-btn" type="button">+</button>
-                                <div id="caption-term-results" class="caption-term-results hidden"></div>
+                                <button id="phrase-term-apply-btn" type="button">+</button>
+                                <div id="phrase-term-results" class="caption-term-results hidden"></div>
                             </div>
                             <div id="phrase-copy-items"></div>
                         </div>
                         <div id="caption-helper-tab-tags" class="caption-helper-tab-pane hidden">
                             <div class="caption-helper-section-title">Tags</div>
+                            <div id="tag-term-row" class="checklist-input-row term-input-row">
+                                <input
+                                    id="tag-term-input"
+                                    type="text"
+                                    class="form-control"
+                                    placeholder="Add/search tag..."
+                                >
+                                <button id="tag-term-apply-btn" type="button">+</button>
+                                <div id="tag-term-results" class="caption-term-results hidden"></div>
+                            </div>
                             <div id="item-tags-list"></div>
                         </div>
                         <div id="caption-helper-tab-metadata" class="caption-helper-tab-pane hidden">

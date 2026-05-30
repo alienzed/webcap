@@ -21,7 +21,10 @@ A vertical panel for quickly inserting/removing active phrases in captions. Desi
   - Inserted phrases are spaced so they do not stick to adjacent caption text.
   - A small `Tag` button assigns the phrase as a tag to the current media item.
   - The `X` button removes the phrase from the active shortlist.
-  - Term search/create is handled by the shared term input used by `Phrases` and `Tags`.
+  - Term search/create for quick phrases is handled by the `Phrases` input (`Add/search quick phrase...`).
+  - Search results support:
+    - primary click: add term to active quicklist
+    - `📌`: pin term into active quicklist (same outcome, explicit quicklist action)
   - No checkboxes, no drag/drop.
 - **Persistence:**
   - Catalog terms are saved per-folder in `caption_phrases`.

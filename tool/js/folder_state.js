@@ -57,6 +57,7 @@ function sanitizeFolderState(data) {
     caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : {},
     caption_requirement_keywords: (typeof src.caption_requirement_keywords === 'object' && src.caption_requirement_keywords) ? JSON.parse(JSON.stringify(src.caption_requirement_keywords)) : {},
     caption_phrases: Array.isArray(src.caption_phrases) ? src.caption_phrases.slice() : undefined,
+    quick_phrases: Array.isArray(src.quick_phrases) ? src.quick_phrases.slice() : undefined,
     caption_set_notes: String(src.caption_set_notes || ''),
     caption_tags_by_media: tagMap,
     ratings_by_media: ratingsByMedia,
@@ -146,6 +147,9 @@ function snapshotFolderStateFromDom() {
     caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined,
     caption_requirement_keywords: (typeof window.checklistKeywordsByItem !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistKeywordsByItem)) : undefined,
     caption_phrases: window.captionHelperPhrases.slice(),
+    quick_phrases: (typeof window.captionQuickPhrases !== 'undefined' && Array.isArray(window.captionQuickPhrases))
+      ? window.captionQuickPhrases.slice()
+      : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),
     caption_tags_by_media: tagsByMedia,
     ratings_by_media: ratingsByMedia,

@@ -193,7 +193,7 @@ Requirements tab:
 - Press `Enter` in keyword value fields to save and close modal.
 
 Phrases tab:
-- Search/add terms via shared `Search or add term...` input (shared with Tags).
+- Search/add quick phrases via `Add/search quick phrase...`.
 - Click phrase to toggle in current caption:
   - If present: remove
   - If missing: insert at cursor
@@ -201,6 +201,7 @@ Phrases tab:
 - Hover highlighting is supported for phrase/requirement matches.
 
 Tags tab:
+- Search/add tags via `Add/search tag...`.
 - Shows per-media assigned tags.
 - Clicking a tag applies it as filter text.
 

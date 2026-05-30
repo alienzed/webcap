@@ -7,7 +7,7 @@ Item tags provide lightweight per-media annotations that are distinct from capti
 - Scope: per media item in the current folder.
 - Storage: persisted in `.webcap_state.json` under `caption_tags_by_media`.
 - UI:
-  - add tags through the shared term input in the `Phrases`/`Tags` helper tabs
+  - add tags through the `Tags` helper input (`Add/search tag...`)
   - remove tags from the `Tags` panel list for the selected item
 
 ## Behavior

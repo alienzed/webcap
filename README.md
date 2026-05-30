@@ -42,6 +42,10 @@ Minimum shape:
     "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
     "activate_script": "dp-clean/bin/activate",
     "mode": "normal"
+  },
+  "vocabulary": {
+    "terms": [],
+    "groups": []
   }
 }
 ```
@@ -51,6 +55,7 @@ Notes:
 - Training mode supports `poc`, `normal`, and `quality`.
 - Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
 - You can edit config in-app via Settings.
+- `vocabulary` is optional. Empty arrays are valid and result in no starter terms.
 
 ## Run
 
@@ -188,15 +193,15 @@ Requirements tab:
 - Press `Enter` in keyword value fields to save and close modal.
 
 Phrases tab:
-- Add/remove reusable phrases.
+- Search/add terms via shared `Search or add term...` input (shared with Tags).
 - Click phrase to toggle in current caption:
   - If present: remove
   - If missing: insert at cursor
-- Copy button copies phrase to clipboard.
+- `Tag` button assigns that phrase as a tag to the current media item.
 - Hover highlighting is supported for phrase/requirement matches.
 
 Tags tab:
-- Add/remove per-media tags.
+- Shows per-media assigned tags.
 - Clicking a tag applies it as filter text.
 
 Metadata tab:

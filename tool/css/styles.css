@@ -1548,15 +1548,25 @@ iframe {
   letter-spacing: 0.3px;
 }
 .caption-term-shared-row {
+  position: relative;
   margin-bottom: 6px;
 }
 .caption-term-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 4px;
   max-height: 160px;
   overflow-y: auto;
-  margin-bottom: 6px;
+  padding: 4px;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  background: #f5f7fb;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 .caption-term-results .phrase-copy-item-btn {
   text-align: left;
@@ -1838,11 +1848,6 @@ iframe {
 
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tabs {
     display: none;
-  }
-
-  .editor-panel.checklist-visible #caption-checklist-panel #caption-term-shared-row {
-    display: flex !important;
-    grid-column: 2 / span 2;
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tab-pane {

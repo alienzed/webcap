@@ -39,21 +39,17 @@ function fillAppSettingsForm(cfg) {
 }
 
 function collectAppSettingsFormConfig() {
+  var base = normalizeAppConfigShape(appSettingsLoadedConfig || {});
   var mode = 'normal';
   if (ui.appSettingsTrainingModePocEl && ui.appSettingsTrainingModePocEl.checked) mode = 'poc';
   if (ui.appSettingsTrainingModeQualityEl && ui.appSettingsTrainingModeQualityEl.checked) mode = 'quality';
-  return normalizeAppConfigShape({
-    filesystem: {
-      root: ui.appSettingsRootEl ? ui.appSettingsRootEl.value : '',
-      models: ui.appSettingsModelsEl ? ui.appSettingsModelsEl.value : '',
-    },
-    debug: !!(ui.appSettingsDebugEl && ui.appSettingsDebugEl.checked),
-    training: {
-      diffusion_pipe_wsl: ui.appSettingsTrainingDiffusionPipeWslEl ? ui.appSettingsTrainingDiffusionPipeWslEl.value : '',
-      activate_script: ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '',
-      mode: mode,
-    }
-  });
+  base.filesystem.root = ui.appSettingsRootEl ? ui.appSettingsRootEl.value : '';
+  base.filesystem.models = ui.appSettingsModelsEl ? ui.appSettingsModelsEl.value : '';
+  base.debug = !!(ui.appSettingsDebugEl && ui.appSettingsDebugEl.checked);
+  base.training.diffusion_pipe_wsl = ui.appSettingsTrainingDiffusionPipeWslEl ? ui.appSettingsTrainingDiffusionPipeWslEl.value : '';
+  base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
+  base.training.mode = mode;
+  return normalizeAppConfigShape(base);
 }
 
 function syncAppSettingsJsonFromForm() {
@@ -79,6 +75,7 @@ function openAppSettingsModal() {
     try {
       var cfg = JSON.parse(responseText);
       appSettingsLoadedConfig = normalizeAppConfigShape(cfg);
+      if (typeof setRuntimeAppConfig === 'function') setRuntimeAppConfig(cfg);
       fillAppSettingsForm(appSettingsLoadedConfig);
       setAppSettingsStatus('', false);
     } catch (e) {
@@ -123,6 +120,7 @@ function saveAppSettings(opts) {
       saved = normalizeAppConfigShape(payload);
     }
     appSettingsLoadedConfig = saved;
+    if (typeof setRuntimeAppConfig === 'function') setRuntimeAppConfig(saved);
     fillAppSettingsForm(saved);
     setRootFolderLabelFromConfig(saved);
     if (saveAndReload) {
@@ -151,6 +149,7 @@ function triggerRuntimeConfigReload(quietInModal) {
     }
     if (cfg) {
       appSettingsLoadedConfig = cfg;
+      if (typeof setRuntimeAppConfig === 'function') setRuntimeAppConfig(cfg);
       fillAppSettingsForm(cfg);
       setRootFolderLabelFromConfig(cfg);
     }

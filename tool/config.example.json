@@ -19,5 +19,29 @@
       }
     ]
   },
+  "vocabulary": {
+    "terms": [],
+    "groups": [
+      {
+        "name": "Camera Position",
+        "terms": [
+          "front view",
+          "rear view",
+          "side view",
+          "three-quarter",
+          "portrait"
+        ]
+      },
+      {
+        "name": "Lighting",
+        "terms": [
+          "soft lighting",
+          "backlit",
+          "low light",
+          "high contrast"
+        ]
+      }
+    ]
+  },
   "debug": true
 }

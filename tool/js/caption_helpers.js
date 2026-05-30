@@ -12,6 +12,34 @@ function normalizeCatalogTerm(text) {
   return String(text || '').trim().replace(/\s+/g, ' ');
 }
 
+function getConfigVocabularyTerms() {
+  var cfg = (window && window.APP_CONFIG && typeof window.APP_CONFIG === 'object') ? window.APP_CONFIG : {};
+  var vocabulary = (cfg && cfg.vocabulary && typeof cfg.vocabulary === 'object') ? cfg.vocabulary : null;
+  if (!vocabulary) return [];
+
+  var out = [];
+  var seen = {};
+  function pushTerm(raw) {
+    var clean = normalizeCatalogTerm(raw);
+    var low = clean.toLowerCase();
+    if (!clean || seen[low]) return;
+    seen[low] = true;
+    out.push(clean);
+  }
+
+  if (Array.isArray(vocabulary.terms)) {
+    vocabulary.terms.forEach(pushTerm);
+  }
+  if (Array.isArray(vocabulary.groups)) {
+    vocabulary.groups.forEach(function (group) {
+      if (!group || typeof group !== 'object') return;
+      var terms = Array.isArray(group.terms) ? group.terms : [];
+      terms.forEach(pushTerm);
+    });
+  }
+  return out;
+}
+
 function hasCaptionHelperPhrase(text) {
   var target = normalizeCatalogTerm(text).toLowerCase();
   if (!target) return false;
@@ -58,6 +86,13 @@ function mergeCaptionHelperPhrasesFromTagsMap(tagsMap, persistNow) {
 function getCaptionHelperCatalogTerms() {
   var seen = {};
   var out = [];
+  getConfigVocabularyTerms().forEach(function (phrase) {
+    var clean = normalizeCatalogTerm(phrase);
+    var low = clean.toLowerCase();
+    if (!clean || seen[low]) return;
+    seen[low] = true;
+    out.push(clean);
+  });
   captionHelperPhrases.forEach(function (phrase) {
     var clean = normalizeCatalogTerm(phrase);
     var low = clean.toLowerCase();
@@ -103,7 +138,6 @@ function setCaptionHelperTab(tabName) {
   document.getElementById('caption-helper-tab-phrases').classList.add('hidden');
   document.getElementById('caption-helper-tab-tags').classList.add('hidden');
   document.getElementById('caption-helper-tab-metadata').classList.add('hidden');
-  document.getElementById('caption-term-shared-row').classList.add('hidden');
   document.getElementById('caption-term-results').classList.add('hidden');
 
   if (tabName === 'requirements') {
@@ -114,25 +148,17 @@ function setCaptionHelperTab(tabName) {
   if (tabName === 'phrases') {
     document.getElementById('caption-helper-tab-phrases-btn').classList.add('active');
     document.getElementById('caption-helper-tab-phrases').classList.remove('hidden');
-    document.getElementById('caption-term-shared-row').classList.remove('hidden');
     return;
   }
   if (tabName === 'tags') {
     document.getElementById('caption-helper-tab-tags-btn').classList.add('active');
     document.getElementById('caption-helper-tab-tags').classList.remove('hidden');
-    document.getElementById('caption-term-shared-row').classList.remove('hidden');
     return;
   }
   if (tabName === 'metadata') {
     document.getElementById('caption-helper-tab-metadata-btn').classList.add('active');
     document.getElementById('caption-helper-tab-metadata').classList.remove('hidden');
-  }
-
-  // In wide checklist layout, tabs are visually collapsed into side-by-side columns.
-  // Keep the shared term input visible so tagging remains accessible.
-  var checklistPanel = document.getElementById('caption-checklist-panel');
-  if (window.innerWidth >= 1500 && checklistPanel && checklistPanel.style.display !== 'none') {
-    document.getElementById('caption-term-shared-row').classList.remove('hidden');
+    return;
   }
 }
 

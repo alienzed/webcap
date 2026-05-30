@@ -16,7 +16,7 @@ This plan follows `docs/copilot_rules.md`:
 - Keep existing UI labels for now (`Phrases`, `Tags`, `Balance` behavior in review/stats).
 - Multi-word phrases/tags are first-class values. No splitting on spaces.
 - Per-set only. No cross-set sharing yet.
-- Starter vocabulary is always present (no starter-pack selection flow).
+- Starter vocabulary is config-sourced (`config.json`) and optional; empty is valid.
 - New terms are created from tagging flow and appended into the set phrase catalog immediately.
 - No ad-hoc/vocab distinction in UI.
 - No popularity-driven reorder in v1.
@@ -146,4 +146,5 @@ Outcomes:
   - union with `caption_tags_by_media` terms
   - `stats.phrases` contributes to search options via runtime catalog union
 - Starter vocabulary source file:
-  - where hard-coded defaults live and how they are versioned
+  - `config.json -> vocabulary` (`terms` + grouped `groups[].terms`)
+  - empty arrays are valid and mean no seeded starters

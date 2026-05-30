@@ -35,6 +35,7 @@ A vertical panel for quickly inserting/removing active phrases in captions. Desi
 
 - `caption_phrases`: set-local catalog terms.
 - `stats.phrases`: active shortlist used by this panel and phrase-count review.
+- `config.json -> vocabulary` (optional): seeded starter terms shown in shared search/add.
 
 ---
 

@@ -1,5 +1,12 @@
 // NOTE: This project intentionally uses plain global variables for all state and functions.
 // No IIFE, encapsulation, or modular patterns are used by design.
+var APP_CONFIG = {};
+
+function setRuntimeAppConfig(cfg) {
+  var next = (cfg && typeof cfg === 'object') ? JSON.parse(JSON.stringify(cfg)) : {};
+  APP_CONFIG = next;
+  window.APP_CONFIG = next;
+}
 
 // Load config.json synchronously and set ROOT_FOLDER_LABEL
 try {
@@ -8,6 +15,7 @@ try {
   xhr.send(null);
   if (xhr.status === 200) {
     var config = JSON.parse(xhr.responseText);
+    setRuntimeAppConfig(config);
     if (config && config.filesystem && config.filesystem.root) {
       var rootPath = config.filesystem.root;
       ROOT_FOLDER_PATH = String(rootPath || '');
@@ -16,8 +24,11 @@ try {
     }
   }
 } catch (e) {
+  setRuntimeAppConfig({});
   console.warn('Failed to load config.json for ROOT_FOLDER_LABEL:', e);
 }
+
+window.setRuntimeAppConfig = setRuntimeAppConfig;
 
 function debugLog() {
   if (!DEBUG) return;

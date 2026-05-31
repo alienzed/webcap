@@ -1400,7 +1400,7 @@ iframe {
   background: #f8fbff;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   z-index: 19;
-  max-height: 55vh;
+  max-height: 60vh;
   overflow-y: auto;
 }
 

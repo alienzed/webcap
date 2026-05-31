@@ -96,6 +96,7 @@ function updatePreviewActionControls() {
   var hideAll = function () {
     ui.previewActionsEl.classList.add('hidden');
     ui.previewMutationIndicatorEl.classList.add('hidden');
+    ui.previewMutationIndicatorEl.removeAttribute('data-action-label');
     ui.previewPrimaryActionAEl.classList.add('hidden');
     ui.previewPrimaryActionBEl.classList.add('hidden');
     ui.previewMoreActionsEl.classList.add('hidden');
@@ -107,12 +108,20 @@ function updatePreviewActionControls() {
     hideAll();
     return;
   }
-  ui.previewMutationIndicatorEl.classList.toggle('hidden', !isMediaMutated(state.currentItem.key));
 
   var actions = getPreviewContextActionsForCurrentItem();
   if (!hasNonSeparatorActions(actions)) {
     hideAll();
     return;
+  }
+  var mutationResetAction = findPreviewActionByLabel(actions, 'Reset');
+  var showMutationReset = !!(isMediaMutated(state.currentItem.key) && mutationResetAction);
+  ui.previewMutationIndicatorEl.classList.toggle('hidden', !showMutationReset);
+  if (showMutationReset) {
+    ui.previewMutationIndicatorEl.textContent = 'Reset';
+    ui.previewMutationIndicatorEl.setAttribute('data-action-label', 'Reset');
+  } else {
+    ui.previewMutationIndicatorEl.removeAttribute('data-action-label');
   }
 
   var plan = getPreviewPrimaryActionPlan(state.currentItem.fileName);
@@ -144,7 +153,7 @@ function updatePreviewActionControls() {
   var hasMore = hasNonSeparatorActions(secondaryActions);
   ui.previewMoreActionsEl.classList.toggle('hidden', !hasMore);
 
-  if (primaryA || primaryB || hasMore) {
+  if (primaryA || primaryB || hasMore || showMutationReset) {
     ui.previewActionsEl.classList.remove('hidden');
   } else {
     ui.previewActionsEl.classList.add('hidden');
@@ -168,6 +177,7 @@ function wirePreviewActionControls() {
 
   bindPrimaryButton(ui.previewPrimaryActionAEl);
   bindPrimaryButton(ui.previewPrimaryActionBEl);
+  bindPrimaryButton(ui.previewMutationIndicatorEl);
 
   ui.previewMoreActionsEl.addEventListener('click', function (e) {
     e.preventDefault();

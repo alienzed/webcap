@@ -381,18 +381,15 @@ iframe {
 .preview-action-btn:hover {
   background: rgba(17, 24, 39, 0.95);
 }
-.preview-mutation-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(245, 158, 11, 0.95);
+.preview-action-btn.preview-action-reset-btn {
+  background: rgba(245, 158, 11, 0.96);
   color: #1f2937;
-  border: 1px solid rgba(251, 191, 36, 0.85);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.2;
+  border-color: rgba(251, 191, 36, 0.9);
+}
+
+.preview-action-btn.preview-action-reset-btn:hover {
+  background: rgba(217, 119, 6, 0.96);
+  color: #111827;
 }
 .media-item-main {
   display: flex;

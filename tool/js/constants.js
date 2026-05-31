@@ -93,26 +93,28 @@ ui = {
 const MAPPINGS_SYSTEM_DEFAULTS = {
   requirements: {
     items: [
-      "Key Phrase",
-      "Expression",
       "Position",
+      "Viewpoint",
+      "Expression",
       "Action",
       "Clothing",
       "Traits",
       "Setting",
       "Lighting",
-      "Viewpoint"
+      "Jewelry",
+      "Surface"
     ],
     keywordsByItem: {
-      "Key Phrase": "",
-      "Expression": "frowning, surprised, angry, happy, sad, excited, expression, smil",
-      "Position": "standing, kneeling, on all fours, sitting, lying, upside down, kneeling sitting, side sitting, squatting, crouching",
+      "Position": " crouching, folded, kneeling, kneeling sitting, leaning back, leaning downward, leaning forward, leaning to the side, lying on her back, lying on her side, on all fours, posing, side sitting, sitting, squatting, standing, upside down",
+      "Viewpoint": " close-up,front, low-position, medium close-up, overhead, portrait, rear, side, three-quarter, three-quarter rear",
+      "Expression": " closed-mouth smile, excited, faint smile, happy, neutral expression, sad, smiling, surprised, serious, smirking, upset",
       "Action": "standing, sitting, running, walking, holding, looking, eating, drinking, touching, rubbing",
-      "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform, skirt, shorts, suit, tie, swimsuit",
-      "Traits": "lips, make-up, hair, eyes, beard, mustache, glasses, hat, skin, nails",
-      "Setting": "background, theme, backdrop",
+      "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform, skirt, shorts, suit, tie, swimsuit, high-heels, boots, sneakers,",
+      "Traits": "lipstick, make-up, styled hair, lip gloss, glistening skin, painted nails",
+      "Setting": "photo studio, bedroom, living room, kitchen, office, outdoors",
       "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight, candle light, lighting",
-      "Viewpoint": "front, side, back, aerial, overhead, close-up, medium close-up, wide shot, low-angle, high-angle, rear, three-quarter, three-quarter rear, low-position, high-position, rotated view"
+      "Jewelry": "necklace, earrings, bracelet, ring, watch, tiara, anklet",
+      "Surface": "bed, chair, couch, floor, table, ground, grass, sand, water"
     }
   },
   primer: {

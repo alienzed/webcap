@@ -5,9 +5,76 @@ var checklistItems = DEFAULT_CHECKLIST_ITEMS.slice(); // Current folder's requir
 var checklistCheckedByMedia = {}; // { mediaKey: { item: true/false, ... } }
 var debouncedChecklistSave = debounceCreate(400); // Debounce saves for checkbox changes
 var checklistKeywordsByItem = {}; // { requirement: "keyword1, keyword2, ..." }
+var checklistRequirementsNaByMedia = {}; // { mediaKey: { requirement: true } }
 
 function checklistSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
+}
+
+function normalizeChecklistTerm(text) {
+  return String(text || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeChecklistTermsList(terms) {
+  var seen = {};
+  var clean = (Array.isArray(terms) ? terms : [])
+    .map(function (term) { return normalizeChecklistTerm(term); })
+    .filter(function (term) {
+      var key = term.toLowerCase();
+      if (!term || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  clean.sort(checklistSort);
+  return clean;
+}
+
+function parseChecklistKeywordTerms(raw) {
+  return normalizeChecklistTermsList(String(raw || '').split(','));
+}
+
+function normalizeChecklistRequirementKey(requirementLabel) {
+  return String(requirementLabel || '').trim();
+}
+
+function getChecklistNaMapForMediaKey(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  if (!key) return {};
+  var map = checklistRequirementsNaByMedia[key];
+  return (map && typeof map === 'object') ? map : {};
+}
+
+function isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel) {
+  var req = normalizeChecklistRequirementKey(requirementLabel);
+  if (!req) return false;
+  var map = getChecklistNaMapForMediaKey(mediaKey);
+  return !!map[req];
+}
+
+function isChecklistRequirementNaForCurrentMedia(requirementLabel) {
+  if (!state || !state.currentItem || !state.currentItem.key) return false;
+  return isChecklistRequirementNaForMediaKey(state.currentItem.key, requirementLabel);
+}
+
+function setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, isNa) {
+  var key = String(mediaKey || '').trim();
+  var req = normalizeChecklistRequirementKey(requirementLabel);
+  if (!key || !req) return false;
+  var map = JSON.parse(JSON.stringify(getChecklistNaMapForMediaKey(key)));
+  if (isNa) {
+    map[req] = true;
+    checklistRequirementsNaByMedia[key] = map;
+  } else {
+    delete map[req];
+    if (Object.keys(map).length) checklistRequirementsNaByMedia[key] = map;
+    else delete checklistRequirementsNaByMedia[key];
+  }
+  saveChecklistToFolderState();
+  renderChecklistPanel();
+  if (typeof renderAnnotateStrip === 'function') {
+    renderAnnotateStrip();
+  }
+  return true;
 }
 
 function moveChecklistItemByOffset(index, offset) {
@@ -31,10 +98,10 @@ function moveChecklistItemByOffset(index, offset) {
 function requirementKeywordsMatch(requirementLabel, captionText) {
   var keywords = checklistKeywordsByItem[requirementLabel];
   if (!keywords) return false;
-  
-  var keywordList = keywords.split(',').map(function(k) { return k.trim().toLowerCase(); }).filter(Boolean);
+
+  var keywordList = parseChecklistKeywordTerms(keywords).map(function (k) { return String(k || '').toLowerCase(); });
   if (!keywordList.length) return false;
-  
+
   var captionLower = String(captionText || '').toLowerCase();
   for (var i = 0; i < keywordList.length; i++) {
     if (captionLower.indexOf(keywordList[i]) !== -1) {
@@ -148,6 +215,16 @@ function renderChecklistPanel() {
       };
     })(i, item);
     actions.appendChild(moveUpBtn);
+    var editTermsBtn = document.createElement('button');
+    editTermsBtn.textContent = '\u270e';
+    editTermsBtn.title = 'Edit requirement terms';
+    editTermsBtn.className = 'checklist-group-edit-btn';
+    (function(requirementLabel) {
+      editTermsBtn.onclick = function() {
+        openChecklistGroupTermsModal(requirementLabel);
+      };
+    })(item);
+    actions.appendChild(editTermsBtn);
     // Remove button
     var rmBtn = document.createElement('button');
     rmBtn.textContent = '×';
@@ -156,6 +233,14 @@ function renderChecklistPanel() {
         checklistItems.splice(idx, 1);
         for (var k in checklistCheckedByMedia) {
           if (checklistCheckedByMedia[k]) delete checklistCheckedByMedia[k][item];
+        }
+        for (var mediaKey in checklistRequirementsNaByMedia) {
+          if (checklistRequirementsNaByMedia[mediaKey]) {
+            delete checklistRequirementsNaByMedia[mediaKey][item];
+            if (!Object.keys(checklistRequirementsNaByMedia[mediaKey]).length) {
+              delete checklistRequirementsNaByMedia[mediaKey];
+            }
+          }
         }
         syncReviewedFromChecklistAll();
         saveChecklistToFolderState();
@@ -178,6 +263,7 @@ function saveChecklistToFolderState() {
   snapshot.caption_requirements = checklistItems.slice();
   snapshot.caption_requirements_checked = JSON.parse(JSON.stringify(checklistCheckedByMedia));
   snapshot.caption_requirement_keywords = JSON.parse(JSON.stringify(checklistKeywordsByItem));
+  snapshot.caption_requirements_na_by_media = JSON.parse(JSON.stringify(checklistRequirementsNaByMedia));
   if (typeof updatePrimerMappingsSummary === 'function') {
     updatePrimerMappingsSummary();
   }
@@ -200,6 +286,11 @@ function loadChecklistFromFolderState(folderState) {
   } else {
     checklistKeywordsByItem = {};
   }
+  if (folderState.caption_requirements_na_by_media && typeof folderState.caption_requirements_na_by_media === 'object') {
+    checklistRequirementsNaByMedia = JSON.parse(JSON.stringify(folderState.caption_requirements_na_by_media));
+  } else {
+    checklistRequirementsNaByMedia = {};
+  }
 
   // Fill missing keyword values for default checklist items.
   for (var i = 0; i < checklistItems.length; i++) {
@@ -212,6 +303,28 @@ function loadChecklistFromFolderState(folderState) {
     }
   }
 
+  // Drop stale NA flags for requirement labels that no longer exist.
+  var requirementSet = {};
+  checklistItems.forEach(function (req) {
+    var key = normalizeChecklistRequirementKey(req);
+    if (key) requirementSet[key] = true;
+  });
+  Object.keys(checklistRequirementsNaByMedia).forEach(function (mediaKey) {
+    var map = checklistRequirementsNaByMedia[mediaKey];
+    if (!map || typeof map !== 'object') {
+      delete checklistRequirementsNaByMedia[mediaKey];
+      return;
+    }
+    Object.keys(map).forEach(function (req) {
+      if (!requirementSet[normalizeChecklistRequirementKey(req)]) {
+        delete map[req];
+      }
+    });
+    if (!Object.keys(map).length) {
+      delete checklistRequirementsNaByMedia[mediaKey];
+    }
+  });
+
   syncReviewedFromChecklistAll();
   if (typeof updatePrimerMappingsSummary === 'function') {
     updatePrimerMappingsSummary();
@@ -222,6 +335,223 @@ function loadChecklistFromFolderState(folderState) {
 
 // Temporary object for modal edits
 var checklistKeywordsModalTemp = null;
+var checklistGroupTermsModalState = null;
+
+function getChecklistKeywordTermsForRequirement(requirementLabel) {
+  var raw = checklistKeywordsByItem && checklistKeywordsByItem[requirementLabel];
+  return parseChecklistKeywordTerms(raw || '');
+}
+
+function setChecklistKeywordTermsForRequirement(requirementLabel, terms) {
+  if (!requirementLabel) return;
+  var cleaned = normalizeChecklistTermsList(terms);
+  checklistKeywordsByItem[requirementLabel] = cleaned.join(', ');
+}
+
+function getChecklistGroupTermsCatalog() {
+  var seen = {};
+  var out = [];
+  function push(raw) {
+    var term = normalizeChecklistTerm(raw);
+    var key = term.toLowerCase();
+    if (!term || seen[key]) return;
+    seen[key] = true;
+    out.push(term);
+  }
+  if (typeof getCaptionHelperCatalogTerms === 'function') {
+    getCaptionHelperCatalogTerms().forEach(push);
+  }
+  checklistItems.forEach(function (requirementLabel) {
+    getChecklistKeywordTermsForRequirement(requirementLabel).forEach(push);
+  });
+  out.sort(checklistSort);
+  return out;
+}
+
+function closeChecklistGroupTermsModal() {
+  var modal = document.getElementById('checklist-group-terms-modal');
+  var overlay = document.getElementById('modal-overlay');
+  var results = document.getElementById('checklist-group-terms-results');
+  if (results) {
+    results.innerHTML = '';
+    results.classList.add('hidden');
+  }
+  if (modal) modal.classList.add('hidden');
+  if (overlay) overlay.classList.add('hidden');
+  checklistGroupTermsModalState = null;
+}
+
+function saveChecklistGroupTermsModalAndClose() {
+  if (!checklistGroupTermsModalState || !checklistGroupTermsModalState.requirement) {
+    closeChecklistGroupTermsModal();
+    return;
+  }
+  setChecklistKeywordTermsForRequirement(
+    checklistGroupTermsModalState.requirement,
+    checklistGroupTermsModalState.terms
+  );
+  saveChecklistToFolderState();
+  renderChecklistPanel();
+  closeChecklistGroupTermsModal();
+}
+
+function addChecklistGroupModalTerm(rawTerm) {
+  if (!checklistGroupTermsModalState) return false;
+  var term = normalizeChecklistTerm(rawTerm);
+  if (!term) return false;
+  var next = checklistGroupTermsModalState.terms.slice();
+  next.push(term);
+  checklistGroupTermsModalState.terms = normalizeChecklistTermsList(next);
+  renderChecklistGroupTermsModalItems();
+  renderChecklistGroupTermsModalResults('');
+  var input = document.getElementById('checklist-group-terms-input');
+  if (input) input.value = '';
+  return true;
+}
+
+function renderChecklistGroupTermsModalItems() {
+  var listEl = document.getElementById('checklist-group-terms-items');
+  if (!listEl || !checklistGroupTermsModalState) return;
+  listEl.innerHTML = '';
+  var terms = checklistGroupTermsModalState.terms || [];
+  if (!terms.length) {
+    var empty = document.createElement('div');
+    empty.className = 'small';
+    empty.textContent = 'No terms configured.';
+    listEl.appendChild(empty);
+    return;
+  }
+  terms.forEach(function (term, idx) {
+    var row = document.createElement('div');
+    row.className = 'row-inline stats-phrase-row checklist-group-term-row';
+    var termBtn = document.createElement('button');
+    termBtn.type = 'button';
+    termBtn.className = 'phrase-copy-item-btn';
+    termBtn.textContent = term;
+    termBtn.title = 'Click to remove';
+    termBtn.onclick = function () {
+      checklistGroupTermsModalState.terms.splice(idx, 1);
+      checklistGroupTermsModalState.terms = normalizeChecklistTermsList(checklistGroupTermsModalState.terms);
+      renderChecklistGroupTermsModalItems();
+    };
+    var actions = document.createElement('div');
+    actions.className = 'stats-phrase-actions';
+    var removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'stats-phrase-mini-btn';
+    removeBtn.title = 'Remove term';
+    removeBtn.textContent = 'x';
+    removeBtn.onclick = function () {
+      checklistGroupTermsModalState.terms.splice(idx, 1);
+      checklistGroupTermsModalState.terms = normalizeChecklistTermsList(checklistGroupTermsModalState.terms);
+      renderChecklistGroupTermsModalItems();
+    };
+    actions.appendChild(removeBtn);
+    row.appendChild(termBtn);
+    row.appendChild(actions);
+    listEl.appendChild(row);
+  });
+}
+
+function renderChecklistGroupTermsModalResults(query) {
+  var resultsEl = document.getElementById('checklist-group-terms-results');
+  if (!resultsEl || !checklistGroupTermsModalState) return;
+  var q = normalizeChecklistTerm(query).toLowerCase();
+  if (!q) {
+    resultsEl.innerHTML = '';
+    resultsEl.classList.add('hidden');
+    return;
+  }
+  var existing = {};
+  checklistGroupTermsModalState.terms.forEach(function (term) {
+    existing[String(term || '').toLowerCase()] = true;
+  });
+  var catalog = getChecklistGroupTermsCatalog();
+  var exact = [];
+  var startsWith = [];
+  var contains = [];
+  catalog.forEach(function (term) {
+    var clean = normalizeChecklistTerm(term);
+    var low = clean.toLowerCase();
+    if (!clean || existing[low]) return;
+    if (low === q) {
+      exact.push(clean);
+      return;
+    }
+    if (low.indexOf(q) === 0) {
+      startsWith.push(clean);
+      return;
+    }
+    if (low.indexOf(q) !== -1) {
+      contains.push(clean);
+    }
+  });
+  var ranked = exact.concat(startsWith, contains).slice(0, 12);
+  resultsEl.innerHTML = '';
+  if (!ranked.length) {
+    var createRow = document.createElement('div');
+    createRow.className = 'caption-term-result-row';
+    var createBtn = document.createElement('button');
+    createBtn.type = 'button';
+    createBtn.className = 'phrase-copy-item-btn caption-term-result-main';
+    createBtn.textContent = 'Create "' + normalizeChecklistTerm(query) + '"';
+    createBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    createBtn.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      addChecklistGroupModalTerm(query);
+    };
+    createRow.appendChild(createBtn);
+    resultsEl.appendChild(createRow);
+    resultsEl.classList.remove('hidden');
+    return;
+  }
+  ranked.forEach(function (term) {
+    var row = document.createElement('div');
+    row.className = 'caption-term-result-row';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'phrase-copy-item-btn caption-term-result-main';
+    btn.textContent = term;
+    btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    btn.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      addChecklistGroupModalTerm(term);
+    };
+    row.appendChild(btn);
+    resultsEl.appendChild(row);
+  });
+  resultsEl.classList.remove('hidden');
+}
+
+function renderChecklistGroupTermsModal() {
+  var titleEl = document.getElementById('checklist-group-terms-modal-title');
+  var inputEl = document.getElementById('checklist-group-terms-input');
+  if (!checklistGroupTermsModalState) return;
+  if (titleEl) {
+    titleEl.textContent = 'Edit Terms: ' + checklistGroupTermsModalState.requirement;
+  }
+  if (inputEl) {
+    inputEl.value = '';
+  }
+  renderChecklistGroupTermsModalItems();
+  renderChecklistGroupTermsModalResults('');
+}
+
+function openChecklistGroupTermsModal(requirementLabel) {
+  var requirement = String(requirementLabel || '').trim();
+  if (!requirement) return;
+  checklistGroupTermsModalState = {
+    requirement: requirement,
+    terms: getChecklistKeywordTermsForRequirement(requirement)
+  };
+  renderChecklistGroupTermsModal();
+  var modal = document.getElementById('checklist-group-terms-modal');
+  var overlay = document.getElementById('modal-overlay');
+  if (modal) modal.classList.remove('hidden');
+  if (overlay) overlay.classList.remove('hidden');
+}
 
 function saveChecklistKeywordsModalAndClose() {
   checklistKeywordsByItem = JSON.parse(JSON.stringify(checklistKeywordsModalTemp || {}));
@@ -289,15 +619,50 @@ if (document.getElementById('checklist-settings-btn')) {
   document.getElementById('checklist-settings-btn').addEventListener('click', openChecklistKeywordsModal);
 }
 
+if (document.getElementById('checklist-group-terms-add-btn')) {
+  document.getElementById('checklist-group-terms-add-btn').addEventListener('click', function () {
+    var input = document.getElementById('checklist-group-terms-input');
+    addChecklistGroupModalTerm(input ? input.value : '');
+  });
+}
+
+if (document.getElementById('checklist-group-terms-input')) {
+  document.getElementById('checklist-group-terms-input').addEventListener('input', function () {
+    renderChecklistGroupTermsModalResults(this.value);
+  });
+  document.getElementById('checklist-group-terms-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addChecklistGroupModalTerm(this.value);
+      return;
+    }
+    if (e.key === 'Escape') {
+      renderChecklistGroupTermsModalResults('');
+    }
+  });
+  document.getElementById('checklist-group-terms-input').addEventListener('blur', function () {
+    setTimeout(function () {
+      renderChecklistGroupTermsModalResults('');
+    }, 150);
+  });
+}
+
 document.addEventListener('click', function(e) {
   if (e.target && e.target.dataset.closeModal === 'checklist-keywords-modal') {
     closeChecklistKeywordsModal();
+    discardChecklistKeywordsModalTemp();
+    return;
+  }
+  if (e.target && e.target.dataset.closeModal === 'checklist-group-terms-modal') {
+    closeChecklistGroupTermsModal();
   }
 });
 
 document.addEventListener('click', function(e) {
   if (e.target && e.target.id === 'modal-overlay') {
     closeChecklistKeywordsModal();
+    closeChecklistGroupTermsModal();
+    discardChecklistKeywordsModalTemp();
   }
 });
 
@@ -306,14 +671,16 @@ document.addEventListener('click', function(e) {
   if (e.target && e.target.id === 'checklist-keywords-save-btn') {
     saveChecklistKeywordsModalAndClose();
   }
+  if (e.target && e.target.id === 'checklist-group-terms-save-btn') {
+    saveChecklistGroupTermsModalAndClose();
+  }
 });
 
 // Discard changes on cancel/close
 function discardChecklistKeywordsModalTemp() {
   checklistKeywordsModalTemp = null;
 }
-document.addEventListener('click', function(e) {
-  if (e.target && (e.target.dataset.closeModal === 'checklist-keywords-modal' || e.target.id === 'modal-overlay')) {
-    discardChecklistKeywordsModalTemp();
-  }
-});
+
+window.isChecklistRequirementNaForMediaKey = isChecklistRequirementNaForMediaKey;
+window.isChecklistRequirementNaForCurrentMedia = isChecklistRequirementNaForCurrentMedia;
+window.setChecklistRequirementNaForMediaKey = setChecklistRequirementNaForMediaKey;

@@ -28,7 +28,7 @@ function getAnnotateStripGroups() {
     var rawTerms = (checklistKeywordsByItem && checklistKeywordsByItem[groupName]) || '';
     var terms = parseAnnotateStripTerms(rawTerms);
     if (!terms.length) continue;
-    groups.push({ name: groupName, terms: terms });
+    groups.push({ name: groupName, requirement: groupName, terms: terms });
   }
   return groups;
 }
@@ -66,6 +66,22 @@ function toggleAnnotateTag(term) {
     return;
   }
   addTagToCurrentMedia(text);
+  renderAnnotateStrip();
+}
+
+function toggleAnnotateGroupNa(requirementLabel) {
+  if (!state.currentItem || !state.currentItem.key) {
+    setStatus('Select a media item to annotate.');
+    return;
+  }
+  if (typeof isChecklistRequirementNaForMediaKey !== 'function' || typeof setChecklistRequirementNaForMediaKey !== 'function') {
+    setStatus('N/A toggle is unavailable.');
+    return;
+  }
+  var mediaKey = state.currentItem.key;
+  var isNa = isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
+  setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, !isNa);
+  setStatus(!isNa ? ('Marked N/A: ' + requirementLabel) : ('Cleared N/A: ' + requirementLabel));
   renderAnnotateStrip();
 }
 
@@ -115,20 +131,44 @@ function renderAnnotateStrip() {
 
     var chipWrap = document.createElement('div');
     chipWrap.className = 'annotate-strip-chip-wrap';
+    var groupIsNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
+      ? isChecklistRequirementNaForMediaKey(mediaKey, group.requirement || group.name)
+      : false;
+
+    var naChip = document.createElement('button');
+    naChip.type = 'button';
+    naChip.className = 'annotate-strip-chip annotate-strip-chip-na';
+    if (groupIsNa) {
+      naChip.classList.add('active');
+    }
+    naChip.textContent = 'N/A';
+    naChip.title = groupIsNa ? 'Clear N/A override' : 'Mark this group N/A for current item';
+    naChip.onclick = function () {
+      toggleAnnotateGroupNa(group.requirement || group.name);
+    };
+    chipWrap.appendChild(naChip);
+
+    var hasActiveTerm = false;
     group.terms.forEach(function (term) {
       var chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'annotate-strip-chip';
       if (hasTagForMediaKey(mediaKey, term)) {
         chip.classList.add('active');
+        hasActiveTerm = true;
       }
       chip.textContent = term;
       chip.title = 'Toggle tag';
       chip.onclick = function () {
+        if (groupIsNa && typeof setChecklistRequirementNaForMediaKey === 'function') {
+          setChecklistRequirementNaForMediaKey(mediaKey, group.requirement || group.name, false);
+        }
         toggleAnnotateTag(term);
       };
       chipWrap.appendChild(chip);
     });
+    if (groupIsNa) titleEl.classList.add('annotate-strip-group-title-na');
+    else titleEl.classList.add(hasActiveTerm ? 'annotate-strip-group-title-complete' : 'annotate-strip-group-title-incomplete');
 
     groupEl.appendChild(chipWrap);
     groupsWrap.appendChild(groupEl);
@@ -201,6 +241,25 @@ function getConfigVocabularyTerms() {
   return out;
 }
 
+function getRequirementKeywordCatalogTerms() {
+  var out = [];
+  var seen = {};
+  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  requirements.forEach(function (requirementLabel) {
+    var groupName = normalizeCatalogTerm(requirementLabel);
+    if (!groupName) return;
+    var rawTerms = (checklistKeywordsByItem && checklistKeywordsByItem[groupName]) || '';
+    parseAnnotateStripTerms(rawTerms).forEach(function (term) {
+      var clean = normalizeCatalogTerm(term);
+      var low = clean.toLowerCase();
+      if (!clean || seen[low]) return;
+      seen[low] = true;
+      out.push(clean);
+    });
+  });
+  return out;
+}
+
 function hasCaptionHelperPhrase(text) {
   var target = normalizeCatalogTerm(text).toLowerCase();
   if (!target) return false;
@@ -248,6 +307,13 @@ function getCaptionHelperCatalogTerms() {
   var seen = {};
   var out = [];
   getConfigVocabularyTerms().forEach(function (phrase) {
+    var clean = normalizeCatalogTerm(phrase);
+    var low = clean.toLowerCase();
+    if (!clean || seen[low]) return;
+    seen[low] = true;
+    out.push(clean);
+  });
+  getRequirementKeywordCatalogTerms().forEach(function (phrase) {
     var clean = normalizeCatalogTerm(phrase);
     var low = clean.toLowerCase();
     if (!clean || seen[low]) return;

@@ -309,8 +309,8 @@ function renderReportPreview(report, reviewedFileNames) {
     var captionPercent = (row.captionPercent !== undefined) ? row.captionPercent : row.percent;
     var tagPercent = (row.tagPercent !== undefined) ? row.tagPercent : 0;
     return '<tr><td><button class="balance-phrase-link" data-phrase="' + encodeURIComponent(phrase) + '">' +
-      escapeHtml(phrase) + '</button></td><td>' + captionCount + '</td><td>' + tagCount + '</td><td>' + captionPercent + '%</td><td>' + tagPercent + '%</td></tr>';
-  }).join('') : '<tr><td colspan="5" style="color:#777;">No phrases configured.</td></tr>';
+      escapeHtml(phrase) + '</button></td><td>' + captionCount + ' (' + captionPercent + '%)</td><td>' + tagCount + ' (' + tagPercent + '%)</td></tr>';
+  }).join('') : '<tr><td colspan="3" style="color:#777;">No phrases configured.</td></tr>';
 
   var validationFocus = (report.ruleFailures || []).map(function (row) { return row.fileName; });
   var requiredFocus = (report.requiredMissing || []).map(function (row) { return row.fileName; });
@@ -413,7 +413,7 @@ function renderReportPreview(report, reviewedFileNames) {
     '</div>' +
     '<div class="row">' +
     '<div class="card"><h3>Missing Required Phrase</h3><ul>' + requiredRows + '</ul></div>' +
-    '<div class="card"><h3>Balance Counts</h3><table><thead><tr><th>Phrase</th><th>Caption Count</th><th>Tag Count</th><th>Caption %</th><th>Tag %</th></tr></thead><tbody>' + phraseRows + '</tbody></table></div>' +
+    '<div class="card"><h3>Balance Counts</h3><table><thead><tr><th>Phrase</th><th>Caption</th><th>Tag</th></tr></thead><tbody>' + phraseRows + '</tbody></table></div>' +
     '</div>' +
     '<div class="row">' +
     '<div class="card"><h3>Validation Failures</h3><ul>' + failRows + '</ul></div>' +

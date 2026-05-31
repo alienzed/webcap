@@ -40,6 +40,24 @@ function sanitizeFolderState(data) {
   mutatedMediaKeys = Array.from(new Set(mutatedMediaKeys
     .map(function (key) { return String(key || '').trim(); })
     .filter(Boolean)));
+  var requirementsNaByMedia = {};
+  if (typeof src.caption_requirements_na_by_media === 'object' && src.caption_requirements_na_by_media) {
+    Object.keys(src.caption_requirements_na_by_media).forEach(function (mediaKey) {
+      var rawMap = src.caption_requirements_na_by_media[mediaKey];
+      if (!rawMap || typeof rawMap !== 'object') return;
+      var cleanMap = {};
+      Object.keys(rawMap).forEach(function (requirementLabel) {
+        var req = String(requirementLabel || '').trim();
+        if (!req) return;
+        if (rawMap[requirementLabel]) {
+          cleanMap[req] = true;
+        }
+      });
+      if (Object.keys(cleanMap).length) {
+        requirementsNaByMedia[String(mediaKey || '').trim()] = cleanMap;
+      }
+    });
+  }
   return {
     version: FOLDER_STATE_VERSION,
     stats: {
@@ -56,6 +74,7 @@ function sanitizeFolderState(data) {
     caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : DEFAULT_CHECKLIST_ITEMS.slice(),
     caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : {},
     caption_requirement_keywords: (typeof src.caption_requirement_keywords === 'object' && src.caption_requirement_keywords) ? JSON.parse(JSON.stringify(src.caption_requirement_keywords)) : {},
+    caption_requirements_na_by_media: requirementsNaByMedia,
     caption_phrases: Array.isArray(src.caption_phrases) ? src.caption_phrases.slice() : undefined,
     quick_phrases: Array.isArray(src.quick_phrases) ? src.quick_phrases.slice() : undefined,
     caption_set_notes: String(src.caption_set_notes || ''),
@@ -147,6 +166,7 @@ function snapshotFolderStateFromDom() {
     caption_requirements: (typeof window.checklistItems !== 'undefined') ? window.checklistItems.slice() : undefined,
     caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined,
     caption_requirement_keywords: (typeof window.checklistKeywordsByItem !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistKeywordsByItem)) : undefined,
+    caption_requirements_na_by_media: (typeof window.checklistRequirementsNaByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistRequirementsNaByMedia)) : undefined,
     caption_phrases: window.captionHelperPhrases.slice(),
     quick_phrases: (typeof window.captionQuickPhrases !== 'undefined' && Array.isArray(window.captionQuickPhrases))
       ? window.captionQuickPhrases.slice()
@@ -325,6 +345,37 @@ function textContainsWholeToken(text, token) {
   return pattern.test(hay);
 }
 
+function countTokenWords(text) {
+  var words = String(text || '').toLowerCase().match(/[a-z0-9]+/g);
+  return words ? words.length : 0;
+}
+
+function removeSubsumedPrimerValues(values) {
+  if (!Array.isArray(values) || values.length < 2) return Array.isArray(values) ? values.slice() : [];
+  var normalized = values.map(function (value) { return String(value || '').trim().toLowerCase(); });
+  var keep = values.map(function () { return true; });
+  for (var i = 0; i < normalized.length; i++) {
+    var current = normalized[i];
+    if (!current) {
+      keep[i] = false;
+      continue;
+    }
+    var currentWordCount = countTokenWords(current);
+    for (var j = 0; j < normalized.length; j++) {
+      if (i === j) continue;
+      var candidate = normalized[j];
+      if (!candidate || candidate === current) continue;
+      var candidateWordCount = countTokenWords(candidate);
+      if (candidateWordCount <= currentWordCount) continue;
+      if (textContainsWholeToken(candidate, current)) {
+        keep[i] = false;
+        break;
+      }
+    }
+  }
+  return values.filter(function (_, idx) { return keep[idx]; });
+}
+
 function getRequirementDefaultPrimerMappings() {
   var requirements = (
     typeof checklistItems !== 'undefined' &&
@@ -427,7 +478,7 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
   });
   var values = {};
   Object.keys(valuesByKey).forEach(function (key) {
-    values[key] = valuesByKey[key].join(', ');
+    values[key] = removeSubsumedPrimerValues(valuesByKey[key]).join(', ');
   });
   return renderMultilineTemplate(template, values);
 }

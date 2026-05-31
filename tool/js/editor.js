@@ -41,6 +41,9 @@ function handleEditorInputAutosave(e) {
         if (typeof renderPhraseCopyPanel === 'function') {
             renderPhraseCopyPanel();
         }
+        if (typeof renderItemTagsPanel === 'function') {
+            renderItemTagsPanel();
+        }
 
     var target = getAutosaveTargetAndPayload();
     if (!target) {

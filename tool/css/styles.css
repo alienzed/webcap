@@ -1432,6 +1432,18 @@ iframe {
   margin-bottom: 6px;
 }
 
+.annotate-strip-group-title-complete {
+  color: #166534;
+}
+
+.annotate-strip-group-title-incomplete {
+  color: #9f1239;
+}
+
+.annotate-strip-group-title-na {
+  color: #475569;
+}
+
 .annotate-strip-chip-wrap {
   display: flex;
   flex-wrap: wrap;
@@ -1457,6 +1469,17 @@ iframe {
   background: #dcfce7;
   border-color: #86efac;
   color: #14532d;
+}
+
+.annotate-strip-chip-na {
+  border-style: dashed;
+  color: #475569;
+}
+
+.annotate-strip-chip-na.active {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #334155;
 }
 
 .editor-wrapper textarea#editor {
@@ -1602,6 +1625,13 @@ iframe {
   border-radius: 3px;
   font-size: 10px;
   line-height: 1;
+}
+
+#checklist-items .checklist-group-edit-btn {
+  min-width: 18px;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
 }
 
 #checklist-items button:disabled {
@@ -1889,6 +1919,30 @@ iframe {
   color: #5d6672;
 }
 
+#item-tags-list .item-tag-pill-present {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #14532d;
+}
+
+#item-tags-list .item-tag-pill-present:hover {
+  background: #bbf7d0;
+  border-color: #4ade80;
+  color: #14532d;
+}
+
+#item-tags-list .item-tag-pill-missing {
+  background: #fffbe6;
+  border-color: #ffc779;
+  color: #92400e;
+}
+
+#item-tags-list .item-tag-pill-missing:hover {
+  background: #fff4cc;
+  border-color: #f2b766;
+  color: #78350f;
+}
+
 #item-tag-add-input {
   min-height: 26px;
   font-size: 13px;
@@ -2089,6 +2143,37 @@ iframe {
 .checklist-settings-btn:hover {
   background: #ffffff;
   border-color: #9aa9bc;
+}
+
+#checklist-group-terms-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+#checklist-group-terms-items .checklist-group-term-row {
+  grid-template-columns: 1fr auto;
+  margin: 0;
+}
+
+#checklist-group-terms-items .phrase-copy-item-btn {
+  text-align: left;
+  border: 1px solid #d4dbe4;
+  background: #f4f7fb;
+  color: #2b2f33;
+  border-radius: 4px;
+  padding: 3px 8px;
+  min-height: 24px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+#checklist-group-terms-items .phrase-copy-item-btn:hover {
+  background: #e9eff6;
+  color: #1f2937;
 }
 
 #caption-checklist-panel .annotate-strip-toggle-btn {

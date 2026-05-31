@@ -650,6 +650,36 @@
                 <button class="btn" data-close-modal="checklist-keywords-modal">Cancel</button>
             </div>
         </div>
+        <div
+            id="checklist-group-terms-modal"
+            class="modal hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="checklist-group-terms-modal-title"
+        >
+            <div class="modal-header">
+                <h3 id="checklist-group-terms-modal-title">Edit Requirement Terms</h3>
+                <button class="modal-close-btn" data-close-modal="checklist-group-terms-modal" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="checklist-input-row term-input-row">
+                    <input
+                        id="checklist-group-terms-input"
+                        type="text"
+                        class="form-control"
+                        placeholder="Add/search term..."
+                    >
+                    <button id="checklist-group-terms-add-btn" type="button">+</button>
+                    <div id="checklist-group-terms-results" class="caption-term-results hidden"></div>
+                </div>
+                <div id="checklist-group-terms-items"></div>
+                <div class="small">Terms are saved as comma-separated values, alphabetically sorted, and deduplicated.</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="checklist-group-terms-save-btn">Save</button>
+                <button class="btn" data-close-modal="checklist-group-terms-modal">Cancel</button>
+            </div>
+        </div>
         <!-- JS load order: shared globals first, feature files, then main.js wiring -->
         <script src="/static/js/constants.js"></script>
         <script src="/static/js/common.js"></script>

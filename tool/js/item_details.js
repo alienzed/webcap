@@ -19,6 +19,21 @@ function getTagsForMediaKey(mediaKey) {
   return Array.isArray(tags) ? tags.slice() : [];
 }
 
+function tagAppearsInCurrentCaption(tagText) {
+  var tag = normalizeItemTag(tagText);
+  if (!tag) return false;
+  var captionText = '';
+  if (ui && ui.editorEl && typeof ui.editorEl.value === 'string') {
+    captionText = ui.editorEl.value;
+  } else if (state && state.currentItem && typeof state.currentItem.caption === 'string') {
+    captionText = state.currentItem.caption;
+  }
+  if (typeof captionContainsPhrase === 'function') {
+    return !!captionContainsPhrase(captionText, tag);
+  }
+  return String(captionText || '').toLowerCase().indexOf(tag.toLowerCase()) !== -1;
+}
+
 function hasTagForMediaKey(mediaKey, tagText) {
   var target = String(tagText || '').trim().toLowerCase();
   if (!mediaKey || !target) return false;
@@ -309,6 +324,7 @@ function renderItemTagsPanel() {
     var tagBtn = document.createElement('button');
     tagBtn.type = 'button';
     tagBtn.className = 'phrase-copy-item-btn';
+    tagBtn.classList.add(tagAppearsInCurrentCaption(tag) ? 'item-tag-pill-present' : 'item-tag-pill-missing');
     tagBtn.textContent = tag;
     tagBtn.onclick = function () {
       ui.filterEl.value = tag;

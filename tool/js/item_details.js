@@ -170,10 +170,28 @@ function saveItemTagsToFolderState() {
   writeFolderStateFile(state.folder, snapshot);
 }
 
+function shouldLiveSyncEditorToTemplateForMediaKey(mediaKey) {
+  if (!state.currentItem || !state.currentItem.key || state.currentItem.key !== mediaKey) return false;
+  if (state.currentItem.hasCaption) return false;
+  if (!ui || !ui.editorEl || ui.editorEl.readOnly) return false;
+  var currentPrimer = buildAutoPrimer(state.currentItem.fileName, state.currentItem.key);
+  var currentEditorText = String(ui.editorEl.value || '');
+  return currentEditorText.trim() === String(currentPrimer || '').trim();
+}
+
+function syncEditorToCurrentTemplatePreview() {
+  if (!state.currentItem || !ui || !ui.editorEl || ui.editorEl.readOnly) return;
+  var nextPrimer = buildAutoPrimer(state.currentItem.fileName, state.currentItem.key) || '';
+  if (ui.editorEl.value === nextPrimer) return;
+  ui.editorEl.value = nextPrimer;
+  ui.editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function addTagToMediaKey(mediaKey, tagText) {
   var key = String(mediaKey || '').trim();
   var tag = normalizeItemTag(tagText);
   if (!key || !tag) return false;
+  var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
   var current = getTagsForMediaKey(key);
   var low = tag.toLowerCase();
   var exists = current.some(function (t) { return String(t).toLowerCase() === low; });
@@ -186,6 +204,9 @@ function addTagToMediaKey(mediaKey, tagText) {
   renderFileList();
   if (typeof renderAnnotateStrip === 'function') {
     renderAnnotateStrip();
+  }
+  if (shouldSyncTemplate) {
+    syncEditorToCurrentTemplatePreview();
   }
   return true;
 }
@@ -208,6 +229,7 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   var key = String(mediaKey || '').trim();
   var target = normalizeItemTag(tagText).toLowerCase();
   if (!key || !target) return false;
+  var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
   var current = getTagsForMediaKey(key);
   if (!current.length) return false;
   var next = current.filter(function (tag) {
@@ -219,6 +241,9 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   saveItemTagsToFolderState();
   renderItemTagsPanel();
   renderFileList();
+  if (shouldSyncTemplate) {
+    syncEditorToCurrentTemplatePreview();
+  }
   return true;
 }
 
@@ -295,13 +320,7 @@ function renderItemTagsPanel() {
     rmBtn.type = 'button';
     rmBtn.textContent = 'x';
     rmBtn.onclick = function () {
-      var current = getTagsForMediaKey(key);
-      current.splice(idx, 1);
-      if (current.length) captionItemTagsByMedia[key] = current;
-      else delete captionItemTagsByMedia[key];
-      saveItemTagsToFolderState();
-      renderItemTagsPanel();
-      renderFileList();
+      removeTagFromMediaKey(key, tag);
       if (typeof renderAnnotateStrip === 'function') {
         renderAnnotateStrip();
       }

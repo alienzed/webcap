@@ -5,23 +5,21 @@ Last reviewed: 2026-05-30.
 
 
 ## Enhancements
+- Up and down keys already move between media items when selected, can mouse scroll over the preview do this too?
+- Consider making annotation an assisted Wizard like flow - provided by a modal entered into purposefully.
+- Update the caption in real time when editing the template, if the caption shown is 'missing' and thus modifiable.
 - Annotation throughput priorities (ranked by expected ROI):
-  1. Auto-advance after annotate action.
-     - Value: Very high for large sets; removes repetitive next-item clicks.
-     - Complexity: Low/medium (toggleable behavior + selection move).
-  2. Carry-forward previous tags.
-     - Value: Very high on similar runs; annotate by delta instead of from scratch.
-     - Complexity: Low (copy prior item tags to current, then edit).
-  3. Group completion indicator in media list + filter for incomplete items.
+  1. Group completion indicator in media list + filter for incomplete items.
      - Value: High; gives clear annotation progress and "what is left" targeting.
      - Complexity: Medium (derived per-item status + filter hook).
-  4. Stage-focused filter presets (`To Rate`, `Rated + Untagged`, `Tagged + No Caption`, `Ready for Review`).
-     - Value: High; cuts repeated filter setup and context switching.
-     - Complexity: Low/medium (preset save/apply wiring).
+     - Some media items will purposefully not meet certain groups, so we need to be careful about how loudly we visually indicate incompleteness, or provide means to strike a group for an item so that it doesn't knock it's score.
+  2. Auto order requirements values, alphabetical, for easier application as I move between sets.
+  4. Any missing filter presets that might help annotation
   5. Batch apply tags on multi-select.
      - Value: High in bursts, especially for contiguous scenes/outfits/locations.
      - Complexity: Medium/high (selection model + safe bulk mutate UX).
      - Note: Revisit after proving item-level annotate strip speed, since complexity is higher.
+     - Questionably useful if the idea is to pretag, but is a set has captions, filtering by some tokens could be a good opportunity to batch tag. It's less clear why I would do this though since tags right now primarily serve for the caption template.
   6. Caption scaffold from annotation tags.
      - Value: Medium; helps reduce blank-page start cost during Caption step.
      - Complexity: Medium (template mapping + insertion rules).

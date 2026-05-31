@@ -103,6 +103,7 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
       "Jewelry",
       "Surface",
       "Hair",
+      "Limbs",
       "Lighting"
     ],
     keywordsByItem: {
@@ -116,7 +117,8 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
       "Jewelry": "necklace, earrings, bracelet, ring, watch, tiara, anklet",
       "Surface": "bed, chair, couch, floor, table, ground, grass, sand, water",
       "Hair": "braided hair, curly hair, hair covering face, long hair, ponytail, short hair, styled hair, straight hair, updo, wavy hair",
-      "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight, candle light, lighting"
+      "Limbs": "arms crossed, arms spread, arms up, hand on head, hand on hip, knees drawn up, legs crossed, legs spread, one arm down, one arm up, one leg crossed over the other, one leg up",
+      "Lighting": "bright, bright background, candle, dark, dim, natural, neon, shadows, studio, sunlight, window"
     }
   },
   primer: {

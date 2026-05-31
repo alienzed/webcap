@@ -2008,6 +2008,11 @@ iframe {
   font-style: italic;
 }
 
+.item-metadata-value-ok {
+  color: #166534;
+  font-style: normal;
+}
+
 .report-preview td.metadata-value-error {
   color: #b91c1c;
   font-style: italic;
@@ -2152,6 +2157,39 @@ iframe {
   max-height: 220px;
   overflow-y: auto;
   margin-bottom: 8px;
+}
+
+#checklist-group-terms-modal .checklist-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px 0;
+}
+
+#checklist-group-terms-modal .checklist-input-row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+#checklist-group-terms-add-btn {
+  border: 1px solid #d9dde3;
+  background: #f5f6f8;
+  color: #5d6672;
+  min-width: 24px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#checklist-group-terms-add-btn:hover {
+  background: #eef1f5;
+  color: #4f5966;
 }
 
 #checklist-group-terms-items .checklist-group-term-row {

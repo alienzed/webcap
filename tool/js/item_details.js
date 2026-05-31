@@ -81,6 +81,51 @@ function getRatingForMediaKey(mediaKey) {
   return normalizeRatingValue(state.ratings[mediaKey]);
 }
 
+function parseRequirementProgressTerms(raw) {
+  var seen = {};
+  return String(raw || '')
+    .split(',')
+    .map(function (part) { return normalizeItemTag(part); })
+    .filter(function (term) {
+      var key = String(term || '').toLowerCase();
+      if (!term || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+}
+
+function computeRequirementProgressForMediaKey(mediaKey) {
+  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  var completed = 0;
+  var total = 0;
+  for (var i = 0; i < requirements.length; i++) {
+    var requirementLabel = String(requirements[i] || '').trim();
+    if (!requirementLabel) continue;
+    var rawTerms = '';
+    if (checklistKeywordsByItem && typeof checklistKeywordsByItem === 'object') {
+      rawTerms = String(checklistKeywordsByItem[requirementLabel] || '').trim();
+    }
+    if (!rawTerms && typeof DEFAULT_CHECKLIST_ITEM_KEYWORDS === 'object' && DEFAULT_CHECKLIST_ITEM_KEYWORDS) {
+      rawTerms = String(DEFAULT_CHECKLIST_ITEM_KEYWORDS[requirementLabel] || '').trim();
+    }
+    var terms = parseRequirementProgressTerms(rawTerms);
+    if (!terms.length) continue;
+    total += 1;
+    var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
+      ? isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)
+      : false;
+    if (isNa) {
+      completed += 1;
+      continue;
+    }
+    var hasMatch = terms.some(function (term) {
+      return hasTagForMediaKey(mediaKey, term);
+    });
+    if (hasMatch) completed += 1;
+  }
+  return { completed: completed, total: total };
+}
+
 function saveItemRatingsToFolderState() {
   var snapshot = snapshotFolderStateFromDom();
   writeFolderStateFile(state.folder, snapshot);
@@ -132,10 +177,32 @@ function renderItemMetadataPanel() {
   listEl.appendChild(starsRow);
 
   var row = getMetadataForMedia(state.currentItem.fileName);
+  var progress = computeRequirementProgressForMediaKey(currentMediaKey);
+  var progressRow = document.createElement('div');
+  progressRow.className = 'item-metadata-row';
+  var progressLabelEl = document.createElement('strong');
+  progressLabelEl.textContent = 'Requirement Progress';
+  var progressValueEl = document.createElement('span');
+  progressValueEl.textContent = String(progress.completed) + '/' + String(progress.total);
+  if (progress.total > 0) {
+    if (progress.completed >= progress.total) {
+      progressValueEl.classList.add('item-metadata-value-ok');
+      progressValueEl.title = 'All requirement groups completed.';
+    } else {
+      progressValueEl.classList.add('item-metadata-value-error');
+      progressValueEl.title = 'Requirement groups still missing.';
+    }
+  } else {
+    progressValueEl.title = 'No requirement groups with configured terms.';
+  }
+  progressRow.appendChild(progressLabelEl);
+  progressRow.appendChild(progressValueEl);
+
   if (!row) {
     var unavailable = document.createElement('div');
     unavailable.textContent = 'Metadata unavailable.';
     listEl.appendChild(unavailable);
+    listEl.appendChild(progressRow);
     return;
   }
   var fieldOrder = [
@@ -177,6 +244,7 @@ function renderItemMetadataPanel() {
     unavailable2.textContent = 'Metadata unavailable.';
     listEl.appendChild(unavailable2);
   }
+  listEl.appendChild(progressRow);
 }
 
 function saveItemTagsToFolderState() {
@@ -216,6 +284,7 @@ function addTagToMediaKey(mediaKey, tagText) {
   ensureCaptionHelperPhraseInCatalog(tag, true);
   debouncedItemTagsSave(saveItemTagsToFolderState);
   renderItemTagsPanel();
+  renderItemMetadataPanel();
   renderFileList();
   if (typeof renderAnnotateStrip === 'function') {
     renderAnnotateStrip();
@@ -255,6 +324,7 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   else delete captionItemTagsByMedia[key];
   saveItemTagsToFolderState();
   renderItemTagsPanel();
+  renderItemMetadataPanel();
   renderFileList();
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();

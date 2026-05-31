@@ -71,6 +71,9 @@ function setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, isNa) 
   }
   saveChecklistToFolderState();
   renderChecklistPanel();
+  if (typeof renderItemMetadataPanel === 'function') {
+    renderItemMetadataPanel();
+  }
   if (typeof renderAnnotateStrip === 'function') {
     renderAnnotateStrip();
   }
@@ -392,6 +395,9 @@ function saveChecklistGroupTermsModalAndClose() {
   );
   saveChecklistToFolderState();
   renderChecklistPanel();
+  if (typeof renderItemMetadataPanel === 'function') {
+    renderItemMetadataPanel();
+  }
   closeChecklistGroupTermsModal();
 }
 

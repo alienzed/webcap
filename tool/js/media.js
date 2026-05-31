@@ -427,6 +427,9 @@ function selectPathMedia(mediaItem) {
     if (typeof renderPhraseCopyPanel === 'function') {
       renderPhraseCopyPanel();
     }
+    if (typeof updatePrimerCaptionResetUi === 'function') {
+      updatePrimerCaptionResetUi();
+    }
     // Re-render list to show selection
     renderFileList();
     scrollCurrentMediaRowIntoView();

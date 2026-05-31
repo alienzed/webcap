@@ -18,6 +18,9 @@ function clearEditorAndPreview() {
   var checklistPanelEl = document.getElementById('caption-checklist-panel');
   if (checklistPanelEl) checklistPanelEl.style.display = 'none';
   state.currentItem = null;
+  if (typeof updatePrimerCaptionResetUi === 'function') {
+    updatePrimerCaptionResetUi();
+  }
   updatePreviewActionControls();
 }
 
@@ -28,6 +31,9 @@ function clearSelection() {
   }
   state.currentItem = null;
   state.currentConfigFile = null;
+  if (typeof updatePrimerCaptionResetUi === 'function') {
+    updatePrimerCaptionResetUi();
+  }
   renderFileList(ui.filterEl.value);
 }
 
@@ -253,6 +259,9 @@ function wireSidebarTabs() {
 function wireAllUi() {
   // Autosaving of primer/stats changes (debounced)
   wireStatsPrimerAutoSave();
+  if (typeof wirePrimerCaptionResetUi === 'function') {
+    wirePrimerCaptionResetUi();
+  }
   if (typeof wireStatsBalancePhraseUi === 'function') {
     wireStatsBalancePhraseUi();
   }

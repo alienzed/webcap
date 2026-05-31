@@ -689,6 +689,7 @@ function statsGetPrimerOptionsFromDom() {
 
 // Debounced auto-save for stats/primer changes
 var debouncedSaveFolderState = debounceCreate(600);
+var primerResetUndoState = null; // { mediaKey, text }
 
 function wireStatsPrimerAutoSave() {
   var statsFields = [
@@ -703,7 +704,97 @@ function wireStatsPrimerAutoSave() {
         debouncedSaveFolderState(function () {
           saveFolderStateForCurrentRoot();
         });
+        if (typeof updatePrimerCaptionResetUi === 'function') {
+          updatePrimerCaptionResetUi();
+        }
       });
     }
   });
+}
+
+function getPrimerResetCurrentMediaItem() {
+  if (!state || !state.currentItem || !state.currentItem.fileName || !state.currentItem.key) return null;
+  return state.currentItem;
+}
+
+function updatePrimerCaptionResetUi() {
+  var resetBtn = document.getElementById('primer-reset-caption-btn');
+  var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
+  if (!resetBtn || !undoBtn) return;
+
+  var mediaItem = getPrimerResetCurrentMediaItem();
+  var hasSelectedMedia = !!(mediaItem && ui && ui.editorEl && !ui.editorEl.readOnly);
+  resetBtn.disabled = !hasSelectedMedia;
+
+  if (!hasSelectedMedia) {
+    undoBtn.classList.add('hidden');
+    return;
+  }
+
+  var canUndo = !!(primerResetUndoState && primerResetUndoState.mediaKey === mediaItem.key);
+  undoBtn.classList.toggle('hidden', !canUndo);
+}
+
+function applyEditorTextAndTriggerInput(nextText) {
+  if (!ui || !ui.editorEl) return;
+  ui.editorEl.value = String(nextText || '');
+  ui.editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function wirePrimerCaptionResetUi() {
+  var resetBtn = document.getElementById('primer-reset-caption-btn');
+  var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
+  if (!resetBtn || !undoBtn) return;
+
+  if (!resetBtn.__primerResetBound) {
+    resetBtn.__primerResetBound = true;
+    resetBtn.addEventListener('click', function () {
+      var mediaItem = getPrimerResetCurrentMediaItem();
+      if (!mediaItem) {
+        setStatus('Select a media item first.');
+        return;
+      }
+      var nextPrimer = buildAutoPrimer(mediaItem.fileName, mediaItem.key) || '';
+      if (!nextPrimer.trim()) {
+        if (!confirm('Primer output is empty. Clear current caption?')) return;
+      } else {
+        if (!confirm('Reset caption to current primer output?')) return;
+      }
+      var previousText = String((ui && ui.editorEl && ui.editorEl.value) || '');
+      if (previousText === nextPrimer) {
+        setStatus('Caption already matches primer output.');
+        return;
+      }
+      primerResetUndoState = {
+        mediaKey: mediaItem.key,
+        text: previousText
+      };
+      applyEditorTextAndTriggerInput(nextPrimer);
+      updatePrimerCaptionResetUi();
+      saveCaptionDirect(state.folder, mediaItem.fileName, nextPrimer, mediaItem.key).catch(function (err) {
+        setStatus(String(err && err.message ? err.message : err));
+      });
+    });
+  }
+
+  if (!undoBtn.__primerResetBound) {
+    undoBtn.__primerResetBound = true;
+    undoBtn.addEventListener('click', function () {
+      var mediaItem = getPrimerResetCurrentMediaItem();
+      if (!mediaItem || !primerResetUndoState || primerResetUndoState.mediaKey !== mediaItem.key) {
+        setStatus('No reset to undo for this item.');
+        updatePrimerCaptionResetUi();
+        return;
+      }
+      var restoreText = String(primerResetUndoState.text || '');
+      primerResetUndoState = null;
+      applyEditorTextAndTriggerInput(restoreText);
+      updatePrimerCaptionResetUi();
+      saveCaptionDirect(state.folder, mediaItem.fileName, restoreText, mediaItem.key).catch(function (err) {
+        setStatus(String(err && err.message ? err.message : err));
+      });
+    });
+  }
+
+  updatePrimerCaptionResetUi();
 }

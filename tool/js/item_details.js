@@ -184,6 +184,9 @@ function addTagToMediaKey(mediaKey, tagText) {
   debouncedItemTagsSave(saveItemTagsToFolderState);
   renderItemTagsPanel();
   renderFileList();
+  if (typeof renderAnnotateStrip === 'function') {
+    renderAnnotateStrip();
+  }
   return true;
 }
 
@@ -198,6 +201,41 @@ function addTagToCurrentMedia(tagText) {
     return false;
   }
   setStatus('Tag added: ' + normalizeItemTag(tagText));
+  return true;
+}
+
+function removeTagFromMediaKey(mediaKey, tagText) {
+  var key = String(mediaKey || '').trim();
+  var target = normalizeItemTag(tagText).toLowerCase();
+  if (!key || !target) return false;
+  var current = getTagsForMediaKey(key);
+  if (!current.length) return false;
+  var next = current.filter(function (tag) {
+    return normalizeItemTag(tag).toLowerCase() !== target;
+  });
+  if (next.length === current.length) return false;
+  if (next.length) captionItemTagsByMedia[key] = next;
+  else delete captionItemTagsByMedia[key];
+  saveItemTagsToFolderState();
+  renderItemTagsPanel();
+  renderFileList();
+  return true;
+}
+
+function removeTagFromCurrentMedia(tagText) {
+  if (!state.currentItem || !state.currentItem.key) {
+    setStatus('Select a media item to remove tags.');
+    return false;
+  }
+  var removed = removeTagFromMediaKey(state.currentItem.key, tagText);
+  if (!removed) {
+    setStatus('Tag not found.');
+    return false;
+  }
+  setStatus('Tag removed: ' + normalizeItemTag(tagText));
+  if (typeof renderAnnotateStrip === 'function') {
+    renderAnnotateStrip();
+  }
   return true;
 }
 
@@ -264,6 +302,9 @@ function renderItemTagsPanel() {
       saveItemTagsToFolderState();
       renderItemTagsPanel();
       renderFileList();
+      if (typeof renderAnnotateStrip === 'function') {
+        renderAnnotateStrip();
+      }
     };
 
     row.appendChild(tagBtn);
@@ -359,3 +400,4 @@ function wireItemDetailsUi() {
 
 window.addTagToCurrentMedia = addTagToCurrentMedia;
 window.hasTagForMediaKey = hasTagForMediaKey;
+window.removeTagFromCurrentMedia = removeTagFromCurrentMedia;

@@ -1,10 +1,31 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-05-19.
+Last reviewed: 2026-05-30.
 
 ## Bugs
 
 
 ## Enhancements
+- Annotation throughput priorities (ranked by expected ROI):
+  1. Auto-advance after annotate action.
+     - Value: Very high for large sets; removes repetitive next-item clicks.
+     - Complexity: Low/medium (toggleable behavior + selection move).
+  2. Carry-forward previous tags.
+     - Value: Very high on similar runs; annotate by delta instead of from scratch.
+     - Complexity: Low (copy prior item tags to current, then edit).
+  3. Group completion indicator in media list + filter for incomplete items.
+     - Value: High; gives clear annotation progress and "what is left" targeting.
+     - Complexity: Medium (derived per-item status + filter hook).
+  4. Stage-focused filter presets (`To Rate`, `Rated + Untagged`, `Tagged + No Caption`, `Ready for Review`).
+     - Value: High; cuts repeated filter setup and context switching.
+     - Complexity: Low/medium (preset save/apply wiring).
+  5. Batch apply tags on multi-select.
+     - Value: High in bursts, especially for contiguous scenes/outfits/locations.
+     - Complexity: Medium/high (selection model + safe bulk mutate UX).
+     - Note: Revisit after proving item-level annotate strip speed, since complexity is higher.
+  6. Caption scaffold from annotation tags.
+     - Value: Medium; helps reduce blank-page start cost during Caption step.
+     - Complexity: Medium (template mapping + insertion rules).
+     - Note: Useful, but less urgent than annotation velocity wins above.
 - A way to visually show in the media list when an item has a star rating. I'm not sure we NEED to show how many stars, just something that clearly denotes 'this item has a rating'. I was even thinking of having the number of star really really tiny beneath the name, only a few pixels tall, like, that would be enough for my needs. OR, we do the opposite, right now we have a background color for missing captions, maybe there's a way to do something similar for missing rating.
 - Dataset inferred sample/megaframe/VRAM/time estimation.
 - Preview quick actions (pre-implementation decision):

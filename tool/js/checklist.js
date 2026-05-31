@@ -78,6 +78,9 @@ function renderChecklistPanel() {
   // Only show if a media item is selected
   if (!state.currentItem) {
     setChecklistPanelVisible(false);
+    if (typeof renderAnnotateStrip === 'function') {
+      renderAnnotateStrip();
+    }
     return;
   }
   setChecklistPanelVisible(true);
@@ -132,6 +135,9 @@ function renderChecklistPanel() {
   }
   renderItemTagsPanel();
   renderItemMetadataPanel();
+  if (typeof renderAnnotateStrip === 'function') {
+    renderAnnotateStrip();
+  }
 }
 
 function saveChecklistToFolderState() {

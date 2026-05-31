@@ -306,7 +306,14 @@ function wireAllUi() {
   var closeBtn = document.getElementById('checklist-close-btn');
   if (closeBtn) {
     closeBtn.onclick = function() {
-      checklistPanelEl.style.display = 'none';
+      if (typeof setChecklistPanelVisible === 'function') {
+        setChecklistPanelVisible(false);
+      } else if (checklistPanelEl) {
+        checklistPanelEl.style.display = 'none';
+      }
+      if (typeof renderAnnotateStrip === 'function') {
+        renderAnnotateStrip();
+      }
     };
   }
 

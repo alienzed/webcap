@@ -4,6 +4,138 @@ var captionHelperPhrases = [];
 var captionQuickPhrases = [];
 var captionHelperNotes = '';
 var debouncedSetNotesSave = debounceCreate(500);
+var annotateStripVisible = false;
+
+function parseAnnotateStripTerms(raw) {
+  var seen = {};
+  return String(raw || '')
+    .split(',')
+    .map(function (part) { return normalizeCatalogTerm(part); })
+    .filter(function (term) {
+      var low = term.toLowerCase();
+      if (!term || seen[low]) return false;
+      seen[low] = true;
+      return true;
+    });
+}
+
+function getAnnotateStripGroups() {
+  var groups = [];
+  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  for (var i = 0; i < requirements.length; i++) {
+    var groupName = normalizeCatalogTerm(requirements[i]);
+    if (!groupName) continue;
+    var rawTerms = (checklistKeywordsByItem && checklistKeywordsByItem[groupName]) || '';
+    var terms = parseAnnotateStripTerms(rawTerms);
+    if (!terms.length) continue;
+    groups.push({ name: groupName, terms: terms });
+  }
+  return groups;
+}
+
+function updateAnnotateStripToggleUi() {
+  var toggleBtn = document.getElementById('annotate-strip-toggle-btn');
+  if (!toggleBtn) return;
+  toggleBtn.setAttribute('aria-expanded', annotateStripVisible ? 'true' : 'false');
+  toggleBtn.innerHTML = 'Annotate ' + (annotateStripVisible ? '&#9660;' : '&#9650;');
+}
+
+function setAnnotateStripVisible(nextVisible, persistNow) {
+  annotateStripVisible = !!nextVisible;
+  window.annotateStripVisible = annotateStripVisible;
+  updateAnnotateStripToggleUi();
+  renderAnnotateStrip();
+  if (persistNow) {
+    saveCaptionHelpersToFolderState();
+  }
+}
+
+function toggleAnnotateTag(term) {
+  var text = normalizeCatalogTerm(term);
+  if (!text) return;
+  if (!state.currentItem || !state.currentItem.key) {
+    setStatus('Select a media item to annotate.');
+    return;
+  }
+  var mediaKey = state.currentItem.key;
+  if (hasTagForMediaKey(mediaKey, text)) {
+    if (typeof removeTagFromCurrentMedia === 'function') {
+      removeTagFromCurrentMedia(text);
+    }
+    renderAnnotateStrip();
+    return;
+  }
+  addTagToCurrentMedia(text);
+  renderAnnotateStrip();
+}
+
+function renderAnnotateStrip() {
+  var stripEl = document.getElementById('annotate-strip');
+  if (!stripEl) return;
+  var panelEl = document.getElementById('caption-checklist-panel');
+  var editorPanelEl = panelEl ? panelEl.closest('.editor-panel') : null;
+  var panelVisible = !!(panelEl && panelEl.style.display !== 'none');
+  var canShow = !!(annotateStripVisible && panelVisible && state.currentItem && state.currentItem.key);
+
+  if (!canShow) {
+    stripEl.classList.add('hidden');
+    stripEl.innerHTML = '';
+    if (editorPanelEl) editorPanelEl.classList.remove('annotate-strip-visible');
+    return;
+  }
+
+  if (editorPanelEl) editorPanelEl.classList.add('annotate-strip-visible');
+  stripEl.classList.remove('hidden');
+  var panelHeight = panelEl ? panelEl.offsetHeight : 0;
+  stripEl.style.bottom = String(panelHeight + 30) + 'px';
+
+  var groups = getAnnotateStripGroups();
+  stripEl.innerHTML = '';
+
+  if (!groups.length) {
+    var empty = document.createElement('div');
+    empty.className = 'annotate-strip-empty';
+    empty.textContent = 'No annotation groups configured. Add requirement keywords to define group items.';
+    stripEl.appendChild(empty);
+    return;
+  }
+
+  var groupsWrap = document.createElement('div');
+  groupsWrap.className = 'annotate-strip-groups';
+  var mediaKey = state.currentItem.key;
+
+  groups.forEach(function (group) {
+    var groupEl = document.createElement('div');
+    groupEl.className = 'annotate-strip-group';
+
+    var titleEl = document.createElement('div');
+    titleEl.className = 'annotate-strip-group-title';
+    titleEl.textContent = group.name;
+    groupEl.appendChild(titleEl);
+
+    var chipWrap = document.createElement('div');
+    chipWrap.className = 'annotate-strip-chip-wrap';
+    group.terms.forEach(function (term) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'annotate-strip-chip';
+      if (hasTagForMediaKey(mediaKey, term)) {
+        chip.classList.add('active');
+      }
+      chip.textContent = term;
+      chip.title = 'Toggle tag';
+      chip.onclick = function () {
+        toggleAnnotateTag(term);
+      };
+      chipWrap.appendChild(chip);
+    });
+
+    groupEl.appendChild(chipWrap);
+    groupsWrap.appendChild(groupEl);
+  });
+
+  stripEl.appendChild(groupsWrap);
+}
 
 function getCaptionQuickPhraseHotkeyLabel(index) {
   var n = Number(index) + 1;
@@ -199,6 +331,7 @@ function saveCaptionHelpersToFolderState() {
   snapshot.caption_phrases = captionHelperPhrases.slice();
   snapshot.quick_phrases = captionQuickPhrases.slice();
   snapshot.caption_set_notes = captionHelperNotes;
+  snapshot.annotate_strip_visible = !!annotateStripVisible;
   writeFolderStateFile(state.folder, snapshot);
 }
 
@@ -372,20 +505,18 @@ function renderPhraseCopyPanel() {
       actions.className = 'phrase-copy-actions';
 
       var hotkeyLabel = getCaptionQuickPhraseHotkeyLabel(idx);
-      if (hotkeyLabel) {
-        var keyHint = document.createElement('button');
-        keyHint.type = 'button';
-        keyHint.className = 'stats-phrase-keyhint';
-        keyHint.title = 'Move up (Shift+' + (idx + 1) + ')';
-        keyHint.textContent = hotkeyLabel;
-        keyHint.onclick = function () {
-          var moved = moveCaptionQuickPhraseByOffset(idx, -1);
-          if (moved) {
-            setStatus('Moved quick phrase up: ' + phrase);
-          }
-        };
-        actions.appendChild(keyHint);
-      }
+      var keyHint = document.createElement('button');
+      keyHint.type = 'button';
+      keyHint.className = 'stats-phrase-keyhint';
+      keyHint.title = hotkeyLabel ? ('Move up (Shift+' + (idx + 1) + ')') : 'Move up';
+      keyHint.textContent = hotkeyLabel || '\u21e7';
+      keyHint.onclick = function () {
+        var moved = moveCaptionQuickPhraseByOffset(idx, -1);
+        if (moved) {
+          setStatus('Moved quick phrase up: ' + phrase);
+        }
+      };
+      actions.appendChild(keyHint);
 
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -418,11 +549,15 @@ function loadCaptionHelpersFromFolderState(folderState) {
     ensureCaptionHelperPhraseInCatalog(phrase, false, true);
   });
   captionHelperNotes = String(folderState.caption_set_notes || '');
+  annotateStripVisible = !!folderState.annotate_strip_visible;
+  window.annotateStripVisible = annotateStripVisible;
+  updateAnnotateStripToggleUi();
   var notesEditor = document.getElementById('set-notes-editor');
   if (notesEditor) {
     notesEditor.value = captionHelperNotes;
   }
   renderPhraseCopyPanel();
+  renderAnnotateStrip();
 }
 
 function wireCaptionHelpersUi() {
@@ -437,6 +572,7 @@ function wireCaptionHelpersUi() {
   var tagApplyBtn = document.getElementById('tag-term-apply-btn');
   var tagResults = document.getElementById('tag-term-results');
   var notesEditor = document.getElementById('set-notes-editor');
+  var annotateStripToggleBtn = document.getElementById('annotate-strip-toggle-btn');
 
   requirementsBtn.onclick = function () {
     setCaptionHelperTab('requirements');
@@ -453,6 +589,11 @@ function wireCaptionHelpersUi() {
   }
   if (metadataBtn) {
     metadataBtn.onclick = function () { setCaptionHelperTab('metadata'); };
+  }
+  if (annotateStripToggleBtn) {
+    annotateStripToggleBtn.onclick = function () {
+      setAnnotateStripVisible(!annotateStripVisible, true);
+    };
   }
 
   function clearResults(el) {
@@ -672,9 +813,13 @@ function wireCaptionHelpersUi() {
   }
 
   setCaptionHelperTab(captionHelperActiveTab);
+  updateAnnotateStripToggleUi();
   renderPhraseCopyPanel();
+  renderAnnotateStrip();
 }
 
 window.ensureCaptionHelperPhraseInCatalog = ensureCaptionHelperPhraseInCatalog;
 window.mergeCaptionHelperPhrasesFromTagsMap = mergeCaptionHelperPhrasesFromTagsMap;
 window.getCaptionHelperCatalogTerms = getCaptionHelperCatalogTerms;
+window.renderAnnotateStrip = renderAnnotateStrip;
+window.setAnnotateStripVisible = setAnnotateStripVisible;

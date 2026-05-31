@@ -381,6 +381,7 @@
             <div class="panel editor-panel">
                 <div class="editor-wrapper">
                     <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
+                    <div id="annotate-strip" class="annotate-strip hidden" aria-label="Annotation strip"></div>
                     <div id="caption-checklist-panel" class="checklist-panel" style="display:none;">
                         <button id="checklist-close-btn" title="Close checklist" aria-label="Close checklist" class="checklist-close-btn">&times;</button>
                         <div id="caption-helper-tabs" class="caption-helper-tabs">
@@ -432,7 +433,16 @@
                             <div id="checklist-items"></div>
                         </div>
                         <div id="caption-helper-tab-phrases" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title">Phrases</div>
+                            <div class="caption-helper-section-title-row">
+                                <div class="caption-helper-section-title">Phrases</div>
+                                <button
+                                    id="annotate-strip-toggle-btn"
+                                    type="button"
+                                    class="annotate-strip-toggle-btn"
+                                    title="Show/hide annotation strip"
+                                    aria-expanded="false"
+                                >Annotate &#9650;</button>
+                            </div>
                             <div id="phrase-term-row" class="checklist-input-row caption-term-shared-row term-input-row">
                                 <input
                                     id="phrase-term-input"

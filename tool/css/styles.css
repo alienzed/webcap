@@ -1392,6 +1392,76 @@ iframe {
   pointer-events: auto;
 }
 
+.annotate-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  background: #f8fbff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  z-index: 19;
+  max-height: 170px;
+  overflow-y: auto;
+}
+
+.annotate-strip-empty {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.annotate-strip-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.annotate-strip-group {
+  flex: 1 1 220px;
+  min-width: 180px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px;
+  background: #ffffff;
+}
+
+.annotate-strip-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.25px;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.annotate-strip-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.annotate-strip-chip {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.1;
+  padding: 3px 8px;
+}
+
+.annotate-strip-chip:hover {
+  background: #edf2f7;
+  color: #1f2937;
+}
+
+.annotate-strip-chip.active {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #14532d;
+}
+
 .editor-wrapper textarea#editor {
   min-height: calc(50vh - 40px);
   width: 100%;
@@ -1409,6 +1479,10 @@ iframe {
 .editor-panel.checklist-visible textarea#editor {
   padding-bottom: 90px !important;
 }
+
+.editor-panel.checklist-visible.annotate-strip-visible textarea#editor {
+  padding-bottom: 260px !important;
+}
 @media (max-width: 700px) {
   #caption-checklist-panel.checklist-panel {
     left: 0;
@@ -1417,6 +1491,10 @@ iframe {
     min-width: 0;
     max-width: none;
     padding: 14px 2px 8px 2px;
+  }
+  .annotate-strip {
+    margin: 0 2px;
+    max-height: 140px;
   }
   #checklist-items {
     grid-template-columns: repeat(2, 1fr);
@@ -2001,6 +2079,21 @@ iframe {
 }
 
 .checklist-settings-btn:hover {
+  background: #ffffff;
+  border-color: #9aa9bc;
+}
+
+#caption-checklist-panel .annotate-strip-toggle-btn {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid #b8c3d1;
+  background: #f9fbfd;
+  color: #334155;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#caption-checklist-panel .annotate-strip-toggle-btn:hover {
   background: #ffffff;
   border-color: #9aa9bc;
 }

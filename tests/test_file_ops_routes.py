@@ -469,6 +469,10 @@ def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, m
         source_dir / ".webcap_state.json",
         json.dumps(
             {
+                "primer": {
+                    "template": "{subject}\n{view}\n{lighting}",
+                    "mappings": [{"scope": "tag", "token": "front", "key": "view", "value": "front view", "enabled": True}],
+                },
                 "reviewedKeys": ["one.png"],
                 "flags": {"one.png": "blue"},
                 "caption_tags_by_media": {"one.png": ["tag-a", "tag-b"]},
@@ -514,6 +518,8 @@ def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, m
     assert (out_dir / "one.txt").exists()
     assert (out_dir / "originals" / "one.png").exists()
     out_state = json.loads((out_dir / ".webcap_state.json").read_text(encoding="utf-8"))
+    assert out_state["primer"]["template"] == "{subject}\n{view}\n{lighting}"
+    assert out_state["primer"]["mappings"][0]["key"] == "view"
     assert out_state["reviewedKeys"] == ["one.png"]
     assert out_state["flags"] == {"one.png": "blue"}
     assert out_state["caption_tags_by_media"] == {"one.png": ["tag-a", "tag-b"]}

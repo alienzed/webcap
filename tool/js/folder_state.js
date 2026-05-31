@@ -233,8 +233,7 @@ async function saveFolderStateForCurrentRoot() {
 function renderMultilineTemplate(template, values) {
   var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function (_, rawKey) {
     var key = String(rawKey || '').toLowerCase();
-    // Keep unresolved placeholders visible and easy to select/edit in textarea workflows.
-    return values.hasOwnProperty(key) ? values[key] : String(rawKey || '').toUpperCase();
+    return values.hasOwnProperty(key) ? values[key] : '';
   });
 
   rendered = rendered

@@ -349,6 +349,13 @@ def _collect_source_media_rels(payload_items) -> list[str]:
     return sorted(out, key=lambda v: v.lower())
 
 
+def _clone_primer_block(state_obj: dict) -> dict:
+    src = state_obj.get("primer") if isinstance(state_obj, dict) else {}
+    if isinstance(src, dict):
+        return json.loads(json.dumps(src))
+    return {"template": "", "defaults": "", "mappings": ""}
+
+
 def create_set_from_results_response(data: dict):
     payload = data or {}
     try:
@@ -379,6 +386,7 @@ def create_set_from_results_response(data: dict):
         tags_by_media = {}
         ratings_by_media = {}
         dest_media_metadata = {}
+        source_folder_order = []
 
         for source_media_rel in source_media_rels:
             source_media_path = app_config.safe_join_fs_root(source_media_rel)
@@ -401,6 +409,7 @@ def create_set_from_results_response(data: dict):
             source_folder_path = source_media_path.parent
             if source_folder_key not in state_by_folder:
                 state_by_folder[source_folder_key] = _load_folder_state(source_folder_path)
+                source_folder_order.append(source_folder_key)
             if source_folder_key not in metadata_by_folder:
                 metadata_by_folder[source_folder_key] = _load_folder_media_metadata(source_folder_path)
             src_state = state_by_folder[source_folder_key]
@@ -450,10 +459,15 @@ def create_set_from_results_response(data: dict):
                 }
             )
 
+        primer_block = {"template": "", "defaults": "", "mappings": ""}
+        if source_folder_order:
+            first_folder_key = source_folder_order[0]
+            primer_block = _clone_primer_block(state_by_folder.get(first_folder_key, {}))
+
         dest_state = {
             "version": 1,
             "stats": {"requiredPhrase": "", "phrases": "", "tokenRules": ""},
-            "primer": {"template": "", "defaults": "", "mappings": ""},
+            "primer": primer_block,
             "reviewedKeys": sorted(set([str(v) for v in reviewed_keys if str(v).strip()])),
             "flags": flags,
             "caption_tags_by_media": tags_by_media,

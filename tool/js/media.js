@@ -114,6 +114,7 @@ function updatePreviewActionControls() {
     hideAll();
     return;
   }
+  // This element is a contextual "Reset" quick action (not a passive mutation badge).
   var mutationResetAction = findPreviewActionByLabel(actions, 'Reset');
   var showMutationReset = !!(isMediaMutated(state.currentItem.key) && mutationResetAction);
   ui.previewMutationIndicatorEl.classList.toggle('hidden', !showMutationReset);

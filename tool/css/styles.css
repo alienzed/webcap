@@ -2143,25 +2143,45 @@ iframe {
 
 @media (min-width: 1500px) {
   .editor-panel.checklist-visible #caption-checklist-panel.checklist-panel {
-    display: block !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: 12px;
+    row-gap: 8px;
+    align-items: start;
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tabs {
     display: flex;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    margin-bottom: 0;
+  }
+
+  .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tab-btn {
+    display: none;
+  }
+
+  .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tabs-actions {
+    margin-left: 0;
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tab-pane {
+    display: block;
     min-height: 0;
     max-height: 280px;
     overflow-y: auto;
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tab-pane.hidden {
+    display: block !important;
+  }
+
+  .editor-panel.checklist-visible #caption-checklist-panel.helper-panel-collapsed .caption-helper-tab-pane {
     display: none !important;
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-section-title {
-    display: none;
+    display: block;
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel #checklist-items,

@@ -63,6 +63,7 @@ function setCaptionHelperPanelCollapsed(nextCollapsed, persistNow) {
   captionHelperPanelCollapsed = !!nextCollapsed;
   window.captionHelperPanelCollapsed = captionHelperPanelCollapsed;
   updateCaptionHelperCollapseUi();
+  renderAnnotateStrip();
   if (persistNow) {
     saveCaptionHelpersToFolderState();
   }
@@ -678,21 +679,35 @@ function wireCaptionHelpersUi() {
   var annotateStripToggleBtn = document.getElementById('annotate-strip-toggle-btn');
   var helperCollapseToggleBtn = document.getElementById('caption-helper-collapse-btn');
 
+  function expandHelperPanelForTabSwitch() {
+    if (captionHelperPanelCollapsed) {
+      setCaptionHelperPanelCollapsed(false, true);
+    }
+  }
+
   requirementsBtn.onclick = function () {
+    expandHelperPanelForTabSwitch();
     setCaptionHelperTab('requirements');
     if (typeof renderChecklistPanel === 'function') {
       renderChecklistPanel();
     }
   };
   phrasesBtn.onclick = function () {
+    expandHelperPanelForTabSwitch();
     setCaptionHelperTab('phrases');
     renderPhraseCopyPanel();
   };
   if (tagsBtn) {
-    tagsBtn.onclick = function () { setCaptionHelperTab('tags'); };
+    tagsBtn.onclick = function () {
+      expandHelperPanelForTabSwitch();
+      setCaptionHelperTab('tags');
+    };
   }
   if (metadataBtn) {
-    metadataBtn.onclick = function () { setCaptionHelperTab('metadata'); };
+    metadataBtn.onclick = function () {
+      expandHelperPanelForTabSwitch();
+      setCaptionHelperTab('metadata');
+    };
   }
   if (annotateStripToggleBtn) {
     annotateStripToggleBtn.onclick = function () {

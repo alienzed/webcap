@@ -103,6 +103,10 @@ Open:
 - Click a media row to load preview and caption.
 - Selection change saves current caption first (when needed), then switches.
 - Selected media status and metadata update live.
+- Preview overlay quick actions are contextual:
+  - Images: `Crop`, `Deface`
+  - Videos: `Clip`, `Deface`
+  - Mutated media: `Reset` appears as a direct quick action.
 
 ### 3. Caption editor
 
@@ -186,6 +190,7 @@ Tabs:
 
 Requirements tab:
 - Add/remove requirements per set.
+- Reorder requirements with row-level `⇧` (move up).
 - Per-media checkbox state persists.
 - Checklist completion can drive reviewed state.
 - Settings modal lets you assign comma-separated keywords per requirement.
@@ -198,6 +203,9 @@ Phrases tab:
   - If present: remove
   - If missing: insert at cursor
 - `Tag` button assigns that phrase as a tag to the current media item.
+- `Annotate ▲/▼` toggles the floating Annotate Strip above the helper panel.
+- Annotate Strip groups come from Requirements + requirement keywords.
+- Clicking an annotate chip toggles that tag on the current media item.
 - Hover highlighting is supported for phrase/requirement matches.
 
 Tags tab:
@@ -218,6 +226,12 @@ Metadata tab:
   - Row fields: `Scope` (`file` or `tag`), `Token`, `Key`, `Value (optional)`, `Enabled`.
   - If `Value` is blank, `Token` is used as the value.
   - Custom mapping rows are applied before requirement-derived defaults.
+  - Multiple matches for the same key are appended in order (comma-separated, deduped).
+  - Unresolved placeholders are removed.
+  - Conditional punctuation is supported in placeholders (examples: `{view,}`, `{,view}`, `{ (view) }`).
+  - Conditional phrase wrappers are supported:
+    - `{view| against }` => append phrase after resolved `view`
+    - `{ in |location| setting}` => add prefix/suffix around resolved `location`
 - `Set Notes` is available as a separate freeform notes field.
 
 ### 9.2 Review tab
@@ -271,6 +285,7 @@ Behavior:
 - Generate reads prep manifest and writes dataset/config outputs.
 - If prep manifest is missing, Generate auto-runs Prepare once, then retries Generate.
 - Train prints resolved command preview to console (does not run training jobs).
+- Create Set From Results copies per-item state and now carries the source `primer` block (`template`, mappings, related primer fields) into the destination set state.
 
 ### 13. Config file editing in-app
 

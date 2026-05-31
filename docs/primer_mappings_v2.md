@@ -1,6 +1,6 @@
 # Primer Mappings V2 (Structured, Modal-Based)
 
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 ## Goal
 Replace legacy advanced textareas with structured modal editors so primer behavior is discoverable and safe.
@@ -69,12 +69,20 @@ When auto-primer is generated for an empty caption:
 6. On match:
 - If key is unset, set `key=value`.
 - If `value` is blank, `token` is used as the value.
-- If key is already set, ignore later rows for that key.
+- If key is already set, append additional matched values in row order.
+- Per-key values are deduplicated case-insensitively before rendering.
 7. Render `primer.template` using final key-value map.
-8. Unresolved placeholders render as uppercase key text (for example `{view}` -> `VIEW`).
+8. Unresolved placeholders are removed (empty output).
+9. Placeholder punctuation can be conditional by including non-key characters inside braces:
+- `{view,}` -> emits trailing comma only if `view` resolves.
+- `{,view}` -> emits leading comma only if `view` resolves.
+- `{ (view) }` -> emits surrounding punctuation only if `view` resolves.
+10. Conditional phrase wrappers are supported:
+- `{view| against }` -> emits `value + " against "` only if `view` resolves.
+- `{ in |location| setting}` -> emits `" in " + value + " setting"` only if `location` resolves.
 
 Collision policy:
-1. First matching row per key wins (top-to-bottom order).
+1. Matching rows for the same key append values in top-to-bottom order.
 2. Custom mappings always win over requirement defaults because defaults are appended after custom rows.
 3. No explicit priority field or conflict UI.
 
@@ -127,5 +135,7 @@ If legacy text fields existed, new saves overwrite with structured state as sour
 
 1. Folder-state save/load preserves `primer.mappings` and `stats.reviewRules`.
 2. Auto-primer generation applies mappings with custom-first precedence and blank-value token passthrough.
-3. Review compute consumes structured rules and returns expected failures.
-4. Existing review/caption workflows remain functional without legacy textareas.
+3. Auto-primer generation appends multiple matched values per key (deduped, ordered).
+4. Placeholder rendering removes unresolved keys and honors conditional punctuation/phrase wrappers.
+5. Review compute consumes structured rules and returns expected failures.
+6. Existing review/caption workflows remain functional without legacy textareas.

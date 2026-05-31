@@ -231,9 +231,46 @@ async function saveFolderStateForCurrentRoot() {
 
 
 function renderMultilineTemplate(template, values) {
-  var rendered = String(template || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, function (_, rawKey) {
-    var key = String(rawKey || '').toLowerCase();
-    return values.hasOwnProperty(key) ? values[key] : '';
+  var rendered = String(template || '').replace(/\{([^{}]+)\}/g, function (_, rawInner) {
+    var inner = String(rawInner || '');
+    var conditional = inner.split('|');
+    if (conditional.length === 2 || conditional.length === 3) {
+      var conditionalPrefix = '';
+      var conditionalKey = '';
+      var conditionalSuffix = '';
+      if (conditional.length === 2) {
+        conditionalKey = String(conditional[0] || '').trim().toLowerCase();
+        conditionalSuffix = String(conditional[1] || '');
+      } else {
+        conditionalPrefix = String(conditional[0] || '');
+        conditionalKey = String(conditional[1] || '').trim().toLowerCase();
+        conditionalSuffix = String(conditional[2] || '');
+      }
+      if (!conditionalKey || !values.hasOwnProperty(conditionalKey)) return '';
+      var conditionalValue = String(values[conditionalKey] || '').trim();
+      if (!conditionalValue) return '';
+      return conditionalPrefix + conditionalValue + conditionalSuffix;
+    }
+
+    var key = '';
+    var prefix = '';
+    var suffix = '';
+    // Support conditional punctuation by allowing non-key chars around key:
+    // {view,} => "front,"
+    // {,view} => ",front"
+    // { (view) } => " (front) "
+    var punctuated = inner.match(/^([^A-Za-z0-9_]*)([A-Za-z0-9_]+)([^A-Za-z0-9_]*)$/);
+    if (punctuated) {
+      prefix = punctuated[1] || '';
+      key = String(punctuated[2] || '').toLowerCase();
+      suffix = punctuated[3] || '';
+    } else {
+      key = String(inner || '').trim().toLowerCase();
+    }
+    if (!key || !values.hasOwnProperty(key)) return '';
+    var value = String(values[key] || '').trim();
+    if (!value) return '';
+    return prefix + value + suffix;
   });
 
   rendered = rendered
@@ -274,6 +311,18 @@ function parseRequirementKeywordList(raw) {
     .split(',')
     .map(function (part) { return String(part || '').trim(); })
     .filter(Boolean);
+}
+
+function escapeRegex(text) {
+  return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function textContainsWholeToken(text, token) {
+  var hay = String(text || '').toLowerCase();
+  var needle = String(token || '').trim().toLowerCase();
+  if (!hay || !needle) return false;
+  var pattern = new RegExp('(^|[^a-z0-9])' + escapeRegex(needle) + '(?=$|[^a-z0-9])', 'i');
+  return pattern.test(hay);
 }
 
 function getRequirementDefaultPrimerMappings() {
@@ -337,11 +386,12 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
   if (!template.trim()) {
     return '';
   }
-  var values = {};
+  var valuesByKey = {};
+  var seenValueByKey = {};
   var fileNorm = String(fileName || '').toLowerCase();
   var customRows = Array.isArray(config && config.mappings) ? config.mappings : [];
   var defaultRows = getRequirementDefaultPrimerMappings();
-  // Custom rows win by order; requirement-derived rows fill only when custom rows did not.
+  // Row order is preserved; matching values for the same key are appended in order.
   var rows = customRows.concat(defaultRows);
   var mediaTags = [];
   if (mediaKey && typeof getTagsForMediaKey === 'function') {
@@ -359,14 +409,25 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
     if (!token || !key) return;
     var matched = false;
     if (scope === 'tag') {
-      matched = mediaTags.some(function (tagValue) { return tagValue.indexOf(token) !== -1; });
+      matched = mediaTags.some(function (tagValue) {
+        return textContainsWholeToken(tagValue, token);
+      });
     } else {
-      matched = fileNorm.indexOf(token) !== -1;
+      matched = textContainsWholeToken(fileNorm, token);
     }
     if (!matched) return;
-    // First matching row for each key wins (top-to-bottom order).
-    if (values.hasOwnProperty(key)) return;
-    values[key] = value;
+    if (!valuesByKey[key]) {
+      valuesByKey[key] = [];
+      seenValueByKey[key] = {};
+    }
+    var dedupeValue = value.toLowerCase();
+    if (seenValueByKey[key][dedupeValue]) return;
+    seenValueByKey[key][dedupeValue] = true;
+    valuesByKey[key].push(value);
+  });
+  var values = {};
+  Object.keys(valuesByKey).forEach(function (key) {
+    values[key] = valuesByKey[key].join(', ');
   });
   return renderMultilineTemplate(template, values);
 }

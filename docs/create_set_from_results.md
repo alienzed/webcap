@@ -1,6 +1,6 @@
 # Create Set From Results
 
-Last updated: 2026-05-28
+Last updated: 2026-05-31
 
 ## Purpose
 
@@ -29,6 +29,9 @@ In scope:
   - `flags`
   - `caption_tags_by_media`
   - `ratings_by_media`
+- Carry source `primer` block into destination `.webcap_state.json`:
+  - `primer.template`
+  - structured primer rows/fields (for example mappings/defaults when present)
 - Carry available `media_metadata.json` entries for copied items into destination cache
 - Deterministic filename collision handling (`_2`, `_3`, ...)
 
@@ -104,6 +107,7 @@ Default rule:
 Write destination `.webcap_state.json` with baseline expected shape plus carried item-level metadata.
 
 - Include baseline top-level fields already used by app (`version`, `stats`, `primer`, etc.).
+- Destination `primer` is cloned from the first encountered source folder in deterministic input order.
 - Carry item-level values for successfully copied destination media keys.
 
 Also write destination `media_metadata.json` when source entries are available for copied media.

@@ -260,6 +260,15 @@ function wireTrainingButtons() {
       if (!ensureFolderSelected('No folder selected for training.')) {
         return;
       }
+      var allMediaKeys = (state.items || []).map(function (item) {
+        return item && item.key;
+      }).filter(Boolean);
+      if (typeof confirmMissingCaptionPreflight === 'function') {
+        if (!confirmMissingCaptionPreflight(allMediaKeys, 'Train')) {
+          setStatus('Training command preview cancelled.');
+          return;
+        }
+      }
       setStatus('Printing training commands...');
       var runPreview = (typeof fetchPreviewText === 'function') ? fetchPreviewText : streamPreviewFromFetch;
       runPreview(

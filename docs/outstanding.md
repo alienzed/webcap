@@ -3,9 +3,11 @@ Last reviewed: 2026-05-31.
 
 ## Bugs
 - None currently tracked here. Add new bugs as numbered items when discovered.
+- Copy set doesn't bring over Reviewed status or the custom Requirements
 
 
 ## Enhancements
+- More advanced filters: multiple terms, does not contain term, any, all, incomplete
 - Up and down keys already move between media items when selected, can mouse scroll over the preview do this too?
 - Consider making annotation an assisted Wizard like flow - provided by a modal entered into purposefully.
 - Update the caption in real time when editing the template, if the caption shown is 'missing' and thus modifiable.

@@ -385,6 +385,10 @@ def create_set_from_results_response(data: dict):
         flags = {}
         tags_by_media = {}
         ratings_by_media = {}
+        caption_requirements = None
+        caption_requirement_keywords = None
+        caption_requirements_checked = {}
+        caption_requirements_na_by_media = {}
         dest_media_metadata = {}
         source_folder_order = []
 
@@ -414,6 +418,15 @@ def create_set_from_results_response(data: dict):
                 metadata_by_folder[source_folder_key] = _load_folder_media_metadata(source_folder_path)
             src_state = state_by_folder[source_folder_key]
             src_media_metadata = metadata_by_folder[source_folder_key]
+
+            if caption_requirements is None:
+                src_requirements = src_state.get("caption_requirements")
+                if isinstance(src_requirements, list):
+                    caption_requirements = json.loads(json.dumps(src_requirements))
+            if caption_requirement_keywords is None:
+                src_keywords = src_state.get("caption_requirement_keywords")
+                if isinstance(src_keywords, dict):
+                    caption_requirement_keywords = json.loads(json.dumps(src_keywords))
 
             source_caption_path = source_media_path.parent / _caption_name_for_media(media_name)
             if source_caption_path.exists() and source_caption_path.is_file():
@@ -446,6 +459,18 @@ def create_set_from_results_response(data: dict):
             if isinstance(src_ratings, dict) and media_name in src_ratings:
                 ratings_by_media[dest_media_name] = src_ratings[media_name]
 
+            src_requirements_checked = src_state.get("caption_requirements_checked")
+            if isinstance(src_requirements_checked, dict):
+                media_checked_map = src_requirements_checked.get(media_name)
+                if isinstance(media_checked_map, dict):
+                    caption_requirements_checked[dest_media_name] = json.loads(json.dumps(media_checked_map))
+
+            src_requirements_na = src_state.get("caption_requirements_na_by_media")
+            if isinstance(src_requirements_na, dict):
+                media_na_map = src_requirements_na.get(media_name)
+                if isinstance(media_na_map, dict):
+                    caption_requirements_na_by_media[dest_media_name] = json.loads(json.dumps(media_na_map))
+
             source_meta = src_media_metadata.get(media_name)
             if isinstance(source_meta, dict):
                 dest_media_metadata[dest_media_name] = source_meta
@@ -473,6 +498,14 @@ def create_set_from_results_response(data: dict):
             "caption_tags_by_media": tags_by_media,
             "ratings_by_media": ratings_by_media,
         }
+        if isinstance(caption_requirements, list):
+            dest_state["caption_requirements"] = caption_requirements
+        if isinstance(caption_requirement_keywords, dict):
+            dest_state["caption_requirement_keywords"] = caption_requirement_keywords
+        if caption_requirements_checked:
+            dest_state["caption_requirements_checked"] = caption_requirements_checked
+        if caption_requirements_na_by_media:
+            dest_state["caption_requirements_na_by_media"] = caption_requirements_na_by_media
         (dest_dir / ".webcap_state.json").write_text(json.dumps(dest_state, indent=2), encoding="utf-8")
         if dest_media_metadata:
             (dest_dir / "media_metadata.json").write_text(json.dumps(dest_media_metadata, indent=2), encoding="utf-8")

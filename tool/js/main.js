@@ -81,6 +81,47 @@ function resetSelectionForFolderAction() {
   renderFileList(ui.filterEl.value);
 }
 
+function buildCaptionAvailabilitySummaryForMediaKeys(mediaKeys) {
+  var keys = Array.isArray(mediaKeys) ? mediaKeys : [];
+  var byKey = {};
+  (state.items || []).forEach(function (item) {
+    if (item && item.key) byKey[item.key] = item;
+  });
+  var missing = 0;
+  var primerFallbacks = 0;
+  var stillEmpty = 0;
+  for (var i = 0; i < keys.length; i += 1) {
+    var key = String(keys[i] || '').trim();
+    if (!key) continue;
+    var item = byKey[key];
+    if (!item || !item.fileName) continue;
+    var hasCaption = !!(item.hasCaption || String(item.caption || '').trim().length);
+    if (hasCaption) continue;
+    missing += 1;
+    var primerText = String(buildAutoPrimer(item.fileName, item.key) || '').trim();
+    if (primerText) primerFallbacks += 1;
+    else stillEmpty += 1;
+  }
+  return {
+    missing: missing,
+    primerFallbacks: primerFallbacks,
+    stillEmpty: stillEmpty
+  };
+}
+
+function confirmMissingCaptionPreflight(mediaKeys, actionLabel) {
+  var summary = buildCaptionAvailabilitySummaryForMediaKeys(mediaKeys);
+  if (!summary.missing) return true;
+  var title = String(actionLabel || 'This action');
+  var message = '' +
+    title + ' detected missing captions.\n\n' +
+    'Missing captions: ' + summary.missing + '\n' +
+    'Primer fallbacks (in-memory): ' + summary.primerFallbacks + '\n' +
+    'Still empty: ' + summary.stillEmpty + '\n\n' +
+    'Continue?';
+  return confirm(message);
+}
+
 function runGenerateDatasetConfigsForCurrentFolder(onSuccess) {
   if (!ensureFolderSelected('No folder selected for config generation.')) {
     return;
@@ -126,18 +167,24 @@ function runPrepareDatasetForCurrentFolder() {
       return;
     }
   }
-  var minStars = (typeof getAdvancedMinStarsThreshold === 'function') ? getAdvancedMinStarsThreshold() : null;
+  if (!confirmMissingCaptionPreflight(selectedMedia, 'Prepare Dataset')) {
+    setStatus('Dataset preparation cancelled.');
+    return;
+  }
+  var starsValue = (typeof getAdvancedStarFilterValue === 'function') ? getAdvancedStarFilterValue() : '';
   var flagValue = (typeof getAdvancedFlagFilterValue === 'function') ? getAdvancedFlagFilterValue() : '';
   var criteria = {
     source_folder: String(state.folder || ''),
     filter_text: String((ui.filterEl && ui.filterEl.value) || '').trim(),
     missing_captions_only: !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked),
     reviewed_only: !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked),
-    unrated_only: !!(ui.advancedFilterUnratedEl && ui.advancedFilterUnratedEl.checked),
-    unflagged_only: !!(ui.advancedFilterUnflaggedEl && ui.advancedFilterUnflaggedEl.checked),
+    unreviewed_only: !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked),
+    incomplete_only: !!(ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked),
     untagged_only: !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked),
+    text_match_mode: 'all',
     invalid_ar_only: !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked),
-    min_stars_gt: minStars === null ? '' : String(minStars),
+    min_stars_gt: '',
+    star_filter: String(starsValue || ''),
     flag_filter: String(flagValue || ''),
     focus_set_active: !!(state.focusSet && state.focusSet.keys && state.focusSet.keys.length),
     focus_set_source: String((state.focusSet && state.focusSet.source) || ''),

@@ -72,7 +72,7 @@
                         </button>
                     </div>
                     <div id="caption-filter-row" class="filter-row">
-                        <input id="media-filter" type="search" placeholder="filter">
+                        <input id="media-filter" type="search" placeholder="filter (comma terms, -exclude)">
                         <button
                             id="caption-filter-clear-all-btn"
                             type="button"
@@ -95,6 +95,13 @@
                         </button>
                     </div>
                     <div id="advanced-filter-panel" class="advanced-filter-panel hidden">
+                        <button
+                            id="advanced-filter-info-btn"
+                            type="button"
+                            class="mini-info-btn advanced-filter-info-btn"
+                            title="Advanced filters help"
+                            aria-label="Advanced filters help"
+                        >i</button>
                         <div class="advanced-filter-checkbox-grid">
                             <label class="advanced-filter-check-row">
                                 <input id="advanced-filter-missing-captions" type="checkbox">
@@ -105,16 +112,16 @@
                                 <span>Reviewed</span>
                             </label>
                             <label class="advanced-filter-check-row">
+                                <input id="advanced-filter-unreviewed" type="checkbox">
+                                <span>Unreviewed</span>
+                            </label>
+                            <label class="advanced-filter-check-row">
+                                <input id="advanced-filter-incomplete" type="checkbox">
+                                <span>Incomplete</span>
+                            </label>
+                            <label class="advanced-filter-check-row">
                                 <input id="advanced-filter-invalid-ar" type="checkbox">
                                 <span>Invalid AR</span>
-                            </label>
-                            <label class="advanced-filter-check-row">
-                                <input id="advanced-filter-unrated" type="checkbox">
-                                <span>Unrated</span>
-                            </label>
-                            <label class="advanced-filter-check-row">
-                                <input id="advanced-filter-unflagged" type="checkbox">
-                                <span>Unflagged</span>
                             </label>
                             <label class="advanced-filter-check-row">
                                 <input id="advanced-filter-untagged" type="checkbox">
@@ -123,18 +130,40 @@
                         </div>
                         <label class="advanced-filter-row">
                             <span>Stars</span>
-                            <select id="advanced-filter-min-stars">
-                                <option value="">&mdash;</option>
-                                <option value="0">&gt; 0</option>
-                                <option value="1">&gt; 1</option>
-                                <option value="2">&gt; 2</option>
-                                <option value="3">&gt; 3</option>
-                                <option value="4">&gt; 4</option>
-                            </select>
+                            <div id="advanced-filter-stars" class="star-filter-options" aria-label="Star filter options">
+                                <label class="star-filter-choice star-filter-choice--none" title="No Star">
+                                    <input type="checkbox" value="no_star">
+                                    <span class="no-entry-icon" aria-hidden="true">&#9940;</span>
+                                </label>
+                                <label class="star-filter-choice" title="1 star">
+                                    <input type="checkbox" value="1">
+                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                </label>
+                                <label class="star-filter-choice" title="2 stars">
+                                    <input type="checkbox" value="2">
+                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                </label>
+                                <label class="star-filter-choice" title="3 stars">
+                                    <input type="checkbox" value="3">
+                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                </label>
+                                <label class="star-filter-choice" title="4 stars">
+                                    <input type="checkbox" value="4">
+                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                </label>
+                                <label class="star-filter-choice" title="5 stars">
+                                    <input type="checkbox" value="5">
+                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                </label>
+                            </div>
                         </label>
                         <label class="advanced-filter-row">
                             <span>Flag</span>
                             <div id="advanced-filter-flag" class="flag-filter-options">
+                                <label class="flag-filter-choice flag-filter-choice--none" title="No Flag">
+                                    <input type="checkbox" value="no_flag">
+                                    <span class="no-entry-icon" aria-hidden="true">&#9940;</span>
+                                </label>
                                 <label class="flag-filter-choice" title="Red">
                                     <input type="checkbox" value="red">
                                     <span class="flag-dot flag-dot--red"></span>
@@ -253,8 +282,8 @@
                                           {view}
                                           {lighting}"></textarea>
                                     <div class="stats-advanced-inline-row stats-primer-reset-row">
-                                        <button id="primer-reset-caption-btn" type="button" title="Reset current caption to primer output">Reset</button>
-                                        <button id="primer-undo-reset-caption-btn" type="button" class="hidden" title="Undo last reset for current item">Undo Reset</button>
+                                        <button id="primer-reset-caption-btn" type="button" title="Reapply current primer output to the current caption">Reapply</button>
+                                        <button id="primer-undo-reset-caption-btn" type="button" class="hidden" title="Undo last reapply for current item">Undo Reapply</button>
                                     </div>
                                     <div class="section-label-inline">
                                         <label>Mappings</label>
@@ -299,7 +328,7 @@
                                             id="stats-phrases-add-input"
                                             type="text"
                                             class="form-control"
-                                            placeholder="Add balance phrase from catalog..."
+                                            placeholder="Add balance phrase..."
                                         >
                                         <button id="stats-phrases-add-btn" type="button">+</button>
                                         <div id="stats-phrases-add-results" class="caption-term-results hidden"></div>
@@ -384,6 +413,9 @@
             </div>
             <div class="panel editor-panel">
                 <div class="editor-wrapper">
+                    <div id="editor-floating-actions" class="editor-floating-actions">
+                        <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Save current primer text as this item's caption">Apply Primer</button>
+                    </div>
                     <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
                     <div id="annotate-strip" class="annotate-strip hidden" aria-label="Annotation strip"></div>
                     <div id="caption-checklist-panel" class="checklist-panel" style="display:none;">

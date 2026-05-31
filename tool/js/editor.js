@@ -44,6 +44,9 @@ function handleEditorInputAutosave(e) {
         if (typeof renderItemTagsPanel === 'function') {
             renderItemTagsPanel();
         }
+        if (typeof updatePrimerCaptionResetUi === 'function') {
+            updatePrimerCaptionResetUi();
+        }
 
     var target = getAutosaveTargetAndPayload();
     if (!target) {

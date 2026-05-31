@@ -109,16 +109,14 @@ function parseLegacyPrimerMappings(multiline) {
 }
 
 function parseLegacyReviewRules(multiline) {
-  if (typeof parseTokenRules === 'function') {
-    return parseTokenRules(multiline).map(function (rule) {
-      return {
-        scope: String(rule.scope || 'file'),
-        trigger: String(rule.trigger || ''),
-        required: String(rule.required || ''),
-        enabled: true
-      };
-    });
-  }
+  return parseTokenRules(multiline).map(function (rule) {
+    return {
+      scope: String(rule.scope || 'file'),
+      trigger: String(rule.trigger || ''),
+      required: String(rule.required || ''),
+      enabled: true
+    };
+  });
   return [];
 }
 
@@ -126,15 +124,11 @@ function triggerAdvancedRulesAutosave() {
   if (!state || !state.folder) return;
   if (typeof debouncedSaveFolderState === 'function') {
     debouncedSaveFolderState(function () {
-      if (typeof saveFolderStateForCurrentRoot === 'function') {
-        saveFolderStateForCurrentRoot();
-      }
+      saveFolderStateForCurrentRoot();
     });
     return;
   }
-  if (typeof saveFolderStateForCurrentRoot === 'function') {
-    saveFolderStateForCurrentRoot();
-  }
+  saveFolderStateForCurrentRoot();
 }
 
 function updatePrimerMappingsSummary() {
@@ -236,12 +230,9 @@ function createCheckboxCell(checked, onChange) {
 
 function renderAdvancedHelpPreview(title, bodyHtml) {
   // Reuse the existing clear flow so non-media preview content behaves consistently.
-  if (typeof clearEditorAndPreview === 'function') {
-    clearEditorAndPreview();
-  }
-  if (typeof renderFileList === 'function') {
-    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
-  }
+  clearEditorAndPreview();
+  renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+
   var doc = ui && ui.previewEl ? (ui.previewEl.contentDocument || ui.previewEl.contentdocument) : null;
   if (!doc) {
     setStatus('Help preview unavailable.');

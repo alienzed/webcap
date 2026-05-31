@@ -205,6 +205,7 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
         // Toggle class on row
         var row = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + (updatedKey || mediaKey) + '"]');
         if (row) row.classList.toggle('empty-caption', !hasCaption);
+        updatePrimerCaptionResetUi();
         resolve();
         return;
       }

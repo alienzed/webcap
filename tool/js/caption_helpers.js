@@ -173,9 +173,7 @@ function renderAnnotateStrip() {
     editBtn.textContent = '\u270e';
     editBtn.title = 'Edit requirement terms';
     editBtn.onclick = function () {
-      if (typeof openChecklistGroupTermsModal === 'function') {
-        openChecklistGroupTermsModal(group.requirement || group.name);
-      }
+      openChecklistGroupTermsModal(group.requirement || group.name);
     };
     titleRowEl.appendChild(editBtn);
 

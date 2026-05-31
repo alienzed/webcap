@@ -201,15 +201,70 @@ function wirePreviewActionControls() {
  * Return the array of media items after applying the current UI filters.
  * If ignoreFocusSet is true, the focus set will be ignored and filters applied to full folder.
  */
+function parseMediaFilterQuery(raw) {
+  var text = String(raw || '').toLowerCase().trim();
+  var out = { positive: [], negative: [] };
+  if (!text) return out;
+  var hasStructuredSeparators = /[,;\n]/.test(text);
+  var parts = hasStructuredSeparators ? text.split(/[,;\n]+/) : [text];
+  var seen = {};
+  for (var i = 0; i < parts.length; i += 1) {
+    var term = String(parts[i] || '').trim();
+    if (!term) continue;
+    var isNegative = false;
+    if (term.charAt(0) === '-' || term.charAt(0) === '!') {
+      isNegative = true;
+      term = term.slice(1).trim();
+    }
+    if (!term) continue;
+    var key = (isNegative ? '!' : '+') + term;
+    if (seen[key]) continue;
+    seen[key] = true;
+    if (isNegative) out.negative.push(term);
+    else out.positive.push(term);
+  }
+  return out;
+}
+
+function mediaItemMatchesFilterQuery(item, query, mode) {
+  var label = String(item && item.label || '').toLowerCase();
+  var fileName = String(item && item.fileName || '').toLowerCase();
+  var caption = String(item && item.caption || '').toLowerCase();
+  var tags = getTagsForMediaKey(item && item.key).join(' ').toLowerCase();
+  var haystack = label + '\n' + fileName + '\n' + caption + '\n' + tags;
+  var termMatches = function (term) {
+    return haystack.indexOf(term) !== -1;
+  };
+  for (var i = 0; i < query.negative.length; i += 1) {
+    if (termMatches(query.negative[i])) return false;
+  }
+  if (!query.positive.length) return true;
+  if (mode === 'all') {
+    return query.positive.every(termMatches);
+  }
+  return query.positive.some(termMatches);
+}
+
+function mediaItemHasIncompleteRequirementGroups(item) {
+  if (!item || !item.key) return false;
+  if (typeof computeRequirementProgressForMediaKey !== 'function') return false;
+  var progress = computeRequirementProgressForMediaKey(item.key);
+  if (!progress || !isFinite(progress.total) || !isFinite(progress.completed)) return false;
+  if (progress.total <= 0) return false;
+  return progress.completed < progress.total;
+}
+
 function getFilteredMediaItems(ignoreFocusSet) {
-  var q = (ui.filterEl && ui.filterEl.value) ? ui.filterEl.value.toLowerCase() : '';
+  var q = (ui.filterEl && ui.filterEl.value) ? String(ui.filterEl.value) : '';
+  var queryTerms = parseMediaFilterQuery(q);
+  var textMatchMode = 'all';
   var mediaItems = Array.isArray(state.items) ? state.items.slice() : [];
   var missingCaptionsOnly = !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked);
   var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
-  var unratedOnly = !!(ui.advancedFilterUnratedEl && ui.advancedFilterUnratedEl.checked);
-  var unflaggedOnly = !!(ui.advancedFilterUnflaggedEl && ui.advancedFilterUnflaggedEl.checked);
+  var unreviewedOnly = !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked);
+  var incompleteOnly = !!(ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked);
   var untaggedOnly = !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked);
-  var minStarsThreshold = getAdvancedMinStarsThreshold();
+  var starFilterState = getAdvancedStarFilterState();
   var flagFilterValues = getAdvancedFlagFilterValues();
 
   // Apply focus set only when not ignoring it
@@ -220,13 +275,9 @@ function getFilteredMediaItems(ignoreFocusSet) {
   }
 
   // Filter logic (by label, fileName, or caption)
-  if (q) {
+  if (String(q || '').trim()) {
     mediaItems = mediaItems.filter(function (item) {
-      var label = (item.label || '').toLowerCase();
-      var fileName = (item.fileName || '').toLowerCase();
-      var caption = (item.caption || '').toLowerCase();
-      var tags = getTagsForMediaKey(item.key).join(' ').toLowerCase();
-      return label.indexOf(q) !== -1 || fileName.indexOf(q) !== -1 || caption.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
+      return mediaItemMatchesFilterQuery(item, queryTerms, textMatchMode);
     });
   }
   if (missingCaptionsOnly) {
@@ -235,29 +286,25 @@ function getFilteredMediaItems(ignoreFocusSet) {
   if (reviewedOnly) {
     mediaItems = mediaItems.filter(function (item) { return !!(state.reviewedSet && state.reviewedSet.has(item.key)); });
   }
-  if (unratedOnly) {
-    mediaItems = mediaItems.filter(function (item) {
-      var rating = (typeof getRatingForMediaKey === 'function') ? getRatingForMediaKey(item.key) : 0;
-      return rating <= 0;
-    });
+  if (unreviewedOnly) {
+    mediaItems = mediaItems.filter(function (item) { return !(state.reviewedSet && state.reviewedSet.has(item.key)); });
   }
-  if (minStarsThreshold !== null) {
+  if (incompleteOnly) {
+    mediaItems = mediaItems.filter(mediaItemHasIncompleteRequirementGroups);
+  }
+  if (starFilterState.values.length || starFilterState.includeNoStar) {
     mediaItems = mediaItems.filter(function (item) {
       var rating = (typeof getRatingForMediaKey === 'function') ? getRatingForMediaKey(item.key) : 0;
-      return rating > minStarsThreshold;
+      if (rating <= 0) return starFilterState.includeNoStar;
+      return starFilterState.values.indexOf(rating) !== -1;
     });
   }
   if (flagFilterValues.length) {
     mediaItems = mediaItems.filter(function (item) {
       var itemFlag = String((state.flags && state.flags[item.key]) || '').toLowerCase();
-      if (flagFilterValues.indexOf('any') !== -1) return !!itemFlag;
+      var wantsNoFlag = flagFilterValues.indexOf('no_flag') !== -1;
+      if (!itemFlag) return wantsNoFlag;
       return flagFilterValues.indexOf(itemFlag) !== -1;
-    });
-  }
-  if (unflaggedOnly) {
-    mediaItems = mediaItems.filter(function (item) {
-      var itemFlag = String((state.flags && state.flags[item.key]) || '').toLowerCase().trim();
-      return !itemFlag;
     });
   }
   if (untaggedOnly) {
@@ -281,11 +328,11 @@ function hasAnyActiveMediaFilter() {
   if (q) return true;
   if (ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked) return true;
   if (ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked) return true;
-  if (ui.advancedFilterUnratedEl && ui.advancedFilterUnratedEl.checked) return true;
-  if (ui.advancedFilterUnflaggedEl && ui.advancedFilterUnflaggedEl.checked) return true;
+  if (ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked) return true;
+  if (ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked) return true;
   if (ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked) return true;
   if (ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked) return true;
-  if (ui.advancedFilterMinStarsEl && String(ui.advancedFilterMinStarsEl.value || '').trim()) return true;
+  if (ui.advancedFilterStarsEl && ui.advancedFilterStarsEl.querySelector('input[type="checkbox"]:checked')) return true;
   if (ui.advancedFilterFlagEl && ui.advancedFilterFlagEl.querySelector('input[type="checkbox"]:checked')) return true;
   return false;
 }
@@ -362,13 +409,48 @@ function buildSelectedMediaStatus(mediaItem) {
   return status;
 }
 
-function getAdvancedMinStarsThreshold() {
-  if (!ui.advancedFilterMinStarsEl) return null;
-  var raw = String(ui.advancedFilterMinStarsEl.value || '').trim();
-  if (!raw.length) return null;
-  var n = Number(raw);
-  if (!isFinite(n)) return null;
-  return Math.max(0, Math.min(4, Math.round(n)));
+function getAdvancedStarFilterValues() {
+  if (!ui.advancedFilterStarsEl) return [];
+  var inputs = ui.advancedFilterStarsEl.querySelectorAll('input[type="checkbox"]:checked');
+  var values = Array.prototype.map.call(inputs, function (input) {
+    return String(input.value || '').trim().toLowerCase();
+  }).filter(Boolean);
+  var seen = {};
+  var out = [];
+  values.forEach(function (key) {
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push(key);
+  });
+  return out;
+}
+
+function getAdvancedStarFilterState() {
+  var raw = getAdvancedStarFilterValues();
+  var includeNoStar = raw.indexOf('no_star') !== -1;
+  var values = raw.map(function (entry) {
+    var n = Number(entry);
+    if (!isFinite(n)) return 0;
+    return Math.max(1, Math.min(5, Math.round(n)));
+  }).filter(function (n) {
+    return n >= 1 && n <= 5;
+  });
+  var seen = {};
+  var unique = [];
+  values.forEach(function (n) {
+    var key = String(n);
+    if (seen[key]) return;
+    seen[key] = true;
+    unique.push(n);
+  });
+  return {
+    includeNoStar: includeNoStar,
+    values: unique
+  };
+}
+
+function getAdvancedStarFilterValue() {
+  return getAdvancedStarFilterValues().join(',');
 }
 
 function getAdvancedFlagFilterValue() {
@@ -526,6 +608,21 @@ function renderPreviewHtml(isImage, src) {
     '  } catch (_err) {}\n' +
     '}\n' +
     'document.addEventListener("click", sendPreviewReselect, true);\n' +
+    'function sendPreviewWheelNavigate(deltaY){\n' +
+    '  try {\n' +
+    '    if(window.parent && window.parent.postMessage){\n' +
+    '      window.parent.postMessage({ type: "media-preview-wheel-navigate", deltaY: Number(deltaY) || 0 }, "*");\n' +
+    '    }\n' +
+    '  } catch (_err) {}\n' +
+    '}\n' +
+    'document.addEventListener("wheel", function(evt){\n' +
+    '  if (!evt) return;\n' +
+    '  if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey) return;\n' +
+    '  var deltaY = (typeof evt.deltaY === "number") ? evt.deltaY : 0;\n' +
+    '  if (!deltaY) return;\n' +
+    '  try { evt.preventDefault(); } catch (_err) {}\n' +
+    '  sendPreviewWheelNavigate(deltaY);\n' +
+    '}, { passive: false, capture: true });\n' +
     'var video=document.getElementById("media-video");\n' +
     'if(video){\n' +
     '  var error=document.getElementById("video-error");\n' +
@@ -546,6 +643,20 @@ function renderPreviewHtml(isImage, src) {
       }
     }, true);
   } catch (_bindErr) {}
+  try {
+    doc.addEventListener('wheel', function (e) {
+      if (!e) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      var deltaY = (typeof e.deltaY === 'number') ? e.deltaY : 0;
+      if (!deltaY) return;
+      if (typeof handlePreviewWheelNavigate === 'function') {
+        var handled = handlePreviewWheelNavigate(deltaY);
+        if (handled) {
+          e.preventDefault();
+        }
+      }
+    }, { passive: false, capture: true });
+  } catch (_wheelBindErr) {}
 }
 
 async function renderFileList() {

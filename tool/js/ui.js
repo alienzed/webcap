@@ -2,6 +2,30 @@
 
 var MEDIA_NAME_PATTERN = /\.(mp4|webm|ogg|mov|mkv|avi|m4v|jpg|jpeg|png|gif|webp|bmp)$/i;
 var contextMenuEl = null;
+var previewWheelNavigateLastAt = 0;
+var PREVIEW_WHEEL_NAV_COOLDOWN_MS = 140;
+
+function handlePreviewWheelNavigate(deltaY) {
+  if (!state || !state.currentItem || !state.currentItem.fileName) {
+    return false;
+  }
+  if (typeof moveSelectedMediaByOffset !== 'function') {
+    return false;
+  }
+  var delta = Number(deltaY);
+  if (!isFinite(delta) || delta === 0) {
+    return false;
+  }
+  var now = Date.now();
+  if ((now - previewWheelNavigateLastAt) < PREVIEW_WHEEL_NAV_COOLDOWN_MS) {
+    return false;
+  }
+  var handled = moveSelectedMediaByOffset(delta > 0 ? 1 : -1);
+  if (handled) {
+    previewWheelNavigateLastAt = now;
+  }
+  return handled;
+}
 
 function hideContextMenu() {
   if (contextMenuEl) {
@@ -192,6 +216,10 @@ function wireReviewActions() {
       reselectCurrentMediaFromPreview();
       return;
     }
+    if (data.type === 'media-preview-wheel-navigate') {
+      handlePreviewWheelNavigate(data.deltaY);
+      return;
+    }
     if (data.type === 'caption-review-select') {
       selectByFileName(data.fileName, data.focusFiles, data.focusSource);
       return;
@@ -244,14 +272,52 @@ function getReviewAvailability() {
   };
 }
 
+function openAdvancedFilterHelpInPreview() {
+  if (typeof renderAdvancedHelpPreview !== 'function') {
+    setStatus('Help preview unavailable.');
+    return;
+  }
+  renderAdvancedHelpPreview(
+    'Advanced Filters Help',
+    '<p style="margin:0 0 10px 0;">Use Advanced Filters to narrow the media list before review, prep, and set creation.</p>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Text Filter (top search box)</h4>' +
+    '<ul style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;">Use comma-separated terms; all included terms must match.</li>' +
+    '<li style="margin:0 0 6px 0;">Prefix a term with <code>-</code> or <code>!</code> to exclude it.</li>' +
+    '<li style="margin:0 0 6px 0;">Search checks filename, label, caption text, and item tags.</li>' +
+    '</ul>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Checkbox Filters</h4>' +
+    '<ul style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;"><strong>Captionless</strong>: items without captions.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Reviewed</strong>: items marked reviewed.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Unreviewed</strong>: items not marked reviewed yet.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Incomplete</strong>: requirement groups not fully satisfied (N/A counts as complete).</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Invalid AR</strong>: items with unsupported aspect buckets.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Untagged</strong>: items with no item tags.</li>' +
+    '</ul>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Stars + Flag</h4>' +
+    '<ul style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;"><strong>Stars</strong>: include selected star ratings and optionally <strong>No Star</strong>.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Flag</strong>: include selected colors and optionally <strong>No Flag</strong>.</li>' +
+    '</ul>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Composing Filters</h4>' +
+    '<p style="margin:0 0 6px 0;">All active filters are combined with AND logic. Add filters gradually, then clear with the <strong>x</strong> button.</p>' +
+    '<p style="margin:0;">This help is intentionally structured to expand later with Smart Set filter guidance.</p>'
+  );
+}
+
 function clearCaptionFilterInputs() {
   if (ui.filterEl) ui.filterEl.value = '';
   if (ui.advancedFilterMissingCaptionsEl) ui.advancedFilterMissingCaptionsEl.checked = false;
   if (ui.advancedFilterReviewedEl) ui.advancedFilterReviewedEl.checked = false;
-  if (ui.advancedFilterUnratedEl) ui.advancedFilterUnratedEl.checked = false;
-  if (ui.advancedFilterUnflaggedEl) ui.advancedFilterUnflaggedEl.checked = false;
+  if (ui.advancedFilterUnreviewedEl) ui.advancedFilterUnreviewedEl.checked = false;
   if (ui.advancedFilterUntaggedEl) ui.advancedFilterUntaggedEl.checked = false;
-  if (ui.advancedFilterMinStarsEl) ui.advancedFilterMinStarsEl.value = '';
+  if (ui.advancedFilterIncompleteEl) ui.advancedFilterIncompleteEl.checked = false;
+  if (ui.advancedFilterStarsEl) {
+    Array.prototype.forEach.call(ui.advancedFilterStarsEl.querySelectorAll('input[type="checkbox"]'), function (input) {
+      input.checked = false;
+    });
+  }
   if (ui.advancedFilterFlagEl) {
     Array.prototype.forEach.call(ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]'), function (input) {
       input.checked = false;
@@ -602,13 +668,8 @@ if (ui.advancedFilterReviewedEl) {
     renderFileList();
   });
 }
-if (ui.advancedFilterUnratedEl) {
-  ui.advancedFilterUnratedEl.addEventListener('change', function () {
-    renderFileList();
-  });
-}
-if (ui.advancedFilterUnflaggedEl) {
-  ui.advancedFilterUnflaggedEl.addEventListener('change', function () {
+if (ui.advancedFilterUnreviewedEl) {
+  ui.advancedFilterUnreviewedEl.addEventListener('change', function () {
     renderFileList();
   });
 }
@@ -617,8 +678,13 @@ if (ui.advancedFilterUntaggedEl) {
     renderFileList();
   });
 }
-if (ui.advancedFilterMinStarsEl) {
-  ui.advancedFilterMinStarsEl.addEventListener('change', function () {
+if (ui.advancedFilterIncompleteEl) {
+  ui.advancedFilterIncompleteEl.addEventListener('change', function () {
+    renderFileList();
+  });
+}
+if (ui.advancedFilterStarsEl) {
+  ui.advancedFilterStarsEl.addEventListener('change', function () {
     renderFileList();
   });
 }
@@ -643,4 +709,7 @@ if (ui.captionFilterClearAllBtn) {
   ui.captionFilterClearAllBtn.addEventListener('click', function () {
     clearCaptionFilters();
   });
+}
+if (ui.advancedFilterInfoBtn) {
+  ui.advancedFilterInfoBtn.addEventListener('click', openAdvancedFilterHelpInPreview);
 }

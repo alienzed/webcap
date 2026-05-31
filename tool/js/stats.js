@@ -340,14 +340,6 @@ function addStatsBalancePhraseFromInput() {
   var inputEl = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
   var text = normalizeBalancePhrase(inputEl ? inputEl.value : '');
   if (!text) return;
-  var catalog = (typeof getCaptionHelperCatalogTerms === 'function') ? getCaptionHelperCatalogTerms() : [];
-  var inCatalog = catalog.some(function (term) {
-    return String(term || '').toLowerCase() === text.toLowerCase();
-  });
-  if (!inCatalog) {
-    setStatus('Pick an existing catalog term for balance phrases.');
-    return;
-  }
   var exists = statsBalancePhrases.some(function (p) { return String(p).toLowerCase() === text.toLowerCase(); });
   if (exists) {
     if (inputEl) inputEl.value = '';
@@ -431,7 +423,7 @@ function openBalancePhrasesHelpInPreview() {
     '</ul>' +
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">How To Use It</h4>' +
     '<ol style="margin:0 0 8px 18px;padding:0;">' +
-    '<li style="margin:0 0 6px 0;">Add phrases from the catalog.</li>' +
+    '<li style="margin:0 0 6px 0;">Add phrases you want to track (catalog suggestions are optional).</li>' +
     '<li style="margin:0 0 6px 0;">Run Review Captions and check the Phrase Balance section.</li>' +
     '<li style="margin:0 0 6px 0;">If a phrase is missing or low, add/edit captions for those examples.</li>' +
     '<li style="margin:0 0 6px 0;">Repeat until coverage looks balanced for the set.</li>' +
@@ -717,9 +709,19 @@ function getPrimerResetCurrentMediaItem() {
   return state.currentItem;
 }
 
+function isPrimerInEffectForCurrentItem(mediaItem) {
+  if (!mediaItem || !ui || !ui.editorEl || ui.editorEl.readOnly) return false;
+  if (mediaItem.hasCaption) return false;
+  var primerText = String(buildAutoPrimer(mediaItem.fileName, mediaItem.key) || '');
+  if (!primerText.trim()) return false;
+  var editorText = String(ui.editorEl.value || '');
+  return editorText.trim() === primerText.trim();
+}
+
 function updatePrimerCaptionResetUi() {
   var resetBtn = document.getElementById('primer-reset-caption-btn');
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
+  var applyPrimerBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
   if (!resetBtn || !undoBtn) return;
 
   var mediaItem = getPrimerResetCurrentMediaItem();
@@ -728,11 +730,15 @@ function updatePrimerCaptionResetUi() {
 
   if (!hasSelectedMedia) {
     undoBtn.classList.add('hidden');
+    if (applyPrimerBtn) applyPrimerBtn.classList.add('hidden');
     return;
   }
 
   var canUndo = !!(primerResetUndoState && primerResetUndoState.mediaKey === mediaItem.key);
   undoBtn.classList.toggle('hidden', !canUndo);
+  if (applyPrimerBtn) {
+    applyPrimerBtn.classList.toggle('hidden', !isPrimerInEffectForCurrentItem(mediaItem));
+  }
 }
 
 function applyEditorTextAndTriggerInput(nextText) {
@@ -744,6 +750,7 @@ function applyEditorTextAndTriggerInput(nextText) {
 function wirePrimerCaptionResetUi() {
   var resetBtn = document.getElementById('primer-reset-caption-btn');
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
+  var applyPrimerBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
   if (!resetBtn || !undoBtn) return;
 
   if (!resetBtn.__primerResetBound) {
@@ -758,11 +765,11 @@ function wirePrimerCaptionResetUi() {
       if (!nextPrimer.trim()) {
         if (!confirm('Primer output is empty. Clear current caption?')) return;
       } else {
-        if (!confirm('Reset caption to current primer output?')) return;
+        if (!confirm('Reapply current primer output to caption?')) return;
       }
       var previousText = String((ui && ui.editorEl && ui.editorEl.value) || '');
       if (previousText === nextPrimer) {
-        setStatus('Caption already matches primer output.');
+        setStatus('Caption already matches primer output (nothing to reapply).');
         return;
       }
       primerResetUndoState = {
@@ -782,7 +789,7 @@ function wirePrimerCaptionResetUi() {
     undoBtn.addEventListener('click', function () {
       var mediaItem = getPrimerResetCurrentMediaItem();
       if (!mediaItem || !primerResetUndoState || primerResetUndoState.mediaKey !== mediaItem.key) {
-        setStatus('No reset to undo for this item.');
+        setStatus('No reapply to undo for this item.');
         updatePrimerCaptionResetUi();
         return;
       }
@@ -793,6 +800,31 @@ function wirePrimerCaptionResetUi() {
       saveCaptionDirect(state.folder, mediaItem.fileName, restoreText, mediaItem.key).catch(function (err) {
         setStatus(String(err && err.message ? err.message : err));
       });
+    });
+  }
+
+  if (applyPrimerBtn && !applyPrimerBtn.__primerApplyBound) {
+    applyPrimerBtn.__primerApplyBound = true;
+    applyPrimerBtn.addEventListener('click', function () {
+      var mediaItem = getPrimerResetCurrentMediaItem();
+      if (!mediaItem) {
+        setStatus('Select a media item first.');
+        updatePrimerCaptionResetUi();
+        return;
+      }
+      if (!isPrimerInEffectForCurrentItem(mediaItem)) {
+        setStatus('Apply Primer is only available while primer text is currently in effect.');
+        updatePrimerCaptionResetUi();
+        return;
+      }
+      var textToSave = String((ui && ui.editorEl && ui.editorEl.value) || '');
+      saveCaptionDirect(state.folder, mediaItem.fileName, textToSave, mediaItem.key)
+        .then(function () {
+          updatePrimerCaptionResetUi();
+        })
+        .catch(function (err) {
+          setStatus(String(err && err.message ? err.message : err));
+        });
     });
   }
 

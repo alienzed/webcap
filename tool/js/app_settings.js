@@ -75,7 +75,7 @@ function openAppSettingsModal() {
     try {
       var cfg = JSON.parse(responseText);
       appSettingsLoadedConfig = normalizeAppConfigShape(cfg);
-      if (typeof setRuntimeAppConfig === 'function') setRuntimeAppConfig(cfg);
+      setRuntimeAppConfig(cfg);
       fillAppSettingsForm(appSettingsLoadedConfig);
       setAppSettingsStatus('', false);
     } catch (e) {
@@ -120,7 +120,7 @@ function saveAppSettings(opts) {
       saved = normalizeAppConfigShape(payload);
     }
     appSettingsLoadedConfig = saved;
-    if (typeof setRuntimeAppConfig === 'function') setRuntimeAppConfig(saved);
+    setRuntimeAppConfig(saved);
     fillAppSettingsForm(saved);
     setRootFolderLabelFromConfig(saved);
     if (saveAndReload) {
@@ -149,7 +149,7 @@ function triggerRuntimeConfigReload(quietInModal) {
     }
     if (cfg) {
       appSettingsLoadedConfig = cfg;
-      if (typeof setRuntimeAppConfig === 'function') setRuntimeAppConfig(cfg);
+      setRuntimeAppConfig(cfg);
       fillAppSettingsForm(cfg);
       setRootFolderLabelFromConfig(cfg);
     }
@@ -180,12 +180,9 @@ function openHelpReadmeInPreview() {
       return;
     }
     // Reuse the existing clear flow so preview actions/selection are reset consistently.
-    if (typeof clearEditorAndPreview === 'function') {
-      clearEditorAndPreview();
-    }
-    if (typeof renderFileList === 'function') {
-      renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
-    }
+    clearEditorAndPreview();
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+
     var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
     if (!doc) {
       setStatus('Help load failed.');
@@ -216,9 +213,7 @@ function wireAppSettingsUi() {
   }
   if (ui.utilityCurrentPathBtn) {
     ui.utilityCurrentPathBtn.onclick = function () {
-      if (typeof toggleUtilityPathFlyout === 'function') {
-        toggleUtilityPathFlyout();
-      }
+      toggleUtilityPathFlyout();
     };
   }
 

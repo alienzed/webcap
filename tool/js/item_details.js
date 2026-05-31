@@ -19,6 +19,72 @@ function getTagsForMediaKey(mediaKey) {
   return Array.isArray(tags) ? tags.slice() : [];
 }
 
+function canonicalizeMatchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildPluralTokenVariants(token) {
+  var t = String(token || '').toLowerCase().trim();
+  if (!t) return [];
+  var out = [t];
+  var seen = {};
+  function push(v) {
+    var key = String(v || '').trim();
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push(key);
+  }
+  seen[t] = true;
+
+  // Plural -> singular
+  if (t.length > 3 && t.slice(-3) === 'ies') push(t.slice(0, -3) + 'y');
+  if (t.length > 2 && t.slice(-2) === 'es') push(t.slice(0, -2));
+  if (t.length > 1 && t.slice(-1) === 's') push(t.slice(0, -1));
+
+  // Singular -> plural
+  if (t.length > 1 && t.slice(-1) === 'y') push(t.slice(0, -1) + 'ies');
+  push(t + 's');
+  push(t + 'es');
+
+  return out;
+}
+
+function captionContainsTagWithAllowances(captionText, tagText) {
+  var captionTokens = canonicalizeMatchText(captionText).split(' ').filter(Boolean);
+  var tagTokens = canonicalizeMatchText(tagText).split(' ').filter(Boolean);
+  if (!captionTokens.length || !tagTokens.length) return false;
+  if (captionTokens.length < tagTokens.length) return false;
+
+  var lastIdx = tagTokens.length - 1;
+  var lastTokenVariants = {};
+  buildPluralTokenVariants(tagTokens[lastIdx]).forEach(function (variant) {
+    lastTokenVariants[variant] = true;
+  });
+
+  for (var i = 0; i <= captionTokens.length - tagTokens.length; i += 1) {
+    var matched = true;
+    for (var j = 0; j < tagTokens.length; j += 1) {
+      var expected = tagTokens[j];
+      var actual = captionTokens[i + j];
+      if (j === lastIdx) {
+        if (!lastTokenVariants[actual]) {
+          matched = false;
+          break;
+        }
+      } else if (actual !== expected) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) return true;
+  }
+  return false;
+}
+
 function tagAppearsInCurrentCaption(tagText) {
   var tag = normalizeItemTag(tagText);
   if (!tag) return false;
@@ -28,10 +94,7 @@ function tagAppearsInCurrentCaption(tagText) {
   } else if (state && state.currentItem && typeof state.currentItem.caption === 'string') {
     captionText = state.currentItem.caption;
   }
-  if (typeof captionContainsPhrase === 'function') {
-    return !!captionContainsPhrase(captionText, tag);
-  }
-  return String(captionText || '').toLowerCase().indexOf(tag.toLowerCase()) !== -1;
+  return captionContainsTagWithAllowances(captionText, tag);
 }
 
 function hasTagForMediaKey(mediaKey, tagText) {

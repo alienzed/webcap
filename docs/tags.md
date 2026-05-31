@@ -15,7 +15,16 @@ Item tags provide lightweight per-media annotations that are distinct from capti
 - Tags are stored as a list for each media filename key.
 - Filter includes tags in addition to filename and caption text.
 - Tag text is normalized (trimmed; duplicate tags are ignored case-insensitively).
-- Selecting a tag in the `Tags` panel applies that tag to the filter input.
+- Tags are visually stateful in the `Tags` panel:
+  - green when present in the current caption
+  - amber when missing from the current caption
+- Clicking a tag in the `Tags` panel toggles caption text:
+  - if missing, inserts at cursor
+  - if present, removes from caption
+- Display order in the `Tags` panel:
+  - missing-from-caption tags first
+  - present-in-caption tags second
+  - alphabetical within each group
 
 ## Metadata Display
 

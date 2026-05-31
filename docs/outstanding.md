@@ -1,9 +1,8 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-05-30.
+Last reviewed: 2026-05-31.
 
 ## Bugs
-  1. Replacements seem to separate tags by word, so "side sitting" results in "sitting, side sitting"
-  2. Shift # keys don't seem to do anything, or rather, they type what the number key's second character is... maybe we just go with 6-7-8-9 ? or another modifier key that'll work in browser?
+- None currently tracked here. Add new bugs as numbered items when discovered.
 
 
 ## Enhancements

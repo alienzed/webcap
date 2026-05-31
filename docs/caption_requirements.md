@@ -1,5 +1,6 @@
-
 # Caption Requirements Checklist Feature
+
+Status: Legacy implementation notes. Some layout details below (for example right-docked-only placement) are superseded by current shipped behavior documented in `README.md` and `docs/phrase_copy.md`.
 
 ## Purpose/Overview
 

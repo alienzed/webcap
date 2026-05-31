@@ -190,7 +190,7 @@ Tabs:
 
 Requirements tab:
 - Add/remove requirements per set.
-- Reorder requirements with row-level `⇧` (move up).
+- Reorder requirements with a row-level up-arrow button (move up).
 - Per-media checkbox state persists.
 - Checklist completion can drive reviewed state.
 - Settings modal lets you assign comma-separated keywords per requirement.
@@ -203,15 +203,21 @@ Phrases tab:
   - If present: remove
   - If missing: insert at cursor
 - `Tag` button assigns that phrase as a tag to the current media item.
-- `Annotate ▲/▼` toggles the floating Annotate Strip above the helper panel.
+- Up-arrow button reorders quick phrases up one slot.
+- `X` button removes a quick phrase from the active list.
+- `Annotate` toggle in helper-header actions shows/hides the floating Annotate Strip.
 - Annotate Strip groups come from Requirements + requirement keywords.
 - Clicking an annotate chip toggles that tag on the current media item.
+- Group header pencil button opens per-group requirement-term editor.
+- `n/a` chip lets you mark a group not applicable for the current media item.
 - Hover highlighting is supported for phrase/requirement matches.
 
 Tags tab:
 - Search/add tags via `Add/search tag...`.
 - Shows per-media assigned tags.
-- Clicking a tag applies it as filter text.
+- Tags missing from the current caption are highlighted.
+- Clicking a tag toggles it in the caption (insert at cursor if missing, remove if present).
+- Tag list is sorted with missing tags first, then present tags, each alphabetical.
 
 Metadata tab:
 - Per-media star rating (1..5).
@@ -252,7 +258,6 @@ Global shortcuts (when not typing in input/textarea/select):
 - `Delete`: prune selected media (outside `originals`)
 - `0..5`: set rating (`0` clears)
 - `G`, `Y`, `O`, `B`, `R`: set flag color (green/yellow/orange/blue/red)
-- `Shift+1..9`: move quick phrase at slot `N` up one position (Phrases list)
 
 Editor shortcuts:
 - `Ctrl+S` / `Cmd+S`: save caption or current config file

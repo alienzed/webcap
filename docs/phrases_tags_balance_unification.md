@@ -1,7 +1,7 @@
 # Phrases + Tags + Balance Unification Plan (Minimal-Risk)
 
 Last updated: 2026-05-30
-Status: Historical planning doc. Keep for context; current behavior is documented in `README.md`, `docs/phrase_copy.md`, and `docs/primer_mappings_v2.md`.
+Status: Historical planning doc. Keep for context; current behavior is documented in `README.md`, `docs/phrase_copy.md`, and `docs/primer_mappings_v2.md`. Some interaction details below (for example old tag click-to-filter notes) are intentionally superseded by shipped behavior.
 
 ## Purpose
 Define a cautious implementation plan to unify Phrases, Tags, and Balance behavior while minimizing regressions and preserving existing contracts.

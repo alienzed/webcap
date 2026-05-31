@@ -100,9 +100,10 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
       "Clothing",
       "Traits",
       "Setting",
-      "Lighting",
       "Jewelry",
-      "Surface"
+      "Surface",
+      "Hair",
+      "Lighting"
     ],
     keywordsByItem: {
       "Position": " crouching, folded, kneeling, kneeling sitting, leaning back, leaning downward, leaning forward, leaning to the side, lying on her back, lying on her side, on all fours, posing, side sitting, sitting, squatting, standing, upside down",
@@ -112,9 +113,10 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
       "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform, skirt, shorts, suit, tie, swimsuit, high-heels, boots, sneakers,",
       "Traits": "lipstick, make-up, styled hair, lip gloss, glistening skin, painted nails",
       "Setting": "photo studio, bedroom, living room, kitchen, office, outdoors",
-      "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight, candle light, lighting",
       "Jewelry": "necklace, earrings, bracelet, ring, watch, tiara, anklet",
-      "Surface": "bed, chair, couch, floor, table, ground, grass, sand, water"
+      "Surface": "bed, chair, couch, floor, table, ground, grass, sand, water",
+      "Hair": "braided hair, curly hair, hair covering face, long hair, ponytail, short hair, styled hair, straight hair, updo, wavy hair",
+      "Lighting": "lighting, bright, dark, shadow, sunlight, neon, backlit, twilight, candle light, lighting"
     }
   },
   primer: {

@@ -179,6 +179,13 @@ function openHelpReadmeInPreview() {
       setStatus('Help load failed.');
       return;
     }
+    // Reuse the existing clear flow so preview actions/selection are reset consistently.
+    if (typeof clearEditorAndPreview === 'function') {
+      clearEditorAndPreview();
+    }
+    if (typeof renderFileList === 'function') {
+      renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+    }
     var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
     if (!doc) {
       setStatus('Help load failed.');

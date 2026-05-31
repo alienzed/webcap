@@ -235,6 +235,13 @@ function createCheckboxCell(checked, onChange) {
 }
 
 function renderAdvancedHelpPreview(title, bodyHtml) {
+  // Reuse the existing clear flow so non-media preview content behaves consistently.
+  if (typeof clearEditorAndPreview === 'function') {
+    clearEditorAndPreview();
+  }
+  if (typeof renderFileList === 'function') {
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  }
   var doc = ui && ui.previewEl ? (ui.previewEl.contentDocument || ui.previewEl.contentdocument) : null;
   if (!doc) {
     setStatus('Help preview unavailable.');

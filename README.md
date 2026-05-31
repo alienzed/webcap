@@ -75,13 +75,18 @@ Open:
 ## End-to-End Workflow
 
 1. Open a dataset folder.
-2. Filter/select the working subset.
+2. Filter/select the working subset (text filter + advanced filters).
 3. Curate files (rename/prune/reset/restore/crop/transform/deface/clip).
-4. Write captions and use Requirements/Phrases/Tags/Metadata helpers.
+4. Build captions with Requirements/Phrases/Tags/Metadata and the primer template.
 5. Run Review Captions to inspect coverage/quality.
-6. Run Prepare Dataset.
+6. Run Prepare Dataset on the visible selection.
 7. Run Generate.
 8. Run Train to print command preview, then execute externally.
+
+Practical loop:
+- Use `Captionless` + `Incomplete` to focus work.
+- Use `Review Captions` repeatedly during captioning, not only at the end.
+- Keep Prepare scoped by filters when you want a partial batch.
 
 ## Feature Guide
 
@@ -118,13 +123,20 @@ Open:
 ### 4. Filters and subset selection
 
 Filter bar supports:
-- Text filter
+- Text filter:
+  - Comma-separated terms are ANDed.
+  - Prefix a term with `-` or `!` to exclude.
+  - Matches filename, label, caption text, and item tags.
 - Advanced filters:
   - Captionless
   - Reviewed
-  - Stars (`> N`)
-  - Flag color
+  - Unreviewed
+  - Incomplete (requirement groups not fully satisfied; `n/a` counts complete)
+  - Untagged
+  - Stars (multi-select, includes `No Star`)
+  - Flag color (multi-select, includes `No Flag`)
   - Invalid AR
+  - Advanced Filters help (`i`) with in-app usage details.
 - Clear All resets text + all advanced filters.
 
 Prepare uses the currently visible media rows as its selection source.
@@ -215,7 +227,7 @@ Phrases tab:
 Tags tab:
 - Search/add tags via `Add/search tag...`.
 - Shows per-media assigned tags.
-- Tags missing from the current caption are highlighted.
+- Tags missing from the current caption are highlighted using strict token matching with punctuation normalization and plural allowances.
 - Clicking a tag toggles it in the caption (insert at cursor if missing, remove if present).
 - Tag list is sorted with missing tags first, then present tags, each alphabetical.
 
@@ -239,12 +251,17 @@ Metadata tab:
     - `{view| against }` => append phrase after resolved `view`
     - `{ in |location| setting}` => add prefix/suffix around resolved `location`
 - `Set Notes` is available as a separate freeform notes field.
+- Primer application UX:
+  - `Reapply` writes current primer output into the caption for the selected item.
+  - `Undo Reapply` restores the previous caption for that item.
+  - Floating `Apply Primer` appears when caption is missing and primer text is currently in effect.
+  - While editing `Caption Template`, captionless items live-update only if the editor still matches primer-derived text (safe no-overwrite behavior).
 
 ### 9.2 Review tab
 
 - `Required key phrase`: set one phrase that must appear in each caption.
 - `Balance Phrases`:
-  - Add phrases to track caption variety/coverage across the set.
+  - Add phrases to track caption variety/coverage across the set (free text or catalog suggestion).
   - Click the `i` button for usage help in the preview panel.
   - Clicking a balance phrase row adds that phrase as a tag to the current media item.
 - `Rules`:
@@ -262,6 +279,9 @@ Global shortcuts (when not typing in input/textarea/select):
 Editor shortcuts:
 - `Ctrl+S` / `Cmd+S`: save caption or current config file
 - `F2`: rename selected media (when editor is not focused)
+
+Preview navigation:
+- Mouse wheel over preview can move previous/next media (cooldown applied to avoid rapid accidental jumps).
 
 ### 11. Review reports
 
@@ -287,6 +307,11 @@ Training panel includes:
 
 Behavior:
 - Prepare processes selected/visible subset and writes `auto_dataset/prep_manifest.json`.
+- Prepare includes a missing-caption preflight when needed:
+  - Shows missing total
+  - Shows primer-fallback count (in-memory)
+  - Shows still-empty count
+  - Prompts Continue/Cancel
 - Generate reads prep manifest and writes dataset/config outputs.
 - If prep manifest is missing, Generate auto-runs Prepare once, then retries Generate.
 - Train prints resolved command preview to console (does not run training jobs).

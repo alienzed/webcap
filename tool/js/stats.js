@@ -682,17 +682,49 @@ function statsGetPrimerOptionsFromDom() {
 // Debounced auto-save for stats/primer changes
 var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
+var primerTemplateSnapshot = '';
+
+function syncMissingCaptionEditorToUpdatedPrimer(previousTemplate, nextTemplate) {
+  if (!ui || !ui.editorEl || ui.editorEl.readOnly) return;
+  var mediaItem = getPrimerResetCurrentMediaItem();
+  if (!mediaItem || mediaItem.hasCaption) return;
+
+  var previousPrimer = '';
+  var previousConfig = statsGetPrimerOptionsFromDom();
+  previousConfig.template = String(previousTemplate || '');
+  if (previousConfig.template.trim()) {
+    previousPrimer = String(buildPrimerFromConfig(mediaItem.fileName, mediaItem.key, previousConfig) || '');
+  }
+
+  var currentEditorText = String(ui.editorEl.value || '');
+  if (currentEditorText.trim() !== previousPrimer.trim()) return;
+
+  var nextConfig = statsGetPrimerOptionsFromDom();
+  nextConfig.template = String(nextTemplate || '');
+  var nextPrimer = String(buildPrimerFromConfig(mediaItem.fileName, mediaItem.key, nextConfig) || '');
+  if (currentEditorText === nextPrimer) return;
+
+  applyEditorTextAndTriggerInput(nextPrimer);
+}
 
 function wireStatsPrimerAutoSave() {
+  var templateEl = document.getElementById('primer-template');
+  if (templateEl) primerTemplateSnapshot = String(templateEl.value || '');
   var statsFields = [
     document.getElementById('stats-required-phrase'),
     document.getElementById('stats-phrases'),
-    document.getElementById('primer-template')
+    templateEl
   ];
   statsFields.forEach(function (el) {
     if (el && !el.__autoSaveBound) {
       el.__autoSaveBound = true;
-      el.addEventListener('input', function () {
+      el.addEventListener('input', function (evt) {
+        if (el.id === 'primer-template') {
+          var nextTemplate = String((evt && evt.target && evt.target.value) || '');
+          var previousTemplate = primerTemplateSnapshot;
+          primerTemplateSnapshot = nextTemplate;
+          syncMissingCaptionEditorToUpdatedPrimer(previousTemplate, nextTemplate);
+        }
         debouncedSaveFolderState(function () {
           saveFolderStateForCurrentRoot();
         });

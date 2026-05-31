@@ -2,34 +2,29 @@ This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-05-31.
 
 ## Bugs
-- None currently tracked here. Add new bugs as numbered items when discovered.
 - Copy set doesn't bring over Reviewed status or the custom Requirements
 
 
 ## Enhancements
-- More advanced filters: multiple terms, does not contain term, any, all, incomplete
-- Up and down keys already move between media items when selected, can mouse scroll over the preview do this too?
 - Consider making annotation an assisted Wizard like flow - provided by a modal entered into purposefully.
-- Update the caption in real time when editing the template, if the caption shown is 'missing' and thus modifiable.
 - Annotation throughput priorities (ranked by expected ROI):
-  1. Group completion indicator in media list + filter for incomplete items.
-     - Value: High; gives clear annotation progress and "what is left" targeting.
+  1. Group completion indicator in media list.
+     - Value: High; gives clear annotation progress and "what is left" targeting. (Incomplete filter is implemented.)
      - Complexity: Medium (derived per-item status + filter hook).
      - Some media items will purposefully not meet certain groups, so we need to be careful about how loudly we visually indicate incompleteness, or provide means to strike a group for an item so that it doesn't knock it's score.
   2. Auto order requirements values, alphabetical, for easier application as I move between sets.
-  3. Highlight a tag that does not appear to be associated with the caption.
-  4. Any missing filter presets that might help annotation
-  5. Batch apply tags on multi-select.
+  3. Any missing filter presets that might help annotation
+  4. Batch apply tags on multi-select.
      - Value: High in bursts, especially for contiguous scenes/outfits/locations.
      - Complexity: Medium/high (selection model + safe bulk mutate UX).
      - Note: Revisit after proving item-level annotate strip speed, since complexity is higher.
      - Questionably useful if the idea is to pretag, but is a set has captions, filtering by some tokens could be a good opportunity to batch tag. It's less clear why I would do this though since tags right now primarily serve for the caption template.
-  6. Caption scaffold from annotation tags.
+  5. Caption scaffold from annotation tags.
      - Value: Medium; helps reduce blank-page start cost during Caption step.
      - Complexity: Medium (template mapping + insertion rules).
      - Note: Useful, but less urgent than annotation velocity wins above.
      - If I am understanding correctly, are we talking about a default caption template?
-  8. We have a way to add optional text after a placeholder, adding option text before a placeholder would also be useful.
+  6. We have a way to add optional text after a placeholder, adding option text before a placeholder would also be useful.
 - Dataset inferred sample/megaframe/VRAM/time estimation.
 
 ## 1.1 Ideas
@@ -110,6 +105,7 @@ Last reviewed: 2026-05-31.
   - Legacy autoset remains available from current-folder context menu.
 - Keyboard/media navigation:
   - `ArrowUp` / `ArrowDown` selects previous/next media when a media item is selected.
+  - Mouse wheel over preview also navigates previous/next media (with cooldown).
   - `Delete` triggers prune prompt/action for selected media.
   - After prune, next item selection is attempted (silent no-op at end of list).
 - Metadata/rating updates:
@@ -122,9 +118,20 @@ Last reviewed: 2026-05-31.
 - Advanced filters added (chevron beside filter input):
   - Missing captions only.
   - Reviewed only.
-  - Stars filter (`> N`).
-  - Cumulative flag filter.
+  - Unreviewed only.
+  - Incomplete only (requirement groups not fully satisfied; N/A counts complete).
+  - Untagged only.
+  - Multi-select stars filter (includes `No Star`).
+  - Multi-select flag filter (includes `No Flag`).
   - Invalid AR (shows only items with unsupported aspect ratios).
+  - Advanced Filters info/help button.
+- Filter text supports comma-separated include terms and exclude terms (prefix `-` or `!`).
+- Tag/caption mismatch highlighting now uses strict token matching with allowances for plural forms and punctuation normalization.
+- Balance phrases can be added from free text; catalog terms are now optional suggestions.
+- Primer/caption UX updates:
+  - `Reset` renamed to `Reapply` (`Undo Reapply`).
+  - Floating `Apply Primer` action appears when a caption is missing and primer text is in effect.
+  - While editing primer template, captionless items update live only when editor still matches primer-derived text (safe no-overwrite behavior).
 - Existing confirmed behavior retained:
   - Rename reselection via `pendingSelectFileName`.
   - Prune backup behavior (`pruned_` in `originals`).

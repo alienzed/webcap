@@ -14,6 +14,7 @@ Last reviewed: 2026-05-30.
      - Complexity: Medium (derived per-item status + filter hook).
      - Some media items will purposefully not meet certain groups, so we need to be careful about how loudly we visually indicate incompleteness, or provide means to strike a group for an item so that it doesn't knock it's score.
   2. Auto order requirements values, alphabetical, for easier application as I move between sets.
+  3. Highlight a tag that does not appear to be associated with the caption.
   4. Any missing filter presets that might help annotation
   5. Batch apply tags on multi-select.
      - Value: High in bursts, especially for contiguous scenes/outfits/locations.
@@ -24,6 +25,7 @@ Last reviewed: 2026-05-30.
      - Value: Medium; helps reduce blank-page start cost during Caption step.
      - Complexity: Medium (template mapping + insertion rules).
      - Note: Useful, but less urgent than annotation velocity wins above.
+     - If I am understanding correctly, are we talking about a default caption template?
 - A way to visually show in the media list when an item has a star rating. I'm not sure we NEED to show how many stars, just something that clearly denotes 'this item has a rating'. I was even thinking of having the number of star really really tiny beneath the name, only a few pixels tall, like, that would be enough for my needs. OR, we do the opposite, right now we have a background color for missing captions, maybe there's a way to do something similar for missing rating.
 - Dataset inferred sample/megaframe/VRAM/time estimation.
 - Preview quick actions (pre-implementation decision):

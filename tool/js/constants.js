@@ -107,9 +107,9 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
       "Lighting"
     ],
     keywordsByItem: {
-      "Position": " crouching, folded, kneeling, kneeling sitting, leaning back, leaning downward, leaning forward, leaning to the side, lying on her back, lying on her side, on all fours, posing, side sitting, sitting, squatting, standing, upside down",
-      "Viewpoint": " close-up,front, low-position, medium close-up, overhead, portrait, rear, side, three-quarter, three-quarter rear",
-      "Expression": " closed-mouth smile, excited, faint smile, happy, neutral expression, sad, smiling, surprised, serious, smirking, upset",
+      "Position": "crouching, folded, kneeling, kneeling sitting, leaning back, leaning downward, leaning forward, leaning to the side, lying on her back, lying on her side, on all fours, posing, side sitting, sitting, squatting, standing, upside down",
+      "Viewpoint": "close-up,front, low-position, medium close-up, overhead, portrait, rear, side, three-quarter, three-quarter rear",
+      "Expression": "closed-mouth smile, excited, faint smile, happy, neutral expression, sad, smiling, surprised, serious, smirking, upset",
       "Action": "standing, sitting, running, walking, holding, looking, eating, drinking, touching, rubbing",
       "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform, skirt, shorts, suit, tie, swimsuit, high-heels, boots, sneakers,",
       "Traits": "lipstick, make-up, styled hair, lip gloss, glistening skin, painted nails",

@@ -383,7 +383,6 @@
                     <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
                     <div id="annotate-strip" class="annotate-strip hidden" aria-label="Annotation strip"></div>
                     <div id="caption-checklist-panel" class="checklist-panel" style="display:none;">
-                        <button id="checklist-close-btn" title="Close checklist" aria-label="Close checklist" class="checklist-close-btn">&times;</button>
                         <div id="caption-helper-tabs" class="caption-helper-tabs">
                             <button
                                 id="caption-helper-tab-requirements-btn"
@@ -409,6 +408,24 @@
                                 data-caption-helper-tab="metadata"
                                 type="button"
                             >Metadata</button>
+                            <div class="caption-helper-tabs-actions">
+                                <button
+                                    id="annotate-strip-toggle-btn"
+                                    type="button"
+                                    class="annotate-strip-toggle-btn"
+                                    title="Show/hide annotation strip"
+                                    aria-expanded="false"
+                                >Annotate &#9650;</button>
+                                <button
+                                    id="caption-helper-collapse-btn"
+                                    type="button"
+                                    class="caption-helper-collapse-btn"
+                                    title="Collapse helper panel"
+                                    aria-label="Collapse helper panel"
+                                    aria-expanded="true"
+                                >&#9660;</button>
+                                <button id="checklist-close-btn" title="Close helper panel" aria-label="Close helper panel" class="checklist-close-btn">&times;</button>
+                            </div>
                         </div>
                         <div id="caption-helper-tab-requirements" class="caption-helper-tab-pane">
                             <div class="caption-helper-section-title-row">
@@ -433,16 +450,7 @@
                             <div id="checklist-items"></div>
                         </div>
                         <div id="caption-helper-tab-phrases" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title-row">
-                                <div class="caption-helper-section-title">Phrases</div>
-                                <button
-                                    id="annotate-strip-toggle-btn"
-                                    type="button"
-                                    class="annotate-strip-toggle-btn"
-                                    title="Show/hide annotation strip"
-                                    aria-expanded="false"
-                                >Annotate &#9650;</button>
-                            </div>
+                            <div class="caption-helper-section-title">Phrases</div>
                             <div id="phrase-term-row" class="checklist-input-row caption-term-shared-row term-input-row">
                                 <input
                                     id="phrase-term-input"

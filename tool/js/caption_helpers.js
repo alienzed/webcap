@@ -5,6 +5,7 @@ var captionQuickPhrases = [];
 var captionHelperNotes = '';
 var debouncedSetNotesSave = debounceCreate(500);
 var annotateStripVisible = false;
+var captionHelperPanelCollapsed = false;
 
 function parseAnnotateStripTerms(raw) {
   var seen = {};
@@ -38,6 +39,33 @@ function updateAnnotateStripToggleUi() {
   if (!toggleBtn) return;
   toggleBtn.setAttribute('aria-expanded', annotateStripVisible ? 'true' : 'false');
   toggleBtn.innerHTML = 'Annotate ' + (annotateStripVisible ? '&#9660;' : '&#9650;');
+}
+
+function updateCaptionHelperCollapseUi() {
+  var panelEl = document.getElementById('caption-checklist-panel');
+  var editorPanelEl = panelEl ? panelEl.closest('.editor-panel') : null;
+  if (panelEl) {
+    if (captionHelperPanelCollapsed) panelEl.classList.add('helper-panel-collapsed');
+    else panelEl.classList.remove('helper-panel-collapsed');
+  }
+  if (editorPanelEl) {
+    if (captionHelperPanelCollapsed) editorPanelEl.classList.add('helper-panel-collapsed');
+    else editorPanelEl.classList.remove('helper-panel-collapsed');
+  }
+  var toggleBtn = document.getElementById('caption-helper-collapse-btn');
+  if (!toggleBtn) return;
+  toggleBtn.setAttribute('aria-expanded', captionHelperPanelCollapsed ? 'false' : 'true');
+  toggleBtn.setAttribute('title', captionHelperPanelCollapsed ? 'Expand helper panel' : 'Collapse helper panel');
+  toggleBtn.innerHTML = captionHelperPanelCollapsed ? '&#9654;' : '&#9660;';
+}
+
+function setCaptionHelperPanelCollapsed(nextCollapsed, persistNow) {
+  captionHelperPanelCollapsed = !!nextCollapsed;
+  window.captionHelperPanelCollapsed = captionHelperPanelCollapsed;
+  updateCaptionHelperCollapseUi();
+  if (persistNow) {
+    saveCaptionHelpersToFolderState();
+  }
 }
 
 function setAnnotateStripVisible(nextVisible, persistNow) {
@@ -124,10 +152,27 @@ function renderAnnotateStrip() {
     var groupEl = document.createElement('div');
     groupEl.className = 'annotate-strip-group';
 
+    var titleRowEl = document.createElement('div');
+    titleRowEl.className = 'annotate-strip-group-title-row';
+
     var titleEl = document.createElement('div');
     titleEl.className = 'annotate-strip-group-title';
     titleEl.textContent = group.name;
-    groupEl.appendChild(titleEl);
+    titleRowEl.appendChild(titleEl);
+
+    var editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'annotate-strip-group-edit-btn';
+    editBtn.textContent = '\u270e';
+    editBtn.title = 'Edit requirement terms';
+    editBtn.onclick = function () {
+      if (typeof openChecklistGroupTermsModal === 'function') {
+        openChecklistGroupTermsModal(group.requirement || group.name);
+      }
+    };
+    titleRowEl.appendChild(editBtn);
+
+    groupEl.appendChild(titleRowEl);
 
     var chipWrap = document.createElement('div');
     chipWrap.className = 'annotate-strip-chip-wrap';
@@ -387,6 +432,7 @@ function saveCaptionHelpersToFolderState() {
   snapshot.quick_phrases = captionQuickPhrases.slice();
   snapshot.caption_set_notes = captionHelperNotes;
   snapshot.annotate_strip_visible = !!annotateStripVisible;
+  snapshot.caption_helper_panel_collapsed = !!captionHelperPanelCollapsed;
   writeFolderStateFile(state.folder, snapshot);
 }
 
@@ -559,18 +605,18 @@ function renderPhraseCopyPanel() {
       var actions = document.createElement('div');
       actions.className = 'phrase-copy-actions';
 
-      var keyHint = document.createElement('button');
-      keyHint.type = 'button';
-      keyHint.className = 'stats-phrase-keyhint';
-      keyHint.title = 'Move up';
-      keyHint.textContent = '\u21e7';
-      keyHint.onclick = function () {
+      var moveUpBtn = document.createElement('button');
+      moveUpBtn.type = 'button';
+      moveUpBtn.className = 'stats-phrase-move-btn';
+      moveUpBtn.title = 'Move up';
+      moveUpBtn.textContent = '\u2191';
+      moveUpBtn.onclick = function () {
         var moved = moveCaptionQuickPhraseByOffset(idx, -1);
         if (moved) {
           setStatus('Moved quick phrase up: ' + phrase);
         }
       };
-      actions.appendChild(keyHint);
+      actions.appendChild(moveUpBtn);
 
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -604,8 +650,11 @@ function loadCaptionHelpersFromFolderState(folderState) {
   });
   captionHelperNotes = String(folderState.caption_set_notes || '');
   annotateStripVisible = !!folderState.annotate_strip_visible;
+  captionHelperPanelCollapsed = !!folderState.caption_helper_panel_collapsed;
   window.annotateStripVisible = annotateStripVisible;
+  window.captionHelperPanelCollapsed = captionHelperPanelCollapsed;
   updateAnnotateStripToggleUi();
+  updateCaptionHelperCollapseUi();
   var notesEditor = document.getElementById('set-notes-editor');
   if (notesEditor) {
     notesEditor.value = captionHelperNotes;
@@ -627,6 +676,7 @@ function wireCaptionHelpersUi() {
   var tagResults = document.getElementById('tag-term-results');
   var notesEditor = document.getElementById('set-notes-editor');
   var annotateStripToggleBtn = document.getElementById('annotate-strip-toggle-btn');
+  var helperCollapseToggleBtn = document.getElementById('caption-helper-collapse-btn');
 
   requirementsBtn.onclick = function () {
     setCaptionHelperTab('requirements');
@@ -647,6 +697,11 @@ function wireCaptionHelpersUi() {
   if (annotateStripToggleBtn) {
     annotateStripToggleBtn.onclick = function () {
       setAnnotateStripVisible(!annotateStripVisible, true);
+    };
+  }
+  if (helperCollapseToggleBtn) {
+    helperCollapseToggleBtn.onclick = function () {
+      setCaptionHelperPanelCollapsed(!captionHelperPanelCollapsed, true);
     };
   }
 
@@ -868,6 +923,7 @@ function wireCaptionHelpersUi() {
 
   setCaptionHelperTab(captionHelperActiveTab);
   updateAnnotateStripToggleUi();
+  updateCaptionHelperCollapseUi();
   renderPhraseCopyPanel();
   renderAnnotateStrip();
 }

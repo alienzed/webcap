@@ -387,19 +387,31 @@ function renderItemTagsPanel() {
     listEl.textContent = 'No tags.';
     return;
   }
-  tags.forEach(function (tag, idx) {
+  tags.sort(function (a, b) {
+    var aText = String(a || '');
+    var bText = String(b || '');
+    var aPresent = tagAppearsInCurrentCaption(aText);
+    var bPresent = tagAppearsInCurrentCaption(bText);
+    if (aPresent !== bPresent) return aPresent ? 1 : -1;
+    return aText.toLowerCase().localeCompare(bText.toLowerCase());
+  });
+
+  tags.forEach(function (tag) {
     var row = document.createElement('div');
     row.className = 'row-inline';
 
     var tagBtn = document.createElement('button');
     tagBtn.type = 'button';
     tagBtn.className = 'phrase-copy-item-btn';
-    tagBtn.classList.add(tagAppearsInCurrentCaption(tag) ? 'item-tag-pill-present' : 'item-tag-pill-missing');
+    var inCaption = tagAppearsInCurrentCaption(tag);
+    tagBtn.classList.add(inCaption ? 'item-tag-pill-present' : 'item-tag-pill-missing');
     tagBtn.textContent = tag;
+    tagBtn.title = inCaption ? 'Remove from caption' : 'Insert at cursor';
     tagBtn.onclick = function () {
-      ui.filterEl.value = tag;
-      ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
-      setStatus('Filter applied from tag: ' + tag);
+      if (typeof toggleCaptionPhraseAtCursor === 'function') {
+        toggleCaptionPhraseAtCursor(tag);
+      }
+      renderItemTagsPanel();
     };
 
     var rmBtn = document.createElement('button');

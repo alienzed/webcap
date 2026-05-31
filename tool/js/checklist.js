@@ -206,8 +206,9 @@ function renderChecklistPanel() {
     var actions = document.createElement('div');
     actions.className = 'checklist-row-actions';
     var moveUpBtn = document.createElement('button');
-    moveUpBtn.textContent = '\u21e7';
+    moveUpBtn.textContent = '\u2191';
     moveUpBtn.title = 'Move requirement up';
+    moveUpBtn.className = 'checklist-row-action-btn checklist-row-action-move';
     moveUpBtn.disabled = (i === 0);
     (function(idx, label) {
       moveUpBtn.onclick = function() {
@@ -221,7 +222,7 @@ function renderChecklistPanel() {
     var editTermsBtn = document.createElement('button');
     editTermsBtn.textContent = '\u270e';
     editTermsBtn.title = 'Edit requirement terms';
-    editTermsBtn.className = 'checklist-group-edit-btn';
+    editTermsBtn.className = 'checklist-row-action-btn checklist-group-edit-btn';
     (function(requirementLabel) {
       editTermsBtn.onclick = function() {
         openChecklistGroupTermsModal(requirementLabel);
@@ -230,7 +231,9 @@ function renderChecklistPanel() {
     actions.appendChild(editTermsBtn);
     // Remove button
     var rmBtn = document.createElement('button');
-    rmBtn.textContent = '×';
+    rmBtn.textContent = '\u00D7';
+    rmBtn.title = 'Remove requirement';
+    rmBtn.className = 'checklist-row-action-btn checklist-row-action-remove';
     (function(idx, item) {
       rmBtn.onclick = function() {
         checklistItems.splice(idx, 1);

@@ -79,6 +79,7 @@ function sanitizeFolderState(data) {
     quick_phrases: Array.isArray(src.quick_phrases) ? src.quick_phrases.slice() : undefined,
     caption_set_notes: String(src.caption_set_notes || ''),
     annotate_strip_visible: !!src.annotate_strip_visible,
+    caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,
     caption_tags_by_media: tagMap,
     ratings_by_media: ratingsByMedia,
     mutated_media_keys: mutatedMediaKeys
@@ -173,6 +174,7 @@ function snapshotFolderStateFromDom() {
       : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),
     annotate_strip_visible: !!window.annotateStripVisible,
+    caption_helper_panel_collapsed: !!window.captionHelperPanelCollapsed,
     caption_tags_by_media: tagsByMedia,
     ratings_by_media: ratingsByMedia,
     mutated_media_keys: mutatedKeys

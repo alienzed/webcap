@@ -305,9 +305,9 @@ function renderStatsBalancePhraseList() {
 
       var moveUpBtn = document.createElement('button');
       moveUpBtn.type = 'button';
-      moveUpBtn.className = 'stats-phrase-keyhint';
+      moveUpBtn.className = 'stats-phrase-move-btn';
       moveUpBtn.title = 'Move up';
-      moveUpBtn.textContent = '\u21e7';
+      moveUpBtn.textContent = '\u2191';
       moveUpBtn.onclick = function () {
         var moved = moveStatsBalancePhraseByOffset(idx, -1);
         if (moved) {

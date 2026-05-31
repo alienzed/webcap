@@ -1400,7 +1400,7 @@ iframe {
   background: #f8fbff;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   z-index: 19;
-  max-height: 170px;
+  max-height: 320px;
   overflow-y: auto;
 }
 
@@ -1491,7 +1491,7 @@ iframe {
   }
   .annotate-strip {
     margin: 0 2px;
-    max-height: 140px;
+    max-height: 240px;
   }
   #checklist-items {
     grid-template-columns: repeat(2, 1fr);

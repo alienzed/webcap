@@ -1545,6 +1545,12 @@ iframe {
   margin-bottom: 1px;
 }
 
+#checklist-items .checklist-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 #checklist-items label {
   display: flex;
   align-items: center;
@@ -1596,6 +1602,11 @@ iframe {
   border-radius: 3px;
   font-size: 10px;
   line-height: 1;
+}
+
+#checklist-items button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 @media (max-width: 900px) {
   .editor-panel {

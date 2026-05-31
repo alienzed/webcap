@@ -289,7 +289,6 @@ function wireAllUi() {
       var val = addInput.value.trim();
       if (!val || checklistItems.indexOf(val) !== -1) return;
       checklistItems.push(val);
-      checklistItems.sort(checklistSort);
       for (var k in checklistCheckedByMedia) {
         if (checklistCheckedByMedia[k]) checklistCheckedByMedia[k][val] = false;
       }

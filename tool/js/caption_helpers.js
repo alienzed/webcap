@@ -35,10 +35,13 @@ function getAnnotateStripGroups() {
 }
 
 function updateAnnotateStripToggleUi() {
-  var toggleBtn = document.getElementById('annotate-strip-toggle-btn');
-  if (!toggleBtn) return;
-  toggleBtn.setAttribute('aria-expanded', annotateStripVisible ? 'true' : 'false');
-  toggleBtn.innerHTML = 'Annotate ' + (annotateStripVisible ? '&#9660;' : '&#9650;');
+  var toggleIds = ['annotate-strip-toggle-btn', 'annotate-strip-toggle-inline-btn'];
+  for (var i = 0; i < toggleIds.length; i++) {
+    var toggleBtn = document.getElementById(toggleIds[i]);
+    if (!toggleBtn) continue;
+    toggleBtn.setAttribute('aria-expanded', annotateStripVisible ? 'true' : 'false');
+    toggleBtn.innerHTML = 'Annotate ' + (annotateStripVisible ? '&#9660;' : '&#9650;');
+  }
 }
 
 function updateCaptionHelperCollapseUi() {
@@ -52,11 +55,14 @@ function updateCaptionHelperCollapseUi() {
     if (captionHelperPanelCollapsed) editorPanelEl.classList.add('helper-panel-collapsed');
     else editorPanelEl.classList.remove('helper-panel-collapsed');
   }
-  var toggleBtn = document.getElementById('caption-helper-collapse-btn');
-  if (!toggleBtn) return;
-  toggleBtn.setAttribute('aria-expanded', captionHelperPanelCollapsed ? 'false' : 'true');
-  toggleBtn.setAttribute('title', captionHelperPanelCollapsed ? 'Expand helper panel' : 'Collapse helper panel');
-  toggleBtn.innerHTML = captionHelperPanelCollapsed ? '&#9654;' : '&#9660;';
+  var toggleIds = ['caption-helper-collapse-btn', 'caption-helper-collapse-inline-btn'];
+  for (var i = 0; i < toggleIds.length; i++) {
+    var toggleBtn = document.getElementById(toggleIds[i]);
+    if (!toggleBtn) continue;
+    toggleBtn.setAttribute('aria-expanded', captionHelperPanelCollapsed ? 'false' : 'true');
+    toggleBtn.setAttribute('title', captionHelperPanelCollapsed ? 'Expand helper panel' : 'Collapse helper panel');
+    toggleBtn.innerHTML = captionHelperPanelCollapsed ? '&#9654;' : '&#9660;';
+  }
 }
 
 function setCaptionHelperPanelCollapsed(nextCollapsed, persistNow) {
@@ -677,7 +683,9 @@ function wireCaptionHelpersUi() {
   var tagResults = document.getElementById('tag-term-results');
   var notesEditor = document.getElementById('set-notes-editor');
   var annotateStripToggleBtn = document.getElementById('annotate-strip-toggle-btn');
+  var annotateStripToggleInlineBtn = document.getElementById('annotate-strip-toggle-inline-btn');
   var helperCollapseToggleBtn = document.getElementById('caption-helper-collapse-btn');
+  var helperCollapseInlineToggleBtn = document.getElementById('caption-helper-collapse-inline-btn');
 
   function expandHelperPanelForTabSwitch() {
     if (captionHelperPanelCollapsed) {
@@ -714,8 +722,18 @@ function wireCaptionHelpersUi() {
       setAnnotateStripVisible(!annotateStripVisible, true);
     };
   }
+  if (annotateStripToggleInlineBtn) {
+    annotateStripToggleInlineBtn.onclick = function () {
+      setAnnotateStripVisible(!annotateStripVisible, true);
+    };
+  }
   if (helperCollapseToggleBtn) {
     helperCollapseToggleBtn.onclick = function () {
+      setCaptionHelperPanelCollapsed(!captionHelperPanelCollapsed, true);
+    };
+  }
+  if (helperCollapseInlineToggleBtn) {
+    helperCollapseInlineToggleBtn.onclick = function () {
       setCaptionHelperPanelCollapsed(!captionHelperPanelCollapsed, true);
     };
   }

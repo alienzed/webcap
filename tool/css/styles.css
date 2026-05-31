@@ -2123,22 +2123,31 @@ iframe {
 }
 
 #caption-checklist-panel .checklist-input-row input[type="text"] {
-  width: 20ch;
-  min-width: 80px;
-  max-width: 180px;
-  display: inline-block;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  display: block;
 }
 
 #caption-checklist-panel #phrase-term-row input[type="text"],
 #caption-checklist-panel #tag-term-row input[type="text"] {
-  width: 20ch !important;
-  min-width: 80px;
-  max-width: 180px;
+  width: auto !important;
+  min-width: 0;
+  max-width: none;
 }
 
 #caption-checklist-panel .checklist-input-row button {
+  width: 28px;
   min-width: 28px;
-  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @media (min-width: 1500px) {
@@ -2151,18 +2160,7 @@ iframe {
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tabs {
-    display: flex;
-    grid-column: 1 / -1;
-    justify-content: flex-end;
-    margin-bottom: 0;
-  }
-
-  .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tab-btn {
     display: none;
-  }
-
-  .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tabs-actions {
-    margin-left: 0;
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-tab-pane {
@@ -2177,11 +2175,21 @@ iframe {
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel.helper-panel-collapsed .caption-helper-tab-pane {
+    display: block !important;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .editor-panel.checklist-visible #caption-checklist-panel.helper-panel-collapsed .caption-helper-tab-pane > :not(.caption-helper-section-title-row) {
     display: none !important;
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-section-title {
     display: block;
+  }
+
+  .editor-panel.checklist-visible #caption-checklist-panel .caption-helper-section-title-row {
+    display: flex;
   }
 
   .editor-panel.checklist-visible #caption-checklist-panel #checklist-items,
@@ -2219,7 +2227,7 @@ iframe {
 }
 
 .caption-helper-section-title-row {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
@@ -2235,6 +2243,16 @@ iframe {
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
+}
+
+.checklist-settings-tabs-btn {
+  display: none;
+}
+
+.caption-helper-section-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .checklist-settings-btn:hover {

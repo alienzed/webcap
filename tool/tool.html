@@ -430,13 +430,22 @@
                         <div id="caption-helper-tab-requirements" class="caption-helper-tab-pane">
                             <div class="caption-helper-section-title-row">
                                 <div class="caption-helper-section-title">Requirements</div>
-                                <button
-                                    id="checklist-settings-btn"
-                                    type="button"
-                                    class="checklist-settings-btn"
-                                    title="Configure requirement keywords"
-                                    aria-label="Configure requirement keywords"
-                                >⚙</button>
+                                <div class="caption-helper-section-controls">
+                                    <button
+                                        id="annotate-strip-toggle-inline-btn"
+                                        type="button"
+                                        class="annotate-strip-toggle-btn"
+                                        title="Show/hide annotation strip"
+                                        aria-expanded="false"
+                                    >Annotate &#9650;</button>
+                                    <button
+                                        id="checklist-settings-btn"
+                                        type="button"
+                                        class="checklist-settings-btn"
+                                        title="Configure requirement keywords"
+                                        aria-label="Configure requirement keywords"
+                                    >&#9881;</button>
+                                </div>
                             </div>
                             <div class="checklist-input-row">
                                 <input
@@ -450,7 +459,9 @@
                             <div id="checklist-items"></div>
                         </div>
                         <div id="caption-helper-tab-phrases" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title">Phrases</div>
+                            <div class="caption-helper-section-title-row">
+                                <div class="caption-helper-section-title">Phrases</div>
+                            </div>
                             <div id="phrase-term-row" class="checklist-input-row caption-term-shared-row term-input-row">
                                 <input
                                     id="phrase-term-input"
@@ -464,7 +475,9 @@
                             <div id="phrase-copy-items"></div>
                         </div>
                         <div id="caption-helper-tab-tags" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title">Tags</div>
+                            <div class="caption-helper-section-title-row">
+                                <div class="caption-helper-section-title">Tags</div>
+                            </div>
                             <div id="tag-term-row" class="checklist-input-row term-input-row">
                                 <input
                                     id="tag-term-input"
@@ -478,7 +491,20 @@
                             <div id="item-tags-list"></div>
                         </div>
                         <div id="caption-helper-tab-metadata" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title">Metadata</div>
+                            <div class="caption-helper-section-title-row">
+                                <div class="caption-helper-section-title">Metadata</div>
+                                <div class="caption-helper-section-controls">
+                                    <button
+                                        id="caption-helper-collapse-inline-btn"
+                                        type="button"
+                                        class="caption-helper-collapse-btn"
+                                        title="Collapse helper panel"
+                                        aria-label="Collapse helper panel"
+                                        aria-expanded="true"
+                                    >&#9660;</button>
+                                    <button id="checklist-close-inline-btn" title="Close helper panel" aria-label="Close helper panel" class="checklist-close-btn">&times;</button>
+                                </div>
+                            </div>
                             <div id="item-metadata-list"></div>
                         </div>
                     </div>
@@ -714,3 +740,4 @@
         <script src="/static/js/main.js"></script>
     </body>
 </html>
+

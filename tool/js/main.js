@@ -302,17 +302,27 @@ function wireAllUi() {
     });
   }
 
+  function closeChecklistPanel() {
+    if (typeof setChecklistPanelVisible === 'function') {
+      setChecklistPanelVisible(false);
+    } else if (checklistPanelEl) {
+      checklistPanelEl.style.display = 'none';
+    }
+    if (typeof renderAnnotateStrip === 'function') {
+      renderAnnotateStrip();
+    }
+  }
+
   var closeBtn = document.getElementById('checklist-close-btn');
   if (closeBtn) {
     closeBtn.onclick = function() {
-      if (typeof setChecklistPanelVisible === 'function') {
-        setChecklistPanelVisible(false);
-      } else if (checklistPanelEl) {
-        checklistPanelEl.style.display = 'none';
-      }
-      if (typeof renderAnnotateStrip === 'function') {
-        renderAnnotateStrip();
-      }
+      closeChecklistPanel();
+    };
+  }
+  var closeInlineBtn = document.getElementById('checklist-close-inline-btn');
+  if (closeInlineBtn) {
+    closeInlineBtn.onclick = function() {
+      closeChecklistPanel();
     };
   }
 

@@ -75,13 +75,13 @@ function toggleAnnotateGroupNa(requirementLabel) {
     return;
   }
   if (typeof isChecklistRequirementNaForMediaKey !== 'function' || typeof setChecklistRequirementNaForMediaKey !== 'function') {
-    setStatus('N/A toggle is unavailable.');
+    setStatus('n/a toggle is unavailable.');
     return;
   }
   var mediaKey = state.currentItem.key;
   var isNa = isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
   setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, !isNa);
-  setStatus(!isNa ? ('Marked N/A: ' + requirementLabel) : ('Cleared N/A: ' + requirementLabel));
+  setStatus(!isNa ? ('Marked n/a: ' + requirementLabel) : ('Cleared n/a: ' + requirementLabel));
   renderAnnotateStrip();
 }
 
@@ -141,8 +141,8 @@ function renderAnnotateStrip() {
     if (groupIsNa) {
       naChip.classList.add('active');
     }
-    naChip.textContent = 'N/A';
-    naChip.title = groupIsNa ? 'Clear N/A override' : 'Mark this group N/A for current item';
+    naChip.textContent = 'n/a';
+    naChip.title = groupIsNa ? 'Clear n/a override' : 'Mark this group n/a for current item';
     naChip.onclick = function () {
       toggleAnnotateGroupNa(group.requirement || group.name);
     };
@@ -177,12 +177,6 @@ function renderAnnotateStrip() {
   stripEl.appendChild(groupsWrap);
 }
 
-function getCaptionQuickPhraseHotkeyLabel(index) {
-  var n = Number(index) + 1;
-  if (n < 1 || n > 9) return '';
-  return '\u21e7' + n;
-}
-
 function moveCaptionQuickPhraseByOffset(index, offset) {
   var idx = Number(index);
   var step = Number(offset);
@@ -198,11 +192,6 @@ function moveCaptionQuickPhraseByOffset(index, offset) {
   setCaptionQuickPhrases(next, true);
   renderPhraseCopyPanel();
   return true;
-}
-
-function moveCaptionQuickPhraseByHotkeyNumber(n) {
-  var idx = Number(n) - 1;
-  return moveCaptionQuickPhraseByOffset(idx, -1);
 }
 
 function captionHelperSort(a, b) {
@@ -570,12 +559,11 @@ function renderPhraseCopyPanel() {
       var actions = document.createElement('div');
       actions.className = 'phrase-copy-actions';
 
-      var hotkeyLabel = getCaptionQuickPhraseHotkeyLabel(idx);
       var keyHint = document.createElement('button');
       keyHint.type = 'button';
       keyHint.className = 'stats-phrase-keyhint';
-      keyHint.title = hotkeyLabel ? ('Move up (Shift+' + (idx + 1) + ')') : 'Move up';
-      keyHint.textContent = hotkeyLabel || '\u21e7';
+      keyHint.title = 'Move up';
+      keyHint.textContent = '\u21e7';
       keyHint.onclick = function () {
         var moved = moveCaptionQuickPhraseByOffset(idx, -1);
         if (moved) {

@@ -43,5 +43,5 @@ Adds a small info panel below the media preview area that displays key media met
 ```
 
 ## Notes
-- If metadata extraction fails, the panel should display "N/A" or a suitable fallback for each field.
+- If metadata extraction fails, the panel should display "n/a" or a suitable fallback for each field.
 - This feature is optional for images, but should be shown if available.

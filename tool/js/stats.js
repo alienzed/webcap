@@ -249,6 +249,23 @@ function setStatsBalancePhrases(nextPhrases, triggerAutosave) {
   renderPhraseCopyPanel();
 }
 
+function moveStatsBalancePhraseByOffset(index, offset) {
+  var idx = Number(index);
+  var step = Number(offset);
+  if (!isFinite(idx) || !isFinite(step)) return false;
+  if (!Array.isArray(statsBalancePhrases) || !statsBalancePhrases.length) return false;
+  if (idx < 0 || idx >= statsBalancePhrases.length) return false;
+  var nextIdx = idx + step;
+  if (nextIdx < 0 || nextIdx >= statsBalancePhrases.length) return false;
+  var next = statsBalancePhrases.slice();
+  var temp = next[idx];
+  next[idx] = next[nextIdx];
+  next[nextIdx] = temp;
+  setStatsBalancePhrases(next, true);
+  renderStatsBalancePhraseList();
+  return true;
+}
+
 function loadStatsBalancePhrasesFromTextarea() {
   var phrasesEl = ui && ui.statsPhrasesEl ? ui.statsPhrasesEl : document.getElementById('stats-phrases');
   var parsed = parsePhrases(phrasesEl ? phrasesEl.value : '');
@@ -285,6 +302,19 @@ function renderStatsBalancePhraseList() {
 
       var actions = document.createElement('div');
       actions.className = 'stats-phrase-actions';
+
+      var moveUpBtn = document.createElement('button');
+      moveUpBtn.type = 'button';
+      moveUpBtn.className = 'stats-phrase-keyhint';
+      moveUpBtn.title = 'Move up';
+      moveUpBtn.textContent = '\u21e7';
+      moveUpBtn.onclick = function () {
+        var moved = moveStatsBalancePhraseByOffset(idx, -1);
+        if (moved) {
+          setStatus('Moved balance phrase up: ' + phrase);
+        }
+      };
+      actions.appendChild(moveUpBtn);
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';

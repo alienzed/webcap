@@ -106,7 +106,7 @@ def probe_media_metadata(file_path):
             frame_count = None
             if stream:
                 frame_count = stream.get("nb_read_frames") or stream.get("nb_frames")
-            if frame_count not in (None, "", "N/A"):
+            if frame_count not in (None, "", "n/a"):
                 try:
                     result["frame_count"] = int(frame_count)
                 except Exception:

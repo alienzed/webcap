@@ -350,17 +350,6 @@ function wireAllUi() {
     });
   });
   document.addEventListener('keydown', function (e) {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || !e.shiftKey) return;
-    var active = document.activeElement;
-    var allowWhenReadonlyEditor = !!(active === ui.editorEl && ui.editorEl && ui.editorEl.readOnly);
-    if (isEditableElement(active) && !allowWhenReadonlyEditor) return;
-    if (!/^[1-9]$/.test(e.key)) return;
-    if (typeof moveCaptionQuickPhraseByHotkeyNumber !== 'function') return;
-    var moved = moveCaptionQuickPhraseByHotkeyNumber(Number(e.key));
-    if (!moved) return;
-    e.preventDefault();
-  });
-  document.addEventListener('keydown', function (e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (!state.currentItem || !state.currentItem.fileName) return;
     if (isEditableElement(document.activeElement)) return;

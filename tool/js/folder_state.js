@@ -71,7 +71,7 @@ function sanitizeFolderState(data) {
     },
     reviewedKeys: reviewedKeys,
     flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {},
-    caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : DEFAULT_CHECKLIST_ITEMS.slice(),
+    caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : getDefaultRequirementItems().slice(),
     caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : {},
     caption_requirement_keywords: (typeof src.caption_requirement_keywords === 'object' && src.caption_requirement_keywords) ? JSON.parse(JSON.stringify(src.caption_requirement_keywords)) : {},
     caption_requirements_na_by_media: requirementsNaByMedia,
@@ -385,7 +385,7 @@ function getRequirementDefaultPrimerMappings() {
     checklistItems.length
   )
     ? checklistItems.slice()
-    : DEFAULT_CHECKLIST_ITEMS.slice();
+    : getDefaultRequirementItems().slice();
   var keywordsByRequirement = (
     typeof checklistKeywordsByItem === 'object' &&
     checklistKeywordsByItem
@@ -394,6 +394,7 @@ function getRequirementDefaultPrimerMappings() {
     : {};
   var rows = [];
   var seen = {};
+  var defaultsByItem = getDefaultRequirementKeywordsByItem();
   var requirementScope = 'tag';
   if (
     typeof MAPPINGS_SYSTEM_DEFAULTS === 'object' &&
@@ -411,8 +412,8 @@ function getRequirementDefaultPrimerMappings() {
     var key = normalizeRequirementPrimerKey(requirement);
     if (!key) return;
     var rawKeywords = String(keywordsByRequirement[requirement] || '').trim();
-    if (!rawKeywords && typeof DEFAULT_CHECKLIST_ITEM_KEYWORDS === 'object' && DEFAULT_CHECKLIST_ITEM_KEYWORDS) {
-      rawKeywords = String(DEFAULT_CHECKLIST_ITEM_KEYWORDS[requirement] || '').trim();
+    if (!rawKeywords) {
+      rawKeywords = String(defaultsByItem[requirement] || '').trim();
     }
     var keywords = parseRequirementKeywordList(rawKeywords);
     keywords.forEach(function (keyword) {

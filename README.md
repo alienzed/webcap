@@ -46,6 +46,10 @@ Minimum shape:
   "vocabulary": {
     "terms": [],
     "groups": []
+  },
+  "requirements": {
+    "items": [],
+    "keywordsByItem": {}
   }
 }
 ```
@@ -56,6 +60,7 @@ Notes:
 - Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
 - You can edit config in-app via Settings.
 - `vocabulary` is optional. Empty arrays are valid and result in no starter terms.
+- `requirements` is optional. When provided, new/missing set requirement groups and terms use this baseline.
 
 ## Run
 
@@ -208,6 +213,9 @@ Requirements tab:
 - Settings modal lets you assign comma-separated keywords per requirement.
 - Keyword matches highlight requirement rows while editing.
 - Press `Enter` in keyword value fields to save and close modal.
+- Group terms editor supports pinning terms to global config baseline:
+  - In `Edit requirement terms`, click `📌` to pin/unpin term for that requirement group in `config.json`.
+  - Global pinned requirement terms are searchable in term add/search flows.
 
 Phrases tab:
 - Search/add quick phrases via `Add/search quick phrase...`.

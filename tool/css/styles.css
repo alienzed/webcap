@@ -2438,6 +2438,24 @@ iframe {
   color: #1f2937;
 }
 
+#checklist-group-terms-items .checklist-pin-btn {
+  opacity: 0.45;
+}
+
+#checklist-group-terms-items .checklist-pin-btn.active {
+  opacity: 1;
+  border-color: #c3cfdb;
+  background: #eef2f7;
+  color: #516275;
+}
+
+#checklist-group-terms-results .checklist-global-badge {
+  min-width: 24px;
+  width: 24px;
+  opacity: 0.7;
+  cursor: default;
+}
+
 #caption-checklist-panel .annotate-strip-toggle-btn {
   padding: 2px 8px;
   font-size: 11px;

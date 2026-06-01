@@ -1,7 +1,7 @@
 
 // Caption requirements checklist logic (classic JS, robust, codebase-consistent)
 var checklistPanelEl = null;
-var checklistItems = DEFAULT_CHECKLIST_ITEMS.slice(); // Current folder's requirements
+var checklistItems = getDefaultRequirementItems().slice(); // Current folder's requirements
 var checklistCheckedByMedia = {}; // { mediaKey: { item: true/false, ... } }
 var debouncedChecklistSave = debounceCreate(400); // Debounce saves for checkbox changes
 var checklistKeywordsByItem = {}; // { requirement: "keyword1, keyword2, ..." }
@@ -280,7 +280,7 @@ function loadChecklistFromFolderState(folderState) {
   if (folderState.caption_requirements && Object.prototype.toString.call(folderState.caption_requirements) === '[object Array]') {
     checklistItems = folderState.caption_requirements.slice();
   } else {
-    checklistItems = DEFAULT_CHECKLIST_ITEMS.slice();
+    checklistItems = getDefaultRequirementItems().slice();
   }
   if (folderState.caption_requirements_checked && typeof folderState.caption_requirements_checked === 'object') {
     checklistCheckedByMedia = JSON.parse(JSON.stringify(folderState.caption_requirements_checked));
@@ -299,10 +299,11 @@ function loadChecklistFromFolderState(folderState) {
   }
 
   // Fill missing keyword values for default checklist items.
+  var defaultsByItem = getDefaultRequirementKeywordsByItem();
   for (var i = 0; i < checklistItems.length; i++) {
     var requirement = checklistItems[i];
-    if (!checklistKeywordsByItem[requirement] && typeof DEFAULT_CHECKLIST_ITEM_KEYWORDS === 'object') {
-      var defaultKeywords = String(DEFAULT_CHECKLIST_ITEM_KEYWORDS[requirement] || '').trim();
+    if (!checklistKeywordsByItem[requirement]) {
+      var defaultKeywords = String(defaultsByItem[requirement] || '').trim();
       if (defaultKeywords) {
         checklistKeywordsByItem[requirement] = defaultKeywords;
       }
@@ -367,11 +368,132 @@ function getChecklistGroupTermsCatalog() {
   if (typeof getCaptionHelperCatalogTerms === 'function') {
     getCaptionHelperCatalogTerms().forEach(push);
   }
+  getConfigRequirementKeywordCatalogTerms().forEach(push);
   checklistItems.forEach(function (requirementLabel) {
     getChecklistKeywordTermsForRequirement(requirementLabel).forEach(push);
   });
   out.sort(checklistSort);
   return out;
+}
+
+function getConfigRequirementKeywordsByItemMap() {
+  var out = {};
+  var req = (window && window.APP_CONFIG && window.APP_CONFIG.requirements && typeof window.APP_CONFIG.requirements === 'object')
+    ? window.APP_CONFIG.requirements
+    : null;
+  var src = (req && req.keywordsByItem && typeof req.keywordsByItem === 'object')
+    ? req.keywordsByItem
+    : {};
+  Object.keys(src).forEach(function (key) {
+    var requirement = normalizeChecklistRequirementKey(key);
+    if (!requirement) return;
+    out[requirement] = parseChecklistKeywordTerms(src[key]);
+  });
+  return out;
+}
+
+function getConfigRequirementKeywordCatalogTerms() {
+  var out = [];
+  var seen = {};
+  var byItem = getConfigRequirementKeywordsByItemMap();
+  Object.keys(byItem).forEach(function (requirement) {
+    var terms = Array.isArray(byItem[requirement]) ? byItem[requirement] : [];
+    terms.forEach(function (term) {
+      var clean = normalizeChecklistTerm(term);
+      var low = clean.toLowerCase();
+      if (!clean || seen[low]) return;
+      seen[low] = true;
+      out.push(clean);
+    });
+  });
+  out.sort(checklistSort);
+  return out;
+}
+
+function isChecklistGroupTermPinnedGlobally(requirementLabel, termText) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  var term = normalizeChecklistTerm(termText).toLowerCase();
+  if (!requirement || !term) return false;
+  var byItem = getConfigRequirementKeywordsByItemMap();
+  var terms = Array.isArray(byItem[requirement]) ? byItem[requirement] : [];
+  for (var i = 0; i < terms.length; i++) {
+    if (String(terms[i] || '').toLowerCase() === term) return true;
+  }
+  return false;
+}
+
+function normalizeRequirementLabelList(labels) {
+  var seen = {};
+  var out = [];
+  (Array.isArray(labels) ? labels : []).forEach(function (raw) {
+    var clean = normalizeChecklistRequirementKey(raw);
+    var low = clean.toLowerCase();
+    if (!clean || seen[low]) return;
+    seen[low] = true;
+    out.push(clean);
+  });
+  return out;
+}
+
+function saveChecklistGlobalTermPin(requirementLabel, termText, shouldPin) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  var term = normalizeChecklistTerm(termText);
+  if (!requirement || !term) return;
+
+  var cfg = (window && window.APP_CONFIG && typeof window.APP_CONFIG === 'object') ? window.APP_CONFIG : {};
+  var nextCfg = JSON.parse(JSON.stringify(cfg));
+  if (!nextCfg.requirements || typeof nextCfg.requirements !== 'object') nextCfg.requirements = {};
+
+  var req = nextCfg.requirements;
+  var items = normalizeRequirementLabelList(Array.isArray(req.items) ? req.items.slice() : getDefaultRequirementItems().slice());
+  var keywordsByItem = (req.keywordsByItem && typeof req.keywordsByItem === 'object')
+    ? JSON.parse(JSON.stringify(req.keywordsByItem))
+    : {};
+
+  var existingTerms = parseChecklistKeywordTerms(String(keywordsByItem[requirement] || ''));
+  var nextTerms = existingTerms.slice();
+  if (shouldPin) {
+    nextTerms.push(term);
+    nextTerms = normalizeChecklistTermsList(nextTerms);
+    if (items.map(function (v) { return String(v || '').toLowerCase(); }).indexOf(requirement.toLowerCase()) === -1) {
+      items.push(requirement);
+    }
+  } else {
+    nextTerms = existingTerms.filter(function (current) {
+      return String(current || '').toLowerCase() !== term.toLowerCase();
+    });
+    nextTerms = normalizeChecklistTermsList(nextTerms);
+  }
+
+  if (nextTerms.length) keywordsByItem[requirement] = nextTerms.join(', ');
+  else delete keywordsByItem[requirement];
+
+  req.items = normalizeRequirementLabelList(items);
+  req.keywordsByItem = keywordsByItem;
+
+  var prevReqJson = JSON.stringify(cfg && cfg.requirements ? cfg.requirements : {});
+  var nextReqJson = JSON.stringify(nextCfg.requirements);
+  if (prevReqJson === nextReqJson) return;
+
+  HttpModule.postJson('/app/config', nextCfg, function (status, responseText) {
+    if (status !== 200) {
+      setStatus(getErrorMessage(responseText, 'Failed to update global requirement terms in config.'));
+      renderChecklistGroupTermsModalItems();
+      renderChecklistGroupTermsModalResults('');
+      return;
+    }
+    var saved = nextCfg;
+    try {
+      var parsed = JSON.parse(responseText);
+      if (parsed && parsed.config && typeof parsed.config === 'object') {
+        saved = parsed.config;
+      }
+    } catch (_e) {}
+    setRuntimeAppConfig(saved);
+    renderChecklistGroupTermsModalItems();
+    renderChecklistGroupTermsModalResults('');
+    setStatus(shouldPin ? ('Pinned term to global config: ' + term) : ('Unpinned global term: ' + term));
+  });
 }
 
 function closeChecklistGroupTermsModal() {
@@ -445,6 +567,17 @@ function renderChecklistGroupTermsModalItems() {
     };
     var actions = document.createElement('div');
     actions.className = 'stats-phrase-actions';
+    var pinBtn = document.createElement('button');
+    pinBtn.type = 'button';
+    pinBtn.className = 'stats-phrase-mini-btn checklist-pin-btn';
+    var isPinned = isChecklistGroupTermPinnedGlobally(checklistGroupTermsModalState.requirement, term);
+    pinBtn.textContent = '\uD83D\uDCCC';
+    pinBtn.title = isPinned ? 'Unpin from global config terms' : 'Pin to global config terms';
+    pinBtn.classList.toggle('active', isPinned);
+    pinBtn.onclick = function () {
+      saveChecklistGlobalTermPin(checklistGroupTermsModalState.requirement, term, !isPinned);
+    };
+    actions.appendChild(pinBtn);
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'stats-phrase-mini-btn';
@@ -474,6 +607,12 @@ function renderChecklistGroupTermsModalResults(query) {
   var existing = {};
   checklistGroupTermsModalState.terms.forEach(function (term) {
     existing[String(term || '').toLowerCase()] = true;
+  });
+  var globalTermsLookup = {};
+  getConfigRequirementKeywordCatalogTerms().forEach(function (term) {
+    var clean = normalizeChecklistTerm(term);
+    if (!clean) return;
+    globalTermsLookup[clean.toLowerCase()] = true;
   });
   var catalog = getChecklistGroupTermsCatalog();
   var exact = [];
@@ -529,6 +668,15 @@ function renderChecklistGroupTermsModalResults(query) {
       addChecklistGroupModalTerm(term);
     };
     row.appendChild(btn);
+    if (globalTermsLookup[String(term || '').toLowerCase()]) {
+      var badge = document.createElement('button');
+      badge.type = 'button';
+      badge.className = 'stats-phrase-mini-btn caption-term-result-quick checklist-global-badge';
+      badge.textContent = 'G';
+      badge.title = 'Global config term';
+      badge.disabled = true;
+      row.appendChild(badge);
+    }
     resultsEl.appendChild(row);
   });
   resultsEl.classList.remove('hidden');

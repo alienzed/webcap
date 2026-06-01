@@ -159,6 +159,7 @@ function parseRequirementProgressTerms(raw) {
 
 function computeRequirementProgressForMediaKey(mediaKey) {
   var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  var defaultsByItem = getDefaultRequirementKeywordsByItem();
   var completed = 0;
   var total = 0;
   for (var i = 0; i < requirements.length; i++) {
@@ -168,8 +169,8 @@ function computeRequirementProgressForMediaKey(mediaKey) {
     if (checklistKeywordsByItem && typeof checklistKeywordsByItem === 'object') {
       rawTerms = String(checklistKeywordsByItem[requirementLabel] || '').trim();
     }
-    if (!rawTerms && typeof DEFAULT_CHECKLIST_ITEM_KEYWORDS === 'object' && DEFAULT_CHECKLIST_ITEM_KEYWORDS) {
-      rawTerms = String(DEFAULT_CHECKLIST_ITEM_KEYWORDS[requirementLabel] || '').trim();
+    if (!rawTerms) {
+      rawTerms = String(defaultsByItem[requirementLabel] || '').trim();
     }
     var terms = parseRequirementProgressTerms(rawTerms);
     if (!terms.length) continue;

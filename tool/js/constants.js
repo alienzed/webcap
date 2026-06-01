@@ -137,6 +137,51 @@ const DEFAULT_CHECKLIST_ITEMS = MAPPINGS_SYSTEM_DEFAULTS.requirements.items;
 const DEFAULT_CHECKLIST_ITEM_KEYWORDS = MAPPINGS_SYSTEM_DEFAULTS.requirements.keywordsByItem;
 const DEFAULT_REQUIREMENT_PRIMER_KEY_ALIASES = MAPPINGS_SYSTEM_DEFAULTS.primer.keyAliases;
 
+function normalizeRequirementDefaultsItemLabel(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function getConfigRequirementDefaultsBlock() {
+  var cfg = (window && window.APP_CONFIG && typeof window.APP_CONFIG === 'object') ? window.APP_CONFIG : {};
+  var req = (cfg && cfg.requirements && typeof cfg.requirements === 'object') ? cfg.requirements : null;
+  return req;
+}
+
+function getDefaultRequirementItems() {
+  var req = getConfigRequirementDefaultsBlock();
+  var source = (req && Array.isArray(req.items) && req.items.length)
+    ? req.items
+    : DEFAULT_CHECKLIST_ITEMS;
+  var out = [];
+  var seen = {};
+  source.forEach(function (raw) {
+    var label = normalizeRequirementDefaultsItemLabel(raw);
+    var key = label.toLowerCase();
+    if (!label || seen[key]) return;
+    seen[key] = true;
+    out.push(label);
+  });
+  return out;
+}
+
+function getDefaultRequirementKeywordsByItem() {
+  var out = {};
+  Object.keys(DEFAULT_CHECKLIST_ITEM_KEYWORDS || {}).forEach(function (key) {
+    var label = normalizeRequirementDefaultsItemLabel(key);
+    if (!label) return;
+    out[label] = String(DEFAULT_CHECKLIST_ITEM_KEYWORDS[key] || '').trim();
+  });
+  var req = getConfigRequirementDefaultsBlock();
+  if (req && req.keywordsByItem && typeof req.keywordsByItem === 'object') {
+    Object.keys(req.keywordsByItem).forEach(function (key) {
+      var label = normalizeRequirementDefaultsItemLabel(key);
+      if (!label) return;
+      out[label] = String(req.keywordsByItem[key] || '').trim();
+    });
+  }
+  return out;
+}
+
 // Central palette for flag colors (order matters for UI)
 const FLAG_COLORS = ['red', 'green', 'blue', 'yellow', 'orange'];
 

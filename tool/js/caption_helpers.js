@@ -255,7 +255,6 @@ function normalizeCatalogTerm(text) {
 function getConfigVocabularyTerms() {
   var cfg = (window && window.APP_CONFIG && typeof window.APP_CONFIG === 'object') ? window.APP_CONFIG : {};
   var vocabulary = (cfg && cfg.vocabulary && typeof cfg.vocabulary === 'object') ? cfg.vocabulary : null;
-  if (!vocabulary) return [];
 
   var out = [];
   var seen = {};
@@ -267,14 +266,26 @@ function getConfigVocabularyTerms() {
     out.push(clean);
   }
 
-  if (Array.isArray(vocabulary.terms)) {
-    vocabulary.terms.forEach(pushTerm);
+  if (vocabulary) {
+    if (Array.isArray(vocabulary.terms)) {
+      vocabulary.terms.forEach(pushTerm);
+    }
+    if (Array.isArray(vocabulary.groups)) {
+      vocabulary.groups.forEach(function (group) {
+        if (!group || typeof group !== 'object') return;
+        var terms = Array.isArray(group.terms) ? group.terms : [];
+        terms.forEach(pushTerm);
+      });
+    }
   }
-  if (Array.isArray(vocabulary.groups)) {
-    vocabulary.groups.forEach(function (group) {
-      if (!group || typeof group !== 'object') return;
-      var terms = Array.isArray(group.terms) ? group.terms : [];
-      terms.forEach(pushTerm);
+
+  var requirements = (cfg && cfg.requirements && typeof cfg.requirements === 'object')
+    ? cfg.requirements
+    : null;
+  if (requirements && requirements.keywordsByItem && typeof requirements.keywordsByItem === 'object') {
+    Object.keys(requirements.keywordsByItem).forEach(function (requirementLabel) {
+      var raw = String(requirements.keywordsByItem[requirementLabel] || '');
+      raw.split(',').forEach(pushTerm);
     });
   }
   return out;

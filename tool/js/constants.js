@@ -95,8 +95,8 @@ ui = {
 const MAPPINGS_SYSTEM_DEFAULTS = {
   requirements: {
     items: [
-      "Position",
       "Viewpoint",
+      "Position",
       "Expression",
       "Action",
       "Clothing",
@@ -109,8 +109,8 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
       "Lighting"
     ],
     keywordsByItem: {
-      "Position": "crouching, folded, kneeling, kneeling sitting, leaning back, leaning downward, leaning forward, leaning to the side, lying on her back, lying on her side, on all fours, posing, side sitting, sitting, squatting, standing, upside down",
       "Viewpoint": "close-up,front, low-position, medium close-up, overhead, portrait, rear, side, three-quarter, three-quarter rear",
+      "Position": "crouching, folded, kneeling, kneeling sitting, leaning back, leaning downward, leaning forward, leaning to the side, lying on her back, lying on her side, on all fours, posing, side sitting, sitting, squatting, standing, upside down",
       "Expression": "closed-mouth smile, excited, faint smile, happy, neutral expression, sad, smiling, surprised, serious, smirking, upset",
       "Action": "standing, sitting, running, walking, holding, looking, eating, drinking, touching, rubbing",
       "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform, skirt, shorts, suit, tie, swimsuit, high-heels, boots, sneakers,",
@@ -119,8 +119,8 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
       "Jewelry": "necklace, earrings, bracelet, ring, watch, tiara, anklet",
       "Surface": "bed, chair, couch, floor, table, ground, grass, sand, water",
       "Hair": "braided hair, curly hair, hair covering face, long hair, pigtails, ponytail, short hair, styled hair, straight hair, updo, wavy hair",
-      "Limbs": "arms crossed, arms spread, arms up, hand on head, hand on hip, knees drawn up, legs crossed, legs spread, one arm down, one arm up, one leg crossed over the other, one leg up",
-      "Lighting": "bright, bright background, candle, dark, dim, natural, neon, shadows, studio, sunlight, window"
+      "Lighting": "bright, bright background, candle, dark, dim, natural, neon, shadows, studio, sunlight, window",
+      "Body": "arms crossed, arms crossed with hands on shoulders, arms spread, arms up, back arched, hand on head, hand on hip, hand on knee, knees drawn up, legs crossed, legs spread, one arm down, one arm up, one knee drawn up, one leg crossed over the other, one leg up, supported on one arm, waving"
     }
   },
   primer: {

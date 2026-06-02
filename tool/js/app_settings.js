@@ -99,6 +99,7 @@ function setRootFolderLabelFromConfig(cfg) {
 
 function saveAppSettings(opts) {
   var saveAndReload = !!(opts && opts.reloadAfterSave);
+  var closeOnSuccess = !opts || opts.closeOnSuccess !== false;
   var payload = null;
   try {
     payload = parseAppSettingsJson();
@@ -124,11 +125,17 @@ function saveAppSettings(opts) {
     fillAppSettingsForm(saved);
     setRootFolderLabelFromConfig(saved);
     if (saveAndReload) {
+      if (closeOnSuccess) closeAppSettingsModal();
+      setStatus('Settings saved. Reloading runtime settings...');
       triggerRuntimeConfigReload(true);
       return;
     }
-    setAppSettingsStatus('Saved. Click Reboot to apply runtime changes.', false);
-    setStatus('Settings saved.');
+    if (closeOnSuccess) {
+      closeAppSettingsModal();
+    } else {
+      setAppSettingsStatus('Saved. Click Reboot to apply runtime changes.', false);
+    }
+    setStatus('Settings saved. Use Reboot to apply runtime changes.');
   });
 }
 

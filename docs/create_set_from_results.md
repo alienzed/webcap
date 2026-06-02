@@ -1,12 +1,12 @@
 # Create Set From Results
 
-Last updated: 2026-05-31
+Last updated: 2026-06-01
 
 ## Purpose
 
-Create a brand-new set folder from currently visible media results.
+Create a brand-new set folder from visible search results.
 
-This feature is intentionally independent of Smart Set mode. It can be called from any UI context that has a visible media result list.
+This feature is intentionally independent of any single list implementation. It can be called from normal media-list results or dedicated SuperSet results.
 
 ## Product Position
 
@@ -37,7 +37,7 @@ In scope:
 
 Out of scope:
 
-- Smart Set UI/search mechanics
+- SuperSet UI/search mechanics
 - Rule-builder/filter UX
 - Per-item merge UIs
 - Background jobs/progress orchestration
@@ -157,6 +157,8 @@ Error response examples:
 ## UX Contract
 
 This component requires explicit user confirmation action before execution.
+
+When invoked from SuperSet results, input should include the full matched result set, not only currently rendered/visible rows.
 
 After successful creation:
 

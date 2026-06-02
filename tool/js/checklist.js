@@ -44,6 +44,20 @@ function getChecklistNaMapForMediaKey(mediaKey) {
   return (map && typeof map === 'object') ? map : {};
 }
 
+function getChecklistCheckedMapForMediaKey(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  if (!key) return {};
+  var map = checklistCheckedByMedia[key];
+  return (map && typeof map === 'object') ? map : {};
+}
+
+function isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel) {
+  var req = normalizeChecklistRequirementKey(requirementLabel);
+  if (!req) return false;
+  var map = getChecklistCheckedMapForMediaKey(mediaKey);
+  return !!map[req];
+}
+
 function isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel) {
   var req = normalizeChecklistRequirementKey(requirementLabel);
   if (!req) return false;
@@ -77,7 +91,45 @@ function setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, isNa) 
   if (typeof renderAnnotateStrip === 'function') {
     renderAnnotateStrip();
   }
+  if (typeof renderFileList === 'function') {
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  }
   return true;
+}
+
+function setChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel, isChecked) {
+  if (typeof requirementLabel === 'undefined') {
+    requirementLabel = mediaKey;
+    mediaKey = (state && state.currentItem && state.currentItem.key) ? state.currentItem.key : '';
+  }
+  var key = String(mediaKey || '').trim();
+  var req = normalizeChecklistRequirementKey(requirementLabel);
+  if (!key || !req) return false;
+  var map = JSON.parse(JSON.stringify(getChecklistCheckedMapForMediaKey(key)));
+  if (isChecked) {
+    map[req] = true;
+    checklistCheckedByMedia[key] = map;
+  } else {
+    delete map[req];
+    if (Object.keys(map).length) checklistCheckedByMedia[key] = map;
+    else delete checklistCheckedByMedia[key];
+  }
+  syncReviewedFromChecklist(key);
+  saveChecklistToFolderState();
+  renderChecklistPanel();
+  return true;
+}
+
+function toggleChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel) {
+  if (typeof requirementLabel === 'undefined') {
+    requirementLabel = mediaKey;
+    mediaKey = (state && state.currentItem && state.currentItem.key) ? state.currentItem.key : '';
+  }
+  return setChecklistRequirementCheckedForMediaKey(
+    mediaKey,
+    requirementLabel,
+    !isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel)
+  );
 }
 
 function moveChecklistItemByOffset(index, offset) {
@@ -144,6 +196,9 @@ function setReviewedRowClass(mediaKey, reviewed) {
 
 function syncReviewedFromChecklist(mediaKey) {
   if (!mediaKey) return;
+  if (!state.reviewedSet || !(state.reviewedSet instanceof Set)) {
+    state.reviewedSet = new Set();
+  }
   var reviewed = checklistAllCheckedForMedia(mediaKey);
   if (reviewed) state.reviewedSet.add(mediaKey);
   else state.reviewedSet.delete(mediaKey);
@@ -191,6 +246,12 @@ function renderChecklistPanel() {
         checklistCheckedByMedia[mediaKey][item] = this.checked;
         syncReviewedFromChecklist(mediaKey);
         debouncedChecklistSave(saveChecklistToFolderState);
+        if (typeof renderItemMetadataPanel === 'function') {
+          renderItemMetadataPanel();
+        }
+        if (typeof renderAnnotateStrip === 'function') {
+          renderAnnotateStrip();
+        }
       };
     })(item);
     label.appendChild(cb);
@@ -509,11 +570,8 @@ function closeChecklistGroupTermsModal() {
   checklistGroupTermsModalState = null;
 }
 
-function saveChecklistGroupTermsModalAndClose() {
-  if (!checklistGroupTermsModalState || !checklistGroupTermsModalState.requirement) {
-    closeChecklistGroupTermsModal();
-    return;
-  }
+function applyChecklistGroupTermsModalChanges() {
+  if (!checklistGroupTermsModalState || !checklistGroupTermsModalState.requirement) return;
   setChecklistKeywordTermsForRequirement(
     checklistGroupTermsModalState.requirement,
     checklistGroupTermsModalState.terms
@@ -523,7 +581,6 @@ function saveChecklistGroupTermsModalAndClose() {
   if (typeof renderItemMetadataPanel === 'function') {
     renderItemMetadataPanel();
   }
-  closeChecklistGroupTermsModal();
 }
 
 function addChecklistGroupModalTerm(rawTerm) {
@@ -533,6 +590,7 @@ function addChecklistGroupModalTerm(rawTerm) {
   var next = checklistGroupTermsModalState.terms.slice();
   next.push(term);
   checklistGroupTermsModalState.terms = normalizeChecklistTermsList(next);
+  applyChecklistGroupTermsModalChanges();
   renderChecklistGroupTermsModalItems();
   renderChecklistGroupTermsModalResults('');
   var input = document.getElementById('checklist-group-terms-input');
@@ -563,6 +621,7 @@ function renderChecklistGroupTermsModalItems() {
     termBtn.onclick = function () {
       checklistGroupTermsModalState.terms.splice(idx, 1);
       checklistGroupTermsModalState.terms = normalizeChecklistTermsList(checklistGroupTermsModalState.terms);
+      applyChecklistGroupTermsModalChanges();
       renderChecklistGroupTermsModalItems();
     };
     var actions = document.createElement('div');
@@ -586,6 +645,7 @@ function renderChecklistGroupTermsModalItems() {
     removeBtn.onclick = function () {
       checklistGroupTermsModalState.terms.splice(idx, 1);
       checklistGroupTermsModalState.terms = normalizeChecklistTermsList(checklistGroupTermsModalState.terms);
+      applyChecklistGroupTermsModalChanges();
       renderChecklistGroupTermsModalItems();
     };
     actions.appendChild(removeBtn);
@@ -827,9 +887,6 @@ document.addEventListener('click', function(e) {
 document.addEventListener('click', function(e) {
   if (e.target && e.target.id === 'checklist-keywords-save-btn') {
     saveChecklistKeywordsModalAndClose();
-  }
-  if (e.target && e.target.id === 'checklist-group-terms-save-btn') {
-    saveChecklistGroupTermsModalAndClose();
   }
 });
 

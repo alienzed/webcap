@@ -167,6 +167,11 @@ function renderAnnotateStrip() {
     titleEl.textContent = group.name;
     titleRowEl.appendChild(titleEl);
 
+    var isComplete = false;
+    var statusBadgeEl = null;
+    var controlsEl = document.createElement('div');
+    controlsEl.className = 'annotate-strip-group-controls';
+
     var editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'annotate-strip-group-edit-btn';
@@ -175,15 +180,60 @@ function renderAnnotateStrip() {
     editBtn.onclick = function () {
       openChecklistGroupTermsModal(group.requirement || group.name);
     };
-    titleRowEl.appendChild(editBtn);
+    controlsEl.appendChild(editBtn);
+
+    var reviewed = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
+      ? isChecklistRequirementCheckedForMediaKey(mediaKey, group.requirement || group.name)
+      : false;
+    var reviewedBtn = document.createElement('button');
+    reviewedBtn.type = 'button';
+    reviewedBtn.className = 'annotate-strip-group-reviewed-btn';
+    if (reviewed) {
+      reviewedBtn.classList.add('active');
+    }
+    reviewedBtn.textContent = '\u2713';
+    reviewedBtn.setAttribute('aria-label', reviewed ? 'Clear reviewed mark' : 'Mark requirement reviewed');
+    reviewedBtn.setAttribute('aria-pressed', reviewed ? 'true' : 'false');
+    reviewedBtn.title = reviewed ? 'Clear reviewed mark' : 'Mark requirement reviewed';
+    reviewedBtn.onclick = function () {
+      if (typeof toggleChecklistRequirementCheckedForMediaKey !== 'function') {
+        setStatus('Reviewed toggle is unavailable.');
+        return;
+      }
+      toggleChecklistRequirementCheckedForMediaKey(mediaKey, group.requirement || group.name);
+    };
+    controlsEl.appendChild(reviewedBtn);
+
+    var groupRequirementLabel = group.requirement || group.name;
+    var groupIsNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
+      ? isChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel)
+      : false;
+    var hasActiveTerm = false;
+    group.terms.forEach(function (term) {
+      if (hasTagForMediaKey(mediaKey, term)) {
+        hasActiveTerm = true;
+      }
+    });
+    isComplete = !!(groupIsNa || hasActiveTerm);
+    if (!isComplete) {
+      groupEl.classList.add('annotate-strip-group-incomplete');
+      statusBadgeEl = document.createElement('div');
+      statusBadgeEl.className = 'annotate-strip-group-status-badge annotate-strip-group-status-badge-incomplete';
+      statusBadgeEl.textContent = 'Missing';
+      statusBadgeEl.title = 'This requirement group still needs attention';
+      titleRowEl.appendChild(statusBadgeEl);
+    } else if (groupIsNa) {
+      groupEl.classList.add('annotate-strip-group-na');
+    } else {
+      groupEl.classList.add('annotate-strip-group-complete');
+    }
+
+    titleRowEl.appendChild(controlsEl);
 
     groupEl.appendChild(titleRowEl);
 
     var chipWrap = document.createElement('div');
     chipWrap.className = 'annotate-strip-chip-wrap';
-    var groupIsNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-      ? isChecklistRequirementNaForMediaKey(mediaKey, group.requirement || group.name)
-      : false;
 
     var naChip = document.createElement('button');
     naChip.type = 'button';
@@ -198,7 +248,6 @@ function renderAnnotateStrip() {
     };
     chipWrap.appendChild(naChip);
 
-    var hasActiveTerm = false;
     group.terms.forEach(function (term) {
       var chip = document.createElement('button');
       chip.type = 'button';
@@ -211,14 +260,14 @@ function renderAnnotateStrip() {
       chip.title = 'Toggle tag';
       chip.onclick = function () {
         if (groupIsNa && typeof setChecklistRequirementNaForMediaKey === 'function') {
-          setChecklistRequirementNaForMediaKey(mediaKey, group.requirement || group.name, false);
+          setChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel, false);
         }
         toggleAnnotateTag(term);
       };
       chipWrap.appendChild(chip);
     });
     if (groupIsNa) titleEl.classList.add('annotate-strip-group-title-na');
-    else titleEl.classList.add(hasActiveTerm ? 'annotate-strip-group-title-complete' : 'annotate-strip-group-title-incomplete');
+    else titleEl.classList.add(isComplete ? 'annotate-strip-group-title-complete' : 'annotate-strip-group-title-incomplete');
 
     groupEl.appendChild(chipWrap);
     groupsWrap.appendChild(groupEl);

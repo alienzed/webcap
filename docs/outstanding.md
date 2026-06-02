@@ -8,23 +8,24 @@ Last reviewed: 2026-05-31.
 ## Enhancements
 - Consider making annotation an assisted Wizard like flow - provided by a modal entered into purposefully.
 - Annotation throughput priorities (ranked by expected ROI):
-  1. Group completion indicator in media list.
-     - Value: High; gives clear annotation progress and "what is left" targeting. (Incomplete filter is implemented.)
+  1. Group completion indicator in media list. (Partial: Incomplete filter is implemented; per-row indicator is pending.)
+     - Value: High; gives clear annotation progress and "what is left" targeting.
      - Complexity: Medium (derived per-item status + filter hook).
      - Some media items will purposefully not meet certain groups, so we need to be careful about how loudly we visually indicate incompleteness, or provide means to strike a group for an item so that it doesn't knock it's score.
-  2. Auto order requirements values, alphabetical, for easier application as I move between sets.
-  3. Any missing filter presets that might help annotation
-  4. Batch apply tags on multi-select.
+  2. Batch apply tags on multi-select.
      - Value: High in bursts, especially for contiguous scenes/outfits/locations.
      - Complexity: Medium/high (selection model + safe bulk mutate UX).
      - Note: Revisit after proving item-level annotate strip speed, since complexity is higher.
      - Questionably useful if the idea is to pretag, but is a set has captions, filtering by some tokens could be a good opportunity to batch tag. It's less clear why I would do this though since tags right now primarily serve for the caption template.
-  5. Caption scaffold from annotation tags.
+  3. Caption scaffold from annotation tags.
      - Value: Medium; helps reduce blank-page start cost during Caption step.
      - Complexity: Medium (template mapping + insertion rules).
      - Note: Useful, but less urgent than annotation velocity wins above.
      - If I am understanding correctly, are we talking about a default caption template?
-  6. We have a way to add optional text after a placeholder, adding option text before a placeholder would also be useful.
+  Completed:
+  - Auto order requirements values: requirement terms are normalized/sorted alphabetically.
+  - Filter preset expansion: advanced filters now include `Captionless`, `Reviewed`, `Unreviewed`, `Incomplete`, `Invalid AR`, `Untagged`, plus stars/flags with `No Star`/`No Flag`.
+  - Optional text before placeholders: supported via conditional wrappers in caption template syntax.
 - Dataset inferred sample/megaframe/VRAM/time estimation.
 
 ## 1.1 Ideas

@@ -143,6 +143,10 @@ Filter bar supports:
   - Invalid AR
   - Advanced Filters help (`i`) with in-app usage details.
 - Clear All resets text + all advanced filters.
+- SuperSet (cross-folder search):
+  - Optional `Search recursively` expands scope to current folder + subfolders.
+  - SuperSet results are intended for preview/validation and set materialization.
+  - Use `Create Set From Results` to materialize a new set from those results.
 
 Prepare uses the currently visible media rows as its selection source.
 The filter summary row also shows folder-level rating progress as `Rated A/B` (`A` = items with rating > 0, `B` = total media items in current folder).
@@ -229,6 +233,7 @@ Phrases tab:
 - Annotate Strip groups come from Requirements + requirement keywords.
 - Clicking an annotate chip toggles that tag on the current media item.
 - Group header pencil button opens per-group requirement-term editor.
+- Group header checkmark button marks that requirement reviewed for the current item.
 - `n/a` chip lets you mark a group not applicable for the current media item.
 - Hover highlighting is supported for phrase/requirement matches.
 

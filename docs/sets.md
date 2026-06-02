@@ -1,146 +1,78 @@
-# Smart Set Requirements
+# SuperSet Requirements
 
-Last updated: 2026-05-27
-
-## Implementation Status (WIP)
-
-This document is primarily a target requirements spec, not a full reflection of shipped behavior.
-
-Current implementation status:
-- `Create Set From Results` exists and is operational (`/fs/create_set_from_results`).
-- Smart Set search/materialize UX is still in progress and does not yet match the full workflow described below.
-- Treat the sections below as intended direction unless explicitly confirmed in code.
-
-Reference for currently implemented set creation behavior:
-- `docs/create_set_from_results.md`
+Last updated: 2026-06-01
 
 ## Purpose
 
-Smart Set enables selective reuse of already-captioned media across existing sets.
+SuperSet means one thing: search in more than one set (current folder plus subfolders), then materialize a new set from those cross-folder results.
 
-It is designed for combining subsets into a new consolidated set (for example, "baseball players" or "baseballs only") without manual file-system drag/drop workflows.
+This is a scope expansion of filtering, not a separate editing workflow.
 
-Smart Set is not for discovering new uncataloged media. Inputs are existing media items that already have caption/tag signal.
+## Product Position
 
-## Product Principle
+- Safety and stability are higher priority than seamlessness.
+- SuperSet must not make existing caption and media mutation paths fragile.
+- If a design choice reduces coupling with the normal media list and editor path, prefer it.
 
-Simplicity and minimalism are paramount.
+## Core UX Contract
 
-This is a satisfice feature: focused, functional, safe, and intentionally not over-engineered.
+1. User explicitly opts in to recursive search via a dedicated control in Advanced Filters.
+2. Optional confirm prompt can fire on activation to emphasize wider scope and cost.
+3. Recursive scope defaults to current folder plus subfolders, not whole root by default.
+4. When recursive search is active, SuperSet search is manual only via a `Search` button.
+5. `Search` can disable itself after a run and re-enable when filters change.
+6. `Clear All` should clear recursive-search state and exit SuperSet results.
+7. Results render in a dedicated SuperSet list, not the normal media list.
+8. SuperSet results are browse and validate only, with preview and read-only caption visibility.
+9. Materialization uses a dedicated action path from SuperSet results.
 
-## High-Level Flow (Shippable)
+## Entry and Visibility Rules
 
-1. User explicitly enters Smart Set mode from the top-level `Smart Set` button.
-2. User defines filters in Smart Set workspace.
-3. User clicks `Search` (manual run only).
-4. Results load lazily; user sanity-checks and refines filters in the same workspace.
-5. User clicks `Materialize`, provides required name and location.
-6. App creates a brand-new consolidated set and auto-navigates to it.
-7. Smart Set mode exits; user continues normal workflow (rate, prune, recaption, etc.).
+- Recursive control should always be visible in Advanced Filters.
+- Do not hide the control dynamically based on folder context.
+- If disabled behavior is used, keep it explainable and lightweight.
 
-## Scope and Safety
+## Metadata Assumptions
 
-- Source sets are read-only during Smart Set operations.
-- Materialization creates an independent copied set.
-- Pruning in the new set affects the new set only, not sources.
-- Smart Set behavior must not regress normal media-list behavior.
+- SuperSet search and spot-checking may rely on folder metadata that the app already indexes during normal folder entry.
+- Do not add bespoke waiting, retry, or loading-state logic just for temporarily missing metadata.
+- If metadata is not ready yet, the expected behavior is simply to search again once indexing catches up.
+- Metadata-dependent filters should assume cache-first lookup and keep the flow simple.
 
-## Search Model
+## Safety Boundary
 
-### Query Controls
+- SuperSet result interactions must not set `state.currentItem`.
+- SuperSet list must not reuse normal media-list mutation handlers.
+- While SuperSet results are active, caption editor and mutation actions are out of scope.
+- No prune, reset, rename, rate, tag, or image actions from SuperSet list.
 
-- Dedicated path scope control (not a filter row).
-- Path scope prefilled to the folder context that launched Smart Set.
-- Path scope is editable.
-- `Include subfolders` toggle is present and defaults to `on`.
+## Results Experience
 
-### Filter Builder
-
-- Rule-row model (email-rule style), not a single text box.
-- Global combine mode is supported:
-  - `Match all`
-  - `Match any`
-- At least one filter row is required to run search.
-- Default starter row is pre-seeded as `caption contains [empty]`.
-
-### Required Fields and Operators (Initial)
-
-- Text field behavior: same as main filter for consistency.
-- `contains` (required)
-- `does not contain` (supported)
-- `path` (required field)
-- `star` multi-select with explicit `No stars`
-- `flag` multi-select with explicit `No flag`
-
-### Matching Semantics
-
-- Text matching is case-insensitive.
-- `contains` uses substring matching (not whole-word only).
-
-### Interaction
-
-- No auto-submit while editing filters.
-- No advanced progress UI.
-- Keep interaction plain and responsive.
-- Clear/reset action is not required for v1.
-
-## Results Workspace
-
-- Search results and folder media list are different concerns.
-- Results list is filename-only.
-- No thumbnails in the results list.
-- No per-item include/exclude checkbox workflow in Smart Set mode.
-- If results are wrong, user refines filters and searches again.
-- If results are broad, user can materialize and prune afterward.
-- Clicking a filename loads preview/caption/details by reusing existing detail UI behavior.
-- Results may lazy-load.
+- Dedicated SuperSet list element and controller.
+- Hide or sideline the normal media list while SuperSet results are being viewed.
+- Result sets may be large, so prioritize simple rendering and stability.
+- Load results incrementally with `Load more` or infinite-scroll style chunks instead of rendering the entire set at once.
+- Practical batch sizing can be in the 200-400 row range per chunk.
+- Clicking an item should support spot-check validation:
+  - show preview
+  - show caption text
+  - show relevant read-only item data such as tags, stars, flags, and metadata
+- Deep metadata or caption editing workflows are intentionally out of scope.
 
 ## Materialization
 
-### Required Inputs
+- SuperSet feeds Create Set logic with source-relative item references from multiple folders.
+- Materialization must use all matched result items, not only currently rendered or visible chunks.
+- Source sets remain read-only.
+- Destination is a brand-new set folder.
+- Post-success: auto-navigate to the created set, then return to normal workflow.
 
-- Set name is required.
-- Destination location is required.
-- Destination defaults to current folder context.
+See: `docs/create_set_from_results.md`
 
-### Validation
+## Out Of Scope
 
-- Name collisions block submission with validation error.
-- User must fix before submit.
-
-### Copy Behavior
-
-- Output is a brand-new consolidated set folder.
-- Copy media and relevant sidecars/metadata needed for normal downstream workflows.
-- Carry item-level metadata (including stars, flags, reviewed state).
-
-### Duplicate Handling
-
-1. Deduplicate identical content (hash-equivalent): keep one binary copy.
-2. If identical binary has different captions/metadata, create a merged caption that is explicitly marked and appended with clear separator/marker.
-3. Filename collisions (non-identical files): keep first filename, then suffix `_2`, `_3`, etc.
-
-### Post-Create Navigation
-
-- On success, auto-browse to the new materialized directory.
-- Exit Smart Set mode.
-
-## Smart Set Identity on Materialized Sets
-
-- Materialized set opens like any normal set.
-- Show visible `Smart Set` indicator/badge on sets with Smart Set provenance.
-
-## Persistence
-
-- Persist Smart Set recipe/state with folder state persistence (hidden config behavior already used by app).
-- Persist exactly what is required to restore Smart Set filter configuration as previously set.
-- Do not restore prior result snapshots.
-
-## Out of Scope (for this requirement set)
-
-- New-media discovery without captions/tags.
-- Saved filter presets.
-- Advanced progress instrumentation UX.
-- Per-item pick-and-choose selection UX in Smart Set results.
-- Auto-rematerialization behavior.
-- Extra Smart Set-specific actions beyond future `Reopen Smart Filters` discussion.
+- Full Smart Set workspace mode UX.
+- Dedicated rule-builder separate from existing filters.
+- Rich per-item inclusion and exclusion controls inside SuperSet results.
+- Reusing the existing media list edit pipeline for SuperSet rows.
+- Any feature that increases coupling risk with normal edit and caption flows.

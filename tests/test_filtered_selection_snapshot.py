@@ -76,7 +76,7 @@ def test_prepare_dataset_fails_loudly_on_missing_caption(tmp_path, monkeypatch):
         )
 
 
-def test_generate_dataset_configs_writes_selection_snapshot_comments(tmp_path):
+def test_generate_dataset_configs_omits_selection_snapshot_comments_by_default(tmp_path):
     set_folder = tmp_path / "set"
     auto_dataset = set_folder / "auto_dataset"
     img_43 = auto_dataset / "43_img"
@@ -129,15 +129,16 @@ def test_generate_dataset_configs_writes_selection_snapshot_comments(tmp_path):
     dataset_config_module.generate_dataset_configs(set_folder)
 
     lo_text = (set_folder / "dataset.lo.toml").read_text(encoding="utf-8")
-    assert "# --- webcap selection snapshot v1 ---" in lo_text
-    assert "# snapshot.prepared_mode: visible_subset" in lo_text
-    assert "# snapshot.selected_count: 2" in lo_text
-    assert "# snapshot.total_count: 5" in lo_text
-    assert "# criteria.source_folder: char/james" in lo_text
-    assert "# criteria.filter_text: stars>1" in lo_text
-    assert "# criteria.reviewed_only: True" in lo_text
-    assert "# bucket: 43_img" in lo_text
-    assert "# bucket: 916_img" in lo_text
-    assert "# file: aa.png" in lo_text
-    assert "# file: zz.png" in lo_text
-    assert "# snapshot.selection_hash: sha256:" in lo_text
+    assert "# --- webcap selection snapshot v1 ---" not in lo_text
+    assert "# snapshot.prepared_mode: visible_subset" not in lo_text
+    assert "# snapshot.selected_count: 2" not in lo_text
+    assert "# snapshot.total_count: 5" not in lo_text
+    assert "# criteria.source_folder: char/james" not in lo_text
+    assert "# criteria.filter_text: stars>1" not in lo_text
+    assert "# criteria.reviewed_only: True" not in lo_text
+    assert "# bucket: 43_img" not in lo_text
+    assert "# bucket: 916_img" not in lo_text
+    assert "# file: aa.png" not in lo_text
+    assert "# file: zz.png" not in lo_text
+    assert "# snapshot.selection_hash: sha256:" not in lo_text
+    assert "enable_ar_bucket = true" in lo_text

@@ -500,6 +500,7 @@ function selectPathMedia(mediaItem) {
       nextEditorValue = primerText || '';
     }
     state.currentItem = mediaItem;
+    state.currentConfigFile = null;
     ui.editorEl.removeAttribute('readonly');
     ui.editorEl.value = nextEditorValue;
     renderPathPreview(state.folder, mediaItem.fileName);

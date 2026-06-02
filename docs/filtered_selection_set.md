@@ -10,11 +10,11 @@ Allow non-destructive multi-pass curation by preparing from the currently visibl
 2. If visible count is `0`, prepare is blocked.
 3. If visible count is less than total media count, a confirmation prompt is shown every time.
 4. `Prepare` fully rebuilds `auto_dataset` each run.
-5. `Generate Dataset Config` writes `dataset.hi.toml` and `dataset.lo.toml` and prepends a structured snapshot comment block.
+5. `Generate Dataset Config` writes `dataset.hi.toml` and `dataset.lo.toml`. Structured snapshot comments are available in code and controlled by `training.write_selection_snapshot_comments`.
 
 ## Selection Snapshot
 
-Snapshot comments are written into both dataset config files and include:
+Snapshot metadata is still collected from `prep_manifest.json` and can be rendered by the backend helper when `training.write_selection_snapshot_comments` is enabled.
 
 - `snapshot.generated_at`
 - `snapshot.source_folder`

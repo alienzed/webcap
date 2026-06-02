@@ -117,6 +117,15 @@ function setChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel, i
   syncReviewedFromChecklist(key);
   saveChecklistToFolderState();
   renderChecklistPanel();
+  if (typeof renderItemMetadataPanel === 'function') {
+    renderItemMetadataPanel();
+  }
+  if (typeof renderAnnotateStrip === 'function') {
+    renderAnnotateStrip();
+  }
+  if (typeof renderFileList === 'function') {
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  }
   return true;
 }
 

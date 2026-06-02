@@ -5,7 +5,8 @@
   },
   "training": {
     "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
-    "activate_script": "dp-clean/bin/activate"
+    "activate_script": "dp-clean/bin/activate",
+    "write_selection_snapshot_comments": false
   },
   "set_destinations": {
     "presets": [

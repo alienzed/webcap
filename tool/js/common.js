@@ -145,6 +145,76 @@ function debounceCreate(waitMs) {
   };
 }
 
+var APP_THEME_STORAGE_KEY = 'webcap.theme';
+
+function getStoredAppTheme() {
+  try {
+    var theme = localStorage.getItem(APP_THEME_STORAGE_KEY);
+    if (theme === 'dark' || theme === 'light') return theme;
+  } catch (e) {}
+  return '';
+}
+
+function getSystemPreferredAppTheme() {
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+  } catch (e) {}
+  return 'light';
+}
+
+function getInitialAppTheme() {
+  return getStoredAppTheme() || getSystemPreferredAppTheme();
+}
+
+function updateThemeToggleUi(theme) {
+  if (!ui || !ui.utilityThemeBtn) return;
+  var currentTheme = String(theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
+  var nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  ui.utilityThemeBtn.textContent = nextTheme === 'dark' ? 'Dark' : 'Light';
+  ui.utilityThemeBtn.title = 'Switch to ' + nextTheme + ' theme';
+  ui.utilityThemeBtn.setAttribute('aria-pressed', currentTheme === 'dark' ? 'true' : 'false');
+  ui.utilityThemeBtn.setAttribute('aria-label', 'Switch to ' + nextTheme + ' theme');
+}
+
+function applyAppTheme(theme, persist) {
+  var nextTheme = String(theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
+  if (document && document.documentElement) {
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    document.documentElement.style.colorScheme = nextTheme;
+  }
+  if (persist) {
+    try {
+      localStorage.setItem(APP_THEME_STORAGE_KEY, nextTheme);
+    } catch (e) {}
+  }
+  updateThemeToggleUi(nextTheme);
+  return nextTheme;
+}
+
+function toggleAppTheme() {
+  var currentTheme = (document && document.documentElement && document.documentElement.getAttribute('data-theme')) || getInitialAppTheme();
+  var nextTheme = String(currentTheme || '').toLowerCase() === 'dark' ? 'light' : 'dark';
+  return applyAppTheme(nextTheme, true);
+}
+
+function wireThemeToggleUi() {
+  if (ui && ui.utilityThemeBtn && !ui.utilityThemeBtn.__themeWired) {
+    ui.utilityThemeBtn.__themeWired = true;
+    ui.utilityThemeBtn.onclick = function () {
+      toggleAppTheme();
+    };
+  }
+  applyAppTheme(getInitialAppTheme(), false);
+}
+
+window.applyAppTheme = applyAppTheme;
+window.toggleAppTheme = toggleAppTheme;
+window.wireThemeToggleUi = wireThemeToggleUi;
+
+wireThemeToggleUi();
+
 
 // Network helper functions
 var HttpModule = {
@@ -261,6 +331,13 @@ function savePathCaption() {
 // Legacy/manual save entrypoint used by multiple UI paths.
 // Returns a Promise and supports both caption and config editor modes.
 function saveCurrentCaption() {
+  if (state.currentItem && state.currentItem.fileName) {
+    try {
+      return Promise.resolve(savePathCaption());
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
   if (state.currentConfigFile && state.currentConfigFile.file) {
     var cfgFolder = state.currentConfigFile.folder || state.folder || '';
     return saveConfigDirect(cfgFolder, state.currentConfigFile.file, ui.editorEl.value || '');

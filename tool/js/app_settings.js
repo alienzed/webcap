@@ -16,6 +16,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.diffusion_pipe_wsl) out.training.diffusion_pipe_wsl = '';
   if (!out.training.activate_script) out.training.activate_script = '';
   if (!out.training.mode || ['poc', 'normal', 'quality'].indexOf(out.training.mode) === -1) out.training.mode = 'normal';
+  if (typeof out.training.write_selection_snapshot_comments !== 'boolean') out.training.write_selection_snapshot_comments = false;
   return out;
 }
 
@@ -30,6 +31,7 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsModelsEl) ui.appSettingsModelsEl.value = c.filesystem.models || '';
   if (ui.appSettingsTrainingDiffusionPipeWslEl) ui.appSettingsTrainingDiffusionPipeWslEl.value = c.training.diffusion_pipe_wsl || '';
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
+  if (ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl) ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked = !!c.training.write_selection_snapshot_comments;
   var mode = c.training.mode || 'normal';
   if (mode === 'poc' && ui.appSettingsTrainingModePocEl) ui.appSettingsTrainingModePocEl.checked = true;
   else if (mode === 'quality' && ui.appSettingsTrainingModeQualityEl) ui.appSettingsTrainingModeQualityEl.checked = true;
@@ -48,6 +50,7 @@ function collectAppSettingsFormConfig() {
   base.debug = !!(ui.appSettingsDebugEl && ui.appSettingsDebugEl.checked);
   base.training.diffusion_pipe_wsl = ui.appSettingsTrainingDiffusionPipeWslEl ? ui.appSettingsTrainingDiffusionPipeWslEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
+  base.training.write_selection_snapshot_comments = !!(ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl && ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked);
   base.training.mode = mode;
   return normalizeAppConfigShape(base);
 }
@@ -254,6 +257,7 @@ function wireAppSettingsUi() {
     ui.appSettingsModelsEl,
     ui.appSettingsTrainingDiffusionPipeWslEl,
     ui.appSettingsTrainingActivateScriptEl,
+    ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl,
     ui.appSettingsTrainingModePocEl,
     ui.appSettingsTrainingModeNormalEl,
     ui.appSettingsTrainingModeQualityEl,

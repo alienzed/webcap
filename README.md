@@ -41,7 +41,8 @@ Minimum shape:
   "training": {
     "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
     "activate_script": "dp-clean/bin/activate",
-    "mode": "normal"
+    "mode": "normal",
+    "write_selection_snapshot_comments": false
   },
   "vocabulary": {
     "terms": [],
@@ -57,6 +58,7 @@ Minimum shape:
 Notes:
 - `filesystem.root` is required.
 - Training mode supports `poc`, `normal`, and `quality`.
+- `training.write_selection_snapshot_comments` controls whether Generate prepends the selection snapshot header into `dataset.hi.toml` and `dataset.lo.toml`.
 - Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
 - You can edit config in-app via Settings.
 - `vocabulary` is optional. Empty arrays are valid and result in no starter terms.
@@ -144,9 +146,10 @@ Filter bar supports:
   - Advanced Filters help (`i`) with in-app usage details.
 - Clear All resets text + all advanced filters.
 - SuperSet (cross-folder search):
-  - Optional `Search recursively` expands scope to current folder + subfolders.
-  - SuperSet results are intended for preview/validation and set materialization.
-  - Use `Create Set From Results` to materialize a new set from those results.
+  - Optional `Search recursively` checkbox expands scope to current folder + subfolders.
+  - `Search` is the commit point; it disables itself until filters change.
+  - SuperSet results are preview/validation-only and use a dedicated results list.
+  - Use `Create Set From Results` to materialize a new set from all matched results.
 
 Prepare uses the currently visible media rows as its selection source.
 The filter summary row also shows folder-level rating progress as `Rated A/B` (`A` = items with rating > 0, `B` = total media items in current folder).
@@ -348,6 +351,7 @@ Utility buttons:
 Settings modal supports:
 - Filesystem root/models paths
 - Training paths (`diffusion_pipe_wsl`, `activate_script`)
+- Selection snapshot comments toggle
 - Training mode (`poc` / `normal` / `quality`)
 - Debug mode
 - Advanced JSON editing

@@ -157,7 +157,7 @@ def estimate_steps(entries, repeats, epochs: int):
     return int(epochs) * int(per_epoch)
 
 
-def generate_dataset_configs(folder_path: Path, mode: str = "normal"):
+def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
     manifest_path = dataset_root / PREP_MANIFEST_NAME
@@ -241,7 +241,7 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal"):
         hi_blocks.append(render_dataset_entry(entry, hi_repeats[idx]))
         lo_blocks.append(render_dataset_entry(entry, lo_repeats[idx]))
 
-    snapshot_lines = build_selection_snapshot_comment_lines(folder, dataset_root, manifest)
+    snapshot_lines = build_selection_snapshot_comment_lines(folder, dataset_root, manifest) if write_selection_snapshot_comments else None
     hi_text = render_dataset_toml(hi_blocks, snapshot_lines)
     lo_text = render_dataset_toml(lo_blocks, snapshot_lines)
     hi_path = folder / "dataset.hi.toml"

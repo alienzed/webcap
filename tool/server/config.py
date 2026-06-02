@@ -55,6 +55,8 @@ def validate_config_payload(payload):
         if mode not in ("poc", "normal", "quality"):
             mode = "normal"
         normalized_training["mode"] = mode
+    if "write_selection_snapshot_comments" in training:
+        normalized_training["write_selection_snapshot_comments"] = bool(training.get("write_selection_snapshot_comments"))
     if normalized_training:
         out["training"] = normalized_training
     elif "training" in out:

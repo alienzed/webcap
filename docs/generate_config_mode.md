@@ -96,9 +96,9 @@ Update `validate_config_payload` training key allowlist to include `mode` with s
 
 File: `tool/server/run_ops.py`
 
-`generate_dataset_config_response` should pass resolved mode into generation layer.
+`generate_dataset_config_response` should pass resolved mode into generation layer, along with the snapshot-comments flag from app settings when enabled.
 Recommended signature change:
-- `generate_dataset_configs(folder_path: Path, mode: str = "normal")`
+- `generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False)`
 
 Mode should come from runtime config (`app_config.config.training.mode`) to stay consistent with settings behavior.
 

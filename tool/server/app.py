@@ -536,25 +536,19 @@ def maybe_create_config_files(folder_path):
     media_files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_ALL_EXTS]
     if not media_files:
         return
-    templates = ["config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"]
+    templates = ["config.hi.toml", "config.lo.toml"]
     templates_dir = TOOL_DIR / "templates"
     for name in templates:
         dest = folder / name
         src = templates_dir / name
-        if not dest.exists() and src.exists():
+        if src.exists():
             try:
                 dataset_rel = folder.relative_to(app_config.FS_ROOT).as_posix()
             except Exception:
                 dataset_rel = folder.name
-            # Read template as text
-            with open(src, "r", encoding="utf-8") as f:
-                template_text = f.read()
-            # Fill placeholders using folder path relative to FS root as dataset
-            # so nested dataset folders keep their full structure.
+            template_text = src.read_text(encoding="utf-8")
             filled_text = fill_template_placeholders(template_text, dataset_rel)
-            # Write to destination
-            with open(dest, "w", encoding="utf-8") as f:
-                f.write(filled_text)
+            dest.write_text(filled_text, encoding="utf-8")
             try:
                 os.chmod(dest, 0o644)
             except Exception:

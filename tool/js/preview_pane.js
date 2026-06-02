@@ -536,6 +536,10 @@ function loadConfigFileToEditor(fileName) {
 
 // Save logic for config files (overrides caption save if editing config)
 function saveCurrentEditorContent() {
+  if (state.currentItem && state.currentItem.fileName) {
+    saveCurrentCaption();
+    return;
+  }
   if (state.currentConfigFile) {
     // Save config file
     var folder = state.folder || '';

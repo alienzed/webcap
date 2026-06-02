@@ -3,7 +3,19 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light dark">
         <title>WebCap</title>
+        <script>
+        (function () {
+            try {
+                var storedTheme = localStorage.getItem('webcap.theme');
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var theme = (storedTheme === 'dark' || storedTheme === 'light') ? storedTheme : (prefersDark ? 'dark' : 'light');
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.style.colorScheme = theme;
+            } catch (e) {}
+        })();
+        </script>
         <link rel="stylesheet" href="/static/css/bootstrap.min.css">
         <link rel="stylesheet" href="/static/css/styles.css">
         <link rel="stylesheet" href="/static/css/modals.css">
@@ -62,6 +74,13 @@
                                 <path d="M12 16.75h.01"></path>
                             </svg>
                         </button>
+                        <button
+                            id="utility-theme-btn"
+                            type="button"
+                            class="utility-btn utility-icon-btn utility-theme-btn"
+                            title="Toggle theme"
+                            aria-pressed="false"
+                        >Dark</button>
                         <button
                             id="utility-smart-set-btn"
                             type="button"
@@ -605,6 +624,11 @@
                     <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/home/user/diffusion-pipe">
                     <label for="app-settings-training-activate-script">Activate Script</label>
                     <input id="app-settings-training-activate-script" type="text" placeholder="dp-clean/bin/activate">
+                    <span>Selection Snapshot Comments</span>
+                    <label class="app-settings-radio-label" style="justify-content:flex-start;gap:8px;">
+                        <input id="app-settings-training-write-selection-snapshot-comments" type="checkbox">
+                        <span>Write selection snapshot comments into dataset TOMLs</span>
+                    </label>
                     <span>Training Mode</span>
                     <div class="app-settings-radio-group">
                         <label class="app-settings-radio-label">

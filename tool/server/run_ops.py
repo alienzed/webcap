@@ -204,6 +204,7 @@ def generate_dataset_config_response(folder: str):
             return Response(f"[ERROR] Folder does not exist: {folder}\n", status=404, mimetype="text/plain")
         training = app_config.config.get("training") or {}
         mode = str(training.get("mode") or "normal").strip().lower()
+        write_snapshot_comments = bool(training.get("write_selection_snapshot_comments"))
         prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
         auto_prepare_attempted = False
         prep_log = ""
@@ -215,7 +216,11 @@ def generate_dataset_config_response(folder: str):
                 prep_log += str(prep_text).rstrip() + "\n"
 
         try:
-            text = generate_dataset_configs(folder_path, mode=mode)
+            text = generate_dataset_configs(
+                folder_path,
+                mode=mode,
+                write_selection_snapshot_comments=write_snapshot_comments,
+            )
             image_only = _manifest_is_image_only(prep_manifest_path)
             if image_only:
                 hi_name = HI_CONFIG_NAME
@@ -259,12 +264,12 @@ def _create_missing_config_files(folder_path: Path):
     if not media_files:
         return
 
-    templates = ["config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"]
+    templates = ["config.hi.toml", "config.lo.toml"]
     templates_dir = ROOT / "tool" / "templates"
     for name in templates:
         dest = folder_path / name
         src = templates_dir / name
-        if not dest.exists() and src.exists():
+        if src.exists():
             try:
                 dataset_rel = folder_path.relative_to(app_config.FS_ROOT).as_posix()
             except Exception:
@@ -291,6 +296,7 @@ def train_run_response(folder: str):
     hi_name = HI_CONFIG_NAME
     lo_name = LO_CONFIG_NAME
     mode = str(training_cfg.get("mode") or "normal").strip().lower()
+    write_snapshot_comments = bool(training_cfg.get("write_selection_snapshot_comments"))
 
     try:
         folder_path = app_config.safe_join_fs_root(folder)
@@ -317,7 +323,11 @@ def train_run_response(folder: str):
                 if prep_text:
                     warnings.append(str(prep_text).rstrip())
             try:
-                gen_text = generate_dataset_configs(folder_path, mode=mode)
+                gen_text = generate_dataset_configs(
+                    folder_path,
+                    mode=mode,
+                    write_selection_snapshot_comments=write_snapshot_comments,
+                )
                 if gen_text:
                     warnings.append(str(gen_text).rstrip())
             except FileNotFoundError as e:

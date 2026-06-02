@@ -99,6 +99,32 @@ def test_app_config_get_prefers_disk_config(monkeypatch):
     assert response.get_json()["filesystem"]["root"] == "C:/disk-root"
 
 
+def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    monkeypatch.setattr(app_module.app_config, "CONFIG_PATH", config_path)
+
+    client = app_module.app.test_client()
+    response = client.post(
+        "/app/config",
+        json={
+            "filesystem": {"root": "C:/train-root", "models": "C:/models"},
+            "debug": False,
+            "training": {
+                "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
+                "activate_script": "dp-clean/bin/activate",
+                "mode": "normal",
+                "write_selection_snapshot_comments": True,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["config"]["training"]["write_selection_snapshot_comments"] is True
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["training"]["write_selection_snapshot_comments"] is True
+
+
 def test_duplicate_image_route_copies_caption(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_b"
@@ -311,6 +337,139 @@ def test_generate_dataset_config_creates_missing_config_templates(tmp_path, monk
     assert response.status_code == 200
     assert (set_dir / "config.hi.toml").exists()
     assert (set_dir / "config.lo.toml").exists()
+
+
+def test_generate_dataset_config_overwrites_existing_config_templates(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_g"
+    auto_dataset = set_dir / "auto_dataset"
+    set_dir.mkdir(parents=True)
+    auto_dataset.mkdir(parents=True)
+    write_image(set_dir / "clip.png")
+    prepared_img_dir = auto_dataset / "square_img"
+    prepared_img_dir.mkdir(parents=True)
+    write_image(prepared_img_dir / "clip.png")
+    write_text(prepared_img_dir / "clip.txt", "prepared caption")
+    write_text(set_dir / "config.lo.toml", "corrupted config")
+    write_text(set_dir / "config.hi.toml", "corrupted config")
+    (auto_dataset / "prep_manifest.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "target_fps": 16,
+                "videos": [],
+                "images": [
+                    {
+                        "file": "clip.png",
+                        "ar": "square",
+                        "width": 512,
+                        "height": 512,
+                        "prepared_path": "square_img/clip.png",
+                        "caption": True,
+                    }
+                ],
+                "skipped": [],
+                "selection": {
+                    "mode": "all",
+                    "selected_files": ["clip.png"],
+                    "selected_count": 1,
+                    "total_count": 1,
+                    "criteria": {},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def safe_join(rel_path):
+        rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
+        if rel.startswith("/"):
+            rel = rel[1:]
+        return (fs_root / rel).resolve()
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    client = app_module.app.test_client()
+    response = client.post("/fs/generate_dataset_config", json={"folder": "set_g"})
+
+    assert response.status_code == 200
+    hi_text = (set_dir / "config.hi.toml").read_text(encoding="utf-8")
+    lo_text = (set_dir / "config.lo.toml").read_text(encoding="utf-8")
+    assert "corrupted config" not in hi_text
+    assert "corrupted config" not in lo_text
+    assert 'output_dir = "' in hi_text
+    assert 'output_dir = "' in lo_text
+
+
+def test_generate_dataset_config_can_write_snapshot_comments_when_enabled(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_h"
+    auto_dataset = set_dir / "auto_dataset"
+    set_dir.mkdir(parents=True)
+    auto_dataset.mkdir(parents=True)
+    write_image(set_dir / "clip.png")
+    prepared_img_dir = auto_dataset / "square_img"
+    prepared_img_dir.mkdir(parents=True)
+    write_image(prepared_img_dir / "clip.png")
+    write_text(prepared_img_dir / "clip.txt", "prepared caption")
+    (auto_dataset / "prep_manifest.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "target_fps": 16,
+                "videos": [],
+                "images": [
+                    {
+                        "file": "clip.png",
+                        "ar": "square",
+                        "width": 512,
+                        "height": 512,
+                        "prepared_path": "square_img/clip.png",
+                        "caption": True,
+                    }
+                ],
+                "skipped": [],
+                "selection": {
+                    "mode": "all",
+                    "selected_files": ["clip.png"],
+                    "selected_count": 1,
+                    "total_count": 1,
+                    "criteria": {},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def safe_join(rel_path):
+        rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
+        if rel.startswith("/"):
+            rel = rel[1:]
+        return (fs_root / rel).resolve()
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(
+        app_module.app_config,
+        "config",
+        {
+            "training": {
+                "mode": "normal",
+                "write_selection_snapshot_comments": True,
+            }
+        },
+    )
+
+    client = app_module.app.test_client()
+    response = client.post("/fs/generate_dataset_config", json={"folder": "set_h"})
+
+    assert response.status_code == 200
+    lo_text = (set_dir / "dataset.lo.toml").read_text(encoding="utf-8")
+    assert "# --- webcap selection snapshot v1 ---" in lo_text
+    assert "# snapshot.prepared_mode: all" in lo_text
+    assert "# file: clip.png" in lo_text
+    assert "enable_ar_bucket = true" in lo_text
 
 
 def test_train_run_auto_generates_missing_configs(tmp_path, monkeypatch):

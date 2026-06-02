@@ -168,7 +168,6 @@ function renderAnnotateStrip() {
     titleRowEl.appendChild(titleEl);
 
     var isComplete = false;
-    var statusBadgeEl = null;
     var controlsEl = document.createElement('div');
     controlsEl.className = 'annotate-strip-group-controls';
 
@@ -215,13 +214,11 @@ function renderAnnotateStrip() {
       }
     });
     isComplete = !!(groupIsNa || hasActiveTerm);
-    if (!isComplete) {
+    if (reviewed) {
+      groupEl.classList.add('annotate-strip-group-reviewed');
+      titleEl.classList.add('annotate-strip-group-title-reviewed');
+    } else if (!isComplete) {
       groupEl.classList.add('annotate-strip-group-incomplete');
-      statusBadgeEl = document.createElement('div');
-      statusBadgeEl.className = 'annotate-strip-group-status-badge annotate-strip-group-status-badge-incomplete';
-      statusBadgeEl.textContent = 'Missing';
-      statusBadgeEl.title = 'This requirement group still needs attention';
-      titleRowEl.appendChild(statusBadgeEl);
     } else if (groupIsNa) {
       groupEl.classList.add('annotate-strip-group-na');
     } else {
@@ -266,8 +263,10 @@ function renderAnnotateStrip() {
       };
       chipWrap.appendChild(chip);
     });
-    if (groupIsNa) titleEl.classList.add('annotate-strip-group-title-na');
-    else titleEl.classList.add(isComplete ? 'annotate-strip-group-title-complete' : 'annotate-strip-group-title-incomplete');
+    if (!reviewed) {
+      if (groupIsNa) titleEl.classList.add('annotate-strip-group-title-na');
+      else titleEl.classList.add(isComplete ? 'annotate-strip-group-title-complete' : 'annotate-strip-group-title-incomplete');
+    }
 
     groupEl.appendChild(chipWrap);
     groupsWrap.appendChild(groupEl);
@@ -533,12 +532,13 @@ function joinCaptionParts(before, after) {
   return '';
 }
 
-function insertCaptionPhraseAtCursor(text) {
+function insertCaptionPhraseAtCursor(text, options) {
   if (!ui || !ui.editorEl) return false;
   if (ui.editorEl.readOnly) {
     setStatus('Cannot insert while editor is read-only.');
     return false;
   }
+  var insertOptions = (options && typeof options === 'object') ? options : {};
   var phrase = String(text || '').trim();
   if (!phrase) return false;
   var editor = ui.editorEl;
@@ -548,8 +548,8 @@ function insertCaptionPhraseAtCursor(text) {
   var before = value.slice(0, start).replace(/[ \t]+$/, '');
   var after = value.slice(end).replace(/^[ \t]+/, '');
   var leading = before && !/\s$/.test(before) ? ' ' : '';
-  var trailing = after && /^\s/.test(after) ? '' : ' ';
-  var insertion = leading + phrase + trailing;
+  var separator = typeof insertOptions.separator === 'string' ? insertOptions.separator : ', ';
+  var insertion = leading + phrase + separator;
   editor.value = before + insertion + after;
   var caret = before.length + insertion.length;
   editor.focus();
@@ -574,7 +574,20 @@ function removeCaptionPhraseFromCaption(text) {
 
   var start = match.start;
   var end = match.end;
-  var nextValue = joinCaptionParts(value.slice(0, start), value.slice(end));
+  var before = value.slice(0, start);
+  var after = value.slice(end);
+  var nextStart = start;
+  var nextEnd = end;
+  var trailingCommaMatch = after.match(/^[ \t]*,[ \t]*/);
+  if (trailingCommaMatch) {
+    nextEnd = end + trailingCommaMatch[0].length;
+  } else {
+    var leadingCommaMatch = before.match(/[ \t]*,[ \t]*$/);
+    if (leadingCommaMatch) {
+      nextStart = start - leadingCommaMatch[0].length;
+    }
+  }
+  var nextValue = joinCaptionParts(value.slice(0, nextStart), value.slice(nextEnd));
   editor.value = nextValue;
   var caret = Math.min(start, nextValue.length);
   editor.focus();
@@ -592,7 +605,7 @@ function toggleCaptionPhraseAtCursor(text) {
     removeCaptionPhraseFromCaption(phrase);
     return;
   }
-  insertCaptionPhraseAtCursor(phrase);
+  insertCaptionPhraseAtCursor(phrase, { separator: ', ' });
 }
 
 function setCaptionQuickPhrases(nextPhrases, triggerAutosave) {

@@ -1548,6 +1548,12 @@ iframe {
   border-color: #bbf7d0;
 }
 
+.annotate-strip-group-reviewed {
+  border-color: #86efac;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.08);
+}
+
 .annotate-strip-group-na {
   border-color: #cbd5e1;
   background: linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
@@ -1569,7 +1575,7 @@ iframe {
   justify-content: space-between;
   gap: 6px;
   margin-bottom: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .annotate-strip-group-controls {
@@ -1597,27 +1603,6 @@ iframe {
   color: #364152;
 }
 
-.annotate-strip-group-status-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.annotate-strip-group-status-badge-incomplete {
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
-}
-
 .annotate-strip-group-reviewed-btn {
   min-width: 20px;
   width: 20px;
@@ -1643,6 +1628,10 @@ iframe {
 }
 
 .annotate-strip-group-title-complete {
+  color: #166534;
+}
+
+.annotate-strip-group-title-reviewed {
   color: #166534;
 }
 

@@ -674,8 +674,16 @@ async function renderFileList() {
     var showCreateSetBtn = filtersActive && mediaItems.length > 0;
     ui.createSetFromResultsBtn.classList.toggle('hidden', !showCreateSetBtn);
   }
-  // Show count of matching media items
-  var countText = mediaItems.length + (mediaItems.length === 1 ? ' item matches the filter' : ' items match the filter');
+  // Show count of matching media items, or SuperSet results when that mode is active.
+  var countValue = mediaItems.length;
+  var countLabel = 'item matches the filter';
+  if (state && state.supersetActive) {
+    countValue = Array.isArray(state.supersetResults) ? state.supersetResults.length : 0;
+    countLabel = countValue === 1 ? 'SuperSet result' : 'SuperSet results';
+  } else if (mediaItems.length !== 1) {
+    countLabel = 'items match the filter';
+  }
+  var countText = countValue + ' ' + countLabel;
   if (ui.captionFilterCountTextEl) {
     ui.captionFilterCountTextEl.textContent = countText;
   } else if (ui.captionFilterCount) {
@@ -768,11 +776,24 @@ async function renderFileList() {
 
   syncSelectionWithVisibleMedia(mediaItems);
   updatePreviewActionControls();
+  if (typeof updateSuperSetControls === 'function') {
+    updateSuperSetControls();
+  }
 }
 
 // File/Folder Flags
 function markFlag(itemKey, color) {
   debugLog('[markFlag] itemKey:', itemKey, 'color:', color, 'state.folder:', state.folder);
+  var previous = String((state.flags && state.flags[itemKey]) || '').trim();
+  var next = String(color || '').trim();
+  if (previous !== next && typeof recordUndoOperation === 'function') {
+    recordUndoOperation({
+      type: 'flag',
+      itemKey: itemKey,
+      previousFlag: previous,
+      nextFlag: next
+    });
+  }
   if (color) {
     state.flags[itemKey] = color;
   } else {

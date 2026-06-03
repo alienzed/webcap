@@ -11,11 +11,20 @@ state = {
   listRenderSeq: 0,
   reviewedSet: new Set(),
   focusSet: null,
+  supersetArmed: false,
+  supersetActive: false,
+  supersetResults: [],
+  supersetRenderedCount: 0,
+  supersetCurrentResult: null,
+  supersetSourceFolder: '',
+  supersetSearchDirty: false,
   flags: {}, // key: file or folder name, value: color string (red/yellow/orange/green)
   ratings: {}, // key: media file name, value: integer 1..5
   mutatedSet: new Set(), // key: media file name
   mutatedByMediaSource: {}, // key: media file name, value: 'best_effort' | 'deterministic'
-  mutationStatusSeq: 0
+  mutationStatusSeq: 0,
+  undoStack: [],
+  undoSuppress: false
 };
 // Define global UI object (all static elements)
 ui = {
@@ -41,6 +50,10 @@ ui = {
   advancedFilterInvalidArEl: document.getElementById('advanced-filter-invalid-ar'),
   advancedFilterUntaggedEl: document.getElementById('advanced-filter-untagged'),
   advancedFilterIncompleteEl: document.getElementById('advanced-filter-incomplete'),
+  advancedFilterSupersetEl: document.getElementById('advanced-filter-superset'),
+  supersetSearchBtn: document.getElementById('superset-search-btn'),
+  supersetResultsEl: document.getElementById('superset-results'),
+  supersetExitBtn: document.getElementById('superset-exit-btn'),
   captionFilterCount: document.getElementById('caption-filter-count'),
   captionFilterCountTextEl: document.getElementById('caption-filter-count-text'),
   captionFilterCountSeparatorEl: document.getElementById('caption-filter-count-separator'),
@@ -54,7 +67,6 @@ ui = {
   utilityRebootBtn: document.getElementById('utility-reboot-btn'),
   utilityHelpBtn: document.getElementById('utility-help-btn'),
   utilityThemeBtn: document.getElementById('utility-theme-btn'),
-  utilitySmartSetBtn: document.getElementById('utility-smart-set-btn'),
   createSetFromResultsBtn: document.getElementById('create-set-from-results-btn'),
   reviewBtn: document.getElementById('review-captions-btn'),
   focusSetExitBtn: document.getElementById('focus-set-exit-btn'),
@@ -65,6 +77,7 @@ ui = {
   appSettingsCancelBtn: document.getElementById('app-settings-cancel-btn'),
   appSettingsSaveBtn: document.getElementById('app-settings-save-btn'),
   appSettingsSaveReloadBtn: document.getElementById('app-settings-save-reload-btn'),
+  appSettingsResetBtn: document.getElementById('app-settings-reset-btn'),
   appSettingsStatusEl: document.getElementById('app-settings-status'),
   appSettingsRootEl: document.getElementById('app-settings-filesystem-root'),
   appSettingsModelsEl: document.getElementById('app-settings-filesystem-models'),
@@ -167,20 +180,16 @@ function getDefaultRequirementItems() {
 }
 
 function getDefaultRequirementKeywordsByItem() {
+  var req = getConfigRequirementDefaultsBlock();
+  var source = (req && req.keywordsByItem && typeof req.keywordsByItem === 'object' && Object.keys(req.keywordsByItem).length)
+    ? req.keywordsByItem
+    : DEFAULT_CHECKLIST_ITEM_KEYWORDS;
   var out = {};
-  Object.keys(DEFAULT_CHECKLIST_ITEM_KEYWORDS || {}).forEach(function (key) {
+  Object.keys(source || {}).forEach(function (key) {
     var label = normalizeRequirementDefaultsItemLabel(key);
     if (!label) return;
-    out[label] = String(DEFAULT_CHECKLIST_ITEM_KEYWORDS[key] || '').trim();
+    out[label] = String(source[key] || '').trim();
   });
-  var req = getConfigRequirementDefaultsBlock();
-  if (req && req.keywordsByItem && typeof req.keywordsByItem === 'object') {
-    Object.keys(req.keywordsByItem).forEach(function (key) {
-      var label = normalizeRequirementDefaultsItemLabel(key);
-      if (!label) return;
-      out[label] = String(req.keywordsByItem[key] || '').trim();
-    });
-  }
   return out;
 }
 

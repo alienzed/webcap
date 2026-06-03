@@ -44,6 +44,96 @@ function setStatus(text) {
   appendToConsolePanel(text || '');
 }
 
+function recordUndoOperation(op) {
+  if (!state || state.undoSuppress || !op || !op.type) return;
+  state.undoStack = [op];
+}
+
+function restoreUndoMediaSelection(mediaKey, statusText) {
+  if (!mediaKey || typeof selectPathMedia !== 'function' || !state || !Array.isArray(state.items)) {
+    return false;
+  }
+  var target = null;
+  for (var i = 0; i < state.items.length; i += 1) {
+    var item = state.items[i];
+    if (item && item.key === mediaKey) {
+      target = item;
+      break;
+    }
+  }
+  if (!target) return false;
+  setTimeout(function () {
+    selectPathMedia(target).then(function () {
+      if (statusText) setStatus(statusText);
+    }).catch(function (err) {
+      setStatus(String(err && err.message ? err.message : err));
+    });
+  }, 0);
+  return true;
+}
+
+function undoLastOperation() {
+  if (!state || !Array.isArray(state.undoStack) || !state.undoStack.length) {
+    setStatus('Nothing to undo.');
+    return false;
+  }
+  var op = state.undoStack.pop();
+  state.undoSuppress = true;
+  try {
+    if (op.type === 'rating' && typeof setRatingForMediaKey === 'function') {
+      setRatingForMediaKey(op.mediaKey, op.previousRating);
+      var ratingStatus = op.previousRating > 0 ? 'Undid rating: ' + op.previousRating + ' stars' : 'Undid rating: cleared';
+      if (!restoreUndoMediaSelection(op.mediaKey, ratingStatus)) {
+        setStatus(ratingStatus);
+      }
+      return true;
+    }
+    if (op.type === 'flag' && typeof markFlag === 'function') {
+      markFlag(op.itemKey, op.previousFlag || '');
+      var flagStatus = op.previousFlag ? 'Undid flag: ' + op.previousFlag : 'Undid flag: cleared';
+      if (!restoreUndoMediaSelection(op.itemKey, flagStatus)) {
+        setStatus(flagStatus);
+      }
+      return true;
+    }
+    if (op.type === 'checklist-checked' && typeof setChecklistRequirementCheckedForMediaKey === 'function') {
+      setChecklistRequirementCheckedForMediaKey(op.mediaKey, op.requirementLabel, !!op.previousValue);
+      var checkedStatus = op.previousValue ? 'Undid group reviewed mark.' : 'Undid group reviewed clear.';
+      if (!restoreUndoMediaSelection(op.mediaKey, checkedStatus)) {
+        setStatus(checkedStatus);
+      }
+      return true;
+    }
+    if (op.type === 'checklist-na' && typeof setChecklistRequirementNaForMediaKey === 'function') {
+      setChecklistRequirementNaForMediaKey(op.mediaKey, op.requirementLabel, !!op.previousValue);
+      var naStatus = op.previousValue ? 'Undid group n/a clear.' : 'Undid group n/a mark.';
+      if (!restoreUndoMediaSelection(op.mediaKey, naStatus)) {
+        setStatus(naStatus);
+      }
+      return true;
+    }
+    if (op.type === 'tag') {
+      if (op.previousValue && typeof addTagToMediaKey === 'function') {
+        addTagToMediaKey(op.mediaKey, op.tagText);
+      } else if (!op.previousValue && typeof removeTagFromMediaKey === 'function') {
+        removeTagFromMediaKey(op.mediaKey, op.tagText);
+      } else {
+        setStatus('Nothing to undo.');
+        return false;
+      }
+      var tagStatus = op.previousValue ? 'Undid tag removal: ' + op.tagText : 'Undid tag add: ' + op.tagText;
+      if (!restoreUndoMediaSelection(op.mediaKey, tagStatus)) {
+        setStatus(tagStatus);
+      }
+      return true;
+    }
+  } finally {
+    state.undoSuppress = false;
+  }
+  setStatus('Nothing to undo.');
+  return false;
+}
+
 function isBlacklistedSetSubfolderName(name) {
   var n = String(name || '').toLowerCase();
   return n === 'originals' || n === 'auto_dataset' || n === 'src_videos';

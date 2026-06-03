@@ -14,7 +14,7 @@ from .file_ops import duplicate_folder_response, duplicate_image_response, open_
 from .media import media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response
 from .run_ops import autoset_run_response, prepare_dataset_response, generate_dataset_config_response, train_run_response
-from .smart_set import create_set_from_results_response, smart_set_materialize_response
+from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -143,6 +143,26 @@ def app_config_save():
     try:
         saved = app_config.save_config_to_disk(data)
         return jsonify({"ok": True, "config": saved})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        if app_config.FS_DEBUG:
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/app/reset_app", methods=["POST"])
+def app_reset_app():
+    try:
+        current = app_config.load_config_from_disk()
+        current["requirements"] = app_config.load_default_requirements_block()
+        saved = app_config.save_config_to_disk(current)
+        loaded = app_config.reload_runtime_config()
+        return jsonify({
+            "ok": True,
+            "message": "App requirements reset to defaults.",
+            "config": loaded or saved,
+        })
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -312,6 +332,12 @@ def smart_set_materialize_route():
 def create_set_from_results_route():
     data = request.get_json(silent=True) or {}
     return create_set_from_results_response(data)
+
+
+@app.route("/fs/superset_search", methods=["POST"])
+def superset_search_route():
+    data = request.get_json(silent=True) or {}
+    return superset_search_response(data)
 
 # Unified deface endpoint
 @app.route('/fs/deface', methods=['POST'])

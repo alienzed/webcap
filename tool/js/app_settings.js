@@ -142,6 +142,33 @@ function saveAppSettings(opts) {
   });
 }
 
+function resetAppSettings() {
+  if (!confirm('Reset the app requirements to the stock defaults? This will remove custom global requirement terms.')) {
+    return;
+  }
+  setAppSettingsStatus('Resetting app defaults...', false);
+  HttpModule.postJson('/app/reset_app', {}, function (status, responseText) {
+    if (status !== 200) {
+      setAppSettingsStatus(getErrorMessage(responseText, 'Failed to reset app defaults.'), true);
+      return;
+    }
+    var saved = null;
+    try {
+      var parsed = JSON.parse(responseText);
+      saved = normalizeAppConfigShape(parsed.config || {});
+    } catch (e) {
+      saved = normalizeAppConfigShape(appSettingsLoadedConfig || {});
+    }
+    appSettingsLoadedConfig = saved;
+    setRuntimeAppConfig(saved);
+    fillAppSettingsForm(saved);
+    setRootFolderLabelFromConfig(saved);
+    setAppSettingsStatus('App requirements reset to defaults.', false);
+    setStatus('App requirements reset to defaults.');
+    refreshCurrentDirectory();
+  });
+}
+
 function triggerRuntimeConfigReload(quietInModal) {
   HttpModule.postJson('/app/reboot', {}, function (status, responseText) {
     if (status !== 200) {
@@ -238,6 +265,9 @@ function wireAppSettingsUi() {
     ui.appSettingsSaveReloadBtn.onclick = function () {
       saveAppSettings({ reloadAfterSave: true });
     };
+  }
+  if (ui.appSettingsResetBtn) {
+    ui.appSettingsResetBtn.onclick = resetAppSettings;
   }
   if (ui.appSettingsModalEl) {
     ui.appSettingsModalEl.addEventListener('click', function (e) {

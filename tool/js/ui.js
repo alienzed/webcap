@@ -324,10 +324,16 @@ function clearCaptionFilterInputs() {
     });
   }
   if (ui.advancedFilterInvalidArEl) ui.advancedFilterInvalidArEl.checked = false;
+  if (ui.advancedFilterSupersetEl) ui.advancedFilterSupersetEl.checked = false;
 }
 
 function clearCaptionFilters() {
   clearCaptionFilterInputs();
+  if (typeof exitSuperSetSearch === 'function' && state && state.supersetActive) {
+    exitSuperSetSearch({ uncheck: true });
+    return;
+  }
+  if (typeof updateSuperSetControls === 'function') updateSuperSetControls();
   renderFileList();
 }
 
@@ -536,6 +542,17 @@ function refreshTrainingConfigList() {
 // Directory listing now uses backend /fs/list
 function refreshCurrentDirectory() {
   var path = state.folder || '';
+  if (state && state.supersetActive) {
+    state.supersetActive = false;
+    state.supersetResults = [];
+    state.supersetRenderedCount = 0;
+    state.supersetCurrentResult = null;
+    state.supersetSearchDirty = false;
+    state.supersetSourceFolder = '';
+    state.supersetArmed = false;
+    if (ui.advancedFilterSupersetEl) ui.advancedFilterSupersetEl.checked = false;
+    if (typeof updateSuperSetControls === 'function') updateSuperSetControls();
+  }
   updateUtilityPathLabel(path);
   updateSetFolderScopedUi();
   updateReviewButtonAvailability();
@@ -653,45 +670,34 @@ function clearFocusSet() {
   renderFileList(ui.filterEl.value);
 }
 // Ensure live filtering as you type
+function handleMediaFilterChanged() {
+  if (typeof markSuperSetSearchDirty === 'function') markSuperSetSearchDirty();
+  renderFileList();
+}
+
 if (ui.filterEl) {
-  ui.filterEl.addEventListener('input', function () {
-    renderFileList();
-  });
+  ui.filterEl.addEventListener('input', handleMediaFilterChanged);
 }
 if (ui.advancedFilterMissingCaptionsEl) {
-  ui.advancedFilterMissingCaptionsEl.addEventListener('change', function () {
-    renderFileList();
-  });
+  ui.advancedFilterMissingCaptionsEl.addEventListener('change', handleMediaFilterChanged);
 }
 if (ui.advancedFilterReviewedEl) {
-  ui.advancedFilterReviewedEl.addEventListener('change', function () {
-    renderFileList();
-  });
+  ui.advancedFilterReviewedEl.addEventListener('change', handleMediaFilterChanged);
 }
 if (ui.advancedFilterUnreviewedEl) {
-  ui.advancedFilterUnreviewedEl.addEventListener('change', function () {
-    renderFileList();
-  });
+  ui.advancedFilterUnreviewedEl.addEventListener('change', handleMediaFilterChanged);
 }
 if (ui.advancedFilterUntaggedEl) {
-  ui.advancedFilterUntaggedEl.addEventListener('change', function () {
-    renderFileList();
-  });
+  ui.advancedFilterUntaggedEl.addEventListener('change', handleMediaFilterChanged);
 }
 if (ui.advancedFilterIncompleteEl) {
-  ui.advancedFilterIncompleteEl.addEventListener('change', function () {
-    renderFileList();
-  });
+  ui.advancedFilterIncompleteEl.addEventListener('change', handleMediaFilterChanged);
 }
 if (ui.advancedFilterStarsEl) {
-  ui.advancedFilterStarsEl.addEventListener('change', function () {
-    renderFileList();
-  });
+  ui.advancedFilterStarsEl.addEventListener('change', handleMediaFilterChanged);
 }
 if (ui.advancedFilterFlagEl) {
-  ui.advancedFilterFlagEl.addEventListener('change', function () {
-    renderFileList();
-  });
+  ui.advancedFilterFlagEl.addEventListener('change', handleMediaFilterChanged);
 }
 if (ui.advancedFilterInvalidArEl) {
   ui.advancedFilterInvalidArEl.addEventListener('change', function () {
@@ -702,7 +708,28 @@ if (ui.advancedFilterInvalidArEl) {
       setStatus('Invalid AR is unavailable while metadata is generating. Please try again in a moment.');
       return;
     }
-    renderFileList();
+    handleMediaFilterChanged();
+  });
+}
+if (ui.advancedFilterSupersetEl) {
+  ui.advancedFilterSupersetEl.addEventListener('change', function () {
+    if (!ui.advancedFilterSupersetEl.checked && typeof exitSuperSetSearch === 'function' && state && state.supersetActive) {
+      exitSuperSetSearch({ uncheck: false });
+      return;
+    }
+    state.supersetArmed = !!ui.advancedFilterSupersetEl.checked;
+    if (state.supersetArmed) state.supersetSearchDirty = true;
+    if (typeof updateSuperSetControls === 'function') updateSuperSetControls();
+  });
+}
+if (ui.supersetSearchBtn) {
+  ui.supersetSearchBtn.addEventListener('click', function () {
+    if (typeof runSuperSetSearch === 'function') runSuperSetSearch();
+  });
+}
+if (ui.supersetExitBtn) {
+  ui.supersetExitBtn.addEventListener('click', function () {
+    if (typeof exitSuperSetSearch === 'function') exitSuperSetSearch({ uncheck: true });
   });
 }
 if (ui.captionFilterClearAllBtn) {

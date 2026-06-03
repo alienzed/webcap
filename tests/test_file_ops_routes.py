@@ -125,6 +125,91 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
     assert saved["training"]["write_selection_snapshot_comments"] is True
 
 
+def test_app_config_save_bootstraps_missing_requirements(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    example_path = tmp_path / "config.example.json"
+    write_text(
+        example_path,
+        json.dumps(
+            {
+                "filesystem": {"root": "C:/base-root", "models": "C:/models"},
+                "debug": False,
+                "training": {},
+                "requirements": {
+                    "items": ["Caption", "Tags"],
+                    "keywordsByItem": {"Caption": "caption", "Tags": "tag"},
+                },
+            }
+        ),
+    )
+    monkeypatch.setattr(app_module.app_config, "CONFIG_PATH", config_path)
+    monkeypatch.setattr(app_module.app_config, "CONFIG_EXAMPLE_PATH", example_path)
+
+    client = app_module.app.test_client()
+    response = client.post(
+        "/app/config",
+        json={
+            "filesystem": {"root": "C:/train-root", "models": "C:/models"},
+            "debug": False,
+            "training": {},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["config"]["requirements"]["items"] == ["Caption", "Tags"]
+    assert payload["config"]["requirements"]["keywordsByItem"]["Caption"] == "caption"
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["requirements"]["items"] == ["Caption", "Tags"]
+
+
+def test_reset_app_restores_stock_requirements(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    example_path = tmp_path / "config.example.json"
+    write_text(
+        example_path,
+        json.dumps(
+            {
+                "filesystem": {"root": "C:/base-root", "models": "C:/models"},
+                "debug": False,
+                "training": {},
+                "requirements": {
+                    "items": ["Caption", "Tags"],
+                    "keywordsByItem": {"Caption": "caption", "Tags": "tag"},
+                },
+            }
+        ),
+    )
+    write_text(
+        config_path,
+        json.dumps(
+            {
+                "filesystem": {"root": "C:/custom-root", "models": "C:/models"},
+                "debug": False,
+                "training": {},
+                "requirements": {
+                    "items": ["Caption"],
+                    "keywordsByItem": {"Caption": ["custom caption"]},
+                },
+            }
+        ),
+    )
+    monkeypatch.setattr(app_module.app_config, "CONFIG_PATH", config_path)
+    monkeypatch.setattr(app_module.app_config, "CONFIG_EXAMPLE_PATH", example_path)
+
+    client = app_module.app.test_client()
+    response = client.post("/app/reset_app")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["config"]["requirements"]["items"] == ["Caption", "Tags"]
+    assert payload["config"]["requirements"]["keywordsByItem"]["Tags"] == "tag"
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["requirements"]["items"] == ["Caption", "Tags"]
+    assert saved["requirements"]["keywordsByItem"]["Caption"] == "caption"
+
+
 def test_duplicate_image_route_copies_caption(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_b"
@@ -614,6 +699,93 @@ def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path
     assert sorted(out_state["ratings_by_media"].keys()) == sorted(dest_names)
     assert out_state["stats"]["phrases"] == ""
     assert "caption_phrases" not in out_state
+
+
+def test_superset_search_matches_current_folder_and_subfolders_with_filters(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    source_dir = fs_root / "sets" / "a"
+    child_dir = source_dir / "child"
+    sibling_dir = fs_root / "sets" / "b"
+    child_dir.mkdir(parents=True)
+    sibling_dir.mkdir(parents=True)
+
+    write_image(source_dir / "one.png")
+    write_text(source_dir / "one.txt", "front dragon")
+    write_image(child_dir / "two.png")
+    write_text(child_dir / "two.txt", "side dragon")
+    write_image(sibling_dir / "three.png")
+    write_text(sibling_dir / "three.txt", "front dragon")
+    write_image(source_dir / "skip.jpg")
+    write_text(source_dir / "skip.txt", "front dragon")
+
+    write_text(
+        source_dir / ".webcap_state.json",
+        json.dumps(
+            {
+                "reviewedKeys": ["one.png"],
+                "caption_tags_by_media": {"one.png": ["dragon", "front"], "skip.jpg": []},
+                "ratings_by_media": {"one.png": 4},
+                "flags": {"one.png": "green"},
+            }
+        ),
+    )
+    write_text(
+        child_dir / ".webcap_state.json",
+        json.dumps(
+            {
+                "reviewedKeys": [],
+                "caption_tags_by_media": {"two.png": ["dragon", "side"]},
+                "ratings_by_media": {"two.png": 5},
+                "flags": {"two.png": "red"},
+            }
+        ),
+    )
+    write_text(
+        source_dir / "media_metadata.json",
+        json.dumps({"one.png": {"aspect": "1:1"}, "skip.jpg": {"aspect": "2.39"}}),
+    )
+    write_text(child_dir / "media_metadata.json", json.dumps({"two.png": {"aspect": "16:9"}}))
+
+    monkeypatch.setattr(smart_set_module.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    client = app_module.app.test_client()
+    response = client.post(
+        "/fs/superset_search",
+        json={
+            "criteria": {
+                "source_folder": "sets/a",
+                "filter_text": "dragon,-side",
+                "reviewed_only": True,
+                "star_filter": "4",
+                "flag_filter": "green",
+                "text_match_mode": "all",
+            }
+        },
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["match_count"] == 1
+    assert payload["results"][0]["source_media_rel"] == "sets/a/one.png"
+    assert payload["results"][0]["caption"] == "front dragon"
+    assert payload["results"][0]["tags"] == ["dragon", "front"]
+    assert payload["results"][0]["reviewed"] is True
+    assert payload["results"][0]["rating"] == 4
+    assert payload["results"][0]["flag"] == "green"
+
+    invalid_response = client.post(
+        "/fs/superset_search",
+        json={
+            "criteria": {
+                "source_folder": "sets/a",
+                "invalid_ar_only": True,
+            }
+        },
+    )
+    assert invalid_response.status_code == 200
+    invalid_payload = invalid_response.get_json()
+    assert [row["source_media_rel"] for row in invalid_payload["results"]] == ["sets/a/skip.jpg"]
 
 
 def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, monkeypatch):

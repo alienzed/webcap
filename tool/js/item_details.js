@@ -200,7 +200,16 @@ function setRatingForMediaKey(mediaKey, rating) {
   if (!state.ratings || typeof state.ratings !== 'object') {
     state.ratings = {};
   }
+  var previous = getRatingForMediaKey(mediaKey);
   var next = normalizeRatingValue(rating);
+  if (previous !== next && typeof recordUndoOperation === 'function') {
+    recordUndoOperation({
+      type: 'rating',
+      mediaKey: mediaKey,
+      previousRating: previous,
+      nextRating: next
+    });
+  }
   if (next <= 0) {
     delete state.ratings[mediaKey];
   } else {
@@ -343,6 +352,15 @@ function addTagToMediaKey(mediaKey, tagText) {
   var low = tag.toLowerCase();
   var exists = current.some(function (t) { return String(t).toLowerCase() === low; });
   if (exists) return false;
+  if (typeof recordUndoOperation === 'function') {
+    recordUndoOperation({
+      type: 'tag',
+      mediaKey: key,
+      tagText: tag,
+      previousValue: false,
+      nextValue: true
+    });
+  }
   current.push(tag);
   captionItemTagsByMedia[key] = current;
   ensureCaptionHelperPhraseInCatalog(tag, true);
@@ -384,6 +402,18 @@ function removeTagFromMediaKey(mediaKey, tagText) {
     return normalizeItemTag(tag).toLowerCase() !== target;
   });
   if (next.length === current.length) return false;
+  var removedTag = current.find(function (tag) {
+    return normalizeItemTag(tag).toLowerCase() === target;
+  }) || tagText;
+  if (typeof recordUndoOperation === 'function') {
+    recordUndoOperation({
+      type: 'tag',
+      mediaKey: key,
+      tagText: normalizeItemTag(removedTag),
+      previousValue: true,
+      nextValue: false
+    });
+  }
   if (next.length) captionItemTagsByMedia[key] = next;
   else delete captionItemTagsByMedia[key];
   saveItemTagsToFolderState();

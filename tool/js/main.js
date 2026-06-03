@@ -384,6 +384,16 @@ function wireAllUi() {
 
   ui.editorEl.addEventListener('input', handleEditorInputAutosave);
 
+  document.addEventListener('keydown', function (e) {
+    if (e.defaultPrevented || e.altKey || e.shiftKey) return;
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (String(e.key || '').toLowerCase() !== 'z') return;
+    if (isEditableElement(document.activeElement)) return;
+    if (typeof undoLastOperation !== 'function') return;
+    e.preventDefault();
+    undoLastOperation();
+  });
+
   document.addEventListener('keydown', function(e) {
     if (e.key === 'F2' && document.activeElement !== ui.editorEl && state.currentItem) {
       var inOriginals = state.folder && state.folder.split(/[\/]/).pop() === 'originals';

@@ -76,6 +76,179 @@ def _build_suggested_set_name(term: str) -> str:
     return f"smart-{_slugify_name(term)}-{stamp}"
 
 
+def _parse_filter_query(raw: str) -> dict:
+    text = str(raw or "").lower().strip()
+    out = {"positive": [], "negative": []}
+    if not text:
+        return out
+    parts = re.split(r"[,;\n]+", text) if re.search(r"[,;\n]", text) else [text]
+    seen = set()
+    for part in parts:
+        term = str(part or "").strip()
+        if not term:
+            continue
+        is_negative = term[0] in ("-", "!")
+        if is_negative:
+            term = term[1:].strip()
+        if not term:
+            continue
+        key = ("!" if is_negative else "+") + term
+        if key in seen:
+            continue
+        seen.add(key)
+        out["negative" if is_negative else "positive"].append(term)
+    return out
+
+
+def _matches_filter_query(match: dict, query: dict, mode: str = "all") -> bool:
+    tags = match.get("tags") if isinstance(match.get("tags"), list) else []
+    haystack = "\n".join(
+        [
+            str(match.get("media_name") or ""),
+            str(match.get("caption") or ""),
+            " ".join([str(tag or "") for tag in tags]),
+        ]
+    ).lower()
+
+    def term_matches(term: str) -> bool:
+        return str(term or "").lower() in haystack
+
+    for term in query.get("negative") or []:
+        if term_matches(term):
+            return False
+    positives = query.get("positive") or []
+    if not positives:
+        return True
+    if mode == "any":
+        return any(term_matches(term) for term in positives)
+    return all(term_matches(term) for term in positives)
+
+
+def _normalize_rating(value) -> int:
+    try:
+        rating = round(float(value))
+    except Exception:
+        return 0
+    return max(0, min(5, rating))
+
+
+def _parse_csv_values(value: str) -> list[str]:
+    out = []
+    seen = set()
+    for part in str(value or "").split(","):
+        text = str(part or "").strip().lower()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def _parse_star_filter(value: str) -> dict:
+    raw = _parse_csv_values(value)
+    include_no_star = "no_star" in raw
+    values = []
+    seen = set()
+    for entry in raw:
+        try:
+            n = round(float(entry))
+        except Exception:
+            continue
+        if n < 1 or n > 5 or n in seen:
+            continue
+        seen.add(n)
+        values.append(n)
+    return {"include_no_star": include_no_star, "values": values}
+
+
+def _parse_requirement_terms(raw: str) -> list[str]:
+    out = []
+    seen = set()
+    for part in str(raw or "").split(","):
+        term = re.sub(r"\s+", " ", str(part or "").strip())
+        key = term.lower()
+        if not term or key in seen:
+            continue
+        seen.add(key)
+        out.append(term)
+    return out
+
+
+def _requirement_key(label: str) -> str:
+    return str(label or "").strip().lower()
+
+
+def _match_has_incomplete_requirements(match: dict, folder_state: dict) -> bool:
+    requirements = folder_state.get("caption_requirements")
+    if not isinstance(requirements, list) or not requirements:
+        return False
+    keywords_by_item = folder_state.get("caption_requirement_keywords")
+    if not isinstance(keywords_by_item, dict):
+        keywords_by_item = {}
+    na_by_media = folder_state.get("caption_requirements_na_by_media")
+    if not isinstance(na_by_media, dict):
+        na_by_media = {}
+    media_name = str(match.get("media_name") or "")
+    media_na = na_by_media.get(media_name)
+    if not isinstance(media_na, dict):
+        media_na = {}
+    tags = [str(tag or "") for tag in (match.get("tags") if isinstance(match.get("tags"), list) else [])]
+    total = 0
+    completed = 0
+    for raw_label in requirements:
+        label = str(raw_label or "").strip()
+        if not label:
+            continue
+        terms = _parse_requirement_terms(str(keywords_by_item.get(label) or ""))
+        if not terms:
+            continue
+        total += 1
+        if bool(media_na.get(_requirement_key(label))):
+            completed += 1
+            continue
+        found = False
+        for term in terms:
+            if any(str(tag or "").strip().lower() == term.strip().lower() for tag in tags):
+                found = True
+                break
+        if found:
+            completed += 1
+    return total > 0 and completed < total
+
+
+def _map_aspect_ratio_to_bucket(aspect: str) -> str:
+    norm = str(aspect or "").strip().lower()
+    if not norm:
+        return "Unknown"
+    val = None
+    try:
+        val = float(norm)
+    except Exception:
+        match = re.match(r"^([0-9]*\.?[0-9]+):([0-9]*\.?[0-9]+)$", norm)
+        if match:
+            left = float(match.group(1))
+            right = float(match.group(2))
+            if right > 0:
+                val = left / right
+    if val is None or val <= 0:
+        return "Unknown"
+    if abs(val - 1.0) < 0.05:
+        return "square"
+    if abs(val - (4 / 3)) < 0.05:
+        return "4:3"
+    if abs(val - (3 / 4)) < 0.05:
+        return "3:4"
+    if abs(val - (16 / 9)) < 0.05:
+        return "16:9"
+    if abs(val - (9 / 16)) < 0.05:
+        return "9:16"
+    return "Unknown"
+
+
+def _has_supported_aspect_bucket(aspect: str) -> bool:
+    return _map_aspect_ratio_to_bucket(aspect) != "Unknown"
+
+
 def _unique_dest_dir(root: Path, preferred_name: str) -> tuple[Path, str]:
     base_name = _validate_set_name(preferred_name) or _build_suggested_set_name(preferred_name)
     candidate = root / base_name
@@ -138,6 +311,125 @@ def _collect_matches(root: Path, term: str) -> list[dict]:
                     "has_original": bool(has_original),
                 }
             )
+
+    return matches
+
+
+def _iter_search_dirs(root: Path, source_folder: str):
+    source_rel = str(source_folder or "").strip().replace("\\", "/").strip("/")
+    source_dir = app_config.safe_join_fs_root(source_rel)
+    if not source_dir.exists() or not source_dir.is_dir():
+        raise ValueError("Source folder does not exist.")
+    dirs = [source_dir]
+    dirs.extend([p for p in sorted(source_dir.rglob("*")) if p.is_dir()])
+    for dir_path in dirs:
+        try:
+            rel_dir = dir_path.relative_to(root)
+        except Exception:
+            continue
+        if _is_blacklisted_rel_path(rel_dir):
+            continue
+        yield dir_path, rel_dir
+
+
+def _collect_superset_matches(root: Path, criteria: dict) -> list[dict]:
+    query = _parse_filter_query(criteria.get("filter_text") or "")
+    text_match_mode = str(criteria.get("text_match_mode") or "all").strip().lower()
+    if text_match_mode not in ("all", "any"):
+        text_match_mode = "all"
+    missing_captions_only = bool(criteria.get("missing_captions_only"))
+    reviewed_only = bool(criteria.get("reviewed_only"))
+    unreviewed_only = bool(criteria.get("unreviewed_only"))
+    incomplete_only = bool(criteria.get("incomplete_only"))
+    untagged_only = bool(criteria.get("untagged_only"))
+    invalid_ar_only = bool(criteria.get("invalid_ar_only"))
+    star_filter = _parse_star_filter(criteria.get("star_filter") or "")
+    flag_filter = _parse_csv_values(criteria.get("flag_filter") or "")
+
+    matches = []
+    for dir_path, rel_dir in _iter_search_dirs(root, criteria.get("source_folder") or ""):
+        media_files = sorted(
+            [p for p in dir_path.iterdir() if p.is_file() and p.suffix.lower() in MEDIA_ALL_EXTS],
+            key=lambda p: p.name.lower(),
+        )
+        if not media_files:
+            continue
+
+        rel_key = rel_dir.as_posix() if str(rel_dir) != "." else ""
+        folder_state = _load_folder_state(dir_path)
+        folder_metadata = _load_folder_media_metadata(dir_path)
+        reviewed_keys = folder_state.get("reviewedKeys")
+        if not isinstance(reviewed_keys, list):
+            reviewed_keys = []
+        reviewed_set = set(str(key or "") for key in reviewed_keys)
+        tags_map = folder_state.get("caption_tags_by_media")
+        if not isinstance(tags_map, dict):
+            tags_map = {}
+        ratings_map = folder_state.get("ratings_by_media")
+        if not isinstance(ratings_map, dict):
+            ratings_map = {}
+        flags_map = folder_state.get("flags")
+        if not isinstance(flags_map, dict):
+            flags_map = {}
+
+        for media_path in media_files:
+            media_name = media_path.name
+            caption_text = _read_caption_text(dir_path, media_name)
+            tags = tags_map.get(media_name)
+            if not isinstance(tags, list):
+                tags = []
+            metadata = folder_metadata.get(media_name)
+            if not isinstance(metadata, dict):
+                metadata = {}
+            reviewed = media_name in reviewed_set
+            rating = _normalize_rating(ratings_map.get(media_name))
+            flag = str(flags_map.get(media_name) or "").strip().lower()
+            has_caption = bool(caption_text.strip())
+            match = {
+                "source_folder": rel_key,
+                "media_name": media_name,
+                "source_media_rel": f"{rel_key}/{media_name}" if rel_key else media_name,
+                "caption": caption_text,
+                "tags": [str(tag).strip() for tag in tags if str(tag).strip()],
+                "reviewed": reviewed,
+                "rating": rating,
+                "flag": flag,
+                "metadata": metadata,
+                "has_caption": has_caption,
+                "has_original": (dir_path / "originals" / media_name).exists(),
+            }
+
+            if not _matches_filter_query(match, query, text_match_mode):
+                continue
+            if missing_captions_only and has_caption:
+                continue
+            if reviewed_only and not reviewed:
+                continue
+            if unreviewed_only and reviewed:
+                continue
+            if incomplete_only and not _match_has_incomplete_requirements(match, folder_state):
+                continue
+            if untagged_only and match["tags"]:
+                continue
+            if star_filter["values"] or star_filter["include_no_star"]:
+                if rating <= 0:
+                    if not star_filter["include_no_star"]:
+                        continue
+                elif rating not in star_filter["values"]:
+                    continue
+            if flag_filter:
+                wants_no_flag = "no_flag" in flag_filter
+                if not flag:
+                    if not wants_no_flag:
+                        continue
+                elif flag not in flag_filter:
+                    continue
+            if invalid_ar_only:
+                aspect = str(metadata.get("aspect") or "").strip()
+                if not aspect or _has_supported_aspect_bucket(aspect):
+                    continue
+
+            matches.append(match)
 
     return matches
 
@@ -314,6 +606,30 @@ def smart_set_materialize_response(data: dict):
                 "copied_count": materialized["copied_count"],
                 "originals_copied_count": materialized["originals_copied_count"],
                 "created_items": materialized["created_items"],
+            }
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        if app_config.FS_DEBUG:
+            import traceback
+
+            traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+def superset_search_response(data: dict):
+    payload = data or {}
+    try:
+        root = Path(app_config.FS_ROOT).resolve()
+        criteria = payload.get("criteria") if isinstance(payload.get("criteria"), dict) else payload
+        matches = _collect_superset_matches(root, criteria)
+        return jsonify(
+            {
+                "ok": True,
+                "source_folder": str(criteria.get("source_folder") or ""),
+                "match_count": len(matches),
+                "results": matches,
             }
         )
     except ValueError as e:

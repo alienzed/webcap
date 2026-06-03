@@ -81,14 +81,6 @@
                             title="Toggle theme"
                             aria-pressed="false"
                         >Dark</button>
-                        <button
-                            id="utility-smart-set-btn"
-                            type="button"
-                            class="utility-btn utility-icon-btn"
-                            title="Materialize Smart Set"
-                        >
-                            Smart
-                        </button>
                     </div>
                     <div id="caption-filter-row" class="filter-row">
                         <input id="media-filter" type="search" placeholder="filter (comma terms, -exclude)">
@@ -205,6 +197,18 @@
                                 </label>
                             </div>
                         </label>
+                        <div class="advanced-filter-superset-row">
+                            <label class="advanced-filter-check-row">
+                                <input id="advanced-filter-superset" type="checkbox">
+                                <span>SuperSet Search</span>
+                            </label>
+                            <button
+                                id="superset-search-btn"
+                                type="button"
+                                class="superset-search-btn hidden"
+                                title="Search current folder and subfolders"
+                            >Search</button>
+                        </div>
                     </div>
                     <div id="caption-filter-count">
                         <span id="caption-filter-count-text"></span>
@@ -235,6 +239,12 @@
                             </div>
                         </div>
                         <div id="media-list" class="media-list with-stats-pane"></div>
+                        <div id="superset-results" class="media-list superset-results hidden"></div>
+                        <button
+                            id="superset-exit-btn"
+                            type="button"
+                            class="review-captions-btn superset-exit-btn hidden"
+                        >Exit SuperSet Search</button>
                     </div>
                     <div class="stats-panel">
                         <button
@@ -673,6 +683,7 @@
                 <div class="app-settings-actions">
                     <button id="app-settings-save-btn" type="button">Save</button>
                     <button id="app-settings-save-reload-btn" type="button">Save + Reboot</button>
+                    <button id="app-settings-reset-btn" type="button" class="app-settings-reset-btn">Reset App</button>
                     <button id="app-settings-cancel-btn" type="button">Cancel</button>
                 </div>
             </div>
@@ -791,6 +802,10 @@
         <script src="/static/js/editor.js"></script>
         <script src="/static/js/checklist.js"></script>
         <script src="/static/js/caption_helpers.js"></script>
+        <script src="/static/js/caption_helpers_annotate.js"></script>
+        <script src="/static/js/caption_helpers_catalog.js"></script>
+        <script src="/static/js/caption_helpers_panel.js"></script>
+        <script src="/static/js/caption_helpers_ui.js"></script>
         <script src="/static/js/item_details.js"></script>
         <script src="/static/js/app_settings.js"></script>
         <script src="/static/js/smart_set.js"></script>

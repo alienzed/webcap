@@ -1,6 +1,6 @@
 # Requirements Baseline From Config (With Global Pin)
 
-Last updated: 2026-06-01
+Last updated: 2026-06-02
 
 ## Goal
 
@@ -12,6 +12,7 @@ This keeps onboarding fast without forcing global auto-expansion.
 
 1. Config-backed requirement defaults:
 - Runtime defaults for requirement groups and requirement keyword terms now read from `APP_CONFIG.requirements`.
+- If `requirements` is missing or empty, the app should re-prime the built-in defaults.
 - Fallback to code constants remains in place when config keys are missing.
 
 2. Copy-on-write set behavior:
@@ -28,6 +29,10 @@ This keeps onboarding fast without forcing global auto-expansion.
 - Unpin removes term from that config group.
 - Changes are deduped and alphabetically normalized for term lists.
 - Config writes are lazy (only when actual config content changes).
+
+5. Reset surface:
+- A Settings-level `Reset App` action should restore stock requirement defaults and clear custom global requirement terms.
+- The reset is explicit and destructive; it is the escape hatch for “I want the shipped defaults back.”
 
 ## Data Shape
 
@@ -47,8 +52,10 @@ This keeps onboarding fast without forcing global auto-expansion.
 
 Notes:
 - `items` drives baseline requirement group labels for new/missing set state.
-- `keywordsByItem` drives baseline terms per requirement group.
+- `keywordsByItem` stores the editable global baseline for requirement-group terms.
 - Missing keys fall back to constants.
+- If `requirements` is empty or absent, the app re-primes the built-in defaults.
+- `Reset App` restores the stock requirements block, including the built-in terms.
 
 ## UX Notes
 
@@ -123,3 +130,7 @@ Notes:
 
 5. Search:
 - Group-term search should include config requirement terms and show `G` badge for global terms.
+
+6. Reset:
+- Reset App should restore the default requirements block and remove custom global term additions.
+- After reset, a fresh set should see the stock baseline again without carrying over prior custom terms.

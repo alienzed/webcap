@@ -10,6 +10,7 @@ import copy
 import re
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
+CONFIG_EXAMPLE_PATH = Path(__file__).resolve().parents[1] / 'config.example.json'
 
 config = {}
 FS_ROOT = Path(".")
@@ -21,6 +22,38 @@ def _as_clean_str(value, field_name):
     if not text:
         raise ValueError(f"Missing or empty {field_name}")
     return text
+
+
+def load_default_requirements_block():
+    try:
+        with open(CONFIG_EXAMPLE_PATH, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+        requirements = raw.get('requirements')
+        if isinstance(requirements, dict):
+            return copy.deepcopy(requirements)
+    except Exception:
+        pass
+    return {}
+
+
+def requirement_defaults_are_empty(payload):
+    requirements = payload.get('requirements') if isinstance(payload, dict) else None
+    if not isinstance(requirements, dict):
+        return True
+    items = requirements.get('items')
+    keywords = requirements.get('keywordsByItem')
+    has_items = isinstance(items, list) and len(items) > 0
+    has_keywords = isinstance(keywords, dict) and len(keywords) > 0
+    return not (has_items or has_keywords)
+
+
+def apply_requirement_defaults(payload):
+    normalized = copy.deepcopy(payload) if isinstance(payload, dict) else {}
+    if requirement_defaults_are_empty(normalized):
+        defaults = load_default_requirements_block()
+        if defaults:
+            normalized['requirements'] = defaults
+    return normalized
 
 
 def validate_config_payload(payload):
@@ -68,11 +101,11 @@ def validate_config_payload(payload):
 def load_config_from_disk():
     with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
         raw = json.load(f)
-    return validate_config_payload(raw)
+    return apply_requirement_defaults(validate_config_payload(raw))
 
 
 def save_config_to_disk(payload):
-    normalized = validate_config_payload(payload)
+    normalized = apply_requirement_defaults(validate_config_payload(payload))
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         json.dump(normalized, f, indent=2)
         f.write("\n")

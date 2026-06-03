@@ -74,6 +74,17 @@ function setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, isNa) 
   var key = String(mediaKey || '').trim();
   var req = normalizeChecklistRequirementKey(requirementLabel);
   if (!key || !req) return false;
+  var previous = isChecklistRequirementNaForMediaKey(key, requirementLabel);
+  var next = !!isNa;
+  if (previous !== next && typeof recordUndoOperation === 'function') {
+    recordUndoOperation({
+      type: 'checklist-na',
+      mediaKey: key,
+      requirementLabel: requirementLabel,
+      previousValue: previous,
+      nextValue: next
+    });
+  }
   var map = JSON.parse(JSON.stringify(getChecklistNaMapForMediaKey(key)));
   if (isNa) {
     map[req] = true;
@@ -105,6 +116,17 @@ function setChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel, i
   var key = String(mediaKey || '').trim();
   var req = normalizeChecklistRequirementKey(requirementLabel);
   if (!key || !req) return false;
+  var previous = isChecklistRequirementCheckedForMediaKey(key, requirementLabel);
+  var next = !!isChecked;
+  if (previous !== next && typeof recordUndoOperation === 'function') {
+    recordUndoOperation({
+      type: 'checklist-checked',
+      mediaKey: key,
+      requirementLabel: requirementLabel,
+      previousValue: previous,
+      nextValue: next
+    });
+  }
   var map = JSON.parse(JSON.stringify(getChecklistCheckedMapForMediaKey(key)));
   if (isChecked) {
     map[req] = true;

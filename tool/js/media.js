@@ -781,12 +781,32 @@ async function renderFileList() {
   }
 }
 
-// File/Folder Flags
-function markFlag(itemKey, color) {
-  debugLog('[markFlag] itemKey:', itemKey, 'color:', color, 'state.folder:', state.folder);
+function updateFlagDotForItem(itemKey, color) {
+  var sel = '[data-key="' + itemKey.replace(/"/g, '\"') + '"]';
+  var itemEls = Array.prototype.slice.call(document.querySelectorAll('.media-item' + sel));
+  if (!itemEls.length) {
+    itemEls = Array.prototype.slice.call(document.querySelectorAll('.folder-item' + sel));
+  }
+  itemEls.forEach(function(row) {
+    var dots = row.querySelectorAll('.flag-dot');
+    dots.forEach(function(dot) { dot.parentNode.removeChild(dot); });
+    if (color) {
+      var dot = document.createElement('span');
+      dot.className = 'flag-dot flag-dot--' + color;
+      row.querySelector('div').appendChild(dot);
+    }
+  });
+}
+
+function setFlagValueForItem(itemKey, color, options) {
+  var opts = options || {};
+  debugLog('[setFlagValueForItem] itemKey:', itemKey, 'color:', color, 'options:', opts, 'state.folder:', state.folder);
+  if (!state.flags || typeof state.flags !== 'object') {
+    state.flags = {};
+  }
   var previous = String((state.flags && state.flags[itemKey]) || '').trim();
   var next = String(color || '').trim();
-  if (previous !== next && typeof recordUndoOperation === 'function') {
+  if (!opts.skipUndo && previous !== next && typeof recordUndoOperation === 'function') {
     recordUndoOperation({
       type: 'flag',
       itemKey: itemKey,
@@ -799,28 +819,16 @@ function markFlag(itemKey, color) {
   } else {
     delete state.flags[itemKey];
   }
-  saveFlags();
-  // Update only the flag dot in the DOM for the affected item
-  // Use centralized FLAG_COLOR_MAP from constants.js
-  // Try both media and folder
-  var sel = '[data-key="' + itemKey.replace(/"/g, '\"') + '"]';
-  var itemEls = Array.prototype.slice.call(document.querySelectorAll('.media-item' + sel));
-  if (!itemEls.length) {
-    // Try folder only
-    itemEls = Array.prototype.slice.call(document.querySelectorAll('.folder-item' + sel));
+  if (!opts.skipSave) {
+    saveFlags();
   }
-  itemEls.forEach(function(row) {
-    // Remove any existing flag dot
-    var dots = row.querySelectorAll('.flag-dot');
-    dots.forEach(function(dot) { dot.parentNode.removeChild(dot); });
-    // Add new dot if color is set
-    if (color) {
-      var dot = document.createElement('span');
-      dot.className = 'flag-dot flag-dot--' + color;
-      row.querySelector('div').appendChild(dot);
-    }
-  });
+  updateFlagDotForItem(itemKey, color);
   // Do NOT refresh the directory or clear selection
+}
+
+// File/Folder Flags
+function markFlag(itemKey, color) {
+  setFlagValueForItem(itemKey, color, { skipUndo: false, skipSave: false });
 }
 
 function saveFlags() {

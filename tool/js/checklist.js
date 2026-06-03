@@ -234,15 +234,25 @@ function syncReviewedFromChecklist(mediaKey) {
   if (reviewed) state.reviewedSet.add(mediaKey);
   else state.reviewedSet.delete(mediaKey);
   setReviewedRowClass(mediaKey, reviewed);
+  if (reviewed) {
+    var currentFlag = String((state.flags && state.flags[mediaKey]) || '').trim().toLowerCase();
+    if (!currentFlag && typeof setFlagValueForItem === 'function') {
+      setFlagValueForItem(mediaKey, 'green', { skipUndo: true, skipSave: true });
+      return true;
+    }
+  }
+  return false;
 }
 
 function syncReviewedFromChecklistAll() {
-  if (!state || !Array.isArray(state.items)) return;
+  var changed = false;
+  if (!state || !Array.isArray(state.items)) return changed;
   for (var i = 0; i < state.items.length; i++) {
     var item = state.items[i];
     if (!item || !item.key) continue;
-    syncReviewedFromChecklist(item.key);
+    changed = syncReviewedFromChecklist(item.key) || changed;
   }
+  return changed;
 }
 
 function renderChecklistPanel() {
@@ -424,9 +434,12 @@ function loadChecklistFromFolderState(folderState) {
     }
   });
 
-  syncReviewedFromChecklistAll();
+  var autoFlaggedCompleteItems = syncReviewedFromChecklistAll();
   if (typeof updatePrimerMappingsSummary === 'function') {
     updatePrimerMappingsSummary();
+  }
+  if (autoFlaggedCompleteItems) {
+    saveChecklistToFolderState();
   }
   renderChecklistPanel();
 }

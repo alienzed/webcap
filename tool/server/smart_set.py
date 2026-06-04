@@ -612,9 +612,7 @@ def smart_set_materialize_response(data: dict):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         if app_config.FS_DEBUG:
-            import traceback
-
-            traceback.print_exc()
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 500
 
 
@@ -636,9 +634,7 @@ def superset_search_response(data: dict):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         if app_config.FS_DEBUG:
-            import traceback
-
-            traceback.print_exc()
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 500
 
 
@@ -840,7 +836,5 @@ def create_set_from_results_response(data: dict):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         if app_config.FS_DEBUG:
-            import traceback
-
-            traceback.print_exc()
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 500

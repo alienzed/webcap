@@ -62,7 +62,8 @@ Notes:
 - Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
 - You can edit config in-app via Settings.
 - `vocabulary` is optional. Empty arrays are valid and result in no starter terms.
-- `requirements` is optional. When provided, new/missing set requirement groups and terms use this baseline.
+- `requirements` is the editable global requirement baseline. If it is missing or empty, WebCap re-primes the shipped defaults.
+- `Reset App` in Settings restores the stock requirements baseline.
 
 ## Run
 
@@ -159,6 +160,7 @@ The filter summary row also shows folder-level rating progress as `Rated A/B` (`
 - Double-click media row toggles reviewed on/off.
 - Reviewed state persists in folder state.
 - `Reset Reviewed` clears all reviewed marks in the current folder.
+- When a media item becomes fully complete, WebCap adds a green flag once as a visual cue; it does not keep recomputing or enforcing that flag.
 
 ### 6. Context-menu media operations
 
@@ -220,9 +222,10 @@ Requirements tab:
 - Settings modal lets you assign comma-separated keywords per requirement.
 - Keyword matches highlight requirement rows while editing.
 - Press `Enter` in keyword value fields to save and close modal.
-- Group terms editor supports pinning terms to global config baseline:
-  - In `Edit requirement terms`, click `📌` to pin/unpin term for that requirement group in `config.json`.
-  - Global pinned requirement terms are searchable in term add/search flows.
+- Group terms editor supports pinning terms to the global requirement baseline:
+  - In `Edit requirement terms`, click the pin button to pin/unpin a term.
+  - Pinned requirement terms are searchable in term add/search flows.
+  - `Reset App` restores the shipped requirement baseline if the global list gets trimmed too far.
 
 Phrases tab:
 - Search/add quick phrases via `Add/search quick phrase...`.
@@ -355,6 +358,7 @@ Settings modal supports:
 - Training mode (`poc` / `normal` / `quality`)
 - Debug mode
 - Advanced JSON editing
+- Reset App for restoring the stock requirements baseline
 - Save or Save + Reboot
 
 ## Data and Artifacts

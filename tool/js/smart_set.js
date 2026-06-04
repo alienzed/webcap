@@ -35,6 +35,10 @@ function buildSuperSetCriteriaFromDom() {
 function updateSuperSetControls() {
   var armed = !!(ui.advancedFilterSupersetEl && ui.advancedFilterSupersetEl.checked);
   state.supersetArmed = armed;
+  var row = ui.advancedFilterSupersetEl ? ui.advancedFilterSupersetEl.closest('.advanced-filter-superset-row') : null;
+  if (row) {
+    row.classList.toggle('is-armed', armed);
+  }
   if (ui.supersetSearchBtn) {
     ui.supersetSearchBtn.classList.toggle('hidden', !armed);
     ui.supersetSearchBtn.disabled = !armed || (state.supersetActive && !state.supersetSearchDirty);

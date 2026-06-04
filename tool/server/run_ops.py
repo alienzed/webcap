@@ -158,8 +158,8 @@ def prepare_dataset_response(folder: str, selected_media=None, selection_criteri
         return Response(stream_with_context(generate()), mimetype="text/plain")
     except Exception as e:
         if app_config.FS_DEBUG:
-            print("[prepare_dataset] ERROR:", e)
-            traceback.print_exc()
+            app_config.debug_print("[prepare_dataset] ERROR:", e)
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 
@@ -190,8 +190,8 @@ def autoset_run_response(folder: str):
         return Response(stream_with_context(generate()), mimetype="text/plain")
     except Exception as e:
         if app_config.FS_DEBUG:
-            print("[autoset_run] ERROR:", e)
-            traceback.print_exc()
+            app_config.debug_print("[autoset_run] ERROR:", e)
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 
@@ -242,7 +242,7 @@ def generate_dataset_config_response(folder: str):
                 )
             raise
     except Exception as e:
-        traceback.print_exc()
+        app_config.debug_traceback()
         return Response(f"[ERROR] {e}\n", status=500, mimetype="text/plain")
 
 
@@ -393,6 +393,5 @@ def train_run_response(folder: str):
 
         return Response(stream_with_context(generate()), mimetype="text/plain")
     except Exception as e:
-        if app_config.FS_DEBUG:
-            traceback.print_exc()
+        app_config.debug_traceback()
         return Response(f"[ERROR] {e}\n", status=500, mimetype="text/plain")

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from flask import jsonify
 
-from .config import FS_DEBUG, safe_join_fs_root
+from . import config as app_config
 
 
 def duplicate_folder_response(src_rel):
@@ -86,24 +86,24 @@ def duplicate_image_response(src_rel):
 
 def rename_response(data):
     data = data or {}
-    print("[fs_rename] Incoming data:", data)
+    app_config.debug_print("[fs_rename] Incoming data:", data)
     folder = data.get("folder", "").strip()
     old_name = data.get("oldFile") or data.get("old_name") or ""
     new_name = data.get("newFile") or data.get("new_name") or ""
     old_name = old_name.strip()
     new_name = new_name.strip()
     if not old_name or not new_name:
-        print("[fs_rename] Missing required parameters:", folder, old_name, new_name)
+        app_config.debug_print("[fs_rename] Missing required parameters:", folder, old_name, new_name)
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = safe_join_fs_root(folder)
+        folder_path = app_config.safe_join_fs_root(folder)
         old_path = folder_path / old_name
         new_path = folder_path / new_name
         if not old_path.exists():
-            print("[fs_rename] Source does not exist:", old_path)
+            app_config.debug_print("[fs_rename] Source does not exist:", old_path)
             return jsonify({"error": "Source does not exist"}), 404
         if new_path.exists():
-            print("[fs_rename] Target already exists:", new_path)
+            app_config.debug_print("[fs_rename] Target already exists:", new_path)
             return jsonify({"error": "Target already exists"}), 409
         if old_path.is_dir():
             if old_name in ("originals", ".", "..") or new_name in ("originals", ".", ".."):
@@ -157,7 +157,7 @@ def rename_response(data):
                                 new_keys.append(k)
                         if changed:
                             folder_state["reviewedKeys"] = new_keys
-                            print(f"[fs_rename] Updated reviewedKeys in {state_path}")
+                            app_config.debug_print(f"[fs_rename] Updated reviewedKeys in {state_path}")
                     if (
                         isinstance(folder_state, dict)
                         and "mutated_media_keys" in folder_state
@@ -173,17 +173,17 @@ def rename_response(data):
                                 next_mutation_keys.append(key)
                         if changed_mutation:
                             folder_state["mutated_media_keys"] = next_mutation_keys
-                            print(f"[fs_rename] Updated mutated_media_keys in {state_path}")
+                            app_config.debug_print(f"[fs_rename] Updated mutated_media_keys in {state_path}")
                     with open(state_path, "w", encoding="utf-8") as f:
                         json.dump(folder_state, f, indent=2)
                 except Exception as e:
-                    print(f"[fs_rename] Could not update folder state keys: {e}")
+                    app_config.debug_print(f"[fs_rename] Could not update folder state keys: {e}")
             return jsonify({"ok": True})
-        print("[fs_rename] Source is neither file nor folder:", old_path)
+        app_config.debug_print("[fs_rename] Source is neither file nor folder:", old_path)
         return jsonify({"error": "Source is neither file nor folder"}), 400
     except Exception as e:
-        print("[fs_rename] ERROR:", e)
-        traceback.print_exc()
+        app_config.debug_print("[fs_rename] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 
@@ -243,7 +243,7 @@ def _launch_windows_explorer(abs_path: Path):
         raise ValueError("Empty Windows path")
 
     explorer = _windows_explorer_exe()
-    print(
+    app_config.debug_print(
         "[open_in_explorer] Windows reveal:",
         win_path,
         "file=" + str(abs_path.is_file()),
@@ -267,15 +267,15 @@ def _launch_windows_explorer(abs_path: Path):
 
 def open_in_explorer_response(rel_path):
     rel_path = (rel_path or "").strip()
-    print("[open_in_explorer] Received rel_path:", rel_path)
+    app_config.debug_print("[open_in_explorer] Received rel_path:", rel_path)
     if not rel_path:
-        print("[open_in_explorer] ERROR: Missing path")
+        app_config.debug_print("[open_in_explorer] ERROR: Missing path")
         return jsonify({"error": "Missing path"}), 400
     try:
-        abs_path = safe_join_fs_root(rel_path)
-        print("[open_in_explorer] Resolved abs_path:", abs_path)
+        abs_path = app_config.safe_join_fs_root(rel_path)
+        app_config.debug_print("[open_in_explorer] Resolved abs_path:", abs_path)
         if not abs_path.exists():
-            print("[open_in_explorer] ERROR: Path does not exist:", abs_path)
+            app_config.debug_print("[open_in_explorer] ERROR: Path does not exist:", abs_path)
             return jsonify({"error": "Path does not exist"}), 404
 
         if sys.platform.startswith("win") or _is_wsl_runtime():
@@ -289,17 +289,17 @@ def open_in_explorer_response(rel_path):
             subprocess.Popen(["xdg-open", str(abs_path if abs_path.is_dir() else abs_path.parent)])
         return jsonify({"ok": True})
     except Exception as e:
-        print("[open_in_explorer] ERROR:", e)
-        traceback.print_exc()
+        app_config.debug_print("[open_in_explorer] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 500
 
 
 def open_in_vscode_response(rel_path):
     rel_path = (rel_path or "").strip()
-    print("[open_in_vscode] Received rel_path:", rel_path)
+    app_config.debug_print("[open_in_vscode] Received rel_path:", rel_path)
     try:
-        abs_path = safe_join_fs_root(rel_path)
-        print("[open_in_vscode] Resolved abs_path:", abs_path)
+        abs_path = app_config.safe_join_fs_root(rel_path)
+        app_config.debug_print("[open_in_vscode] Resolved abs_path:", abs_path)
         if not abs_path.exists() or not abs_path.is_dir():
             return jsonify({"error": "Folder does not exist"}), 404
 
@@ -310,7 +310,6 @@ def open_in_vscode_response(rel_path):
         subprocess.Popen([code_cmd, str(abs_path)])
         return jsonify({"ok": True})
     except Exception as e:
-        if FS_DEBUG:
-            print("[open_in_vscode] ERROR:", e)
-            traceback.print_exc()
+        app_config.debug_print("[open_in_vscode] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 500

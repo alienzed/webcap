@@ -8,6 +8,7 @@ from pathlib import Path
 import json
 import copy
 import re
+import traceback
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
 CONFIG_EXAMPLE_PATH = Path(__file__).resolve().parents[1] / 'config.example.json'
@@ -15,6 +16,16 @@ CONFIG_EXAMPLE_PATH = Path(__file__).resolve().parents[1] / 'config.example.json
 config = {}
 FS_ROOT = Path(".")
 FS_DEBUG = False
+
+
+def debug_print(*args, **kwargs):
+    if FS_DEBUG:
+        print(*args, **kwargs)
+
+
+def debug_traceback():
+    if FS_DEBUG:
+        traceback.print_exc()
 
 
 def _as_clean_str(value, field_name):

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import jsonify
 
-from .config import FS_DEBUG, safe_join_fs_root
+from . import config as app_config
 from .media import probe_media_metadata
 from .originals import ensure_original_by_hash, ensure_originals_folder
 
@@ -389,8 +389,6 @@ def clip_video_response(data):
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        if FS_DEBUG:
-            import traceback
-            print("[video_clip] ERROR:", e)
-            traceback.print_exc()
+        app_config.debug_print("[video_clip] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400

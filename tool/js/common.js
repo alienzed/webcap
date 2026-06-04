@@ -6,6 +6,7 @@ function setRuntimeAppConfig(cfg) {
   var next = (cfg && typeof cfg === 'object') ? JSON.parse(JSON.stringify(cfg)) : {};
   APP_CONFIG = next;
   window.APP_CONFIG = next;
+  DEBUG = !!(next && next.debug);
 }
 
 // Load config.json synchronously and set ROOT_FOLDER_LABEL
@@ -366,6 +367,9 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
         var row = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + (updatedKey || mediaKey) + '"]');
         if (row) row.classList.toggle('empty-caption', !hasCaption);
         updatePrimerCaptionResetUi();
+        if (typeof renderFileList === 'function') {
+          renderFileList();
+        }
         resolve();
         return;
       }

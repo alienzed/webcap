@@ -21,23 +21,9 @@ Last reviewed: 2026-05-31.
      - Value: Medium; helps reduce blank-page start cost during Caption step.
      - Complexity: Medium (template mapping + insertion rules).
      - Note: Useful, but less urgent than annotation velocity wins above.
-     - If I am understanding correctly, are we talking about a default caption template?
-  Completed:
-  - Auto order requirements values: requirement terms are normalized/sorted alphabetically.
-  - Filter preset expansion: advanced filters now include `Captionless`, `Reviewed`, `Unreviewed`, `Incomplete`, `Invalid AR`, `Untagged`, plus stars/flags with `No Star`/`No Flag`.
-  - Optional text before placeholders: supported via conditional wrappers in caption template syntax.
 - Dataset inferred sample/megaframe/VRAM/time estimation.
 
 ## 1.1 Ideas
-- We have caption requirements. We need a concept of Set Requirements, ideally self counting. For example, a good character LORA includes:
-    6 front face close-ups
-    6 three-quarter face close-ups
-    3 side/profile shots
-    6 head-and-shoulders
-    5 half-body
-    3 full-body
-    3 expressive/candid shots
-  It would be awesome to get a bird's eye view of where my set is relative this.
   Parked long-term (no immediate pain).
 
 ## Stabilization Mode

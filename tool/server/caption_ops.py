@@ -43,11 +43,11 @@ def load_caption_text(folder: str, media_name: str):
     media_name = _validate_media_name(media_name)
     caption_name = _caption_name_for_media(media_name)
     caption_path = folder_path / caption_name
-    print(f'[BACKEND][READ] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
+    app_config.debug_print(f'[BACKEND][READ] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
     if not caption_path.exists():
         return {'caption': '', 'exists': False, 'caption_file': caption_name}
     text = caption_path.read_text(encoding='utf-8')
-    print(f'[BACKEND][READ] FOUND caption: {text[:80]}...')
+    app_config.debug_print(f'[BACKEND][READ] FOUND caption: {text[:80]}...')
     return {
         'caption': text,
         'exists': True,
@@ -59,10 +59,10 @@ def save_caption_text(folder: str, media_name: str, text: str):
     media_name = _validate_media_name(media_name)
     caption_name = _caption_name_for_media(media_name)
     caption_path = folder_path / caption_name
-    print(f'[BACKEND][WRITE] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
+    app_config.debug_print(f'[BACKEND][WRITE] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
     caption_path.parent.mkdir(parents=True, exist_ok=True)
     caption_path.write_text(text or '', encoding='utf-8')
-    print(f'[BACKEND][WRITE] WROTE caption.')
+    app_config.debug_print('[BACKEND][WRITE] WROTE caption.')
     try:
         os.chmod(caption_path, 0o644)
     except Exception:

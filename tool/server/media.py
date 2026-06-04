@@ -5,7 +5,7 @@ def media_flip_horizontal_response(data):
     if not folder or not file_name:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = safe_join_fs_root(folder)
+        folder_path = app_config.safe_join_fs_root(folder)
         src_media = folder_path / file_name
         if not src_media.exists() or not src_media.is_file():
             return jsonify({"error": "Media file not found"}), 404
@@ -41,9 +41,8 @@ def media_flip_horizontal_response(data):
         update_media_metadata(folder_path)
         return jsonify({"ok": True})
     except Exception as e:
-        if FS_DEBUG:
-            print("[media_flip_horizontal] ERROR:", e)
-            traceback.print_exc()
+        app_config.debug_print("[media_flip_horizontal] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 import json
 import os
@@ -54,7 +53,7 @@ from pathlib import Path
 
 from flask import jsonify
 
-from .config import FS_DEBUG, safe_join_fs_root
+from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
 from .originals import MEDIA_ALL_EXTS, restore_original_media, restore_original_media_video_only
 
@@ -175,14 +174,14 @@ def update_media_metadata(folder_path):
 
 def media_restore_response(data):
     data = data or {}
-    print("[caption_restore] Incoming data:", data)
+    app_config.debug_print("[caption_restore] Incoming data:", data)
     folder = data.get("folder", "").strip()
     file_name = data.get("fileName", "").strip()
     if not folder or not file_name:
-        print("[caption_restore] Missing required parameters:", folder, file_name)
+        app_config.debug_print("[caption_restore] Missing required parameters:", folder, file_name)
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = safe_join_fs_root(folder)
+        folder_path = app_config.safe_join_fs_root(folder)
         result = restore_original_media(folder_path, file_name)
         if result == "not_found":
             return jsonify({"error": "Original media not found in originals"}), 404
@@ -190,9 +189,8 @@ def media_restore_response(data):
             return jsonify({"error": "Media file already exists in set; restore will not overwrite."}), 409
         return jsonify({"ok": True})
     except Exception as e:
-        if FS_DEBUG:
-            print("[caption_restore] ERROR:", e)
-            traceback.print_exc()
+        app_config.debug_print("[caption_restore] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 
@@ -203,15 +201,14 @@ def media_reset_response(data):
     if not folder or not file_name:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = safe_join_fs_root(folder)
+        folder_path = app_config.safe_join_fs_root(folder)
         ok = restore_original_media_video_only(folder_path, file_name)
         if not ok:
             return jsonify({"error": "Original media not found in originals"}), 404
         return jsonify({"ok": True})
     except Exception as e:
-        if FS_DEBUG:
-            print("[caption_reset] ERROR:", e)
-            traceback.print_exc()
+        app_config.debug_print("[caption_reset] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 
@@ -222,7 +219,7 @@ def media_crop_response(data):
     if not file_name:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = safe_join_fs_root(folder)
+        folder_path = app_config.safe_join_fs_root(folder)
         image_data_url = data.get("imageDataUrl")
         if image_data_url:
             result = crop_image_data_url_in_place(folder_path, file_name, image_data_url)
@@ -234,9 +231,8 @@ def media_crop_response(data):
     except FileNotFoundError as e:
         return jsonify({"error": str(e)}), 404
     except Exception as e:
-        if FS_DEBUG:
-            print("[media_crop] ERROR:", e)
-            traceback.print_exc()
+        app_config.debug_print("[media_crop] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 
@@ -248,16 +244,15 @@ def media_image_transform_response(data):
     if not file_name or not operation:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = safe_join_fs_root(folder)
+        folder_path = app_config.safe_join_fs_root(folder)
         result = transform_image_in_place(folder_path, file_name, operation)
         update_media_metadata(folder_path)
         return jsonify({"ok": True, **result})
     except FileNotFoundError as e:
         return jsonify({"error": str(e)}), 404
     except Exception as e:
-        if FS_DEBUG:
-            print("[media_image_transform] ERROR:", e)
-            traceback.print_exc()
+        app_config.debug_print("[media_image_transform] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 
@@ -268,7 +263,7 @@ def media_prune_response(data):
     if not folder or not file_name:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = safe_join_fs_root(folder)
+        folder_path = app_config.safe_join_fs_root(folder)
         originals_path = folder_path / "originals"
         originals_path.mkdir(exist_ok=True)
         src_media = folder_path / file_name
@@ -308,20 +303,19 @@ def media_prune_response(data):
 
         return jsonify({"ok": True})
     except Exception as e:
-        if FS_DEBUG:
-            print("[caption_prune] ERROR:", e)
-            traceback.print_exc()
+        app_config.debug_print("[caption_prune] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 
 def media_metadata_response(rel_path):
     rel_path = (rel_path or "").strip()
     try:
-        folder_path = safe_join_fs_root(rel_path)
+        folder_path = app_config.safe_join_fs_root(rel_path)
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
         metadata_dict = update_media_metadata(folder_path)
-        print(f"[metadata] generated for folder: {rel_path or '.'}")
+        app_config.debug_print(f"[metadata] generated for folder: {rel_path or '.'}")
         metadata_list = []
         for filename, info in metadata_dict.items():
             record = {
@@ -339,7 +333,6 @@ def media_metadata_response(rel_path):
             metadata_list.append(record)
         return jsonify(metadata_list)
     except Exception as e:
-        if FS_DEBUG:
-            print("[fs_media_metadata] ERROR:", e)
-            traceback.print_exc()
+        app_config.debug_print("[fs_media_metadata] ERROR:", e)
+        app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400

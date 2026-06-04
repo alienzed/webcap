@@ -58,12 +58,12 @@ def folder_state_save():
                 written = json.load(f)
             # print("[folder_state_save] State read back from file:", written)
         except Exception as e:
-            print("[folder_state_save] Could not read back file:", e)
+            app_config.debug_print("[folder_state_save] Could not read back file:", e)
         return jsonify({"ok": True})
     except Exception as e:
         if app_config.FS_DEBUG:
             # print("[folder_state_save] ERROR:", e)
-            traceback.print_exc()
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 # Read file contents (for captions, config, etc.)
@@ -79,7 +79,7 @@ def fs_read():
     except Exception as e:
         if app_config.FS_DEBUG:
             # print("[fs_read] ERROR:", e)
-            traceback.print_exc()
+            app_config.debug_traceback()
         return ("", 400)
 
 @app.route("/fs/root", methods=["GET"])
@@ -147,7 +147,7 @@ def app_config_save():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         if app_config.FS_DEBUG:
-            traceback.print_exc()
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 500
 
 
@@ -167,7 +167,7 @@ def app_reset_app():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         if app_config.FS_DEBUG:
-            traceback.print_exc()
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 500
 
 
@@ -182,7 +182,7 @@ def app_reboot():
         })
     except Exception as e:
         if app_config.FS_DEBUG:
-            traceback.print_exc()
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 500
 
 
@@ -471,8 +471,8 @@ def fs_describe():
         })
     except Exception as e:
         if app_config.FS_DEBUG:
-            print("[fs_describe] ERROR:", e)
-            traceback.print_exc()
+            app_config.debug_print("[fs_describe] ERROR:", e)
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
  # Media metadata endpoint
@@ -497,8 +497,8 @@ def fs_mutation_status():
         })
     except Exception as e:
         if app_config.FS_DEBUG:
-            print("[fs_mutation_status] ERROR:", e)
-            traceback.print_exc()
+            app_config.debug_print("[fs_mutation_status] ERROR:", e)
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
     
 from .config import list_toml_files, read_toml_file, save_toml_file
@@ -511,8 +511,8 @@ def list_config():
         return jsonify({"files": files})
     except Exception as e:
         if app_config.FS_DEBUG:
-            print("[list_config] ERROR:", e)
-            traceback.print_exc()
+            app_config.debug_print("[list_config] ERROR:", e)
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
 @app.route("/fs/read_config", methods=["GET"])
@@ -524,8 +524,8 @@ def read_config():
         return Response(text, mimetype="text/plain")
     except Exception as e:
         if app_config.FS_DEBUG:
-            print("[read_config] ERROR:", e)
-            traceback.print_exc()
+            app_config.debug_print("[read_config] ERROR:", e)
+            app_config.debug_traceback()
         return Response("", status=400)
 
 @app.route("/fs/save_config", methods=["POST"])
@@ -539,8 +539,8 @@ def save_config():
         return jsonify({"ok": True})
     except Exception as e:
         if app_config.FS_DEBUG:
-            print("[save_config] ERROR:", e)
-            traceback.print_exc()
+            app_config.debug_print("[save_config] ERROR:", e)
+            app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
     
 @app.route("/fs/open_in_explorer", methods=["POST"])

@@ -9,6 +9,9 @@ from flask import jsonify
 
 from . import config as app_config
 
+# Alias kept for compatibility with callers and tests that monkeypatch this name.
+safe_join_fs_root = app_config.safe_join_fs_root
+
 
 def duplicate_folder_response(src_rel):
     try:

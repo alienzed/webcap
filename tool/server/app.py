@@ -9,10 +9,10 @@ import shutil
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
-from .originals import MEDIA_ALL_EXTS, copy_media_to_originals, image_mutation_status_by_hash
+from .originals import MEDIA_ALL_EXTS, copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, open_in_vscode_response, rename_response
 from .media import media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
-from .video_clip_ops import clip_video_response
+from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import autoset_run_response, prepare_dataset_response, generate_dataset_config_response, train_run_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 
@@ -271,6 +271,21 @@ def media_video_clip():
     data = request.get_json(silent=True) or {}
     return clip_video_response(data)
 
+
+@app.route("/media/video_clip_status", methods=["GET"])
+def media_video_clip_status():
+    job_id = request.args.get("jobId", "").strip()
+    try:
+        job = get_clip_job_status(job_id)
+        if not job:
+            return jsonify({"error": "Clip job not found"}), 404
+        return jsonify({"ok": True, "job": job})
+    except Exception as e:
+        if app_config.FS_DEBUG:
+            app_config.debug_print("[media_video_clip_status] ERROR:", e)
+            app_config.debug_traceback()
+        return jsonify({"error": str(e)}), 400
+
 # Minimal streaming endpoint for autoset.py
 @app.route("/fs/autoset_run", methods=["POST"])
 def autoset_run():
@@ -421,6 +436,8 @@ def fs_describe():
         # List folders and files (with metadata)
         entries = []
         for entry in sorted(dir_path.iterdir(), key=lambda e: e.name.lower()):
+            if entry.is_file() and is_transient_media_name(entry.name):
+                continue
             meta = {
                 "name": entry.name,
                 "type": "dir" if entry.is_dir() else "file",
@@ -489,7 +506,7 @@ def fs_mutation_status():
         folder_path = safe_join_fs_root(rel_path)
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
-        status_by_media = image_mutation_status_by_hash(folder_path)
+        status_by_media = media_mutation_status_by_hash(folder_path)
         return jsonify({
             "ok": True,
             "folder": rel_path,

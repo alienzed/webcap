@@ -16,9 +16,22 @@ MEDIA_ALL_EXTS = {
     '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
     '.mpg', '.mpeg', '.wmv'
 }
-DETERMINISTIC_MUTATION_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
+DETERMINISTIC_MUTATION_EXTS = MEDIA_ALL_EXTS
 MEDIA_HASH_INDEX_FILE = 'media_hashes.json'
 MEDIA_HASH_INDEX_VERSION = 1
+
+
+def is_transient_media_name(file_name):
+    name = str(file_name or '').strip().lower()
+    if not name:
+        return False
+    return (
+        name.startswith('.') or
+        '_clip_tmp_' in name or
+        '.crop-' in name or
+        '.transform-' in name or
+        name.endswith('.tmp')
+    )
 
 
 def is_blacklisted_path(folder_path):
@@ -220,9 +233,9 @@ def ensure_canonical_exists(src_path, originals_dir):
     return canonical
 
 
-def image_mutation_status_by_hash(folder_path):
+def media_mutation_status_by_hash(folder_path):
     """
-    Deterministically report mutation status for still images in `folder_path` by
+    Deterministically report mutation status for supported media in `folder_path` by
     comparing current file hash against `originals/<name>` hash.
     Returns a dict keyed by media file name.
     """
@@ -239,7 +252,7 @@ def image_mutation_status_by_hash(folder_path):
     for entry in sorted(folder_path.iterdir(), key=lambda p: p.name.lower()):
         if not entry.is_file():
             continue
-        if entry.suffix.lower() not in DETERMINISTIC_MUTATION_IMAGE_EXTS:
+        if entry.suffix.lower() not in DETERMINISTIC_MUTATION_EXTS:
             continue
         original_entry = originals_dir / entry.name
         if not original_entry.exists() or not original_entry.is_file():
@@ -264,3 +277,7 @@ def image_mutation_status_by_hash(folder_path):
 
     _write_media_hash_index(folder_path, index_data)
     return status
+
+
+def image_mutation_status_by_hash(folder_path):
+    return media_mutation_status_by_hash(folder_path)

@@ -14,6 +14,9 @@ from . import config as app_config
 from .media import probe_media_metadata
 from .originals import ensure_original_by_hash, ensure_originals_folder
 
+# Alias kept for compatibility with callers and tests that monkeypatch this name.
+safe_join_fs_root = app_config.safe_join_fs_root
+
 VIDEO_EXTS = {".mp4", ".webm", ".ogg", ".mov", ".mkv", ".avi", ".m4v", ".wmv", ".mpg", ".mpeg"}
 VIDEO_CLIP_RECENT_DUPLICATE_WINDOW_SEC = 2.0
 VIDEO_CLIP_JOB_RETENTION_SEC = 600.0
@@ -196,6 +199,24 @@ def _set_signature_state(signature, status):
         "status": status,
         "updatedAt": time.time(),
     }
+
+
+def get_clip_job_status(job_id):
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        return None
+    with _video_clip_lock:
+        job = _video_clip_jobs.get(job_id)
+        if not job:
+            return None
+        return {
+            "id": job.get("id"),
+            "status": job.get("status"),
+            "error": job.get("error"),
+            "outputName": job.get("outputName"),
+            "overwriteSource": bool(job.get("overwriteSource")),
+            "updatedAt": job.get("updatedAt"),
+        }
 
 
 def _prune_tracking(now_ts):

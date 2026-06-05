@@ -113,3 +113,39 @@
 .report-preview .balance-phrase-link:hover {
   text-decoration: underline;
 }
+
+html[data-theme="dark"] .report-preview {
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"] .report-preview .card,
+html[data-theme="dark"] .report-preview .config-panel {
+  background: #111827;
+  border-color: #334155;
+}
+
+html[data-theme="dark"] .report-preview th,
+html[data-theme="dark"] .report-preview td {
+  border-bottom-color: #334155;
+}
+
+html[data-theme="dark"] .report-preview .summary-row {
+  border-bottom-color: #334155;
+}
+
+html[data-theme="dark"] .report-preview .small {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .report-preview .fail-link,
+html[data-theme="dark"] .report-preview .token-link,
+html[data-theme="dark"] .report-preview .balance-phrase-link {
+  color: #93c5fd;
+}
+
+html[data-theme="dark"] .report-preview .fail-link:hover,
+html[data-theme="dark"] .report-preview .token-link:hover,
+html[data-theme="dark"] .report-preview .balance-phrase-link:hover {
+  color: #bfdbfe;
+}

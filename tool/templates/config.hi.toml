@@ -30,7 +30,7 @@ max_t = 1.0
 
 [adapter]
 type = "lora"
-rank = 32
+rank = 16
 dtype = "bfloat16"
 
 [optimizer]

@@ -55,7 +55,7 @@ from flask import jsonify
 
 from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
-from .originals import MEDIA_ALL_EXTS, restore_original_media, restore_original_media_video_only
+from .originals import MEDIA_ALL_EXTS, is_transient_media_name, restore_original_media, restore_original_media_video_only
 
 
 def get_aspect_ratio(width, height):
@@ -154,7 +154,7 @@ def update_media_metadata(folder_path):
     else:
         metadata = {}
     for entry in folder_path.iterdir():
-        if not entry.is_file() or entry.suffix.lower() not in MEDIA_ALL_EXTS:
+        if not entry.is_file() or entry.suffix.lower() not in MEDIA_ALL_EXTS or is_transient_media_name(entry.name):
             continue
         key = entry.name
         stat = entry.stat()
@@ -164,7 +164,7 @@ def update_media_metadata(folder_path):
         if cached and cached.get("mtime") == mtime and cached.get("size") == size:
             continue
         metadata[key] = probe_media_metadata(entry)
-    to_remove = [k for k in metadata if not (folder_path / k).exists()]
+    to_remove = [k for k in metadata if not (folder_path / k).exists() or is_transient_media_name(k)]
     for k in to_remove:
         del metadata[k]
     with open(metadata_path, "w", encoding="utf-8") as f:

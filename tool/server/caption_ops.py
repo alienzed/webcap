@@ -4,7 +4,7 @@ from flask import send_from_directory
 import os
 
 from . import config as app_config
-from .originals import MEDIA_ALL_EXTS
+from .originals import MEDIA_ALL_EXTS, is_transient_media_name
 
 def _resolve_folder(folder: str) -> Path:
     folder = (folder or '').strip()
@@ -34,7 +34,7 @@ def list_media_files(folder: str):
     folder_path = _resolve_folder(folder)
     files = [
         entry.name for entry in folder_path.iterdir()
-        if entry.is_file() and entry.suffix.lower() in MEDIA_ALL_EXTS
+        if entry.is_file() and entry.suffix.lower() in MEDIA_ALL_EXTS and not is_transient_media_name(entry.name)
     ]
     return sorted(files, key=lambda name: name.lower())
 

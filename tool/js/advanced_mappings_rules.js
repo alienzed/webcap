@@ -228,6 +228,20 @@ function createCheckboxCell(checked, onChange) {
   return createAdvancedCell(input);
 }
 
+function getHelpPreviewTheme() {
+  var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';
+  var isDark = String(theme || '').toLowerCase() === 'dark';
+  return {
+    theme: isDark ? 'dark' : 'light',
+    bodyBg: isDark ? '#0f172a' : '#f8fafc',
+    bodyColor: isDark ? '#e5e7eb' : '#1f2937',
+    headingColor: isDark ? '#f8fafc' : '#111827',
+    mutedColor: isDark ? '#94a3b8' : '#6b7280',
+    codeBg: isDark ? '#111827' : '#e2e8f0',
+    codeColor: isDark ? '#f8fafc' : '#0f172a'
+  };
+}
+
 function renderAdvancedHelpPreview(title, bodyHtml) {
   // Reuse the existing clear flow so non-media preview content behaves consistently.
   clearEditorAndPreview();
@@ -238,11 +252,22 @@ function renderAdvancedHelpPreview(title, bodyHtml) {
     setStatus('Help preview unavailable.');
     return;
   }
+  var theme = getHelpPreviewTheme();
   doc.open();
   doc.write(
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>' +
-    '<body style="font-family:system-ui;padding:16px;background:#f8fafc;color:#1f2937;line-height:1.4;">' +
-    '<h3 style="margin:0 0 10px 0;">' + escapeHtml(String(title || 'Help')) + '</h3>' +
+    '<!DOCTYPE html><html data-theme="' + theme.theme + '"><head><meta charset="UTF-8">' +
+    '<style>' +
+    'html{color-scheme:' + theme.theme + ';}' +
+    'body{font-family:system-ui;margin:0;padding:16px;background:' + theme.bodyBg + ';color:' + theme.bodyColor + ';line-height:1.4;}' +
+    'h3{margin:0 0 10px 0;color:' + theme.headingColor + ';}' +
+    'h4{color:' + theme.headingColor + ';}' +
+    'code{background:' + theme.codeBg + ';color:' + theme.codeColor + ';padding:0 4px;border-radius:4px;}' +
+    'a{color:' + (theme.theme === 'dark' ? '#93c5fd' : '#1266d6') + ';}' +
+    'p,li{color:' + theme.bodyColor + ';}' +
+    'small,.muted{color:' + theme.mutedColor + ';}' +
+    '</style></head>' +
+    '<body>' +
+    '<h3>' + escapeHtml(String(title || 'Help')) + '</h3>' +
     String(bodyHtml || '') +
     '</body></html>'
   );

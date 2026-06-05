@@ -225,13 +225,21 @@ function openHelpReadmeInPreview() {
       setStatus('Help load failed.');
       return;
     }
+    var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';
+    var isDark = String(theme || '').toLowerCase() === 'dark';
     var escaped = escapeHtml(responseText || '');
     doc.open();
     doc.write(
-      '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>' +
-      '<body style="font-family:Consolas,monospace;padding:16px;background:#f8fafc;color:#1f2937;line-height:1.4;">' +
-      '<h3 style="margin-top:0;font-family:system-ui;">README</h3>' +
-      '<pre style="white-space:pre-wrap;margin:0;">' + escaped + '</pre>' +
+      '<!DOCTYPE html><html data-theme="' + (isDark ? 'dark' : 'light') + '"><head><meta charset="UTF-8">' +
+      '<style>' +
+      'html{color-scheme:' + (isDark ? 'dark' : 'light') + ';}' +
+      'body{font-family:Consolas,monospace;margin:0;padding:16px;background:' + (isDark ? '#0f172a' : '#f8fafc') + ';color:' + (isDark ? '#e5e7eb' : '#1f2937') + ';line-height:1.4;}' +
+      'h3{margin-top:0;font-family:system-ui;color:' + (isDark ? '#f8fafc' : '#111827') + ';}' +
+      'pre{white-space:pre-wrap;margin:0;color:' + (isDark ? '#e5e7eb' : '#1f2937') + ';}' +
+      '</style></head>' +
+      '<body>' +
+      '<h3>README</h3>' +
+      '<pre>' + escaped + '</pre>' +
       '</body></html>'
     );
     doc.close();

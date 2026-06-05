@@ -300,6 +300,7 @@ function renderReportPreview(report, reviewedFileNames) {
     var names = (files || []).map(function (name) { return String(name || ''); }).filter(Boolean);
     return encodeURIComponent(names.join('\n'));
   }
+  var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';
 
   var requiredLabel = report.requiredPhrase ? report.requiredPhrase : '(not set)';
   var phraseRows = report.phraseSummary.length ? report.phraseSummary.map(function (row) {
@@ -398,7 +399,7 @@ function renderReportPreview(report, reviewedFileNames) {
 
 
   var html = '' +
-    '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+    '<!DOCTYPE html><html data-theme="' + theme + '"><head><meta charset="UTF-8">' +
     '<link rel="stylesheet" href="/static/css/report.css">' +
     '</head><body>' +
     '<div class="report-preview">' +

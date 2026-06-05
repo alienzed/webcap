@@ -6,6 +6,16 @@ var videoClipCropEnabled = false;
 var videoClipSourceResolution = null;
 var videoClipPendingCrop = null;
 var videoClipOverwriteSourceMode = false;
+var videoClipStatusPollTimer = null;
+var videoClipStatusJobId = '';
+
+function clearVideoClipStatusPoll() {
+  if (videoClipStatusPollTimer) {
+    clearInterval(videoClipStatusPollTimer);
+    videoClipStatusPollTimer = null;
+  }
+  videoClipStatusJobId = '';
+}
 
 // --- Extract frame and open crop modal ---
 function extractFrameAndOpenCropModal() {
@@ -62,6 +72,74 @@ function setVideoClipBusy(isBusy) {
   if (startEl) startEl.disabled = videoClipCropBusy;
   var durationEl = getVideoClipEl('video-clip-duration-input');
   if (durationEl) durationEl.disabled = videoClipCropBusy;
+}
+
+function finalizeVideoClipJob(payload, status, message) {
+  clearVideoClipStatusPoll();
+  setVideoClipBusy(false);
+  if (status === 'completed') {
+    if (payload && payload.overwriteSource && payload.fileName) {
+      markMediaMutated(payload.fileName, 'best_effort');
+      state.pendingSelectFileName = payload.fileName;
+    }
+    setStatus((payload && payload.overwriteSource ? 'In-place clip exported: ' : 'Clip exported: ') + (payload && payload.outputName ? payload.outputName : ''));
+    if (payload && payload.overwriteSource && payload.fileName && typeof saveFolderStateForCurrentRoot === 'function') {
+      Promise.resolve(saveFolderStateForCurrentRoot()).catch(function (err) {
+        if (window.console && console.warn) {
+          console.warn('[VideoClip] Could not persist clip mutation state:', err);
+        }
+      }).then(function () {
+        refreshCurrentDirectory();
+      });
+    } else {
+      refreshCurrentDirectory();
+    }
+    return;
+  }
+  if (status === 'failed') {
+    setStatus('Clip export failed: ' + (message || 'Unknown error'));
+  }
+}
+
+function pollVideoClipJob(jobId, payload) {
+  clearVideoClipStatusPoll();
+  videoClipStatusJobId = String(jobId || '').trim();
+  if (!videoClipStatusJobId) return;
+
+  var pollOnce = function () {
+    if (!videoClipStatusJobId) return;
+    fetch('/media/video_clip_status?jobId=' + encodeURIComponent(videoClipStatusJobId))
+      .then(function (resp) {
+        return resp.json().then(function (data) {
+          return { status: resp.status, data: data };
+        });
+      })
+      .then(function (res) {
+        if (String(videoClipStatusJobId || '') !== String(jobId || '').trim()) return;
+        if (res.status === 404) {
+          finalizeVideoClipJob(payload, 'failed', 'Clip job not found');
+          return;
+        }
+        if (res.status !== 200 || !res.data || !res.data.ok || !res.data.job) return;
+        var job = res.data.job;
+        var jobStatus = String(job.status || '').toLowerCase();
+        if (jobStatus === 'completed') {
+          finalizeVideoClipJob(payload, 'completed');
+          return;
+        }
+        if (jobStatus === 'failed') {
+          finalizeVideoClipJob(payload, 'failed', job.error || 'Clip export failed');
+        }
+      })
+      .catch(function (err) {
+        if (window.console && console.warn) {
+          console.warn('[VideoClip] Status poll failed:', err);
+        }
+      });
+  };
+
+  pollOnce();
+  videoClipStatusPollTimer = setInterval(pollOnce, 1000);
 }
 
 function isVideoClipInSrcVideosFolder() {
@@ -161,6 +239,7 @@ function getVideoClipResolution(fileName) {
 }
 
 function closeVideoClipModal() {
+  clearVideoClipStatusPoll();
   destroyVideoClipCropper();
   videoClipTargetItem = null;
   videoClipCropEnabled = false;
@@ -474,11 +553,22 @@ function applyVideoClip(overwrite) {
   }
 
   HttpModule.postJson('/media/video_clip', payload, function (status, responseText) {
-    setVideoClipBusy(false);
     if (window.console && console.log) {
       console.log('[VideoClip] Export response:', status, responseText);
     }
     if (status === 200 || status === 202) {
+      var parsed = null;
+      try { parsed = JSON.parse(responseText); } catch (e) {}
+      if (parsed && parsed.jobId) {
+        setStatus((payload.overwriteSource ? 'In-place clip queued: ' : 'Clip queued: ') + payload.outputName);
+        setVideoClipBusy(true);
+        pollVideoClipJob(parsed.jobId, payload);
+        if (window.console && console.log) {
+          console.log('[VideoClip] Accepted:', payload.outputName, parsed.jobId);
+        }
+        return;
+      }
+      setVideoClipBusy(false);
       // Leave modal open so user can create more clips.
       var successText = status === 202 ? (payload.overwriteSource ? 'In-place clip queued: ' : 'Clip queued: ') : (payload.overwriteSource ? 'In-place clip exported: ' : 'Clip exported: ');
       setStatus(successText + payload.outputName);
@@ -488,6 +578,7 @@ function applyVideoClip(overwrite) {
       refreshCurrentDirectory();
       return;
     }
+    setVideoClipBusy(false);
     var message = getErrorMessage(responseText, 'Clip export failed');
     var data = null;
     try { data = JSON.parse(responseText); } catch (e) {}

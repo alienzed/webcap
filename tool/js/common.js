@@ -262,6 +262,15 @@ function getInitialAppTheme() {
   return getStoredAppTheme() || getSystemPreferredAppTheme();
 }
 
+function getCurrentAppTheme() {
+  var theme = '';
+  if (document && document.documentElement) {
+    theme = document.documentElement.getAttribute('data-theme') || '';
+  }
+  theme = theme || getInitialAppTheme();
+  return String(theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
+}
+
 function updateThemeToggleUi(theme) {
   if (!ui || !ui.utilityThemeBtn) return;
   var currentTheme = String(theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
@@ -306,6 +315,7 @@ function wireThemeToggleUi() {
 window.applyAppTheme = applyAppTheme;
 window.toggleAppTheme = toggleAppTheme;
 window.wireThemeToggleUi = wireThemeToggleUi;
+window.getCurrentAppTheme = getCurrentAppTheme;
 
 wireThemeToggleUi();
 

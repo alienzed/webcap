@@ -1,6 +1,6 @@
 # Primer Mappings V2 (Structured, Modal-Based)
 
-Last updated: 2026-05-31
+Last updated: 2026-06-05
 
 ## Goal
 Replace legacy advanced textareas with structured modal editors so primer behavior is discoverable and safe.

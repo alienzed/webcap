@@ -39,13 +39,6 @@ pruneMedia = async function (mediaItem) {
         state.items.splice(idx, 1);
       }
     }
-    if (state.ratings && Object.prototype.hasOwnProperty.call(state.ratings, mediaItem.key)) {
-      delete state.ratings[mediaItem.key];
-      saveFolderStateForCurrentRoot();
-    }
-    if (clearMediaMutated(mediaItem.key)) {
-      saveFolderStateForCurrentRoot();
-    }
     if (prunedWasCurrent) {
       state.currentItem = null;
       clearEditorAndPreview();
@@ -151,8 +144,6 @@ async function restoreMediaItem(mediaItem) {
         }
         setStatus(msg);
       }
-      // Only update state after request completes
-      state.reviewedSet.delete(mediaItem.key);
       if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
         state.focusSet.keys = state.focusSet.keys.filter(function (key) {
           return key !== mediaItem.key;
@@ -164,13 +155,6 @@ async function restoreMediaItem(mediaItem) {
       if (state.currentItem && state.currentItem.key === mediaItem.key) {
         clearEditorAndPreview();
         window.renderChecklistPanel();
-      }
-      if (state.ratings && Object.prototype.hasOwnProperty.call(state.ratings, mediaItem.key)) {
-        delete state.ratings[mediaItem.key];
-        saveFolderStateForCurrentRoot();
-      }
-      if (clearMediaMutated(mediaItem.key)) {
-        saveFolderStateForCurrentRoot();
       }
       renderFileList();
     }

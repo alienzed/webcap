@@ -1766,6 +1766,23 @@ iframe {
   margin: 0;
 }
 
+.annotate-strip-group-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  min-height: 16px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid #eab308;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: 0.15px;
+}
+
 .annotate-strip-group-title-row {
   display: flex;
   align-items: center;
@@ -3240,6 +3257,12 @@ html[data-theme="dark"] .annotate-strip-chip-na.active {
   background: rgba(71, 85, 105, 0.65);
   border-color: #516275;
   color: #e2e8f0;
+}
+
+html[data-theme="dark"] .annotate-strip-group-status-pill {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.42);
+  color: #fbbf24;
 }
 
 html[data-theme="dark"] .annotate-strip-group-title-complete,

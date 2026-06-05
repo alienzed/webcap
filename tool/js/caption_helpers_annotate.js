@@ -198,6 +198,13 @@ function renderAnnotateStrip() {
     var groupIsNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
       ? isChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel)
       : false;
+    var reviewedState = !!reviewed;
+    if (!reviewedState && !groupIsNa) {
+      var statusEl = document.createElement('span');
+      statusEl.className = 'annotate-strip-group-status-pill';
+      statusEl.textContent = 'Not reviewed';
+      titleRowEl.appendChild(statusEl);
+    }
     var hasActiveTerm = false;
     group.terms.forEach(function (term) {
       if (hasTagForMediaKey(mediaKey, term)) {
@@ -205,7 +212,7 @@ function renderAnnotateStrip() {
       }
     });
     isComplete = !!(groupIsNa || hasActiveTerm);
-    if (reviewed) {
+    if (reviewedState) {
       groupEl.classList.add('annotate-strip-group-reviewed');
       titleEl.classList.add('annotate-strip-group-title-reviewed');
     } else if (!isComplete) {
@@ -253,7 +260,7 @@ function renderAnnotateStrip() {
       };
       chipWrap.appendChild(chip);
     });
-    if (!reviewed) {
+    if (!reviewedState) {
       if (groupIsNa) titleEl.classList.add('annotate-strip-group-title-na');
       else titleEl.classList.add(isComplete ? 'annotate-strip-group-title-complete' : 'annotate-strip-group-title-incomplete');
     }

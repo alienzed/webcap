@@ -1,5 +1,5 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-05-31.
+Last reviewed: 2026-06-05.
 
 ## Bugs
 - Copy set doesn't bring over Reviewed status or the custom Requirements
@@ -38,9 +38,6 @@ Last reviewed: 2026-05-31.
 - Parked long-term; no immediate pain.
 
 ## Nice to Haves (Out of Scope for Now)
-- Preserve the right folder-state data when pruning/restoring/renaming.
-  - Rename already carries over reviewed keys, ratings, tags, and mutation markers.
-  - Prune/restore should ideally bring item metadata along too, instead of only restoring the media/caption files.
 - Review longest duplicate phrase detection inside a single caption.
 
 ## Cleanup Candidates
@@ -134,6 +131,7 @@ Last reviewed: 2026-05-31.
   - Crop: reloads preview for the current item (file mutated in place, same metadata query).
   - Deface: reloads preview for the current item (file mutated in place, same metadata query).
   - All four operations now avoid unnecessary full-directory refreshes.
+- Prune/restore now preserves item metadata state in folder state so restored items keep their prior reviewed/rating/mutation markers.
 - Sidebar tab defaults:
   - Config tab is now selected by default when loading set mode (Review tab still opens when clicking "Review Captions").
 - Metadata/AR display:

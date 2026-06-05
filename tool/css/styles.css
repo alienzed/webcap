@@ -2905,6 +2905,12 @@ html[data-theme="dark"] textarea {
   border-color: var(--border);
 }
 
+html[data-theme="dark"] textarea#editor {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--accent-soft);
+}
+
 html[data-theme="dark"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder {
   color: #9aa8bb;

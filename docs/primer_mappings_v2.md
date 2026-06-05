@@ -65,7 +65,7 @@ When auto-primer is generated for an empty caption:
 4. Skip rows where `enabled` is false.
 5. A row matches when:
 - `scope=file`: normalized filename contains `token`.
-- `scope=tag`: any assigned tag contains `token` (case-insensitive).
+- `scope=tag`: any assigned tag exactly matches `token` after trimming and whitespace normalization.
 6. On match:
 - If key is unset, set `key=value`.
 - If `value` is blank, `token` is used as the value.

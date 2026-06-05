@@ -1,7 +1,7 @@
 output_dir = "{TRAINING_ROOT}/output/runs"
 dataset    = "{TRAINING_ROOT}/{DATASET}/dataset.hi.toml"
 
-epochs = 80
+epochs = 60
 save_every_n_epochs = 5
 
 micro_batch_size_per_gpu = 1

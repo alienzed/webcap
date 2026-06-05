@@ -347,6 +347,13 @@ function textContainsWholeToken(text, token) {
   return pattern.test(hay);
 }
 
+function textMatchesNormalizedText(text, token) {
+  var hay = String(text || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  var needle = String(token || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  if (!hay || !needle) return false;
+  return hay === needle;
+}
+
 function countTokenWords(text) {
   var words = String(text || '').toLowerCase().match(/[a-z0-9]+/g);
   return words ? words.length : 0;
@@ -464,7 +471,7 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
     var matched = false;
     if (scope === 'tag') {
       matched = mediaTags.some(function (tagValue) {
-        return textContainsWholeToken(tagValue, token);
+        return textMatchesNormalizedText(tagValue, token);
       });
     } else {
       matched = textContainsWholeToken(fileNorm, token);

@@ -36,20 +36,12 @@ Last reviewed: 2026-05-31.
 
 ## Backlog (Do Not Implement Yet)
 - Parked long-term; no immediate pain.
-- Persist last selected working directory between refresh/restart (optional toggle in settings; safe fallback when missing).
-- **Save/load sets as packages:** Instead of only writing selection/caption info as comments in config files, support saving and restoring sets (including selection, captions, flags, ratings, etc.) as explicit package files. This would allow fast recovery, sharing, and reproducibility, and could enable advanced features like unpruning files or resetting captions when loading a saved set.
 
 ## Nice to Haves (Out of Scope for Now)
-- Vocabulary autocomplete from a cross-set master list (no automatic sharing yet; suggestion-only).
-- Validate training command preview behavior when config keys are missing (should still provide useful output where possible).
-- Maintain flags and metadata when Pruning/restoring/renaming.
-- Review duplicate-token detection inside a single caption.
-- Audit remaining folder-load side effects and trim non-essential mutation paths.
-- Video clip V2 ergonomics polish (timeline UX, additional controls) as tracked in `video_clip.md`.
-- In-app training execution/orchestration for long-running jobs.
-- TensorBoard lifecycle helpers.
-- Broader multi-hour process orchestration in app.
-- Set-wide search/replace for captions in the current folder only, with preview/confirmation before writing.
+- Preserve the right folder-state data when pruning/restoring/renaming.
+  - Rename already carries over reviewed keys, ratings, tags, and mutation markers.
+  - Prune/restore should ideally bring item metadata along too, instead of only restoring the media/caption files.
+- Review longest duplicate phrase detection inside a single caption.
 
 ## Cleanup Candidates
 - Consolidate set-context gating around shared helper usage and remove stale checks.

@@ -70,9 +70,10 @@ function isChecklistRequirementNaForCurrentMedia(requirementLabel) {
   return isChecklistRequirementNaForMediaKey(state.currentItem.key, requirementLabel);
 }
 
-function setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, isNa) {
+function setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, isNa, options) {
   var key = String(mediaKey || '').trim();
   var req = normalizeChecklistRequirementKey(requirementLabel);
+  var opts = options || {};
   if (!key || !req) return false;
   var previous = isChecklistRequirementNaForMediaKey(key, requirementLabel);
   var next = !!isNa;
@@ -82,27 +83,33 @@ function setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, isNa) 
       mediaKey: key,
       requirementLabel: requirementLabel,
       previousValue: previous,
-      nextValue: next
+      nextValue: next,
+      previousCheckedValue: isChecklistRequirementCheckedForMediaKey(key, requirementLabel)
     });
   }
   var map = JSON.parse(JSON.stringify(getChecklistNaMapForMediaKey(key)));
   if (isNa) {
     map[req] = true;
     checklistRequirementsNaByMedia[key] = map;
+    var checkedMap = JSON.parse(JSON.stringify(getChecklistCheckedMapForMediaKey(key)));
+    delete checkedMap[req];
+    if (Object.keys(checkedMap).length) checklistCheckedByMedia[key] = checkedMap;
+    else delete checklistCheckedByMedia[key];
   } else {
     delete map[req];
     if (Object.keys(map).length) checklistRequirementsNaByMedia[key] = map;
     else delete checklistRequirementsNaByMedia[key];
   }
-  saveChecklistToFolderState();
-  renderChecklistPanel();
-  if (typeof renderItemMetadataPanel === 'function') {
+  if (!opts.skipSync) syncReviewedFromChecklist(key);
+  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipRender) renderChecklistPanel();
+  if (!opts.skipRender && typeof renderItemMetadataPanel === 'function') {
     renderItemMetadataPanel();
   }
-  if (typeof renderAnnotateStrip === 'function') {
+  if (!opts.skipRender && typeof renderAnnotateStrip === 'function') {
     renderAnnotateStrip();
   }
-  if (typeof renderFileList === 'function') {
+  if (!opts.skipRender && typeof renderFileList === 'function') {
     renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
   }
   return true;
@@ -211,8 +218,10 @@ function setChecklistPanelVisible(visible) {
 function checklistAllCheckedForMedia(mediaKey) {
   if (!mediaKey || !checklistItems || !checklistItems.length) return false;
   var checkedMap = checklistCheckedByMedia[mediaKey] || {};
+  var naMap = getChecklistNaMapForMediaKey(mediaKey);
   for (var i = 0; i < checklistItems.length; i++) {
-    if (!checkedMap[checklistItems[i]]) return false;
+    var requirementLabel = checklistItems[i];
+    if (!checkedMap[requirementLabel] && !naMap[normalizeChecklistRequirementKey(requirementLabel)]) return false;
   }
   return true;
 }
@@ -270,20 +279,37 @@ function renderChecklistPanel() {
   setChecklistPanelVisible(true);
   itemsDiv.innerHTML = '';
   var checkedMap = checklistCheckedByMedia[state.currentItem.key] || {};
+  var naMap = getChecklistNaMapForMediaKey(state.currentItem.key);
   for (var i = 0; i < checklistItems.length; i++) {
     var item = checklistItems[i];
+    var isNa = !!naMap[normalizeChecklistRequirementKey(item)];
     var row = document.createElement('div');
     row.className = 'row-inline';
+    if (isNa) row.classList.add('checklist-row-na');
     var label = document.createElement('label');
     label.style.flex = '1';
     var cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.checked = !!checkedMap[item];
+    cb.checked = !!checkedMap[item] || isNa;
     (function(item) {
       cb.onchange = function() {
         if (!state.currentItem) return;
         var mediaKey = state.currentItem.key;
         if (!checklistCheckedByMedia[mediaKey]) checklistCheckedByMedia[mediaKey] = {};
+        if (this.checked && isChecklistRequirementNaForMediaKey(mediaKey, item)) {
+          setChecklistRequirementNaForMediaKey(mediaKey, item, false, {
+            skipSync: true,
+            skipSave: true,
+            skipRender: true
+          });
+        } else if (!this.checked && isChecklistRequirementNaForMediaKey(mediaKey, item)) {
+          setChecklistRequirementNaForMediaKey(mediaKey, item, false, {
+            skipSync: true,
+            skipSave: true,
+            skipRender: true
+          });
+          this.checked = true;
+        }
         checklistCheckedByMedia[mediaKey][item] = this.checked;
         syncReviewedFromChecklist(mediaKey);
         debouncedChecklistSave(saveChecklistToFolderState);

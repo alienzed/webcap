@@ -140,7 +140,7 @@ Filter bar supports:
   - Reviewed
   - Unreviewed
   - Incomplete (requirement groups not fully satisfied; `n/a` counts complete)
-  - Untagged
+  - Tag Mismatch (no tags, or item tags not found in caption text)
   - Stars (multi-select, includes `No Star`)
   - Flag color (multi-select, includes `No Flag`)
   - Invalid AR

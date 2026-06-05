@@ -124,6 +124,60 @@ def _matches_filter_query(match: dict, query: dict, mode: str = "all") -> bool:
     return all(term_matches(term) for term in positives)
 
 
+def _canonicalize_match_text(value: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", str(value or "").lower())).strip()
+
+
+def _plural_token_variants(token: str) -> set[str]:
+    text = str(token or "").lower().strip()
+    if not text:
+        return set()
+    variants = {text}
+    if len(text) > 3 and text.endswith("ies"):
+        variants.add(text[:-3] + "y")
+    if len(text) > 2 and text.endswith("es"):
+        variants.add(text[:-2])
+    if len(text) > 1 and text.endswith("s"):
+        variants.add(text[:-1])
+    if len(text) > 1 and text.endswith("y"):
+        variants.add(text[:-1] + "ies")
+    variants.add(text + "s")
+    variants.add(text + "es")
+    return {variant for variant in variants if variant}
+
+
+def _caption_contains_tag_with_allowances(caption_text: str, tag_text: str) -> bool:
+    caption_tokens = [token for token in _canonicalize_match_text(caption_text).split(" ") if token]
+    tag_tokens = [token for token in _canonicalize_match_text(tag_text).split(" ") if token]
+    if not caption_tokens or not tag_tokens or len(caption_tokens) < len(tag_tokens):
+        return False
+    last_idx = len(tag_tokens) - 1
+    last_variants = _plural_token_variants(tag_tokens[last_idx])
+    for start_idx in range(0, len(caption_tokens) - len(tag_tokens) + 1):
+        matched = True
+        for offset, expected in enumerate(tag_tokens):
+            actual = caption_tokens[start_idx + offset]
+            if offset == last_idx:
+                if actual not in last_variants:
+                    matched = False
+                    break
+            elif actual != expected:
+                matched = False
+                break
+        if matched:
+            return True
+    return False
+
+
+def _match_has_tag_mismatch(match: dict) -> bool:
+    tags = [str(tag or "").strip() for tag in (match.get("tags") if isinstance(match.get("tags"), list) else [])]
+    tags = [tag for tag in tags if tag]
+    if not tags:
+        return True
+    caption_text = str(match.get("caption") or "")
+    return any(not _caption_contains_tag_with_allowances(caption_text, tag) for tag in tags)
+
+
 def _normalize_rating(value) -> int:
     try:
         rating = round(float(value))
@@ -341,7 +395,7 @@ def _collect_superset_matches(root: Path, criteria: dict) -> list[dict]:
     reviewed_only = bool(criteria.get("reviewed_only"))
     unreviewed_only = bool(criteria.get("unreviewed_only"))
     incomplete_only = bool(criteria.get("incomplete_only"))
-    untagged_only = bool(criteria.get("untagged_only"))
+    tag_mismatch_only = bool(criteria.get("tag_mismatch_only") or criteria.get("untagged_only"))
     invalid_ar_only = bool(criteria.get("invalid_ar_only"))
     star_filter = _parse_star_filter(criteria.get("star_filter") or "")
     flag_filter = _parse_csv_values(criteria.get("flag_filter") or "")
@@ -409,7 +463,7 @@ def _collect_superset_matches(root: Path, criteria: dict) -> list[dict]:
                 continue
             if incomplete_only and not _match_has_incomplete_requirements(match, folder_state):
                 continue
-            if untagged_only and match["tags"]:
+            if tag_mismatch_only and not _match_has_tag_mismatch(match):
                 continue
             if star_filter["values"] or star_filter["include_no_star"]:
                 if rating <= 0:

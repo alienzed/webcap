@@ -711,6 +711,8 @@ def test_superset_search_matches_current_folder_and_subfolders_with_filters(tmp_
 
     write_image(source_dir / "one.png")
     write_text(source_dir / "one.txt", "front dragon")
+    write_image(source_dir / "mismatch.png")
+    write_text(source_dir / "mismatch.txt", "front dragon")
     write_image(child_dir / "two.png")
     write_text(child_dir / "two.txt", "side dragon")
     write_image(sibling_dir / "three.png")
@@ -723,7 +725,11 @@ def test_superset_search_matches_current_folder_and_subfolders_with_filters(tmp_
         json.dumps(
             {
                 "reviewedKeys": ["one.png"],
-                "caption_tags_by_media": {"one.png": ["dragon", "front"], "skip.jpg": []},
+                "caption_tags_by_media": {
+                    "one.png": ["dragon", "front"],
+                    "mismatch.png": ["dragon", "wings"],
+                    "skip.jpg": [],
+                },
                 "ratings_by_media": {"one.png": 4},
                 "flags": {"one.png": "green"},
             }
@@ -786,6 +792,22 @@ def test_superset_search_matches_current_folder_and_subfolders_with_filters(tmp_
     assert invalid_response.status_code == 200
     invalid_payload = invalid_response.get_json()
     assert [row["source_media_rel"] for row in invalid_payload["results"]] == ["sets/a/skip.jpg"]
+
+    tag_mismatch_response = client.post(
+        "/fs/superset_search",
+        json={
+            "criteria": {
+                "source_folder": "sets/a",
+                "tag_mismatch_only": True,
+            }
+        },
+    )
+    assert tag_mismatch_response.status_code == 200
+    tag_mismatch_payload = tag_mismatch_response.get_json()
+    assert [row["source_media_rel"] for row in tag_mismatch_payload["results"]] == [
+        "sets/a/mismatch.png",
+        "sets/a/skip.jpg",
+    ]
 
 
 def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, monkeypatch):

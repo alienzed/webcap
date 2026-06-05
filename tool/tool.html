@@ -136,7 +136,7 @@
                             </label>
                             <label class="advanced-filter-check-row">
                                 <input id="advanced-filter-untagged" type="checkbox">
-                                <span>Untagged</span>
+                                <span>Tag Mismatch</span>
                             </label>
                         </div>
                         <label class="advanced-filter-row">
@@ -204,10 +204,17 @@
                                     <span class="advanced-filter-superset-title">SuperSet Search</span>
                                     <span
                                         class="advanced-filter-superset-subtitle"
-                                        title="Search this folder and all subfolders using the filters above."
+                                        title="Search this folder and all subfolders using the filters above, then materialize the matches into a new set."
                                     >Include subfolders</span>
                                 </span>
                             </label>
+                            <button
+                                id="superset-info-btn"
+                                type="button"
+                                class="mini-info-btn superset-info-btn"
+                                title="SuperSet help"
+                                aria-label="SuperSet help"
+                            >i</button>
                             <button
                                 id="superset-search-btn"
                                 type="button"

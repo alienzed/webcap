@@ -107,6 +107,9 @@ function undoLastOperation() {
     }
     if (op.type === 'checklist-na' && typeof setChecklistRequirementNaForMediaKey === 'function') {
       setChecklistRequirementNaForMediaKey(op.mediaKey, op.requirementLabel, !!op.previousValue);
+      if (!op.previousValue && op.previousCheckedValue && typeof setChecklistRequirementCheckedForMediaKey === 'function') {
+        setChecklistRequirementCheckedForMediaKey(op.mediaKey, op.requirementLabel, true);
+      }
       var naStatus = op.previousValue ? 'Undid group n/a clear.' : 'Undid group n/a mark.';
       if (!restoreUndoMediaSelection(op.mediaKey, naStatus)) {
         setStatus(naStatus);

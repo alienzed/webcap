@@ -293,7 +293,7 @@ function openAdvancedFilterHelpInPreview() {
     '<li style="margin:0 0 6px 0;"><strong>Unreviewed</strong>: items not marked reviewed yet.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Incomplete</strong>: requirement groups not fully satisfied (N/A counts as complete).</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Invalid AR</strong>: items with unsupported aspect buckets.</li>' +
-    '<li style="margin:0 0 6px 0;"><strong>Untagged</strong>: items with no item tags.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Tag Mismatch</strong>: items with no tags, or with item tags not found in the caption.</li>' +
     '</ul>' +
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">Stars + Flag</h4>' +
     '<ul style="margin:0 0 8px 18px;padding:0;">' +
@@ -303,6 +303,25 @@ function openAdvancedFilterHelpInPreview() {
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">Composing Filters</h4>' +
     '<p style="margin:0 0 6px 0;">All active filters are combined with AND logic. Add filters gradually, then clear with the <strong>x</strong> button.</p>' +
     '<p style="margin:0;">This help is intentionally structured to expand later with Smart Set filter guidance.</p>'
+  );
+}
+
+function openSuperSetHelpInPreview() {
+  if (typeof renderAdvancedHelpPreview !== 'function') {
+    setStatus('Help preview unavailable.');
+    return;
+  }
+  renderAdvancedHelpPreview(
+    'SuperSet Search Help',
+    '<p style="margin:0 0 10px 0;">SuperSet Search applies the current text and advanced filters to the current folder plus every subfolder.</p>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">How it works</h4>' +
+    '<ul style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;">Turn on <strong>SuperSet Search</strong>, then click <strong>Search</strong> to build a cross-folder result list.</li>' +
+    '<li style="margin:0 0 6px 0;">Changing any filter marks those results stale until you search again.</li>' +
+    '<li style="margin:0 0 6px 0;">Use <strong>Create Set From Results</strong> to materialize the matched media into a new set.</li>' +
+    '</ul>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Use boundary</h4>' +
+    '<p style="margin:0;">SuperSet is intended only for that materialization flow. Do not treat it as a normal browse, review, or edit mode outside creating a new set from the matched results.</p>'
   );
 }
 
@@ -739,4 +758,11 @@ if (ui.captionFilterClearAllBtn) {
 }
 if (ui.advancedFilterInfoBtn) {
   ui.advancedFilterInfoBtn.addEventListener('click', openAdvancedFilterHelpInPreview);
+}
+if (ui.supersetInfoBtn) {
+  ui.supersetInfoBtn.addEventListener('click', function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    openSuperSetHelpInPreview();
+  });
 }

@@ -162,6 +162,7 @@ function computeRequirementProgressForMediaKey(mediaKey) {
   var defaultsByItem = getDefaultRequirementKeywordsByItem();
   var completed = 0;
   var total = 0;
+  var missing = [];
   for (var i = 0; i < requirements.length; i++) {
     var requirementLabel = String(requirements[i] || '').trim();
     if (!requirementLabel) continue;
@@ -185,9 +186,107 @@ function computeRequirementProgressForMediaKey(mediaKey) {
     var hasMatch = terms.some(function (term) {
       return hasTagForMediaKey(mediaKey, term);
     });
-    if (hasMatch) completed += 1;
+    if (hasMatch) {
+      completed += 1;
+    } else {
+      missing.push(requirementLabel + ' (' + terms.join(', ') + ')');
+    }
   }
-  return { completed: completed, total: total };
+  return { completed: completed, total: total, missing: missing };
+}
+
+function computeReviewedProgressForMediaKey(mediaKey) {
+  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  var checkedMap = (typeof getChecklistCheckedMapForMediaKey === 'function')
+    ? getChecklistCheckedMapForMediaKey(mediaKey)
+    : {};
+  var completed = 0;
+  var total = 0;
+  var missing = [];
+  for (var requirementIdx = 0; requirementIdx < requirements.length; requirementIdx++) {
+    var requirementLabel = String(requirements[requirementIdx] || '').trim();
+    if (!requirementLabel) continue;
+    total += 1;
+    var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
+      ? isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)
+      : false;
+    if (checkedMap[requirementLabel] || isNa) {
+      completed += 1;
+    } else {
+      missing.push(requirementLabel);
+    }
+  }
+  return { completed: completed, total: total, missing: missing };
+}
+
+function getCurrentCaptionTextForMatch() {
+  if (ui && ui.editorEl && typeof ui.editorEl.value === 'string') {
+    return ui.editorEl.value;
+  }
+  if (state && state.currentItem && typeof state.currentItem.caption === 'string') {
+    return state.currentItem.caption;
+  }
+  return '';
+}
+
+function getUniqueNormalizedTagsForMediaKey(mediaKey) {
+  var seen = {};
+  return getTagsForMediaKey(mediaKey).map(function (tag) {
+    return normalizeItemTag(tag);
+  }).filter(function (tag) {
+    var key = tag.toLowerCase();
+    if (!tag || seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+}
+
+function computeTagMatchProgressForText(mediaKey, captionText) {
+  var tags = getUniqueNormalizedTagsForMediaKey(mediaKey);
+  var completed = 0;
+  var missing = [];
+  for (var tagIdx = 0; tagIdx < tags.length; tagIdx++) {
+    var tag = tags[tagIdx];
+    if (captionContainsTagWithAllowances(captionText, tag)) {
+      completed += 1;
+    } else {
+      missing.push(tag);
+    }
+  }
+  return { completed: completed, total: tags.length, missing: missing };
+}
+
+function computeTagMatchProgressForMediaKey(mediaKey) {
+  return computeTagMatchProgressForText(mediaKey, getCurrentCaptionTextForMatch());
+}
+
+function formatProgressTooltip(progress, emptyText, completeText, missingPrefix) {
+  if (!progress || progress.total <= 0) return emptyText;
+  if (!progress.missing || !progress.missing.length) return completeText;
+  return missingPrefix + progress.missing.join(', ');
+}
+
+function appendMetadataProgressRow(listEl, label, progress, options) {
+  var row = document.createElement('div');
+  row.className = 'item-metadata-row';
+  var labelEl = document.createElement('strong');
+  labelEl.textContent = label;
+  var valueEl = document.createElement('span');
+  valueEl.textContent = String(progress.completed) + '/' + String(progress.total);
+  valueEl.title = formatProgressTooltip(
+    progress,
+    options.emptyText,
+    options.completeText,
+    options.missingPrefix
+  );
+  if (progress.total > 0) {
+    valueEl.classList.add(progress.completed >= progress.total ? 'item-metadata-value-ok' : 'item-metadata-value-error');
+  } else if (options.emptyIsError) {
+    valueEl.classList.add('item-metadata-value-error');
+  }
+  row.appendChild(labelEl);
+  row.appendChild(valueEl);
+  listEl.appendChild(row);
 }
 
 function saveItemRatingsToFolderState() {
@@ -251,31 +350,32 @@ function renderItemMetadataPanel() {
 
   var row = getMetadataForMedia(state.currentItem.fileName);
   var progress = computeRequirementProgressForMediaKey(currentMediaKey);
-  var progressRow = document.createElement('div');
-  progressRow.className = 'item-metadata-row';
-  var progressLabelEl = document.createElement('strong');
-  progressLabelEl.textContent = 'Requirement Progress';
-  var progressValueEl = document.createElement('span');
-  progressValueEl.textContent = String(progress.completed) + '/' + String(progress.total);
-  if (progress.total > 0) {
-    if (progress.completed >= progress.total) {
-      progressValueEl.classList.add('item-metadata-value-ok');
-      progressValueEl.title = 'All requirement groups completed.';
-    } else {
-      progressValueEl.classList.add('item-metadata-value-error');
-      progressValueEl.title = 'Requirement groups still missing.';
-    }
-  } else {
-    progressValueEl.title = 'No requirement groups with configured terms.';
-  }
-  progressRow.appendChild(progressLabelEl);
-  progressRow.appendChild(progressValueEl);
+  var reviewedProgress = computeReviewedProgressForMediaKey(currentMediaKey);
+  var tagMatchProgress = computeTagMatchProgressForMediaKey(currentMediaKey);
+  var appendProgressRows = function () {
+    appendMetadataProgressRow(listEl, 'Requirement Progress', progress, {
+      emptyText: 'No requirement groups with configured terms.',
+      completeText: 'All requirement groups completed.',
+      missingPrefix: 'Missing requirement groups: '
+    });
+    appendMetadataProgressRow(listEl, 'Reviewed Progress', reviewedProgress, {
+      emptyText: 'No review groups configured.',
+      completeText: 'All review groups checked.',
+      missingPrefix: 'Unchecked review groups: '
+    });
+    appendMetadataProgressRow(listEl, 'Tag Match', tagMatchProgress, {
+      emptyText: 'No item tags.',
+      completeText: 'All item tags are found in the caption.',
+      missingPrefix: 'Tags not found in caption: ',
+      emptyIsError: true
+    });
+  };
 
   if (!row) {
     var unavailable = document.createElement('div');
     unavailable.textContent = 'Metadata unavailable.';
     listEl.appendChild(unavailable);
-    listEl.appendChild(progressRow);
+    appendProgressRows();
     return;
   }
   var fieldOrder = [
@@ -317,7 +417,7 @@ function renderItemMetadataPanel() {
     unavailable2.textContent = 'Metadata unavailable.';
     listEl.appendChild(unavailable2);
   }
-  listEl.appendChild(progressRow);
+  appendProgressRows();
 }
 
 function saveItemTagsToFolderState() {

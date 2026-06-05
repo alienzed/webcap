@@ -51,6 +51,7 @@ ui = {
   advancedFilterUntaggedEl: document.getElementById('advanced-filter-untagged'),
   advancedFilterIncompleteEl: document.getElementById('advanced-filter-incomplete'),
   advancedFilterSupersetEl: document.getElementById('advanced-filter-superset'),
+  supersetInfoBtn: document.getElementById('superset-info-btn'),
   supersetSearchBtn: document.getElementById('superset-search-btn'),
   supersetResultsEl: document.getElementById('superset-results'),
   supersetExitBtn: document.getElementById('superset-exit-btn'),

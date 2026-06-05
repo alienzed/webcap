@@ -107,7 +107,7 @@ Last reviewed: 2026-05-31.
   - Reviewed only.
   - Unreviewed only.
   - Incomplete only (requirement groups not fully satisfied; N/A counts complete).
-  - Untagged only.
+  - Tag Mismatch only (no tags, or item tags not found in caption text).
   - Multi-select stars filter (includes `No Star`).
   - Multi-select flag filter (includes `No Flag`).
   - Invalid AR (shows only items with unsupported aspect ratios).

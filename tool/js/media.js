@@ -254,6 +254,16 @@ function mediaItemHasIncompleteRequirementGroups(item) {
   return progress.completed < progress.total;
 }
 
+function mediaItemHasTagMismatch(item) {
+  if (!item || !item.key) return false;
+  if (typeof getTagsForMediaKey !== 'function') return false;
+  var tags = getTagsForMediaKey(item.key);
+  if (!tags.length) return true;
+  if (typeof computeTagMatchProgressForText !== 'function') return false;
+  var progress = computeTagMatchProgressForText(item.key, item.caption || '');
+  return !!(progress && progress.total > 0 && progress.completed < progress.total);
+}
+
 function getFilteredMediaItems(ignoreFocusSet) {
   var q = (ui.filterEl && ui.filterEl.value) ? String(ui.filterEl.value) : '';
   var queryTerms = parseMediaFilterQuery(q);
@@ -263,7 +273,7 @@ function getFilteredMediaItems(ignoreFocusSet) {
   var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
   var unreviewedOnly = !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked);
   var incompleteOnly = !!(ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked);
-  var untaggedOnly = !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked);
+  var tagMismatchOnly = !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked);
   var starFilterState = getAdvancedStarFilterState();
   var flagFilterValues = getAdvancedFlagFilterValues();
 
@@ -307,10 +317,8 @@ function getFilteredMediaItems(ignoreFocusSet) {
       return flagFilterValues.indexOf(itemFlag) !== -1;
     });
   }
-  if (untaggedOnly) {
-    mediaItems = mediaItems.filter(function (item) {
-      return getTagsForMediaKey(item.key).length === 0;
-    });
+  if (tagMismatchOnly) {
+    mediaItems = mediaItems.filter(mediaItemHasTagMismatch);
   }
   var showInvalidArOnly = !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked);
   if (showInvalidArOnly) {

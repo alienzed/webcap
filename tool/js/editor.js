@@ -44,6 +44,9 @@ function handleEditorInputAutosave(e) {
         if (typeof renderItemTagsPanel === 'function') {
             renderItemTagsPanel();
         }
+        if (typeof renderItemMetadataPanel === 'function') {
+            renderItemMetadataPanel();
+        }
         if (typeof updatePrimerCaptionResetUi === 'function') {
             updatePrimerCaptionResetUi();
         }

@@ -22,6 +22,7 @@ function clearEditorAndPreview() {
     updatePrimerCaptionResetUi();
   }
   updatePreviewActionControls();
+  updateBalanceDistributionWheel();
 }
 
 function clearSelection() {

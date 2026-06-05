@@ -432,6 +432,58 @@ iframe {
   background: rgba(217, 119, 6, 0.96);
   color: #111827;
 }
+
+.balance-distribution-wheel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 100px;
+  height: 100px;
+  z-index: 19;
+  opacity: 0.34;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  outline: none;
+}
+
+.balance-distribution-wheel:hover,
+.balance-distribution-wheel:focus {
+  opacity: 1;
+  transform: translateY(1px);
+}
+
+.balance-distribution-wheel.hidden {
+  display: none;
+}
+
+.balance-distribution-wheel svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+}
+
+.balance-wheel-bg {
+  fill: none;
+  stroke: rgba(15, 23, 42, 0.38);
+  stroke-width: 17;
+}
+
+.balance-wheel-slice {
+  opacity: 0.82;
+}
+
+.balance-wheel-slice.is-current {
+  stroke-width: 22;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+}
+
+.balance-wheel-zero {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.58);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+}
 .media-item-main {
   display: flex;
   align-items: center;

@@ -440,6 +440,7 @@ function renderReportPreview(report, reviewedFileNames) {
   doc.open();
   doc.write(html);
   doc.close();
+  hideBalanceDistributionWheel();
 
   // Attach event listeners for file and token links after DOM is ready
   setTimeout(function() {

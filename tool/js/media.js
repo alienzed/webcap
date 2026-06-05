@@ -524,6 +524,7 @@ function selectPathMedia(mediaItem) {
     // Re-render list to show selection
     renderFileList();
     scrollCurrentMediaRowIntoView();
+    updateBalanceDistributionWheel();
     resolve(mediaItem);
   });
 }
@@ -784,6 +785,7 @@ async function renderFileList() {
 
   syncSelectionWithVisibleMedia(mediaItems);
   updatePreviewActionControls();
+  updateBalanceDistributionWheel();
   if (typeof updateSuperSetControls === 'function') {
     updateSuperSetControls();
   }

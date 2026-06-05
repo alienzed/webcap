@@ -36,6 +36,7 @@ ui = {
   previewPrimaryActionAEl: document.getElementById('preview-action-primary-a'),
   previewPrimaryActionBEl: document.getElementById('preview-action-primary-b'),
   previewMoreActionsEl: document.getElementById('preview-action-more'),
+  balanceDistributionWheelEl: document.getElementById('balance-distribution-wheel'),
   mediaListEl: document.getElementById('media-list'),
   filterEl: document.getElementById('media-filter'),
   captionFilterClearAllBtn: document.getElementById('caption-filter-clear-all-btn'),

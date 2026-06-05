@@ -47,6 +47,7 @@ function handleEditorInputAutosave(e) {
         if (typeof renderItemMetadataPanel === 'function') {
             renderItemMetadataPanel();
         }
+        updateBalanceDistributionWheel();
         if (typeof updatePrimerCaptionResetUi === 'function') {
             updatePrimerCaptionResetUi();
         }

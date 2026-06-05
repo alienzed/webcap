@@ -247,6 +247,7 @@ function setStatsBalancePhrases(nextPhrases, triggerAutosave) {
     }
   }
   renderPhraseCopyPanel();
+  updateBalanceDistributionWheel();
 }
 
 function moveStatsBalancePhraseByOffset(index, offset) {

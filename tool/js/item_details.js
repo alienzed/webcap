@@ -468,6 +468,7 @@ function addTagToMediaKey(mediaKey, tagText) {
   renderItemTagsPanel();
   renderItemMetadataPanel();
   renderFileList();
+  updateBalanceDistributionWheel();
   if (typeof renderAnnotateStrip === 'function') {
     renderAnnotateStrip();
   }
@@ -520,6 +521,7 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   renderItemTagsPanel();
   renderItemMetadataPanel();
   renderFileList();
+  updateBalanceDistributionWheel();
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
   }

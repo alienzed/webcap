@@ -30,8 +30,11 @@ Current defaults use fixed repeats and can overshoot badly on small sets (for ex
 
 Initial defaults discussed for this app:
 
-1. High-noise image-only: target about `3800` steps (acceptable band roughly `3500-4000`)
-2. Low-noise: target about `6000` steps
+1. High-noise: target about `5000` steps
+2. Low-noise: target about `20000` steps
+
+These step budgets are intentionally independent of `POC` / `Normal` / `Quality`.
+Mode should primarily affect bucket selection and effective training cost, not own the duration model.
 
 These are practical defaults, not hard quality guarantees.
 
@@ -73,7 +76,7 @@ Diversity can be added later as a light boost, not a replacement for sample coun
 
 ## Mode-Based Learning Rates (Documented Defaults)
 
-In addition to mode-based repeat targeting, fixed learning rates can be tied to Training Mode.
+Separate from the flat `hi` / `lo` repeat targets, fixed learning rates can still be tied to Training Mode.
 
 Agreed table:
 

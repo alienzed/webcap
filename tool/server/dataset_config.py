@@ -42,10 +42,10 @@ TRAINING_MODE_TARGETS = {
     },
     "normal": {
         "square": (512, 512),
-        "43": (592, 448),
-        "34": (448, 592),
-        "169": (688, 384),
-        "916": (384, 688),
+        "43": (640, 480),
+        "34": (480, 640),
+        "169": (736, 416),
+        "916": (416, 736),
     },
     "quality": {
         "square": (768, 768),
@@ -93,9 +93,9 @@ DEFAULT_LO_EPOCHS = 100
 HI_CONFIG_NAME = "config.hi.toml"
 LO_CONFIG_NAME = "config.lo.toml"
 REPEAT_TARGET_STEPS = {
-    "poc": {"hi": 2200, "lo": 3600},
-    "normal": {"hi": 3800, "lo": 6000},
-    "quality": {"hi": 5200, "lo": 8000},
+    "poc": {"hi": 5000, "lo": 20000},
+    "normal": {"hi": 5000, "lo": 20000},
+    "quality": {"hi": 5000, "lo": 20000},
 }
 VIDEO_DETAIL_REPEAT_WEIGHT = 0.25
 VIDEO_MOTION_REPEAT_WEIGHT = 1.0
@@ -178,7 +178,8 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lines.append(f"[INFO] Found {len(image_dirs)} prepared image folder(s).")
 
     metadata = {}
-    image_entries = []
+    hi_image_entries = []
+    lo_image_entries = []
     for image_dir in image_dirs:
         ar_label = ar_from_image_dir(image_dir.name)
         images = read_image_metadata(image_dir)
@@ -190,45 +191,67 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
         if not images:
             continue
 
-        buckets, unsupported = pick_image_buckets(ar_label, images, mode=generate_mode)
-        if unsupported:
-            lines.append(f"[WARN] {image_dir.name}: {len(unsupported)} image(s) smaller than every valid bucket:")
-            for name in unsupported:
+        hi_buckets, hi_unsupported = pick_image_buckets(ar_label, images, mode=generate_mode, noise_profile="hi")
+        lo_buckets, lo_unsupported = pick_image_buckets(ar_label, images, mode=generate_mode, noise_profile="lo")
+        if hi_unsupported:
+            lines.append(f"[WARN] {image_dir.name} (HI): {len(hi_unsupported)} image(s) smaller than every valid bucket:")
+            for name in hi_unsupported:
                 lines.append(f"  - {name}")
-        if not buckets:
-            lines.append(f"[WARN] {image_dir.name}: no image buckets selected.")
-            continue
-
-        lines.append(
-            f"[INFO] {image_dir.name}: selected image bucket(s): "
-            + ", ".join(f"{w}x{h}" for (w, h) in buckets)
-        )
-        image_entries.append({
-            "kind": "image",
-            "path": image_dir,
-            "ar_label": ar_label,
-            "buckets": buckets,
-            "sample_count": max(1, len(images) - len(unsupported)),
-            "repeat_weight": IMAGE_REPEAT_WEIGHT,
-        })
+        if lo_unsupported:
+            lines.append(f"[WARN] {image_dir.name} (LO): {len(lo_unsupported)} image(s) smaller than every valid bucket:")
+            for name in lo_unsupported:
+                lines.append(f"  - {name}")
+        if not hi_buckets:
+            lines.append(f"[WARN] {image_dir.name} (HI): no image buckets selected.")
+        else:
+            lines.append(
+                f"[INFO] {image_dir.name}: selected HI image bucket(s): "
+                + ", ".join(f"{w}x{h}" for (w, h) in hi_buckets)
+            )
+            hi_image_entries.append({
+                "kind": "image",
+                "path": image_dir,
+                "ar_label": ar_label,
+                "buckets": hi_buckets,
+                "sample_count": max(1, len(images) - len(hi_unsupported)),
+                "repeat_weight": IMAGE_REPEAT_WEIGHT,
+            })
+        if not lo_buckets:
+            lines.append(f"[WARN] {image_dir.name} (LO): no image buckets selected.")
+        else:
+            lines.append(
+                f"[INFO] {image_dir.name}: selected LO image bucket(s): "
+                + ", ".join(f"{w}x{h}" for (w, h) in lo_buckets)
+            )
+            lo_image_entries.append({
+                "kind": "image",
+                "path": image_dir,
+                "ar_label": ar_label,
+                "buckets": lo_buckets,
+                "sample_count": max(1, len(images) - len(lo_unsupported)),
+                "repeat_weight": IMAGE_REPEAT_WEIGHT,
+            })
 
     metadata_path = dataset_root / "webcap_dataset_metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     lines.append(f"[INFO] Wrote metadata cache: {metadata_path}")
 
-    all_entries = []
-    all_entries.extend(video_entries)
-    all_entries.extend(image_entries)
+    hi_entries = []
+    hi_entries.extend(video_entries)
+    hi_entries.extend(hi_image_entries)
+    lo_entries = []
+    lo_entries.extend(video_entries)
+    lo_entries.extend(lo_image_entries)
 
     hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
     hi_epochs = read_epochs_from_training_config(folder / HI_CONFIG_NAME, DEFAULT_HI_EPOCHS)
     lo_epochs = read_epochs_from_training_config(folder / LO_CONFIG_NAME, DEFAULT_LO_EPOCHS)
-    hi_scalar, hi_base = solve_repeat_scalar(all_entries, hi_target_steps, hi_epochs)
-    lo_scalar, lo_base = solve_repeat_scalar(all_entries, lo_target_steps, lo_epochs)
-    hi_repeats = build_repeats(all_entries, hi_scalar)
-    lo_repeats = build_repeats(all_entries, lo_scalar)
-    hi_est = estimate_steps(all_entries, hi_repeats, hi_epochs)
-    lo_est = estimate_steps(all_entries, lo_repeats, lo_epochs)
+    hi_scalar, hi_base = solve_repeat_scalar(hi_entries, hi_target_steps, hi_epochs)
+    lo_scalar, lo_base = solve_repeat_scalar(lo_entries, lo_target_steps, lo_epochs)
+    hi_repeats = build_repeats(hi_entries, hi_scalar)
+    lo_repeats = build_repeats(lo_entries, lo_scalar)
+    hi_est = estimate_steps(hi_entries, hi_repeats, hi_epochs)
+    lo_est = estimate_steps(lo_entries, lo_repeats, lo_epochs)
 
     lines.append(f"[INFO] Repeat targeting HI: target={hi_target_steps}, epochs={hi_epochs}, base={hi_base:.2f}, scalar={hi_scalar}, est_steps={hi_est}")
     lines.append(f"[INFO] Repeat targeting LO: target={lo_target_steps}, epochs={lo_epochs}, base={lo_base:.2f}, scalar={lo_scalar}, est_steps={lo_est}")
@@ -237,8 +260,9 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
 
     hi_blocks = []
     lo_blocks = []
-    for idx, entry in enumerate(all_entries):
+    for idx, entry in enumerate(hi_entries):
         hi_blocks.append(render_dataset_entry(entry, hi_repeats[idx]))
+    for idx, entry in enumerate(lo_entries):
         lo_blocks.append(render_dataset_entry(entry, lo_repeats[idx]))
 
     snapshot_lines = build_selection_snapshot_comment_lines(folder, dataset_root, manifest) if write_selection_snapshot_comments else None
@@ -691,6 +715,29 @@ def snap_32_nearest(value):
     return high
 
 
+def target_dimensions_for_short_side(ar_label: str, short_side: int):
+    short_side = max(256, snap_32_nearest(short_side))
+    if ar_label == "square":
+        return (short_side, short_side)
+    target_ar = AR_CLASSES[ar_label]
+    if target_ar >= 1:
+        h = short_side
+        w = snap_32_nearest(h * target_ar)
+    else:
+        w = short_side
+        h = snap_32_nearest(w / target_ar)
+    return (max(256, w), max(256, h))
+
+
+def resolve_image_target(ar_label: str, mode: str = "normal", noise_profile: str = "lo"):
+    generate_mode = normalize_training_generate_mode(mode)
+    target_w, target_h = TRAINING_MODE_TARGETS[generate_mode][ar_label]
+    if str(noise_profile or "lo").strip().lower() != "hi":
+        return (target_w, target_h)
+    short_side = max(256, min(target_w, target_h) - 32)
+    return target_dimensions_for_short_side(ar_label, short_side)
+
+
 def add_candidate(candidates, seen, target_ar, w, h, max_long, max_short):
     if w < 256 or h < 256:
         return
@@ -707,7 +754,7 @@ def add_candidate(candidates, seen, target_ar, w, h, max_long, max_short):
     candidates.append((w, h, w * h))
 
 
-def pick_image_buckets(ar_label: str, images, mode: str = "normal"):
+def pick_image_buckets(ar_label: str, images, mode: str = "normal", noise_profile: str = "lo"):
     generate_mode = normalize_training_generate_mode(mode)
     candidates = generate_image_candidates(ar_label, mode=generate_mode)
     if not candidates:
@@ -739,13 +786,13 @@ def pick_image_buckets(ar_label: str, images, mode: str = "normal"):
     for (w, h, _) in candidates:
         support[(w, h)] = sum(1 for (_, iw, ih) in supported_images if iw >= w and ih >= h)
 
-    target_w, target_h = TRAINING_MODE_TARGETS[generate_mode][ar_label]
+    target_w, target_h = resolve_image_target(ar_label, mode=generate_mode, noise_profile=noise_profile)
     primary = pick_primary_image_bucket(candidates, support, total, target_w, target_h, generate_mode)
     if not primary:
         return [], unsupported
 
     selected = [primary]
-    if generate_mode == "normal":
+    if generate_mode == "normal" and str(noise_profile or "lo").strip().lower() != "hi":
         second = pick_secondary_image_bucket(candidates, support, total, primary)
         if second:
             selected.append(second)
@@ -779,8 +826,16 @@ def pick_primary_image_bucket(candidates, support, total, target_w, target_h, mo
             best = max(at_or_below, key=lambda item: item[2])
             return (best[0], best[1])
 
-    # Normal/Quality (and POC fallback): for homogeneous/high-support sets,
-    # prioritize the largest fully-supported bucket.
+    at_or_above = [
+        (w, h, area)
+        for (w, h, area) in full_coverage
+        if w >= target_w and h >= target_h
+    ]
+    if at_or_above:
+        best = min(at_or_above, key=lambda item: item[2])
+        return (best[0], best[1])
+
+    # When the ideal target is not fully supported, take the strongest bucket just below it.
     best = max(full_coverage, key=lambda item: item[2])
     return (best[0], best[1])
 

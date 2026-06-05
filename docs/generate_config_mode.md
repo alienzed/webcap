@@ -9,7 +9,7 @@ This document intentionally avoids changing existing AR validity rules, fallback
 
 1. Mode source is app settings (`training.mode`), default `normal`.
 2. Generate overwrites standard outputs (deterministic). No mode-suffixed file names.
-3. Image bucketing uses a single bucket per AR for all modes.
+3. Image bucketing uses target-near selection per AR, with `hi` biased slightly smaller than `lo`.
 4. Video bucketing keeps current multi-bucket logic (motion + optional detail).
 5. Modes provide preferred targets/ceilings. Existing support/fallback logic decides what is actually emitted.
 6. If dataset constraints force convergence, outputs across modes may be similar or identical. That is expected.
@@ -20,7 +20,7 @@ Images are static and do not gain the same temporal benefit from multi-resolutio
 Videos benefit from multiple buckets because lower-res higher-frame motion coverage and higher-res lower-frame detail are both useful.
 
 So:
-- Images: one bucket per AR.
+- Images: target-near bucket selection per AR, with `hi` slightly coarser than `lo`.
 - Videos: keep existing motion/detail behavior.
 
 ## Mode Tables
@@ -37,15 +37,21 @@ POC:
 
 Normal:
 - square 1:1: 512x512
-- 4:3: 592x448
-- 16:9: 688x384
-- 9:16: 384x688
+- 4:3: 640x480
+- 16:9: 736x416
+- 9:16: 416x736
 
 Quality:
 - square 1:1: 768x768
 - 4:3: 896x672
 - 16:9: 1024x576
 - 9:16: 576x1024
+
+Notes:
+- `lo` uses the target table directly.
+- `hi` is biased one short-side step below the corresponding mode target.
+- `Normal` prefers the smallest fully-supported bucket at or just above target instead of the largest fully-supported bucket.
+- `Quality` can still climb to larger fully-supported buckets when support allows.
 
 ### LoRA Rank Defaults
 
@@ -110,11 +116,12 @@ Implement mode tables as constants and route image bucket selection through them
 
 Practical approach:
 - keep current candidate/support/fallback logic
-- constrain preferred selection to mode target neighborhood
-- emit one image bucket per AR (disable second bucket path)
+- constrain preferred selection to the mode target neighborhood
+- bias `hi` one short-side step below `lo`
+- keep the optional second Normal image bucket on the `lo` side only
 
 Minimum safe delta:
-- set single-bucket behavior in image picker path
+- keep the image picker deterministic and target-near
 - keep unsupported-image warnings
 - keep video block logic unchanged
 
@@ -143,7 +150,7 @@ When writing config templates during Generate:
 
 1. `training.mode` survives app settings save/load and reboot.
 2. Generate reads persisted mode without needing request payload changes.
-3. Image output has at most one bucket per AR directory block.
+3. Image output stays deterministic and target-near, with `hi` generally landing below `lo`.
 4. Video output still contains current motion/detail behavior where applicable.
 5. Rank values in generated config templates match selected mode.
 6. Low-res/small sets may produce identical POC/Normal/Quality outputs without error.
@@ -158,7 +165,7 @@ When writing config templates during Generate:
 
 2. Image-only set:
 - run Prepare + Generate for each mode
-- verify one image bucket per AR in dataset TOMLs
+- verify `hi` and `lo` image buckets separate as intended
 - verify mode shifts selected resolution only when supported
 
 3. Video set:
@@ -182,3 +189,12 @@ When writing config templates during Generate:
 ## Notes
 
 This feature intentionally treats mode as a preference layer over existing safety and support logic. It should not increase risk of invalid buckets, upscaling, or non-deterministic generation.
+
+## Step Budget Note
+
+Repeat targeting is intentionally separated from `POC` / `Normal` / `Quality`.
+
+- `hi` targets about `5000` steps
+- `lo` targets about `20000` steps
+
+Modes primarily change bucket selection and effective training cost, not the step-budget model itself.

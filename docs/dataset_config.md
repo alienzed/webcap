@@ -9,7 +9,7 @@ For planned step-targeted repeat defaults, see `docs/repeat_targeting.md`.
 The strategy is to:
 - Use fixed, preset resolution pools per aspect ratio (not dynamically generated).
 - Select buckets that are actually supported by media in the folder (coverage-based).
-- Differentiate configuration by training profile: lo-noise (motion + detail) vs hi-noise (motion only for video, but keep detail for images).
+- Differentiate configuration by training profile: lo-noise (motion + detail, fuller image detail) vs hi-noise (motion only for video, slightly coarser image preference).
 - Ensure every media item lands in at least one bucket.
 
 ---
@@ -57,10 +57,12 @@ All resolutions divisible by 32.
 
 ### Image Buckets
 
-**Single Image Bucket per Profile** (no motion; frame count = 1):
-- Resolution: highest preset where ≥60% of images are supported
-- Rationale: images are static; one bucket per profile sufficient
-- Both profiles: retain high-res images (no motion concern for hi-noise)
+**Image Buckets per Profile** (no motion; frame count = 1):
+- Resolution: choose from supported presets while staying near the mode target
+- Normal: prefers the smallest fully-supported bucket at or just above target, instead of the largest fully-supported bucket
+- Quality: can still climb to larger fully-supported buckets when supported
+- Hi-noise: biased one short-side step below lo-noise for the same mode
+- Lo-noise: keeps the fuller-detail image preference and may emit a second supporting bucket in Normal mode
 
 ---
 
@@ -68,11 +70,11 @@ All resolutions divisible by 32.
 
 ### Lo-Noise Profile (dataset.lo.toml)
 - **Videos**: motion bucket + detail bucket (if ≥60% support)
-- **Images**: one high-res bucket per AR
+- **Images**: target-near detail bucket per AR, with an optional second supporting bucket in Normal mode
 
 ### Hi-Noise Profile (dataset.hi.toml)
 - **Videos**: motion bucket only
-- **Images**: one high-res bucket per AR (same as lo-noise)
+- **Images**: target-near bucket per AR, biased slightly smaller than lo-noise
 
 ---
 

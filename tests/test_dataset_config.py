@@ -93,15 +93,18 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert "  [512, 512, 33]," in hi_text
     assert hi_text.count('group = "images"') == 1
     assert "  [256, 256, 1]," in hi_text
-    assert "  [512, 512, 1]," in hi_text
+    assert "  [512, 512, 1]," not in hi_text
+    assert "  [256, 256, 1]," in lo_text
+    assert "  [512, 512, 1]," in lo_text
     assert "  [768, 768, 1]," not in hi_text
-    assert "num_repeats = 8" in hi_text
-    assert "num_repeats = 10" in lo_text
+    assert "num_repeats = 11" in hi_text
+    assert "num_repeats = 34" in lo_text
     assert "[INFO] Built 1 video directory block(s)." in report
     assert "[INFO] Training generate mode: normal" in report
-    assert "[INFO] square_img: selected image bucket(s): 256x256, 512x512" in report
-    assert "[INFO] Repeat targeting HI: target=3800" in report
-    assert "[INFO] Repeat targeting LO: target=6000" in report
+    assert "[INFO] square_img: selected HI image bucket(s): 256x256" in report
+    assert "[INFO] square_img: selected LO image bucket(s): 256x256, 512x512" in report
+    assert "[INFO] Repeat targeting HI: target=5000" in report
+    assert "[INFO] Repeat targeting LO: target=20000" in report
     assert (auto_dataset / "webcap_dataset_metadata.json").exists()
 
 
@@ -181,10 +184,10 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
     assert lo_text.count('group = "videos"') == 2
     assert "  [640, 352, 49]," in hi_text
     assert "  [1024, 576, 13]," in hi_text
-    assert "num_repeats = 19" in hi_text
-    assert "num_repeats = 5" in hi_text
-    assert "num_repeats = 24" in lo_text
-    assert "num_repeats = 6" in lo_text
+    assert "num_repeats = 25" in hi_text
+    assert "num_repeats = 7" in hi_text
+    assert "num_repeats = 80" in lo_text
+    assert "num_repeats = 20" in lo_text
     assert "[INFO] Built 2 video directory block(s)." in report
 
 
@@ -293,7 +296,7 @@ def test_selected_image_buckets_respect_image_mfp_limit():
     buckets, unsupported = pick_image_buckets("916", images, mode="normal")
 
     assert unsupported == []
-    assert buckets == [(576, 1024)]
+    assert buckets == [(416, 736), (576, 1024)]
 
 
 def test_pick_image_buckets_prefers_full_coverage_then_detail():
@@ -315,7 +318,7 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
     ]
     buckets_916, unsupported_916 = pick_image_buckets("916", images_916, mode="normal")
     assert unsupported_916 == []
-    assert buckets_916 == [(480, 864), (576, 1024)]
+    assert buckets_916 == [(416, 736), (576, 1024)]
 
     images_square = [
         ("003c.jpg", 544, 544),
@@ -328,7 +331,7 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
     ]
     buckets_square, unsupported_square = pick_image_buckets("square", images_square, mode="normal")
     assert unsupported_square == []
-    assert buckets_square == [(544, 544)]
+    assert buckets_square == [(512, 512)]
 
     buckets_square_poc, _ = pick_image_buckets("square", images_square, mode="poc")
     assert buckets_square_poc == [(384, 384)]
@@ -343,6 +346,25 @@ def test_image_candidates_use_mode_caps():
     assert generate_image_candidates("169", mode="normal")[0][:2] == (1024, 576)
     assert generate_image_candidates("169", mode="poc")[0][:2] == (736, 416)
     assert generate_candidates("169")[0][:2] == (1248, 704)
+
+
+def test_normal_and_quality_image_buckets_stay_separated():
+    images = [
+        ("a.png", 768, 768),
+        ("b.png", 768, 768),
+        ("c.png", 768, 768),
+    ]
+
+    normal_hi, unsupported_normal_hi = pick_image_buckets("square", images, mode="normal", noise_profile="hi")
+    normal_lo, unsupported_normal_lo = pick_image_buckets("square", images, mode="normal", noise_profile="lo")
+    quality_lo, unsupported_quality_lo = pick_image_buckets("square", images, mode="quality", noise_profile="lo")
+
+    assert unsupported_normal_hi == []
+    assert unsupported_normal_lo == []
+    assert unsupported_quality_lo == []
+    assert normal_hi == [(480, 480)]
+    assert normal_lo == [(512, 512)]
+    assert quality_lo == [(768, 768)]
 
 
 def test_validate_config_payload_persists_training_mode():
@@ -373,9 +395,9 @@ def test_poc_mode_never_emits_second_image_bucket():
 
 
 def test_repeat_targets_vary_by_mode():
-    assert repeat_targets_for_mode("poc") == (2200, 3600)
-    assert repeat_targets_for_mode("normal") == (3800, 6000)
-    assert repeat_targets_for_mode("quality") == (5200, 8000)
+    assert repeat_targets_for_mode("poc") == (5000, 20000)
+    assert repeat_targets_for_mode("normal") == (5000, 20000)
+    assert repeat_targets_for_mode("quality") == (5000, 20000)
 
 
 def test_read_epochs_from_training_config_handles_non_utf8_bytes(tmp_path):

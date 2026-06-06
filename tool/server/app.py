@@ -9,12 +9,13 @@ import shutil
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
-from .originals import MEDIA_ALL_EXTS, copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
+from .originals import copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, open_in_vscode_response, rename_response
 from .media import media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import autoset_run_response, prepare_dataset_response, generate_dataset_config_response, train_run_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
+from .training_config_files import ensure_training_config_files
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -26,9 +27,8 @@ TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
 
-# Aliases kept for readability in route handlers.
+# Alias kept for readability in route handlers.
 safe_join_fs_root = app_config.safe_join_fs_root
-fill_template_placeholders = app_config.fill_template_placeholders
 
 @app.route("/fs/folder_state/save", methods=["POST"])
 def folder_state_save():
@@ -309,7 +309,7 @@ def generate_dataset_config_route():
     try:
         folder_path = safe_join_fs_root(folder)
         if folder_path.exists() and folder_path.is_dir():
-            maybe_create_config_files(folder_path)
+            ensure_training_config_files(folder_path)
     except Exception:
         # Let downstream route handler return canonical error responses.
         pass
@@ -572,30 +572,5 @@ def open_in_vscode():
     rel_path = data.get("path", "").strip()
     return open_in_vscode_response(rel_path)
     
-def maybe_create_config_files(folder_path):
-    folder = Path(folder_path)
-    if folder.name in ("originals", "auto_dataset"):
-        return
-    media_files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_ALL_EXTS]
-    if not media_files:
-        return
-    templates = ["config.hi.toml", "config.lo.toml"]
-    templates_dir = TOOL_DIR / "templates"
-    for name in templates:
-        dest = folder / name
-        src = templates_dir / name
-        if src.exists():
-            try:
-                dataset_rel = folder.relative_to(app_config.FS_ROOT).as_posix()
-            except Exception:
-                dataset_rel = folder.name
-            template_text = src.read_text(encoding="utf-8")
-            filled_text = fill_template_placeholders(template_text, dataset_rel)
-            dest.write_text(filled_text, encoding="utf-8")
-            try:
-                os.chmod(dest, 0o644)
-            except Exception:
-                pass
-
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

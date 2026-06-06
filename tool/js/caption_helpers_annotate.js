@@ -27,6 +27,76 @@ function getAnnotateStripGroups() {
   return groups;
 }
 
+function normalizeAnnotateUsageKey(text) {
+  return normalizeCatalogTerm(text).toLowerCase();
+}
+
+function buildAnnotateStripUsageStats(groups) {
+  var preparedGroups = [];
+  var countsByGroupTerm = {};
+  var maxCountByGroup = {};
+
+  (groups || []).forEach(function (group) {
+    var groupKey = String(group && (group.requirement || group.name) || '').trim().toLowerCase();
+    var terms = Array.isArray(group && group.terms) ? group.terms : [];
+    if (!groupKey || !terms.length) return;
+    var preparedTerms = [];
+    terms.forEach(function (term) {
+      var termKey = normalizeAnnotateUsageKey(term);
+      if (!termKey) return;
+      preparedTerms.push({ text: term, key: termKey });
+      countsByGroupTerm[groupKey + '::' + termKey] = 0;
+    });
+    if (!preparedTerms.length) return;
+    maxCountByGroup[groupKey] = 0;
+    preparedGroups.push({
+      key: groupKey,
+      terms: preparedTerms
+    });
+  });
+
+  (Array.isArray(state.items) ? state.items : []).forEach(function (item) {
+    if (!item || !item.key || typeof getTagsForMediaKey !== 'function') return;
+    var tags = getTagsForMediaKey(item.key);
+    if (!tags.length) return;
+    var tagSet = {};
+    tags.forEach(function (tag) {
+      var tagKey = normalizeAnnotateUsageKey(tag);
+      if (tagKey) tagSet[tagKey] = true;
+    });
+    preparedGroups.forEach(function (group) {
+      group.terms.forEach(function (term) {
+        if (!tagSet[term.key]) return;
+        var countKey = group.key + '::' + term.key;
+        countsByGroupTerm[countKey] = (countsByGroupTerm[countKey] || 0) + 1;
+        if (countsByGroupTerm[countKey] > maxCountByGroup[group.key]) {
+          maxCountByGroup[group.key] = countsByGroupTerm[countKey];
+        }
+      });
+    });
+  });
+
+  return {
+    countsByGroupTerm: countsByGroupTerm,
+    maxCountByGroup: maxCountByGroup
+  };
+}
+
+function getAnnotateChipHeatLevel(count, maxCount) {
+  var usageCount = Number(count) || 0;
+  var maxUsage = Number(maxCount) || 0;
+  if (usageCount <= 0 || maxUsage <= 0) return 0;
+  var ratio = usageCount / maxUsage;
+  var weightedRatio = Math.sqrt(Math.max(0, Math.min(1, ratio)));
+  return Math.max(1, Math.min(3, Math.round(weightedRatio * 3)));
+}
+
+function formatAnnotateChipUsageTitle(count) {
+  var usageCount = Number(count) || 0;
+  if (usageCount <= 0) return 'Toggle tag';
+  return 'Toggle tag - used on ' + usageCount + ' item' + (usageCount === 1 ? '' : 's') + ' in this folder';
+}
+
 function updateAnnotateStripToggleUi() {
   var toggleIds = ['annotate-strip-toggle-btn', 'annotate-strip-toggle-inline-btn'];
   for (var i = 0; i < toggleIds.length; i++) {
@@ -145,6 +215,7 @@ function renderAnnotateStrip() {
   var groupsWrap = document.createElement('div');
   groupsWrap.className = 'annotate-strip-groups';
   var mediaKey = state.currentItem.key;
+  var usageStats = buildAnnotateStripUsageStats(groups);
 
   groups.forEach(function (group) {
     var groupEl = document.createElement('div');
@@ -244,14 +315,20 @@ function renderAnnotateStrip() {
 
     group.terms.forEach(function (term) {
       var chip = document.createElement('button');
+      var groupKey = String(group.requirement || group.name || '').trim().toLowerCase();
+      var termKey = normalizeAnnotateUsageKey(term);
+      var usageCount = usageStats.countsByGroupTerm[groupKey + '::' + termKey] || 0;
+      var usageMax = usageStats.maxCountByGroup[groupKey] || 0;
+      var heatLevel = getAnnotateChipHeatLevel(usageCount, usageMax);
       chip.type = 'button';
       chip.className = 'annotate-strip-chip';
+      chip.setAttribute('data-heat-level', String(heatLevel));
       if (hasTagForMediaKey(mediaKey, term)) {
         chip.classList.add('active');
         hasActiveTerm = true;
       }
       chip.textContent = term;
-      chip.title = 'Toggle tag';
+      chip.title = formatAnnotateChipUsageTitle(usageCount);
       chip.onclick = function () {
         if (groupIsNa && typeof setChecklistRequirementNaForMediaKey === 'function') {
           setChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel, false);

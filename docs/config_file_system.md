@@ -20,7 +20,9 @@ This returns `.toml` filenames in the selected folder only.
 - Missing template files are created during dataset-generation/training flows:
   - `/fs/generate_dataset_config`
   - `/fs/train_run`
-- Templates come from `tool/templates/` and are written server-side with placeholder substitution via `fill_template_placeholders(...)`.
+- Canonical training config templates live in `tool/templates/config.hi.toml` and `tool/templates/config.lo.toml`.
+- A shared backend helper materializes those templates into set folders, with placeholder substitution via `fill_template_placeholders(...)`.
+- Dataset TOML examples are documentation-only and live under `docs/examples/`; generated `dataset.hi.toml` / `dataset.lo.toml` come from code, not templates.
 
 ## Editing Flow
 

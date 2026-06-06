@@ -16,11 +16,7 @@ from . import config as app_config
 from . import autoset as autoset_module
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
-from .originals import MEDIA_ALL_EXTS
-
-ROOT = Path(__file__).resolve().parents[2]
-HI_CONFIG_NAME = "config.hi.toml"
-LO_CONFIG_NAME = "config.lo.toml"
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, ensure_training_config_files
 
 
 class _QueueWriter:
@@ -257,35 +253,6 @@ def _to_wsl_path(path_obj: Path):
     return out
 
 
-def _create_missing_config_files(folder_path: Path):
-    if folder_path.name in ("originals", "auto_dataset"):
-        return
-    media_files = [f for f in folder_path.iterdir() if f.is_file() and f.suffix.lower() in MEDIA_ALL_EXTS]
-    if not media_files:
-        return
-
-    templates = ["config.hi.toml", "config.lo.toml"]
-    templates_dir = ROOT / "tool" / "templates"
-    for name in templates:
-        dest = folder_path / name
-        src = templates_dir / name
-        if src.exists():
-            try:
-                dataset_rel = folder_path.relative_to(app_config.FS_ROOT).as_posix()
-            except Exception:
-                dataset_rel = folder_path.name
-            template_text = src.read_text(encoding="utf-8")
-            try:
-                filled_text = app_config.fill_template_placeholders(template_text, dataset_rel)
-            except Exception:
-                filled_text = template_text
-            dest.write_text(filled_text, encoding="utf-8")
-            try:
-                os.chmod(dest, 0o644)
-            except Exception:
-                pass
-
-
 def train_run_response(folder: str):
     if not folder:
         return Response("[ERROR] Missing folder argument\n", status=400, mimetype="text/plain")
@@ -315,7 +282,7 @@ def train_run_response(folder: str):
 
         if missing_hi or missing_lo or missing_dataset_hi or missing_dataset_lo:
             warnings.append("[INFO] Missing training config or dataset files; auto-running Generate Dataset Configs.")
-            _create_missing_config_files(folder_path)
+            ensure_training_config_files(folder_path)
             prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
             if not prep_manifest_path.exists():
                 warnings.append("[INFO] Missing prep manifest; auto-running Prepare Dataset once.")

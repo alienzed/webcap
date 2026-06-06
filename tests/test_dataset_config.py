@@ -97,8 +97,8 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert "  [256, 256, 1]," in lo_text
     assert "  [512, 512, 1]," in lo_text
     assert "  [768, 768, 1]," not in hi_text
-    assert "num_repeats = 11" in hi_text
-    assert "num_repeats = 34" in lo_text
+    assert "num_repeats = 17" in hi_text
+    assert "num_repeats = 38" in lo_text
     assert "[INFO] Built 1 video directory block(s)." in report
     assert "[INFO] Training generate mode: normal" in report
     assert "[INFO] square_img: selected HI image bucket(s): 256x256" in report
@@ -184,10 +184,10 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
     assert lo_text.count('group = "videos"') == 2
     assert "  [640, 352, 49]," in hi_text
     assert "  [1024, 576, 13]," in hi_text
-    assert "num_repeats = 25" in hi_text
-    assert "num_repeats = 7" in hi_text
-    assert "num_repeats = 80" in lo_text
-    assert "num_repeats = 20" in lo_text
+    assert "num_repeats = 40" in hi_text
+    assert "num_repeats = 10" in hi_text
+    assert "num_repeats = 89" in lo_text
+    assert "num_repeats = 23" in lo_text
     assert "[INFO] Built 2 video directory block(s)." in report
 
 

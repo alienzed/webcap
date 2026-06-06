@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
@@ -88,10 +89,6 @@ VIDEO_DETAIL_MIN_COVERAGE = 0.35
 VIDEO_DETAIL_MIN_SUPPORT = 2
 POC_VIDEO_DETAIL_ENABLED = False
 NORMAL_SECOND_BUCKET_MIN_SCALE_NON_SQUARE = 1.08
-DEFAULT_HI_EPOCHS = 80
-DEFAULT_LO_EPOCHS = 100
-HI_CONFIG_NAME = "config.hi.toml"
-LO_CONFIG_NAME = "config.lo.toml"
 REPEAT_TARGET_STEPS = {
     "poc": {"hi": 5000, "lo": 20000},
     "normal": {"hi": 5000, "lo": 20000},
@@ -244,8 +241,9 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lo_entries.extend(lo_image_entries)
 
     hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
-    hi_epochs = read_epochs_from_training_config(folder / HI_CONFIG_NAME, DEFAULT_HI_EPOCHS)
-    lo_epochs = read_epochs_from_training_config(folder / LO_CONFIG_NAME, DEFAULT_LO_EPOCHS)
+    default_hi_epochs, default_lo_epochs = default_training_config_epochs()
+    hi_epochs = read_epochs_from_training_config(folder / HI_CONFIG_NAME, default_hi_epochs)
+    lo_epochs = read_epochs_from_training_config(folder / LO_CONFIG_NAME, default_lo_epochs)
     hi_scalar, hi_base = solve_repeat_scalar(hi_entries, hi_target_steps, hi_epochs)
     lo_scalar, lo_base = solve_repeat_scalar(lo_entries, lo_target_steps, lo_epochs)
     hi_repeats = build_repeats(hi_entries, hi_scalar)

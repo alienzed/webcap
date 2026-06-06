@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import tool.server.config as config_module
+import tool.server.training_config_files as training_config_files_module
 
 
 def test_fill_template_placeholders_normalizes_paths(monkeypatch):
@@ -27,10 +28,14 @@ def test_fill_template_placeholders_normalizes_paths(monkeypatch):
     assert "models//Stable-diffusion" not in rendered
 
 
-def test_dataset_lo_template_uses_placeholders():
-    template_path = Path(__file__).resolve().parents[1] / "tool" / "templates" / "dataset.lo.toml"
+def test_dataset_lo_example_uses_placeholders():
+    template_path = Path(__file__).resolve().parents[1] / "docs" / "examples" / "dataset.lo.toml"
     text = template_path.read_text(encoding="utf-8")
 
     assert "/mnt/w/training/massage/v3/" not in text
     assert text.count('{TRAINING_ROOT}/{DATASET}/auto_dataset/square') >= 2
     assert text.count('{TRAINING_ROOT}/{DATASET}/auto_dataset/169') >= 2
+
+
+def test_default_training_epochs_follow_canonical_templates():
+    assert training_config_files_module.default_training_config_epochs() == (50, 90)

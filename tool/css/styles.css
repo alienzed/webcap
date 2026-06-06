@@ -1889,6 +1889,24 @@ iframe {
   padding: 3px 8px;
 }
 
+.annotate-strip-chip[data-heat-level="1"] {
+  background: #f1f5f9;
+  border-color: #c5d0dd;
+  color: #314155;
+}
+
+.annotate-strip-chip[data-heat-level="2"] {
+  background: #e8eef5;
+  border-color: #b7c3d1;
+  color: #29384c;
+}
+
+.annotate-strip-chip[data-heat-level="3"] {
+  background: #e2e8f0;
+  border-color: #a9b6c5;
+  color: #223046;
+}
+
 .annotate-strip-chip:hover {
   background: #edf2f7;
   color: #1f2937;
@@ -3241,6 +3259,24 @@ html[data-theme="dark"] .annotate-strip-chip {
   background: #111827;
   color: var(--text);
   border-color: #324055;
+}
+
+html[data-theme="dark"] .annotate-strip-chip[data-heat-level="1"] {
+  background: #16202d;
+  border-color: #3a495f;
+  color: #d9e2ee;
+}
+
+html[data-theme="dark"] .annotate-strip-chip[data-heat-level="2"] {
+  background: #1a2634;
+  border-color: #44546b;
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .annotate-strip-chip[data-heat-level="3"] {
+  background: #203041;
+  border-color: #526378;
+  color: #edf2f7;
 }
 
 html[data-theme="dark"] .annotate-strip-chip:hover {

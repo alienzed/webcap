@@ -52,7 +52,6 @@ function appendFaceFocusMetadataRows(listEl, row) {
   var bucket = normalizeFaceFocusBucket(focus.bucket);
   var fields = [
     ['Face Focus', getFaceFocusBucketLabel(bucket), bucket],
-    ['Faces', focus.face_count !== undefined ? String(focus.face_count) : '-', ''],
     ['Largest Face', formatFaceFocusPercent(focus.largest_height_pct) + ' height', ''],
     ['Face Score', formatFaceFocusScore(focus.largest_score), '']
   ];

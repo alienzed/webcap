@@ -31,10 +31,86 @@ function normalizeAnnotateUsageKey(text) {
   return normalizeCatalogTerm(text).toLowerCase();
 }
 
+var ANNOTATE_STRIP_CONTEXT_PERCENT = 0.08;
+var ANNOTATE_STRIP_CONTEXT_FLOOR = 12;
+var ANNOTATE_STRIP_CONTEXT_CEILING = 40;
+
+function annotateStripItemHasCaptionOrTags(item) {
+  if (!item || !item.key) return false;
+  if (String(item.caption || '').trim()) return true;
+  if (typeof getTagsForMediaKey !== 'function') return false;
+  return getTagsForMediaKey(item.key).length > 0;
+}
+
+function getAnnotateStripContextWindowSize(totalAnnotatedSiblings) {
+  var total = Number(totalAnnotatedSiblings) || 0;
+  if (total <= 0) return 0;
+  var scaled = Math.round(total * ANNOTATE_STRIP_CONTEXT_PERCENT);
+  var bounded = Math.max(ANNOTATE_STRIP_CONTEXT_FLOOR, Math.min(ANNOTATE_STRIP_CONTEXT_CEILING, scaled));
+  return Math.min(total, bounded);
+}
+
+function getAnnotateStripContextItems() {
+  var allItems = Array.isArray(state.items) ? state.items : [];
+  var currentKey = state.currentItem && state.currentItem.key;
+  var currentIndex = -1;
+  var totalAnnotatedSiblings = 0;
+
+  for (var i = 0; i < allItems.length; i++) {
+    var item = allItems[i];
+    if (item && item.key === currentKey) {
+      currentIndex = i;
+      continue;
+    }
+    if (annotateStripItemHasCaptionOrTags(item)) {
+      totalAnnotatedSiblings += 1;
+    }
+  }
+
+  var targetSize = getAnnotateStripContextWindowSize(totalAnnotatedSiblings);
+  if (!targetSize) {
+    return {
+      items: [],
+      windowSize: 0,
+      annotatedSiblingCount: totalAnnotatedSiblings
+    };
+  }
+
+  var contextItems = [];
+  if (currentIndex >= 0) {
+    for (var offset = 1; offset < allItems.length && contextItems.length < targetSize; offset++) {
+      var before = currentIndex - offset;
+      if (before >= 0 && annotateStripItemHasCaptionOrTags(allItems[before])) {
+        contextItems.push(allItems[before]);
+      }
+      if (contextItems.length >= targetSize) break;
+      var after = currentIndex + offset;
+      if (after < allItems.length && annotateStripItemHasCaptionOrTags(allItems[after])) {
+        contextItems.push(allItems[after]);
+      }
+    }
+  } else {
+    for (var j = 0; j < allItems.length && contextItems.length < targetSize; j++) {
+      if (annotateStripItemHasCaptionOrTags(allItems[j])) {
+        contextItems.push(allItems[j]);
+      }
+    }
+  }
+
+  return {
+    items: contextItems,
+    windowSize: targetSize,
+    annotatedSiblingCount: totalAnnotatedSiblings
+  };
+}
+
 function buildAnnotateStripUsageStats(groups) {
   var preparedGroups = [];
   var countsByGroupTerm = {};
+  var folderCountsByGroupTerm = {};
   var maxCountByGroup = {};
+  var context = getAnnotateStripContextItems();
+  var folderAnnotatedTotal = 0;
 
   (groups || []).forEach(function (group) {
     var groupKey = String(group && (group.requirement || group.name) || '').trim().toLowerCase();
@@ -46,6 +122,7 @@ function buildAnnotateStripUsageStats(groups) {
       if (!termKey) return;
       preparedTerms.push({ text: term, key: termKey });
       countsByGroupTerm[groupKey + '::' + termKey] = 0;
+      folderCountsByGroupTerm[groupKey + '::' + termKey] = 0;
     });
     if (!preparedTerms.length) return;
     maxCountByGroup[groupKey] = 0;
@@ -55,7 +132,7 @@ function buildAnnotateStripUsageStats(groups) {
     });
   });
 
-  (Array.isArray(state.items) ? state.items : []).forEach(function (item) {
+  function countItem(item, targetCountsByGroupTerm, updateMax) {
     if (!item || !item.key || typeof getTagsForMediaKey !== 'function') return;
     var tags = getTagsForMediaKey(item.key);
     if (!tags.length) return;
@@ -68,17 +145,32 @@ function buildAnnotateStripUsageStats(groups) {
       group.terms.forEach(function (term) {
         if (!tagSet[term.key]) return;
         var countKey = group.key + '::' + term.key;
-        countsByGroupTerm[countKey] = (countsByGroupTerm[countKey] || 0) + 1;
-        if (countsByGroupTerm[countKey] > maxCountByGroup[group.key]) {
-          maxCountByGroup[group.key] = countsByGroupTerm[countKey];
+        targetCountsByGroupTerm[countKey] = (targetCountsByGroupTerm[countKey] || 0) + 1;
+        if (updateMax && targetCountsByGroupTerm[countKey] > maxCountByGroup[group.key]) {
+          maxCountByGroup[group.key] = targetCountsByGroupTerm[countKey];
         }
       });
     });
+  }
+
+  (Array.isArray(state.items) ? state.items : []).forEach(function (item) {
+    if (!item || (state.currentItem && item.key === state.currentItem.key)) return;
+    if (!annotateStripItemHasCaptionOrTags(item)) return;
+    folderAnnotatedTotal += 1;
+    countItem(item, folderCountsByGroupTerm, false);
+  });
+
+  context.items.forEach(function (item) {
+    countItem(item, countsByGroupTerm, true);
   });
 
   return {
     countsByGroupTerm: countsByGroupTerm,
-    maxCountByGroup: maxCountByGroup
+    folderCountsByGroupTerm: folderCountsByGroupTerm,
+    maxCountByGroup: maxCountByGroup,
+    contextCount: context.items.length,
+    contextWindowSize: context.windowSize,
+    annotatedSiblingCount: folderAnnotatedTotal
   };
 }
 
@@ -91,10 +183,20 @@ function getAnnotateChipHeatLevel(count, maxCount) {
   return Math.max(1, Math.min(3, Math.round(weightedRatio * 3)));
 }
 
-function formatAnnotateChipUsageTitle(count) {
-  var usageCount = Number(count) || 0;
-  if (usageCount <= 0) return 'Toggle tag';
-  return 'Toggle tag - used on ' + usageCount + ' item' + (usageCount === 1 ? '' : 's') + ' in this folder';
+function formatAnnotateChipUsageTitle(contextCount, contextTotal, folderCount, folderTotal) {
+  var nearbyCount = Number(contextCount) || 0;
+  var nearbyTotal = Number(contextTotal) || 0;
+  var setCount = Number(folderCount) || 0;
+  var setTotal = Number(folderTotal) || 0;
+  var parts = [];
+  if (nearbyTotal > 0) {
+    parts.push('nearby ' + nearbyCount + '/' + nearbyTotal);
+  }
+  if (setTotal > 0) {
+    parts.push('folder ' + setCount + '/' + setTotal);
+  }
+  if (!parts.length) return 'Toggle tag';
+  return 'Toggle tag - ' + parts.join(', ');
 }
 
 function updateAnnotateStripToggleUi() {
@@ -313,22 +415,60 @@ function renderAnnotateStrip() {
     };
     chipWrap.appendChild(naChip);
 
+    var activeTermsByKey = {};
+    var activeTermCount = 0;
+    group.terms.forEach(function (term) {
+      if (!hasTagForMediaKey(mediaKey, term)) return;
+      var activeTermKey = normalizeAnnotateUsageKey(term);
+      if (!activeTermKey || activeTermsByKey[activeTermKey]) return;
+      activeTermsByKey[activeTermKey] = true;
+      activeTermCount += 1;
+    });
+
     group.terms.forEach(function (term) {
       var chip = document.createElement('button');
       var groupKey = String(group.requirement || group.name || '').trim().toLowerCase();
       var termKey = normalizeAnnotateUsageKey(term);
       var usageCount = usageStats.countsByGroupTerm[groupKey + '::' + termKey] || 0;
+      var folderUsageCount = usageStats.folderCountsByGroupTerm[groupKey + '::' + termKey] || 0;
       var usageMax = usageStats.maxCountByGroup[groupKey] || 0;
       var heatLevel = getAnnotateChipHeatLevel(usageCount, usageMax);
       chip.type = 'button';
       chip.className = 'annotate-strip-chip';
       chip.setAttribute('data-heat-level', String(heatLevel));
-      if (hasTagForMediaKey(mediaKey, term)) {
+      var isActiveTerm = !!activeTermsByKey[termKey];
+      var isInCaption = typeof tagAppearsInCurrentCaption === 'function'
+        ? tagAppearsInCurrentCaption(term)
+        : false;
+      if (isActiveTerm) {
         chip.classList.add('active');
         hasActiveTerm = true;
+        if (!isInCaption) {
+          chip.classList.add('annotate-strip-chip-missing-caption');
+          groupEl.classList.add('annotate-strip-group-tag-mismatch');
+        }
+      } else if (activeTermCount > 0) {
+        chip.classList.add('annotate-strip-chip-compatible-muted');
+      }
+      if (!isActiveTerm && usageStats.contextCount > 0 && usageCount <= 0) {
+        chip.classList.add('annotate-strip-chip-novel');
       }
       chip.textContent = term;
-      chip.title = formatAnnotateChipUsageTitle(usageCount);
+      var chipTitle = formatAnnotateChipUsageTitle(
+        usageCount,
+        usageStats.contextCount,
+        folderUsageCount,
+        usageStats.annotatedSiblingCount
+      );
+      if (isActiveTerm && !isInCaption) {
+        chipTitle += ' - tag missing from caption';
+      } else if (!isActiveTerm && activeTermCount > 0) {
+        chipTitle += ' - alternative to selected group term';
+      }
+      if (!isActiveTerm && usageStats.contextCount > 0 && usageCount <= 0) {
+        chipTitle += ' - not used nearby';
+      }
+      chip.title = chipTitle;
       chip.onclick = function () {
         if (groupIsNa && typeof setChecklistRequirementNaForMediaKey === 'function') {
           setChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel, false);

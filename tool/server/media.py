@@ -5,7 +5,7 @@ def media_flip_horizontal_response(data):
     if not folder or not file_name:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = app_config.safe_join_fs_root(folder)
+        folder_path = safe_join_fs_root(folder)
         src_media = folder_path / file_name
         if not src_media.exists() or not src_media.is_file():
             return jsonify({"error": "Media file not found"}), 404
@@ -55,7 +55,10 @@ from flask import jsonify
 
 from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
+from .face_focus import FACE_FOCUS_VERSION, analyze_image_face_focus, get_face_focus_detector, is_face_focus_image
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name, restore_original_media, restore_original_media_video_only
+
+safe_join_fs_root = app_config.safe_join_fs_root
 
 
 def get_aspect_ratio(width, height):
@@ -65,7 +68,7 @@ def get_aspect_ratio(width, height):
     return f"{width//g}:{height//g}"
 
 
-def probe_media_metadata(file_path):
+def probe_media_metadata(file_path, face_detector=None):
     ext = file_path.suffix.lower()
     result = {
         "size": file_path.stat().st_size,
@@ -142,10 +145,24 @@ def probe_media_metadata(file_path):
             result["aspect_ratio"] = get_aspect_ratio(width, height)
         except Exception as e:
             result["error"] = str(e)
+        if face_detector is not None and is_face_focus_image(file_path):
+            try:
+                result["face_focus"] = analyze_image_face_focus(file_path, face_detector)
+            except Exception as e:
+                result["face_focus"] = {
+                    "bucket": "unknown",
+                    "face_count": 0,
+                    "error": str(e),
+                }
     return result
 
 
-def update_media_metadata(folder_path):
+def write_media_metadata_file(metadata_path, metadata):
+    with open(metadata_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2)
+
+
+def update_media_metadata(folder_path, include_face_focus=False):
     folder_path = Path(folder_path)
     metadata_path = folder_path / "media_metadata.json"
     if metadata_path.exists():
@@ -153,6 +170,8 @@ def update_media_metadata(folder_path):
             metadata = json.load(f)
     else:
         metadata = {}
+    face_detector = None
+    pending_entries = []
     for entry in folder_path.iterdir():
         if not entry.is_file() or entry.suffix.lower() not in MEDIA_ALL_EXTS or is_transient_media_name(entry.name):
             continue
@@ -161,14 +180,25 @@ def update_media_metadata(folder_path):
         mtime = int(stat.st_mtime)
         size = stat.st_size
         cached = metadata.get(key)
-        if cached and cached.get("mtime") == mtime and cached.get("size") == size:
+        cached_face_focus = cached.get("face_focus") if isinstance(cached, dict) else None
+        cached_has_current_face_focus = (
+            isinstance(cached_face_focus, dict)
+            and cached_face_focus.get("version") == FACE_FOCUS_VERSION
+        )
+        needs_face_focus = bool(include_face_focus) and is_face_focus_image(entry) and not cached_has_current_face_focus
+        if cached and cached.get("mtime") == mtime and cached.get("size") == size and not needs_face_focus:
             continue
-        metadata[key] = probe_media_metadata(entry)
+        pending_entries.append(entry)
+    if include_face_focus and any(is_face_focus_image(entry) for entry in pending_entries):
+        face_detector = get_face_focus_detector()
+    for entry in pending_entries:
+        metadata[entry.name] = probe_media_metadata(entry, face_detector)
+        if include_face_focus and is_face_focus_image(entry):
+            write_media_metadata_file(metadata_path, metadata)
     to_remove = [k for k in metadata if not (folder_path / k).exists() or is_transient_media_name(k)]
     for k in to_remove:
         del metadata[k]
-    with open(metadata_path, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
+    write_media_metadata_file(metadata_path, metadata)
     return metadata
 
 
@@ -181,7 +211,7 @@ def media_restore_response(data):
         app_config.debug_print("[caption_restore] Missing required parameters:", folder, file_name)
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = app_config.safe_join_fs_root(folder)
+        folder_path = safe_join_fs_root(folder)
         result = restore_original_media(folder_path, file_name)
         if result == "not_found":
             return jsonify({"error": "Original media not found in originals"}), 404
@@ -201,7 +231,7 @@ def media_reset_response(data):
     if not folder or not file_name:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = app_config.safe_join_fs_root(folder)
+        folder_path = safe_join_fs_root(folder)
         ok = restore_original_media_video_only(folder_path, file_name)
         if not ok:
             return jsonify({"error": "Original media not found in originals"}), 404
@@ -219,7 +249,7 @@ def media_crop_response(data):
     if not file_name:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = app_config.safe_join_fs_root(folder)
+        folder_path = safe_join_fs_root(folder)
         image_data_url = data.get("imageDataUrl")
         if image_data_url:
             result = crop_image_data_url_in_place(folder_path, file_name, image_data_url)
@@ -244,7 +274,7 @@ def media_image_transform_response(data):
     if not file_name or not operation:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = app_config.safe_join_fs_root(folder)
+        folder_path = safe_join_fs_root(folder)
         result = transform_image_in_place(folder_path, file_name, operation)
         update_media_metadata(folder_path)
         return jsonify({"ok": True, **result})
@@ -263,7 +293,7 @@ def media_prune_response(data):
     if not folder or not file_name:
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = app_config.safe_join_fs_root(folder)
+        folder_path = safe_join_fs_root(folder)
         originals_path = folder_path / "originals"
         originals_path.mkdir(exist_ok=True)
         src_media = folder_path / file_name
@@ -308,13 +338,13 @@ def media_prune_response(data):
         return jsonify({"error": str(e)}), 400
 
 
-def media_metadata_response(rel_path):
+def media_metadata_response(rel_path, include_face_focus=False):
     rel_path = (rel_path or "").strip()
     try:
-        folder_path = app_config.safe_join_fs_root(rel_path)
+        folder_path = safe_join_fs_root(rel_path)
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
-        metadata_dict = update_media_metadata(folder_path)
+        metadata_dict = update_media_metadata(folder_path, include_face_focus=include_face_focus)
         app_config.debug_print(f"[metadata] generated for folder: {rel_path or '.'}")
         metadata_list = []
         for filename, info in metadata_dict.items():
@@ -330,6 +360,14 @@ def media_metadata_response(rel_path):
                 "duration": f"{info['duration']:.2f}s" if info.get("duration") else "-",
                 "frames": info.get("frame_count", "-"),
             }
+            face_focus = info.get("face_focus") if isinstance(info.get("face_focus"), dict) else None
+            if face_focus:
+                record["face_focus"] = face_focus
+                record["face_focus_bucket"] = face_focus.get("bucket", "unknown")
+                record["face_count"] = face_focus.get("face_count", 0)
+                record["largest_face_height_pct"] = face_focus.get("largest_height_pct")
+                record["largest_face_area_pct"] = face_focus.get("largest_area_pct")
+                record["largest_face_score"] = face_focus.get("largest_score")
             metadata_list.append(record)
         return jsonify(metadata_list)
     except Exception as e:

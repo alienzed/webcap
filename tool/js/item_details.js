@@ -417,6 +417,7 @@ function renderItemMetadataPanel() {
     unavailable2.textContent = 'Metadata unavailable.';
     listEl.appendChild(unavailable2);
   }
+  appendFaceFocusMetadataRows(listEl, row);
   appendProgressRows();
 }
 

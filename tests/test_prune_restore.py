@@ -6,6 +6,7 @@ from PIL import Image
 
 import tool.server.app as app_module
 import tool.server.file_ops as file_ops_module
+import tool.server.face_focus as face_focus_module
 import tool.server.media as media_module
 
 
@@ -200,6 +201,204 @@ def test_crop_image_replaces_media_and_preserves_caption(client, isolated_fs_roo
     assert Image.open(set_folder / "photo.jpg").size == (30, 30)
     assert Image.open(set_folder / "originals" / "photo.jpg").size == (100, 80)
     assert (set_folder / "photo.txt").read_text(encoding="utf-8") == "caption stays"
+
+
+def test_media_metadata_adds_image_face_focus(monkeypatch, tmp_path):
+    folder = tmp_path / "set_face_focus"
+    folder.mkdir()
+    Image.new("RGB", (100, 100), "blue").save(folder / "photo.jpg")
+
+    class FakeProc:
+        stdout = json.dumps({"streams": [{"width": 100, "height": 100}]})
+
+    detector = object()
+    monkeypatch.setattr(media_module.subprocess, "run", lambda *args, **kwargs: FakeProc())
+    monkeypatch.setattr(media_module, "get_face_focus_detector", lambda: detector)
+    monkeypatch.setattr(
+        media_module,
+        "analyze_image_face_focus",
+        lambda file_path, face_detector: {
+            "bucket": "close",
+            "face_count": 1,
+            "largest_height_pct": 34.0,
+            "largest_area_pct": 8.0,
+            "largest_score": 0.91,
+        },
+    )
+
+    metadata = media_module.update_media_metadata(folder, include_face_focus=True)
+
+    assert metadata["photo.jpg"]["face_focus"]["bucket"] == "close"
+    assert metadata["photo.jpg"]["face_focus"]["largest_height_pct"] == 34.0
+
+
+def test_face_focus_filters_tiny_false_positive_boxes(monkeypatch, tmp_path):
+    image_path = tmp_path / "noisy.jpg"
+    Image.new("RGB", (100, 100), "blue").save(image_path)
+
+    class FakeDetector:
+        def __call__(self, frame, threshold):
+            return (
+                [
+                    [1, 1, 2, 2, 0.99],
+                    [5, 5, 6, 6, 0.99],
+                    [10, 10, 50, 50, 0.85],
+                ],
+                [],
+            )
+
+    result = face_focus_module.analyze_image_face_focus(image_path, FakeDetector())
+
+    assert result["face_count"] == 1
+    assert result["raw_face_count"] == 3
+    assert result["bucket"] == "close"
+    assert result["version"] == face_focus_module.FACE_FOCUS_VERSION
+    assert result["detector_input_size"] == [640, 640]
+
+
+def test_media_metadata_skips_face_focus_by_default(monkeypatch, tmp_path):
+    folder = tmp_path / "set_face_focus_default"
+    folder.mkdir()
+    Image.new("RGB", (100, 100), "blue").save(folder / "photo.jpg")
+
+    class FakeProc:
+        stdout = json.dumps({"streams": [{"width": 100, "height": 100}]})
+
+    monkeypatch.setattr(media_module.subprocess, "run", lambda *args, **kwargs: FakeProc())
+    monkeypatch.setattr(
+        media_module,
+        "get_face_focus_detector",
+        lambda: (_ for _ in ()).throw(AssertionError("detector should not load")),
+    )
+
+    metadata = media_module.update_media_metadata(folder)
+
+    assert "face_focus" not in metadata["photo.jpg"]
+
+
+def test_media_metadata_response_flattens_face_focus(client, isolated_fs_root, monkeypatch):
+    set_folder_rel = "set_face_focus_response"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+    Image.new("RGB", (100, 100), "blue").save(set_folder / "photo.jpg")
+
+    monkeypatch.setattr(
+        media_module,
+        "update_media_metadata",
+        lambda folder_path, include_face_focus=False: {
+            "photo.jpg": {
+                "size": 100,
+                "mtime": 123,
+                "resolution": "100x100",
+                "aspect_ratio": "1:1",
+                "face_focus": {
+                    "bucket": "medium",
+                    "face_count": 1,
+                    "largest_height_pct": 20.0,
+                    "largest_area_pct": 4.0,
+                    "largest_score": 0.82,
+                },
+            }
+        },
+    )
+
+    response = client.get(f"/fs/media_metadata?folder={set_folder_rel}")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload[0]["face_focus_bucket"] == "medium"
+    assert payload[0]["largest_face_height_pct"] == 20.0
+    assert payload[0]["largest_face_score"] == 0.82
+
+
+def test_media_metadata_route_opts_into_face_focus(client, isolated_fs_root, monkeypatch):
+    set_folder_rel = "set_face_focus_route"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+    seen = []
+
+    def fake_update_media_metadata(folder_path, include_face_focus=False):
+        seen.append(include_face_focus)
+        return {}
+
+    monkeypatch.setattr(media_module, "update_media_metadata", fake_update_media_metadata)
+
+    plain_response = client.get(f"/fs/media_metadata?folder={set_folder_rel}")
+    focus_response = client.get(f"/fs/media_metadata?folder={set_folder_rel}&face_focus=1")
+
+    assert plain_response.status_code == 200
+    assert focus_response.status_code == 200
+    assert seen == [False, True]
+
+
+def test_media_metadata_backfills_cached_image_face_focus(monkeypatch, tmp_path):
+    folder = tmp_path / "set_face_focus_backfill"
+    folder.mkdir()
+    image_path = folder / "photo.jpg"
+    Image.new("RGB", (100, 100), "blue").save(image_path)
+    stat = image_path.stat()
+    write_text(
+        folder / "media_metadata.json",
+        json.dumps({
+            "photo.jpg": {
+                "size": stat.st_size,
+                "mtime": int(stat.st_mtime),
+                "resolution": "100x100",
+                "aspect_ratio": "1:1",
+            }
+        }),
+    )
+
+    class FakeProc:
+        stdout = json.dumps({"streams": [{"width": 100, "height": 100}]})
+
+    monkeypatch.setattr(media_module.subprocess, "run", lambda *args, **kwargs: FakeProc())
+    monkeypatch.setattr(media_module, "get_face_focus_detector", lambda: object())
+    monkeypatch.setattr(
+        media_module,
+        "analyze_image_face_focus",
+        lambda file_path, face_detector: {
+            "bucket": "body",
+            "face_count": 1,
+            "largest_height_pct": 8.0,
+        },
+    )
+
+    metadata = media_module.update_media_metadata(folder, include_face_focus=True)
+
+    assert metadata["photo.jpg"]["face_focus"]["bucket"] == "body"
+
+
+def test_media_metadata_flushes_face_focus_incrementally(monkeypatch, tmp_path):
+    folder = tmp_path / "set_face_focus_flush"
+    folder.mkdir()
+    Image.new("RGB", (100, 100), "blue").save(folder / "one.jpg")
+    Image.new("RGB", (100, 100), "green").save(folder / "two.jpg")
+
+    class FakeProc:
+        stdout = json.dumps({"streams": [{"width": 100, "height": 100}]})
+
+    calls = []
+
+    def fake_analyze_image_face_focus(file_path, face_detector):
+        calls.append(Path(file_path).name)
+        if len(calls) > 1:
+            raise RuntimeError("stop after first flush")
+        return {
+            "bucket": "medium",
+            "face_count": 1,
+            "largest_height_pct": 20.0,
+            "version": face_focus_module.FACE_FOCUS_VERSION,
+        }
+
+    monkeypatch.setattr(media_module.subprocess, "run", lambda *args, **kwargs: FakeProc())
+    monkeypatch.setattr(media_module, "get_face_focus_detector", lambda: object())
+    monkeypatch.setattr(media_module, "analyze_image_face_focus", fake_analyze_image_face_focus)
+
+    media_module.update_media_metadata(folder, include_face_focus=True)
+    cached = json.loads((folder / "media_metadata.json").read_text(encoding="utf-8"))
+
+    assert cached["one.jpg"]["face_focus"]["bucket"] == "medium"
 
 
 def test_crop_rejects_out_of_bounds_without_changing_file(client, isolated_fs_root):

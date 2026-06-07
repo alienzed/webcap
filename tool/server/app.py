@@ -496,7 +496,8 @@ def fs_describe():
 @app.route("/fs/media_metadata", methods=["GET"])
 def fs_media_metadata():
     rel_path = request.args.get("folder", "").strip()
-    return media_metadata_response(rel_path)
+    include_face_focus = request.args.get("face_focus", "").strip().lower() in {"1", "true", "yes"}
+    return media_metadata_response(rel_path, include_face_focus=include_face_focus)
 
 
 @app.route("/fs/mutation_status", methods=["GET"])

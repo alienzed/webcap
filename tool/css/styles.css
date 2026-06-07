@@ -1806,6 +1806,10 @@ iframe {
   background: rgba(148, 163, 184, 0.10);
 }
 
+.annotate-strip-group-tag-mismatch .annotate-strip-group-title-row {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
 .annotate-strip-group-controls {
   display: inline-flex;
   align-items: center;
@@ -1887,6 +1891,7 @@ iframe {
   font-size: 11px;
   line-height: 1.1;
   padding: 3px 8px;
+  position: relative;
 }
 
 .annotate-strip-chip[data-heat-level="1"] {
@@ -1916,6 +1921,29 @@ iframe {
   background: #dcfce7;
   border-color: #86efac;
   color: #14532d;
+}
+
+.annotate-strip-chip-compatible-muted:not(.active) {
+  opacity: 0.48;
+}
+
+.annotate-strip-chip-missing-caption.active {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #78350f;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.24);
+}
+
+.annotate-strip-chip-novel::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #2563eb;
+  border: 1px solid #ffffff;
 }
 
 .annotate-strip-chip-na {
@@ -3255,6 +3283,10 @@ html[data-theme="dark"] .annotate-strip-group-na .annotate-strip-group-title-row
   background: rgba(71, 85, 105, 0.35);
 }
 
+html[data-theme="dark"] .annotate-strip-group-tag-mismatch .annotate-strip-group-title-row {
+  box-shadow: inset 3px 0 0 #fbbf24;
+}
+
 html[data-theme="dark"] .annotate-strip-chip {
   background: #111827;
   color: var(--text);
@@ -3287,6 +3319,18 @@ html[data-theme="dark"] .annotate-strip-chip.active {
   background: rgba(34, 197, 94, 0.18);
   border-color: rgba(34, 197, 94, 0.45);
   color: #d1fae5;
+}
+
+html[data-theme="dark"] .annotate-strip-chip-missing-caption.active {
+  background: rgba(180, 83, 9, 0.28);
+  border-color: rgba(251, 191, 36, 0.68);
+  color: #fde68a;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.18);
+}
+
+html[data-theme="dark"] .annotate-strip-chip-novel::after {
+  background: #60a5fa;
+  border-color: #0f172a;
 }
 
 html[data-theme="dark"] .annotate-strip-chip-na.active {

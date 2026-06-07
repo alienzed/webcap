@@ -161,11 +161,12 @@ function fetchPreviewText(url, body, ui, onDone, onError) {
 
 
 // Render media metadata panel into the report iframe
-function renderMediaMetadataPanel(folder, doc, scopedFileNames) {
+function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus) {
   var panel = doc.getElementById('media-metadata-panel');
   if (!panel) return;
   panel.textContent = 'Loading...';
-  var url = '/fs/media_metadata?folder=' + encodeURIComponent(folder);
+  var url = '/fs/media_metadata?folder=' + encodeURIComponent(folder) +
+    (includeFaceFocus ? '&face_focus=1' : '');
   var xhr = new XMLHttpRequest();
   xhr.open('GET', url);
   xhr.onreadystatechange = function() {
@@ -206,6 +207,7 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames) {
         if (summaryEl) {
           summaryEl.textContent = 'Showing ' + scopedRows.length + ' of ' + allRows.length + ' metadata rows';
         }
+        renderFaceFocusReportPanel(doc, allRows, scopedFileNames);
 
         function metadataCellHtml(row, column) {
           var val = row[column] !== undefined ? String(row[column]) : '-';
@@ -433,6 +435,7 @@ function renderReportPreview(report, reviewedFileNames) {
     '<div class="card"><h3>Top Tokens</h3><ul class="token-grid">' + topRows + '</ul></div>' +
     '<div class="card"><h3>Rare Tokens (&lt;=2)</h3><ul class="token-grid">' + rareRows + '</ul></div>' +
     '</div>' +
+    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Loading...</div></div></div>' +
     '<div class="row"><div class="card"><h3>Media Metadata</h3><div id="media-metadata-panel">Loading...</div></div></div>' +
     '</div>' +
     '</body></html>';
@@ -478,7 +481,7 @@ function renderReportPreview(report, reviewedFileNames) {
     // Render config and media metadata panels after iframe is loaded
     renderConfigPanel(doc);
     if (!parent || !parent.state || !parent.state.folder) return;
-    renderMediaMetadataPanel(parent.state.folder, doc, reviewedFileNames);
+    renderMediaMetadataPanel(parent.state.folder, doc, reviewedFileNames, true);
   }, 50);
 }
 

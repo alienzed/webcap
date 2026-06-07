@@ -1,0 +1,29 @@
+html[data-theme="dark"] .crop-modal-dialog {
+  background: #111827;
+  color: #e5e7eb;
+  border-color: #374151;
+}
+
+html[data-theme="dark"] .crop-size-readout {
+  color: #f9fafb;
+}
+
+html[data-theme="dark"] .crop-status {
+  color: #9ca3af;
+}
+
+html[data-theme="dark"] .crop-status.error {
+  color: #fca5a5;
+}
+
+html[data-theme="dark"] .crop-ratio-btn {
+  background: #1f2937;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+
+html[data-theme="dark"] .crop-ratio-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}

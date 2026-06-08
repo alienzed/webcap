@@ -759,13 +759,17 @@ function updatePrimerCaptionResetUi() {
 
   var mediaItem = getPrimerResetCurrentMediaItem();
   var hasSelectedMedia = !!(mediaItem && ui && ui.editorEl && !ui.editorEl.readOnly);
-  resetBtn.disabled = !hasSelectedMedia;
-
   if (!hasSelectedMedia) {
+    resetBtn.classList.add('hidden');
     undoBtn.classList.add('hidden');
     if (applyPrimerBtn) applyPrimerBtn.classList.add('hidden');
     return;
   }
+
+  var primerText = String(buildAutoPrimer(mediaItem.fileName, mediaItem.key) || '');
+  var editorText = String(ui.editorEl.value || '');
+  var canReset = editorText.trim() !== primerText.trim();
+  resetBtn.classList.toggle('hidden', !canReset);
 
   var canUndo = !!(primerResetUndoState && primerResetUndoState.mediaKey === mediaItem.key);
   undoBtn.classList.toggle('hidden', !canUndo);

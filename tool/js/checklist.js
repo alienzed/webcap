@@ -683,17 +683,10 @@ function renderChecklistGroupTermsModalItems() {
   terms.forEach(function (term, idx) {
     var row = document.createElement('div');
     row.className = 'row-inline stats-phrase-row checklist-group-term-row';
-    var termBtn = document.createElement('button');
-    termBtn.type = 'button';
-    termBtn.className = 'phrase-copy-item-btn';
+    var termBtn = document.createElement('span');
+    termBtn.className = 'phrase-copy-item-btn checklist-group-term-label';
     termBtn.textContent = term;
-    termBtn.title = 'Click to remove';
-    termBtn.onclick = function () {
-      checklistGroupTermsModalState.terms.splice(idx, 1);
-      checklistGroupTermsModalState.terms = normalizeChecklistTermsList(checklistGroupTermsModalState.terms);
-      applyChecklistGroupTermsModalChanges();
-      renderChecklistGroupTermsModalItems();
-    };
+    termBtn.title = term;
     var actions = document.createElement('div');
     actions.className = 'stats-phrase-actions';
     var pinBtn = document.createElement('button');

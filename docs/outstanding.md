@@ -39,6 +39,8 @@ Last reviewed: 2026-06-05.
 
 ## Nice to Haves (Out of Scope for Now)
 - Review longest duplicate phrase detection inside a single caption.
+- Chaos / clutter scoring for scene complexity.
+- Lighting tone / color cast detection for warm, cool, or tinted scenes.
 
 ## Cleanup Candidates
 - Consolidate set-context gating around shared helper usage and remove stale checks.

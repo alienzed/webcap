@@ -57,6 +57,7 @@ from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
 from .face_focus import FACE_FOCUS_VERSION, analyze_image_face_focus, get_face_focus_detector, is_face_focus_image
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name, restore_original_media, restore_original_media_video_only
+from .selection_pose import SELECTION_POSE_VERSION, analyze_image_selection_pose, get_selection_pose_analyzers, is_selection_pose_image
 
 safe_join_fs_root = app_config.safe_join_fs_root
 
@@ -68,7 +69,7 @@ def get_aspect_ratio(width, height):
     return f"{width//g}:{height//g}"
 
 
-def probe_media_metadata(file_path, face_detector=None):
+def probe_media_metadata(file_path, face_detector=None, selection_pose_analyzers=None):
     ext = file_path.suffix.lower()
     result = {
         "size": file_path.stat().st_size,
@@ -154,6 +155,20 @@ def probe_media_metadata(file_path, face_detector=None):
                     "face_count": 0,
                     "error": str(e),
                 }
+        if selection_pose_analyzers is not None and is_selection_pose_image(file_path):
+            try:
+                result["selection_pose"] = analyze_image_selection_pose(file_path, selection_pose_analyzers)
+            except Exception as e:
+                result["selection_pose"] = {
+                    "version": SELECTION_POSE_VERSION,
+                    "face_direction": "unknown",
+                    "expression_primary": "unknown",
+                    "expressions": [],
+                    "body_orientation": "unknown",
+                    "pose_class": "unknown",
+                    "arm_position": "unknown",
+                    "error": str(e),
+                }
     return result
 
 
@@ -162,7 +177,7 @@ def write_media_metadata_file(metadata_path, metadata):
         json.dump(metadata, f, indent=2)
 
 
-def update_media_metadata(folder_path, include_face_focus=False):
+def update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None):
     folder_path = Path(folder_path)
     metadata_path = folder_path / "media_metadata.json"
     if metadata_path.exists():
@@ -171,9 +186,15 @@ def update_media_metadata(folder_path, include_face_focus=False):
     else:
         metadata = {}
     face_detector = None
+    selection_pose_analyzers = None
     pending_entries = []
+    scoped_filename_set = None
+    if scoped_filenames:
+        scoped_filename_set = {str(name or "").strip() for name in scoped_filenames if str(name or "").strip()}
     for entry in folder_path.iterdir():
         if not entry.is_file() or entry.suffix.lower() not in MEDIA_ALL_EXTS or is_transient_media_name(entry.name):
+            continue
+        if scoped_filename_set is not None and entry.name not in scoped_filename_set:
             continue
         key = entry.name
         stat = entry.stat()
@@ -185,15 +206,23 @@ def update_media_metadata(folder_path, include_face_focus=False):
             isinstance(cached_face_focus, dict)
             and cached_face_focus.get("version") == FACE_FOCUS_VERSION
         )
+        cached_selection_pose = cached.get("selection_pose") if isinstance(cached, dict) else None
+        cached_has_current_selection_pose = (
+            isinstance(cached_selection_pose, dict)
+            and cached_selection_pose.get("version") == SELECTION_POSE_VERSION
+        )
         needs_face_focus = bool(include_face_focus) and is_face_focus_image(entry) and not cached_has_current_face_focus
-        if cached and cached.get("mtime") == mtime and cached.get("size") == size and not needs_face_focus:
+        needs_selection_pose = bool(include_selection_pose) and is_selection_pose_image(entry) and not cached_has_current_selection_pose
+        if cached and cached.get("mtime") == mtime and cached.get("size") == size and not needs_face_focus and not needs_selection_pose:
             continue
         pending_entries.append(entry)
     if include_face_focus and any(is_face_focus_image(entry) for entry in pending_entries):
         face_detector = get_face_focus_detector()
+    if include_selection_pose and any(is_selection_pose_image(entry) for entry in pending_entries):
+        selection_pose_analyzers = get_selection_pose_analyzers()
     for entry in pending_entries:
-        metadata[entry.name] = probe_media_metadata(entry, face_detector)
-        if include_face_focus and is_face_focus_image(entry):
+        metadata[entry.name] = probe_media_metadata(entry, face_detector, selection_pose_analyzers)
+        if (include_face_focus and is_face_focus_image(entry)) or (include_selection_pose and is_selection_pose_image(entry)):
             write_media_metadata_file(metadata_path, metadata)
     to_remove = [k for k in metadata if not (folder_path / k).exists() or is_transient_media_name(k)]
     for k in to_remove:
@@ -338,13 +367,18 @@ def media_prune_response(data):
         return jsonify({"error": str(e)}), 400
 
 
-def media_metadata_response(rel_path, include_face_focus=False):
+def media_metadata_response(rel_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None):
     rel_path = (rel_path or "").strip()
     try:
         folder_path = safe_join_fs_root(rel_path)
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
-        metadata_dict = update_media_metadata(folder_path, include_face_focus=include_face_focus)
+        metadata_dict = update_media_metadata(
+            folder_path,
+            include_face_focus=include_face_focus,
+            include_selection_pose=include_selection_pose,
+            scoped_filenames=scoped_filenames,
+        )
         app_config.debug_print(f"[metadata] generated for folder: {rel_path or '.'}")
         metadata_list = []
         for filename, info in metadata_dict.items():
@@ -368,6 +402,15 @@ def media_metadata_response(rel_path, include_face_focus=False):
                 record["largest_face_height_pct"] = face_focus.get("largest_height_pct")
                 record["largest_face_area_pct"] = face_focus.get("largest_area_pct")
                 record["largest_face_score"] = face_focus.get("largest_score")
+            selection_pose = info.get("selection_pose") if isinstance(info.get("selection_pose"), dict) else None
+            if selection_pose:
+                record["selection_pose"] = selection_pose
+                record["selection_pose_face_direction"] = selection_pose.get("face_direction", "unknown")
+                record["selection_pose_expression_primary"] = selection_pose.get("expression_primary", "unknown")
+                record["selection_pose_expressions"] = list(selection_pose.get("expressions", []) or [])
+                record["selection_pose_body_orientation"] = selection_pose.get("body_orientation", "unknown")
+                record["selection_pose_pose_class"] = selection_pose.get("pose_class", "unknown")
+                record["selection_pose_arm_position"] = selection_pose.get("arm_position", "unknown")
             metadata_list.append(record)
         return jsonify(metadata_list)
     except Exception as e:

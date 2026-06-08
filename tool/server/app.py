@@ -497,7 +497,18 @@ def fs_describe():
 def fs_media_metadata():
     rel_path = request.args.get("folder", "").strip()
     include_face_focus = request.args.get("face_focus", "").strip().lower() in {"1", "true", "yes"}
-    return media_metadata_response(rel_path, include_face_focus=include_face_focus)
+    include_selection_pose = request.args.get("selection_pose", "").strip().lower() in {"1", "true", "yes"}
+    scoped_filenames = [
+        name.strip()
+        for name in str(request.args.get("files", "") or "").splitlines()
+        if name.strip()
+    ]
+    return media_metadata_response(
+        rel_path,
+        include_face_focus=include_face_focus,
+        include_selection_pose=include_selection_pose,
+        scoped_filenames=scoped_filenames,
+    )
 
 
 @app.route("/fs/mutation_status", methods=["GET"])

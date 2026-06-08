@@ -122,6 +122,9 @@ function handleMediaListClick(e) {
     return;
   }
   if (type === 'folder') {
+    if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+      clearFocusSet();
+    }
     state.folder = (state.folder ? state.folder + '/' : '') + key;
     if (state.dirStack.length) {
       state.dirStack.push({ name: key });
@@ -309,6 +312,12 @@ function wireMiscActionButtons() {
   if (ui.reviewBtn) {
     ui.reviewBtn.onclick = function () {
       runReview();
+    };
+  }
+
+  if (ui.reviewSelectionsBtn) {
+    ui.reviewSelectionsBtn.onclick = function () {
+      runSelectionReview();
     };
   }
 

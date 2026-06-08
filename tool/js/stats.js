@@ -798,11 +798,11 @@ function wirePrimerCaptionResetUi() {
       if (!nextPrimer.trim()) {
         if (!confirm('Primer output is empty. Clear current caption?')) return;
       } else {
-        if (!confirm('Reapply current primer output to caption?')) return;
+        if (!confirm('Reset current caption to primer output?')) return;
       }
       var previousText = String((ui && ui.editorEl && ui.editorEl.value) || '');
       if (previousText === nextPrimer) {
-        setStatus('Caption already matches primer output (nothing to reapply).');
+        setStatus('Caption already matches primer output (nothing to reset).');
         return;
       }
       primerResetUndoState = {
@@ -822,7 +822,7 @@ function wirePrimerCaptionResetUi() {
     undoBtn.addEventListener('click', function () {
       var mediaItem = getPrimerResetCurrentMediaItem();
       if (!mediaItem || !primerResetUndoState || primerResetUndoState.mediaKey !== mediaItem.key) {
-        setStatus('No reapply to undo for this item.');
+        setStatus('No reset to undo for this item.');
         updatePrimerCaptionResetUi();
         return;
       }
@@ -846,7 +846,7 @@ function wirePrimerCaptionResetUi() {
         return;
       }
       if (!isPrimerInEffectForCurrentItem(mediaItem)) {
-        setStatus('Apply Primer is only available while primer text is currently in effect.');
+        setStatus('Apply is only available while primer text is currently in effect.');
         updatePrimerCaptionResetUi();
         return;
       }

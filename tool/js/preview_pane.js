@@ -161,12 +161,16 @@ function fetchPreviewText(url, body, ui, onDone, onError) {
 
 
 // Render media metadata panel into the report iframe
-function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus) {
+function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus, includeSelectionPose) {
   var panel = doc.getElementById('media-metadata-panel');
   if (!panel) return;
   panel.textContent = 'Loading...';
   var url = '/fs/media_metadata?folder=' + encodeURIComponent(folder) +
-    (includeFaceFocus ? '&face_focus=1' : '');
+    (includeFaceFocus ? '&face_focus=1' : '') +
+    (includeSelectionPose ? '&selection_pose=1' : '');
+  if (Array.isArray(scopedFileNames) && scopedFileNames.length) {
+    url += '&files=' + encodeURIComponent(scopedFileNames.join('\n'));
+  }
   var xhr = new XMLHttpRequest();
   xhr.open('GET', url);
   xhr.onreadystatechange = function() {
@@ -199,7 +203,7 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
               'Group by Aspect Ratio' +
             '</label>' +
           '</div>' +
-          '<div id="metadata-row-summary" style="margin:0 0 6px 0;font-size:12px;color:#6b7280;"></div>' +
+          '<div id="metadata-row-summary" class="small" style="margin:0 0 6px 0;"></div>' +
           '<div id="ar-group-table"></div>';
         var tableDiv = panel.querySelector('#ar-group-table');
         var summaryEl = panel.querySelector('#metadata-row-summary');
@@ -208,6 +212,8 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
           summaryEl.textContent = 'Showing ' + scopedRows.length + ' of ' + allRows.length + ' metadata rows';
         }
         renderFaceFocusReportPanel(doc, allRows, scopedFileNames);
+        renderSelectionPoseReportPanels(doc, allRows, scopedFileNames);
+        renderSuggestedSelectionPanel(doc, allRows, scopedFileNames);
 
         function metadataCellHtml(row, column) {
           var val = row[column] !== undefined ? String(row[column]) : '-';
@@ -435,9 +441,6 @@ function renderReportPreview(report, reviewedFileNames) {
     '<div class="card"><h3>Top Tokens</h3><ul class="token-grid">' + topRows + '</ul></div>' +
     '<div class="card"><h3>Rare Tokens (&lt;=2)</h3><ul class="token-grid">' + rareRows + '</ul></div>' +
     '</div>' +
-    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Loading...</div></div></div>' +
-    '<div class="row"><div class="card"><h3>Media Metadata</h3><div id="media-metadata-panel">Loading...</div></div></div>' +
-    '</div>' +
     '</body></html>';
 
   var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
@@ -480,8 +483,52 @@ function renderReportPreview(report, reviewedFileNames) {
     });
     // Render config and media metadata panels after iframe is loaded
     renderConfigPanel(doc);
+  }, 50);
+}
+
+function renderSelectionPreview(report, reviewedFileNames) {
+  var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';
+  var html = '' +
+    '<!DOCTYPE html><html data-theme="' + theme + '"><head><meta charset="UTF-8">' +
+    '<link rel="stylesheet" href="/static/css/report.css">' +
+    '</head><body>' +
+    '<div class="report-preview">' +
+    '<div class="row">' +
+    '<div class="card"><h3>Summary</h3>' +
+    '<div class="summary-row"><span>Visible items</span><strong>' + report.total + '</strong></div>' +
+    '<div class="summary-row"><span>Images</span><strong>' + report.images + '</strong></div>' +
+    '<div class="summary-row"><span>Videos</span><strong>' + report.videos + '</strong></div>' +
+    '<div class="summary-row"><span>With captions</span><strong>' + report.withCaption + '</strong></div>' +
+    '<div class="summary-row"><span>Missing captions</span><strong>' + report.missingCaption + '</strong></div>' +
+    '</div>' +
+    '<div class="card"><h3>Scope</h3>' +
+    '<p class="small" style="margin:0;line-height:1.45;">Review Selections runs only on the currently visible media items. Use filters first, then click a group to open a focus set for rating and inspection.</p>' +
+    '</div>' +
+    '</div>' +
+    '<div class="row"><div class="card"><h3>Suggested Candidates</h3><div id="selection-suggested-candidates-panel">Loading...</div></div></div>' +
+    '<div class="row">' +
+    '<div class="card"><h3>Face Direction</h3><div id="selection-face-direction-panel">Loading...</div></div>' +
+    '<div class="card"><h3>Expression</h3><div id="selection-expression-panel">Loading...</div></div>' +
+    '<div class="card"><h3>Body Orientation</h3><div id="selection-body-orientation-panel">Loading...</div></div>' +
+    '</div>' +
+    '<div class="row">' +
+    '<div class="card"><h3>Pose Class</h3><div id="selection-pose-class-panel">Loading...</div></div>' +
+    '<div class="card"><h3>Arm Placement</h3><div id="selection-arm-position-panel">Loading...</div></div>' +
+    '</div>' +
+    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Loading...</div></div></div>' +
+    '<div class="row"><div class="card"><h3>Media Metadata</h3><div id="media-metadata-panel">Loading...</div></div></div>' +
+    '</div>' +
+    '</body></html>';
+
+  var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  hideBalanceDistributionWheel();
+
+  setTimeout(function () {
     if (!parent || !parent.state || !parent.state.folder) return;
-    renderMediaMetadataPanel(parent.state.folder, doc, reviewedFileNames, true);
+    renderMediaMetadataPanel(parent.state.folder, doc, reviewedFileNames, true, true);
   }, 50);
 }
 

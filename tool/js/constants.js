@@ -70,6 +70,7 @@ ui = {
   utilityHelpBtn: document.getElementById('utility-help-btn'),
   utilityThemeBtn: document.getElementById('utility-theme-btn'),
   createSetFromResultsBtn: document.getElementById('create-set-from-results-btn'),
+  reviewSelectionsBtn: document.getElementById('review-selections-btn'),
   reviewBtn: document.getElementById('review-captions-btn'),
   focusSetExitBtn: document.getElementById('focus-set-exit-btn'),
   currentFolderRow: document.getElementById('current-folder-row'),

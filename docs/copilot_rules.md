@@ -46,3 +46,15 @@
 - **Critical errors** (invariant violations, impossible states, or integrity threats) must break execution—never caught or logged.
 - Non-critical errors may be logged for debugging, but never swallowed or ignored.
 - Nothing intentionally coded is optional. No optional dependency guards (`if (typeof fn === 'function')`), no feature flags, no silent skips. If something is coded, it is required and must fail loudly if missing.
+
+---
+
+## 7. Analyzer Coherence
+- New image-analysis features should live in their own backend helper file.
+- Each analyzer should write one normalized nested block into `media_metadata.json`.
+- Analyzer outputs should use app-defined field names, not raw library/model output shapes.
+- Each analyzer should include its own `version` field for cache invalidation.
+- UI code should read normalized metadata only and must not depend on library-specific fields.
+- Prefer reusing an existing packaged dependency before adding a new model or runtime.
+- Any new analysis dependency must justify its footprint in offline use, CPU/VRAM cost, and workflow value.
+- Experimental analysis features must remain independent from caption editing, training config generation, and destructive actions.

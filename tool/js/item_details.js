@@ -418,6 +418,7 @@ function renderItemMetadataPanel() {
     listEl.appendChild(unavailable2);
   }
   appendFaceFocusMetadataRows(listEl, row);
+  appendSelectionPoseMetadataRows(listEl, row);
   appendProgressRows();
 }
 
@@ -580,51 +581,87 @@ function renderItemTagsPanel() {
   }
   var key = state.currentItem.key;
   var tags = getTagsForMediaKey(key);
-  if (!tags.length) {
-    listEl.textContent = 'No tags.';
-    return;
+  var row = getMetadataForMedia(state.currentItem.fileName);
+  var suggestedTags = (typeof getSelectionPoseSuggestedTags === 'function')
+    ? getSelectionPoseSuggestedTags(row, tags)
+    : [];
+
+  if (tags.length) {
+    tags.sort(function (a, b) {
+      var aText = String(a || '');
+      var bText = String(b || '');
+      var aPresent = tagAppearsInCurrentCaption(aText);
+      var bPresent = tagAppearsInCurrentCaption(bText);
+      if (aPresent !== bPresent) return aPresent ? 1 : -1;
+      return aText.toLowerCase().localeCompare(bText.toLowerCase());
+    });
+
+    tags.forEach(function (tag) {
+      var rowEl = document.createElement('div');
+      rowEl.className = 'row-inline';
+
+      var tagBtn = document.createElement('button');
+      tagBtn.type = 'button';
+      tagBtn.className = 'phrase-copy-item-btn';
+      var inCaption = tagAppearsInCurrentCaption(tag);
+      tagBtn.classList.add(inCaption ? 'item-tag-pill-present' : 'item-tag-pill-missing');
+      tagBtn.textContent = tag;
+      tagBtn.title = inCaption ? 'Remove from caption' : 'Insert at cursor';
+      tagBtn.onclick = function () {
+        if (typeof toggleCaptionPhraseAtCursor === 'function') {
+          toggleCaptionPhraseAtCursor(tag);
+        }
+        renderItemTagsPanel();
+      };
+
+      var rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.textContent = 'x';
+      rmBtn.onclick = function () {
+        removeTagFromMediaKey(key, tag);
+        if (typeof renderAnnotateStrip === 'function') {
+          renderAnnotateStrip();
+        }
+      };
+
+      rowEl.appendChild(tagBtn);
+      rowEl.appendChild(rmBtn);
+      listEl.appendChild(rowEl);
+    });
+  } else {
+    var emptyEl = document.createElement('div');
+    emptyEl.textContent = 'No tags.';
+    listEl.appendChild(emptyEl);
   }
-  tags.sort(function (a, b) {
-    var aText = String(a || '');
-    var bText = String(b || '');
-    var aPresent = tagAppearsInCurrentCaption(aText);
-    var bPresent = tagAppearsInCurrentCaption(bText);
-    if (aPresent !== bPresent) return aPresent ? 1 : -1;
-    return aText.toLowerCase().localeCompare(bText.toLowerCase());
-  });
 
-  tags.forEach(function (tag) {
-    var row = document.createElement('div');
-    row.className = 'row-inline';
+  if (suggestedTags.length) {
+    var suggestedHeader = document.createElement('div');
+    suggestedHeader.className = 'item-tags-suggested-header';
+    suggestedHeader.textContent = 'Suggested';
+    listEl.appendChild(suggestedHeader);
 
-    var tagBtn = document.createElement('button');
-    tagBtn.type = 'button';
-    tagBtn.className = 'phrase-copy-item-btn';
-    var inCaption = tagAppearsInCurrentCaption(tag);
-    tagBtn.classList.add(inCaption ? 'item-tag-pill-present' : 'item-tag-pill-missing');
-    tagBtn.textContent = tag;
-    tagBtn.title = inCaption ? 'Remove from caption' : 'Insert at cursor';
-    tagBtn.onclick = function () {
-      if (typeof toggleCaptionPhraseAtCursor === 'function') {
-        toggleCaptionPhraseAtCursor(tag);
-      }
-      renderItemTagsPanel();
-    };
+    suggestedTags.forEach(function (tag) {
+      var suggestionRow = document.createElement('div');
+      suggestionRow.className = 'row-inline';
 
-    var rmBtn = document.createElement('button');
-    rmBtn.type = 'button';
-    rmBtn.textContent = 'x';
-    rmBtn.onclick = function () {
-      removeTagFromMediaKey(key, tag);
-      if (typeof renderAnnotateStrip === 'function') {
-        renderAnnotateStrip();
-      }
-    };
+      var suggestionBtn = document.createElement('button');
+      suggestionBtn.type = 'button';
+      suggestionBtn.className = 'phrase-copy-item-btn item-tag-pill-suggested';
+      suggestionBtn.textContent = '+ ' + tag;
+      suggestionBtn.title = 'Add suggested tag';
+      suggestionBtn.onclick = function () {
+        var added = addTagToMediaKey(key, tag);
+        if (added) {
+          setStatus('Suggested tag added: ' + tag);
+        } else {
+          setStatus('Tag already assigned.');
+        }
+      };
 
-    row.appendChild(tagBtn);
-    row.appendChild(rmBtn);
-    listEl.appendChild(row);
-  });
+      suggestionRow.appendChild(suggestionBtn);
+      listEl.appendChild(suggestionRow);
+    });
+  }
 }
 
 function refreshMediaResolutionCache() {

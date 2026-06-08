@@ -560,6 +560,9 @@ function navigateToDirStackIndex(targetIndex) {
   var idx = Number(targetIndex);
   if (!isFinite(idx)) return;
   idx = Math.max(0, Math.min(state.dirStack.length - 1, Math.floor(idx)));
+  if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+    clearFocusSet();
+  }
   state.dirStack = state.dirStack.slice(0, idx + 1);
   state.folder = state.dirStack.slice(1).map(function (entry) { return entry.name; }).join('/');
   // Clear current selection and editor/preview

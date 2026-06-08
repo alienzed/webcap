@@ -239,11 +239,17 @@ function wireReviewActions() {
 }
 
 function updateReviewButtonAvailability() {
-  if (!ui.reviewBtn) return;
   var availability = getReviewAvailability();
-  ui.reviewBtn.disabled = false;
-  ui.reviewBtn.classList.toggle('hidden', !availability.enabled);
-  ui.reviewBtn.title = availability.message;
+  if (ui.reviewBtn) {
+    ui.reviewBtn.disabled = false;
+    ui.reviewBtn.classList.toggle('hidden', !availability.enabled);
+    ui.reviewBtn.title = availability.message;
+  }
+  if (ui.reviewSelectionsBtn) {
+    ui.reviewSelectionsBtn.disabled = false;
+    ui.reviewSelectionsBtn.classList.toggle('hidden', !availability.enabled);
+    ui.reviewSelectionsBtn.title = availability.message.replace('Review Captions', 'Review Selections').replace('Review captions', 'Review selections');
+  }
 }
 
 function updateSetFolderScopedUi() {
@@ -264,6 +270,13 @@ function getReviewAvailability() {
     return {
       enabled: false,
       message: "Review Captions requires at least one media file in this set folder"
+    };
+  }
+  var visibleCount = getVisibleReviewItems().length;
+  if (!visibleCount) {
+    return {
+      enabled: false,
+      message: "Review Captions requires at least one visible media item"
     };
   }
   return {
@@ -372,6 +385,53 @@ function clearMediaFiltersForGeneratedDataset(path) {
   clearCaptionFilterInputs();
 }
 
+function getVisibleReviewItems() {
+  var visibleRows = Array.prototype.slice.call(
+    ui.mediaListEl ? ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]') : []
+  );
+  var visibleKeys = visibleRows
+    .map(function (row) { return String(row.getAttribute('data-key') || '').trim(); })
+    .filter(Boolean);
+  return visibleKeys.map(function (key) {
+    var item = (state.items || []).find(function (it) { return it && it.key === key; });
+    var tags = [];
+    if (item && typeof getTagsForMediaKey === 'function') {
+      tags = getTagsForMediaKey(item.key);
+    }
+    return {
+      key: item ? item.key : key,
+      fileName: item ? item.fileName : key,
+      caption: item ? item.caption || '' : '',
+      tags: Array.isArray(tags) ? tags : []
+    };
+  });
+}
+
+function buildSelectionReport(items) {
+  var summary = {
+    total: 0,
+    images: 0,
+    videos: 0,
+    withCaption: 0,
+    missingCaption: 0
+  };
+  (items || []).forEach(function (row) {
+    if (!row || !row.fileName) return;
+    summary.total += 1;
+    if (isPreviewVideoFileName(row.fileName)) {
+      summary.videos += 1;
+    } else {
+      summary.images += 1;
+    }
+    if (String(row.caption || '').trim()) {
+      summary.withCaption += 1;
+    } else {
+      summary.missingCaption += 1;
+    }
+  });
+  return summary;
+}
+
 function runReview() {
   var availability = getReviewAvailability();
   if (!availability.enabled) {
@@ -394,24 +454,12 @@ function runReview() {
   var runSeq = (state.reviewSeq || 0) + 1;
   state.reviewSeq = runSeq;
   setStatus('Building combined captions and stats...');
-  var visibleRows = Array.prototype.slice.call(
-    ui.mediaListEl ? ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]') : []
-  );
-  var visibleKeys = visibleRows
-    .map(function (row) { return String(row.getAttribute('data-key') || '').trim(); })
-    .filter(Boolean);
-  var results = visibleKeys.map(function (key) {
-    var item = (state.items || []).find(function (it) { return it && it.key === key; });
-    var tags = [];
-    if (item && typeof getTagsForMediaKey === 'function') {
-      tags = getTagsForMediaKey(item.key);
-    }
-    return {
-      fileName: item ? item.fileName : key,
-      caption: item ? item.caption || '' : '',
-      tags: Array.isArray(tags) ? tags : []
-    };
-  });
+  var results = getVisibleReviewItems();
+  if (!results.length) {
+    setStatus('No visible media items to review.');
+    updateReviewButtonAvailability();
+    return;
+  }
   try {
     if (state.reviewSeq !== runSeq) {
       return;
@@ -427,6 +475,40 @@ function runReview() {
     state.suppressInput = false;
     renderReportPreview(report, results.map(function (row) { return row.fileName; }));
     setStatus('Review ready: ' + results.length + ' files');
+  } catch (err) {
+    setStatus(String(err && err.message ? err.message : err));
+  }
+}
+
+function runSelectionReview() {
+  var availability = getReviewAvailability();
+  if (!availability.enabled) {
+    setStatus(availability.message.replace('Review Captions', 'Review Selections') + '.');
+    updateReviewButtonAvailability();
+    return;
+  }
+  if (!state.items.length) {
+    setStatus('No media files loaded');
+    return;
+  }
+  if (state.currentItem && state.currentItem.fileName) {
+    savePathCaption();
+  }
+  state.currentItem = null;
+  renderChecklistPanel();
+  ui.editorEl.setAttribute('readonly', 'readonly');
+  renderFileList(ui.filterEl.value);
+  setStatus('Building selection report...');
+  try {
+    var results = getVisibleReviewItems();
+    if (!results.length) {
+      setStatus('No visible media items to review.');
+      updateReviewButtonAvailability();
+      return;
+    }
+    var report = buildSelectionReport(results);
+    renderSelectionPreview(report, results.map(function (row) { return row.fileName; }));
+    setStatus('Selection review ready: ' + results.length + ' files');
   } catch (err) {
     setStatus(String(err && err.message ? err.message : err));
   }

@@ -275,6 +275,10 @@
                                 <span class="btn-glyph" aria-hidden="true">&#8627;</span>
                                 <span>Create Set</span>
                             </button>
+                            <button id="review-selections-btn" type="button" class="review-captions-btn hidden" title="Review selections with current filter results">
+                                <span class="btn-glyph" aria-hidden="true">&#9678;</span>
+                                <span>Review Selections</span>
+                            </button>
                             <button id="review-captions-btn" type="button" class="review-captions-btn hidden" title="Review captions with current filter results">
                                 <span class="btn-glyph" aria-hidden="true">&#9654;</span>
                                 <span>Review Captions</span>
@@ -324,10 +328,6 @@
                                     <textarea id="primer-template" rows="9" placeholder="{subject}
                                           {view}
                                           {lighting}"></textarea>
-                                    <div class="stats-advanced-inline-row stats-primer-reset-row">
-                                        <button id="primer-reset-caption-btn" type="button" title="Reapply current primer output to the current caption">Reapply</button>
-                                        <button id="primer-undo-reset-caption-btn" type="button" class="hidden" title="Undo last reapply for current item">Undo Reapply</button>
-                                    </div>
                                     <div class="section-label-inline">
                                         <label>Mappings</label>
                                         <button
@@ -457,7 +457,9 @@
             <div class="panel editor-panel">
                 <div class="editor-wrapper">
                     <div id="editor-floating-actions" class="editor-floating-actions">
-                        <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Save current primer text as this item's caption">Apply Primer</button>
+                        <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Save current primer text as this item's caption">Apply</button>
+                        <button id="primer-reset-caption-btn" type="button" class="editor-floating-action-btn" title="Reset the current caption to the current primer output">Reset</button>
+                        <button id="primer-undo-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Undo last reset for current item">Undo Reset</button>
                     </div>
                     <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
                     <div id="annotate-strip" class="annotate-strip hidden" aria-label="Annotation strip"></div>
@@ -805,6 +807,7 @@
         <script src="/static/vendor/cropperjs/dist/cropper.min.js"></script>
         <script src="/static/js/console_panel.js"></script>
         <script src="/static/js/face_focus.js"></script>
+        <script src="/static/js/selection_pose.js"></script>
         <script src="/static/js/ui.js"></script>
         <script src="/static/js/preview_pane.js"></script>
         <script src="/static/js/mutation_state.js"></script>

@@ -195,19 +195,11 @@ function closeCropModal() {
   }
 }
 
-function buildCroppedImageDataUrl(cropData) {
+function buildCroppedImageDataUrl() {
   if (!cropperInstance || typeof cropperInstance.getCroppedCanvas !== 'function') {
     throw new Error('Cropper is not ready');
   }
-  cropMagnetApplying = true;
-  cropperInstance.setData(cropData);
-  cropMagnetApplying = false;
-  if (cropRotationEnabled && typeof cropperInstance.rotateTo === 'function') {
-    cropperInstance.rotateTo(cropActiveAngle);
-  }
   var canvas = cropperInstance.getCroppedCanvas({
-    width: cropData.width,
-    height: cropData.height,
     imageSmoothingEnabled: true,
     imageSmoothingQuality: 'high',
     fillColor: '#000000'
@@ -219,7 +211,11 @@ function buildCroppedImageDataUrl(cropData) {
   if (!dataUrl || dataUrl === 'data:,') {
     throw new Error('Unable to encode cropped image');
   }
-  return dataUrl;
+  return {
+    dataUrl: dataUrl,
+    width: canvas.width,
+    height: canvas.height
+  };
 }
 
 // --- Shared modal/Cropper setup ---
@@ -340,14 +336,18 @@ function openImageCropModal(mediaItem) {
     if (cropBusy || !cropTargetItem || !cropperInstance) return;
     var fileName = cropTargetItem.fileName;
     var cropData = finalizeCropData(cropperInstance.getData(true));
-    var imageDataUrl = null;
+    var renderedCrop = null;
     try {
-      imageDataUrl = buildCroppedImageDataUrl(cropData);
+      renderedCrop = buildCroppedImageDataUrl();
     } catch (err) {
       var renderError = err && err.message ? err.message : String(err);
       setCropStatus(renderError, true);
       setStatus('Crop failed: ' + renderError);
       return;
+    }
+    if (renderedCrop && renderedCrop.width > 0 && renderedCrop.height > 0) {
+      cropData.width = renderedCrop.width;
+      cropData.height = renderedCrop.height;
     }
     setCropBusy(true);
     setCropStatus('Applying crop...', false);
@@ -356,7 +356,7 @@ function openImageCropModal(mediaItem) {
       fileName: fileName,
       crop: cropData,
       angle: cropActiveAngle,
-      imageDataUrl: imageDataUrl
+      imageDataUrl: renderedCrop ? renderedCrop.dataUrl : null
     }, function (status, responseText) {
       setCropBusy(false);
       if (status === 200) {

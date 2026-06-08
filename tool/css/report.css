@@ -1,5 +1,13 @@
 
 /* --- Report Preview Pane Styles --- */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #f7f8fa;
+  color: #2b2f33;
+}
+
 .report-preview {
   font-family: system-ui;
   margin: 0;
@@ -115,6 +123,12 @@
 }
 
 html[data-theme="dark"] .report-preview {
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"],
+html[data-theme="dark"] body {
   background: #0f172a;
   color: #e5e7eb;
 }

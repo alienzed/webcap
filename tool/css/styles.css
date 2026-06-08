@@ -273,6 +273,8 @@ textarea:focus, input:focus {
   top: 10px;
   right: 10px;
   display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 6px;
   z-index: 20;
 }
@@ -1248,12 +1250,6 @@ iframe {
 .stats-advanced-inline-row > button:hover {
   background: #eef1f5;
   color: #4f5966;
-}
-
-.stats-primer-reset-row {
-  justify-content: flex-end;
-  margin-top: 2px;
-  margin-bottom: 2px;
 }
 
 #primer-mappings-modal,
@@ -2458,15 +2454,39 @@ iframe {
 }
 
 #item-tags-list .item-tag-pill-missing {
-  background: #fffbe6;
-  border-color: #ffc779;
+  background: #f8fafc;
+  border-color: #d8dee6;
   color: #92400e;
+  box-shadow: inset 0 -2px 0 #fbbf24;
 }
 
 #item-tags-list .item-tag-pill-missing:hover {
-  background: #fff4cc;
-  border-color: #f2b766;
+  background: #f8fafc;
+  border-color: #cbd5e1;
   color: #78350f;
+  box-shadow: inset 0 -2px 0 #f59e0b;
+}
+
+#item-tags-list .item-tags-suggested-header {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+#item-tags-list .item-tag-pill-suggested {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
+  opacity: 0.92;
+}
+
+#item-tags-list .item-tag-pill-suggested:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #334155;
 }
 
 #item-tag-add-input {
@@ -2768,9 +2788,18 @@ iframe {
   line-height: 1.3;
 }
 
+#checklist-group-terms-items .checklist-group-term-label {
+  cursor: default;
+}
+
 #checklist-group-terms-items .phrase-copy-item-btn:hover {
   background: #e9eff6;
   color: #1f2937;
+}
+
+#checklist-group-terms-items .checklist-group-term-label:hover {
+  background: #f4f7fb;
+  color: #2b2f33;
 }
 
 #checklist-group-terms-items .checklist-pin-btn {
@@ -3161,9 +3190,30 @@ html[data-theme="dark"] #item-tags-list .item-tag-pill-present {
 }
 
 html[data-theme="dark"] #item-tags-list .item-tag-pill-missing {
-  background: rgba(180, 83, 9, 0.18);
-  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(100, 116, 139, 0.4);
   color: #fde68a;
+  box-shadow: inset 0 -2px 0 rgba(245, 158, 11, 0.85);
+}
+
+html[data-theme="dark"] #item-tags-list .item-tags-suggested-header {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] #item-tags-list .item-tag-pill-suggested {
+  background: rgba(51, 65, 85, 0.5);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] #item-tags-list .item-tag-pill-suggested:hover {
+  background: rgba(71, 85, 105, 0.58);
+  border-color: rgba(148, 163, 184, 0.55);
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .media-item.mutated-media {
+  border-right-color: #fbbf24;
 }
 
 html[data-theme="dark"] #item-metadata-list,

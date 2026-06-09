@@ -104,7 +104,7 @@ function renderFaceFocusReportPanel(doc, rows, scopedFileNames) {
   var summaryRows = buildFaceFocusSummaryRows(rows, scopedFileNames);
   var total = summaryRows.reduce(function (sum, row) { return sum + row.count; }, 0);
   if (!total) {
-    panel.innerHTML = '<div style="color:#777;">No image face focus metadata.</div>';
+    panel.innerHTML = '<div style="color:#777;">No image face focus metadata. Enable Face Focus analysis in App Settings to generate these values.</div>';
     return;
   }
   var html = '<table><thead><tr><th>Focus</th><th>Count</th><th>Percent</th></tr></thead><tbody>';

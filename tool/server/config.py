@@ -106,6 +106,16 @@ def validate_config_payload(payload):
     elif "training" in out:
         out["training"] = {}
 
+    analysis = out.get("analysis")
+    if analysis is None:
+        analysis = {}
+    if not isinstance(analysis, dict):
+        raise ValueError("Config.analysis must be an object when provided.")
+    out["analysis"] = {
+        "enableFaceAnalysis": bool(analysis.get("enableFaceAnalysis", False)),
+        "enableMediaPipeAnalysis": bool(analysis.get("enableMediaPipeAnalysis", False)),
+    }
+
     return out
 
 

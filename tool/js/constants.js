@@ -90,6 +90,8 @@ ui = {
   appSettingsTrainingModePocEl: document.getElementById('app-settings-training-mode-poc'),
   appSettingsTrainingModeNormalEl: document.getElementById('app-settings-training-mode-normal'),
   appSettingsTrainingModeQualityEl: document.getElementById('app-settings-training-mode-quality'),
+  appSettingsEnableFaceAnalysisEl: document.getElementById('app-settings-enable-face-analysis'),
+  appSettingsEnableMediaPipeAnalysisEl: document.getElementById('app-settings-enable-mediapipe-analysis'),
   appSettingsDebugEl: document.getElementById('app-settings-debug'),
   appSettingsJsonEl: document.getElementById('app-settings-json'),
   statsPhrasesEl: document.getElementById('stats-phrases'),

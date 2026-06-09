@@ -270,11 +270,11 @@
                             <span class="btn-glyph" aria-hidden="true">x</span>
                             <span>Exit Set</span>
                         </button>
+                        <button id="create-set-from-results-btn" type="button" class="review-captions-btn hidden" title="Create a new set with the current filter results" style="width:100%;margin-bottom:6px;">
+                            <span class="btn-glyph" aria-hidden="true">&#8627;</span>
+                            <span>Create Set</span>
+                        </button>
                         <div class="sidebar-action-strip">
-                            <button id="create-set-from-results-btn" type="button" class="review-captions-btn hidden" title="Create a new set with the current filter results">
-                                <span class="btn-glyph" aria-hidden="true">&#8627;</span>
-                                <span>Create Set</span>
-                            </button>
                             <button id="review-selections-btn" type="button" class="review-captions-btn hidden" title="Review selections with current filter results">
                                 <span class="btn-glyph" aria-hidden="true">&#9678;</span>
                                 <span>Review Selections</span>
@@ -687,6 +687,15 @@
                             <span>Quality (Best fit)</span>
                         </label>
                     </div>
+                    <span>Analysis</span>
+                    <label class="app-settings-radio-label" style="justify-content:flex-start;gap:8px;">
+                        <input id="app-settings-enable-face-analysis" type="checkbox">
+                        <span>Enable Face Focus analysis</span>
+                    </label>
+                    <label class="app-settings-radio-label" style="justify-content:flex-start;gap:8px;">
+                        <input id="app-settings-enable-mediapipe-analysis" type="checkbox">
+                        <span>Enable MediaPipe selection pose analysis</span>
+                    </label>
                 </div>
                 <label class="app-settings-debug-row">
                     <input id="app-settings-debug" type="checkbox">

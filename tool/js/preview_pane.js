@@ -505,7 +505,8 @@ function renderSelectionPreview(report, reviewedFileNames) {
     '<p class="small" style="margin:0;line-height:1.45;">Review Selections runs only on the currently visible media items. Use filters first, then click a group to open a focus set for rating and inspection.</p>' +
     '</div>' +
     '</div>' +
-    '<div class="row"><div class="card"><h3>Suggested Candidates</h3><div id="selection-suggested-candidates-panel">Loading...</div></div></div>' +
+    '<div class="row"><div class="card"><h3>Suggested Candidates</h3><p class="small" style="margin:0 0 6px 0;color:#666;font-size:12px;" title="Items with high-confidence multimodal signals from face direction, expression, body orientation, and pose class.">Items with consistent pose and expression signals</p><div id="selection-suggested-candidates-panel">Loading...</div></div></div>' +
+    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Loading...</div></div></div>' +
     '<div class="row">' +
     '<div class="card"><h3>Face Direction</h3><div id="selection-face-direction-panel">Loading...</div></div>' +
     '<div class="card"><h3>Expression</h3><div id="selection-expression-panel">Loading...</div></div>' +
@@ -515,7 +516,6 @@ function renderSelectionPreview(report, reviewedFileNames) {
     '<div class="card"><h3>Pose Class</h3><div id="selection-pose-class-panel">Loading...</div></div>' +
     '<div class="card"><h3>Arm Placement</h3><div id="selection-arm-position-panel">Loading...</div></div>' +
     '</div>' +
-    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Loading...</div></div></div>' +
     '<div class="row"><div class="card"><h3>Media Metadata</h3><div id="media-metadata-panel">Loading...</div></div></div>' +
     '</div>' +
     '</body></html>';
@@ -528,7 +528,9 @@ function renderSelectionPreview(report, reviewedFileNames) {
 
   setTimeout(function () {
     if (!parent || !parent.state || !parent.state.folder) return;
-    renderMediaMetadataPanel(parent.state.folder, doc, reviewedFileNames, true, true);
+    var faceFocusEnabled = !!(APP_CONFIG && APP_CONFIG.analysis && APP_CONFIG.analysis.enableFaceAnalysis);
+    var selectionPoseEnabled = !!(APP_CONFIG && APP_CONFIG.analysis && APP_CONFIG.analysis.enableMediaPipeAnalysis);
+    renderMediaMetadataPanel(parent.state.folder, doc, reviewedFileNames, faceFocusEnabled, selectionPoseEnabled);
   }, 50);
 }
 

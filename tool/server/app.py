@@ -503,8 +503,13 @@ def fs_describe():
 @app.route("/fs/media_metadata", methods=["GET"])
 def fs_media_metadata():
     rel_path = request.args.get("folder", "").strip()
-    include_face_focus = request.args.get("face_focus", "").strip().lower() in {"1", "true", "yes"}
-    include_selection_pose = request.args.get("selection_pose", "").strip().lower() in {"1", "true", "yes"}
+    try:
+        disk_config = app_config.load_config_from_disk()
+    except Exception:
+        disk_config = app_config.get_config_snapshot()
+    analysis = disk_config.get("analysis") if isinstance(disk_config.get("analysis"), dict) else {}
+    include_face_focus = bool(analysis.get("enableFaceAnalysis", False))
+    include_selection_pose = bool(analysis.get("enableMediaPipeAnalysis", False))
     scoped_filenames = [
         name.strip()
         for name in str(request.args.get("files", "") or "").splitlines()

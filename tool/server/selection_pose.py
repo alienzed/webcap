@@ -10,7 +10,7 @@ SELECTION_POSE_VERSION = 1
 SELECTION_POSE_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 SELECTION_FACE_MODEL_PATH = Path(__file__).resolve().parents[1] / "vendor" / "mediapipe" / "models" / "face_landmarker.task"
 SELECTION_POSE_MODEL_PATH = Path(__file__).resolve().parents[1] / "vendor" / "mediapipe" / "models" / "pose_landmarker_lite.task"
-VISIBILITY_THRESHOLD = 0.45
+VISIBILITY_THRESHOLD = 0.55
 POSE_LANDMARK_COUNT = 33
 
 _FACE_LANDMARKER = None

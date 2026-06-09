@@ -8,6 +8,10 @@
     "activate_script": "dp-clean/bin/activate",
     "write_selection_snapshot_comments": false
   },
+  "analysis": {
+    "enableFaceAnalysis": false,
+    "enableMediaPipeAnalysis": false
+  },
   "set_destinations": {
     "presets": [
       {

@@ -17,6 +17,9 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.activate_script) out.training.activate_script = '';
   if (!out.training.mode || ['poc', 'normal', 'quality'].indexOf(out.training.mode) === -1) out.training.mode = 'normal';
   if (typeof out.training.write_selection_snapshot_comments !== 'boolean') out.training.write_selection_snapshot_comments = false;
+  if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
+  if (typeof out.analysis.enableFaceAnalysis !== 'boolean') out.analysis.enableFaceAnalysis = false;
+  if (typeof out.analysis.enableMediaPipeAnalysis !== 'boolean') out.analysis.enableMediaPipeAnalysis = false;
   return out;
 }
 
@@ -37,6 +40,8 @@ function fillAppSettingsForm(cfg) {
   else if (mode === 'quality' && ui.appSettingsTrainingModeQualityEl) ui.appSettingsTrainingModeQualityEl.checked = true;
   else if (ui.appSettingsTrainingModeNormalEl) ui.appSettingsTrainingModeNormalEl.checked = true;
   if (ui.appSettingsDebugEl) ui.appSettingsDebugEl.checked = !!c.debug;
+  if (ui.appSettingsEnableFaceAnalysisEl) ui.appSettingsEnableFaceAnalysisEl.checked = !!c.analysis.enableFaceAnalysis;
+  if (ui.appSettingsEnableMediaPipeAnalysisEl) ui.appSettingsEnableMediaPipeAnalysisEl.checked = !!c.analysis.enableMediaPipeAnalysis;
   renderAppSettingsJson(c);
 }
 
@@ -51,6 +56,8 @@ function collectAppSettingsFormConfig() {
   base.training.diffusion_pipe_wsl = ui.appSettingsTrainingDiffusionPipeWslEl ? ui.appSettingsTrainingDiffusionPipeWslEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
   base.training.write_selection_snapshot_comments = !!(ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl && ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked);
+  base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
+  base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);
   base.training.mode = mode;
   return normalizeAppConfigShape(base);
 }
@@ -296,6 +303,8 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingDiffusionPipeWslEl,
     ui.appSettingsTrainingActivateScriptEl,
     ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl,
+    ui.appSettingsEnableFaceAnalysisEl,
+    ui.appSettingsEnableMediaPipeAnalysisEl,
     ui.appSettingsTrainingModePocEl,
     ui.appSettingsTrainingModeNormalEl,
     ui.appSettingsTrainingModeQualityEl,

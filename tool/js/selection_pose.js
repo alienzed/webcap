@@ -93,12 +93,22 @@ function appendSelectionPoseMetadataRows(listEl, row) {
   var expressionList = Array.isArray(pose.expressions) ? pose.expressions.map(function (value) {
     return String(value || '').replace(/_/g, ' ');
   }).filter(Boolean) : [];
+  var expressionScoresStr = '';
+  if (typeof pose.expression_scores === 'object' && pose.expression_scores) {
+    var scorePairs = [];
+    for (var key in pose.expression_scores) {
+      if (pose.expression_scores.hasOwnProperty(key)) {
+        scorePairs.push(key.replace(/_/g, ' ') + ': ' + Math.round(pose.expression_scores[key] * 100) + '%');
+      }
+    }
+    expressionScoresStr = scorePairs.join(', ');
+  }
   var fields = [
-    ['Face Direction', pose.face_direction ? String(pose.face_direction).replace(/_/g, ' ') : 'unknown'],
-    ['Expression', expressionList.length ? expressionList.join(', ') : (pose.expression_primary || 'unknown')],
-    ['Body Orientation', pose.body_orientation ? String(pose.body_orientation).replace(/_/g, ' ') : 'unknown'],
-    ['Pose Class', pose.pose_class ? String(pose.pose_class).replace(/_/g, ' ') : 'unknown'],
-    ['Arm Position', pose.arm_position ? String(pose.arm_position).replace(/_/g, ' ') : 'unknown']
+    ['Face Direction', pose.face_direction ? String(pose.face_direction).replace(/_/g, ' ') : 'unknown', null],
+    ['Expression', expressionList.length ? expressionList.join(', ') : (pose.expression_primary || 'unknown'), expressionScoresStr],
+    ['Body Orientation', pose.body_orientation ? String(pose.body_orientation).replace(/_/g, ' ') : 'unknown', null],
+    ['Pose Class', pose.pose_class ? String(pose.pose_class).replace(/_/g, ' ') : 'unknown', null],
+    ['Arm Position', pose.arm_position ? String(pose.arm_position).replace(/_/g, ' ') : 'unknown', null]
   ];
   fields.forEach(function (field) {
     var itemRow = document.createElement('div');
@@ -111,6 +121,9 @@ function appendSelectionPoseMetadataRows(listEl, row) {
       valueEl.classList.add('item-metadata-value-error');
     } else {
       valueEl.classList.add('item-metadata-value-ok');
+    }
+    if (field[2]) {
+      valueEl.title = field[2];
     }
     itemRow.appendChild(labelEl);
     itemRow.appendChild(valueEl);
@@ -156,7 +169,7 @@ function renderSelectionPoseSummaryPanel(doc, rows, scopedFileNames, fieldDef) {
   var summaryRows = buildSelectionPoseSummaryRows(rows, scopedFileNames, fieldDef);
   var total = summaryRows.reduce(function (sum, row) { return sum + row.count; }, 0);
   if (!total) {
-    panel.innerHTML = '<div style="color:#777;">No metadata.</div>';
+    panel.innerHTML = '<div style="color:#777;">No MediaPipe pose metadata. Enable MediaPipe analysis in App Settings to generate these values.</div>';
     return;
   }
   var html = '<table><thead><tr><th>Bucket</th><th>Count</th><th>Percent</th></tr></thead><tbody>';

@@ -27,6 +27,13 @@ TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
 
+# Reject any incoming HTTP requests that do not originate from the loopback interface.
+@app.before_request
+def enforce_local_access():
+    remote_addr = request.remote_addr or ""
+    if remote_addr not in ("127.0.0.1", "::1"):
+        return jsonify({"error": "Local access only"}), 403
+
 # Alias kept for readability in route handlers.
 safe_join_fs_root = app_config.safe_join_fs_root
 
@@ -585,4 +592,6 @@ def open_in_vscode():
     return open_in_vscode_response(rel_path)
     
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Only bind to localhost for desktop/offline use.
+    # Disable Flask debug mode for a production-like local runtime.
+    app.run(host="127.0.0.1", port=5000, debug=False)

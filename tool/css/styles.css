@@ -1802,10 +1802,6 @@ iframe {
   background: rgba(148, 163, 184, 0.10);
 }
 
-.annotate-strip-group-tag-mismatch .annotate-strip-group-title-row {
-  xbox-shadow: inset 3px 0 0 #f59e0b;
-}
-
 .annotate-strip-group-controls {
   display: inline-flex;
   align-items: center;
@@ -3331,10 +3327,6 @@ html[data-theme="dark"] .annotate-strip-group-reviewed .annotate-strip-group-tit
 
 html[data-theme="dark"] .annotate-strip-group-na .annotate-strip-group-title-row {
   background: rgba(71, 85, 105, 0.35);
-}
-
-html[data-theme="dark"] .annotate-strip-group-tag-mismatch .annotate-strip-group-title-row {
-  box-shadow: inset 3px 0 0 #fbbf24;
 }
 
 html[data-theme="dark"] .annotate-strip-chip {

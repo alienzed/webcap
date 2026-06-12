@@ -243,7 +243,8 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
                   type: 'caption-review-select',
                   fileName: fileName,
                   focusFiles: [fileName],
-                  focusSource: 'Media Metadata'
+                  focusSource: 'Media Metadata',
+                  reportType: 'selection'
                 }, '*');
               }
             };
@@ -460,7 +461,13 @@ function renderReportPreview(report, reviewedFileNames) {
         var files = [];
         if (focus) { files = decodeURIComponent(focus).split('\n').filter(Boolean); }
         if (window.parent && window.parent.postMessage) {
-          window.parent.postMessage({ type: 'caption-review-select', fileName: decodeURIComponent(f), focusFiles: files, focusSource: decodeURIComponent(source || '') }, '*');
+          window.parent.postMessage({
+            type: 'caption-review-select',
+            fileName: decodeURIComponent(f),
+            focusFiles: files,
+            focusSource: decodeURIComponent(source || ''),
+            reportType: 'captions'
+          }, '*');
         }
       });
     });

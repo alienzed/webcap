@@ -191,7 +191,8 @@ function renderSelectionPoseSummaryPanel(doc, rows, scopedFileNames, fieldDef) {
           type: 'caption-review-select',
           fileName: fileName,
           focusFiles: files,
-          focusSource: decodeURIComponent(btn.getAttribute('data-source') || '')
+          focusSource: decodeURIComponent(btn.getAttribute('data-source') || ''),
+          reportType: 'selection'
         }, '*');
       }
     };
@@ -360,7 +361,8 @@ function renderSuggestedSelectionPanel(doc, rows, scopedFileNames) {
           type: 'caption-review-select',
           fileName: fileName,
           focusFiles: files,
-          focusSource: 'Suggested Candidates'
+          focusSource: 'Suggested Candidates',
+          reportType: 'selection'
         }, '*');
       }
     };

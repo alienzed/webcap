@@ -85,6 +85,8 @@ The most valuable interaction pattern to preserve is the existing focus-set loop
 - click a compact bucket or group in the report
 - activate a focused subset of media
 - rate or inspect through that subset quickly
+- use the focus-set header back control to rerun `Review Selections`
+- use the focus-set header `x` control to leave the subset and return to browsing
 
 This feels faster than scanning the full set and should remain the core interaction model for `Selection`.
 

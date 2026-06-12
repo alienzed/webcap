@@ -789,6 +789,9 @@ async function renderFileList() {
   syncSelectionWithVisibleMedia(mediaItems);
   updatePreviewActionControls();
   updateBalanceDistributionWheel();
+  if (typeof updateFocusSetUi === 'function') {
+    updateFocusSetUi();
+  }
   if (typeof updateSuperSetControls === 'function') {
     updateSuperSetControls();
   }

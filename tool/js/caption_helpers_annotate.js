@@ -402,19 +402,6 @@ function renderAnnotateStrip() {
     var chipWrap = document.createElement('div');
     chipWrap.className = 'annotate-strip-chip-wrap';
 
-    var naChip = document.createElement('button');
-    naChip.type = 'button';
-    naChip.className = 'annotate-strip-chip annotate-strip-chip-na';
-    if (groupIsNa) {
-      naChip.classList.add('active');
-    }
-    naChip.textContent = 'n/a';
-    naChip.title = groupIsNa ? 'Clear n/a override' : 'Mark this group n/a for current item';
-    naChip.onclick = function () {
-      toggleAnnotateGroupNa(group.requirement || group.name);
-    };
-    chipWrap.appendChild(naChip);
-
     var activeTermsByKey = {};
     var activeTermCount = 0;
     group.terms.forEach(function (term) {
@@ -424,6 +411,21 @@ function renderAnnotateStrip() {
       activeTermsByKey[activeTermKey] = true;
       activeTermCount += 1;
     });
+
+    if (activeTermCount <= 0) {
+      var naChip = document.createElement('button');
+      naChip.type = 'button';
+      naChip.className = 'annotate-strip-chip annotate-strip-chip-na';
+      if (groupIsNa) {
+        naChip.classList.add('active');
+      }
+      naChip.textContent = 'n/a';
+      naChip.title = groupIsNa ? 'Clear n/a override' : 'Mark this group n/a for current item';
+      naChip.onclick = function () {
+        toggleAnnotateGroupNa(group.requirement || group.name);
+      };
+      chipWrap.appendChild(naChip);
+    }
 
     group.terms.forEach(function (term) {
       var chip = document.createElement('button');

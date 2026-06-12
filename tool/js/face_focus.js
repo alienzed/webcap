@@ -126,7 +126,8 @@ function renderFaceFocusReportPanel(doc, rows, scopedFileNames) {
           type: 'caption-review-select',
           fileName: fileName,
           focusFiles: files,
-          focusSource: 'Face Focus'
+          focusSource: 'Face Focus',
+          reportType: 'selection'
         }, '*');
       }
     };

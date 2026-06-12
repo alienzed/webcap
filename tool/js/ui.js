@@ -175,10 +175,11 @@ function showContextMenu(clientX, clientY, actions) {
 }
 
 
-function activateFocusSet(fileNames, source) {
+function activateFocusSet(fileNames, source, reportType) {
   var seen = {};
   var keys = [];
   var names = (fileNames || []).map(function (name) { return String(name || ''); }).filter(Boolean);
+  reportType = String(reportType || '');
   names.forEach(function (fileName) {
     for (var i = 0; i < state.items.length; i += 1) {
       var item = state.items[i];
@@ -199,10 +200,80 @@ function activateFocusSet(fileNames, source) {
 
   state.focusSet = {
     keys: keys,
-    source: String(source || '')
+    source: String(source || ''),
+    reportType: reportType
   };
-  if (ui.focusSetExitBtn) ui.focusSetExitBtn.style.display = '';
+  updateFocusSetUi();
   renderFileList(ui.filterEl.value);
+}
+
+function getFocusSetReportLabel(reportType) {
+  if (reportType === 'selection') return 'Review Selections';
+  if (reportType === 'captions') return 'Review Captions';
+  return '';
+}
+
+function updateFocusSetUi() {
+  var focusSet = state && state.focusSet;
+  var hasFocusSet = !!(focusSet && focusSet.keys && focusSet.keys.length);
+  var reportLabel = hasFocusSet ? getFocusSetReportLabel(String(focusSet.reportType || '')) : '';
+  var count = hasFocusSet ? focusSet.keys.length : 0;
+  var source = hasFocusSet ? String(focusSet.source || '').trim() : '';
+  if (ui.focusSetBannerEl) {
+    ui.focusSetBannerEl.classList.toggle('hidden', !hasFocusSet);
+  }
+  if (ui.mediaListWrapperEl) {
+    ui.mediaListWrapperEl.classList.toggle('focus-set-active', hasFocusSet);
+  }
+  if (ui.currentFolderRow) {
+    ui.currentFolderRow.classList.toggle('focus-set-scope-header', hasFocusSet);
+  }
+  if (ui.focusSetBannerMetaEl) {
+    if (hasFocusSet) {
+      ui.focusSetBannerMetaEl.textContent = count + ' item' + (count === 1 ? '' : 's') + (source ? ' - ' + source : '');
+    } else {
+      ui.focusSetBannerMetaEl.textContent = '';
+    }
+  }
+  if (ui.focusSetReturnBtn) {
+    ui.focusSetReturnBtn.classList.toggle('hidden', !(hasFocusSet && reportLabel));
+    ui.focusSetReturnBtn.title = reportLabel ? 'Return to ' + reportLabel : 'Return to report';
+    ui.focusSetReturnBtn.setAttribute('aria-label', reportLabel ? 'Return to ' + reportLabel : 'Return to report');
+  }
+  if (ui.focusSetExitBtn) {
+    ui.focusSetExitBtn.title = 'Exit focus set';
+    ui.focusSetExitBtn.setAttribute('aria-label', 'Exit focus set');
+  }
+}
+
+function clearFocusSet() {
+  state.focusSet = null;
+  updateFocusSetUi();
+  renderFileList(ui.filterEl.value);
+}
+
+function rerunFocusSetReport() {
+  var focusSet = state && state.focusSet;
+  var reportType = String(focusSet && focusSet.reportType || '');
+  if (!reportType) return;
+  clearFocusSet();
+  setTimeout(function () {
+    if (reportType === 'selection') {
+      runSelectionReview();
+      return;
+    }
+    if (reportType === 'captions') {
+      runReview();
+    }
+  }, 0);
+}
+
+function exitFocusSetToBrowsing() {
+  state.focusSet = null;
+  updateFocusSetUi();
+  if (ui.editorEl) ui.editorEl.removeAttribute('readonly');
+  clearEditorAndPreview();
+  refreshCurrentDirectory();
 }
 
 // Review/stats bridge for caption mode.
@@ -221,7 +292,7 @@ function wireReviewActions() {
       return;
     }
     if (data.type === 'caption-review-select') {
-      selectByFileName(data.fileName, data.focusFiles, data.focusSource);
+      selectByFileName(data.fileName, data.focusFiles, data.focusSource, data.reportType);
       return;
     }
     if (data.type === 'caption-review-token') {
@@ -514,7 +585,7 @@ function runSelectionReview() {
   }
 }
 
-function selectByFileName(fileName, focusFiles, focusSource) {
+function selectByFileName(fileName, focusFiles, focusSource, reportType) {
   if (!fileName) {
     return;
   }
@@ -547,7 +618,7 @@ function selectByFileName(fileName, focusFiles, focusSource) {
   }
 
   if (focusFiles && focusFiles.length) {
-    activateFocusSet(focusFiles, focusSource || 'Focused Items');
+    activateFocusSet(focusFiles, focusSource || 'Focused Items', reportType || '');
     setTimeout(doSelect, 0);
   } else {
     doSelect();
@@ -763,12 +834,6 @@ function refreshCurrentDirectory() {
     }
   };
   xhr.send();
-}
-// Clears the current focus set and updates UI accordingly
-function clearFocusSet() {
-  state.focusSet = null;
-  if (ui.focusSetExitBtn) ui.focusSetExitBtn.style.display = 'none';
-  renderFileList(ui.filterEl.value);
 }
 // Ensure live filtering as you type
 function handleMediaFilterChanged() {

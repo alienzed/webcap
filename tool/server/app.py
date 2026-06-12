@@ -391,8 +391,8 @@ def deface():
         originals_dir = ensure_originals_folder(folder_path)
         # Ensure backup by hash
         ensure_original_by_hash(file_path, originals_dir)
-        # Run deface with --output to overwrite input
-        deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1', str(file_path), '--output', str(file_path)]
+        anonymized_path = file_path.with_name(file_path.stem + '_anonymized' + file_path.suffix)
+        deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1', str(file_path)]
         yield f'[DEFACE] Command: {deface_cmd}\n'
         yield f'[DEFACE] CWD: {os.getcwd()}\n'
         yield f'[DEFACE] PATH: {os.environ.get("PATH", "")}\n'
@@ -401,8 +401,11 @@ def deface():
         for line in proc.stdout:
             yield line
         proc.wait()
-        if proc.returncode == 0:
+        if proc.returncode == 0 and anonymized_path.exists():
+            os.replace(anonymized_path, file_path)
             yield f'[SUCCESS] Defaced {file_path.name}\n'
+        elif proc.returncode == 0:
+            yield f'[FAIL] Deface completed but no anonymized output was found for {file_path.name}\n'
         else:
             yield f'[FAIL] Deface failed for {file_path.name}\n'
 

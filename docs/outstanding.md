@@ -1,11 +1,11 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-06-05.
-
-## Bugs
-- Copy set doesn't bring over Reviewed status or the custom Requirements
+Last reviewed: 2026-06-11.
 
 
 ## Enhancements
+- Add a conservative face ROI mode for face-specific analysis only: use the existing CenterFace / `face_focus` bbox as a padded crop for face direction / expression analysis when the padded ROI is both meaningfully smaller than the full frame and still at least `192 px` on its short side; keep body/pose analysis on the full image and fall back to full-image face analysis when ROI is not clearly beneficial.
+- Apply a tag to an entire set - or finally explore multi-select in the media list (probably more involved). Select All could be enough...
+- n/a in a group is sort of incompatible with having other tags selected. I am not sure we'd deselect tags on n/a click, but n/a probably shouldn't be available to click on if another item is selected - let's discuss if this is worth the complexity.
 - Consider making annotation an assisted Wizard like flow - provided by a modal entered into purposefully.
 - Annotation throughput priorities (ranked by expected ROI):
   1. Group completion indicator in media list. (Partial: Incomplete filter is implemented; per-row indicator is pending.)
@@ -70,6 +70,10 @@ Last reviewed: 2026-06-05.
 - Crop modal supports arbitrary image rotation angle (slider/input + reset) and persists rotated crop output.
 - Phrase actions are toggle-based: clicking a matched phrase removes it; otherwise inserts at cursor.
 - Cropper selection includes soft snap toward an 8px grid; finalized crop dimensions are snapped/clamped for safer outputs.
+- Deface video truncation fix:
+  - Stop writing deface output back to the same source path during processing.
+  - Let `deface` emit its default `_anonymized` sibling output, then replace the original on success.
+  - This avoids partial/shortened video outputs caused by same-path read/write during anonymization.
 - Review captions operates on the currently visible/filtered set.
 - Persist caption requirement keywords in folder state (`tool/js/folder_state.js`).
 - Review captions now runs on the current filtered view (uses `tool/js/media.js` and `tool/js/ui.js`).

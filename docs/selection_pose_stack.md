@@ -138,6 +138,75 @@ Instead, normalize into coarse app-owned buckets such as:
 
 The UI should consume those normalized values only.
 
+## Face ROI Mode
+Face ROI mode is a targeted optimization for face-specific signals only.
+
+It should apply to:
+
+- `face_direction`
+- `facial expression`
+
+It should not apply to:
+
+- `body_orientation`
+- `pose_class`
+- `arm_position`
+
+Those body-oriented signals should continue using the full image.
+
+### Goal
+Improve face-direction and expression accuracy for images where the face is present but underrepresented within a much larger frame.
+
+This mode is not intended to create new information. It is intended to improve the effective face representation presented to the face analyzer in cases where the full-frame path is likely wasting too much of the analyzer input budget on background.
+
+### Source of ROI
+The preferred source is the existing CenterFace / `face_focus` detection path, since it already produces plausible face boxes and size metrics.
+
+Implementation direction:
+
+- detect face on the original image
+- select the primary plausible face box
+- derive a padded face ROI from that box
+- run face-specific analysis on that ROI only
+- keep pose/body analysis on the full image
+- merge both results back into the normal `selection_pose` metadata block
+
+### Decision Rule
+Use face ROI mode only when both of the following are true:
+
+- the padded face ROI would make the face materially larger relative to the analyzer input than the full image would
+- the padded face ROI still contains enough real source pixels to justify analysis
+
+Current recommended gate:
+
+- ROI candidate if the padded crop short side is less than `50%` of the full-image short side
+- ROI allowed only if the padded crop short side is at least `192 px`
+
+If either condition fails, use the current full-image face analysis path.
+
+### Disqualifiers
+Do not use face ROI mode when any of the following are true:
+
+- no plausible face was detected
+- the selected face is edge-clipped
+- face confidence is too weak
+- the face is already large enough in-frame that ROI is unlikely to help
+- the padded crop remains too small to offer meaningful detail
+
+### Padding and Fallback
+The ROI should be padded rather than tightly cropped to the raw face box.
+
+Goals of padding:
+
+- preserve some local context around the face
+- avoid brittle overly-tight crops
+- reduce the chance of harming expression or direction inference
+
+If the ROI gate fails, or if ROI analysis itself fails, the system should fall back to the existing full-image face-analysis path rather than leaving face fields empty.
+
+### Product Framing
+This should be treated as a conservative rescue path for small-face-in-large-image cases, not as a universal replacement for full-image face analysis.
+
 ## Intended Product Uses
 This stack is meant to feed two specific features:
 

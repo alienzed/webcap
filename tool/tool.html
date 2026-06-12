@@ -229,7 +229,7 @@
                         <span id="caption-filter-count-separator" class="hidden"> -</span>
                         <span id="caption-filter-rated-summary" class="caption-filter-rated-summary hidden"></span>
                     </div>
-                    <div class="media-list-wrapper">
+                    <div id="media-list-wrapper" class="media-list-wrapper">
                         <button
                             id="up-one-directory-btn"
                             type="button"
@@ -244,6 +244,28 @@
                             aria-label="Refresh directory"
                             class="refresh-btn-square floating-refresh"
                         >&#8635;</button>
+                        <div id="focus-set-banner" class="focus-set-banner hidden">
+                            <div class="focus-set-banner-copy">
+                                <span class="focus-set-banner-title">Focus Set</span>
+                                <span id="focus-set-banner-meta" class="focus-set-banner-meta"></span>
+                            </div>
+                            <div class="focus-set-banner-actions">
+                                <button
+                                    id="focus-set-return-btn"
+                                    type="button"
+                                    class="focus-set-banner-btn hidden"
+                                    title="Return to report"
+                                    aria-label="Return to report"
+                                >&#8592;</button>
+                                <button
+                                    id="focus-set-exit-btn"
+                                    type="button"
+                                    class="focus-set-banner-btn"
+                                    title="Exit focus set"
+                                    aria-label="Exit focus set"
+                                >x</button>
+                            </div>
+                        </div>
                         <div id="media-list-header">
                             <div id="current-folder-row" class="media-item folder-item header-item current-folder-item current-folder-bordered" data-type="current-folder">
                                 <div>
@@ -261,15 +283,6 @@
                         >Exit SuperSet Search</button>
                     </div>
                     <div class="stats-panel">
-                        <button
-                            id="focus-set-exit-btn"
-                            type="button"
-                            class="review-captions-btn"
-                            style="display:none"
-                        >
-                            <span class="btn-glyph" aria-hidden="true">x</span>
-                            <span>Exit Set</span>
-                        </button>
                         <button id="create-set-from-results-btn" type="button" class="review-captions-btn hidden" title="Create a new set with the current filter results" style="width:100%;margin-bottom:6px;">
                             <span class="btn-glyph" aria-hidden="true">&#8627;</span>
                             <span>Create Set</span>

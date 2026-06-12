@@ -46,7 +46,7 @@ This document provides a comprehensive, rewrite-ready breakdown of the Review fe
 
 - **Report HTML (renderReportPreview in stats.js):**
   - Each file/token button sends a `postMessage` to the parent window:
-    - File links: `{ type: "caption-review-select", fileName, focusFiles, focusSource }`
+    - File links: `{ type: "caption-review-select", fileName, focusFiles, focusSource, reportType }`
     - Token links: `{ type: "caption-review-token", token }`
 - **Main UI Listener (ui.js):**
   - Registers `addEventListener('message', ...)`.
@@ -56,6 +56,14 @@ This document provides a comprehensive, rewrite-ready breakdown of the Review fe
 - **Selection Handling:**
   - `selectByFileName`: Activates focus set, selects media, updates preview/editor.
   - `applyTokenFilter`: Sets filter input, triggers file list re-render.
+
+## Focus Set Return Contract
+
+- Focus set is a temporary subset state layered on top of the normal set browser.
+- The media list shows a lightweight focus-set header while that subset is active.
+- The back control returns to the originating report by clearing the focus set and rerunning that report.
+- The `x` control exits the focus set and returns to normal browsing without reopening a report.
+- This treatment is cosmetic only; the underlying media-list browsing behavior stays unchanged.
 
 ---
 

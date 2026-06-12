@@ -335,11 +335,13 @@ function wireMiscActionButtons() {
 
   if (ui.focusSetExitBtn) {
     ui.focusSetExitBtn.onclick = function () {
-      state.focusSet = null;
-      if (ui.editorEl) ui.editorEl.removeAttribute('readonly');
-      clearEditorAndPreview();
-      refreshCurrentDirectory();
-      ui.focusSetExitBtn.style.display = 'none';
+      exitFocusSetToBrowsing();
+    };
+  }
+
+  if (ui.focusSetReturnBtn) {
+    ui.focusSetReturnBtn.onclick = function () {
+      rerunFocusSetReport();
     };
   }
 
@@ -363,7 +365,8 @@ function wireReportLinks() {
           type: 'caption-review-select',
           fileName: decodeURIComponent(f),
           focusFiles: files,
-          focusSource: decodeURIComponent(source || '')
+          focusSource: decodeURIComponent(source || ''),
+          reportType: 'captions'
         }, '*');
       }
     });

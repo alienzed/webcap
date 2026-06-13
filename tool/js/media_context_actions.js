@@ -84,12 +84,6 @@ function buildCurrentFolderContextActions() {
       }
     },
     {
-      label: 'Run Autoset (Legacy)',
-      run: function () {
-        runAutosetForCurrentFolder();
-      }
-    },
-    {
       label: 'Generate Dataset Configs',
       run: function () {
         runGenerateDatasetConfigsForCurrentFolder();

@@ -1,7 +1,7 @@
 # Expandable Console Panel (Streaming Output)
 
 ## Purpose
-Show streaming output (e.g., autoset, deface) without cluttering the main UI.
+Show streaming output (e.g., dataset preparation, deface) without cluttering the main UI.
 
 ## UI/UX
 - Status area acts as a mini-console for quick feedback.

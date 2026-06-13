@@ -1555,7 +1555,7 @@ iframe {
   color: #334155;
 }
 
-.training-autoset-btn {
+.training-prepare-btn {
   width: 100%;
   border: 1px solid #cbd3dd;
   border-left: 3px solid var(--accent);
@@ -1588,14 +1588,14 @@ iframe {
   color: #111827;
 }
 
-.training-autoset-btn:hover {
+.training-prepare-btn:hover {
   border-color: #b8c2cd;
   border-left-color: var(--accent);
   background: #f8fafc;
   color: #111827;
 }
 
-.training-autoset-btn:active {
+.training-prepare-btn:active {
   background: #eef2f6;
   color: #111827;
 }

@@ -14,7 +14,7 @@ Initial media sourcing/clipping/prep can happen outside the app.
 2. Curate set contents (rename, prune, restore, reset, crop/deface where needed).
 3. Caption items and iterate quickly while browsing media.
 4. Review caption quality and distribution coverage.
-5. Run preparation steps for training assets (autoset and related dataset prep tasks).
+5. Run preparation steps for training assets.
 6. Generate training config artifacts from the current set state.
 7. Validate config wiring and preview concrete train commands.
 8. Execute training externally (terminal/runner), then iterate back in WebCap as needed.

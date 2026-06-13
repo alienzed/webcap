@@ -108,7 +108,6 @@ Practical loop:
 - Right-click current folder row for actions:
   - Open in Explorer
   - Open Folder in VS Code
-  - Run Autoset (Legacy)
   - Generate Dataset Configs
   - Deface (entire folder)
   - Reset Reviewed
@@ -393,7 +392,7 @@ Per set folder:
 - File system: `/fs/describe`, `/fs/read`, `/fs/list_config`, `/fs/read_config`, `/fs/save_config`, `/fs/rename`, `/fs/open_in_explorer`, `/fs/open_in_vscode`
 - Captions/media: `/caption/load`, `/caption/save`, `/caption/media`, `/fs/media_metadata`
 - Mutations: `/media/prune`, `/media/reset`, `/media/restore`, `/media/crop`, `/media/image_transform`, `/media/flip_horizontal`, `/media/video_clip`, `/fs/deface`
-- Training flow: `/fs/prepare_dataset`, `/fs/generate_dataset_config`, `/fs/train_run`, `/fs/autoset_run`
+- Training flow: `/fs/prepare_dataset`, `/fs/generate_dataset_config`, `/fs/train_run`
 
 ## Tests
 

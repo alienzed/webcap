@@ -13,7 +13,7 @@ from .originals import copy_media_to_originals, media_mutation_status_by_hash, i
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, open_in_vscode_response, rename_response
 from .media import media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
-from .run_ops import autoset_run_response, prepare_dataset_response, generate_dataset_config_response, train_run_response
+from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .training_config_files import ensure_training_config_files
 from .permissions import normalize_path_permissions, normalize_tree_permissions
@@ -37,6 +37,13 @@ def enforce_local_access():
 
 # Alias kept for readability in route handlers.
 safe_join_fs_root = app_config.safe_join_fs_root
+
+
+def _request_bool_arg(name):
+    value = request.args.get(name)
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 @app.route("/fs/folder_state/save", methods=["POST"])
 def folder_state_save():
@@ -296,13 +303,6 @@ def media_video_clip_status():
             app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
-# Minimal streaming endpoint for autoset.py
-@app.route("/fs/autoset_run", methods=["POST"])
-def autoset_run():
-    data = request.get_json(silent=True) or {}
-    folder = data.get("folder", "").strip()
-    return autoset_run_response(folder)
-
 @app.route("/fs/prepare_dataset", methods=["POST"])
 def prepare_dataset_route():
     data = request.get_json(silent=True) or {}
@@ -516,8 +516,8 @@ def fs_media_metadata():
     except Exception:
         disk_config = app_config.get_config_snapshot()
     analysis = disk_config.get("analysis") if isinstance(disk_config.get("analysis"), dict) else {}
-    include_face_focus = bool(analysis.get("enableFaceAnalysis", False))
-    include_selection_pose = bool(analysis.get("enableMediaPipeAnalysis", False))
+    include_face_focus = bool(analysis.get("enableFaceAnalysis", False)) or _request_bool_arg("face_focus")
+    include_selection_pose = bool(analysis.get("enableMediaPipeAnalysis", False)) or _request_bool_arg("selection_pose")
     scoped_filenames = [
         name.strip()
         for name in str(request.args.get("files", "") or "").splitlines()

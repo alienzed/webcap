@@ -184,7 +184,7 @@ When writing config templates during Generate:
 1. Learning-rate mode tuning
 2. New UI controls for per-run mode selection
 3. File naming variants by mode
-4. Refactors of autoset legacy pipeline
+4. Broader dataset-preparation pipeline refactors
 
 ## Notes
 

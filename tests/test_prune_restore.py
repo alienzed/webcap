@@ -285,7 +285,7 @@ def test_media_metadata_response_flattens_face_focus(client, isolated_fs_root, m
     monkeypatch.setattr(
         media_module,
         "update_media_metadata",
-        lambda folder_path, include_face_focus=False: {
+        lambda folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None: {
             "photo.jpg": {
                 "size": 100,
                 "mtime": 123,
@@ -317,18 +317,25 @@ def test_media_metadata_route_opts_into_face_focus(client, isolated_fs_root, mon
     set_folder.mkdir(parents=True)
     seen = []
 
-    def fake_update_media_metadata(folder_path, include_face_focus=False):
-        seen.append(include_face_focus)
+    def fake_update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None):
+        seen.append((include_face_focus, include_selection_pose))
         return {}
 
     monkeypatch.setattr(media_module, "update_media_metadata", fake_update_media_metadata)
+    monkeypatch.setattr(
+        app_module.app_config,
+        "load_config_from_disk",
+        lambda: {"analysis": {"enableFaceAnalysis": False, "enableMediaPipeAnalysis": False}},
+    )
 
     plain_response = client.get(f"/fs/media_metadata?folder={set_folder_rel}")
     focus_response = client.get(f"/fs/media_metadata?folder={set_folder_rel}&face_focus=1")
+    pose_response = client.get(f"/fs/media_metadata?folder={set_folder_rel}&selection_pose=1")
 
     assert plain_response.status_code == 200
     assert focus_response.status_code == 200
-    assert seen == [False, True]
+    assert pose_response.status_code == 200
+    assert seen == [(False, False), (True, False), (False, True)]
 
 
 def test_media_metadata_backfills_cached_image_face_focus(monkeypatch, tmp_path):

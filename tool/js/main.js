@@ -49,25 +49,6 @@ function createFlagAction(itemKey) {
   };
 }
 
-function runAutosetForCurrentFolder() {
-  if (!state.folder) {
-    setStatus('No folder selected for autoset.');
-    return;
-  }
-  setStatus('Running legacy autoset...');
-  streamPreviewFromFetch(
-    '/fs/autoset_run',
-    { folder: state.folder },
-    ui,
-    function () {
-      setStatus('Legacy autoset finished.');
-    },
-    function (err) {
-      setStatus('Autoset failed: ' + err);
-    }
-  );
-}
-
 function ensureFolderSelected(missingStatus) {
   if (state.folder) return true;
   setStatus(missingStatus || 'No folder selected.');

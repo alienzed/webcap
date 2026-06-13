@@ -3,7 +3,6 @@ Last reviewed: 2026-06-11.
 
 
 ## Enhancements
-- Deprecate legacy autoset.py script
 - Add a conservative face ROI mode for face-specific analysis only: use the existing CenterFace / `face_focus` bbox as a padded crop for face direction / expression analysis when the padded ROI is both meaningfully smaller than the full frame and still at least `192 px` on its short side; keep body/pose analysis on the full image and fall back to full-image face analysis when ROI is not clearly beneficial.
 - Apply a tag to an entire set - or finally explore multi-select in the media list (probably more involved). Select All could be enough...
 - n/a in a group is sort of incompatible with having other tags selected. I am not sure we'd deselect tags on n/a click, but n/a probably shouldn't be available to click on if another item is selected - let's discuss if this is worth the complexity.
@@ -80,7 +79,7 @@ Last reviewed: 2026-06-11.
   - Config files shown in grouped HI/LO columns.
   - `Generate` and `Prepare Dataset` remain explicit actions.
   - Train action currently prints command preview to console (not owning full run lifecycle).
-  - Legacy autoset remains available from current-folder context menu.
+  - Legacy one-shot dataset route, context action, and script were retired in favor of explicit Prepare/Generate flow.
 - Keyboard/media navigation:
   - `ArrowUp` / `ArrowDown` selects previous/next media when a media item is selected.
   - Mouse wheel over preview also navigates previous/next media (with cooldown).

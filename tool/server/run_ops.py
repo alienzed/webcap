@@ -1,7 +1,5 @@
-import os
 import shlex
 import subprocess
-import sys
 import traceback
 import queue
 import threading
@@ -13,7 +11,6 @@ from pathlib import Path
 from flask import Response, jsonify, stream_with_context
 
 from . import config as app_config
-from . import autoset as autoset_module
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
 from .permissions import normalize_path_permissions
@@ -111,24 +108,6 @@ def _run_prepare_dataset(folder_path: Path, output_queue, selected_media=None, s
         output_queue.put(None)
 
 
-def _run_legacy_autoset(folder_path: Path, output_queue):
-    writer = _QueueWriter(output_queue)
-    try:
-        with redirect_stdout(writer), redirect_stderr(writer):
-            autoset_module.main(["--master", str(folder_path)])
-    except SystemExit as e:
-        code = e.code if isinstance(e.code, int) else 1
-        if code not in (0, None):
-            writer.write(f"[ERROR] autoset exited with code {code}\n")
-    except Exception as e:
-        writer.write(f"[ERROR] {e}\n")
-        if app_config.FS_DEBUG:
-            writer.write(traceback.format_exc() + "\n")
-    finally:
-        writer.flush()
-        output_queue.put(None)
-
-
 def prepare_dataset_response(folder: str, selected_media=None, selection_criteria=None, total_media_count=None):
     if not folder:
         return jsonify({"error": "Missing folder argument"}), 400
@@ -157,38 +136,6 @@ def prepare_dataset_response(folder: str, selected_media=None, selection_criteri
     except Exception as e:
         if app_config.FS_DEBUG:
             app_config.debug_print("[prepare_dataset] ERROR:", e)
-            app_config.debug_traceback()
-        return jsonify({"error": str(e)}), 400
-
-
-def autoset_run_response(folder: str):
-    if not folder:
-        return jsonify({"error": "Missing folder argument"}), 400
-    try:
-        folder_path = app_config.safe_join_fs_root(folder)
-        if not folder_path.exists() or not folder_path.is_dir():
-            return jsonify({"error": f"Folder does not exist: {folder}"}), 404
-
-        def generate():
-            output_queue = queue.Queue()
-            thread = threading.Thread(
-                target=_run_legacy_autoset,
-                args=(folder_path, output_queue),
-                daemon=True,
-            )
-            thread.start()
-            while True:
-                chunk = output_queue.get()
-                if chunk is None:
-                    break
-                yield chunk
-            thread.join()
-            yield "[autoset] Finished legacy autoset run.\n"
-
-        return Response(stream_with_context(generate()), mimetype="text/plain")
-    except Exception as e:
-        if app_config.FS_DEBUG:
-            app_config.debug_print("[autoset_run] ERROR:", e)
             app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 

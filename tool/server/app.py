@@ -16,6 +16,7 @@ from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import autoset_run_response, prepare_dataset_response, generate_dataset_config_response, train_run_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .training_config_files import ensure_training_config_files
+from .permissions import normalize_path_permissions, normalize_tree_permissions
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -58,6 +59,7 @@ def folder_state_save():
         # print("[folder_state_save] State to be written:", state)
         with open(state_path, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
+        normalize_path_permissions(state_path)
         # print("[folder_state_save] State written to file.")
         # Optionally, read back and print for verification
         try:
@@ -79,6 +81,7 @@ def fs_read():
     rel_path = request.args.get("path", "").strip()
     try:
         abs_path = safe_join_fs_root(rel_path)
+        normalize_path_permissions(abs_path)
         if not abs_path.exists() or not abs_path.is_file():
             return ("", 404)
         with open(abs_path, "r", encoding="utf-8") as f:
@@ -403,6 +406,7 @@ def deface():
         proc.wait()
         if proc.returncode == 0 and anonymized_path.exists():
             os.replace(anonymized_path, file_path)
+            normalize_path_permissions(file_path)
             yield f'[SUCCESS] Defaced {file_path.name}\n'
         elif proc.returncode == 0:
             yield f'[FAIL] Deface completed but no anonymized output was found for {file_path.name}\n'
@@ -441,6 +445,7 @@ def fs_describe():
         dir_path = safe_join_fs_root(rel_path)
         if not dir_path.exists() or not dir_path.is_dir():
             return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
+        normalize_tree_permissions(dir_path)
         copy_media_to_originals(dir_path)
 
         # List folders and files (with metadata)

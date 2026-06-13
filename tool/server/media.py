@@ -33,6 +33,7 @@ def media_flip_horizontal_response(data):
         # Atomically replace original
         try:
             os.replace(tmp_path, src_media)
+            normalize_path_permissions(src_media)
         except Exception as e:
             if tmp_path.exists():
                 try: tmp_path.unlink()
@@ -57,6 +58,7 @@ from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
 from .face_focus import FACE_FOCUS_VERSION, analyze_image_face_focus, get_face_focus_detector, is_face_focus_image
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name, restore_original_media, restore_original_media_video_only
+from .permissions import normalize_path_permissions, normalize_tree_permissions
 from .selection_pose import SELECTION_POSE_VERSION, analyze_image_selection_pose, get_selection_pose_analyzers, is_selection_pose_image
 
 safe_join_fs_root = app_config.safe_join_fs_root
@@ -175,12 +177,14 @@ def probe_media_metadata(file_path, face_detector=None, selection_pose_analyzers
 def write_media_metadata_file(metadata_path, metadata):
     with open(metadata_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
+    normalize_path_permissions(metadata_path)
 
 
 def update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None):
     folder_path = Path(folder_path)
     metadata_path = folder_path / "media_metadata.json"
     if metadata_path.exists():
+        normalize_path_permissions(metadata_path)
         with open(metadata_path, "r", encoding="utf-8") as f:
             metadata = json.load(f)
     else:
@@ -325,6 +329,7 @@ def media_prune_response(data):
         folder_path = safe_join_fs_root(folder)
         originals_path = folder_path / "originals"
         originals_path.mkdir(exist_ok=True)
+        normalize_path_permissions(originals_path)
         src_media = folder_path / file_name
         if not src_media.exists() or not src_media.is_file():
             return jsonify({"error": "Media file not found"}), 404
@@ -348,16 +353,14 @@ def media_prune_response(data):
         if dst_media.exists():
             raise Exception(f"Destination already exists: {dst_media}")
         shutil.move(str(src_media), str(dst_media))
+        normalize_path_permissions(dst_media)
 
         src_caption = folder_path / (Path(file_name).stem + ".txt")
         dst_caption = originals_path / (Path(dst_media_name).stem + ".txt")
         if src_caption.exists():
             with open(src_caption, "r", encoding="utf-8") as fsrc, open(dst_caption, "w", encoding="utf-8") as fdst:
                 fdst.write(fsrc.read())
-            try:
-                os.chmod(dst_caption, 0o644)
-            except Exception:
-                pass
+            normalize_path_permissions(dst_caption)
             src_caption.unlink()
 
         return jsonify({"ok": True})
@@ -373,6 +376,7 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
         folder_path = safe_join_fs_root(rel_path)
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
+        normalize_tree_permissions(folder_path)
         metadata_dict = update_media_metadata(
             folder_path,
             include_face_focus=include_face_focus,

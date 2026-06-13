@@ -283,6 +283,24 @@ function toggleCaptionPhraseAtCursor(text) {
   insertCaptionPhraseAtCursor(phrase, { separator: ', ' });
 }
 
+function toggleCaptionTagAtCursor(text) {
+  var tag = String(text || '').trim();
+  if (!tag || !ui || !ui.editorEl) return;
+  var rendered = (typeof renderChecklistTermWithAffixes === 'function')
+    ? renderChecklistTermWithAffixes(tag)
+    : tag;
+  var value = ui.editorEl.value || '';
+  if (rendered && captionContainsPhrase(value, rendered)) {
+    removeCaptionPhraseFromCaption(rendered);
+    return;
+  }
+  if (tag && captionContainsPhrase(value, tag)) {
+    removeCaptionPhraseFromCaption(tag);
+    return;
+  }
+  insertCaptionPhraseAtCursor(rendered || tag, { separator: ', ' });
+}
+
 function setCaptionQuickPhrases(nextPhrases, triggerAutosave) {
   captionQuickPhrases = (nextPhrases || [])
     .map(function (phrase) { return normalizeCatalogTerm(phrase); })
@@ -310,3 +328,4 @@ window.mergeCaptionHelperPhrasesFromTagsMap = mergeCaptionHelperPhrasesFromTagsM
 window.getCaptionHelperCatalogTerms = getCaptionHelperCatalogTerms;
 window.moveCaptionQuickPhraseByOffset = moveCaptionQuickPhraseByOffset;
 window.toggleCaptionPhraseAtCursor = toggleCaptionPhraseAtCursor;
+window.toggleCaptionTagAtCursor = toggleCaptionTagAtCursor;

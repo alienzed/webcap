@@ -89,7 +89,7 @@ All resolutions divisible by 32.
 
 ## Frame Counts
 
-- **Motion**: 33 frames
+- **Motion**: 37 frames
 - **Detail**: 13 frames
 - **Images**: 1 frame (static)
 

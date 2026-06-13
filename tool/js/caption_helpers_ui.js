@@ -2,12 +2,9 @@
 
 function wireCaptionHelpersUi() {
   var requirementsBtn = document.getElementById('caption-helper-tab-requirements-btn');
-  var phrasesBtn = document.getElementById('caption-helper-tab-phrases-btn');
   var tagsBtn = document.getElementById('caption-helper-tab-tags-btn');
+  var analysisBtn = document.getElementById('caption-helper-tab-analysis-btn');
   var metadataBtn = document.getElementById('caption-helper-tab-metadata-btn');
-  var phraseInput = document.getElementById('phrase-term-input');
-  var phraseApplyBtn = document.getElementById('phrase-term-apply-btn');
-  var phraseResults = document.getElementById('phrase-term-results');
   var tagInput = document.getElementById('tag-term-input');
   var tagApplyBtn = document.getElementById('tag-term-apply-btn');
   var tagResults = document.getElementById('tag-term-results');
@@ -30,15 +27,16 @@ function wireCaptionHelpersUi() {
       renderChecklistPanel();
     }
   };
-  phrasesBtn.onclick = function () {
-    expandHelperPanelForTabSwitch();
-    setCaptionHelperTab('phrases');
-    renderPhraseCopyPanel();
-  };
   if (tagsBtn) {
     tagsBtn.onclick = function () {
       expandHelperPanelForTabSwitch();
       setCaptionHelperTab('tags');
+    };
+  }
+  if (analysisBtn) {
+    analysisBtn.onclick = function () {
+      expandHelperPanelForTabSwitch();
+      setCaptionHelperTab('analysis');
     };
   }
   if (metadataBtn) {
@@ -148,51 +146,6 @@ function wireCaptionHelpersUi() {
     clearResults(tagResults);
   }
 
-  function applyQuickPhraseTerm(rawText) {
-    var text = normalizeCatalogTerm(rawText);
-    if (!text) return;
-    ensureCaptionHelperPhraseInCatalog(text, false);
-    var added = addCaptionQuickPhrase(text, true);
-    if (!added) {
-      setStatus('Already in quicklist.');
-      return;
-    }
-    renderPhraseCopyPanel();
-    setStatus('Added to quicklist: ' + text);
-    if (phraseInput) phraseInput.value = '';
-    clearResults(phraseResults);
-  }
-
-  function renderPhraseResults(query) {
-    if (!phraseResults) return;
-    var q = normalizeCatalogTerm(query).toLowerCase();
-    if (!q) {
-      clearResults(phraseResults);
-      return;
-    }
-    var ranked = rankCatalogTerms(q);
-    phraseResults.innerHTML = '';
-    if (!ranked.length) {
-      phraseResults.appendChild(buildResultRow(
-        'Create "' + normalizeCatalogTerm(query) + '"',
-        function () { applyQuickPhraseTerm(query); },
-        '\uD83D\uDCCC',
-        function () { applyQuickPhraseTerm(query); }
-      ));
-      phraseResults.classList.remove('hidden');
-      return;
-    }
-    ranked.forEach(function (term) {
-      phraseResults.appendChild(buildResultRow(
-        term,
-        function () { applyQuickPhraseTerm(term); },
-        '\uD83D\uDCCC',
-        function () { applyQuickPhraseTerm(term); }
-      ));
-    });
-    phraseResults.classList.remove('hidden');
-  }
-
   function renderTagResults(query) {
     if (!tagResults) return;
     var q = normalizeCatalogTerm(query).toLowerCase();
@@ -214,32 +167,6 @@ function wireCaptionHelpersUi() {
       tagResults.appendChild(buildResultRow(term, function () { applyTagTerm(term); }));
     });
     tagResults.classList.remove('hidden');
-  }
-
-  if (phraseApplyBtn && phraseInput) {
-    phraseApplyBtn.onclick = function () {
-      var text = normalizeCatalogTerm(phraseInput.value);
-      if (!text) return;
-      applyQuickPhraseTerm(text);
-    };
-    phraseInput.addEventListener('input', function () {
-      renderPhraseResults(phraseInput.value);
-    });
-    phraseInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        var text = normalizeCatalogTerm(phraseInput.value);
-        if (!text) return;
-        applyQuickPhraseTerm(text);
-        return;
-      }
-      if (e.key === 'Escape') {
-        clearResults(phraseResults);
-      }
-    });
-    phraseInput.addEventListener('blur', function () {
-      setTimeout(function () { clearResults(phraseResults); }, 150);
-    });
   }
 
   if (tagApplyBtn && tagInput) {

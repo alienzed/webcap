@@ -1,21 +1,19 @@
 // Caption helper tab switching, phrase panel, and folder-state loading.
 
 function setCaptionHelperTab(tabName) {
-  if (tabName !== 'requirements' && tabName !== 'phrases' && tabName !== 'tags' && tabName !== 'metadata') {
+  if (tabName !== 'requirements' && tabName !== 'tags' && tabName !== 'analysis' && tabName !== 'metadata') {
     tabName = 'requirements';
   }
   captionHelperActiveTab = tabName;
   document.getElementById('caption-helper-tab-requirements-btn').classList.remove('active');
-  document.getElementById('caption-helper-tab-phrases-btn').classList.remove('active');
   document.getElementById('caption-helper-tab-tags-btn').classList.remove('active');
+  document.getElementById('caption-helper-tab-analysis-btn').classList.remove('active');
   document.getElementById('caption-helper-tab-metadata-btn').classList.remove('active');
   document.getElementById('caption-helper-tab-requirements').classList.add('hidden');
-  document.getElementById('caption-helper-tab-phrases').classList.add('hidden');
   document.getElementById('caption-helper-tab-tags').classList.add('hidden');
+  document.getElementById('caption-helper-tab-analysis').classList.add('hidden');
   document.getElementById('caption-helper-tab-metadata').classList.add('hidden');
-  var phraseResults = document.getElementById('phrase-term-results');
   var tagResults = document.getElementById('tag-term-results');
-  if (phraseResults) phraseResults.classList.add('hidden');
   if (tagResults) tagResults.classList.add('hidden');
 
   if (tabName === 'requirements') {
@@ -23,14 +21,14 @@ function setCaptionHelperTab(tabName) {
     document.getElementById('caption-helper-tab-requirements').classList.remove('hidden');
     return;
   }
-  if (tabName === 'phrases') {
-    document.getElementById('caption-helper-tab-phrases-btn').classList.add('active');
-    document.getElementById('caption-helper-tab-phrases').classList.remove('hidden');
-    return;
-  }
   if (tabName === 'tags') {
     document.getElementById('caption-helper-tab-tags-btn').classList.add('active');
     document.getElementById('caption-helper-tab-tags').classList.remove('hidden');
+    return;
+  }
+  if (tabName === 'analysis') {
+    document.getElementById('caption-helper-tab-analysis-btn').classList.add('active');
+    document.getElementById('caption-helper-tab-analysis').classList.remove('hidden');
     return;
   }
   if (tabName === 'metadata') {

@@ -8,6 +8,7 @@ from pathlib import Path
 from flask import jsonify
 
 from . import config as app_config
+from .permissions import normalize_path_permissions, normalize_tree_permissions
 
 # Alias kept for compatibility with callers and tests that monkeypatch this name.
 safe_join_fs_root = app_config.safe_join_fs_root
@@ -34,6 +35,7 @@ def duplicate_folder_response(src_rel):
         i += 1
 
     shutil.copytree(str(src_path), str(dst_path))
+    normalize_tree_permissions(dst_path)
     return jsonify({"success": True, "dst": str(dst_path)})
 
 
@@ -70,19 +72,13 @@ def duplicate_image_response(src_rel):
         i += 1
 
     shutil.copy2(str(src_path), str(dst_path))
-    try:
-        os.chmod(dst_path, 0o644)
-    except Exception:
-        pass
+    normalize_path_permissions(dst_path)
 
     src_caption = src_path.with_suffix(".txt")
     dst_caption = dst_path.with_suffix(".txt")
     if src_caption.exists() and src_caption.is_file() and not dst_caption.exists():
         shutil.copy2(str(src_caption), str(dst_caption))
-        try:
-            os.chmod(dst_caption, 0o644)
-        except Exception:
-            pass
+        normalize_path_permissions(dst_caption)
 
     return jsonify({"success": True, "dst": str(dst_path), "dstName": dst_name})
 
@@ -179,6 +175,7 @@ def rename_response(data):
                             app_config.debug_print(f"[fs_rename] Updated mutated_media_keys in {state_path}")
                     with open(state_path, "w", encoding="utf-8") as f:
                         json.dump(folder_state, f, indent=2)
+                    normalize_path_permissions(state_path)
                 except Exception as e:
                     app_config.debug_print(f"[fs_rename] Could not update folder state keys: {e}")
             return jsonify({"ok": True})

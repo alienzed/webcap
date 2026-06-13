@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from .media import update_media_metadata
+from .permissions import normalize_path_permissions, normalize_tree_permissions
 
 VIDEO_EXTS = {".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v", ".ogg", ".wmv", ".mpg", ".mpeg"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
@@ -65,6 +66,7 @@ def copy_clean_caption(source_media_path: Path, dest_dir: Path):
         raise RuntimeError(f"Empty caption text for media: {source_media_path.name}")
     dest_caption = dest_dir / source_caption.name
     dest_caption.write_text(cleaned, encoding="utf-8")
+    normalize_path_permissions(dest_caption)
     return cleaned
 
 
@@ -130,10 +132,12 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
     lines = []
     lines.append(f"[INFO] Preparing dataset from: {folder}")
     lines.append(f"[INFO] Target FPS: {target_fps}")
+    normalize_tree_permissions(folder)
 
     if dataset_root.exists():
         shutil.rmtree(dataset_root)
     dataset_root.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(dataset_root)
     lines.append(f"[INFO] Rebuilt directory: {dataset_root}")
 
     metadata = update_media_metadata(folder)
@@ -219,6 +223,7 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
         dest_dir_name = ar_label if is_video else f"{ar_label}_img"
         dest_dir = dataset_root / dest_dir_name
         dest_dir.mkdir(parents=True, exist_ok=True)
+        normalize_path_permissions(dest_dir)
         dest_path = dest_dir / src.name
 
         if is_video:
@@ -235,6 +240,7 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
             else:
                 shutil.copy2(src, dest_path)
                 action = "copied"
+            normalize_path_permissions(dest_path)
             copy_clean_caption(src, dest_dir)
             manifest["videos"].append({
                 "file": file_name,
@@ -250,6 +256,7 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
             })
         else:
             shutil.copy2(src, dest_path)
+            normalize_path_permissions(dest_path)
             copy_clean_caption(src, dest_dir)
             manifest["images"].append({
                 "file": file_name,
@@ -262,6 +269,7 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
 
     manifest_path = dataset_root / PREP_MANIFEST_NAME
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    normalize_path_permissions(manifest_path)
 
     lines.append(f"[INFO] Videos prepared: {len(manifest['videos'])}")
     lines.append(f"[INFO] Images prepared: {len(manifest['images'])}")

@@ -16,6 +16,7 @@ from . import config as app_config
 from . import autoset as autoset_module
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
+from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, ensure_training_config_files
 
 
@@ -84,6 +85,7 @@ def _bump_micro_batch_default_if_template_value(config_path: Path):
     if updated == original:
         return False
     config_path.write_text(updated, encoding="utf-8")
+    normalize_path_permissions(config_path)
     return True
 
 

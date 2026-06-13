@@ -5,6 +5,7 @@ from PIL import Image
 import tool.server.app as app_module
 import tool.server.run_ops as run_ops_module
 from tool.server.dataset_config import (
+    choose_video_detail_bucket,
     generate_candidates,
     generate_image_candidates,
     generate_dataset_configs,
@@ -182,7 +183,7 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
 
     assert hi_text.count('group = "videos"') == 2
     assert lo_text.count('group = "videos"') == 2
-    assert "  [640, 352, 49]," in hi_text
+    assert "  [672, 384, 37]," in hi_text
     assert "  [1024, 576, 13]," in hi_text
     assert "num_repeats = 40" in hi_text
     assert "num_repeats = 10" in hi_text
@@ -256,6 +257,18 @@ def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
     assert "Wrote" in response.get_data(as_text=True)
     assert (set_folder / "dataset.hi.toml").exists()
     assert (set_folder / "dataset.lo.toml").exists()
+
+
+def test_choose_video_detail_bucket_respects_mfp_limit():
+    clips = [
+        {"width": 1248, "height": 704, "frames": 13},
+        {"width": 1248, "height": 704, "frames": 13},
+    ]
+
+    detail = choose_video_detail_bucket("169", clips, 640, 352)
+
+    assert detail is not None
+    assert (detail["width"], detail["height"]) == (1184, 672)
 
 
 def test_rectangle_image_candidates_allow_long_edge_above_768():

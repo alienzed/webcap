@@ -7,6 +7,8 @@ import shutil
 import hashlib
 import json
 
+from .permissions import normalize_path_permissions
+
 # Blacklisted folder names (never process or mutate)
 BLACKLISTED_FOLDERS = {'originals', 'auto_dataset', 'src_videos'}
 
@@ -52,6 +54,7 @@ def _read_media_hash_index(folder_path):
     path = Path(folder_path) / MEDIA_HASH_INDEX_FILE
     if not path.exists() or not path.is_file():
         return {"version": MEDIA_HASH_INDEX_VERSION, "files": {}}
+    normalize_path_permissions(path)
     try:
         raw = json.loads(path.read_text(encoding='utf-8'))
     except Exception:
@@ -102,6 +105,8 @@ def _get_cached_or_compute_sha256(path, index_files, cache_key):
     return sha
 
 def safe_chmod(path, mode):
+    if normalize_path_permissions(path):
+        return
     try:
         path.chmod(mode)
     except Exception:
@@ -115,6 +120,7 @@ def ensure_originals_folder(folder_path):
         return None
     originals_dir = folder_path / 'originals'
     originals_dir.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(originals_dir)
     return originals_dir
 
 

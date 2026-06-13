@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
+from .permissions import normalize_path_permissions, normalize_tree_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
@@ -79,11 +80,11 @@ IMAGE_MODE_CAPS = {
 }
 
 PREP_MANIFEST_NAME = "prep_manifest.json"
-VIDEO_FRAME_CANDIDATES = [49, 45, 41, 37, 33]
+VIDEO_FRAME_CANDIDATES = [37, 49, 45, 41, 33]
 VIDEO_FRAME_CANDIDATES_POC = [33, 29, 25, 21, 17]
 MIN_VIDEO_FRAMES_FOR_STATS = 16
 VIDEO_COVERAGE = 0.85
-VIDEO_MFP_LIMIT = 12000
+VIDEO_MFP_LIMIT = 11000
 VIDEO_DETAIL_FRAMES = 13
 VIDEO_DETAIL_MIN_COVERAGE = 0.35
 VIDEO_DETAIL_MIN_SUPPORT = 2
@@ -157,6 +158,7 @@ def estimate_steps(entries, repeats, epochs: int):
 def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
+    normalize_tree_permissions(folder)
     manifest_path = dataset_root / PREP_MANIFEST_NAME
     if not manifest_path.exists():
         raise FileNotFoundError(f"Missing prep manifest: {manifest_path}")
@@ -231,6 +233,7 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
 
     metadata_path = dataset_root / "webcap_dataset_metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    normalize_path_permissions(metadata_path)
     lines.append(f"[INFO] Wrote metadata cache: {metadata_path}")
 
     hi_entries = []
@@ -270,6 +273,8 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lo_path = folder / "dataset.lo.toml"
     hi_path.write_text(hi_text, encoding="utf-8")
     lo_path.write_text(lo_text, encoding="utf-8")
+    normalize_path_permissions(hi_path)
+    normalize_path_permissions(lo_path)
     lines.append(f"[INFO] Wrote {hi_path}")
     lines.append(f"[INFO] Wrote {lo_path}")
 

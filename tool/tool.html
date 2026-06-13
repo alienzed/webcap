@@ -485,17 +485,17 @@
                                 type="button"
                             >Requirements</button>
                             <button
-                                id="caption-helper-tab-phrases-btn"
-                                class="caption-helper-tab-btn"
-                                data-caption-helper-tab="phrases"
-                                type="button"
-                            >Phrases</button>
-                            <button
                                 id="caption-helper-tab-tags-btn"
                                 class="caption-helper-tab-btn"
                                 data-caption-helper-tab="tags"
                                 type="button"
                             >Tags</button>
+                            <button
+                                id="caption-helper-tab-analysis-btn"
+                                class="caption-helper-tab-btn"
+                                data-caption-helper-tab="analysis"
+                                type="button"
+                            >Analysis</button>
                             <button
                                 id="caption-helper-tab-metadata-btn"
                                 class="caption-helper-tab-btn"
@@ -552,22 +552,6 @@
                             </div>
                             <div id="checklist-items"></div>
                         </div>
-                        <div id="caption-helper-tab-phrases" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title-row">
-                                <div class="caption-helper-section-title">Phrases</div>
-                            </div>
-                            <div id="phrase-term-row" class="checklist-input-row caption-term-shared-row term-input-row">
-                                <input
-                                    id="phrase-term-input"
-                                    type="text"
-                                    class="form-control"
-                                    placeholder="Add/search quick phrase..."
-                                >
-                                <button id="phrase-term-apply-btn" type="button">+</button>
-                                <div id="phrase-term-results" class="caption-term-results hidden"></div>
-                            </div>
-                            <div id="phrase-copy-items"></div>
-                        </div>
                         <div id="caption-helper-tab-tags" class="caption-helper-tab-pane hidden">
                             <div class="caption-helper-section-title-row">
                                 <div class="caption-helper-section-title">Tags</div>
@@ -583,6 +567,12 @@
                                 <div id="tag-term-results" class="caption-term-results hidden"></div>
                             </div>
                             <div id="item-tags-list"></div>
+                        </div>
+                        <div id="caption-helper-tab-analysis" class="caption-helper-tab-pane hidden">
+                            <div class="caption-helper-section-title-row">
+                                <div class="caption-helper-section-title">Analysis</div>
+                            </div>
+                            <div id="item-analysis-list"></div>
                         </div>
                         <div id="caption-helper-tab-metadata" class="caption-helper-tab-pane hidden">
                             <div class="caption-helper-section-title-row">
@@ -664,6 +654,11 @@
                     <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/home/user/diffusion-pipe">
                     <label for="app-settings-training-activate-script">Activate Script</label>
                     <input id="app-settings-training-activate-script" type="text" placeholder="dp-clean/bin/activate">
+                    <span>Root Permissions</span>
+                    <label class="app-settings-radio-label" style="justify-content:flex-start;gap:8px;">
+                        <input id="app-settings-training-chmod-root-on-load" type="checkbox">
+                        <span>Run chmod -R 775 on filesystem root at startup/reboot</span>
+                    </label>
                     <span>Selection Snapshot Comments</span>
                     <label class="app-settings-radio-label" style="justify-content:flex-start;gap:8px;">
                         <input id="app-settings-training-write-selection-snapshot-comments" type="checkbox">
@@ -821,6 +816,37 @@
             </div>
             <div class="modal-footer">
                 <button class="btn" data-close-modal="checklist-group-terms-modal">Close</button>
+            </div>
+        </div>
+        <div
+            id="checklist-term-affixes-modal"
+            class="modal hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="checklist-term-affixes-modal-title"
+        >
+            <div class="modal-header">
+                <h3 id="checklist-term-affixes-modal-title">Edit Modifiers</h3>
+                <button class="modal-close-btn" data-close-modal="checklist-term-affixes-modal" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-body-row">
+                    <div class="modal-body-row-label">Prefix</div>
+                    <input id="checklist-term-affixes-prefix" type="text" class="form-control" placeholder="e.g. on the">
+                </div>
+                <div class="modal-body-row">
+                    <div class="modal-body-row-label">Suffix</div>
+                    <input id="checklist-term-affixes-suffix" type="text" class="form-control" placeholder="optional trailing text">
+                </div>
+                <div class="small">Preview</div>
+                <div id="checklist-term-affixes-preview" class="small" style="margin-top:6px;"></div>
+            </div>
+            <div class="modal-footer modal-footer-split">
+                <button class="btn" id="checklist-term-affixes-clear-btn" type="button">Clear</button>
+                <div class="modal-footer-actions">
+                    <button class="btn" data-close-modal="checklist-term-affixes-modal">Cancel</button>
+                    <button class="btn" id="checklist-term-affixes-save-btn" type="button">Save</button>
+                </div>
             </div>
         </div>
         <!-- JS load order: shared globals first, feature files, then main.js wiring -->

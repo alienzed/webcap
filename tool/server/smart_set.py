@@ -9,6 +9,7 @@ from flask import jsonify
 from . import config as app_config
 from .caption_ops import _caption_name_for_media
 from .originals import BLACKLISTED_FOLDERS, MEDIA_ALL_EXTS
+from .permissions import normalize_path_permissions
 
 
 def _is_blacklisted_rel_path(rel_path: Path) -> bool:
@@ -20,6 +21,7 @@ def _load_folder_state(folder_path: Path) -> dict:
     state_path = folder_path / ".webcap_state.json"
     if not state_path.exists() or not state_path.is_file():
         return {}
+    normalize_path_permissions(state_path)
     try:
         with state_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
@@ -32,6 +34,7 @@ def _load_folder_media_metadata(folder_path: Path) -> dict:
     metadata_path = folder_path / "media_metadata.json"
     if not metadata_path.exists() or not metadata_path.is_file():
         return {}
+    normalize_path_permissions(metadata_path)
     try:
         with metadata_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
@@ -528,12 +531,14 @@ def _build_dest_name_with_suffix(dest_dir: Path, media_name: str) -> str:
 
 def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
     dest_dir.mkdir(parents=True, exist_ok=False)
+    normalize_path_permissions(dest_dir)
 
     state_by_folder = {}
     reviewed_keys = []
     flags = {}
     tags_by_media = {}
     ratings_by_media = {}
+    caption_term_affixes = None
     created_items = []
     originals_copied = 0
 
@@ -551,19 +556,23 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
         dest_name = _build_dest_name(dest_dir, source_folder, media_name)
         dest_media = dest_dir / dest_name
         shutil.copy2(source_media, dest_media)
+        normalize_path_permissions(dest_media)
 
         caption_name = _caption_name_for_media(media_name)
         source_caption = source_dir / caption_name
         if source_caption.exists() and source_caption.is_file():
             dest_caption = dest_dir / _caption_name_for_media(dest_name)
             shutil.copy2(source_caption, dest_caption)
+            normalize_path_permissions(dest_caption)
 
         source_original = source_dir / "originals" / media_name
         if source_original.exists() and source_original.is_file():
             dest_originals_dir = dest_dir / "originals"
             dest_originals_dir.mkdir(parents=True, exist_ok=True)
+            normalize_path_permissions(dest_originals_dir)
             dest_original = dest_originals_dir / dest_name
             shutil.copy2(source_original, dest_original)
+            normalize_path_permissions(dest_original)
             originals_copied += 1
 
         if source_folder not in state_by_folder:
@@ -588,6 +597,11 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
         if isinstance(src_ratings, dict) and media_name in src_ratings:
             ratings_by_media[dest_name] = src_ratings[media_name]
 
+        if caption_term_affixes is None:
+            src_term_affixes = src_state.get("caption_term_affixes")
+            if isinstance(src_term_affixes, dict):
+                caption_term_affixes = json.loads(json.dumps(src_term_affixes))
+
         created_items.append(
             {
                 "source_folder": source_folder,
@@ -606,7 +620,11 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
         "caption_tags_by_media": tags_by_media,
         "ratings_by_media": ratings_by_media,
     }
-    (dest_dir / ".webcap_state.json").write_text(json.dumps(dest_state, indent=2), encoding="utf-8")
+    if isinstance(caption_term_affixes, dict):
+        dest_state["caption_term_affixes"] = caption_term_affixes
+    dest_state_path = dest_dir / ".webcap_state.json"
+    dest_state_path.write_text(json.dumps(dest_state, indent=2), encoding="utf-8")
+    normalize_path_permissions(dest_state_path)
 
     return {
         "copied_count": len(created_items),
@@ -742,6 +760,7 @@ def create_set_from_results_response(data: dict):
         if dest_dir.exists():
             return jsonify({"error": "Destination set folder already exists."}), 409
         dest_dir.mkdir(parents=False, exist_ok=False)
+        normalize_path_permissions(dest_dir)
 
         created_items = []
         originals_copied = 0
@@ -753,6 +772,7 @@ def create_set_from_results_response(data: dict):
         ratings_by_media = {}
         caption_requirements = None
         caption_requirement_keywords = None
+        caption_term_affixes = None
         caption_requirements_checked = {}
         caption_requirements_na_by_media = {}
         dest_media_metadata = {}
@@ -774,6 +794,7 @@ def create_set_from_results_response(data: dict):
             dest_media_name = _build_dest_name_with_suffix(dest_dir, media_name)
             dest_media_path = dest_dir / dest_media_name
             shutil.copy2(source_media_path, dest_media_path)
+            normalize_path_permissions(dest_media_path)
 
             source_folder_key = source_folder.as_posix() if str(source_folder) != "." else ""
             source_folder_path = source_media_path.parent
@@ -793,18 +814,25 @@ def create_set_from_results_response(data: dict):
                 src_keywords = src_state.get("caption_requirement_keywords")
                 if isinstance(src_keywords, dict):
                     caption_requirement_keywords = json.loads(json.dumps(src_keywords))
+            if caption_term_affixes is None:
+                src_term_affixes = src_state.get("caption_term_affixes")
+                if isinstance(src_term_affixes, dict):
+                    caption_term_affixes = json.loads(json.dumps(src_term_affixes))
 
             source_caption_path = source_media_path.parent / _caption_name_for_media(media_name)
             if source_caption_path.exists() and source_caption_path.is_file():
                 dest_caption_path = dest_dir / _caption_name_for_media(dest_media_name)
                 shutil.copy2(source_caption_path, dest_caption_path)
+                normalize_path_permissions(dest_caption_path)
 
             source_original_path = source_media_path.parent / "originals" / media_name
             if source_original_path.exists() and source_original_path.is_file():
                 dest_originals_dir = dest_dir / "originals"
                 dest_originals_dir.mkdir(parents=True, exist_ok=True)
+                normalize_path_permissions(dest_originals_dir)
                 dest_original_path = dest_originals_dir / dest_media_name
                 shutil.copy2(source_original_path, dest_original_path)
+                normalize_path_permissions(dest_original_path)
                 originals_copied += 1
 
             reviewed = src_state.get("reviewedKeys")
@@ -868,13 +896,19 @@ def create_set_from_results_response(data: dict):
             dest_state["caption_requirements"] = caption_requirements
         if isinstance(caption_requirement_keywords, dict):
             dest_state["caption_requirement_keywords"] = caption_requirement_keywords
+        if isinstance(caption_term_affixes, dict):
+            dest_state["caption_term_affixes"] = caption_term_affixes
         if caption_requirements_checked:
             dest_state["caption_requirements_checked"] = caption_requirements_checked
         if caption_requirements_na_by_media:
             dest_state["caption_requirements_na_by_media"] = caption_requirements_na_by_media
-        (dest_dir / ".webcap_state.json").write_text(json.dumps(dest_state, indent=2), encoding="utf-8")
+        dest_state_path = dest_dir / ".webcap_state.json"
+        dest_state_path.write_text(json.dumps(dest_state, indent=2), encoding="utf-8")
+        normalize_path_permissions(dest_state_path)
         if dest_media_metadata:
-            (dest_dir / "media_metadata.json").write_text(json.dumps(dest_media_metadata, indent=2), encoding="utf-8")
+            dest_metadata_path = dest_dir / "media_metadata.json"
+            dest_metadata_path.write_text(json.dumps(dest_media_metadata, indent=2), encoding="utf-8")
+            normalize_path_permissions(dest_metadata_path)
 
         dest_folder_rel = dest_dir.relative_to(root).as_posix()
         return jsonify(

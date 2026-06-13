@@ -13,6 +13,7 @@ from flask import jsonify
 from . import config as app_config
 from .media import probe_media_metadata
 from .originals import ensure_original_by_hash, ensure_originals_folder
+from .permissions import normalize_path_permissions
 
 # Alias kept for compatibility with callers and tests that monkeypatch this name.
 safe_join_fs_root = app_config.safe_join_fs_root
@@ -155,6 +156,7 @@ def _run_clip_ffmpeg(source_path, out_path, start_sec, duration_sec, crop_rect):
     if proc.returncode != 0:
         stderr = (proc.stderr or proc.stdout or "").strip()
         raise RuntimeError("ffmpeg failed: " + stderr)
+    normalize_path_permissions(out_path)
 
 
 def _run_clip_ffmpeg_overwrite_source(source_path, start_sec, duration_sec, crop_rect):
@@ -173,6 +175,7 @@ def _run_clip_ffmpeg_overwrite_source(source_path, start_sec, duration_sec, crop
     try:
         _run_clip_ffmpeg(source_path, tmp_path, start_sec, duration_sec, crop_rect)
         os.replace(tmp_path, source_path)
+        normalize_path_permissions(source_path)
     finally:
         try:
             if tmp_path.exists():

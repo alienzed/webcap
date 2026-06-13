@@ -40,6 +40,19 @@ function sanitizeFolderState(data) {
   mutatedMediaKeys = Array.from(new Set(mutatedMediaKeys
     .map(function (key) { return String(key || '').trim(); })
     .filter(Boolean)));
+  var captionTermAffixes = {};
+  if (typeof src.caption_term_affixes === 'object' && src.caption_term_affixes) {
+    Object.keys(src.caption_term_affixes).forEach(function (termKey) {
+      var entry = src.caption_term_affixes[termKey];
+      if (!entry || typeof entry !== 'object') return;
+      var key = String(termKey || '').trim().toLowerCase();
+      if (!key) return;
+      var prefix = String(entry.prefix || '').trim();
+      var suffix = String(entry.suffix || '').trim();
+      if (!prefix && !suffix) return;
+      captionTermAffixes[key] = { prefix: prefix, suffix: suffix };
+    });
+  }
   var requirementsNaByMedia = {};
   if (typeof src.caption_requirements_na_by_media === 'object' && src.caption_requirements_na_by_media) {
     Object.keys(src.caption_requirements_na_by_media).forEach(function (mediaKey) {
@@ -75,6 +88,7 @@ function sanitizeFolderState(data) {
     caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : {},
     caption_requirement_keywords: (typeof src.caption_requirement_keywords === 'object' && src.caption_requirement_keywords) ? JSON.parse(JSON.stringify(src.caption_requirement_keywords)) : {},
     caption_requirements_na_by_media: requirementsNaByMedia,
+    caption_term_affixes: captionTermAffixes,
     caption_phrases: Array.isArray(src.caption_phrases) ? src.caption_phrases.slice() : undefined,
     quick_phrases: Array.isArray(src.quick_phrases) ? src.quick_phrases.slice() : undefined,
     caption_set_notes: String(src.caption_set_notes || ''),
@@ -168,6 +182,7 @@ function snapshotFolderStateFromDom() {
     caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined,
     caption_requirement_keywords: (typeof window.checklistKeywordsByItem !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistKeywordsByItem)) : undefined,
     caption_requirements_na_by_media: (typeof window.checklistRequirementsNaByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistRequirementsNaByMedia)) : undefined,
+    caption_term_affixes: (typeof window.checklistTermAffixesByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermAffixesByKey)) : undefined,
     caption_phrases: window.captionHelperPhrases.slice(),
     quick_phrases: (typeof window.captionQuickPhrases !== 'undefined' && Array.isArray(window.captionQuickPhrases))
       ? window.captionQuickPhrases.slice()

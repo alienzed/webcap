@@ -90,6 +90,7 @@ ui = {
   appSettingsModelsEl: document.getElementById('app-settings-filesystem-models'),
   appSettingsTrainingDiffusionPipeWslEl: document.getElementById('app-settings-training-diffusion-pipe-wsl'),
   appSettingsTrainingActivateScriptEl: document.getElementById('app-settings-training-activate-script'),
+  appSettingsTrainingChmodRootOnLoadEl: document.getElementById('app-settings-training-chmod-root-on-load'),
   appSettingsTrainingWriteSelectionSnapshotCommentsEl: document.getElementById('app-settings-training-write-selection-snapshot-comments'),
   appSettingsTrainingModePocEl: document.getElementById('app-settings-training-mode-poc'),
   appSettingsTrainingModeNormalEl: document.getElementById('app-settings-training-mode-normal'),
@@ -129,12 +130,12 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
       "Jewelry",
       "Surface",
       "Hair",
-      "Limbs",
-      "Lighting"
+      "Lighting",
+      "Body"
     ],
     keywordsByItem: {
       "Viewpoint": "close-up,front, low-position, medium close-up, overhead, portrait, rear, side, three-quarter, three-quarter rear",
-      "Position": "crouching, folded, kneeling, kneeling sitting, leaning back, leaning downward, leaning forward, leaning to the side, lying on her back, lying on her side, on all fours, posing, side sitting, sitting, squatting, standing, upside down",
+      "Position": "crouching, folded, kneeling, kneeling sitting, leaning back, leaning downward, leaning forward, leaning to the side, lying on back, lying on side, on all fours, posing, side sitting, sitting, squatting, standing, upside down",
       "Expression": "closed-mouth smile, excited, faint smile, happy, neutral expression, sad, smiling, surprised, serious, smirking, upset",
       "Action": "standing, sitting, running, walking, holding, looking, eating, drinking, touching, rubbing",
       "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform, skirt, shorts, suit, tie, swimsuit, high-heels, boots, sneakers,",

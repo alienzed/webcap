@@ -42,6 +42,7 @@ Minimum shape:
     "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
     "activate_script": "dp-clean/bin/activate",
     "mode": "normal",
+    "chmod_training_root_on_load": true,
     "write_selection_snapshot_comments": false
   },
   "vocabulary": {
@@ -58,6 +59,7 @@ Minimum shape:
 Notes:
 - `filesystem.root` is required.
 - Training mode supports `poc`, `normal`, and `quality`.
+- `training.chmod_training_root_on_load` runs a POSIX-only recursive `chmod 775` on `filesystem.root` at startup/reboot for WSL/shared-drive permission repair.
 - `training.write_selection_snapshot_comments` controls whether Generate prepends the selection snapshot header into `dataset.hi.toml` and `dataset.lo.toml`.
 - Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
 - You can edit config in-app via Settings.
@@ -85,7 +87,7 @@ Open:
 1. Open a dataset folder.
 2. Filter/select the working subset (text filter + advanced filters).
 3. Curate files (rename/prune/reset/restore/crop/transform/deface/clip).
-4. Build captions with Requirements/Phrases/Tags/Metadata and the primer template.
+4. Build captions with Requirements/Tags/Analysis/Metadata and the primer template.
 5. Run Review Captions to inspect coverage/quality.
 6. Run Prepare Dataset on the visible selection.
 7. Run Generate.
@@ -212,6 +214,7 @@ Tabs:
 - Requirements
 - Phrases
 - Tags
+- Analysis
 - Metadata
 
 Requirements tab:
@@ -227,17 +230,12 @@ Requirements tab:
   - Pinned requirement terms are searchable in term add/search flows.
   - `Reset App` restores the shipped requirement baseline if the global list gets trimmed too far.
 
-Phrases tab:
-- Search/add quick phrases via `Add/search quick phrase...`.
-- Click phrase to toggle in current caption:
-  - If present: remove
-  - If missing: insert at cursor
-- `Tag` button assigns that phrase as a tag to the current media item.
-- Up-arrow button reorders quick phrases up one slot.
-- `X` button removes a quick phrase from the active list.
+Requirements tab:
 - `Annotate` toggle in helper-header actions shows/hides the floating Annotate Strip.
 - Annotate Strip groups come from Requirements + requirement keywords.
 - Clicking an annotate chip toggles that tag on the current media item.
+- Stronger blue annotate chips indicate terms that are common on nearby annotated items but missing on the current item.
+- Right-clicking an annotate chip opens `Prefix` / `Suffix` fields for that term; tag insertion uses the rendered text.
 - Group header pencil button opens per-group requirement-term editor.
 - Group header checkmark button marks that requirement reviewed for the current item.
 - `n/a` chip lets you mark a group not applicable for the current media item.
@@ -250,9 +248,27 @@ Tags tab:
 - Clicking a tag toggles it in the caption (insert at cursor if missing, remove if present).
 - Tag list is sorted with missing tags first, then present tags, each alphabetical.
 
+Analysis tab:
+- Selection warnings appear first.
+- Derived analyzer output appears below warnings:
+  - face focus
+  - face direction
+  - expression
+  - body orientation
+  - pose class
+  - arm position
+
 Metadata tab:
+- File facts stay here:
+  - resolution
+  - size
+  - aspect
+  - fps
+  - duration
+  - frames
+  - codec
 - Per-media star rating (1..5).
-- Key metadata fields (resolution, AR, fps, duration, frames, codec, size).
+- Requirement/review/tag-match progress remains here.
 - Unsupported AR values are highlighted.
 
 ### 9.1 Config tab (caption primer)

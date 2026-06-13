@@ -159,7 +159,7 @@ function buildSelectionPoseSummaryRows(rows, scopedFileNames, fieldDef) {
   return (fieldDef.rows || []).map(function (row) {
     return summary[row.key] || { key: row.key, label: row.label, count: 0, files: [] };
   }).filter(function (row) {
-    return row.count > 0 || row.key === 'unknown';
+    return row.count > 0 && row.key !== 'unknown';
   });
 }
 

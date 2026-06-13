@@ -3,6 +3,7 @@ Last reviewed: 2026-06-11.
 
 
 ## Enhancements
+- Deprecate legacy autoset.py script
 - Add a conservative face ROI mode for face-specific analysis only: use the existing CenterFace / `face_focus` bbox as a padded crop for face direction / expression analysis when the padded ROI is both meaningfully smaller than the full frame and still at least `192 px` on its short side; keep body/pose analysis on the full image and fall back to full-image face analysis when ROI is not clearly beneficial.
 - Apply a tag to an entire set - or finally explore multi-select in the media list (probably more involved). Select All could be enough...
 - n/a in a group is sort of incompatible with having other tags selected. I am not sure we'd deselect tags on n/a click, but n/a probably shouldn't be available to click on if another item is selected - let's discuss if this is worth the complexity.
@@ -21,13 +22,8 @@ Last reviewed: 2026-06-11.
      - Value: Medium; helps reduce blank-page start cost during Caption step.
      - Complexity: Medium (template mapping + insertion rules).
      - Note: Useful, but less urgent than annotation velocity wins above.
-- Dataset inferred sample/megaframe/VRAM/time estimation.
 
 ## 1.1 Ideas
-  Parked long-term (no immediate pain).
-
-## Stabilization Mode
-- App is in 1.0 lock-in mode: resist new feature work and prioritize targeted bug/regression fixes.
 
 ## Documentation Sync Notes
 - `dataset_workflow.md` updated to reflect current in-app clip/crop/deface and `auto_dataset` behavior.
@@ -35,7 +31,7 @@ Last reviewed: 2026-06-11.
 - `spec.md` refreshed to match current route and workflow behavior.
 
 ## Backlog (Do Not Implement Yet)
-- Parked long-term; no immediate pain.
+
 
 ## Nice to Haves (Out of Scope for Now)
 - Review longest duplicate phrase detection inside a single caption.

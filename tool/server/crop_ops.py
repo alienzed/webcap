@@ -8,7 +8,8 @@ from io import BytesIO
 from PIL import Image, ImageOps
 
 from .caption_ops import _validate_media_name
-from .originals import ensure_original_by_hash, ensure_originals_folder, safe_chmod
+from .originals import ensure_original_by_hash, ensure_originals_folder
+from .permissions import normalize_path_permissions
 
 
 CROPPABLE_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
@@ -87,7 +88,7 @@ def crop_image_in_place(folder_path, file_name, crop):
         try:
             cropped.save(tmp_path, format=image_format, **save_kwargs)
             os.replace(tmp_path, image_path)
-            safe_chmod(image_path, 0o644)
+            normalize_path_permissions(image_path)
         finally:
             if tmp_path and tmp_path.exists():
                 tmp_path.unlink()
@@ -167,7 +168,7 @@ def crop_image_data_url_in_place(folder_path, file_name, image_data_url):
     try:
         out_image.save(tmp_path, format=target_format, **save_kwargs)
         os.replace(tmp_path, image_path)
-        safe_chmod(image_path, 0o644)
+        normalize_path_permissions(image_path)
     finally:
         if tmp_path and tmp_path.exists():
             tmp_path.unlink()
@@ -215,7 +216,7 @@ def transform_image_in_place(folder_path, file_name, operation):
         try:
             transformed.save(tmp_path, format=image_format, **save_kwargs)
             os.replace(tmp_path, image_path)
-            safe_chmod(image_path, 0o644)
+            normalize_path_permissions(image_path)
         finally:
             if tmp_path and tmp_path.exists():
                 tmp_path.unlink()

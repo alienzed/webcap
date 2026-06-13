@@ -183,6 +183,16 @@ function getAnnotateChipHeatLevel(count, maxCount) {
   return Math.max(1, Math.min(3, Math.round(weightedRatio * 3)));
 }
 
+function isAnnotateChipGapHint(count, contextCount, heatLevel) {
+  var usageCount = Number(count) || 0;
+  var nearbyTotal = Number(contextCount) || 0;
+  var heat = Number(heatLevel) || 0;
+  if (usageCount <= 0 || nearbyTotal <= 0) return false;
+  if (heat >= 3) return true;
+  if (usageCount >= 3) return true;
+  return nearbyTotal >= 6 && (usageCount / nearbyTotal) >= 0.35;
+}
+
 function formatAnnotateChipUsageTitle(contextCount, contextTotal, folderCount, folderTotal) {
   var nearbyCount = Number(contextCount) || 0;
   var nearbyTotal = Number(contextTotal) || 0;
@@ -449,7 +459,12 @@ function renderAnnotateStrip() {
           chip.classList.add('annotate-strip-chip-missing-caption');
           groupEl.classList.add('annotate-strip-group-tag-mismatch');
         }
-      } else if (activeTermCount > 0) {
+      }
+      var isGapHint = !isActiveTerm && isAnnotateChipGapHint(usageCount, usageStats.contextCount, heatLevel);
+      if (isGapHint) {
+        chip.classList.add('annotate-strip-chip-gap-hint');
+        groupEl.classList.add('annotate-strip-group-gap-hints');
+      } else if (!isActiveTerm && activeTermCount > 0) {
         chip.classList.add('annotate-strip-chip-compatible-muted');
       }
       if (!isActiveTerm && usageStats.contextCount > 0 && usageCount <= 0) {
@@ -464,18 +479,25 @@ function renderAnnotateStrip() {
       );
       if (isActiveTerm && !isInCaption) {
         chipTitle += ' - tag missing from caption';
+      } else if (isGapHint) {
+        chipTitle += ' - common nearby but missing on this item';
       } else if (!isActiveTerm && activeTermCount > 0) {
-        chipTitle += ' - alternative to selected group term';
+        chipTitle += ' - not selected on this item';
       }
       if (!isActiveTerm && usageStats.contextCount > 0 && usageCount <= 0) {
         chipTitle += ' - not used nearby';
       }
+      chipTitle += ' - right-click to edit prefix/suffix';
       chip.title = chipTitle;
       chip.onclick = function () {
         if (groupIsNa && typeof setChecklistRequirementNaForMediaKey === 'function') {
           setChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel, false);
         }
         toggleAnnotateTag(term);
+      };
+      chip.oncontextmenu = function (e) {
+        e.preventDefault();
+        openChecklistTermAffixesModal(term);
       };
       chipWrap.appendChild(chip);
     });

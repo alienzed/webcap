@@ -35,6 +35,11 @@ from pathlib import Path
 import sys
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
+try:
+    from .permissions import normalize_path_permissions
+except Exception:
+    def normalize_path_permissions(*args, **kwargs):
+        return False
 
 # -------------------------
 # Configuration parameters
@@ -50,7 +55,7 @@ AR_TOL = 0.05                  # ± tolerance for aspect ratio classification
 
 # Motion bucket: long temporal span, high coverage
 # LONG_MOTION_FRAME_CANDIDATES = [65, 49, 45, 41, 37, 33]
-LONG_MOTION_FRAME_CANDIDATES = [49, 45, 41, 37, 33]
+LONG_MOTION_FRAME_CANDIDATES = [37, 49, 45, 41, 33]
 
 # Detail bucket: few frames, high-res emphasis (top 50% by area)
 # Simplified: unify detail to 13 frames (previously [5,1] → now 13f)
@@ -65,7 +70,7 @@ MIN_MIDDLE_CLIPS = 8
 # VRAM limits → "mfp" ceilings
 VRAM_TO_MFP = {
     24: 8800,   # 24GB
-    32: 12000,  # 32GB
+    32: 11000,  # 32GB
 }
 
 # Supported still image formats
@@ -242,10 +247,12 @@ def generate_candidate_resolutions_for_ar(target_ar: float, ar_label: str):
 
 def copy_with_caption(src: Path, dst_dir: Path):
     dst_dir.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(dst_dir)
 
     # Copy video
     dst = dst_dir / src.name
     copy_or_convert(src, dst, target_fps=16)
+    normalize_path_permissions(dst)
     #shutil.copy2(src, dst)
 
     # Caption
@@ -265,6 +272,7 @@ def copy_with_caption(src: Path, dst_dir: Path):
             cleaned += "."
 
         dst_txt.write_text(cleaned, encoding="utf-8")
+        normalize_path_permissions(dst_txt)
 
 # -------------------------
 # Move video + .txt caption
@@ -272,11 +280,13 @@ def copy_with_caption(src: Path, dst_dir: Path):
 
 def move_with_caption(src: Path, dst_dir: Path):
     dst_dir.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(dst_dir)
 
     dst = dst_dir / src.name
     if dst.exists():
         dst.unlink()
     shutil.move(src, dst)
+    normalize_path_permissions(dst)
 
     txt = src.with_suffix(".txt")
     if txt.exists():
@@ -284,6 +294,7 @@ def move_with_caption(src: Path, dst_dir: Path):
         if dst_txt.exists():
             dst_txt.unlink()
         shutil.move(txt, dst_txt)
+        normalize_path_permissions(dst_txt)
 
 # -------------------------
 # Bucket selection helpers
@@ -296,9 +307,11 @@ def copy_image_with_caption(src: Path, dst_dir: Path):
     Applies the same caption cleaning rules as videos.
     """
     dst_dir.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(dst_dir)
 
     dst = dst_dir / src.name
     shutil.copy2(src, dst)
+    normalize_path_permissions(dst)
 
     txt_path = src.with_suffix(".txt")
     if txt_path.exists():
@@ -315,6 +328,7 @@ def copy_image_with_caption(src: Path, dst_dir: Path):
             cleaned += "."
 
         dst_txt.write_text(cleaned, encoding="utf-8")
+        normalize_path_permissions(dst_txt)
 def select_frames_with_fallback(frame_counts, candidates, coverage_threshold):
     """
     Try the desired frame count. If not enough clips can satisfy it,
@@ -393,6 +407,8 @@ def copy_or_convert(src_path, dst_path, target_fps):
         # Just copy – no re‑encoding
         os.makedirs(os.path.dirname(dst_path), exist_ok=True)
         shutil.copy2(src_path, dst_path)
+    normalize_path_permissions(Path(dst_path).parent)
+    normalize_path_permissions(dst_path)
 
 def choose_bucket_resolution(ar_label: str,
                              target_ar: float,
@@ -696,6 +712,7 @@ def main(argv=None):
     master = Path(args.master).resolve()
     dataset_root = master / "auto_dataset"
     dataset_root.mkdir(exist_ok=True)
+    normalize_path_permissions(dataset_root)
 
     if args.vram not in VRAM_TO_MFP:
         raise SystemExit(f"Unsupported VRAM={args.vram}GB; valid keys: {list(VRAM_TO_MFP.keys())}")
@@ -1348,17 +1365,20 @@ def main(argv=None):
         res_json_path = dataset_root / "resolution_rankings.json"
         with res_json_path.open("w", encoding="utf-8") as jf:
             json.dump(resolution_json, jf, indent=2)
+        normalize_path_permissions(res_json_path)
         print(f"[INFO] Resolution rankings written to {res_json_path}\n")
 
     # Write TOML
     toml_path = dataset_root / args.toml_name
     with toml_path.open("w", encoding="utf-8") as f:
         f.write("\n".join(toml_lines) + "\n")
+    normalize_path_permissions(toml_path)
 
     if args.verbose:
         json_path = dataset_root / "wan_auto_buckets.json"
         with json_path.open("w", encoding="utf-8") as f:
             json.dump(bucket_json, f, indent=2)
+        normalize_path_permissions(json_path)
         print(f"[INFO] Bucket summary written to {json_path}\n")
 
     print(f"[INFO] Dataset TOML written to {toml_path}")
@@ -1371,6 +1391,7 @@ def main(argv=None):
 
         eval_root = dataset_root / "eval"
         eval_root.mkdir(exist_ok=True)
+        normalize_path_permissions(eval_root)
 
         eval_selection = select_eval_clips(ar_clips)
 
@@ -1387,11 +1408,13 @@ def main(argv=None):
 
                 ar_dir = eval_root / ar_label
                 ar_dir.mkdir(parents=True, exist_ok=True)
+                normalize_path_permissions(ar_dir)
 
                 for (vid, w, h, f) in clips:
                     train_ar_dir = dataset_root / ar_label
                     eval_ar_dir = eval_root / ar_label
                     eval_ar_dir.mkdir(parents=True, exist_ok=True)
+                    normalize_path_permissions(eval_ar_dir)
 
                     train_vid = train_ar_dir / vid.name
                     if train_vid.exists():
@@ -1421,11 +1444,13 @@ def main(argv=None):
             eval_toml_path = eval_root / "dataset.auto.toml"
             with eval_toml_path.open("w", encoding="utf-8") as f:
                 f.write("\n".join(eval_toml_lines) + "\n")
+            normalize_path_permissions(eval_toml_path)
 
             # Write eval manifest
             eval_manifest_path = eval_root / "eval_manifest.json"
             with eval_manifest_path.open("w", encoding="utf-8") as f:
                 json.dump(eval_manifest, f, indent=2)
+            normalize_path_permissions(eval_manifest_path)
 
             print(f"[INFO] Eval dataset written to {eval_toml_path}")
         # end eval_generation_guard

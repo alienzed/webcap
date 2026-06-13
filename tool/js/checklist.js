@@ -6,6 +6,7 @@ var checklistCheckedByMedia = {}; // { mediaKey: { item: true/false, ... } }
 var debouncedChecklistSave = debounceCreate(400); // Debounce saves for checkbox changes
 var checklistKeywordsByItem = {}; // { requirement: "keyword1, keyword2, ..." }
 var checklistRequirementsNaByMedia = {}; // { mediaKey: { requirement: true } }
+var checklistTermAffixesByKey = {}; // { termLower: { prefix: "", suffix: "" } }
 
 function checklistSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
@@ -31,6 +32,81 @@ function normalizeChecklistTermsList(terms) {
 
 function parseChecklistKeywordTerms(raw) {
   return normalizeChecklistTermsList(String(raw || '').split(','));
+}
+
+function normalizeChecklistTermAffixKey(termText) {
+  return normalizeChecklistTerm(termText).toLowerCase();
+}
+
+function normalizeChecklistAffixValue(value) {
+  return String(value || '')
+    .replace(/\r?\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sanitizeChecklistTermAffixesMap(rawMap) {
+  var src = (rawMap && typeof rawMap === 'object') ? rawMap : {};
+  var out = {};
+  Object.keys(src).forEach(function (rawKey) {
+    var key = normalizeChecklistTermAffixKey(rawKey);
+    var entry = src[rawKey];
+    if (!key || !entry || typeof entry !== 'object') return;
+    var prefix = normalizeChecklistAffixValue(entry.prefix);
+    var suffix = normalizeChecklistAffixValue(entry.suffix);
+    if (!prefix && !suffix) return;
+    out[key] = { prefix: prefix, suffix: suffix };
+  });
+  return out;
+}
+
+function getChecklistTermAffixes(termText) {
+  var key = normalizeChecklistTermAffixKey(termText);
+  if (!key) return { prefix: '', suffix: '' };
+  var entry = checklistTermAffixesByKey[key];
+  if (!entry || typeof entry !== 'object') return { prefix: '', suffix: '' };
+  return {
+    prefix: normalizeChecklistAffixValue(entry.prefix),
+    suffix: normalizeChecklistAffixValue(entry.suffix),
+  };
+}
+
+function renderChecklistTermWithAffixes(termText) {
+  var term = normalizeChecklistTerm(termText);
+  if (!term) return '';
+  var affixes = getChecklistTermAffixes(term);
+  var prefix = affixes.prefix;
+  var suffix = affixes.suffix;
+  var result = term;
+  if (prefix) {
+    result = prefix + (/[\s([{'"-]$/.test(prefix) ? '' : ' ') + result;
+  }
+  if (suffix) {
+    result = result + (/^[\s)\]}:;,.!?'"-]/.test(suffix) ? '' : ' ') + suffix;
+  }
+  return result.replace(/\s+/g, ' ').trim();
+}
+
+function setChecklistTermAffixes(termText, prefix, suffix) {
+  var key = normalizeChecklistTermAffixKey(termText);
+  if (!key) return false;
+  var cleanPrefix = normalizeChecklistAffixValue(prefix);
+  var cleanSuffix = normalizeChecklistAffixValue(suffix);
+  if (!cleanPrefix && !cleanSuffix) {
+    if (!checklistTermAffixesByKey[key]) return false;
+    delete checklistTermAffixesByKey[key];
+    return true;
+  }
+  var prev = checklistTermAffixesByKey[key];
+  if (
+    prev &&
+    normalizeChecklistAffixValue(prev.prefix) === cleanPrefix &&
+    normalizeChecklistAffixValue(prev.suffix) === cleanSuffix
+  ) {
+    return false;
+  }
+  checklistTermAffixesByKey[key] = { prefix: cleanPrefix, suffix: cleanSuffix };
+  return true;
 }
 
 function normalizeChecklistRequirementKey(requirementLabel) {
@@ -398,6 +474,7 @@ function saveChecklistToFolderState() {
   snapshot.caption_requirements_checked = JSON.parse(JSON.stringify(checklistCheckedByMedia));
   snapshot.caption_requirement_keywords = JSON.parse(JSON.stringify(checklistKeywordsByItem));
   snapshot.caption_requirements_na_by_media = JSON.parse(JSON.stringify(checklistRequirementsNaByMedia));
+  snapshot.caption_term_affixes = JSON.parse(JSON.stringify(checklistTermAffixesByKey));
   if (typeof updatePrimerMappingsSummary === 'function') {
     updatePrimerMappingsSummary();
   }
@@ -425,6 +502,7 @@ function loadChecklistFromFolderState(folderState) {
   } else {
     checklistRequirementsNaByMedia = {};
   }
+  checklistTermAffixesByKey = sanitizeChecklistTermAffixesMap(folderState.caption_term_affixes);
 
   // Fill missing keyword values for default checklist items.
   var defaultsByItem = getDefaultRequirementKeywordsByItem();
@@ -474,6 +552,7 @@ function loadChecklistFromFolderState(folderState) {
 // Temporary object for modal edits
 var checklistKeywordsModalTemp = null;
 var checklistGroupTermsModalState = null;
+var checklistTermAffixesModalState = null;
 
 function getChecklistKeywordTermsForRequirement(requirementLabel) {
   var raw = checklistKeywordsByItem && checklistKeywordsByItem[requirementLabel];
@@ -638,6 +717,78 @@ function closeChecklistGroupTermsModal() {
   if (modal) modal.classList.add('hidden');
   if (overlay) overlay.classList.add('hidden');
   checklistGroupTermsModalState = null;
+}
+
+function renderChecklistTermAffixesPreview() {
+  var previewEl = document.getElementById('checklist-term-affixes-preview');
+  var prefixEl = document.getElementById('checklist-term-affixes-prefix');
+  var suffixEl = document.getElementById('checklist-term-affixes-suffix');
+  if (!previewEl || !checklistTermAffixesModalState) return;
+  var prefix = prefixEl ? prefixEl.value : '';
+  var suffix = suffixEl ? suffixEl.value : '';
+  var term = checklistTermAffixesModalState.term;
+  var manualPreview = term;
+  var cleanPrefix = normalizeChecklistAffixValue(prefix);
+  var cleanSuffix = normalizeChecklistAffixValue(suffix);
+  if (cleanPrefix) {
+    manualPreview = cleanPrefix + (/[\s([{'"-]$/.test(cleanPrefix) ? '' : ' ') + manualPreview;
+  }
+  if (cleanSuffix) {
+    manualPreview = manualPreview + (/^[\s)\]}:;,.!?'"-]/.test(cleanSuffix) ? '' : ' ') + cleanSuffix;
+  }
+  previewEl.textContent = manualPreview.replace(/\s+/g, ' ').trim() || term;
+}
+
+function closeChecklistTermAffixesModal() {
+  var modal = document.getElementById('checklist-term-affixes-modal');
+  var overlay = document.getElementById('modal-overlay');
+  if (modal) modal.classList.add('hidden');
+  if (overlay) overlay.classList.add('hidden');
+  checklistTermAffixesModalState = null;
+}
+
+function saveChecklistTermAffixesModal() {
+  if (!checklistTermAffixesModalState) return;
+  var prefixEl = document.getElementById('checklist-term-affixes-prefix');
+  var suffixEl = document.getElementById('checklist-term-affixes-suffix');
+  var changed = setChecklistTermAffixes(
+    checklistTermAffixesModalState.term,
+    prefixEl ? prefixEl.value : '',
+    suffixEl ? suffixEl.value : ''
+  );
+  if (changed) {
+    saveChecklistToFolderState();
+    if (typeof renderAnnotateStrip === 'function') renderAnnotateStrip();
+    if (typeof renderItemTagsPanel === 'function') renderItemTagsPanel();
+  }
+  closeChecklistTermAffixesModal();
+}
+
+function clearChecklistTermAffixesModal() {
+  if (!checklistTermAffixesModalState) return;
+  var prefixEl = document.getElementById('checklist-term-affixes-prefix');
+  var suffixEl = document.getElementById('checklist-term-affixes-suffix');
+  if (prefixEl) prefixEl.value = '';
+  if (suffixEl) suffixEl.value = '';
+  renderChecklistTermAffixesPreview();
+}
+
+function openChecklistTermAffixesModal(termText) {
+  var term = normalizeChecklistTerm(termText);
+  if (!term) return;
+  checklistTermAffixesModalState = { term: term };
+  var titleEl = document.getElementById('checklist-term-affixes-modal-title');
+  var prefixEl = document.getElementById('checklist-term-affixes-prefix');
+  var suffixEl = document.getElementById('checklist-term-affixes-suffix');
+  var modal = document.getElementById('checklist-term-affixes-modal');
+  var overlay = document.getElementById('modal-overlay');
+  var affixes = getChecklistTermAffixes(term);
+  if (titleEl) titleEl.textContent = 'Edit Modifiers: ' + term;
+  if (prefixEl) prefixEl.value = affixes.prefix;
+  if (suffixEl) suffixEl.value = affixes.suffix;
+  renderChecklistTermAffixesPreview();
+  if (modal) modal.classList.remove('hidden');
+  if (overlay) overlay.classList.remove('hidden');
 }
 
 function applyChecklistGroupTermsModalChanges() {
@@ -927,6 +1078,28 @@ if (document.getElementById('checklist-group-terms-input')) {
   });
 }
 
+if (document.getElementById('checklist-term-affixes-prefix')) {
+  document.getElementById('checklist-term-affixes-prefix').addEventListener('input', renderChecklistTermAffixesPreview);
+}
+
+if (document.getElementById('checklist-term-affixes-suffix')) {
+  document.getElementById('checklist-term-affixes-suffix').addEventListener('input', renderChecklistTermAffixesPreview);
+  document.getElementById('checklist-term-affixes-suffix').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveChecklistTermAffixesModal();
+    }
+  });
+}
+
+if (document.getElementById('checklist-term-affixes-save-btn')) {
+  document.getElementById('checklist-term-affixes-save-btn').addEventListener('click', saveChecklistTermAffixesModal);
+}
+
+if (document.getElementById('checklist-term-affixes-clear-btn')) {
+  document.getElementById('checklist-term-affixes-clear-btn').addEventListener('click', clearChecklistTermAffixesModal);
+}
+
 document.addEventListener('click', function(e) {
   if (e.target && e.target.dataset.closeModal === 'checklist-keywords-modal') {
     closeChecklistKeywordsModal();
@@ -935,6 +1108,10 @@ document.addEventListener('click', function(e) {
   }
   if (e.target && e.target.dataset.closeModal === 'checklist-group-terms-modal') {
     closeChecklistGroupTermsModal();
+    return;
+  }
+  if (e.target && e.target.dataset.closeModal === 'checklist-term-affixes-modal') {
+    closeChecklistTermAffixesModal();
   }
 });
 
@@ -942,6 +1119,7 @@ document.addEventListener('click', function(e) {
   if (e.target && e.target.id === 'modal-overlay') {
     closeChecklistKeywordsModal();
     closeChecklistGroupTermsModal();
+    closeChecklistTermAffixesModal();
     discardChecklistKeywordsModalTemp();
   }
 });
@@ -960,4 +1138,7 @@ function discardChecklistKeywordsModalTemp() {
 
 window.isChecklistRequirementNaForMediaKey = isChecklistRequirementNaForMediaKey;
 window.isChecklistRequirementNaForCurrentMedia = isChecklistRequirementNaForCurrentMedia;
+window.getChecklistTermAffixes = getChecklistTermAffixes;
+window.openChecklistTermAffixesModal = openChecklistTermAffixesModal;
+window.renderChecklistTermWithAffixes = renderChecklistTermWithAffixes;
 window.setChecklistRequirementNaForMediaKey = setChecklistRequirementNaForMediaKey;

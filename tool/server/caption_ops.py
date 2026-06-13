@@ -1,10 +1,10 @@
 
 from pathlib import Path
 from flask import send_from_directory
-import os
 
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name
+from .permissions import normalize_path_permissions
 
 def _resolve_folder(folder: str) -> Path:
     folder = (folder or '').strip()
@@ -15,6 +15,7 @@ def _resolve_folder(folder: str) -> Path:
         path = app_config.safe_join_fs_root(folder)
     if not path.exists() or not path.is_dir():
         raise ValueError('Folder does not exist')
+    normalize_path_permissions(path)
     return path
 
 def _validate_media_name(media_name: str) -> str:
@@ -44,6 +45,7 @@ def load_caption_text(folder: str, media_name: str):
     caption_name = _caption_name_for_media(media_name)
     caption_path = folder_path / caption_name
     app_config.debug_print(f'[BACKEND][READ] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
+    normalize_path_permissions(caption_path)
     if not caption_path.exists():
         return {'caption': '', 'exists': False, 'caption_file': caption_name}
     text = caption_path.read_text(encoding='utf-8')
@@ -61,12 +63,10 @@ def save_caption_text(folder: str, media_name: str, text: str):
     caption_path = folder_path / caption_name
     app_config.debug_print(f'[BACKEND][WRITE] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
     caption_path.parent.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(caption_path.parent)
     caption_path.write_text(text or '', encoding='utf-8')
     app_config.debug_print('[BACKEND][WRITE] WROTE caption.')
-    try:
-        os.chmod(caption_path, 0o644)
-    except Exception:
-        pass
+    normalize_path_permissions(caption_path)
     return {'ok': True, 'caption_file': caption_name}
 
 def serve_media_file(folder: str, media_name: str):

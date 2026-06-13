@@ -94,6 +94,12 @@ function tagAppearsInCurrentCaption(tagText) {
   } else if (state && state.currentItem && typeof state.currentItem.caption === 'string') {
     captionText = state.currentItem.caption;
   }
+  if (typeof renderChecklistTermWithAffixes === 'function') {
+    var rendered = renderChecklistTermWithAffixes(tag);
+    if (rendered && rendered.toLowerCase() !== tag.toLowerCase() && captionContainsPhrase(captionText, rendered)) {
+      return true;
+    }
+  }
   return captionContainsTagWithAllowances(captionText, tag);
 }
 
@@ -320,6 +326,7 @@ function setRatingForMediaKey(mediaKey, rating) {
 }
 
 function renderItemMetadataPanel() {
+  renderItemAnalysisPanel();
   var listEl = document.getElementById('item-metadata-list');
   if (!listEl) return;
   listEl.innerHTML = '';
@@ -417,9 +424,95 @@ function renderItemMetadataPanel() {
     unavailable2.textContent = 'Metadata unavailable.';
     listEl.appendChild(unavailable2);
   }
-  appendFaceFocusMetadataRows(listEl, row);
-  appendSelectionPoseMetadataRows(listEl, row);
   appendProgressRows();
+}
+
+function appendItemPanelSectionTitle(listEl, title) {
+  var heading = document.createElement('div');
+  heading.className = 'item-panel-section-title';
+  heading.textContent = title;
+  listEl.appendChild(heading);
+}
+
+function appendItemPanelEmptyRow(listEl, text) {
+  var empty = document.createElement('div');
+  empty.className = 'item-panel-empty';
+  empty.textContent = text;
+  listEl.appendChild(empty);
+}
+
+function appendAnalysisWarningRow(listEl, label, text) {
+  var row = document.createElement('div');
+  row.className = 'item-metadata-row item-analysis-warning-row';
+  var labelEl = document.createElement('strong');
+  labelEl.textContent = label;
+  var valueEl = document.createElement('span');
+  valueEl.className = 'item-metadata-value-error';
+  valueEl.textContent = text;
+  row.appendChild(labelEl);
+  row.appendChild(valueEl);
+  listEl.appendChild(row);
+}
+
+function collectItemAnalysisWarnings(row) {
+  var warnings = [];
+  if (!row) {
+    warnings.push({ label: 'Analysis', text: 'Metadata unavailable.' });
+    return warnings;
+  }
+
+  var focus = (typeof getFaceFocusFromMetadata === 'function') ? getFaceFocusFromMetadata(row) : null;
+  if (!focus) {
+    warnings.push({ label: 'Face Focus', text: 'Metadata unavailable.' });
+  } else if (typeof normalizeFaceFocusBucket === 'function' && normalizeFaceFocusBucket(focus.bucket) === 'unknown') {
+    warnings.push({ label: 'Face Focus', text: 'Unknown.' });
+  }
+
+  var pose = (typeof getSelectionPoseFromMetadata === 'function') ? getSelectionPoseFromMetadata(row) : null;
+  if (!pose) {
+    warnings.push({ label: 'Selection Pose', text: 'Metadata unavailable.' });
+  } else {
+    var missing = [];
+    if (!pose.face_direction || String(pose.face_direction).toLowerCase() === 'unknown') missing.push('face direction');
+    if (!pose.expression_primary || String(pose.expression_primary).toLowerCase() === 'unknown') missing.push('expression');
+    if (!pose.body_orientation || String(pose.body_orientation).toLowerCase() === 'unknown') missing.push('body orientation');
+    if (!pose.pose_class || String(pose.pose_class).toLowerCase() === 'unknown') missing.push('pose class');
+    if (!pose.arm_position || String(pose.arm_position).toLowerCase() === 'unknown') missing.push('arm position');
+    if (missing.length) {
+      warnings.push({ label: 'Selection Pose', text: 'Missing ' + missing.join(', ') + '.' });
+    }
+  }
+
+  return warnings;
+}
+
+function renderItemAnalysisPanel() {
+  var listEl = document.getElementById('item-analysis-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  if (!state.currentItem || !state.currentItem.fileName) {
+    listEl.textContent = 'Select a media item.';
+    return;
+  }
+
+  var row = getMetadataForMedia(state.currentItem.fileName);
+  var warnings = collectItemAnalysisWarnings(row);
+  if (warnings.length) {
+    appendItemPanelSectionTitle(listEl, 'Warnings');
+    warnings.forEach(function (warning) {
+      appendAnalysisWarningRow(listEl, warning.label, warning.text);
+    });
+  }
+
+  appendItemPanelSectionTitle(listEl, 'Signals');
+  var signalStartCount = listEl.childNodes.length;
+  if (row) {
+    appendFaceFocusMetadataRows(listEl, row);
+    appendSelectionPoseMetadataRows(listEl, row);
+  }
+  if (listEl.childNodes.length === signalStartCount) {
+    appendItemPanelEmptyRow(listEl, 'No analysis metadata.');
+  }
 }
 
 function saveItemTagsToFolderState() {
@@ -608,8 +701,8 @@ function renderItemTagsPanel() {
       tagBtn.textContent = tag;
       tagBtn.title = inCaption ? 'Remove from caption' : 'Insert at cursor';
       tagBtn.onclick = function () {
-        if (typeof toggleCaptionPhraseAtCursor === 'function') {
-          toggleCaptionPhraseAtCursor(tag);
+        if (typeof toggleCaptionTagAtCursor === 'function') {
+          toggleCaptionTagAtCursor(tag);
         }
         renderItemTagsPanel();
       };

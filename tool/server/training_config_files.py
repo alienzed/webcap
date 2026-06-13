@@ -1,9 +1,9 @@
-import os
 import re
 from pathlib import Path
 
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
+from .permissions import normalize_path_permissions
 
 ROOT = Path(__file__).resolve().parents[2]
 TRAINING_TEMPLATES_DIR = ROOT / "tool" / "templates"
@@ -80,9 +80,6 @@ def ensure_training_config_files(folder_path: Path):
         dest = folder / name
         rendered = render_training_config_template(name, folder)
         dest.write_text(rendered, encoding="utf-8")
-        try:
-            os.chmod(dest, 0o644)
-        except Exception:
-            pass
+        normalize_path_permissions(dest)
         written.append(dest)
     return written

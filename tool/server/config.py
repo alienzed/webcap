@@ -7,8 +7,11 @@ Centralized config and root path logic for the backend.
 from pathlib import Path
 import json
 import copy
+import os
 import re
 import traceback
+
+from .permissions import normalize_path_permissions
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
 CONFIG_EXAMPLE_PATH = Path(__file__).resolve().parents[1] / 'config.example.json'
@@ -94,6 +97,7 @@ def validate_config_payload(payload):
     for key in ("diffusion_pipe_wsl", "activate_script"):
         if key in training:
             normalized_training[key] = str(training.get(key) or "").strip()
+    normalized_training["chmod_training_root_on_load"] = bool(training.get("chmod_training_root_on_load", True))
     if "mode" in training:
         mode = str(training.get("mode") or "").strip().lower()
         if mode not in ("poc", "normal", "quality"):
@@ -119,6 +123,55 @@ def validate_config_payload(payload):
     return out
 
 
+def _runtime_supports_chmod_recursive():
+    return os.name == "posix"
+
+
+def _chmod_one(path, mode, errors):
+    try:
+        os.chmod(path, mode)
+        return True
+    except Exception as exc:
+        errors.append((str(path), str(exc)))
+        return False
+
+
+def chmod_training_root_permissions(root_path, mode=0o775):
+    if not _runtime_supports_chmod_recursive():
+        return {"attempted": False, "reason": "non_posix", "changed": 0, "failed": 0}
+
+    root = Path(root_path).expanduser().resolve()
+    if not root.exists():
+        return {"attempted": False, "reason": "missing_root", "changed": 0, "failed": 0}
+    if not root.is_dir():
+        return {"attempted": False, "reason": "not_dir", "changed": 0, "failed": 0}
+
+    errors = []
+    changed = 0
+    if _chmod_one(root, mode, errors):
+        changed += 1
+
+    def on_walk_error(exc):
+        errors.append((getattr(exc, "filename", str(root)), str(exc)))
+
+    for current, dirnames, filenames in os.walk(root, topdown=True, onerror=on_walk_error, followlinks=False):
+        current_path = Path(current)
+        for dirname in dirnames:
+            dir_path = current_path / dirname
+            if dir_path.is_symlink():
+                continue
+            if _chmod_one(dir_path, mode, errors):
+                changed += 1
+        for filename in filenames:
+            file_path = current_path / filename
+            if file_path.is_symlink():
+                continue
+            if _chmod_one(file_path, mode, errors):
+                changed += 1
+
+    return {"attempted": True, "reason": "", "changed": changed, "failed": len(errors)}
+
+
 def load_config_from_disk():
     with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
         raw = json.load(f)
@@ -139,6 +192,19 @@ def reload_runtime_config():
     config = loaded
     FS_ROOT = Path(config['filesystem']['root'])
     FS_DEBUG = bool(config.get('debug', False))
+    training = config.get("training") or {}
+    if training.get("chmod_training_root_on_load", True):
+        stats = chmod_training_root_permissions(FS_ROOT)
+        if stats.get("attempted"):
+            debug_print(
+                "[config] chmod_training_root_on_load:",
+                f"mode=775 changed={stats.get('changed', 0)} failed={stats.get('failed', 0)}",
+            )
+        else:
+            debug_print(
+                "[config] chmod_training_root_on_load skipped:",
+                stats.get("reason", "unknown"),
+            )
     return config
 
 
@@ -186,13 +252,8 @@ def save_toml_file(folder_path, filename, text):
     file_path = folder / filename
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(text)
-    try:
-        import os
-        os.chmod(file_path, 0o644)
-    except Exception:
-        pass
-
-        return True
+    normalize_path_permissions(file_path)
+    return True
 
 def fill_template_placeholders(toml_text, dataset_name):
     """

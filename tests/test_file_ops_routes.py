@@ -4,6 +4,7 @@ from pathlib import Path
 from PIL import Image
 
 import tool.server.app as app_module
+import tool.server.config as config_module
 import tool.server.file_ops as file_ops_module
 import tool.server.run_ops as run_ops_module
 import tool.server.smart_set as smart_set_module
@@ -123,6 +124,46 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
     assert payload["config"]["training"]["write_selection_snapshot_comments"] is True
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     assert saved["training"]["write_selection_snapshot_comments"] is True
+    assert saved["training"]["chmod_training_root_on_load"] is True
+
+
+def test_validate_config_payload_defaults_and_preserves_chmod_training_root_on_load():
+    normalized = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/sets", "models": ""},
+        "training": {},
+    })
+    assert normalized["training"]["chmod_training_root_on_load"] is True
+
+    disabled = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/sets", "models": ""},
+        "training": {"chmod_training_root_on_load": False},
+    })
+    assert disabled["training"]["chmod_training_root_on_load"] is False
+
+
+def test_chmod_training_root_permissions_recurses_775(tmp_path, monkeypatch):
+    root = tmp_path / "fs_root"
+    child = root / "set_a"
+    child.mkdir(parents=True)
+    write_text(child / "caption.txt", "caption")
+
+    calls = []
+
+    def fake_chmod(path, mode):
+        calls.append((Path(path).resolve(), mode))
+
+    monkeypatch.setattr(config_module, "_runtime_supports_chmod_recursive", lambda: True)
+    monkeypatch.setattr(config_module.os, "chmod", fake_chmod)
+
+    stats = config_module.chmod_training_root_permissions(root)
+
+    assert stats["attempted"] is True
+    assert stats["failed"] == 0
+    assert set(calls) == {
+        (root.resolve(), 0o775),
+        (child.resolve(), 0o775),
+        ((child / "caption.txt").resolve(), 0o775),
+    }
 
 
 def test_app_config_save_bootstraps_missing_requirements(tmp_path, monkeypatch):
@@ -273,6 +314,7 @@ def test_open_in_explorer_selects_windows_file_with_spaces(tmp_path, monkeypatch
         popen_calls.append(args)
 
     monkeypatch.setattr(file_ops_module, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(file_ops_module.app_config, "safe_join_fs_root", safe_join)
     monkeypatch.setattr(file_ops_module, "_is_wsl_runtime", lambda: False)
     monkeypatch.setattr(file_ops_module.sys, "platform", "win32")
     monkeypatch.setattr(file_ops_module.subprocess, "Popen", fake_popen)
@@ -302,6 +344,7 @@ def test_open_in_explorer_wsl_uses_select_comma_path(tmp_path, monkeypatch):
         popen_calls.append(args)
 
     monkeypatch.setattr(file_ops_module, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(file_ops_module.app_config, "safe_join_fs_root", safe_join)
     monkeypatch.setattr(file_ops_module, "_is_wsl_runtime", lambda: True)
     monkeypatch.setattr(file_ops_module.sys, "platform", "linux")
     monkeypatch.setattr(file_ops_module, "_to_windows_path", lambda path: "C:\\set\\photo.png")
@@ -331,6 +374,7 @@ def test_open_in_vscode_opens_current_folder(tmp_path, monkeypatch):
         calls.append(args)
 
     monkeypatch.setattr(file_ops_module, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(file_ops_module.app_config, "safe_join_fs_root", safe_join)
     monkeypatch.setattr(file_ops_module.shutil, "which", lambda name: "C:/bin/code.cmd" if name == "code" else None)
     monkeypatch.setattr(file_ops_module.subprocess, "Popen", fake_popen)
 
@@ -640,6 +684,7 @@ def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path
                 "flags": {"shared.png": "green"},
                 "caption_tags_by_media": {"shared.png": ["dragon", "profile"]},
                 "ratings_by_media": {"shared.png": 4},
+                "caption_term_affixes": {"floor": {"prefix": "on the", "suffix": ""}},
                 "caption_phrases": ["legacy phrase"],
                 "caption_requirements": ["legacy requirement"],
             }
@@ -697,6 +742,7 @@ def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path
     assert sorted(out_state["flags"].keys()) == sorted(dest_names)
     assert sorted(out_state["caption_tags_by_media"].keys()) == sorted(dest_names)
     assert sorted(out_state["ratings_by_media"].keys()) == sorted(dest_names)
+    assert out_state["caption_term_affixes"] == {"floor": {"prefix": "on the", "suffix": ""}}
     assert out_state["stats"]["phrases"] == ""
     assert "caption_phrases" not in out_state
 

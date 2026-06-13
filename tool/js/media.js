@@ -515,12 +515,7 @@ function selectPathMedia(mediaItem) {
     setStatus(buildSelectedMediaStatus(mediaItem));
     updatePreviewActionControls();
     renderChecklistPanel();
-    if (typeof renderPhraseCopyPanel === 'function') {
-      renderPhraseCopyPanel();
-    }
-    if (typeof updatePrimerCaptionResetUi === 'function') {
-      updatePrimerCaptionResetUi();
-    }
+    updatePrimerCaptionResetUi();
     // Re-render list to show selection
     renderFileList();
     scrollCurrentMediaRowIntoView();

@@ -15,6 +15,7 @@ Keep annotation terms simple while allowing small wording fixes like `on sand` o
 - Tag insertion uses the rendered text:
   - term `floor` with prefix `on the` inserts `on the floor`
   - term `sand` with prefix `on` inserts `on sand`
+- Primer/template generation uses the rendered text for tag-scope mappings.
 - Raw tag storage does not change. Tags remain the plain term so filtering, review, and matching stay stable.
 
 ## Storage

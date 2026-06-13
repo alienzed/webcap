@@ -89,8 +89,6 @@ function sanitizeFolderState(data) {
     caption_requirement_keywords: (typeof src.caption_requirement_keywords === 'object' && src.caption_requirement_keywords) ? JSON.parse(JSON.stringify(src.caption_requirement_keywords)) : {},
     caption_requirements_na_by_media: requirementsNaByMedia,
     caption_term_affixes: captionTermAffixes,
-    caption_phrases: Array.isArray(src.caption_phrases) ? src.caption_phrases.slice() : undefined,
-    quick_phrases: Array.isArray(src.quick_phrases) ? src.quick_phrases.slice() : undefined,
     caption_set_notes: String(src.caption_set_notes || ''),
     annotate_strip_visible: !!src.annotate_strip_visible,
     caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,
@@ -183,10 +181,6 @@ function snapshotFolderStateFromDom() {
     caption_requirement_keywords: (typeof window.checklistKeywordsByItem !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistKeywordsByItem)) : undefined,
     caption_requirements_na_by_media: (typeof window.checklistRequirementsNaByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistRequirementsNaByMedia)) : undefined,
     caption_term_affixes: (typeof window.checklistTermAffixesByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermAffixesByKey)) : undefined,
-    caption_phrases: window.captionHelperPhrases.slice(),
-    quick_phrases: (typeof window.captionQuickPhrases !== 'undefined' && Array.isArray(window.captionQuickPhrases))
-      ? window.captionQuickPhrases.slice()
-      : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),
     annotate_strip_visible: !!window.annotateStripVisible,
     caption_helper_panel_collapsed: !!window.captionHelperPanelCollapsed,
@@ -496,10 +490,16 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
       valuesByKey[key] = [];
       seenValueByKey[key] = {};
     }
-    var dedupeValue = value.toLowerCase();
+    var outputValue = value;
+    if (scope === 'tag' && typeof renderChecklistTermWithAffixes === 'function') {
+      var renderedValue = renderChecklistTermWithAffixes(value);
+      var renderedToken = renderChecklistTermWithAffixes(token);
+      outputValue = renderedValue || renderedToken || value;
+    }
+    var dedupeValue = outputValue.toLowerCase();
     if (seenValueByKey[key][dedupeValue]) return;
     seenValueByKey[key][dedupeValue] = true;
-    valuesByKey[key].push(value);
+    valuesByKey[key].push(outputValue);
   });
   var values = {};
   Object.keys(valuesByKey).forEach(function (key) {

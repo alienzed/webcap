@@ -38,9 +38,6 @@ function handleEditorInputAutosave(e) {
         if (typeof renderChecklistPanel === 'function') {
             renderChecklistPanel();
         }
-        if (typeof renderPhraseCopyPanel === 'function') {
-            renderPhraseCopyPanel();
-        }
         if (typeof renderItemTagsPanel === 'function') {
             renderItemTagsPanel();
         }

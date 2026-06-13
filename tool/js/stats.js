@@ -246,7 +246,6 @@ function setStatsBalancePhrases(nextPhrases, triggerAutosave) {
       phrasesEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }
-  renderPhraseCopyPanel();
   updateBalanceDistributionWheel();
 }
 

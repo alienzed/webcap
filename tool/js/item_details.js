@@ -253,7 +253,13 @@ function computeTagMatchProgressForText(mediaKey, captionText) {
   var missing = [];
   for (var tagIdx = 0; tagIdx < tags.length; tagIdx++) {
     var tag = tags[tagIdx];
-    if (captionContainsTagWithAllowances(captionText, tag)) {
+    var rendered = (typeof renderChecklistTermWithAffixes === 'function')
+      ? renderChecklistTermWithAffixes(tag)
+      : tag;
+    if (
+      (rendered && captionContainsPhrase(captionText, rendered)) ||
+      captionContainsTagWithAllowances(captionText, tag)
+    ) {
       completed += 1;
     } else {
       missing.push(tag);

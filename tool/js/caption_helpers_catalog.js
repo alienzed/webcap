@@ -1,21 +1,4 @@
-// Caption helper catalog, quick phrases, and caption phrase editing.
-
-function moveCaptionQuickPhraseByOffset(index, offset) {
-  var idx = Number(index);
-  var step = Number(offset);
-  if (!isFinite(idx) || !isFinite(step)) return false;
-  if (!Array.isArray(captionQuickPhrases) || !captionQuickPhrases.length) return false;
-  if (idx < 0 || idx >= captionQuickPhrases.length) return false;
-  var nextIdx = idx + step;
-  if (nextIdx < 0 || nextIdx >= captionQuickPhrases.length) return false;
-  var next = captionQuickPhrases.slice();
-  var temp = next[idx];
-  next[idx] = next[nextIdx];
-  next[nextIdx] = temp;
-  setCaptionQuickPhrases(next, true);
-  renderPhraseCopyPanel();
-  return true;
-}
+// Caption helper catalog and caption phrase editing.
 
 function captionHelperSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
@@ -102,9 +85,6 @@ function ensureCaptionHelperPhraseInCatalog(text, persistNow, skipRender) {
   if (persistNow) {
     saveCaptionHelpersToFolderState();
   }
-  if (!skipRender) {
-    renderPhraseCopyPanel();
-  }
   return true;
 }
 
@@ -119,9 +99,6 @@ function mergeCaptionHelperPhrasesFromTagsMap(tagsMap, persistNow) {
   });
   if (changed && persistNow) {
     saveCaptionHelpersToFolderState();
-  }
-  if (changed) {
-    renderPhraseCopyPanel();
   }
   return changed;
 }
@@ -301,31 +278,8 @@ function toggleCaptionTagAtCursor(text) {
   insertCaptionPhraseAtCursor(rendered || tag, { separator: ', ' });
 }
 
-function setCaptionQuickPhrases(nextPhrases, triggerAutosave) {
-  captionQuickPhrases = (nextPhrases || [])
-    .map(function (phrase) { return normalizeCatalogTerm(phrase); })
-    .filter(Boolean);
-  if (triggerAutosave) {
-    saveCaptionHelpersToFolderState();
-  }
-}
-
-function addCaptionQuickPhrase(text, triggerAutosave) {
-  var clean = normalizeCatalogTerm(text);
-  if (!clean) return false;
-  var exists = captionQuickPhrases.some(function (p) {
-    return String(p || '').toLowerCase() === clean.toLowerCase();
-  });
-  if (exists) return false;
-  var next = captionQuickPhrases.slice();
-  next.push(clean);
-  setCaptionQuickPhrases(next, triggerAutosave);
-  return true;
-}
-
 window.ensureCaptionHelperPhraseInCatalog = ensureCaptionHelperPhraseInCatalog;
 window.mergeCaptionHelperPhrasesFromTagsMap = mergeCaptionHelperPhrasesFromTagsMap;
 window.getCaptionHelperCatalogTerms = getCaptionHelperCatalogTerms;
-window.moveCaptionQuickPhraseByOffset = moveCaptionQuickPhraseByOffset;
 window.toggleCaptionPhraseAtCursor = toggleCaptionPhraseAtCursor;
 window.toggleCaptionTagAtCursor = toggleCaptionTagAtCursor;

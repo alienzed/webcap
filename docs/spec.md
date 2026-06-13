@@ -60,11 +60,10 @@ Primary persisted fields include:
 5. `caption_requirements`
 6. `caption_requirements_checked`
 7. `caption_requirement_keywords`
-8. `caption_phrases`
-9. `caption_set_notes`
-10. `caption_tags_by_media`
-11. `ratings_by_media`
-12. `mutated_media_keys`
+8. `caption_set_notes`
+9. `caption_tags_by_media`
+10. `ratings_by_media`
+11. `mutated_media_keys`
 
 ## 6. Config Template Behavior
 1. Config templates are not created on folder load.

@@ -1,4 +1,4 @@
-// Caption helper tab switching, phrase panel, and folder-state loading.
+// Caption helper tab switching and folder-state loading.
 
 function setCaptionHelperTab(tabName) {
   if (tabName !== 'requirements' && tabName !== 'tags' && tabName !== 'analysis' && tabName !== 'metadata') {
@@ -38,101 +38,8 @@ function setCaptionHelperTab(tabName) {
   }
 }
 
-function renderPhraseCopyPanel() {
-  var container = document.getElementById('phrase-copy-items');
-  if (!container) return;
-  container.innerHTML = '';
-  var activePhrases = Array.isArray(captionQuickPhrases) ? captionQuickPhrases.slice() : [];
-
-  var liveCaption = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
-    ? ui.editorEl.value
-    : (state && state.currentItem && typeof state.currentItem.caption === 'string' ? state.currentItem.caption : '');
-
-  if (!activePhrases.length) {
-    var empty = document.createElement('div');
-    empty.className = 'small';
-    empty.textContent = 'No quick phrases. Add terms from phrase search.';
-    container.appendChild(empty);
-    return;
-  }
-
-  for (var i = 0; i < activePhrases.length; i++) {
-    (function (idx) {
-      var phrase = activePhrases[idx];
-      var isMatched = !!(phrase && captionContainsPhrase(liveCaption, phrase));
-      var row = document.createElement('div');
-      row.className = 'row-inline phrase-row-inline';
-
-      var phraseBtn = document.createElement('button');
-      phraseBtn.type = 'button';
-      phraseBtn.className = 'phrase-copy-item-btn';
-      phraseBtn.title = isMatched ? 'Remove from caption' : 'Insert at cursor';
-      phraseBtn.textContent = phrase;
-      if (isMatched) {
-        phraseBtn.classList.add('phrase-copy-item-matched');
-      }
-      (function (text) {
-        phraseBtn.onclick = function () {
-          toggleCaptionPhraseAtCursor(text);
-        };
-      })(phrase);
-
-      var tagBtn = document.createElement('button');
-      tagBtn.type = 'button';
-      tagBtn.title = 'Add as tag to current media';
-      tagBtn.textContent = 'Tag';
-      (function (text) {
-        tagBtn.onclick = function () {
-          addTagToCurrentMedia(text);
-        };
-      })(phrase);
-
-      var actions = document.createElement('div');
-      actions.className = 'phrase-copy-actions';
-
-      var moveUpBtn = document.createElement('button');
-      moveUpBtn.type = 'button';
-      moveUpBtn.className = 'stats-phrase-move-btn';
-      moveUpBtn.title = 'Move up';
-      moveUpBtn.textContent = '\u2191';
-      moveUpBtn.onclick = function () {
-        var moved = moveCaptionQuickPhraseByOffset(idx, -1);
-        if (moved) {
-          setStatus('Moved quick phrase up: ' + phrase);
-        }
-      };
-      actions.appendChild(moveUpBtn);
-
-      var removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'stats-phrase-mini-btn';
-      removeBtn.title = 'Remove quick phrase';
-      removeBtn.textContent = 'X';
-      removeBtn.onclick = function () {
-        var next = captionQuickPhrases.slice();
-        next.splice(idx, 1);
-        setCaptionQuickPhrases(next, true);
-        renderPhraseCopyPanel();
-      };
-
-      row.appendChild(phraseBtn);
-      row.appendChild(tagBtn);
-      actions.appendChild(removeBtn);
-      row.appendChild(actions);
-      container.appendChild(row);
-    })(i);
-  }
-}
-
 function loadCaptionHelpersFromFolderState(folderState) {
   captionHelperPhrases = [];
-  (folderState.caption_phrases || []).forEach(function (phrase) {
-    ensureCaptionHelperPhraseInCatalog(phrase, false, true);
-  });
-  setCaptionQuickPhrases(Array.isArray(folderState.quick_phrases) ? folderState.quick_phrases : [], false);
-  captionQuickPhrases.forEach(function (phrase) {
-    ensureCaptionHelperPhraseInCatalog(phrase, false, true);
-  });
   captionHelperNotes = String(folderState.caption_set_notes || '');
   annotateStripVisible = !!folderState.annotate_strip_visible;
   captionHelperPanelCollapsed = !!folderState.caption_helper_panel_collapsed;
@@ -142,10 +49,8 @@ function loadCaptionHelpersFromFolderState(folderState) {
   if (notesEditor) {
     notesEditor.value = captionHelperNotes;
   }
-  renderPhraseCopyPanel();
   renderAnnotateStrip();
 }
 
 window.loadCaptionHelpersFromFolderState = loadCaptionHelpersFromFolderState;
-window.renderPhraseCopyPanel = renderPhraseCopyPanel;
 window.setCaptionHelperTab = setCaptionHelperTab;

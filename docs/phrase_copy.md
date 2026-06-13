@@ -28,10 +28,10 @@ Provide fast, low-friction caption editing helpers while keeping state per set a
   - Heading color reflects group state (complete/incomplete/n-a).
 
 ## Persistence
-- `caption_phrases`: term catalog.
-- `quick_phrases`: active quick phrase list.
+- `caption_phrases`: retired legacy term catalog; no longer loaded or re-saved.
+- `quick_phrases`: retired legacy quick phrase list; no longer loaded or re-saved.
 - `annotate_strip_visible`: annotate toggle state.
 - `caption_helper_panel_collapsed`: helper collapsed/expanded state.
 
 ## Notes
-- Quick-phrase persistence remains in state for backward compatibility, but the visible helper UI now centers on annotation and tags.
+- Quick-phrase state is retired; the visible helper UI now centers on annotation and tags.

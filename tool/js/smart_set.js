@@ -130,7 +130,6 @@ function selectSuperSetResult(index) {
   renderPathPreview(String(result.source_folder || ''), String(result.media_name || ''));
   renderSuperSetResultDetails(result);
   if (typeof renderChecklistPanel === 'function') renderChecklistPanel();
-  if (typeof renderPhraseCopyPanel === 'function') renderPhraseCopyPanel();
   if (typeof updatePrimerCaptionResetUi === 'function') updatePrimerCaptionResetUi();
   if (typeof updatePreviewActionControls === 'function') updatePreviewActionControls();
   renderSuperSetResults();
@@ -249,7 +248,6 @@ function runSuperSetSearch() {
     clearEditorAndPreview();
     clearSuperSetResultDetails();
     if (typeof renderChecklistPanel === 'function') renderChecklistPanel();
-    if (typeof renderPhraseCopyPanel === 'function') renderPhraseCopyPanel();
     if (typeof updateSetFolderScopedUi === 'function') updateSetFolderScopedUi();
     if (typeof updateReviewButtonAvailability === 'function') updateReviewButtonAvailability();
     renderFileList();

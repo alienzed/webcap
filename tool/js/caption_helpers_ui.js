@@ -141,7 +141,6 @@ function wireCaptionHelpersUi() {
       setStatus('Tag already assigned.');
     }
     saveCaptionHelpersToFolderState();
-    renderPhraseCopyPanel();
     if (tagInput) tagInput.value = '';
     clearResults(tagResults);
   }
@@ -214,7 +213,6 @@ function wireCaptionHelpersUi() {
   setCaptionHelperTab(captionHelperActiveTab);
   updateAnnotateStripToggleUi();
   updateCaptionHelperCollapseUi();
-  renderPhraseCopyPanel();
   renderAnnotateStrip();
 }
 

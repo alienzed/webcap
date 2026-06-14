@@ -515,6 +515,8 @@ function selectPathMedia(mediaItem) {
     setStatus(buildSelectedMediaStatus(mediaItem));
     updatePreviewActionControls();
     renderChecklistPanel();
+    renderItemTagsPanel();
+    renderItemMetadataPanel();
     updatePrimerCaptionResetUi();
     // Re-render list to show selection
     renderFileList();

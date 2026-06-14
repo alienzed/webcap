@@ -226,6 +226,22 @@ function buildMediaContextMenuActions(mediaItem, key) {
   }
 
   actions.push({
+    label: 'Copy Tags',
+    run: function () {
+      copyTagsForMediaKey(mediaItem.key);
+    }
+  });
+  if (hasTagClipboardTags()) {
+    actions.push({
+      label: 'Paste Tags',
+      run: function () {
+        pasteClipboardTagsToMediaKey(mediaItem.key);
+      }
+    });
+  }
+  actions.push({ separator: true });
+
+  actions.push({
     label: 'Rename',
     run: function () {
       promptRenameMedia(mediaItem, ui, state);

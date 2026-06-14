@@ -5,6 +5,8 @@ function wireCaptionHelpersUi() {
   var tagsBtn = document.getElementById('caption-helper-tab-tags-btn');
   var analysisBtn = document.getElementById('caption-helper-tab-analysis-btn');
   var metadataBtn = document.getElementById('caption-helper-tab-metadata-btn');
+  var itemTagsCopyBtn = document.getElementById('item-tags-copy-btn');
+  var itemTagsPasteBtn = document.getElementById('item-tags-paste-btn');
   var tagInput = document.getElementById('tag-term-input');
   var tagApplyBtn = document.getElementById('tag-term-apply-btn');
   var tagResults = document.getElementById('tag-term-results');
@@ -31,18 +33,31 @@ function wireCaptionHelpersUi() {
     tagsBtn.onclick = function () {
       expandHelperPanelForTabSwitch();
       setCaptionHelperTab('tags');
+      renderItemTagsPanel();
     };
   }
   if (analysisBtn) {
     analysisBtn.onclick = function () {
       expandHelperPanelForTabSwitch();
       setCaptionHelperTab('analysis');
+      renderItemAnalysisPanel();
     };
   }
   if (metadataBtn) {
     metadataBtn.onclick = function () {
       expandHelperPanelForTabSwitch();
       setCaptionHelperTab('metadata');
+      renderItemMetadataPanel();
+    };
+  }
+  if (itemTagsCopyBtn) {
+    itemTagsCopyBtn.onclick = function () {
+      copyCurrentItemTagsToClipboard();
+    };
+  }
+  if (itemTagsPasteBtn) {
+    itemTagsPasteBtn.onclick = function () {
+      pasteClipboardTagsToCurrentItem();
     };
   }
   if (annotateStripToggleBtn) {

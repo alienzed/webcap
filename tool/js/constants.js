@@ -102,6 +102,8 @@ ui = {
   statsPhrasesItemsEl: document.getElementById('stats-phrases-items'),
   statsPhrasesAddInputEl: document.getElementById('stats-phrases-add-input'),
   statsPhrasesAddBtnEl: document.getElementById('stats-phrases-add-btn'),
+  itemTagsCopyBtnEl: document.getElementById('item-tags-copy-btn'),
+  itemTagsPasteBtnEl: document.getElementById('item-tags-paste-btn'),
   primerMappingsEditBtnEl: document.getElementById('primer-mappings-edit-btn'),
   primerMappingsSummaryEl: document.getElementById('primer-mappings-summary'),
   reviewRulesEditBtnEl: document.getElementById('review-rules-edit-btn'),

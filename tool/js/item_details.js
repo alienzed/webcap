@@ -1,5 +1,6 @@
 // Per-item tags and metadata loading
 var captionItemTagsByMedia = {};
+var itemTagsClipboard = [];
 var mediaMetadataLoading = false;
 var debouncedItemTagsSave = debounceCreate(300);
 var debouncedItemRatingSave = debounceCreate(250);
@@ -17,6 +18,135 @@ function normalizeItemTag(text) {
 function getTagsForMediaKey(mediaKey) {
   var tags = captionItemTagsByMedia[mediaKey];
   return Array.isArray(tags) ? tags.slice() : [];
+}
+
+function getTagClipboardTags() {
+  return Array.isArray(itemTagsClipboard) ? itemTagsClipboard.slice() : [];
+}
+
+function hasTagClipboardTags() {
+  return getTagClipboardTags().length > 0;
+}
+
+function updateTagClipboardUi() {
+  var copyBtn = ui && ui.itemTagsCopyBtnEl;
+  var pasteBtn = ui && ui.itemTagsPasteBtnEl;
+  var hasSelection = !!(state && state.currentItem && state.currentItem.key);
+  var clipboardTags = getTagClipboardTags();
+  var clipboardCount = clipboardTags.length;
+  if (copyBtn) {
+    copyBtn.disabled = !hasSelection;
+  }
+  if (pasteBtn) {
+    pasteBtn.classList.toggle('hidden', clipboardCount <= 0);
+    pasteBtn.disabled = !hasSelection || clipboardCount <= 0;
+    pasteBtn.title = clipboardCount > 0
+      ? 'Paste ' + clipboardCount + ' copied tag' + (clipboardCount === 1 ? '' : 's')
+      : 'Paste copied tags';
+  }
+}
+
+function copyTagsForMediaKey(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  if (!key) {
+    setStatus('No media item selected to copy tags.');
+    return false;
+  }
+  var tags = getTagsForMediaKey(key)
+    .map(function (tag) { return normalizeItemTag(tag); })
+    .filter(Boolean);
+  if (!tags.length) {
+    setStatus('No tags to copy.');
+    return false;
+  }
+  itemTagsClipboard = tags.slice();
+  updateTagClipboardUi();
+  setStatus('Copied ' + tags.length + ' tag' + (tags.length === 1 ? '' : 's') + '.');
+  return true;
+}
+
+function copyCurrentItemTagsToClipboard() {
+  if (!state || !state.currentItem || !state.currentItem.key) {
+    setStatus('Select a media item to copy tags.');
+    return false;
+  }
+  return copyTagsForMediaKey(state.currentItem.key);
+}
+
+function mergeTagsIntoMediaKey(mediaKey, rawTags) {
+  var key = String(mediaKey || '').trim();
+  var incoming = Array.isArray(rawTags) ? rawTags : [];
+  if (!key || !incoming.length) {
+    return { added: 0, alreadyPresent: 0 };
+  }
+  var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
+  var current = getTagsForMediaKey(key);
+  var seen = {};
+  current.forEach(function (tag) {
+    var low = normalizeItemTag(tag).toLowerCase();
+    if (low) seen[low] = true;
+  });
+  var next = current.slice();
+  var added = 0;
+  var alreadyPresent = 0;
+  incoming.forEach(function (rawTag) {
+    var tag = normalizeItemTag(rawTag);
+    var low = tag.toLowerCase();
+    if (!tag) return;
+    if (seen[low]) {
+      alreadyPresent += 1;
+      return;
+    }
+    seen[low] = true;
+    next.push(tag);
+    ensureCaptionHelperPhraseInCatalog(tag, true);
+    added += 1;
+  });
+  if (!added) {
+    return { added: 0, alreadyPresent: alreadyPresent };
+  }
+  captionItemTagsByMedia[key] = next;
+  saveItemTagsToFolderState();
+  renderItemTagsPanel();
+  renderItemMetadataPanel();
+  renderFileList();
+  updateBalanceDistributionWheel();
+  if (typeof renderAnnotateStrip === 'function') {
+    renderAnnotateStrip();
+  }
+  if (shouldSyncTemplate) {
+    syncEditorToCurrentTemplatePreview();
+  }
+  return { added: added, alreadyPresent: alreadyPresent };
+}
+
+function pasteClipboardTagsToMediaKey(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  var clipboardTags = getTagClipboardTags();
+  if (!key) {
+    setStatus('No media item selected to paste tags into.');
+    return false;
+  }
+  if (!clipboardTags.length) {
+    setStatus('No copied tags to paste.');
+    return false;
+  }
+  if (!confirm('Merge ' + clipboardTags.length + ' copied tag' + (clipboardTags.length === 1 ? '' : 's') + ' into this item?')) {
+    setStatus('Paste tags cancelled.');
+    return false;
+  }
+  var result = mergeTagsIntoMediaKey(key, clipboardTags);
+  updateTagClipboardUi();
+  setStatus('Merged ' + result.added + ' tag' + (result.added === 1 ? '' : 's') + ' (' + result.alreadyPresent + ' already present).');
+  return true;
+}
+
+function pasteClipboardTagsToCurrentItem() {
+  if (!state || !state.currentItem || !state.currentItem.key) {
+    setStatus('Select a media item to paste tags into.');
+    return false;
+  }
+  return pasteClipboardTagsToMediaKey(state.currentItem.key);
 }
 
 function canonicalizeMatchText(value) {
@@ -759,9 +889,11 @@ function renderItemTagsPanel() {
   if (!listEl) return;
   listEl.innerHTML = '';
   if (!state.currentItem || !state.currentItem.key) {
+    updateTagClipboardUi();
     listEl.textContent = 'Select a media item.';
     return;
   }
+  updateTagClipboardUi();
   var key = state.currentItem.key;
   var tags = getTagsForMediaKey(key);
   var row = getMetadataForMedia(state.currentItem.fileName);

@@ -21,6 +21,8 @@ function clearEditorAndPreview() {
   if (typeof updatePrimerCaptionResetUi === 'function') {
     updatePrimerCaptionResetUi();
   }
+  renderItemTagsPanel();
+  renderItemMetadataPanel();
   updatePreviewActionControls();
   updateBalanceDistributionWheel();
 }
@@ -35,6 +37,8 @@ function clearSelection() {
   if (typeof updatePrimerCaptionResetUi === 'function') {
     updatePrimerCaptionResetUi();
   }
+  renderItemTagsPanel();
+  renderItemMetadataPanel();
   renderFileList(ui.filterEl.value);
 }
 

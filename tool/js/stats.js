@@ -669,62 +669,27 @@ function getOptionsFromDom() {
 
 function statsGetPrimerOptionsFromDom() {
   var templateEl = document.getElementById('primer-template');
-  var mappingsRows = [];
-  if (typeof getPrimerMappingsRows === 'function') {
-    mappingsRows = getPrimerMappingsRows();
-  }
   return {
     template: templateEl ? templateEl.value : '',
-    mappings: mappingsRows
+    mappings: []
   };
 }
 
 // Debounced auto-save for stats/primer changes
 var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
-var primerTemplateSnapshot = '';
-
-function syncMissingCaptionEditorToUpdatedPrimer(previousTemplate, nextTemplate) {
-  if (!ui || !ui.editorEl || ui.editorEl.readOnly) return;
-  var mediaItem = getPrimerResetCurrentMediaItem();
-  if (!mediaItem || mediaItem.hasCaption) return;
-
-  var previousPrimer = '';
-  var previousConfig = statsGetPrimerOptionsFromDom();
-  previousConfig.template = String(previousTemplate || '');
-  if (previousConfig.template.trim()) {
-    previousPrimer = String(buildPrimerFromConfig(mediaItem.fileName, mediaItem.key, previousConfig) || '');
-  }
-
-  var currentEditorText = String(ui.editorEl.value || '');
-  if (currentEditorText.trim() !== previousPrimer.trim()) return;
-
-  var nextConfig = statsGetPrimerOptionsFromDom();
-  nextConfig.template = String(nextTemplate || '');
-  var nextPrimer = String(buildPrimerFromConfig(mediaItem.fileName, mediaItem.key, nextConfig) || '');
-  if (currentEditorText === nextPrimer) return;
-
-  applyEditorTextAndTriggerInput(nextPrimer);
-}
 
 function wireStatsPrimerAutoSave() {
-  var templateEl = document.getElementById('primer-template');
-  if (templateEl) primerTemplateSnapshot = String(templateEl.value || '');
   var statsFields = [
     document.getElementById('stats-required-phrase'),
     document.getElementById('stats-phrases'),
-    templateEl
+    document.getElementById('primer-template')
   ];
   statsFields.forEach(function (el) {
     if (el && !el.__autoSaveBound) {
       el.__autoSaveBound = true;
-      el.addEventListener('input', function (evt) {
-        if (el.id === 'primer-template') {
-          var nextTemplate = String((evt && evt.target && evt.target.value) || '');
-          var previousTemplate = primerTemplateSnapshot;
-          primerTemplateSnapshot = nextTemplate;
-          syncMissingCaptionEditorToUpdatedPrimer(previousTemplate, nextTemplate);
-        }
+      el.addEventListener('input', function () {
+        refreshPrimerPreviewForCurrentItem();
         debouncedSaveFolderState(function () {
           saveFolderStateForCurrentRoot();
         });
@@ -742,8 +707,8 @@ function getPrimerResetCurrentMediaItem() {
 }
 
 function isPrimerInEffectForCurrentItem(mediaItem) {
-  if (!mediaItem || !ui || !ui.editorEl || ui.editorEl.readOnly) return false;
-  if (mediaItem.hasCaption) return false;
+  if (!mediaItem || !state || !state.currentItem || mediaItem.key !== state.currentItem.key) return false;
+  if (mediaItem.hasCaption || !ui || !ui.editorEl || ui.editorEl.readOnly) return false;
   var primerText = String(buildAutoPrimer(mediaItem.fileName, mediaItem.key) || '');
   if (!primerText.trim()) return false;
   var editorText = String(ui.editorEl.value || '');
@@ -767,7 +732,7 @@ function updatePrimerCaptionResetUi() {
 
   var primerText = String(buildAutoPrimer(mediaItem.fileName, mediaItem.key) || '');
   var editorText = String(ui.editorEl.value || '');
-  var canReset = editorText.trim() !== primerText.trim();
+  var canReset = !!mediaItem.hasCaption && editorText.trim() !== primerText.trim();
   resetBtn.classList.toggle('hidden', !canReset);
 
   var canUndo = !!(primerResetUndoState && primerResetUndoState.mediaKey === mediaItem.key);

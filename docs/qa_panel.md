@@ -1,6 +1,6 @@
 ﻿# QA Panel Concept
 
-Status: Planning only. Do not implement yet.
+Status: Approved direction. Replace the current `Analysis` tab behavior with QA-oriented signals.
 
 ## Framing
 
@@ -37,6 +37,37 @@ Use **QA** as the tab label.
 
 Inside the panel, title it **Quality Assurance**.
 
+## First Implementation Scope
+
+The first QA pass should be generic and tag-driven rather than analyzer-driven.
+
+### Implement Now
+
+1. **Tag Similarity Cluster**
+   - For the current item, compare its assigned tags against other items in the current set.
+   - Surface a warning when multiple items are highly similar by tag composition.
+   - Prefer language like:
+     - `Starting to look a lot like 3 other items`
+     - `Highly similar tag set shared with 2 items`
+   - Show the closest matching file names and the shared tags as evidence.
+   - This is intended as an early warning while tagging, not a hard duplicate detector.
+
+2. **Likely Missing Tags**
+   - For the current item, inspect the most tag-similar neighbors in the current set.
+   - If a tag is present on most of those neighbors but missing on the current item, surface it as a suggestion.
+   - Prefer language like:
+     - `Likely missing tag: lipstick`
+     - `Similar items often also include: bangs, earrings`
+   - This should be suggestion-only, never authoritative.
+
+### Explicit Non-Goals for V1
+
+- Do not require visual-analysis metadata.
+- Do not block editing or saving.
+- Do not auto-apply suggested tags.
+- Do not treat generic missing categories as QA issues without local similarity evidence.
+- Do not make this a full duplicate detector.
+
 ## Priority Model
 
 ### High Value
@@ -62,8 +93,8 @@ Inside the panel, title it **Quality Assurance**.
 ### Medium Value
 
 4. **Annotation Gaps**
-   - Neighbor/context gaps can be useful when they identify likely missed annotations.
-   - These should not dominate the panel because missing material or missing categories are often not fixable.
+   - Neighbor/context gaps are useful when they identify likely missed annotations from similar items.
+   - This is now part of the first implementation scope in a tag-driven form.
 
 5. **Requirement Gaps**
    - Useful mainly when annotation groups are collapsed.
@@ -92,7 +123,18 @@ Inside the panel, title it **Quality Assurance**.
 - Do not treat model-derived analysis as authoritative.
 - Do not require the user to manufacture material they do not have.
 
-## Possible Panel Shape
+## V1 Panel Shape
+
+Rename the tab label from **Analysis** to **QA**.
+
+Inside the panel, show short rows under two sections:
+
+1. `Similarity`
+   - cluster/redundancy warnings for the current item
+2. `Suggestions`
+   - likely missing tags inferred from similar items
+
+Keep rows short and evidence-based.
 
 Each QA row should be short and explain why it matters.
 
@@ -105,7 +147,8 @@ Suggested fields:
 
 Example rows:
 
-- `Check` - Similar face cluster - `front + close-up + smiling` appears in 4 items.
+- `Check` - Similar cluster - Shared tags `front`, `smile`, `close-up` appear together on 3 nearby items.
+- `Info` - Likely missing tag - Similar items often also include `lipstick`.
 - `Info` - Reviewed before mutation - This item changed after review and may need another look.
 - `Possible Conflict` - Face direction mismatch - Metadata suggests side-facing, but tags imply looking at viewer.
 
@@ -117,14 +160,11 @@ Example rows:
 - Should similar-cluster warnings rely only on metadata, or also include tags/captions?
 - Should mutation automatically clear reviewed state instead of only warning?
 
-## Tentative Recommendation
+## Implementation Notes
 
-Rename `Analysis` to `QA`, but do not implement the panel until the first QA signal is compelling.
-
-The strongest first candidate is:
-
-> Current item belongs to an overrepresented face/framing/expression cluster.
-
-That would make QA less about checklist maintenance and more about practical dataset curation.
+- Use current-folder / current-set items as the comparison pool.
+- Prefer tag-based comparison first because it is generic, cheap, and already aligned with the annotation workflow.
+- Similarity should be conservative and deterministic.
+- Suggestions should rely on repeated local association, not one-off coincidence.
 
 

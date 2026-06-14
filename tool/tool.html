@@ -341,20 +341,6 @@
                                     <textarea id="primer-template" rows="9" placeholder="{subject}
                                           {view}
                                           {lighting}"></textarea>
-                                    <div class="section-label-inline">
-                                        <label>Mappings</label>
-                                        <button
-                                            id="primer-mappings-info-btn"
-                                            type="button"
-                                            class="mini-info-btn"
-                                            title="Mappings help"
-                                            aria-label="Mappings help"
-                                        >i</button>
-                                    </div>
-                                    <div class="stats-advanced-inline-row">
-                                        <button id="primer-mappings-edit-btn" type="button">Edit Mappings</button>
-                                        <span id="primer-mappings-summary" class="small">No mappings configured.</span>
-                                    </div>
                                     <label>Set Notes</label>
                                     <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
                                 </div>
@@ -495,7 +481,7 @@
                                 class="caption-helper-tab-btn"
                                 data-caption-helper-tab="analysis"
                                 type="button"
-                            >Analysis</button>
+                            >QA</button>
                             <button
                                 id="caption-helper-tab-metadata-btn"
                                 class="caption-helper-tab-btn"
@@ -570,7 +556,7 @@
                         </div>
                         <div id="caption-helper-tab-analysis" class="caption-helper-tab-pane hidden">
                             <div class="caption-helper-section-title-row">
-                                <div class="caption-helper-section-title">Analysis</div>
+                                <div class="caption-helper-section-title">Quality Assurance</div>
                             </div>
                             <div id="item-analysis-list"></div>
                         </div>
@@ -719,28 +705,6 @@
         </div>
         <!-- Checklist Requirements Keywords Modal and Overlay -->
         <div id="advanced-modal-overlay" class="modal-overlay hidden"></div>
-        <div
-            id="primer-mappings-modal"
-            class="modal hidden"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="primer-mappings-modal-title"
-        >
-            <div class="modal-header">
-                <h3 id="primer-mappings-modal-title">Mappings</h3>
-                <button class="modal-close-btn" data-close-modal="primer-mappings-modal" title="Close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="primer-mappings-modal-body"></div>
-            </div>
-            <div class="modal-footer modal-footer-split">
-                <button class="btn" id="primer-mappings-modal-add-btn" type="button">+ Add mapping</button>
-                <div class="modal-footer-actions">
-                    <button class="btn" id="primer-mappings-save-btn">Save</button>
-                    <button class="btn" data-close-modal="primer-mappings-modal">Cancel</button>
-                </div>
-            </div>
-        </div>
         <div
             id="review-rules-modal"
             class="modal hidden"

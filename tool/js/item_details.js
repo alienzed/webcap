@@ -447,49 +447,129 @@ function appendItemPanelEmptyRow(listEl, text) {
   listEl.appendChild(empty);
 }
 
-function appendAnalysisWarningRow(listEl, label, text) {
+function appendQaSignalRow(listEl, severity, label, text, isPositive) {
   var row = document.createElement('div');
-  row.className = 'item-metadata-row item-analysis-warning-row';
+  row.className = 'item-metadata-row' + (isPositive ? '' : ' item-analysis-warning-row');
   var labelEl = document.createElement('strong');
-  labelEl.textContent = label;
+  labelEl.textContent = severity + ' - ' + label;
   var valueEl = document.createElement('span');
-  valueEl.className = 'item-metadata-value-error';
+  valueEl.className = isPositive ? 'item-metadata-value-ok' : 'item-metadata-value-error';
   valueEl.textContent = text;
   row.appendChild(labelEl);
   row.appendChild(valueEl);
   listEl.appendChild(row);
 }
 
-function collectItemAnalysisWarnings(row) {
-  var warnings = [];
-  if (!row) {
-    warnings.push({ label: 'Analysis', text: 'Metadata unavailable.' });
-    return warnings;
-  }
+function normalizeTagsForQa(tags) {
+  var out = [];
+  var seen = {};
+  (Array.isArray(tags) ? tags : []).forEach(function (tag) {
+    var clean = normalizeItemTag(tag).toLowerCase();
+    if (!clean || seen[clean]) return;
+    seen[clean] = true;
+    out.push(clean);
+  });
+  return out;
+}
 
-  var focus = (typeof getFaceFocusFromMetadata === 'function') ? getFaceFocusFromMetadata(row) : null;
-  if (!focus) {
-    warnings.push({ label: 'Face Focus', text: 'Metadata unavailable.' });
-  } else if (typeof normalizeFaceFocusBucket === 'function' && normalizeFaceFocusBucket(focus.bucket) === 'unknown') {
-    warnings.push({ label: 'Face Focus', text: 'Unknown.' });
+function buildQaTagNeighborRows(mediaKey) {
+  var currentTags = normalizeTagsForQa(getTagsForMediaKey(mediaKey));
+  var rows = [];
+  if (!currentTags.length || !state || !Array.isArray(state.items)) {
+    return { currentTags: currentTags, rows: rows };
   }
+  state.items.forEach(function (item) {
+    if (!item || !item.key || item.key === mediaKey) return;
+    var otherTags = normalizeTagsForQa(getTagsForMediaKey(item.key));
+    if (!otherTags.length) return;
+    var otherLookup = {};
+    otherTags.forEach(function (tag) { otherLookup[tag] = true; });
+    var shared = currentTags.filter(function (tag) { return !!otherLookup[tag]; });
+    if (!shared.length) return;
+    var unionLookup = {};
+    currentTags.forEach(function (tag) { unionLookup[tag] = true; });
+    otherTags.forEach(function (tag) { unionLookup[tag] = true; });
+    var unionCount = Object.keys(unionLookup).length;
+    rows.push({
+      item: item,
+      otherTags: otherTags,
+      sharedTags: shared,
+      sharedCount: shared.length,
+      overlapCurrent: shared.length / currentTags.length,
+      overlapOther: shared.length / otherTags.length,
+      jaccard: unionCount ? (shared.length / unionCount) : 0
+    });
+  });
+  rows.sort(function (a, b) {
+    return (
+      b.overlapCurrent - a.overlapCurrent ||
+      b.sharedCount - a.sharedCount ||
+      b.overlapOther - a.overlapOther ||
+      a.item.fileName.localeCompare(b.item.fileName)
+    );
+  });
+  return { currentTags: currentTags, rows: rows };
+}
 
-  var pose = (typeof getSelectionPoseFromMetadata === 'function') ? getSelectionPoseFromMetadata(row) : null;
-  if (!pose) {
-    warnings.push({ label: 'Selection Pose', text: 'Metadata unavailable.' });
-  } else {
-    var missing = [];
-    if (!pose.face_direction || String(pose.face_direction).toLowerCase() === 'unknown') missing.push('face direction');
-    if (!pose.expression_primary || String(pose.expression_primary).toLowerCase() === 'unknown') missing.push('expression');
-    if (!pose.body_orientation || String(pose.body_orientation).toLowerCase() === 'unknown') missing.push('body orientation');
-    if (!pose.pose_class || String(pose.pose_class).toLowerCase() === 'unknown') missing.push('pose class');
-    if (!pose.arm_position || String(pose.arm_position).toLowerCase() === 'unknown') missing.push('arm position');
-    if (missing.length) {
-      warnings.push({ label: 'Selection Pose', text: 'Missing ' + missing.join(', ') + '.' });
-    }
-  }
+function computeQaSimilaritySignal(mediaKey) {
+  var summary = buildQaTagNeighborRows(mediaKey);
+  var currentTags = summary.currentTags;
+  var neighbors = summary.rows;
+  if (currentTags.length < 2) return null;
+  var strong = neighbors.filter(function (row) {
+    return row.sharedCount >= 2 && row.overlapCurrent >= 0.67 && row.overlapOther >= 0.67;
+  });
+  if (!strong.length) return null;
+  var sharedCounts = {};
+  strong.forEach(function (row) {
+    row.sharedTags.forEach(function (tag) {
+      sharedCounts[tag] = (sharedCounts[tag] || 0) + 1;
+    });
+  });
+  var sharedSummary = Object.keys(sharedCounts)
+    .sort(function (a, b) { return sharedCounts[b] - sharedCounts[a] || a.localeCompare(b); })
+    .slice(0, 4);
+  var fileNames = strong.slice(0, 3).map(function (row) { return row.item.fileName; });
+  var extra = strong.length > fileNames.length ? ' +' + (strong.length - fileNames.length) + ' more' : '';
+  return {
+    severity: 'Check',
+    label: strong.length > 1 ? 'Similar Cluster' : 'Very Similar Item',
+    text:
+      (strong.length > 1 ? 'Starting to look a lot like ' + strong.length + ' other items.' : 'Very similar tag set found in another item.') +
+      ' Shared tags: ' + sharedSummary.join(', ') + '. Matches: ' + fileNames.join(', ') + extra + '.'
+  };
+}
 
-  return warnings;
+function computeQaMissingTagSignal(mediaKey) {
+  var summary = buildQaTagNeighborRows(mediaKey);
+  var currentTags = summary.currentTags;
+  var neighbors = summary.rows.filter(function (row) {
+    return row.sharedCount >= 2 && row.overlapCurrent >= 0.5;
+  }).slice(0, 6);
+  if (currentTags.length < 2 || neighbors.length < 2) return null;
+  var currentLookup = {};
+  currentTags.forEach(function (tag) { currentLookup[tag] = true; });
+  var counts = {};
+  neighbors.forEach(function (row) {
+    row.otherTags.forEach(function (tag) {
+      if (currentLookup[tag]) return;
+      counts[tag] = (counts[tag] || 0) + 1;
+    });
+  });
+  var minSupport = Math.max(2, Math.ceil(neighbors.length * 0.75));
+  var suggestions = Object.keys(counts)
+    .filter(function (tag) { return counts[tag] >= minSupport; })
+    .sort(function (a, b) { return counts[b] - counts[a] || a.localeCompare(b); })
+    .slice(0, 4);
+  if (!suggestions.length) return null;
+  var summaryBits = suggestions.map(function (tag) {
+    return tag + ' (' + counts[tag] + '/' + neighbors.length + ')';
+  });
+  return {
+    severity: 'Info',
+    label: suggestions.length === 1 ? 'Likely Missing Tag' : 'Likely Missing Tags',
+    text: 'Similar items often also include: ' + summaryBits.join(', ') + '.'
+  };
 }
 
 function renderItemAnalysisPanel() {
@@ -501,23 +581,27 @@ function renderItemAnalysisPanel() {
     return;
   }
 
-  var row = getMetadataForMedia(state.currentItem.fileName);
-  var warnings = collectItemAnalysisWarnings(row);
-  if (warnings.length) {
-    appendItemPanelSectionTitle(listEl, 'Warnings');
-    warnings.forEach(function (warning) {
-      appendAnalysisWarningRow(listEl, warning.label, warning.text);
-    });
+  var mediaKey = state.currentItem.key || state.currentItem.fileName;
+  var similaritySignal = computeQaSimilaritySignal(mediaKey);
+  var missingTagSignal = computeQaMissingTagSignal(mediaKey);
+  var currentTags = normalizeTagsForQa(getTagsForMediaKey(mediaKey));
+
+  appendItemPanelSectionTitle(listEl, 'Similarity');
+  if (similaritySignal) {
+    appendQaSignalRow(listEl, similaritySignal.severity, similaritySignal.label, similaritySignal.text, false);
+  } else if (currentTags.length < 2) {
+    appendItemPanelEmptyRow(listEl, 'Add at least 2 tags to compare this item against the set.');
+  } else {
+    appendItemPanelEmptyRow(listEl, 'No strong tag-similarity cluster detected.');
   }
 
-  appendItemPanelSectionTitle(listEl, 'Signals');
-  var signalStartCount = listEl.childNodes.length;
-  if (row) {
-    appendFaceFocusMetadataRows(listEl, row);
-    appendSelectionPoseMetadataRows(listEl, row);
-  }
-  if (listEl.childNodes.length === signalStartCount) {
-    appendItemPanelEmptyRow(listEl, 'No analysis metadata.');
+  appendItemPanelSectionTitle(listEl, 'Suggestions');
+  if (missingTagSignal) {
+    appendQaSignalRow(listEl, missingTagSignal.severity, missingTagSignal.label, missingTagSignal.text, true);
+  } else if (currentTags.length < 2) {
+    appendItemPanelEmptyRow(listEl, 'Tag suggestions appear once this item has a clearer tag footprint.');
+  } else {
+    appendItemPanelEmptyRow(listEl, 'No likely missing tags inferred from similar items.');
   }
 }
 
@@ -528,20 +612,20 @@ function saveItemTagsToFolderState() {
 }
 
 function shouldLiveSyncEditorToTemplateForMediaKey(mediaKey) {
-  if (!state.currentItem || !state.currentItem.key || state.currentItem.key !== mediaKey) return false;
-  if (state.currentItem.hasCaption) return false;
-  if (!ui || !ui.editorEl || ui.editorEl.readOnly) return false;
-  var currentPrimer = buildAutoPrimer(state.currentItem.fileName, state.currentItem.key);
-  var currentEditorText = String(ui.editorEl.value || '');
-  return currentEditorText.trim() === String(currentPrimer || '').trim();
+  return !!(
+    state &&
+    state.currentItem &&
+    state.currentItem.key &&
+    state.currentItem.key === mediaKey &&
+    !state.currentItem.hasCaption &&
+    ui &&
+    ui.editorEl &&
+    !ui.editorEl.readOnly
+  );
 }
 
 function syncEditorToCurrentTemplatePreview() {
-  if (!state.currentItem || !ui || !ui.editorEl || ui.editorEl.readOnly) return;
-  var nextPrimer = buildAutoPrimer(state.currentItem.fileName, state.currentItem.key) || '';
-  if (ui.editorEl.value === nextPrimer) return;
-  ui.editorEl.value = nextPrimer;
-  ui.editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+  refreshPrimerPreviewForCurrentItem();
 }
 
 function addTagToMediaKey(mediaKey, tagText) {

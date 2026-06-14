@@ -1,6 +1,8 @@
 This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-06-11.
 
+## Bugs
+- Caption when in pimer mode doesn't seem to update always... sometimes it seems to get stuck between states. Any change that should update the caption when it has not yet been saved should be immediate. We may want to centralize this better.
 
 ## Enhancements
 - Add a conservative face ROI mode for face-specific analysis only: use the existing CenterFace / `face_focus` bbox as a padded crop for face direction / expression analysis when the padded ROI is both meaningfully smaller than the full frame and still at least `192 px` on its short side; keep body/pose analysis on the full image and fall back to full-image face analysis when ROI is not clearly beneficial.
@@ -30,6 +32,7 @@ Last reviewed: 2026-06-11.
 - `spec.md` refreshed to match current route and workflow behavior.
 
 ## Backlog (Do Not Implement Yet)
+- Apply a single tag to all visible/selected items as a separate bulk action from item-to-item tag clipboard flow.
 
 
 ## Nice to Haves (Out of Scope for Now)

@@ -240,9 +240,6 @@ function applyFolderStateToDom(folderState) {
   if (templateEl) {
     templateEl.value = clean.primer.template;
   }
-  if (typeof loadPrimerMappingsRows === 'function') {
-    loadPrimerMappingsRows(clean.primer.mappings);
-  }
   // Add new field restoration logic here as needed
 }
 
@@ -459,10 +456,9 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
   var valuesByKey = {};
   var seenValueByKey = {};
   var fileNorm = String(fileName || '').toLowerCase();
-  var customRows = Array.isArray(config && config.mappings) ? config.mappings : [];
   var defaultRows = getRequirementDefaultPrimerMappings();
   // Row order is preserved; matching values for the same key are appended in order.
-  var rows = customRows.concat(defaultRows);
+  var rows = defaultRows;
   var mediaTags = [];
   if (mediaKey && typeof getTagsForMediaKey === 'function') {
     mediaTags = getTagsForMediaKey(mediaKey).map(function (tag) { return String(tag || '').toLowerCase(); });
@@ -492,9 +488,9 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
     }
     var outputValue = value;
     if (scope === 'tag' && typeof renderChecklistTermWithAffixes === 'function') {
-      var renderedValue = renderChecklistTermWithAffixes(value);
-      var renderedToken = renderChecklistTermWithAffixes(token);
-      outputValue = renderedValue || renderedToken || value;
+      if (textMatchesNormalizedText(value, token)) {
+        outputValue = renderChecklistTermWithAffixes(token) || value;
+      }
     }
     var dedupeValue = outputValue.toLowerCase();
     if (seenValueByKey[key][dedupeValue]) return;

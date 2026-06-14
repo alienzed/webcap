@@ -135,10 +135,10 @@ function updatePrimerMappingsSummary() {
   if (!ui || !ui.primerMappingsSummaryEl) return;
   var total = primerMappingsRows.length;
   if (!total) {
-    ui.primerMappingsSummaryEl.textContent = 'No mappings configured.';
+    ui.primerMappingsSummaryEl.textContent = 'Legacy feature; no mappings configured.';
     return;
   }
-  ui.primerMappingsSummaryEl.textContent = total + ' custom mapping' + (total === 1 ? '' : 's');
+  ui.primerMappingsSummaryEl.textContent = 'Legacy feature: ' + total + ' custom mapping' + (total === 1 ? '' : 's');
 }
 
 function updateReviewRulesSummary() {
@@ -164,8 +164,9 @@ function setPrimerMappingsRows(rows, triggerAutosave) {
   primerMappingsRows = sanitizePrimerMappingsRows(rows);
   updatePrimerMappingsSummary();
   if (triggerAutosave) {
-    triggerAdvancedRulesAutosave();
+    refreshPrimerPreviewForCurrentItem();
   }
+  if (triggerAutosave) triggerAdvancedRulesAutosave();
 }
 
 function setReviewRulesRows(rows, triggerAutosave) {
@@ -281,8 +282,9 @@ function openPrimerMappingsHelpInPreview() {
     defaultsTotal = getRequirementDefaultPrimerMappings().length;
   }
   renderAdvancedHelpPreview(
-    'Mappings Help',
-    '<p style="margin:0 0 10px 0;">Mappings auto-fill parts of your Caption Template for items that do not have a caption yet.</p>' +
+    'Mappings Help (Legacy)',
+    '<p style="margin:0 0 10px 0;"><strong>Legacy feature:</strong> mappings still work, but they are being deprecated in favor of annotations, affixes, and the caption template.</p>' +
+    '<p style="margin:0 0 10px 0;">Use mappings only for older sets or edge cases that annotations cannot express yet.</p>' +
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">How It Works</h4>' +
     '<ol style="margin:0 0 8px 18px;padding:0;">' +
     '<li style="margin:0 0 6px 0;">Write a Caption Template with placeholders like <code>{view}</code> and <code>{lighting}</code>.</li>' +
@@ -517,6 +519,7 @@ function renderReviewRulesDraft() {
 }
 
 function openPrimerMappingsModal() {
+  setStatus('Mappings are a legacy feature and may be removed in a future cleanup.');
   primerMappingsDraftRows = getPrimerMappingsRows();
   if (!primerMappingsDraftRows.length) {
     primerMappingsDraftRows.push(normalizePrimerMappingRow({}));

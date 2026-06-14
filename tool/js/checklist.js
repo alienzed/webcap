@@ -1080,6 +1080,12 @@ if (document.getElementById('checklist-group-terms-input')) {
 
 if (document.getElementById('checklist-term-affixes-prefix')) {
   document.getElementById('checklist-term-affixes-prefix').addEventListener('input', renderChecklistTermAffixesPreview);
+  document.getElementById('checklist-term-affixes-prefix').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveChecklistTermAffixesModal();
+    }
+  });
 }
 
 if (document.getElementById('checklist-term-affixes-suffix')) {

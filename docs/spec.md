@@ -31,6 +31,13 @@ WebCap is a local-first media curation and captioning app for dataset preparatio
 2. Caption editing:
 - Load/save caption sidecars per media.
 - Autosave/manual save flows are supported.
+- The helper panel includes Requirements, Tags, QA, and Metadata views.
+- QA is intended for actionable curation signals, not raw analysis metadata display.
+- The Tags view supports a session-only tag clipboard:
+  - `Copy Tags` copies the current item's tags into an in-memory clipboard.
+  - `Paste Tags` merges copied tags into the current item additively only.
+  - Paste requires explicit user confirmation and reports merged vs already-present counts.
+  - The same actions are exposed from the Tags panel header and the media-item context menu.
 3. Review:
 - `Review Captions` runs on the current visible/filtered set.
 - Report links can focus file subsets in the UI.
@@ -90,3 +97,13 @@ This defines:
 2. `stats.reviewRules` structured rows (`scope`, `trigger`, `required`, `enabled`)
 3. Deterministic evaluation semantics and UI contract.
 4. System defaults for requirements/aliases/scope are centralized in `tool/js/constants.js` under `MAPPINGS_SYSTEM_DEFAULTS`.
+
+## 10. QA Panel Direction
+The helper-panel `Analysis` tab is being replaced in practice by a `QA` view.
+
+The first approved QA signals are:
+1. Tag-similarity / redundancy warnings for the current item within the current set.
+2. Likely missing tags inferred from highly similar neighboring items in the current set.
+
+Detailed behavior is specified in:
+- `docs/qa_panel.md`

@@ -229,6 +229,23 @@ function buildAutoPrimer(fileName, mediaKey) {
   }
   return buildPrimerFromConfig(fileName, mediaKey, primerOptions);
 }
+
+function refreshPrimerPreviewForCurrentItem() {
+  if (!state || !state.currentItem || !state.currentItem.fileName || !state.currentItem.key || !ui || !ui.editorEl || ui.editorEl.readOnly) {
+    return false;
+  }
+  if (state.currentItem.hasCaption) {
+    return false;
+  }
+  var nextPrimer = String(buildAutoPrimer(state.currentItem.fileName, state.currentItem.key) || '');
+  var currentEditorText = String(ui.editorEl.value || '');
+  if (currentEditorText === nextPrimer) {
+    return false;
+  }
+  applyEditorTextAndTriggerInput(nextPrimer);
+  return true;
+}
+
 function debounceCreate(waitMs) {
   var timer = null;
   return function (callback) {

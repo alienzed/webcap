@@ -54,7 +54,12 @@ function getRequirementKeywordCatalogTerms() {
   requirements.forEach(function (requirementLabel) {
     var groupName = normalizeCatalogTerm(requirementLabel);
     if (!groupName) return;
-    var rawTerms = (checklistKeywordsByItem && checklistKeywordsByItem[groupName]) || '';
+    var rawTerms = '';
+    if (typeof getChecklistKeywordTermsForRequirement === 'function') {
+      rawTerms = getChecklistKeywordTermsForRequirement(groupName);
+    } else if (checklistKeywordsByItem && checklistKeywordsByItem[groupName]) {
+      rawTerms = checklistKeywordsByItem[groupName];
+    }
     parseAnnotateStripTerms(rawTerms).forEach(function (term) {
       var clean = normalizeCatalogTerm(term);
       var low = clean.toLowerCase();

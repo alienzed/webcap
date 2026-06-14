@@ -295,21 +295,13 @@ function parseRequirementProgressTerms(raw) {
 
 function computeRequirementProgressForMediaKey(mediaKey) {
   var requirements = Array.isArray(checklistItems) ? checklistItems : [];
-  var defaultsByItem = getDefaultRequirementKeywordsByItem();
   var completed = 0;
   var total = 0;
   var missing = [];
   for (var i = 0; i < requirements.length; i++) {
     var requirementLabel = String(requirements[i] || '').trim();
     if (!requirementLabel) continue;
-    var rawTerms = '';
-    if (checklistKeywordsByItem && typeof checklistKeywordsByItem === 'object') {
-      rawTerms = String(checklistKeywordsByItem[requirementLabel] || '').trim();
-    }
-    if (!rawTerms) {
-      rawTerms = String(defaultsByItem[requirementLabel] || '').trim();
-    }
-    var terms = parseRequirementProgressTerms(rawTerms);
+    var terms = parseRequirementProgressTerms(getChecklistKeywordTermsForRequirement(requirementLabel).join(', '));
     if (!terms.length) continue;
     total += 1;
     var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')

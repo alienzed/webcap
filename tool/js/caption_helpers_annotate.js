@@ -19,7 +19,12 @@ function getAnnotateStripGroups() {
   for (var i = 0; i < requirements.length; i++) {
     var groupName = normalizeCatalogTerm(requirements[i]);
     if (!groupName) continue;
-    var rawTerms = (checklistKeywordsByItem && checklistKeywordsByItem[groupName]) || '';
+    var rawTerms = '';
+    if (typeof getChecklistKeywordTermsForRequirement === 'function') {
+      rawTerms = getChecklistKeywordTermsForRequirement(groupName);
+    } else if (checklistKeywordsByItem && checklistKeywordsByItem[groupName]) {
+      rawTerms = checklistKeywordsByItem[groupName];
+    }
     var terms = parseAnnotateStripTerms(rawTerms);
     if (!terms.length) continue;
     groups.push({ name: groupName, requirement: groupName, terms: terms });

@@ -265,7 +265,7 @@ function moveChecklistItemByOffset(index, offset) {
 }
 
 function requirementKeywordsMatch(requirementLabel, captionText) {
-  var keywords = checklistKeywordsByItem[requirementLabel];
+  var keywords = getChecklistKeywordTermsForRequirement(requirementLabel);
   if (!keywords) return false;
 
   var keywordList = parseChecklistKeywordTerms(keywords).map(function (k) { return String(k || '').toLowerCase(); });
@@ -504,18 +504,6 @@ function loadChecklistFromFolderState(folderState) {
   }
   checklistTermAffixesByKey = sanitizeChecklistTermAffixesMap(folderState.caption_term_affixes);
 
-  // Fill missing keyword values for default checklist items.
-  var defaultsByItem = getDefaultRequirementKeywordsByItem();
-  for (var i = 0; i < checklistItems.length; i++) {
-    var requirement = checklistItems[i];
-    if (!checklistKeywordsByItem[requirement]) {
-      var defaultKeywords = String(defaultsByItem[requirement] || '').trim();
-      if (defaultKeywords) {
-        checklistKeywordsByItem[requirement] = defaultKeywords;
-      }
-    }
-  }
-
   // Drop stale NA flags for requirement labels that no longer exist.
   var requirementSet = {};
   checklistItems.forEach(function (req) {
@@ -555,8 +543,13 @@ var checklistGroupTermsModalState = null;
 var checklistTermAffixesModalState = null;
 
 function getChecklistKeywordTermsForRequirement(requirementLabel) {
-  var raw = checklistKeywordsByItem && checklistKeywordsByItem[requirementLabel];
-  return parseChecklistKeywordTerms(raw || '');
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement) return [];
+  var localRaw = checklistKeywordsByItem && checklistKeywordsByItem[requirement];
+  var localTerms = parseChecklistKeywordTerms(localRaw || '');
+  var globalMap = getConfigRequirementKeywordsByItemMap();
+  var globalTerms = Array.isArray(globalMap[requirement]) ? globalMap[requirement] : [];
+  return normalizeChecklistTermsList(localTerms.concat(globalTerms));
 }
 
 function setChecklistKeywordTermsForRequirement(requirementLabel, terms) {

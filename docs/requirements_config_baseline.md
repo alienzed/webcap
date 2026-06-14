@@ -16,8 +16,12 @@ This keeps onboarding fast without forcing global auto-expansion.
 - Fallback to code constants remains in place when config keys are missing.
 
 2. Copy-on-write set behavior:
-- If folder state already has `caption_requirements` / `caption_requirement_keywords`, those local values are used.
-- If missing, runtime defaults are used in memory.
+- If folder state already has `caption_requirements`, those local group labels are used.
+- For requirement-group terms, effective runtime terms are now the additive union of:
+  - local `caption_requirement_keywords`
+  - current global `config.requirements.keywordsByItem`
+- Global terms always appear; local state no longer suppresses newer pinned/global terms.
+- Ordering is alphabetical after merge.
 - Folder state is still written only by existing save flows (no extra eager write path was added).
 
 3. Global-searchable terms:
@@ -117,7 +121,8 @@ Notes:
 - Group terms should reflect `config.requirements.keywordsByItem`.
 
 2. Existing set (has requirement state):
-- Existing local groups/terms remain unchanged.
+- Existing local groups remain unchanged.
+- Existing local terms remain, but current global terms are merged in and always appear.
 
 3. Pin flow:
 - Pin a term in group modal.

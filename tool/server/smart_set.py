@@ -771,7 +771,6 @@ def create_set_from_results_response(data: dict):
         tags_by_media = {}
         ratings_by_media = {}
         caption_requirements = None
-        caption_requirement_keywords = None
         caption_term_affixes = None
         caption_requirements_checked = {}
         caption_requirements_na_by_media = {}
@@ -810,10 +809,6 @@ def create_set_from_results_response(data: dict):
                 src_requirements = src_state.get("caption_requirements")
                 if isinstance(src_requirements, list):
                     caption_requirements = json.loads(json.dumps(src_requirements))
-            if caption_requirement_keywords is None:
-                src_keywords = src_state.get("caption_requirement_keywords")
-                if isinstance(src_keywords, dict):
-                    caption_requirement_keywords = json.loads(json.dumps(src_keywords))
             if caption_term_affixes is None:
                 src_term_affixes = src_state.get("caption_term_affixes")
                 if isinstance(src_term_affixes, dict):
@@ -894,8 +889,6 @@ def create_set_from_results_response(data: dict):
         }
         if isinstance(caption_requirements, list):
             dest_state["caption_requirements"] = caption_requirements
-        if isinstance(caption_requirement_keywords, dict):
-            dest_state["caption_requirement_keywords"] = caption_requirement_keywords
         if isinstance(caption_term_affixes, dict):
             dest_state["caption_term_affixes"] = caption_term_affixes
         if caption_requirements_checked:

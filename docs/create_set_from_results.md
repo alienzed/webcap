@@ -29,6 +29,9 @@ In scope:
   - `flags`
   - `caption_tags_by_media`
   - `ratings_by_media`
+- Carry structural annotation state, but not local term baselines:
+  - carry `caption_requirements`
+  - do not carry `caption_requirement_keywords`
 - Carry source `primer` block into destination `.webcap_state.json`:
   - `primer.template`
   - structured primer rows/fields (for example mappings/defaults when present)
@@ -109,6 +112,7 @@ Write destination `.webcap_state.json` with baseline expected shape plus carried
 - Include baseline top-level fields already used by app (`version`, `stats`, `primer`, etc.).
 - Destination `primer` is cloned from the first encountered source folder in deterministic input order.
 - Carry item-level values for successfully copied destination media keys.
+- Destination does not inherit source `caption_requirement_keywords`; fresh sets should resolve current global requirement-term defaults on load.
 
 Also write destination `media_metadata.json` when source entries are available for copied media.
 

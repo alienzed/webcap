@@ -90,7 +90,6 @@ ui = {
   appSettingsModelsEl: document.getElementById('app-settings-filesystem-models'),
   appSettingsTrainingDiffusionPipeWslEl: document.getElementById('app-settings-training-diffusion-pipe-wsl'),
   appSettingsTrainingActivateScriptEl: document.getElementById('app-settings-training-activate-script'),
-  appSettingsTrainingChmodRootOnLoadEl: document.getElementById('app-settings-training-chmod-root-on-load'),
   appSettingsTrainingWriteSelectionSnapshotCommentsEl: document.getElementById('app-settings-training-write-selection-snapshot-comments'),
   appSettingsTrainingModePocEl: document.getElementById('app-settings-training-mode-poc'),
   appSettingsTrainingModeNormalEl: document.getElementById('app-settings-training-mode-normal'),

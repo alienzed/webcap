@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
-from .permissions import normalize_path_permissions, normalize_tree_permissions
+from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
@@ -158,7 +158,6 @@ def estimate_steps(entries, repeats, epochs: int):
 def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
-    normalize_tree_permissions(folder)
     manifest_path = dataset_root / PREP_MANIFEST_NAME
     if not manifest_path.exists():
         raise FileNotFoundError(f"Missing prep manifest: {manifest_path}")

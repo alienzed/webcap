@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 
 from .media import update_media_metadata
-from .permissions import normalize_path_permissions, normalize_tree_permissions
+from .permissions import normalize_path_permissions
 
 VIDEO_EXTS = {".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v", ".ogg", ".wmv", ".mpg", ".mpeg"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
@@ -132,7 +132,6 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
     lines = []
     lines.append(f"[INFO] Preparing dataset from: {folder}")
     lines.append(f"[INFO] Target FPS: {target_fps}")
-    normalize_tree_permissions(folder)
 
     if dataset_root.exists():
         shutil.rmtree(dataset_root)

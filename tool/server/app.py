@@ -16,7 +16,7 @@ from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .training_config_files import ensure_training_config_files
-from .permissions import normalize_path_permissions, normalize_tree_permissions
+from .permissions import normalize_path_permissions, run_with_directory_repair
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -88,11 +88,12 @@ def fs_read():
     rel_path = request.args.get("path", "").strip()
     try:
         abs_path = safe_join_fs_root(rel_path)
-        normalize_path_permissions(abs_path)
-        if not abs_path.exists() or not abs_path.is_file():
-            return ("", 404)
-        with open(abs_path, "r", encoding="utf-8") as f:
-            return f.read()
+        def read():
+            if not abs_path.exists() or not abs_path.is_file():
+                return ("", 404)
+            with open(abs_path, "r", encoding="utf-8") as f:
+                return f.read()
+        return run_with_directory_repair(abs_path.parent, read)
     except Exception as e:
         if app_config.FS_DEBUG:
             # print("[fs_read] ERROR:", e)
@@ -445,67 +446,67 @@ def fs_describe():
         dir_path = safe_join_fs_root(rel_path)
         if not dir_path.exists() or not dir_path.is_dir():
             return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
-        normalize_tree_permissions(dir_path)
-        copy_media_to_originals(dir_path)
-
-        # List folders and files (with metadata)
-        entries = []
-        for entry in sorted(dir_path.iterdir(), key=lambda e: e.name.lower()):
-            if entry.is_file() and is_transient_media_name(entry.name):
-                continue
-            meta = {
-                "name": entry.name,
-                "type": "dir" if entry.is_dir() else "file",
-                "extension": entry.suffix.lower() if entry.is_file() else "",
-                "size": entry.stat().st_size if entry.is_file() else None,
-            }
-            entries.append(meta)
-
-        # Media/caption: include full caption text for each media file
-        from .originals import MEDIA_ALL_EXTS
-        from .caption_ops import _caption_name_for_media
-        captions = {}
-        for meta in entries:
-            if meta["type"] == "file" and meta["extension"] in MEDIA_ALL_EXTS:
-                caption_name = _caption_name_for_media(meta["name"])
-                caption_path = dir_path / caption_name
-                if caption_path.exists():
-                    try:
-                        text = caption_path.read_text(encoding="utf-8")
-                    except Exception as e:
-                        text = f"[ERROR: {e}]"
-                else:
-                    text = None
-                captions[meta["name"]] = {"text": text}
-
-        # Folder state (reviewed, stats, primer, etc.)
-        state_path = dir_path / ".webcap_state.json"
-        folder_state = {}
-        if state_path.exists() and state_path.is_file():
-            try:
-                with open(state_path, "r", encoding="utf-8") as f:
-                    folder_state = json.load(f)
-            except Exception as e:
-                folder_state = {"error": str(e)}
-        # Strict: fail loudly if reviewedKeys is missing or malformed
-        if not isinstance(folder_state, dict):
-            folder_state = {"error": ".webcap_state.json is not a dict"}
-        elif "reviewedKeys" not in folder_state:
-            folder_state["error"] = "Missing reviewedKeys in .webcap_state.json"
-        elif not isinstance(folder_state["reviewedKeys"], list):
-            folder_state["error"] = "reviewedKeys is not a list in .webcap_state.json"
-
-        return jsonify({
-            "folders": [e for e in entries if e["type"] == "dir"],
-            "files": [e for e in entries if e["type"] == "file"],
-            "captions": captions,  # {media file name: {text: ...}}
-            "folder_state": folder_state  # full .webcap_state.json
-        })
+        payload = run_with_directory_repair(dir_path, lambda: _build_fs_describe_payload(dir_path))
+        return jsonify(payload)
     except Exception as e:
         if app_config.FS_DEBUG:
             app_config.debug_print("[fs_describe] ERROR:", e)
             app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
+
+
+def _build_fs_describe_payload(dir_path):
+    copy_media_to_originals(dir_path)
+
+    entries = []
+    for entry in sorted(dir_path.iterdir(), key=lambda e: e.name.lower()):
+        if entry.is_file() and is_transient_media_name(entry.name):
+            continue
+        meta = {
+            "name": entry.name,
+            "type": "dir" if entry.is_dir() else "file",
+            "extension": entry.suffix.lower() if entry.is_file() else "",
+            "size": entry.stat().st_size if entry.is_file() else None,
+        }
+        entries.append(meta)
+
+    from .originals import MEDIA_ALL_EXTS
+    from .caption_ops import _caption_name_for_media
+    captions = {}
+    for meta in entries:
+        if meta["type"] == "file" and meta["extension"] in MEDIA_ALL_EXTS:
+            caption_name = _caption_name_for_media(meta["name"])
+            caption_path = dir_path / caption_name
+            if caption_path.exists():
+                try:
+                    text = caption_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    text = f"[ERROR: {e}]"
+            else:
+                text = None
+            captions[meta["name"]] = {"text": text}
+
+    state_path = dir_path / ".webcap_state.json"
+    folder_state = {}
+    if state_path.exists() and state_path.is_file():
+        try:
+            with open(state_path, "r", encoding="utf-8") as f:
+                folder_state = json.load(f)
+        except Exception as e:
+            folder_state = {"error": str(e)}
+    if not isinstance(folder_state, dict):
+        folder_state = {"error": ".webcap_state.json is not a dict"}
+    elif "reviewedKeys" not in folder_state:
+        folder_state["error"] = "Missing reviewedKeys in .webcap_state.json"
+    elif not isinstance(folder_state["reviewedKeys"], list):
+        folder_state["error"] = "reviewedKeys is not a list in .webcap_state.json"
+
+    return {
+        "folders": [e for e in entries if e["type"] == "dir"],
+        "files": [e for e in entries if e["type"] == "file"],
+        "captions": captions,
+        "folder_state": folder_state
+    }
 
  # Media metadata endpoint
 @app.route("/fs/media_metadata", methods=["GET"])

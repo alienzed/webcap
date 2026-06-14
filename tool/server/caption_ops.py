@@ -4,7 +4,7 @@ from flask import send_from_directory
 
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name
-from .permissions import normalize_path_permissions
+from .permissions import normalize_path_permissions, run_with_directory_repair
 
 def _resolve_folder(folder: str) -> Path:
     folder = (folder or '').strip()
@@ -15,7 +15,6 @@ def _resolve_folder(folder: str) -> Path:
         path = app_config.safe_join_fs_root(folder)
     if not path.exists() or not path.is_dir():
         raise ValueError('Folder does not exist')
-    normalize_path_permissions(path)
     return path
 
 def _validate_media_name(media_name: str) -> str:
@@ -33,10 +32,12 @@ def _caption_name_for_media(media_name: str) -> str:
 
 def list_media_files(folder: str):
     folder_path = _resolve_folder(folder)
-    files = [
-        entry.name for entry in folder_path.iterdir()
-        if entry.is_file() and entry.suffix.lower() in MEDIA_ALL_EXTS and not is_transient_media_name(entry.name)
-    ]
+    def collect():
+        return [
+            entry.name for entry in folder_path.iterdir()
+            if entry.is_file() and entry.suffix.lower() in MEDIA_ALL_EXTS and not is_transient_media_name(entry.name)
+        ]
+    files = run_with_directory_repair(folder_path, collect)
     return sorted(files, key=lambda name: name.lower())
 
 def load_caption_text(folder: str, media_name: str):
@@ -45,16 +46,17 @@ def load_caption_text(folder: str, media_name: str):
     caption_name = _caption_name_for_media(media_name)
     caption_path = folder_path / caption_name
     app_config.debug_print(f'[BACKEND][READ] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
-    normalize_path_permissions(caption_path)
-    if not caption_path.exists():
-        return {'caption': '', 'exists': False, 'caption_file': caption_name}
-    text = caption_path.read_text(encoding='utf-8')
-    app_config.debug_print(f'[BACKEND][READ] FOUND caption: {text[:80]}...')
-    return {
-        'caption': text,
-        'exists': True,
-        'caption_file': caption_name
-    }
+    def load():
+        if not caption_path.exists():
+            return {'caption': '', 'exists': False, 'caption_file': caption_name}
+        text = caption_path.read_text(encoding='utf-8')
+        app_config.debug_print(f'[BACKEND][READ] FOUND caption: {text[:80]}...')
+        return {
+            'caption': text,
+            'exists': True,
+            'caption_file': caption_name
+        }
+    return run_with_directory_repair(folder_path, load)
 
 def save_caption_text(folder: str, media_name: str, text: str):
     folder_path = _resolve_folder(folder)
@@ -74,7 +76,10 @@ def serve_media_file(folder: str, media_name: str):
     media_name = _validate_media_name(media_name)
 
     media_path = folder_path / media_name
-    if not media_path.exists() or not media_path.is_file():
-        raise FileNotFoundError('Media file not found')
-
-    return send_from_directory(folder_path, media_name)
+    def serve():
+        if not media_path.exists() or not media_path.is_file():
+            raise FileNotFoundError('Media file not found')
+        with media_path.open('rb'):
+            pass
+        return send_from_directory(folder_path, media_name)
+    return run_with_directory_repair(folder_path, serve)

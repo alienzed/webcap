@@ -6,7 +6,6 @@
   "training": {
     "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
     "activate_script": "dp-clean/bin/activate",
-    "chmod_training_root_on_load": true,
     "write_selection_snapshot_comments": false
   },
   "analysis": {

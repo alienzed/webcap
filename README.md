@@ -42,7 +42,6 @@ Minimum shape:
     "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
     "activate_script": "dp-clean/bin/activate",
     "mode": "normal",
-    "chmod_training_root_on_load": true,
     "write_selection_snapshot_comments": false
   },
   "vocabulary": {
@@ -59,7 +58,6 @@ Minimum shape:
 Notes:
 - `filesystem.root` is required.
 - Training mode supports `poc`, `normal`, and `quality`.
-- `training.chmod_training_root_on_load` runs a POSIX-only recursive `chmod 775` on `filesystem.root` at startup/reboot for WSL/shared-drive permission repair.
 - `training.write_selection_snapshot_comments` controls whether Generate prepends the selection snapshot header into `dataset.hi.toml` and `dataset.lo.toml`.
 - Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
 - You can edit config in-app via Settings.

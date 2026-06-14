@@ -54,7 +54,6 @@ def _read_media_hash_index(folder_path):
     path = Path(folder_path) / MEDIA_HASH_INDEX_FILE
     if not path.exists() or not path.is_file():
         return {"version": MEDIA_HASH_INDEX_VERSION, "files": {}}
-    normalize_path_permissions(path)
     try:
         raw = json.loads(path.read_text(encoding='utf-8'))
     except Exception:

@@ -11,7 +11,7 @@ from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
 from .face_focus import FACE_FOCUS_VERSION, analyze_image_face_focus, get_face_focus_detector, is_face_focus_image
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name, restore_original_media, restore_original_media_video_only
-from .permissions import normalize_path_permissions, normalize_tree_permissions
+from .permissions import normalize_path_permissions, run_with_directory_repair
 from .selection_pose import SELECTION_POSE_VERSION, analyze_image_selection_pose, get_selection_pose_analyzers, is_selection_pose_image
 
 safe_join_fs_root = app_config.safe_join_fs_root
@@ -186,7 +186,6 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
     folder_path = Path(folder_path)
     metadata_path = folder_path / "media_metadata.json"
     if metadata_path.exists():
-        normalize_path_permissions(metadata_path)
         with open(metadata_path, "r", encoding="utf-8") as f:
             metadata = json.load(f)
     else:
@@ -378,12 +377,14 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
         folder_path = safe_join_fs_root(rel_path)
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
-        normalize_tree_permissions(folder_path)
-        metadata_dict = update_media_metadata(
+        metadata_dict = run_with_directory_repair(
             folder_path,
-            include_face_focus=include_face_focus,
-            include_selection_pose=include_selection_pose,
-            scoped_filenames=scoped_filenames,
+            lambda: update_media_metadata(
+                folder_path,
+                include_face_focus=include_face_focus,
+                include_selection_pose=include_selection_pose,
+                scoped_filenames=scoped_filenames,
+            ),
         )
         app_config.debug_print(f"[metadata] generated for folder: {rel_path or '.'}")
         metadata_list = []

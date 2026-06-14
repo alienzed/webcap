@@ -124,46 +124,20 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
     assert payload["config"]["training"]["write_selection_snapshot_comments"] is True
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     assert saved["training"]["write_selection_snapshot_comments"] is True
-    assert saved["training"]["chmod_training_root_on_load"] is True
 
 
-def test_validate_config_payload_defaults_and_preserves_chmod_training_root_on_load():
+def test_validate_config_payload_strips_legacy_chmod_training_root_on_load():
     normalized = config_module.validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},
         "training": {},
     })
-    assert normalized["training"]["chmod_training_root_on_load"] is True
+    assert "chmod_training_root_on_load" not in normalized["training"]
 
     disabled = config_module.validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},
         "training": {"chmod_training_root_on_load": False},
     })
-    assert disabled["training"]["chmod_training_root_on_load"] is False
-
-
-def test_chmod_training_root_permissions_recurses_775(tmp_path, monkeypatch):
-    root = tmp_path / "fs_root"
-    child = root / "set_a"
-    child.mkdir(parents=True)
-    write_text(child / "caption.txt", "caption")
-
-    calls = []
-
-    def fake_chmod(path, mode):
-        calls.append((Path(path).resolve(), mode))
-
-    monkeypatch.setattr(config_module, "_runtime_supports_chmod_recursive", lambda: True)
-    monkeypatch.setattr(config_module.os, "chmod", fake_chmod)
-
-    stats = config_module.chmod_training_root_permissions(root)
-
-    assert stats["attempted"] is True
-    assert stats["failed"] == 0
-    assert set(calls) == {
-        (root.resolve(), 0o775),
-        (child.resolve(), 0o775),
-        ((child / "caption.txt").resolve(), 0o775),
-    }
+    assert "chmod_training_root_on_load" not in disabled["training"]
 
 
 def test_app_config_save_bootstraps_missing_requirements(tmp_path, monkeypatch):
@@ -409,6 +383,55 @@ def test_fs_describe_does_not_auto_create_config_files(tmp_path, monkeypatch):
     assert not (set_dir / "config.lo.toml").exists()
     assert not (set_dir / "dataset.hi.toml").exists()
     assert not (set_dir / "dataset.lo.toml").exists()
+
+
+def test_fs_describe_repairs_current_directory_on_permission_error(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_e"
+    set_dir.mkdir(parents=True)
+    repairs = []
+    attempts = {"count": 0}
+
+    def safe_join(rel_path):
+        rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
+        if rel.startswith("/"):
+            rel = rel[1:]
+        return (fs_root / rel).resolve()
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", safe_join)
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(
+        app_module,
+        "_build_fs_describe_payload",
+        lambda path: _raise_once_then_payload(attempts, path),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "run_with_directory_repair",
+        lambda path, callback: _run_with_repair_probe(path, callback, repairs),
+    )
+
+    client = app_module.app.test_client()
+    response = client.get("/fs/describe?path=set_e")
+
+    assert response.status_code == 200
+    assert attempts["count"] == 2
+    assert repairs == [set_dir.resolve()]
+
+
+def _raise_once_then_payload(attempts, path):
+    attempts["count"] += 1
+    if attempts["count"] == 1:
+        raise PermissionError("denied")
+    return {"folders": [], "files": [], "captions": {}, "folder_state": {}}
+
+
+def _run_with_repair_probe(path, callback, repairs):
+    try:
+        return callback()
+    except PermissionError:
+        repairs.append(Path(path).resolve())
+        return callback()
 
 
 def test_generate_dataset_config_creates_missing_config_templates(tmp_path, monkeypatch):

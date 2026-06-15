@@ -424,11 +424,16 @@ function getRequirementDefaultPrimerMappings() {
   requirements.forEach(function (requirement) {
     var key = normalizeRequirementPrimerKey(requirement);
     if (!key) return;
-    var rawKeywords = String(keywordsByRequirement[requirement] || '').trim();
-    if (!rawKeywords) {
-      rawKeywords = String(defaultsByItem[requirement] || '').trim();
+    var keywords = [];
+    if (typeof getChecklistKeywordTermsForRequirement === 'function') {
+      keywords = getChecklistKeywordTermsForRequirement(requirement);
+    } else {
+      var rawKeywords = String(keywordsByRequirement[requirement] || '').trim();
+      if (!rawKeywords) {
+        rawKeywords = String(defaultsByItem[requirement] || '').trim();
+      }
+      keywords = parseRequirementKeywordList(rawKeywords);
     }
-    var keywords = parseRequirementKeywordList(rawKeywords);
     keywords.forEach(function (keyword) {
       var token = String(keyword || '').trim().toLowerCase();
       if (!token) return;
@@ -456,9 +461,12 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
   var valuesByKey = {};
   var seenValueByKey = {};
   var fileNorm = String(fileName || '').toLowerCase();
+  var customRows = (typeof getPrimerMappingsRows === 'function')
+    ? getPrimerMappingsRows()
+    : [];
   var defaultRows = getRequirementDefaultPrimerMappings();
-  // Row order is preserved; matching values for the same key are appended in order.
-  var rows = defaultRows;
+  // Custom mappings run first; requirement defaults fill in afterward.
+  var rows = customRows.concat(defaultRows);
   var mediaTags = [];
   if (mediaKey && typeof getTagsForMediaKey === 'function') {
     mediaTags = getTagsForMediaKey(mediaKey).map(function (tag) { return String(tag || '').toLowerCase(); });

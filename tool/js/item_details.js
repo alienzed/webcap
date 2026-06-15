@@ -680,11 +680,11 @@ function appendQaSignalRow(listEl, severity, label, text, isPositive, options) {
   valueEl.className = isPositive ? 'item-metadata-value-ok' : 'item-metadata-value-error';
   valueEl.textContent = text;
   bodyEl.appendChild(valueEl);
-  if (options && options.suggestions && options.suggestions.length) {
-    appendQaTagSuggestions(bodyEl, options.suggestions);
-  }
   if (options && options.fileNames && options.fileNames.length) {
     appendQaFileLinks(bodyEl, options.fileNames, options.focusFiles, options.focusSource);
+  }
+  if (options && options.suggestions && options.suggestions.length) {
+    appendQaTagSuggestions(bodyEl, options.suggestions);
   }
   row.appendChild(labelEl);
   row.appendChild(bodyEl);

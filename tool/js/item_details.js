@@ -99,6 +99,9 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
     }
     seen[low] = true;
     next.push(tag);
+    if (typeof commitChecklistDescriptorSnapshotForMediaKey === 'function') {
+      commitChecklistDescriptorSnapshotForMediaKey(key, tag);
+    }
     ensureCaptionHelperPhraseInCatalog(tag, true);
     added += 1;
   });
@@ -111,9 +114,7 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
   renderItemMetadataPanel();
   renderFileList();
   updateBalanceDistributionWheel();
-  if (typeof renderAnnotateStrip === 'function') {
-    renderAnnotateStrip();
-  }
+  renderAnnotateStrip();
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
   }
@@ -224,11 +225,9 @@ function tagAppearsInCurrentCaption(tagText) {
   } else if (state && state.currentItem && typeof state.currentItem.caption === 'string') {
     captionText = state.currentItem.caption;
   }
-  if (typeof renderChecklistTermWithAffixes === 'function') {
-    var rendered = renderChecklistTermWithAffixes(tag);
-    if (rendered && rendered.toLowerCase() !== tag.toLowerCase() && captionContainsPhrase(captionText, rendered)) {
-      return true;
-    }
+  var rendered = renderChecklistTermWithAffixes(tag, state && state.currentItem ? state.currentItem.key : '');
+  if (rendered && rendered.toLowerCase() !== tag.toLowerCase() && captionContainsPhrase(captionText, rendered)) {
+    return true;
   }
   return captionContainsTagWithAllowances(captionText, tag);
 }
@@ -376,7 +375,7 @@ function computeTagMatchProgressForText(mediaKey, captionText) {
   for (var tagIdx = 0; tagIdx < tags.length; tagIdx++) {
     var tag = tags[tagIdx];
     var rendered = (typeof renderChecklistTermWithAffixes === 'function')
-      ? renderChecklistTermWithAffixes(tag)
+      ? renderChecklistTermWithAffixes(tag, mediaKey)
       : tag;
     if (
       (rendered && captionContainsPhrase(captionText, rendered)) ||
@@ -611,9 +610,8 @@ function appendQaFileLinks(containerEl, fileNames, focusFiles, source) {
     btn.onclick = function (e) {
       e.preventDefault();
       e.stopPropagation();
-      if (typeof selectByFileName === 'function') {
-        selectByFileName(fileName, focus, source || 'Quality Assurance');
-      }
+      selectByFileName(fileName, focus, source || 'Quality Assurance');
+      
     };
     wrap.appendChild(btn);
   });
@@ -902,6 +900,9 @@ function addTagToMediaKey(mediaKey, tagText) {
   }
   current.push(tag);
   captionItemTagsByMedia[key] = current;
+  if (typeof commitChecklistDescriptorSnapshotForMediaKey === 'function') {
+    commitChecklistDescriptorSnapshotForMediaKey(key, tag);
+  }
   invalidateChecklistReviewedRequirementsForTagChange(key, tag, { skipRender: true });
   ensureCaptionHelperPhraseInCatalog(tag, true);
   debouncedItemTagsSave(saveItemTagsToFolderState);
@@ -944,20 +945,16 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   var removedTag = current.find(function (tag) {
     return normalizeItemTag(tag).toLowerCase() === target;
   }) || tagText;
-  if (typeof recordUndoOperation === 'function') {
-    recordUndoOperation({
-      type: 'tag',
-      mediaKey: key,
-      tagText: normalizeItemTag(removedTag),
-      previousValue: true,
-      nextValue: false
-    });
-  }
+  recordUndoOperation({
+    type: 'tag',
+    mediaKey: key,
+    tagText: normalizeItemTag(removedTag),
+    previousValue: true,
+    nextValue: false
+  });
   if (next.length) captionItemTagsByMedia[key] = next;
   else delete captionItemTagsByMedia[key];
-  if (typeof invalidateChecklistReviewedRequirementsForTagChange === 'function') {
-    invalidateChecklistReviewedRequirementsForTagChange(key, removedTag, { skipRender: true });
-  }
+  invalidateChecklistReviewedRequirementsForTagChange(key, removedTag, { skipRender: true });  
   saveItemTagsToFolderState();
   renderItemTagsPanel();
   renderItemMetadataPanel();
@@ -980,9 +977,8 @@ function removeTagFromCurrentMedia(tagText) {
     return false;
   }
   setStatus('Tag removed: ' + normalizeItemTag(tagText));
-  if (typeof renderAnnotateStrip === 'function') {
-    renderAnnotateStrip();
-  }
+  renderAnnotateStrip();
+  
   return true;
 }
 
@@ -1049,9 +1045,7 @@ function renderItemTagsPanel() {
       tagBtn.textContent = tag;
       tagBtn.title = inCaption ? 'Remove from caption' : 'Insert at cursor';
       tagBtn.onclick = function () {
-        if (typeof toggleCaptionTagAtCursor === 'function') {
-          toggleCaptionTagAtCursor(tag);
-        }
+        toggleCaptionTagAtCursor(tag);        
         renderItemTagsPanel();
       };
 
@@ -1060,9 +1054,7 @@ function renderItemTagsPanel() {
       rmBtn.textContent = 'x';
       rmBtn.onclick = function () {
         removeTagFromMediaKey(key, tag);
-        if (typeof renderAnnotateStrip === 'function') {
-          renderAnnotateStrip();
-        }
+        renderAnnotateStrip();        
       };
 
       rowEl.appendChild(tagBtn);
@@ -1153,7 +1145,7 @@ function refreshMediaResolutionCache() {
         });
       }
       mediaMetadataLoading = false;
-      if (state.currentItem && typeof buildSelectedMediaStatus === 'function') {
+      if (state.currentItem) {
         setStatus(buildSelectedMediaStatus(state.currentItem));
         renderItemMetadataPanel();
         return;

@@ -801,17 +801,25 @@
             aria-labelledby="checklist-term-affixes-modal-title"
         >
             <div class="modal-header">
-                <h3 id="checklist-term-affixes-modal-title">Edit Modifiers</h3>
+                <h3 id="checklist-term-affixes-modal-title">Edit Term Styling</h3>
                 <button class="modal-close-btn" data-close-modal="checklist-term-affixes-modal" title="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="modal-body-row">
-                    <div class="modal-body-row-label">Prefix</div>
-                    <input id="checklist-term-affixes-prefix" type="text" class="form-control" placeholder="e.g. on the">
+                    <div class="modal-body-row-label">Wrapper Prefix</div>
+                    <input id="checklist-term-wrapper-prefix" type="text" class="form-control" placeholder="e.g. on the">
                 </div>
                 <div class="modal-body-row">
-                    <div class="modal-body-row-label">Suffix</div>
-                    <input id="checklist-term-affixes-suffix" type="text" class="form-control" placeholder="optional trailing text">
+                    <div class="modal-body-row-label">Wrapper Suffix</div>
+                    <input id="checklist-term-wrapper-suffix" type="text" class="form-control" placeholder="optional trailing text">
+                </div>
+                <div class="modal-body-row">
+                    <div class="modal-body-row-label">Descriptor Prefix</div>
+                    <input id="checklist-term-descriptor-prefix" type="text" class="form-control" placeholder="e.g. red, carpeted">
+                </div>
+                <div class="modal-body-row">
+                    <div class="modal-body-row-label">Descriptor Suffix</div>
+                    <input id="checklist-term-descriptor-suffix" type="text" class="form-control" placeholder="optional trailing text">
                 </div>
                 <div class="small">Preview</div>
                 <div id="checklist-term-affixes-preview" class="small" style="margin-top:6px;"></div>

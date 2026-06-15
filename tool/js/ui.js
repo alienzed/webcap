@@ -837,7 +837,7 @@ function refreshCurrentDirectory() {
 }
 // Ensure live filtering as you type
 function handleMediaFilterChanged() {
-  if (typeof markSuperSetSearchDirty === 'function') markSuperSetSearchDirty();
+  markSuperSetSearchDirty();
   renderFileList();
 }
 
@@ -868,7 +868,6 @@ if (ui.advancedFilterFlagEl) {
 if (ui.advancedFilterInvalidArEl) {
   ui.advancedFilterInvalidArEl.addEventListener('change', function () {
     if (ui.advancedFilterInvalidArEl.checked
-      && typeof isMediaMetadataLoading === 'function'
       && isMediaMetadataLoading()) {
       ui.advancedFilterInvalidArEl.checked = false;
       setStatus('Invalid AR is unavailable while metadata is generating. Please try again in a moment.');
@@ -879,23 +878,23 @@ if (ui.advancedFilterInvalidArEl) {
 }
 if (ui.advancedFilterSupersetEl) {
   ui.advancedFilterSupersetEl.addEventListener('change', function () {
-    if (!ui.advancedFilterSupersetEl.checked && typeof exitSuperSetSearch === 'function' && state && state.supersetActive) {
+    if (!ui.advancedFilterSupersetEl.checked && state && state.supersetActive) {
       exitSuperSetSearch({ uncheck: false });
       return;
     }
     state.supersetArmed = !!ui.advancedFilterSupersetEl.checked;
     if (state.supersetArmed) state.supersetSearchDirty = true;
-    if (typeof updateSuperSetControls === 'function') updateSuperSetControls();
+    updateSuperSetControls();
   });
 }
 if (ui.supersetSearchBtn) {
   ui.supersetSearchBtn.addEventListener('click', function () {
-    if (typeof runSuperSetSearch === 'function') runSuperSetSearch();
+    runSuperSetSearch();
   });
 }
 if (ui.supersetExitBtn) {
   ui.supersetExitBtn.addEventListener('click', function () {
-    if (typeof exitSuperSetSearch === 'function') exitSuperSetSearch({ uncheck: true });
+    exitSuperSetSearch({ uncheck: true });
   });
 }
 if (ui.captionFilterClearAllBtn) {

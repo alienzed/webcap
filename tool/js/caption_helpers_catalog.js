@@ -269,7 +269,7 @@ function toggleCaptionTagAtCursor(text) {
   var tag = String(text || '').trim();
   if (!tag || !ui || !ui.editorEl) return;
   var rendered = (typeof renderChecklistTermWithAffixes === 'function')
-    ? renderChecklistTermWithAffixes(tag)
+    ? renderChecklistTermWithAffixes(tag, state && state.currentItem ? state.currentItem.key : '')
     : tag;
   var value = ui.editorEl.value || '';
   if (rendered && captionContainsPhrase(value, rendered)) {

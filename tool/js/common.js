@@ -81,7 +81,7 @@ function undoLastOperation() {
   var op = state.undoStack.pop();
   state.undoSuppress = true;
   try {
-    if (op.type === 'rating' && typeof setRatingForMediaKey === 'function') {
+    if (op.type === 'rating') {
       setRatingForMediaKey(op.mediaKey, op.previousRating);
       var ratingStatus = op.previousRating > 0 ? 'Undid rating: ' + op.previousRating + ' stars' : 'Undid rating: cleared';
       if (!restoreUndoMediaSelection(op.mediaKey, ratingStatus)) {
@@ -89,7 +89,7 @@ function undoLastOperation() {
       }
       return true;
     }
-    if (op.type === 'flag' && typeof markFlag === 'function') {
+    if (op.type === 'flag') {
       markFlag(op.itemKey, op.previousFlag || '');
       var flagStatus = op.previousFlag ? 'Undid flag: ' + op.previousFlag : 'Undid flag: cleared';
       if (!restoreUndoMediaSelection(op.itemKey, flagStatus)) {
@@ -97,7 +97,7 @@ function undoLastOperation() {
       }
       return true;
     }
-    if (op.type === 'checklist-checked' && typeof setChecklistRequirementCheckedForMediaKey === 'function') {
+    if (op.type === 'checklist-checked') {
       setChecklistRequirementCheckedForMediaKey(op.mediaKey, op.requirementLabel, !!op.previousValue);
       var checkedStatus = op.previousValue ? 'Undid group reviewed mark.' : 'Undid group reviewed clear.';
       if (!restoreUndoMediaSelection(op.mediaKey, checkedStatus)) {
@@ -105,9 +105,9 @@ function undoLastOperation() {
       }
       return true;
     }
-    if (op.type === 'checklist-na' && typeof setChecklistRequirementNaForMediaKey === 'function') {
+    if (op.type === 'checklist-na') {
       setChecklistRequirementNaForMediaKey(op.mediaKey, op.requirementLabel, !!op.previousValue);
-      if (!op.previousValue && op.previousCheckedValue && typeof setChecklistRequirementCheckedForMediaKey === 'function') {
+      if (!op.previousValue && op.previousCheckedValue) {
         setChecklistRequirementCheckedForMediaKey(op.mediaKey, op.requirementLabel, true);
       }
       var naStatus = op.previousValue ? 'Undid group n/a clear.' : 'Undid group n/a mark.';
@@ -117,9 +117,9 @@ function undoLastOperation() {
       return true;
     }
     if (op.type === 'tag') {
-      if (op.previousValue && typeof addTagToMediaKey === 'function') {
+      if (op.previousValue) {
         addTagToMediaKey(op.mediaKey, op.tagText);
-      } else if (!op.previousValue && typeof removeTagFromMediaKey === 'function') {
+      } else if (!op.previousValue) {
         removeTagFromMediaKey(op.mediaKey, op.tagText);
       } else {
         setStatus('Nothing to undo.');

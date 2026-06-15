@@ -359,16 +359,6 @@ function renderAnnotateStrip() {
     var controlsEl = document.createElement('div');
     controlsEl.className = 'annotate-strip-group-controls';
 
-    var editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'annotate-strip-group-edit-btn';
-    editBtn.textContent = '\u270e';
-    editBtn.title = 'Edit requirement terms';
-    editBtn.onclick = function () {
-      openChecklistGroupTermsModal(group.requirement || group.name);
-    };
-    controlsEl.appendChild(editBtn);
-
     var reviewed = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
       ? isChecklistRequirementCheckedForMediaKey(mediaKey, group.requirement || group.name)
       : false;
@@ -391,6 +381,36 @@ function renderAnnotateStrip() {
     var groupIsNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
       ? isChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel)
       : false;
+
+    var naBtn = document.createElement('button');
+    naBtn.type = 'button';
+    naBtn.className = 'annotate-strip-group-na-btn';
+    if (groupIsNa) {
+      naBtn.classList.add('active');
+    }
+    naBtn.innerHTML =
+      '<svg class="annotate-strip-group-btn-icon" viewBox="0 0 16 16" aria-hidden="true">' +
+      '<circle cx="8" cy="8" r="5.25"></circle>' +
+      '<path d="M4.45 11.55L11.55 4.45"></path>' +
+      '</svg>';
+    naBtn.setAttribute('aria-label', groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item');
+    naBtn.setAttribute('aria-pressed', groupIsNa ? 'true' : 'false');
+    naBtn.title = groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item';
+    naBtn.onclick = function () {
+      toggleAnnotateGroupNa(groupRequirementLabel);
+    };
+    controlsEl.appendChild(naBtn);
+
+    var editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'annotate-strip-group-edit-btn';
+    editBtn.textContent = '\u270e';
+    editBtn.title = 'Edit requirement terms';
+    editBtn.onclick = function () {
+      openChecklistGroupTermsModal(group.requirement || group.name);
+    };
+    controlsEl.appendChild(editBtn);
+
     var reviewedState = !!reviewed;
     if (!reviewedState && !groupIsNa) {
       var statusEl = document.createElement('span');
@@ -437,21 +457,6 @@ function renderAnnotateStrip() {
       activeTermsByKey[activeTermKey] = true;
       activeTermCount += 1;
     });
-
-    if (activeTermCount <= 0) {
-      var naChip = document.createElement('button');
-      naChip.type = 'button';
-      naChip.className = 'annotate-strip-chip annotate-strip-chip-na';
-      if (groupIsNa) {
-        naChip.classList.add('active');
-      }
-      naChip.textContent = 'n/a';
-      naChip.title = groupIsNa ? 'Clear n/a override' : 'Mark this group n/a for current item';
-      naChip.onclick = function () {
-        toggleAnnotateGroupNa(group.requirement || group.name);
-      };
-      chipWrap.appendChild(naChip);
-    }
 
     group.terms.forEach(function (term) {
       var chip = document.createElement('button');

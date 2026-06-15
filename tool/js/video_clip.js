@@ -83,7 +83,7 @@ function finalizeVideoClipJob(payload, status, message) {
       state.pendingSelectFileName = payload.fileName;
     }
     setStatus((payload && payload.overwriteSource ? 'In-place clip exported: ' : 'Clip exported: ') + (payload && payload.outputName ? payload.outputName : ''));
-    if (payload && payload.overwriteSource && payload.fileName && typeof saveFolderStateForCurrentRoot === 'function') {
+    if (payload && payload.overwriteSource && payload.fileName) {
       Promise.resolve(saveFolderStateForCurrentRoot()).catch(function (err) {
         if (window.console && console.warn) {
           console.warn('[VideoClip] Could not persist clip mutation state:', err);

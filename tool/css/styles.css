@@ -1900,6 +1900,9 @@ iframe {
   font-size: 12px;
   line-height: 1;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .annotate-strip-group-edit-btn:hover {
@@ -1918,6 +1921,37 @@ iframe {
   font-size: 12px;
   line-height: 1;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.annotate-strip-group-na-btn {
+  min-width: 20px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #d5deea;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.annotate-strip-group-btn-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.annotate-strip-group-na-btn .annotate-strip-group-btn-icon circle,
+.annotate-strip-group-na-btn .annotate-strip-group-btn-icon path {
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  fill: none;
 }
 
 .annotate-strip-group-reviewed-btn:hover {
@@ -1925,10 +1959,21 @@ iframe {
   color: #364152;
 }
 
+.annotate-strip-group-na-btn:hover {
+  background: #eef2f7;
+  color: #334155;
+}
+
 .annotate-strip-group-reviewed-btn.active {
   background: #dcfce7;
   border-color: #86efac;
   color: #14532d;
+}
+
+.annotate-strip-group-na-btn.active {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #334155;
 }
 
 .annotate-strip-group-title-complete {
@@ -2027,17 +2072,6 @@ iframe {
   border-radius: 999px;
   background: #2563eb;
   border: 1px solid #ffffff;
-}
-
-.annotate-strip-chip-na {
-  border-style: dashed;
-  color: #475569;
-}
-
-.annotate-strip-chip-na.active {
-  background: #f1f5f9;
-  border-color: #94a3b8;
-  color: #334155;
 }
 
 .editor-wrapper textarea#editor {
@@ -3140,6 +3174,7 @@ html[data-theme="dark"] .mini-info-btn,
 html[data-theme="dark"] .sidebar-tab-btn,
 html[data-theme="dark"] .review-captions-btn,
 html[data-theme="dark"] .annotate-strip-group-edit-btn,
+html[data-theme="dark"] .annotate-strip-group-na-btn,
 html[data-theme="dark"] .annotate-strip-group-reviewed-btn,
 html[data-theme="dark"] .checklist-row-action-btn,
 html[data-theme="dark"] #checklist-group-terms-add-btn,
@@ -3172,6 +3207,7 @@ html[data-theme="dark"] .mini-info-btn:hover,
 html[data-theme="dark"] .sidebar-tab-btn:hover,
 html[data-theme="dark"] .review-captions-btn:hover,
 html[data-theme="dark"] .annotate-strip-group-edit-btn:hover,
+html[data-theme="dark"] .annotate-strip-group-na-btn:hover,
 html[data-theme="dark"] .annotate-strip-group-reviewed-btn:hover,
 html[data-theme="dark"] .checklist-row-action-btn:hover,
 html[data-theme="dark"] #checklist-group-terms-add-btn:hover,
@@ -3619,7 +3655,7 @@ html[data-theme="dark"] .annotate-strip-chip-novel::after {
   border-color: #0f172a;
 }
 
-html[data-theme="dark"] .annotate-strip-chip-na.active {
+html[data-theme="dark"] .annotate-strip-group-na-btn.active {
   background: rgba(71, 85, 105, 0.65);
   border-color: #516275;
   color: #e2e8f0;

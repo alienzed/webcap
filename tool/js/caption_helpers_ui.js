@@ -25,9 +25,7 @@ function wireCaptionHelpersUi() {
   requirementsBtn.onclick = function () {
     expandHelperPanelForTabSwitch();
     setCaptionHelperTab('requirements');
-    if (typeof renderChecklistPanel === 'function') {
-      renderChecklistPanel();
-    }
+    renderChecklistPanel();
   };
   if (tagsBtn) {
     tagsBtn.onclick = function () {
@@ -125,7 +123,7 @@ function wireCaptionHelpersUi() {
       onMain();
     };
     row.appendChild(mainBtn);
-    if (secondaryText && typeof onSecondary === 'function') {
+    if (secondaryText) {
       var secondaryBtn = document.createElement('button');
       secondaryBtn.type = 'button';
       secondaryBtn.className = 'caption-term-result-quick';

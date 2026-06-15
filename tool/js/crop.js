@@ -86,7 +86,7 @@ function syncCropAngleControls(value) {
 function setCropAngle(value) {
   cropActiveAngle = normalizeCropAngle(value);
   syncCropAngleControls(cropActiveAngle);
-  if (cropperInstance && cropRotationEnabled && typeof cropperInstance.rotateTo === 'function') {
+  if (cropperInstance && cropRotationEnabled) {
     cropperInstance.rotateTo(cropActiveAngle);
   }
 }
@@ -388,7 +388,7 @@ function openVideoCropModal(dataUrl, aspect, onCrop) {
     // Apply handler for video
     if (!cropperInstance) return;
     var data = finalizeCropData(cropperInstance.getData(true));
-    if (typeof onCrop === 'function') onCrop(data);
+    onCrop(data);
     closeCropModal();
   }, {
     rotationEnabled: false,

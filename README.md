@@ -229,7 +229,8 @@ Annotate strip:
 - shows chips built from requirements and requirement keywords
 - clicking a chip toggles that tag on the current media item
 - stronger blue chips indicate common nearby terms missing on the current item
-- right-click a chip to edit prefix and suffix text for rendered insertion
+- right-click a chip to edit set-wide wrappers plus descriptor defaults and current-item overrides
+- wrapper styling is set-wide, while descriptors carry forward as soft defaults and snapshot onto items when tags are added
 - group controls support quick review toggles and term editing
 
 Tags:

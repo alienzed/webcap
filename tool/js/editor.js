@@ -34,20 +34,13 @@ function getAutosaveTargetAndPayload() {
 
 // Main autosave input handler
 function handleEditorInputAutosave(e) {
-        // Always refresh live highlight UI while typing.
-        if (typeof renderChecklistPanel === 'function') {
-            renderChecklistPanel();
-        }
-        if (typeof renderItemTagsPanel === 'function') {
-            renderItemTagsPanel();
-        }
-        if (typeof renderItemMetadataPanel === 'function') {
-            renderItemMetadataPanel();
-        }
-        updateBalanceDistributionWheel();
-        if (typeof updatePrimerCaptionResetUi === 'function') {
-            updatePrimerCaptionResetUi();
-        }
+    invalidateChecklistReviewedRequirementsForCurrentTagMismatch({ skipRender: true });
+    // Always refresh live highlight UI while typing.
+    renderChecklistPanel();
+    renderItemTagsPanel();
+    renderItemMetadataPanel();
+    updateBalanceDistributionWheel();
+    updatePrimerCaptionResetUi();
 
     var target = getAutosaveTargetAndPayload();
     if (!target) {

@@ -1,14 +1,18 @@
 # WebCap
 
-WebCap is a local-first media curation and captioning app for training-set workflows.
-It is built for explicit, reversible mutations and fast dataset iteration.
+WebCap is a local-first media curation, captioning, and dataset-prep app for training-set workflows.
+It is built around explicit, reversible mutations, visible subset prep, and fast iteration on modest working sets.
 
 ## Requirements
 
 - Python 3.10+
 - `pip`
-- `ffmpeg` and `ffprobe` in `PATH` (required for media metadata and video features)
-- `deface` in `PATH` (optional, only needed if you use Deface)
+- `ffmpeg` and `ffprobe` in `PATH` for media metadata, transforms, and video features
+- `deface` in `PATH` for defacing workflows and Face Focus analysis
+
+Notes:
+- `mediapipe` is installed from `requirements.txt`.
+- The MediaPipe model assets used by selection analysis are already vendored under `tool/vendor/mediapipe/models/`.
 
 ## Install
 
@@ -29,7 +33,7 @@ pip install -r requirements.txt
 
 Primary config file: `tool/config.json`
 
-Minimum shape:
+Minimum practical shape:
 
 ```json
 {
@@ -37,12 +41,20 @@ Minimum shape:
     "root": "C:/path/to/sets",
     "models": "C:/path/to/models"
   },
-  "debug": false,
   "training": {
     "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
     "activate_script": "dp-clean/bin/activate",
     "mode": "normal",
     "write_selection_snapshot_comments": false
+  },
+  "analysis": {
+    "enableFaceAnalysis": false,
+    "enableMediaPipeAnalysis": false
+  },
+  "set_destinations": {
+    "presets": [
+      { "label": "Character", "path": "char" }
+    ]
   },
   "vocabulary": {
     "terms": [],
@@ -51,19 +63,23 @@ Minimum shape:
   "requirements": {
     "items": [],
     "keywordsByItem": {}
-  }
+  },
+  "debug": false
 }
 ```
 
 Notes:
 - `filesystem.root` is required.
 - Training mode supports `poc`, `normal`, and `quality`.
-- `training.write_selection_snapshot_comments` controls whether Generate prepends the selection snapshot header into `dataset.hi.toml` and `dataset.lo.toml`.
+- `training.write_selection_snapshot_comments` controls whether Generate writes the prep snapshot header into `dataset.hi.toml` and `dataset.lo.toml`.
 - Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
-- You can edit config in-app via Settings.
-- `vocabulary` is optional. Empty arrays are valid and result in no starter terms.
-- `requirements` is the editable global requirement baseline. If it is missing or empty, WebCap re-primes the shipped defaults.
-- `Reset App` in Settings restores the stock requirements baseline.
+- `analysis.enableFaceAnalysis` enables Face Focus metadata used by `Review Selections`.
+- `analysis.enableMediaPipeAnalysis` enables selection-pose metadata and tag suggestions.
+- `set_destinations.presets` powers destination shortcuts in `Create Set`.
+- `vocabulary` is optional. Empty arrays are valid.
+- `requirements` is the editable global requirement baseline. If it is missing or empty, WebCap re-primes shipped defaults.
+- You can edit config in-app from `Settings`, including raw JSON.
+- `Reset App` restores the shipped requirements baseline.
 
 ## Run
 
@@ -76,337 +92,391 @@ Open:
 
 ## UI Map
 
-- Left panel: folder/media browser, filters, review/train/config sidebars.
-- Center panel: caption/config editor and console panel.
-- Right panel: media preview and review reports.
+- Left workspace:
+  - utility bar
+  - folder and media browser
+  - text and advanced filters
+  - SuperSet search and Create Set actions
+  - set tabs: `Config`, `Review`, `Train`
+- Center editor:
+  - caption editor or config-file editor
+  - helper tabs: `Requirements`, `Tags`, `QA`, `Metadata`
+  - annotate strip, status row, console toggle
+- Right preview:
+  - image/video preview
+  - preview quick actions
+  - review and selection reports
+  - balance distribution wheel overlay when applicable
 
 ## End-to-End Workflow
 
-1. Open a dataset folder.
-2. Filter/select the working subset (text filter + advanced filters).
-3. Curate files (rename/prune/reset/restore/crop/transform/deface/clip).
-4. Build captions with Requirements/Tags/Analysis/Metadata and the primer template.
-5. Run Review Captions to inspect coverage/quality.
-6. Run Prepare Dataset on the visible selection.
-7. Run Generate.
-8. Run Train to print command preview, then execute externally.
+1. Open a set folder.
+2. Filter the visible working subset.
+3. Use `Review Selections` to triage candidates, weak items, and focus sets.
+4. Curate files with rename, prune, reset, restore, duplicate, crop, rotate, flip, deface, and clip.
+5. Build captions with requirements, tags, primer mappings, and set notes.
+6. Use `QA` and `Review Captions` to tighten consistency and coverage.
+7. Run `Prepare Dataset` on the current visible subset.
+8. Run `Generate`.
+9. Run `Train` to print the resolved command preview, then execute externally.
 
 Practical loop:
-- Use `Captionless` + `Incomplete` to focus work.
-- Use `Review Captions` repeatedly during captioning, not only at the end.
-- Keep Prepare scoped by filters when you want a partial batch.
+- Use `Captionless`, `Incomplete`, ratings, and flags to focus work.
+- Use `Review Selections` for curation and `Review Captions` for text QA.
+- Keep Prepare scoped with filters when you want a partial batch.
+- Use `Create Set` when filtered or recursive search results should become a new working set.
 
 ## Feature Guide
 
-### 1. Folder navigation
+### 1. Utility bar and app shell
 
-- Click folders in the left list to navigate.
-- Use the floating up-arrow to go up one directory.
-- Use the utility path button to open a path flyout and jump to any segment.
-- Right-click current folder row for actions:
+- Current-path button opens a path flyout for quick jumps.
+- `Settings` opens app settings and advanced JSON editing.
+- `Reboot` reloads config from disk.
+- `Help` opens the current `README.md` in the preview pane.
+- Theme toggle switches light/dark mode and persists in local storage.
+
+### 2. Folder navigation and file list
+
+- Click folders in the list to navigate.
+- Use the floating up-arrow to move to the parent folder.
+- Use refresh to rescan the current directory.
+- The current-folder row has a context menu for:
   - Open in Explorer
   - Open Folder in VS Code
   - Generate Dataset Configs
-  - Deface (entire folder)
+  - Deface the whole folder
   - Reset Reviewed
+- Folder rows also support:
+  - flag assignment
+  - rename
+  - duplicate folder
+  - open in Explorer
 
-### 2. Media selection and preview
+### 3. Media selection and preview
 
-- Click a media row to load preview and caption.
-- Selection change saves current caption first (when needed), then switches.
-- Selected media status and metadata update live.
-- Preview overlay quick actions are contextual:
-  - Images: `Crop`, `Deface`
-  - Videos: `Clip`, `Deface`
-  - Mutated media: `Reset` appears as a direct quick action.
+- Click a media row to load preview, caption, tags, and metadata.
+- Selection changes save the current caption first when needed.
+- Preview quick actions are contextual:
+  - images: `Crop`, `Deface`
+  - videos: `Clip`, `Deface`
+  - mutated media: `Reset`
+  - more actions are available from the preview overflow menu
+- Mouse wheel over the preview can move to previous/next visible media.
 
-### 3. Caption editor
+### 4. Filters, subset prep, and SuperSet search
+
+Text filter:
+- comma-separated terms are ANDed
+- prefix a term with `-` or `!` to exclude
+- matches filename, label, caption text, and item tags
+
+Advanced filters:
+- `Captionless`
+- `Reviewed`
+- `Unreviewed`
+- `Incomplete`
+- `Tag Mismatch`
+- `Stars`, including `No Star`
+- `Flag`, including `No Flag`
+- `Invalid AR`
+
+Subset behavior:
+- `Clear All` resets text and advanced filters.
+- The filter summary also shows folder-level rating progress as `Rated A/B`.
+- `Prepare Dataset` always uses the currently visible media rows.
+- If the visible subset is smaller than the full folder, Prepare asks for confirmation and records the subset snapshot in `auto_dataset/prep_manifest.json`.
+
+SuperSet search:
+- `Include subfolders` arms recursive search.
+- `Search` is the explicit commit point and stays disabled until filters change again.
+- Results render in a dedicated read-only list, not the normal editable media list.
+- SuperSet results support preview and validation, not caption editing.
+- `Create Set` materializes the full matched result set into a brand-new set folder.
+
+### 5. Review state, focus sets, ratings, and flags
+
+- Double-click a media row toggles reviewed state.
+- Reviewed state persists in `.webcap_state.json`.
+- `Reset Reviewed` clears reviewed state for the current folder.
+- Rating is per-item from `0..5` and can be set from the metadata panel or keyboard.
+- Flags support red, green, blue, yellow, and orange.
+- Review and selection reports can open focus sets:
+  - the left list narrows to a report-defined subset
+  - the banner lets you return to the report or exit the focus set
+
+### 6. Caption editor and persistence
 
 - Captions are saved beside media as `.txt` files.
 - Autosave runs while typing.
-- `Ctrl+S` / `Cmd+S` performs explicit save.
-- `F2` renames selected media (outside `originals`).
+- `Ctrl+S` / `Cmd+S` performs an explicit save.
+- `F2` renames the selected media when rename is allowed.
+- The same editor is reused for `.toml` config file editing from the `Train` tab.
+- Config-file autosave and explicit save use separate config routes from caption saves.
 
-### 4. Filters and subset selection
+### 7. Helper tabs under the editor
 
-Filter bar supports:
-- Text filter:
-  - Comma-separated terms are ANDed.
-  - Prefix a term with `-` or `!` to exclude.
-  - Matches filename, label, caption text, and item tags.
-- Advanced filters:
-  - Captionless
-  - Reviewed
-  - Unreviewed
-  - Incomplete (requirement groups not fully satisfied; `n/a` counts complete)
-  - Tag Mismatch (no tags, or item tags not found in caption text)
-  - Stars (multi-select, includes `No Star`)
-  - Flag color (multi-select, includes `No Flag`)
-  - Invalid AR
-  - Advanced Filters help (`i`) with in-app usage details.
-- Clear All resets text + all advanced filters.
-- SuperSet (cross-folder search):
-  - Optional `Search recursively` checkbox expands scope to current folder + subfolders.
-  - `Search` is the commit point; it disables itself until filters change.
-  - SuperSet results are preview/validation-only and use a dedicated results list.
-  - Use `Create Set From Results` to materialize a new set from all matched results.
+Requirements:
+- add, remove, and reorder requirement groups per set
+- assign comma-separated keyword terms per requirement
+- mark groups reviewed
+- mark groups `n/a` per media item
+- edit per-group requirement terms from the group header
+- pin requirement terms into the global config baseline
+- toggle the floating annotate strip
 
-Prepare uses the currently visible media rows as its selection source.
-The filter summary row also shows folder-level rating progress as `Rated A/B` (`A` = items with rating > 0, `B` = total media items in current folder).
+Annotate strip:
+- shows chips built from requirements and requirement keywords
+- clicking a chip toggles that tag on the current media item
+- stronger blue chips indicate common nearby terms missing on the current item
+- right-click a chip to edit prefix and suffix text for rendered insertion
+- group controls support quick review toggles and term editing
 
-### 5. Review state
+Tags:
+- search and add tags from the merged catalog
+- copy tags from one item and paste/merge them into another
+- sort tags with missing-in-caption tags first
+- click a tag to insert it at the cursor or remove it from the caption
+- remove a tag from the item with the adjacent `x`
+- when MediaPipe selection analysis is enabled, the panel can show suggested coarse tags derived from pose metadata
 
-- Double-click media row toggles reviewed on/off.
-- Reviewed state persists in folder state.
-- `Reset Reviewed` clears all reviewed marks in the current folder.
-- When a media item becomes fully complete, WebCap adds a green flag once as a visual cue; it does not keep recomputing or enforcing that flag.
+QA:
+- shows tag-driven set-composition signals for the current item
+- `Similarity` warns when the current tag set starts to look too much like nearby items
+- `Suggestions` proposes likely missing tags based on similar tagged neighbors
+- file links can open the related focus set directly
 
-### 6. Context-menu media operations
+Metadata:
+- shows resolution, size, aspect, fps, duration, frames, and codec when available
+- shows rating controls
+- shows requirement progress, reviewed progress, and tag-match progress
+- highlights unsupported aspect ratios
 
-Right-click media item for:
-- Flag assignment
-- Open Containing Folder
-- Rename
-- Prune
-- Reset
-- Duplicate Image (images)
-- Crop (images)
-- Rotate Left 90 deg (images)
-- Rotate Right 90 deg (images)
-- Flip Vertical (images)
-- Flip Horizontal (images and videos)
-- Deface
-- Clip (videos in `src_videos` only)
+### 8. Config tab (caption primer and set notes)
 
-Safety behavior:
-- Destructive operations require confirmation.
-- Originals are backed up for reversible workflows.
+- `Caption Template` is the primary primer field.
+- `Mappings` is always visible under the template:
+  - manage rows with `Edit Mappings`
+  - row fields: `Scope`, `Token`, `Key`, `Value`, `Enabled`
+  - blank `Value` falls back to `Token`
+  - custom mappings apply before requirement-derived defaults
+  - multiple values for the same key append in order and dedupe
+  - unresolved placeholders are removed
+  - conditional punctuation and wrapper syntax are supported
+- `Set Notes` stores per-set freeform notes.
+- Primer application flow:
+  - `Reapply` writes the current primer output into the selected item caption
+  - `Undo Reapply` restores the previous caption
+  - floating `Apply Primer` appears for captionless items when primer text is active
+  - captionless items live-update from primer edits only while the editor still matches primer-derived text
 
-### 7. Crop modal (images)
+### 9. Review tab and reports
 
-Crop features:
-- Aspect-ratio presets: `1:1`, `4:3`, `3:4`, `16:9`, `9:16`
-- Soft magnet snap toward an 8px grid while adjusting
-- Finalized crop snapped/clamped to safe bounds
-- Arbitrary angle rotation:
-  - Angle slider (`-180..180`)
-  - Numeric angle input
-  - Reset button
+Review tab controls:
+- `Required key phrase`
+- `Balance Phrases`
+- `Rules` via `Edit Rules`
 
-Apply writes the rendered rotated crop output in place.
+Balance phrases:
+- add and reorder phrases you want to track across the set
+- click a balance phrase row to add that phrase as a tag to the current item
+- balance phrases also drive the preview-side balance distribution wheel
 
-### 8. Video clip flow
+Balance wheel overlay:
+- appears over the preview when a media item is selected and balance phrases exist
+- slices represent the current filtered distribution of configured phrases
+- the current item's matching phrase slices are emphasized
+- phrase matching uses caption text and item tags
 
-- `Clip...` appears for video files under `src_videos`.
-- Modal supports:
-  - Playback/scrubbing
-  - Start time and duration
-  - Output file name
-  - Crop This Frame (fixed ratio crop via crop modal)
-- Export writes clip into the set and refreshes metadata/list state.
+Review Captions report:
+- runs on the current visible media subset
+- shows summary stats
+- missing required phrase
+- phrase balance counts
+- validation failures from structured review rules
+- duplicate captions
+- similar captions
+- caption length insights and outliers
+- top and rare token summaries
+- media metadata table
 
-### 9. Caption helper panel
+### 10. Review Selections report
 
-Tabs:
-- Requirements
-- Phrases
-- Tags
-- Analysis
-- Metadata
+`Review Selections` is the curation-oriented companion to `Review Captions`.
+It runs on the current visible subset and helps build inspection focus sets.
 
-Requirements tab:
-- Add/remove requirements per set.
-- Reorder requirements with a row-level up-arrow button (move up).
-- Per-media checkbox state persists.
-- Checklist completion can drive reviewed state.
-- Settings modal lets you assign comma-separated keywords per requirement.
-- Keyword matches highlight requirement rows while editing.
-- Press `Enter` in keyword value fields to save and close modal.
-- Group terms editor supports pinning terms to the global requirement baseline:
-  - In `Edit requirement terms`, click the pin button to pin/unpin a term.
-  - Pinned requirement terms are searchable in term add/search flows.
-  - `Reset App` restores the shipped requirement baseline if the global list gets trimmed too far.
-
-Requirements tab:
-- `Annotate` toggle in helper-header actions shows/hides the floating Annotate Strip.
-- Annotate Strip groups come from Requirements + requirement keywords.
-- Clicking an annotate chip toggles that tag on the current media item.
-- Stronger blue annotate chips indicate terms that are common on nearby annotated items but missing on the current item.
-- Right-clicking an annotate chip opens `Prefix` / `Suffix` fields for that term; tag insertion uses the rendered text.
-- Group header pencil button opens per-group requirement-term editor.
-- Group header checkmark button marks that requirement reviewed for the current item.
-- Double-clicking a group card also toggles the reviewed mark.
-- `n/a` chip lets you mark a group not applicable for the current media item.
-- Hover highlighting is supported for phrase/requirement matches.
-
-Tags tab:
-- Search/add tags via `Add/search tag...`.
-- Shows per-media assigned tags.
-- Tags missing from the current caption are highlighted using strict token matching with punctuation normalization and plural allowances.
-- Clicking a tag toggles it in the caption (insert at cursor if missing, remove if present).
-- Tag list is sorted with missing tags first, then present tags, each alphabetical.
-
-Analysis tab:
-- Selection warnings appear first.
-- Derived analyzer output appears below warnings:
-  - face focus
+Current panels:
+- filtered subset summary
+- Face Focus buckets when Face Focus analysis is enabled
+- suggested candidate groups
+- MediaPipe selection-pose summaries when MediaPipe analysis is enabled:
   - face direction
   - expression
   - body orientation
   - pose class
   - arm position
-- In QA warnings, clickable missing-tag suggestions add that tag to the current item.
-
-Metadata tab:
-- File facts stay here:
-  - resolution
-  - size
-  - aspect
-  - fps
-  - duration
-  - frames
-  - codec
-- Per-media star rating (1..5).
-- Requirement/review/tag-match progress remains here.
-- Unsupported AR values are highlighted.
-
-### 9.1 Config tab (caption primer)
-
-- `Caption Template` is the primary primer field.
-- `Mappings` is always visible under `Caption Template`:
-  - Open `Edit Mappings` to manage rows.
-  - Row fields: `Scope` (`file` or `tag`), `Token`, `Key`, `Value (optional)`, `Enabled`.
-  - If `Value` is blank, `Token` is used as the value.
-  - Custom mapping rows are applied before requirement-derived defaults.
-  - Multiple matches for the same key are appended in order (comma-separated, deduped).
-  - Unresolved placeholders are removed.
-  - Conditional punctuation is supported in placeholders (examples: `{view,}`, `{,view}`, `{ (view) }`).
-  - Conditional phrase wrappers are supported:
-    - `{view| against }` => append phrase after resolved `view`
-    - `{ in |location| setting}` => add prefix/suffix around resolved `location`
-- `Set Notes` is available as a separate freeform notes field.
-- Primer application UX:
-  - `Reapply` writes current primer output into the caption for the selected item.
-  - `Undo Reapply` restores the previous caption for that item.
-  - Floating `Apply Primer` appears when caption is missing and primer text is currently in effect.
-  - While editing `Caption Template`, captionless items live-update only if the editor still matches primer-derived text (safe no-overwrite behavior).
-
-### 9.2 Review tab
-
-- `Required key phrase`: set one phrase that must appear in each caption.
-- `Balance Phrases`:
-  - Add phrases to track caption variety/coverage across the set (free text or catalog suggestion).
-  - Click the `i` button for usage help in the preview panel.
-  - Clicking a balance phrase row adds that phrase as a tag to the current media item.
-- `Rules`:
-  - Always visible in Review (no accordion).
-  - Open `Edit Rules` to configure file/caption trigger rules used by Validation Failures in review reports.
-
-### 10. Keyboard shortcuts
-
-Global shortcuts (when not typing in input/textarea/select):
-- `ArrowUp` / `ArrowDown`: previous/next visible media
-- `Delete`: prune selected media (outside `originals`)
-- `0..5`: set rating (`0` clears)
-- `G`, `Y`, `O`, `B`, `R`: set flag color (green/yellow/orange/blue/red)
-
-Editor shortcuts:
-- `Ctrl+S` / `Cmd+S`: save caption or current config file
-- `F2`: rename selected media (when editor is not focused)
-
-Preview navigation:
-- Mouse wheel over preview can move previous/next media (cooldown applied to avoid rapid accidental jumps).
-
-### 11. Review reports
-
-`Review Captions` builds a report in preview pane with:
-- Summary stats
-- Missing required phrase
-- Phrase balance
-- Validation failures from structured review rules
-- Duplicate captions
-- Similar captions (80%+)
-- Caption length insights and outliers
-- Top/rare token summaries
-- Media metadata table (with optional AR grouping)
-
-Report links can focus the working set to matching files.
-
-### 12. Training tab
-
-Training panel includes:
-- Prepare Dataset
-- Generate
-- Train
 
 Behavior:
-- Prepare processes selected/visible subset and writes `auto_dataset/prep_manifest.json`.
-- Prepare includes a missing-caption preflight when needed:
-  - Shows missing total
-  - Shows primer-fallback count (in-memory)
-  - Shows still-empty count
-  - Prompts Continue/Cancel
-- Generate reads prep manifest and writes dataset/config outputs.
-- If prep manifest is missing, Generate auto-runs Prepare once, then retries Generate.
-- Train prints resolved command preview to console (does not run training jobs).
-- Create Set From Results copies per-item state and now carries the source `primer` block (`template`, mappings, related primer fields) into the destination set state.
+- panel rows are clickable and open focus sets
+- the report stays separate from caption QA
+- suggested candidate groups are conservative, metadata-based shortlist views, not auto-decisions
 
-### 13. Config file editing in-app
+### 11. Media and folder mutations
 
-- Training panel lists config files grouped by High Noise / Low Noise.
-- Clicking a config file opens it in center editor.
-- Opening a config file closes the status console panel.
-- `Ctrl+S` / `Cmd+S` saves config via `/fs/save_config`.
+Media row context menu supports:
+- flag assignment
+- open containing folder
+- copy tags / paste tags
+- rename
+- prune
+- reset
+- duplicate image
+- crop
+- rotate left 90 deg
+- rotate right 90 deg
+- flip vertical
+- flip horizontal
+- deface
+- clip
+- restore when browsing `originals`
 
-### 14. Utility bar and app settings
+Safety behavior:
+- destructive actions require confirmation
+- originals are backed up for reversible workflows
+- reset restores media from `originals` while leaving captions intact
 
-Utility buttons:
-- Path/home button: current-path flyout and jump navigation
-- Settings: open app settings modal
-- Reboot: reload runtime config from disk
-- Help: load README into preview pane
+### 12. Crop modal and video clip flow
 
-Settings modal supports:
-- Filesystem root/models paths
-- Training paths (`diffusion_pipe_wsl`, `activate_script`)
-- Selection snapshot comments toggle
-- Training mode (`poc` / `normal` / `quality`)
-- Debug mode
-- Advanced JSON editing
-- Reset App for restoring the stock requirements baseline
-- Save or Save + Reboot
+Crop modal:
+- aspect-ratio presets: `1:1`, `4:3`, `3:4`, `16:9`, `9:16`
+- soft magnet snap toward an 8px grid
+- safe bounds clamping on apply
+- arbitrary angle rotation with slider, numeric input, and reset
+
+Video clip flow:
+- available for video files
+- supports playback, scrubbing, start time, duration, and output filename
+- supports `Crop This Frame` before export
+- exports the clip into the set and refreshes list and metadata state
+
+### 13. Train tab and dataset generation
+
+Train tab includes:
+- config file list for `config.hi.toml` and `config.lo.toml`
+- `Prepare Dataset`
+- `Generate`
+- `Train`
+
+Behavior:
+- opening a config file loads it into the center editor
+- `Prepare Dataset` rebuilds `auto_dataset` from the current visible subset
+- Prepare blocks on zero visible rows
+- Prepare performs missing-caption preflight and reports missing, primer-fallback, and still-empty counts
+- `Generate` reads `prep_manifest.json` and writes dataset outputs
+- if the prep manifest is missing, Generate auto-runs Prepare once and retries
+- `Train` prints the resolved command preview to the console but does not run training jobs
+
+### 14. App settings
+
+Settings support:
+- filesystem root and models paths
+- training paths
+- selection snapshot comment toggle
+- training mode
+- Face Focus analysis toggle
+- MediaPipe selection analysis toggle
+- debug mode
+- advanced JSON editing
+- `Save`, `Save + Reboot`, and `Reset App`
+
+### 15. Keyboard shortcuts
+
+Global shortcuts when not typing in an input:
+- `ArrowUp` / `ArrowDown`: previous or next visible media
+- `Delete`: prune selected media outside `originals`
+- `0..5`: clear or set rating
+- `G`, `Y`, `O`, `B`, `R`: set flag color
+
+Editor and rename:
+- `Ctrl+S` / `Cmd+S`: save caption or open config file
+- `F2`: rename selected media when the editor is not focused
 
 ## Data and Artifacts
 
 Per set folder:
-- Captions: `<media>.txt`
-- Folder state: `.webcap_state.json`
-- Metadata cache: `media_metadata.json`
-- Backups: `originals/`
-- Prepared dataset outputs: `auto_dataset/`
-  - Includes `prep_manifest.json`
+- captions: `<media>.txt`
+- folder state: `.webcap_state.json`
+- metadata cache: `media_metadata.json`
+- originals backup: `originals/`
+- prepared dataset outputs: `auto_dataset/`
+- prep manifest: `auto_dataset/prep_manifest.json`
 
-## API Endpoints (high level)
+## API Endpoints
 
-- App/config: `/app/config`, `/app/reboot`, `/app/help_readme`
-- File system: `/fs/describe`, `/fs/read`, `/fs/list_config`, `/fs/read_config`, `/fs/save_config`, `/fs/rename`, `/fs/open_in_explorer`, `/fs/open_in_vscode`
-- Captions/media: `/caption/load`, `/caption/save`, `/caption/media`, `/fs/media_metadata`
-- Mutations: `/media/prune`, `/media/reset`, `/media/restore`, `/media/crop`, `/media/image_transform`, `/media/flip_horizontal`, `/media/video_clip`, `/fs/deface`
-- Training flow: `/fs/prepare_dataset`, `/fs/generate_dataset_config`, `/fs/train_run`
+App and config:
+- `/`
+- `/app/config`
+- `/app/reset_app`
+- `/app/reboot`
+- `/app/help_readme`
+
+Folder state and file system:
+- `/fs/folder_state/save`
+- `/fs/read`
+- `/fs/root`
+- `/fs/path_exists`
+- `/fs/describe`
+- `/fs/rename`
+- `/fs/open_in_explorer`
+- `/fs/open_in_vscode`
+
+Captions, metadata, and config files:
+- `/caption/load`
+- `/caption/save`
+- `/caption/media`
+- `/fs/media_metadata`
+- `/fs/list_config`
+- `/fs/read_config`
+- `/fs/save_config`
+
+Media mutation and restore:
+- `/media/prune`
+- `/media/reset`
+- `/media/restore`
+- `/media/crop`
+- `/media/image_transform`
+- `/media/flip_horizontal`
+- `/media/video_clip`
+- `/media/video_clip_status`
+- `/fs/deface`
+- `/fs/duplicate_image`
+- `/fs/duplicate_folder`
+
+Selection, review, and dataset flow:
+- `/fs/superset_search`
+- `/fs/create_set_from_results`
+- `/fs/smart_set_materialize`
+- `/fs/prepare_dataset`
+- `/fs/generate_dataset_config`
+- `/fs/train_run`
 
 ## Tests
 
 Current test files:
+- `tests/test_config_templates.py`
 - `tests/test_dataset_config.py`
 - `tests/test_file_ops_routes.py`
+- `tests/test_filtered_selection_snapshot.py`
 - `tests/test_prune_restore.py`
 
-Quick runs:
+Example runs:
 
 ```bash
-python tests/test_prune_restore.py
-python tests/test_file_ops_routes.py
-python tests/test_dataset_config.py
+python -m pytest tests/test_config_templates.py
+python -m pytest tests/test_dataset_config.py
+python -m pytest tests/test_file_ops_routes.py
+python -m pytest tests/test_filtered_selection_snapshot.py
+python -m pytest tests/test_prune_restore.py
 ```
 
 ## Troubleshooting
@@ -414,23 +484,29 @@ python tests/test_dataset_config.py
 ### No media appears
 
 - Check `filesystem.root` in config.
-- Confirm supported media file extensions.
-- Check backend terminal for path/permission errors.
+- Confirm the folder contains supported media extensions.
+- Check backend terminal output for path or permission failures.
+
+### Review Selections shows no analysis data
+
+- Enable the relevant analysis toggle in `Settings`.
+- For Face Focus, verify `deface` is installed and in `PATH`.
+- For MediaPipe selection analysis, verify the vendored model files exist under `tool/vendor/mediapipe/models/`.
 
 ### Generate fails quickly
 
-- Ensure folder has media and captions.
-- Run Prepare first, or let Generate auto-prepare if manifest is missing.
-- Inspect console output for prep/generate error details.
+- Ensure the folder has media and captions.
+- Run Prepare first, or let Generate auto-prepare if the manifest is missing.
+- Inspect console output for prep or generate errors.
 
-### Config changes not taking effect
+### Config edits do not seem to apply
 
-- Use Save + Reboot in Settings, or click utility Reboot.
+- Use `Save + Reboot` in Settings, or click utility `Reboot`.
 
 ### Deface fails
 
 - Verify `deface` is installed and in `PATH`.
-- Verify ffmpeg/ffprobe are available.
+- Verify `ffmpeg` and `ffprobe` are available.
 
 ## Project Structure
 
@@ -439,8 +515,9 @@ python tests/test_dataset_config.py
 - `tool/css/`: styles
 - `tool/server/`: Flask routes and backend operations
 - `tool/templates/`: generated config templates
+- `tool/vendor/`: vendored frontend and model assets
 - `docs/`: design notes and specs
-- `tests/`: test scripts
+- `tests/`: regression tests
 
 ## License
 

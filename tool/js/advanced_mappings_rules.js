@@ -122,12 +122,10 @@ function parseLegacyReviewRules(multiline) {
 
 function triggerAdvancedRulesAutosave() {
   if (!state || !state.folder) return;
-  if (typeof debouncedSaveFolderState === 'function') {
-    debouncedSaveFolderState(function () {
-      saveFolderStateForCurrentRoot();
-    });
-    return;
-  }
+  debouncedSaveFolderState(function () {
+    saveFolderStateForCurrentRoot();
+  });
+  return;
   saveFolderStateForCurrentRoot();
 }
 
@@ -278,9 +276,7 @@ function renderAdvancedHelpPreview(title, bodyHtml) {
 
 function openPrimerMappingsHelpInPreview() {
   var defaultsTotal = 0;
-  if (typeof getRequirementDefaultPrimerMappings === 'function') {
-    defaultsTotal = getRequirementDefaultPrimerMappings().length;
-  }
+  defaultsTotal = getRequirementDefaultPrimerMappings().length;
   renderAdvancedHelpPreview(
     'Mappings Help (Legacy)',
     '<p style="margin:0 0 10px 0;"><strong>Legacy feature:</strong> mappings still work, but they are being deprecated in favor of annotations, affixes, and the caption template.</p>' +

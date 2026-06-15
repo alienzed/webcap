@@ -552,6 +552,85 @@ function getChecklistKeywordTermsForRequirement(requirementLabel) {
   return normalizeChecklistTermsList(localTerms.concat(globalTerms));
 }
 
+function getChecklistRequirementsForTag(tagText) {
+  var target = normalizeChecklistTerm(tagText).toLowerCase();
+  var matches = [];
+  if (!target || !Array.isArray(checklistItems) || !checklistItems.length) return matches;
+  checklistItems.forEach(function (requirementLabel) {
+    var requirement = normalizeChecklistRequirementKey(requirementLabel);
+    if (!requirement) return;
+    var hasMatch = getChecklistKeywordTermsForRequirement(requirement).some(function (term) {
+      return normalizeChecklistTerm(term).toLowerCase() === target;
+    });
+    if (hasMatch) {
+      matches.push(requirement);
+    }
+  });
+  return matches;
+}
+
+function clearChecklistReviewedRequirementsForMediaKey(mediaKey, requirementLabels, options) {
+  var key = String(mediaKey || '').trim();
+  var opts = options || {};
+  if (!key) return [];
+  var labels = normalizeRequirementLabelList(requirementLabels);
+  if (!labels.length) return [];
+  var checkedMap = JSON.parse(JSON.stringify(getChecklistCheckedMapForMediaKey(key)));
+  var changed = [];
+  labels.forEach(function (requirementLabel) {
+    if (!checkedMap[requirementLabel]) return;
+    delete checkedMap[requirementLabel];
+    changed.push(requirementLabel);
+  });
+  if (!changed.length) return changed;
+  if (Object.keys(checkedMap).length) checklistCheckedByMedia[key] = checkedMap;
+  else delete checklistCheckedByMedia[key];
+  if (!opts.skipSync) syncReviewedFromChecklist(key);
+  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipRender) renderChecklistPanel();
+  if (!opts.skipRender && typeof renderItemMetadataPanel === 'function') {
+    renderItemMetadataPanel();
+  }
+  if (!opts.skipRender && typeof renderAnnotateStrip === 'function') {
+    renderAnnotateStrip();
+  }
+  if (!opts.skipRender && typeof renderFileList === 'function') {
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  }
+  return changed;
+}
+
+function invalidateChecklistReviewedRequirementsForTagChange(mediaKey, tagText, options) {
+  return clearChecklistReviewedRequirementsForMediaKey(
+    mediaKey,
+    getChecklistRequirementsForTag(tagText),
+    options
+  );
+}
+
+function invalidateChecklistReviewedRequirementsForCurrentTagMismatch(options) {
+  if (!state || !state.currentItem || !state.currentItem.key) return [];
+  var mediaKey = state.currentItem.key;
+  var changedRequirements = [];
+  checklistItems.forEach(function (requirementLabel) {
+    var requirement = normalizeChecklistRequirementKey(requirementLabel);
+    if (!requirement || !isChecklistRequirementCheckedForMediaKey(mediaKey, requirement)) return;
+    var hasMismatch = getChecklistKeywordTermsForRequirement(requirement).some(function (term) {
+      if (typeof hasTagForMediaKey !== 'function' || !hasTagForMediaKey(mediaKey, term)) {
+        return false;
+      }
+      if (typeof tagAppearsInCurrentCaption === 'function') {
+        return !tagAppearsInCurrentCaption(term);
+      }
+      return false;
+    });
+    if (hasMismatch) {
+      changedRequirements.push(requirement);
+    }
+  });
+  return clearChecklistReviewedRequirementsForMediaKey(mediaKey, changedRequirements, options);
+}
+
 function setChecklistKeywordTermsForRequirement(requirementLabel, terms) {
   if (!requirementLabel) return;
   var cleaned = normalizeChecklistTermsList(terms);

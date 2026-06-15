@@ -902,15 +902,14 @@ function addTagToMediaKey(mediaKey, tagText) {
   }
   current.push(tag);
   captionItemTagsByMedia[key] = current;
+  invalidateChecklistReviewedRequirementsForTagChange(key, tag, { skipRender: true });
   ensureCaptionHelperPhraseInCatalog(tag, true);
   debouncedItemTagsSave(saveItemTagsToFolderState);
   renderItemTagsPanel();
   renderItemMetadataPanel();
   renderFileList();
   updateBalanceDistributionWheel();
-  if (typeof renderAnnotateStrip === 'function') {
-    renderAnnotateStrip();
-  }
+  renderAnnotateStrip();
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
   }
@@ -956,6 +955,9 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   }
   if (next.length) captionItemTagsByMedia[key] = next;
   else delete captionItemTagsByMedia[key];
+  if (typeof invalidateChecklistReviewedRequirementsForTagChange === 'function') {
+    invalidateChecklistReviewedRequirementsForTagChange(key, removedTag, { skipRender: true });
+  }
   saveItemTagsToFolderState();
   renderItemTagsPanel();
   renderItemMetadataPanel();

@@ -235,6 +235,7 @@ Requirements tab:
 - Right-clicking an annotate chip opens `Prefix` / `Suffix` fields for that term; tag insertion uses the rendered text.
 - Group header pencil button opens per-group requirement-term editor.
 - Group header checkmark button marks that requirement reviewed for the current item.
+- Double-clicking a group card also toggles the reviewed mark.
 - `n/a` chip lets you mark a group not applicable for the current media item.
 - Hover highlighting is supported for phrase/requirement matches.
 
@@ -254,6 +255,7 @@ Analysis tab:
   - body orientation
   - pose class
   - arm position
+- In QA warnings, clickable missing-tag suggestions add that tag to the current item.
 
 Metadata tab:
 - File facts stay here:

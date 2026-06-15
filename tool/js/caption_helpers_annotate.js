@@ -298,6 +298,14 @@ function toggleAnnotateGroupNa(requirementLabel) {
   renderAnnotateStrip();
 }
 
+function toggleAnnotateGroupReviewed(mediaKey, requirementLabel) {
+  if (typeof toggleChecklistRequirementCheckedForMediaKey !== 'function') {
+    setStatus('Reviewed toggle is unavailable.');
+    return false;
+  }
+  return toggleChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
+}
+
 function renderAnnotateStrip() {
   var stripEl = document.getElementById('annotate-strip');
   if (!stripEl) return;
@@ -340,6 +348,7 @@ function renderAnnotateStrip() {
 
     var titleRowEl = document.createElement('div');
     titleRowEl.className = 'annotate-strip-group-title-row';
+    titleRowEl.title = 'Double-click to toggle reviewed';
 
     var titleEl = document.createElement('div');
     titleEl.className = 'annotate-strip-group-title';
@@ -374,11 +383,7 @@ function renderAnnotateStrip() {
     reviewedBtn.setAttribute('aria-pressed', reviewed ? 'true' : 'false');
     reviewedBtn.title = reviewed ? 'Clear reviewed mark' : 'Mark requirement reviewed';
     reviewedBtn.onclick = function () {
-      if (typeof toggleChecklistRequirementCheckedForMediaKey !== 'function') {
-        setStatus('Reviewed toggle is unavailable.');
-        return;
-      }
-      toggleChecklistRequirementCheckedForMediaKey(mediaKey, group.requirement || group.name);
+      toggleAnnotateGroupReviewed(mediaKey, group.requirement || group.name);
     };
     controlsEl.appendChild(reviewedBtn);
 
@@ -413,6 +418,12 @@ function renderAnnotateStrip() {
 
     titleRowEl.appendChild(controlsEl);
     groupEl.appendChild(titleRowEl);
+    groupEl.addEventListener('dblclick', function (e) {
+      var target = e.target;
+      if (target && target.closest && target.closest('button, a, input, textarea, select, label')) return;
+      e.preventDefault();
+      toggleAnnotateGroupReviewed(mediaKey, group.requirement || group.name);
+    });
 
     var chipWrap = document.createElement('div');
     chipWrap.className = 'annotate-strip-chip-wrap';

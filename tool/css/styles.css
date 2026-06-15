@@ -1867,6 +1867,7 @@ iframe {
   flex-wrap: nowrap;
   padding: 2px 4px;
   border-radius: 5px;
+  cursor: pointer;
 }
 
 .annotate-strip-group-incomplete .annotate-strip-group-title-row {
@@ -2653,6 +2654,84 @@ iframe {
 
 .item-analysis-warning-row {
   border-bottom-color: #fde68a;
+}
+
+.item-analysis-signal-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+  text-align: right;
+}
+
+.item-analysis-file-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px 6px;
+  max-width: 100%;
+}
+
+.item-analysis-tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px 6px;
+  max-width: 100%;
+}
+
+.item-analysis-tag-suggestions-label {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.item-analysis-tag-suggestions-separator {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.item-analysis-file-links-label {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.item-analysis-tag-suggestion {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
+  opacity: 0.95;
+}
+
+.item-analysis-tag-suggestion:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #334155;
+}
+
+.item-analysis-file-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: #8a4a12;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.item-analysis-file-link:hover {
+  color: var(--accent);
+}
+
+.item-analysis-file-links-separator,
+.item-analysis-file-links-more {
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .item-metadata-value-error {
@@ -3572,6 +3651,34 @@ html[data-theme="dark"] .item-metadata-value-ok {
 
 html[data-theme="dark"] .item-metadata-value-error {
   color: #fca5a5;
+}
+
+html[data-theme="dark"] .item-analysis-file-links-label,
+html[data-theme="dark"] .item-analysis-tag-suggestions-label,
+html[data-theme="dark"] .item-analysis-tag-suggestions-separator,
+html[data-theme="dark"] .item-analysis-file-links-separator,
+html[data-theme="dark"] .item-analysis-file-links-more {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .item-analysis-tag-suggestion {
+  background: rgba(51, 65, 85, 0.5);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] .item-analysis-tag-suggestion:hover {
+  background: rgba(71, 85, 105, 0.58);
+  border-color: rgba(148, 163, 184, 0.55);
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .item-analysis-file-link {
+  color: var(--accent-soft);
+}
+
+html[data-theme="dark"] .item-analysis-file-link:hover {
+  color: #fdba74;
 }
 
 html[data-theme="dark"] .checklist-settings-btn,

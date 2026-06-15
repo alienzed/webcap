@@ -569,16 +569,125 @@ function appendItemPanelEmptyRow(listEl, text) {
   listEl.appendChild(empty);
 }
 
-function appendQaSignalRow(listEl, severity, label, text, isPositive) {
+function buildQaFileFocusList(fileNames) {
+  var seen = {};
+  var files = [];
+  (Array.isArray(fileNames) ? fileNames : []).forEach(function (fileName) {
+    var text = String(fileName || '').trim();
+    if (!text || seen[text]) return;
+    seen[text] = true;
+    files.push(text);
+  });
+  return files;
+}
+
+function appendQaFileLinks(containerEl, fileNames, focusFiles, source) {
+  var files = buildQaFileFocusList(fileNames);
+  if (!files.length) return;
+  var focus = buildQaFileFocusList(focusFiles && focusFiles.length ? focusFiles : files);
+  var wrap = document.createElement('div');
+  wrap.className = 'item-analysis-file-links';
+  var labelEl = document.createElement('span');
+  labelEl.className = 'item-analysis-file-links-label';
+  labelEl.textContent = 'Files:';
+  wrap.appendChild(labelEl);
+
+  var maxShown = 4;
+  files.slice(0, maxShown).forEach(function (fileName, index) {
+    if (index > 0) {
+      var separator = document.createElement('span');
+      separator.className = 'item-analysis-file-links-separator';
+      separator.textContent = ',';
+      wrap.appendChild(separator);
+    }
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'item-analysis-file-link';
+    btn.textContent = fileName;
+    btn.title = 'Open ' + fileName + (focus.length > 1 ? ' and focus the related files' : '');
+    btn.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+    });
+    btn.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof selectByFileName === 'function') {
+        selectByFileName(fileName, focus, source || 'Quality Assurance');
+      }
+    };
+    wrap.appendChild(btn);
+  });
+
+  if (files.length > maxShown) {
+    var more = document.createElement('span');
+    more.className = 'item-analysis-file-links-more';
+    more.textContent = ' +' + (files.length - maxShown) + ' more';
+    wrap.appendChild(more);
+  }
+
+  containerEl.appendChild(wrap);
+}
+
+function appendQaTagSuggestions(containerEl, suggestions) {
+  var tags = buildQaFileFocusList(suggestions);
+  if (!tags.length) return;
+
+  var wrap = document.createElement('div');
+  wrap.className = 'item-analysis-tag-suggestions';
+
+  var labelEl = document.createElement('span');
+  labelEl.className = 'item-analysis-tag-suggestions-label';
+  labelEl.textContent = 'Add:';
+  wrap.appendChild(labelEl);
+
+  tags.forEach(function (tag, index) {
+    if (index > 0) {
+      var separator = document.createElement('span');
+      separator.className = 'item-analysis-tag-suggestions-separator';
+      separator.textContent = ',';
+      wrap.appendChild(separator);
+    }
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'phrase-copy-item-btn item-tag-pill-suggested item-analysis-tag-suggestion';
+    btn.textContent = tag;
+    btn.title = 'Add suggested tag';
+    btn.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+    });
+    btn.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof addTagToCurrentMedia === 'function') {
+        addTagToCurrentMedia(tag);
+      }
+    };
+    wrap.appendChild(btn);
+  });
+
+  containerEl.appendChild(wrap);
+}
+
+function appendQaSignalRow(listEl, severity, label, text, isPositive, options) {
   var row = document.createElement('div');
   row.className = 'item-metadata-row' + (isPositive ? '' : ' item-analysis-warning-row');
   var labelEl = document.createElement('strong');
   labelEl.textContent = severity + ' - ' + label;
+  var bodyEl = document.createElement('div');
+  bodyEl.className = 'item-analysis-signal-body';
   var valueEl = document.createElement('span');
   valueEl.className = isPositive ? 'item-metadata-value-ok' : 'item-metadata-value-error';
   valueEl.textContent = text;
+  bodyEl.appendChild(valueEl);
+  if (options && options.suggestions && options.suggestions.length) {
+    appendQaTagSuggestions(bodyEl, options.suggestions);
+  }
+  if (options && options.fileNames && options.fileNames.length) {
+    appendQaFileLinks(bodyEl, options.fileNames, options.focusFiles, options.focusSource);
+  }
   row.appendChild(labelEl);
-  row.appendChild(valueEl);
+  row.appendChild(bodyEl);
   listEl.appendChild(row);
 }
 
@@ -652,13 +761,16 @@ function computeQaSimilaritySignal(mediaKey) {
     .sort(function (a, b) { return sharedCounts[b] - sharedCounts[a] || a.localeCompare(b); })
     .slice(0, 4);
   var fileNames = strong.slice(0, 3).map(function (row) { return row.item.fileName; });
-  var extra = strong.length > fileNames.length ? ' +' + (strong.length - fileNames.length) + ' more' : '';
+  var focusFiles = strong.map(function (row) { return row.item.fileName; });
   return {
     severity: 'Check',
     label: strong.length > 1 ? 'Similar Cluster' : 'Very Similar Item',
     text:
       (strong.length > 1 ? 'Starting to look a lot like ' + strong.length + ' other items.' : 'Very similar tag set found in another item.') +
-      ' Shared tags: ' + sharedSummary.join(', ') + '. Matches: ' + fileNames.join(', ') + extra + '.'
+      ' Shared tags: ' + sharedSummary.join(', ') + '.',
+    fileNames: fileNames,
+    focusFiles: focusFiles,
+    focusSource: 'Quality Assurance'
   };
 }
 
@@ -687,10 +799,16 @@ function computeQaMissingTagSignal(mediaKey) {
   var summaryBits = suggestions.map(function (tag) {
     return tag + ' (' + counts[tag] + '/' + neighbors.length + ')';
   });
+  var evidenceFiles = neighbors.slice(0, 4).map(function (row) { return row.item.fileName; });
+  var focusFiles = neighbors.map(function (row) { return row.item.fileName; });
   return {
     severity: 'Info',
     label: suggestions.length === 1 ? 'Likely Missing Tag' : 'Likely Missing Tags',
-    text: 'Similar items often also include: ' + summaryBits.join(', ') + '.'
+    text: 'Similar items often also include: ' + summaryBits.join(', ') + '.',
+    suggestions: suggestions,
+    fileNames: evidenceFiles,
+    focusFiles: focusFiles,
+    focusSource: 'Quality Assurance'
   };
 }
 
@@ -710,7 +828,14 @@ function renderItemAnalysisPanel() {
 
   appendItemPanelSectionTitle(listEl, 'Similarity');
   if (similaritySignal) {
-    appendQaSignalRow(listEl, similaritySignal.severity, similaritySignal.label, similaritySignal.text, false);
+    appendQaSignalRow(
+      listEl,
+      similaritySignal.severity,
+      similaritySignal.label,
+      similaritySignal.text,
+      false,
+      similaritySignal
+    );
   } else if (currentTags.length < 2) {
     appendItemPanelEmptyRow(listEl, 'Add at least 2 tags to compare this item against the set.');
   } else {
@@ -719,7 +844,14 @@ function renderItemAnalysisPanel() {
 
   appendItemPanelSectionTitle(listEl, 'Suggestions');
   if (missingTagSignal) {
-    appendQaSignalRow(listEl, missingTagSignal.severity, missingTagSignal.label, missingTagSignal.text, true);
+    appendQaSignalRow(
+      listEl,
+      missingTagSignal.severity,
+      missingTagSignal.label,
+      missingTagSignal.text,
+      true,
+      missingTagSignal
+    );
   } else if (currentTags.length < 2) {
     appendItemPanelEmptyRow(listEl, 'Tag suggestions appear once this item has a clearer tag footprint.');
   } else {

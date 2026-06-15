@@ -751,6 +751,8 @@ function saveChecklistTermAffixesModal() {
   );
   if (changed) {
     saveChecklistToFolderState();
+    if (typeof refreshPrimerPreviewForCurrentItem === 'function') refreshPrimerPreviewForCurrentItem();
+    if (typeof updatePrimerCaptionResetUi === 'function') updatePrimerCaptionResetUi();
     if (typeof renderAnnotateStrip === 'function') renderAnnotateStrip();
     if (typeof renderItemTagsPanel === 'function') renderItemTagsPanel();
   }

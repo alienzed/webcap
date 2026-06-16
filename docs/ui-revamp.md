@@ -38,6 +38,81 @@ This is closer to tools like Lightroom, Photo Mechanic, Resolve, labeling tools,
 - mode-specific emphasis
 - hotkeys and batch operations for repeated work
 
+## Current Planning Synthesis
+
+Recent discussion points toward a fairly coherent next direction, even if it should not be implemented yet as one big jump.
+
+### Ratings Are Already The Main Selection System
+
+In practice, stars are no longer only "quality" markers. They have become the user's curation intent system:
+
+- `4` and `5` stars: training-ready keepers
+- `3` stars: alternates, fill candidates, or "maybe useful later"
+- `1` and `2` stars: low-priority or effectively ignored
+- unrated: undecided
+
+This means future review/compare flows should lean into ratings instead of inventing a parallel "selected for training" mechanism.
+
+Flags may still be useful, but they are no longer the primary per-item curation tool.
+
+### Compare Mode Is The Natural Home For Selection Review
+
+The current `Review Selections` surface is still closer to a report than a working compare tool.
+
+The likely long-term direction is:
+
+- use `Review Selections` to launch small, purposeful focus sets
+- open those focus sets into a compare-friendly surface
+- make pruning redundancy and rerating stronger/weaker alternates the core activity
+
+This matters because many of the desired selection improvements are awkward in a single-item preview flow but become natural in a multi-item compare flow.
+
+### Suggested Candidate Logic Should Become More Actionable
+
+The current "suggested" area likely wants to split into a few clearer sections rather than remain one flat shortlist.
+
+The most promising shape is:
+
+- prune-first / redundancy groups
+- keepers or strong anchors
+- alternates worth checking
+- softer coverage hints
+
+This should stay advisory and focus-set-oriented rather than trying to become an overconfident scoring engine.
+
+### Coverage Guidance Should Respect Limited Source Material
+
+Coverage guidance is still useful, but it should assume that some missing material simply does not exist in the current set.
+
+That means:
+
+- prioritize obvious pruning and rerating work over idealized balance goals
+- treat `3`-star material as the main place to look for coverage upgrades
+- keep the tone suggestive rather than prescriptive
+
+### Suggestion Sanity Likely Needs A Soft Rule Layer
+
+Pure co-occurrence or analyzer-driven tag suggestions can become silly in some contexts, such as suggesting `shoes` on a portrait close-up.
+
+The likely direction is not a hard rule system everywhere, but a soft advisory layer combining:
+
+- analyzer/output evidence
+- requirement-group relationships
+- lightweight review rules where needed
+
+This should down-rank or suppress implausible suggestions without turning review into a rigid expert system.
+
+### Avoid Building Parallel Mechanisms Without Need
+
+A recurring theme is that the app already has the beginnings of the right primitives:
+
+- stars for curation intent
+- focus sets for scoped work
+- tags for selected item concepts
+- requirement groups for semantic neighborhoods
+
+The future UI should try to organize and expose these better rather than replacing them with new overlapping systems.
+
 ## What Changes Conceptually
 
 The current UI is mostly always-on:

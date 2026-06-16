@@ -9,6 +9,10 @@ Last reviewed: 2026-06-11.
 - Apply a tag to an entire set - or finally explore multi-select in the media list (probably more involved). Select All could be enough...
 - n/a in a group is sort of incompatible with having other tags selected. I am not sure we'd deselect tags on n/a click, but n/a probably shouldn't be available to click on if another item is selected - let's discuss if this is worth the complexity.
 - Consider making annotation an assisted Wizard like flow - provided by a modal entered into purposefully.
+- Review Selections suggestion sanity layer:
+  - Current tag suggestions and coverage nudges can over-infer from co-occurrence alone (for example `shoes` on a portrait close-up).
+  - Explore a soft rule layer that combines requirement-group relationships, coverage hints, and review rules to down-rank or suppress implausible suggestions.
+  - Prefer reusable defaults derived from requirements groups over per-set manual rule entry, but keep the result advisory rather than hard-blocking.
 - Annotation throughput priorities (ranked by expected ROI):
   1. Group completion indicator in media list. (Partial: Incomplete filter is implemented; per-row indicator is pending.)
      - Value: High; gives clear annotation progress and "what is left" targeting.

@@ -68,6 +68,17 @@ The better long-term direction is a lightweight coverage planner that helps answ
 
 This should be framed as guidance, not as a hard prescription.
 
+## Sequencing Note
+The richer version of this planner probably fits best once `Review Selections` has a stronger compare workflow.
+
+In other words:
+
+- do not overbuild the current one-item report surface
+- let `Review Selections` evolve toward launching small focus sets first
+- let multi-item compare become the natural place for rerating, pruning, and choosing between near-duplicates
+
+This reduces the risk of stuffing too much selection logic into a UI that is still fundamentally report-like.
+
 ## Friendly Warning Tone
 Selection warnings should assume limited source material.
 
@@ -101,6 +112,8 @@ Current working interpretation:
 - `1` and `2` stars usually lean toward discard, redundancy, or weaker quality
 
 These are heuristics, not rules. The planner should use them to prioritize inspection, not to override the user's judgment.
+
+More importantly, ratings should be treated as the primary curation intent signal rather than just a generic quality marker. The user is already using rerating as the main act of choosing between similar items, so future selection tooling should reinforce that behavior instead of introducing a separate selection mechanism.
 
 ## Current / Target / Need Model
 The panel should evolve away from a single shortlist and toward simple coverage guidance.
@@ -142,6 +155,13 @@ Recommended priority:
 4. missing coverage that may or may not exist at all
 
 This ordering better matches the user's real workflow and the reality of limited source material.
+
+It also fits the current rating workflow:
+
+- keep or reaffirm `4`/`5` star material
+- demote redundant or weaker near-duplicates
+- inspect `3`-star material only when it may help coverage
+- avoid inventing extra state when rerating already expresses the decision cleanly
 
 ## Proposed Panel Shape
 The current `Suggested Candidates` block should evolve into a small set of clearer, more purposeful sections.

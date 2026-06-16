@@ -1104,15 +1104,22 @@ function renderItemTagsPanel() {
   }
   updateTagClipboardUi();
   var key = state.currentItem.key;
-  var tags = getTagsForMediaKey(key).slice().sort(function (a, b) {
-    return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
-  });
+  var tags = getTagsForMediaKey(key).slice();
   var row = getMetadataForMedia(state.currentItem.fileName);
   var suggestedTags = (typeof getSelectionPoseSuggestedTags === 'function')
     ? getSelectionPoseSuggestedTags(row, tags)
     : [];
 
   if (tags.length) {
+    tags.sort(function (a, b) {
+      var aText = String(a || '');
+      var bText = String(b || '');
+      var aPresent = tagAppearsInCurrentCaption(aText);
+      var bPresent = tagAppearsInCurrentCaption(bText);
+      if (aPresent !== bPresent) return aPresent ? 1 : -1;
+      return aText.toLowerCase().localeCompare(bText.toLowerCase());
+    });
+
     tags.forEach(function (tag) {
       var rowEl = document.createElement('div');
       rowEl.className = 'row-inline';

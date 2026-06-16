@@ -282,19 +282,23 @@ function toggleAnnotateTag(term) {
   renderAnnotateStrip();
 }
 
-function toggleAnnotateGroupNa(requirementLabel) {
+function toggleAnnotateGroupNa(requirementLabel, nextIsNa) {
   if (!state.currentItem || !state.currentItem.key) {
     setStatus('Select a media item to annotate.');
     return;
   }
   if (typeof isChecklistRequirementNaForMediaKey !== 'function' || typeof setChecklistRequirementNaForMediaKey !== 'function') {
-    setStatus('n/a toggle is unavailable.');
+    setStatus('Mute toggle is unavailable.');
     return;
   }
   var mediaKey = state.currentItem.key;
   var isNa = isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
-  setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, !isNa);
-  setStatus(!isNa ? ('Marked n/a: ' + requirementLabel) : ('Cleared n/a: ' + requirementLabel));
+  var targetIsNa = typeof nextIsNa === 'boolean' ? nextIsNa : !isNa;
+  if (targetIsNa === isNa) {
+    return;
+  }
+  setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, targetIsNa);
+  setStatus(targetIsNa ? ('Muted group: ' + requirementLabel) : ('Unmuted group: ' + requirementLabel));
   renderAnnotateStrip();
 }
 
@@ -363,20 +367,20 @@ function renderAnnotateStrip() {
 
     var titleLabelEl = document.createElement('label');
     titleLabelEl.className = 'annotate-strip-group-title-label';
-    titleLabelEl.title = groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item';
+    titleLabelEl.title = groupIsNa ? 'Unmute group for current item' : 'Mute group for current item';
 
     var naCheckbox = document.createElement('input');
     naCheckbox.type = 'checkbox';
     naCheckbox.className = 'annotate-strip-group-na-checkbox';
-    naCheckbox.checked = groupIsNa;
-    naCheckbox.setAttribute('aria-label', groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item');
-    naCheckbox.title = groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item';
+    naCheckbox.checked = !groupIsNa;
+    naCheckbox.setAttribute('aria-label', groupIsNa ? 'Unmute group for current item' : 'Mute group for current item');
+    naCheckbox.title = groupIsNa ? 'Unmute group for current item' : 'Mute group for current item';
     naCheckbox.onclick = function (e) {
       e.stopPropagation();
     };
     naCheckbox.onchange = function (e) {
       e.stopPropagation();
-      toggleAnnotateGroupNa(groupRequirementLabel);
+      toggleAnnotateGroupNa(groupRequirementLabel, !naCheckbox.checked);
     };
     titleLabelEl.appendChild(naCheckbox);
 
@@ -417,10 +421,15 @@ function renderAnnotateStrip() {
 
 
     var reviewedState = !!reviewed;
-    if (!reviewedState && !groupIsNa) {
+    if (!reviewedState) {
       var statusEl = document.createElement('span');
       statusEl.className = 'annotate-strip-group-status-pill';
-      statusEl.textContent = 'Not reviewed';
+      if (groupIsNa) {
+        statusEl.classList.add('annotate-strip-group-status-pill-muted');
+        statusEl.textContent = 'Muted';
+      } else {
+        statusEl.textContent = 'Not reviewed';
+      }
       titleMainEl.appendChild(statusEl);
     }
     var hasActiveTerm = false;

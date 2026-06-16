@@ -1882,6 +1882,12 @@ iframe {
   letter-spacing: 0.15px;
 }
 
+.annotate-strip-group-status-pill-muted {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+  color: #475569;
+}
+
 .annotate-strip-group-title-row {
   display: flex;
   align-items: center;
@@ -3693,6 +3699,12 @@ html[data-theme="dark"] .annotate-strip-group-status-pill {
   background: rgba(245, 158, 11, 0.16);
   border-color: rgba(245, 158, 11, 0.42);
   color: #fbbf24;
+}
+
+html[data-theme="dark"] .annotate-strip-group-status-pill-muted {
+  background: rgba(71, 85, 105, 0.32);
+  border-color: rgba(148, 163, 184, 0.4);
+  color: #cbd5e1;
 }
 
 html[data-theme="dark"] .annotate-strip-group-title-complete,

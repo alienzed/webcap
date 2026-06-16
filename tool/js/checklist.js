@@ -10,6 +10,7 @@ var checklistTermWrappersByKey = {}; // { termLower: { prefix: "", suffix: "" } 
 var checklistTermDescriptorDefaultsByKey = {}; // { termLower: { prefix: "", suffix: "" } }
 var checklistTermDescriptorsByMedia = {}; // { mediaKey: { termLower: { prefix: "", suffix: "" } } }
 var checklistTermAffixesByKey = {}; // Legacy mirror of wrappers for backward compatibility.
+var checklistExpandedRequirements = {};
 
 function checklistSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
@@ -102,6 +103,26 @@ function checklistMediaHasTag(mediaKey, termText) {
   return getTagsForMediaKey(key).some(function (tag) {
     return normalizeChecklistTerm(tag).toLowerCase() === target;
   });
+}
+
+function isChecklistRequirementExpanded(requirementLabel) {
+  var req = normalizeChecklistRequirementKey(requirementLabel);
+  if (!req) return false;
+  return !!checklistExpandedRequirements[req];
+}
+
+function setChecklistRequirementExpanded(requirementLabel, expanded) {
+  var req = normalizeChecklistRequirementKey(requirementLabel);
+  if (!req) return false;
+  if (expanded) checklistExpandedRequirements[req] = true;
+  else delete checklistExpandedRequirements[req];
+  return true;
+}
+
+function toggleChecklistRequirementExpanded(requirementLabel) {
+  var req = normalizeChecklistRequirementKey(requirementLabel);
+  if (!req) return false;
+  return setChecklistRequirementExpanded(req, !isChecklistRequirementExpanded(req));
 }
 
 function getChecklistTermWrapper(termText) {
@@ -410,6 +431,39 @@ function requirementKeywordsMatch(requirementLabel, captionText) {
   return false;
 }
 
+function getChecklistSelectedTagsForRequirementForMediaKey(mediaKey, requirementLabel) {
+  var key = String(mediaKey || '').trim();
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!key || !requirement || typeof getTagsForMediaKey !== 'function') return [];
+  var terms = getChecklistKeywordTermsForRequirement(requirement);
+  if (!Array.isArray(terms) || !terms.length) return [];
+  var termSet = {};
+  terms.forEach(function (term) {
+    var clean = normalizeChecklistTerm(term).toLowerCase();
+    if (clean) termSet[clean] = true;
+  });
+  return getTagsForMediaKey(key).filter(function (tag) {
+    return !!termSet[normalizeChecklistTerm(tag).toLowerCase()];
+  });
+}
+
+function moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tagText, offset) {
+  var tags = getChecklistSelectedTagsForRequirementForMediaKey(mediaKey, requirementLabel);
+  if (!tags.length) return false;
+  var target = normalizeChecklistTerm(tagText).toLowerCase();
+  var idx = -1;
+  for (var i = 0; i < tags.length; i++) {
+    if (normalizeChecklistTerm(tags[i]).toLowerCase() === target) {
+      idx = i;
+      break;
+    }
+  }
+  var nextIdx = idx + Number(offset || 0);
+  if (idx < 0 || nextIdx < 0 || nextIdx >= tags.length) return false;
+  if (typeof swapTagOrderForMediaKey !== 'function') return false;
+  return swapTagOrderForMediaKey(mediaKey, tags[idx], tags[nextIdx]);
+}
+
 function setChecklistPanelVisible(visible) {
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   if (!checklistPanelEl) return;
@@ -484,52 +538,43 @@ function renderChecklistPanel() {
   itemsDiv.innerHTML = '';
   var checkedMap = checklistCheckedByMedia[state.currentItem.key] || {};
   var naMap = getChecklistNaMapForMediaKey(state.currentItem.key);
+  var mediaKey = state.currentItem.key;
   for (var i = 0; i < checklistItems.length; i++) {
     var item = checklistItems[i];
     var isNa = !!naMap[normalizeChecklistRequirementKey(item)];
     var row = document.createElement('div');
-    row.className = 'row-inline';
+    row.className = 'checklist-row-block';
     if (isNa) row.classList.add('checklist-row-na');
-    var label = document.createElement('label');
-    label.style.flex = '1';
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !!checkedMap[item] || isNa;
-    (function(item) {
-      cb.onchange = function() {
-        if (!state.currentItem) return;
-        var mediaKey = state.currentItem.key;
-        if (!checklistCheckedByMedia[mediaKey]) checklistCheckedByMedia[mediaKey] = {};
-        if (this.checked && isChecklistRequirementNaForMediaKey(mediaKey, item)) {
-          setChecklistRequirementNaForMediaKey(mediaKey, item, false, {
-            skipSync: true,
-            skipSave: true,
-            skipRender: true
-          });
-        } else if (!this.checked && isChecklistRequirementNaForMediaKey(mediaKey, item)) {
-          setChecklistRequirementNaForMediaKey(mediaKey, item, false, {
-            skipSync: true,
-            skipSave: true,
-            skipRender: true
-          });
-          this.checked = true;
-        }
-        checklistCheckedByMedia[mediaKey][item] = this.checked;
-        syncReviewedFromChecklist(mediaKey);
-        debouncedChecklistSave(saveChecklistToFolderState);
-        renderItemMetadataPanel();
-        renderAnnotateStrip();
+    var summaryRow = document.createElement('div');
+    summaryRow.className = 'row-inline checklist-row-summary';
+    if (!!checkedMap[item] || isNa) summaryRow.classList.add('checklist-row-reviewed');
+    var label = document.createElement('div');
+    label.className = 'checklist-row-label';
+    var toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'checklist-row-toggle-btn';
+    toggleBtn.textContent = isChecklistRequirementExpanded(item) ? '\u25BE' : '\u25B8';
+    toggleBtn.title = isChecklistRequirementExpanded(item)
+      ? 'Hide selected tags for primer order'
+      : 'Show selected tags for primer order';
+    (function (requirementLabel) {
+      toggleBtn.onclick = function () {
+        toggleChecklistRequirementExpanded(requirementLabel);
+        renderChecklistPanel();
       };
     })(item);
-    label.appendChild(cb);
-    label.appendChild(document.createTextNode(' ' + item));
-    row.appendChild(label);
+    var labelText = document.createElement('span');
+    labelText.className = 'checklist-row-label-text';
+    labelText.textContent = item;
+    label.appendChild(toggleBtn);
+    label.appendChild(labelText);
+    summaryRow.appendChild(label);
     // Use live editor text first so highlight updates while typing.
     var captionText = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
       ? ui.editorEl.value
       : (state.currentItem.caption || '');
     if (requirementKeywordsMatch(item, captionText)) {
-      row.classList.add('checklist-item-matched');
+      summaryRow.classList.add('checklist-item-matched');
     }
     var actions = document.createElement('div');
     actions.className = 'checklist-row-actions';
@@ -582,7 +627,66 @@ function renderChecklistPanel() {
       };
     })(i, item);
     actions.appendChild(rmBtn);
-    row.appendChild(actions);
+    summaryRow.appendChild(actions);
+    row.appendChild(summaryRow);
+    if (isChecklistRequirementExpanded(item)) {
+      var selectedTags = getChecklistSelectedTagsForRequirementForMediaKey(mediaKey, item);
+      var selectedTagsEl = document.createElement('div');
+      selectedTagsEl.className = 'checklist-selected-tags';
+      if (selectedTags.length) {
+        selectedTags.forEach(function (tag, idx) {
+          var tagRow = document.createElement('div');
+          tagRow.className = 'checklist-selected-tag-row';
+          var tagLabel = document.createElement('span');
+          tagLabel.className = 'checklist-selected-tag-label';
+          tagLabel.textContent = tag;
+          var tagActions = document.createElement('div');
+          tagActions.className = 'checklist-selected-tag-actions';
+
+          var tagUpBtn = document.createElement('button');
+          tagUpBtn.type = 'button';
+          tagUpBtn.className = 'checklist-row-action-btn checklist-row-action-move';
+          tagUpBtn.textContent = '\u2191';
+          tagUpBtn.title = 'Move tag earlier in primer order for this group';
+          tagUpBtn.disabled = idx === 0;
+          (function (requirementLabel, tagText) {
+            tagUpBtn.onclick = function () {
+              var moved = moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tagText, -1);
+              if (moved) {
+                setStatus('Moved tag up in ' + requirementLabel + ': ' + tagText);
+              }
+            };
+          })(item, tag);
+
+          var tagDownBtn = document.createElement('button');
+          tagDownBtn.type = 'button';
+          tagDownBtn.className = 'checklist-row-action-btn checklist-row-action-move';
+          tagDownBtn.textContent = '\u2193';
+          tagDownBtn.title = 'Move tag later in primer order for this group';
+          tagDownBtn.disabled = idx === selectedTags.length - 1;
+          (function (requirementLabel, tagText) {
+            tagDownBtn.onclick = function () {
+              var moved = moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tagText, 1);
+              if (moved) {
+                setStatus('Moved tag down in ' + requirementLabel + ': ' + tagText);
+              }
+            };
+          })(item, tag);
+
+          tagActions.appendChild(tagUpBtn);
+          tagActions.appendChild(tagDownBtn);
+          tagRow.appendChild(tagLabel);
+          tagRow.appendChild(tagActions);
+          selectedTagsEl.appendChild(tagRow);
+        });
+      } else {
+        var emptySelectedTags = document.createElement('div');
+        emptySelectedTags.className = 'checklist-selected-tags-empty';
+        emptySelectedTags.textContent = 'No selected tags in this group.';
+        selectedTagsEl.appendChild(emptySelectedTags);
+      }
+      row.appendChild(selectedTagsEl);
+    }
     itemsDiv.appendChild(row);
   }
   renderItemTagsPanel();
@@ -605,6 +709,7 @@ function saveChecklistToFolderState() {
 }
 
 function loadChecklistFromFolderState(folderState) {
+  checklistExpandedRequirements = {};
   if (folderState.caption_requirements && Object.prototype.toString.call(folderState.caption_requirements) === '[object Array]') {
     checklistItems = folderState.caption_requirements.slice();
   } else {

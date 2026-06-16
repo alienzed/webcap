@@ -763,7 +763,6 @@ function wirePrimerCaptionResetUi() {
         return;
       }
       var nextPrimer = buildAutoPrimer(mediaItem.fileName, mediaItem.key) || '';
-      if (!confirm('Delete current caption and follow primer for this item?')) return;
       var previousText = String((ui && ui.editorEl && ui.editorEl.value) || '');
       if (previousText === nextPrimer) {
         setStatus('Caption already matches primer output (nothing to reset).');

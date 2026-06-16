@@ -110,11 +110,7 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
   }
   captionItemTagsByMedia[key] = next;
   saveItemTagsToFolderState();
-  renderItemTagsPanel();
-  renderItemMetadataPanel();
-  renderFileList();
-  updateBalanceDistributionWheel();
-  renderAnnotateStrip();
+  refreshTagDrivenPanelsForMediaKey(key);
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
   }
@@ -887,11 +883,37 @@ function syncEditorToCurrentTemplatePreview() {
   refreshCurrentPrimerDerivedUi();
 }
 
+function refreshTagDrivenPanelsForMediaKey(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  renderFileList();
+  updateBalanceDistributionWheel();
+  if (state && state.currentItem && state.currentItem.key === key && typeof renderChecklistPanel === 'function') {
+    renderChecklistPanel();
+    return;
+  }
+  renderItemTagsPanel();
+  renderItemMetadataPanel();
+  renderAnnotateStrip();
+}
+
+function updateTagOrderForMediaKey(mediaKey, nextTags) {
+  var key = String(mediaKey || '').trim();
+  var next = Array.isArray(nextTags) ? nextTags.slice() : [];
+  if (!key || !next.length) return false;
+  var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
+  captionItemTagsByMedia[key] = next;
+  saveItemTagsToFolderState();
+  refreshTagDrivenPanelsForMediaKey(key);
+  if (shouldSyncTemplate) {
+    refreshCurrentPrimerDerivedUi();
+  }
+  return true;
+}
+
 function moveTagUpForMediaKey(mediaKey, tagText) {
   var key = String(mediaKey || '').trim();
   var target = normalizeItemTag(tagText).toLowerCase();
   if (!key || !target) return false;
-  var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
   var current = getTagsForMediaKey(key);
   if (current.length < 2) return false;
   var idx = -1;
@@ -906,17 +928,50 @@ function moveTagUpForMediaKey(mediaKey, tagText) {
   var temp = next[idx - 1];
   next[idx - 1] = next[idx];
   next[idx] = temp;
-  captionItemTagsByMedia[key] = next;
-  saveItemTagsToFolderState();
-  renderItemTagsPanel();
-  renderItemMetadataPanel();
-  renderFileList();
-  updateBalanceDistributionWheel();
-  renderAnnotateStrip();
-  if (shouldSyncTemplate) {
-    refreshCurrentPrimerDerivedUi();
+  return updateTagOrderForMediaKey(key, next);
+}
+
+function moveTagDownForMediaKey(mediaKey, tagText) {
+  var key = String(mediaKey || '').trim();
+  var target = normalizeItemTag(tagText).toLowerCase();
+  if (!key || !target) return false;
+  var current = getTagsForMediaKey(key);
+  if (current.length < 2) return false;
+  var idx = -1;
+  for (var i = 0; i < current.length; i++) {
+    if (normalizeItemTag(current[i]).toLowerCase() === target) {
+      idx = i;
+      break;
+    }
   }
-  return true;
+  if (idx < 0 || idx >= current.length - 1) return false;
+  var next = current.slice();
+  var temp = next[idx + 1];
+  next[idx + 1] = next[idx];
+  next[idx] = temp;
+  return updateTagOrderForMediaKey(key, next);
+}
+
+function swapTagOrderForMediaKey(mediaKey, firstTagText, secondTagText) {
+  var key = String(mediaKey || '').trim();
+  var firstTarget = normalizeItemTag(firstTagText).toLowerCase();
+  var secondTarget = normalizeItemTag(secondTagText).toLowerCase();
+  if (!key || !firstTarget || !secondTarget || firstTarget === secondTarget) return false;
+  var current = getTagsForMediaKey(key);
+  if (current.length < 2) return false;
+  var firstIdx = -1;
+  var secondIdx = -1;
+  for (var i = 0; i < current.length; i++) {
+    var currentTag = normalizeItemTag(current[i]).toLowerCase();
+    if (currentTag === firstTarget && firstIdx < 0) firstIdx = i;
+    if (currentTag === secondTarget && secondIdx < 0) secondIdx = i;
+  }
+  if (firstIdx < 0 || secondIdx < 0 || firstIdx === secondIdx) return false;
+  var next = current.slice();
+  var temp = next[firstIdx];
+  next[firstIdx] = next[secondIdx];
+  next[secondIdx] = temp;
+  return updateTagOrderForMediaKey(key, next);
 }
 
 function addTagToMediaKey(mediaKey, tagText) {
@@ -945,11 +1000,7 @@ function addTagToMediaKey(mediaKey, tagText) {
   invalidateChecklistReviewedRequirementsForTagChange(key, tag, { skipRender: true });
   ensureCaptionHelperPhraseInCatalog(tag, true);
   debouncedItemTagsSave(saveItemTagsToFolderState);
-  renderItemTagsPanel();
-  renderItemMetadataPanel();
-  renderFileList();
-  updateBalanceDistributionWheel();
-  renderAnnotateStrip();
+  refreshTagDrivenPanelsForMediaKey(key);
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
   }
@@ -995,10 +1046,7 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   else delete captionItemTagsByMedia[key];
   invalidateChecklistReviewedRequirementsForTagChange(key, removedTag, { skipRender: true });  
   saveItemTagsToFolderState();
-  renderItemTagsPanel();
-  renderItemMetadataPanel();
-  renderFileList();
-  updateBalanceDistributionWheel();
+  refreshTagDrivenPanelsForMediaKey(key);
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
   }
@@ -1056,14 +1104,16 @@ function renderItemTagsPanel() {
   }
   updateTagClipboardUi();
   var key = state.currentItem.key;
-  var tags = getTagsForMediaKey(key);
+  var tags = getTagsForMediaKey(key).slice().sort(function (a, b) {
+    return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
+  });
   var row = getMetadataForMedia(state.currentItem.fileName);
   var suggestedTags = (typeof getSelectionPoseSuggestedTags === 'function')
     ? getSelectionPoseSuggestedTags(row, tags)
     : [];
 
   if (tags.length) {
-    tags.forEach(function (tag, idx) {
+    tags.forEach(function (tag) {
       var rowEl = document.createElement('div');
       rowEl.className = 'row-inline';
 
@@ -1079,16 +1129,6 @@ function renderItemTagsPanel() {
         renderItemTagsPanel();
       };
 
-      var upBtn = document.createElement('button');
-      upBtn.type = 'button';
-      upBtn.className = 'stats-phrase-mini-btn';
-      upBtn.textContent = '\u2191';
-      upBtn.title = 'Move tag up for primer order';
-      upBtn.disabled = idx === 0;
-      upBtn.onclick = function () {
-        moveTagUpForMediaKey(key, tag);
-      };
-
       var rmBtn = document.createElement('button');
       rmBtn.type = 'button';
       rmBtn.className = 'stats-phrase-mini-btn';
@@ -1099,7 +1139,6 @@ function renderItemTagsPanel() {
       };
 
       rowEl.appendChild(tagBtn);
-      rowEl.appendChild(upBtn);
       rowEl.appendChild(rmBtn);
       listEl.appendChild(rowEl);
     });

@@ -2599,6 +2599,21 @@ iframe {
   color: #5d6672;
 }
 
+#item-tags-list .row-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#item-tags-list .phrase-copy-item-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#item-tags-list .stats-phrase-mini-btn {
+  flex: 0 0 auto;
+}
+
 #item-tags-list .item-tag-pill-present {
   background: #dcfce7;
   border-color: #86efac;

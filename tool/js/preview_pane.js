@@ -252,8 +252,8 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
         }
 
         function renderTable(groupByAR) {
-          var cols = ['file','resolution','fps','aspect','size','bitrate','codec','duration','frames'];
-          var colLabels = {file:'File',resolution:'Resolution',fps:'FPS',aspect:'Aspect',size:'Size',bitrate:'Bitrate',codec:'Codec',duration:'Duration',frames:'Frames'};
+          var cols = ['file','resolution','fps','aspect','scene','size','bitrate','codec','duration','frames'];
+          var colLabels = {file:'File',resolution:'Resolution',fps:'FPS',aspect:'Aspect',scene:'Scene',size:'Size',bitrate:'Bitrate',codec:'Codec',duration:'Duration',frames:'Frames'};
           var html = '';
           if (groupByAR) {
             // Group rows by AR bucket
@@ -270,6 +270,7 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
               html += '<div style="margin:8px 0 2px 0;font-weight:bold;">Aspect Ratio: ' + escapeHtml(ar) + ' (' + arGroups[ar].length + ')</div>';
               html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
               arGroups[ar].forEach(function(row){
+                if (row && row.scene_complexity_label && row.scene === undefined) row.scene = row.scene_complexity_label;
                 html += '<tr>' + cols.map(function(c){ return metadataCellHtml(row, c); }).join('') + '</tr>';
               });
               html += '</tbody></table>';
@@ -277,6 +278,7 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
           } else {
             html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
             scopedRows.forEach(function(row){
+              if (row && row.scene_complexity_label && row.scene === undefined) row.scene = row.scene_complexity_label;
               html += '<tr>' + cols.map(function(c){ return metadataCellHtml(row, c); }).join('') + '</tr>';
             });
             html += '</tbody></table>';

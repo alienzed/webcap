@@ -71,6 +71,54 @@ var SELECTION_POSE_REPORT_FIELDS = [
   }
 ];
 
+var SCENE_COMPLEXITY_BUCKETS = [
+  { key: 'simple', label: 'Simple' },
+  { key: 'moderate', label: 'Moderate' },
+  { key: 'busy', label: 'Busy' },
+  { key: 'unknown', label: 'Unknown' }
+];
+
+function normalizeSceneComplexityBucket(value) {
+  var bucket = String(value || '').toLowerCase().trim();
+  for (var i = 0; i < SCENE_COMPLEXITY_BUCKETS.length; i += 1) {
+    if (SCENE_COMPLEXITY_BUCKETS[i].key === bucket) return bucket;
+  }
+  return 'unknown';
+}
+
+function getSceneComplexityBucketLabel(bucket) {
+  var key = normalizeSceneComplexityBucket(bucket);
+  for (var i = 0; i < SCENE_COMPLEXITY_BUCKETS.length; i += 1) {
+    if (SCENE_COMPLEXITY_BUCKETS[i].key === key) return SCENE_COMPLEXITY_BUCKETS[i].label;
+  }
+  return 'Unknown';
+}
+
+function getSceneComplexityFromMetadata(row) {
+  if (!row || typeof row !== 'object') return null;
+  if (row.scene_complexity && typeof row.scene_complexity === 'object') return row.scene_complexity;
+  if (row.scene_complexity_bucket === undefined && row.scene_complexity_score === undefined) return null;
+  return {
+    bucket: row.scene_complexity_bucket,
+    score: row.scene_complexity_score
+  };
+}
+
+function formatSceneComplexityScore(value) {
+  var score = Number(value);
+  if (!isFinite(score)) return '';
+  return String(Math.round(score * 100)) + '%';
+}
+
+function formatSceneComplexityLabel(row) {
+  if (row && row.scene_complexity_label) return String(row.scene_complexity_label);
+  var complexity = getSceneComplexityFromMetadata(row);
+  if (!complexity) return '';
+  var bucket = getSceneComplexityBucketLabel(complexity.bucket);
+  var score = formatSceneComplexityScore(complexity.score);
+  return score ? (bucket + ' (' + score + ')') : bucket;
+}
+
 function getSelectionPoseFromMetadata(row) {
   if (!row || typeof row !== 'object') return null;
   if (row.selection_pose && typeof row.selection_pose === 'object') return row.selection_pose;
@@ -288,6 +336,8 @@ function buildSuggestedSelectionRows(rows, scopedFileNames) {
     if (focusBucket !== 'close' && focusBucket !== 'medium' && focusBucket !== 'body') return;
     var pose = getSelectionPoseFromMetadata(row);
     if (!pose) return;
+    var sceneComplexity = getSceneComplexityFromMetadata(row);
+    var sceneComplexityScore = sceneComplexity ? Number(sceneComplexity.score) : NaN;
     var score = 0.0;
     if (focusBucket === 'close') score += 3.0;
     if (focusBucket === 'medium') score += 2.6;
@@ -296,14 +346,21 @@ function buildSuggestedSelectionRows(rows, scopedFileNames) {
     if (pose.pose_class && pose.pose_class !== 'unknown') score += 0.8;
     if (pose.arm_position && pose.arm_position !== 'unknown') score += (pose.arm_position === 'mixed' ? 0.2 : 0.6);
     if (pose.expression_primary && pose.expression_primary !== 'unknown') score += (pose.expression_primary === 'neutral' ? 0.2 : 0.5);
+    if (isFinite(sceneComplexityScore)) {
+      score += (0.5 - sceneComplexityScore) * 0.5;
+    }
     candidates.push({
       file: fileName,
       focusBucket: focusBucket,
-      score: score
+      score: score,
+      sceneComplexityScore: isFinite(sceneComplexityScore) ? sceneComplexityScore : null
     });
   });
   candidates.sort(function (a, b) {
     if (b.score !== a.score) return b.score - a.score;
+    if (a.sceneComplexityScore !== null && b.sceneComplexityScore !== null && a.sceneComplexityScore !== b.sceneComplexityScore) {
+      return a.sceneComplexityScore - b.sceneComplexityScore;
+    }
     return a.file.localeCompare(b.file);
   });
   var targetCount = Math.min(35, Math.max(15, Math.round(candidates.length * 0.3)));
@@ -332,6 +389,9 @@ function buildSuggestedSelectionRows(rows, scopedFileNames) {
     { key: 'body', label: 'Body Candidates', files: selectedByBucket.body }
   ];
 }
+
+window.getSceneComplexityFromMetadata = getSceneComplexityFromMetadata;
+window.formatSceneComplexityLabel = formatSceneComplexityLabel;
 
 function renderSuggestedSelectionPanel(doc, rows, scopedFileNames) {
   var panel = doc.getElementById('selection-suggested-candidates-panel');

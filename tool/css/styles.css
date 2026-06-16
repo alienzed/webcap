@@ -1832,13 +1832,37 @@ iframe {
 }
 
 .annotate-strip-group-title {
-  flex: 1 1 auto;
   min-width: 0;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.25px;
   color: #334155;
   margin: 0;
+}
+
+.annotate-strip-group-title-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.annotate-strip-group-title-label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.annotate-strip-group-na-checkbox {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: #64748b;
+  cursor: pointer;
 }
 
 .annotate-strip-group-status-pill {
@@ -3659,6 +3683,10 @@ html[data-theme="dark"] .annotate-strip-group-na-btn.active {
   background: rgba(71, 85, 105, 0.65);
   border-color: #516275;
   color: #e2e8f0;
+}
+
+html[data-theme="dark"] .annotate-strip-group-na-checkbox {
+  accent-color: #94a3b8;
 }
 
 html[data-theme="dark"] .annotate-strip-group-status-pill {

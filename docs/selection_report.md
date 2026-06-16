@@ -47,7 +47,7 @@ That worked when the report was smaller, but it becomes confusing as more metada
 Candidate panels for `Selection`:
 
 - `Face Focus`
-- future `Scene Complexity`
+- `Scene Complexity`
 - future lightweight body orientation or pose buckets
 - missing captions as a curation readiness signal
 - rating and flag summaries
@@ -55,6 +55,188 @@ Candidate panels for `Selection`:
 - filtered-subset counts and focus sets that support keep/skip decisions
 
 These are selection signals, not caption-authoring tools.
+
+## Coverage Planner Direction
+The current `Suggested Candidates` panel is useful, but too flat.
+
+The better long-term direction is a lightweight coverage planner that helps answer:
+
+- where the current kept subset is already strong
+- where the set may be narrow or repetitive
+- which redundant clusters are easiest to prune
+- which missing sample types might be worth looking for, if they exist
+
+This should be framed as guidance, not as a hard prescription.
+
+## Friendly Warning Tone
+Selection warnings should assume limited source material.
+
+That means:
+
+- avoid scolding language like "you need" or "you are missing"
+- prefer softer language like "coverage is thin here" or "if alternates exist, these may be worth checking"
+- treat prune suggestions as more actionable than missing-coverage suggestions
+- assume some gaps simply cannot be filled from the current set
+
+In practice, a message like:
+
+- "These five close-ups look very similar; pruning to the cleanest one or two may make the set easier to manage"
+
+is usually more actionable than:
+
+- "Need more rear body shots"
+
+The second kind of message is still allowed, but should read more like:
+
+- "Rear clear-pose coverage looks thin. If any alternates exist in lower-rated items, they may be worth a quick pass."
+
+## Rating-Aware Interpretation
+The selection planner should use ratings as soft intent signals when they exist.
+
+Current working interpretation:
+
+- `5` stars often means identity-anchor keepers, especially face close-ups
+- `4` stars often means strong wider shots or strong body shots
+- `3` stars often means plausible alternates, useful fillers, or "nice but not standout" material
+- `1` and `2` stars usually lean toward discard, redundancy, or weaker quality
+
+These are heuristics, not rules. The planner should use them to prioritize inspection, not to override the user's judgment.
+
+## Current / Target / Need Model
+The panel should evolve away from a single shortlist and toward simple coverage guidance.
+
+A good shape is:
+
+- `Current`: what the kept subset already contains
+- `Target`: what a balanced character LoRA set would ideally include
+- `Need`: what looks thin, repetitive, or overrepresented
+
+This does not mean every target must be satisfiable.
+
+The point is:
+
+- show where variety already exists
+- highlight obvious redundancy
+- suggest where a quick pass through `3`-star material might help
+
+## Preferred Buckets
+The exact buckets can evolve, but the current intended direction is:
+
+- close face anchors
+- medium shots
+- body shots
+- rear or no-face-but-clear-pose shots
+- expression variety
+- repetition / near-duplicate pressure inside each bucket
+
+Tag information can help when available, but should act as supporting evidence rather than replacing analysis metadata.
+
+## Action Priority
+The planner should favor the most actionable guidance first.
+
+Recommended priority:
+
+1. obvious redundancy to prune
+2. overrepresented buckets to thin
+3. useful alternates that may exist in `3`-star material
+4. missing coverage that may or may not exist at all
+
+This ordering better matches the user's real workflow and the reality of limited source material.
+
+## Proposed Panel Shape
+The current `Suggested Candidates` block should evolve into a small set of clearer, more purposeful sections.
+
+Recommended shape:
+
+### 1. Keepers
+A compact overview of the currently strongest kept material, biased toward higher-rated items.
+
+Examples:
+
+- close face keepers
+- wider/body keepers
+- clear-pose keepers
+
+This is not meant to be exhaustive. It is meant to create small, enjoyable rating groups.
+
+### 2. Prune First
+The most actionable section.
+
+Purpose:
+
+- surface obvious repetition
+- point to clusters where several items are probably doing the same job
+- encourage pruning or thinning before chasing ideal coverage
+
+Typical language:
+
+- "These close-ups look very similar; pruning to the cleanest one or two may be worth a quick pass."
+
+### 3. Coverage Hints
+A softer section for gaps or thin coverage.
+
+Purpose:
+
+- show where the set may be narrow
+- suggest where alternates in `3`-star material might help
+- avoid implying that every target must be satisfied
+
+Typical language:
+
+- "Rear clear-pose coverage looks thin. If any alternates exist in lower-rated items, they may be worth checking."
+
+### 4. Alternates Worth Checking
+A bridge between current keepers and lower-confidence material.
+
+Purpose:
+
+- point to `3`-star items that may fill a useful role
+- keep the user from feeling forced into a full balance pass
+- frame these as optional upgrades, not obligations
+
+## Focus Set Behavior
+Each section should open a clearly named focus set with obvious purpose.
+
+Good examples:
+
+- `Close Face Keepers`
+- `Redundant Close-Ups`
+- `Possible Rear Alternates`
+- `Strong Body Keepers`
+
+The title should explain why the user is there without requiring them to remember the originating panel logic.
+
+## Initial Heuristic Inputs
+The first version of this upgraded panel should stay grounded in signals that already exist.
+
+Primary inputs:
+
+- star ratings
+- face focus buckets
+- selection pose buckets
+- scene complexity
+- tag overlap for redundancy pressure
+
+Supporting inputs:
+
+- tags, when present
+- caption presence / readiness state
+
+The planner should prefer existing metadata over inventing new required detectors immediately.
+
+## QA Deferral
+The lower `Quality Assurance` panel should not be expanded right now.
+
+Current decision:
+
+- do not move coverage-planner logic into QA
+- do not force a new purpose for that panel yet
+- revisit QA only when its role is clearer and more trustworthy
+
+For now:
+
+- `Selection` owns broader curation guidance
+- `QA` remains unresolved rather than being overfilled
 
 ## What Stays In Review Captions
 Candidate panels for `Review Captions`:
@@ -132,7 +314,7 @@ Selection is the natural home for lightweight visual-analysis metadata.
 Examples:
 
 - `face_focus`
-- future `scene_complexity`
+- `scene_complexity`
 - future image-only curation signals that help identify weak or noisy samples
 
 This is a better fit than expanding `Review Captions` indefinitely.

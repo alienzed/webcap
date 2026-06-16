@@ -516,6 +516,7 @@ function renderItemMetadataPanel() {
     ['resolution', 'Resolution'],
     ['size', 'Size'],
     ['aspect', 'Aspect'],
+    ['scene_complexity_label', 'Scene Complexity'],
     ['fps', 'FPS'],
     ['duration', 'Duration'],
     ['frames', 'Frames'],
@@ -541,6 +542,12 @@ function renderItemMetadataPanel() {
     if (key === 'aspect' && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(text)) {
       valueEl.classList.add('item-metadata-value-error');
       valueEl.title = 'Aspect ratio is outside supported buckets (square, 4:3, 3:4, 16:9, 9:16).';
+    } else if (key === 'scene_complexity_label') {
+      var sceneComplexity = (typeof getSceneComplexityFromMetadata === 'function') ? getSceneComplexityFromMetadata(row) : null;
+      if (sceneComplexity && sceneComplexity.error) {
+        valueEl.classList.add('item-metadata-value-error');
+        valueEl.title = String(sceneComplexity.error);
+      }
     }
     itemRow.appendChild(labelEl);
     itemRow.appendChild(valueEl);

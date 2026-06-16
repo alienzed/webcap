@@ -346,22 +346,60 @@ function renderAnnotateStrip() {
     var groupEl = document.createElement('div');
     groupEl.className = 'annotate-strip-group';
 
+    var groupRequirementLabel = group.requirement || group.name;
+    var reviewed = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
+      ? isChecklistRequirementCheckedForMediaKey(mediaKey, groupRequirementLabel)
+      : false;
+    var groupIsNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
+      ? isChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel)
+      : false;
+
     var titleRowEl = document.createElement('div');
     titleRowEl.className = 'annotate-strip-group-title-row';
     titleRowEl.title = 'Double-click to toggle reviewed';
 
+    var titleMainEl = document.createElement('div');
+    titleMainEl.className = 'annotate-strip-group-title-main';
+
+    var titleLabelEl = document.createElement('label');
+    titleLabelEl.className = 'annotate-strip-group-title-label';
+    titleLabelEl.title = groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item';
+
+    var naCheckbox = document.createElement('input');
+    naCheckbox.type = 'checkbox';
+    naCheckbox.className = 'annotate-strip-group-na-checkbox';
+    naCheckbox.checked = groupIsNa;
+    naCheckbox.setAttribute('aria-label', groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item');
+    naCheckbox.title = groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item';
+    naCheckbox.onclick = function (e) {
+      e.stopPropagation();
+    };
+    naCheckbox.onchange = function (e) {
+      e.stopPropagation();
+      toggleAnnotateGroupNa(groupRequirementLabel);
+    };
+    titleLabelEl.appendChild(naCheckbox);
+
     var titleEl = document.createElement('div');
     titleEl.className = 'annotate-strip-group-title';
     titleEl.textContent = group.name;
-    titleRowEl.appendChild(titleEl);
+    titleLabelEl.appendChild(titleEl);
+    titleMainEl.appendChild(titleLabelEl);
 
     var isComplete = false;
     var controlsEl = document.createElement('div');
     controlsEl.className = 'annotate-strip-group-controls';
+    
+    var editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'annotate-strip-group-edit-btn';
+    editBtn.textContent = '\u270e';
+    editBtn.title = 'Edit requirement terms';
+    editBtn.onclick = function () {
+      openChecklistGroupTermsModal(group.requirement || group.name);
+    };
+    controlsEl.appendChild(editBtn);
 
-    var reviewed = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
-      ? isChecklistRequirementCheckedForMediaKey(mediaKey, group.requirement || group.name)
-      : false;
     var reviewedBtn = document.createElement('button');
     reviewedBtn.type = 'button';
     reviewedBtn.className = 'annotate-strip-group-reviewed-btn';
@@ -377,46 +415,13 @@ function renderAnnotateStrip() {
     };
     controlsEl.appendChild(reviewedBtn);
 
-    var groupRequirementLabel = group.requirement || group.name;
-    var groupIsNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-      ? isChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel)
-      : false;
-
-    var naBtn = document.createElement('button');
-    naBtn.type = 'button';
-    naBtn.className = 'annotate-strip-group-na-btn';
-    if (groupIsNa) {
-      naBtn.classList.add('active');
-    }
-    naBtn.innerHTML =
-      '<svg class="annotate-strip-group-btn-icon" viewBox="0 0 16 16" aria-hidden="true">' +
-      '<circle cx="8" cy="8" r="5.25"></circle>' +
-      '<path d="M4.45 11.55L11.55 4.45"></path>' +
-      '</svg>';
-    naBtn.setAttribute('aria-label', groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item');
-    naBtn.setAttribute('aria-pressed', groupIsNa ? 'true' : 'false');
-    naBtn.title = groupIsNa ? 'Clear n/a override' : 'Mark group n/a for current item';
-    naBtn.onclick = function () {
-      toggleAnnotateGroupNa(groupRequirementLabel);
-    };
-    controlsEl.appendChild(naBtn);
-
-    var editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'annotate-strip-group-edit-btn';
-    editBtn.textContent = '\u270e';
-    editBtn.title = 'Edit requirement terms';
-    editBtn.onclick = function () {
-      openChecklistGroupTermsModal(group.requirement || group.name);
-    };
-    controlsEl.appendChild(editBtn);
 
     var reviewedState = !!reviewed;
     if (!reviewedState && !groupIsNa) {
       var statusEl = document.createElement('span');
       statusEl.className = 'annotate-strip-group-status-pill';
       statusEl.textContent = 'Not reviewed';
-      titleRowEl.appendChild(statusEl);
+      titleMainEl.appendChild(statusEl);
     }
     var hasActiveTerm = false;
     group.terms.forEach(function (term) {
@@ -436,6 +441,7 @@ function renderAnnotateStrip() {
       groupEl.classList.add('annotate-strip-group-complete');
     }
 
+    titleRowEl.appendChild(titleMainEl);
     titleRowEl.appendChild(controlsEl);
     groupEl.appendChild(titleRowEl);
     groupEl.addEventListener('dblclick', function (e) {

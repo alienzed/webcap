@@ -249,6 +249,7 @@ QA:
 
 Metadata:
 - shows resolution, size, aspect, fps, duration, frames, and codec when available
+- shows scene complexity when metadata has been generated
 - shows rating controls
 - shows requirement progress, reviewed progress, and tag-match progress
 - highlights unsupported aspect ratios
@@ -310,12 +311,21 @@ Current panels:
 - filtered subset summary
 - Face Focus buckets when Face Focus analysis is enabled
 - suggested candidate groups
+- suggested candidates lightly prefer less cluttered scenes when scene complexity metadata is available
 - MediaPipe selection-pose summaries when MediaPipe analysis is enabled:
   - face direction
   - expression
   - body orientation
   - pose class
   - arm position
+
+Planned direction:
+- evolve suggested candidates toward a friendlier coverage planner
+- split that planner into small focus-set-oriented sections such as keepers, prune-first, coverage hints, and alternates
+- prioritize "prune obvious redundancy" ahead of "missing coverage" warnings
+- treat ratings as soft intent signals when building inspection focus sets
+- keep warnings advisory, since missing sample types often simply do not exist in the current material
+- leave the lower QA panel unresolved for now instead of forcing coverage logic into cramped space
 
 Behavior:
 - panel rows are clickable and open focus sets

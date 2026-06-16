@@ -1,72 +1,74 @@
 # Scene Complexity Analysis
 
 ## Purpose
-Add image-only scene complexity analysis to WebCap so dataset curation can estimate how visually busy an image is before captioning or training decisions.
+Add image-only scene complexity analysis to WebCap so curation can estimate how visually busy an image is.
 
-This is not an object detection feature, caption generation feature, or tagging feature. It is lightweight image-analysis metadata, intended to help judge whether an image has a clear focal subject or a crowded, competing scene.
+This is not caption generation, object detection, or auto-tagging. It is lightweight visual metadata intended to help:
+
+- inspect cluttered vs cleaner scenes
+- break ties inside selection heuristics
+- prefer less messy near-duplicates when everything else is similar
+
+## Implementation Scope
+
+### V1
+- analyze images during normal metadata generation
+- store one compact `scene_complexity` block in `media_metadata.json`
+- surface the value in metadata views
+
+### V2
+- use scene complexity as a light tie-breaker in `Review Selections` suggested candidates
+- lower-complexity scenes are preferred only when the rest of the candidate scoring is already similar
+
+### Deferred
+- no standalone scene-complexity filter yet
+- no auto-prune logic
+- no broad workflow coupling beyond metadata display and suggested-candidate ranking
 
 ## Core Assumptions
-- V1 must work fully offline.
-- V1 must not require downloading any additional model weights.
-- V1 must be CPU-first and should not reserve meaningful VRAM.
-- V1 should use thumbnail-scale image analysis only; full-resolution processing is unnecessary.
-- V1 should reuse the existing `media_metadata.json` cache instead of introducing a new state file.
-- V1 should be easy to remove if the signal proves unhelpful.
+- must work fully offline
+- must not require downloading model weights
+- should stay CPU-first
+- should use thumbnail-scale analysis only
+- should reuse the existing metadata cache
+- should remain easy to remove if it proves low-value
 
-If those assumptions stop being true, this likely stops being worth doing.
+## Dependency Position
+- V1/V2 do not require a new model
+- V1/V2 do not require `numpy`
+- V1/V2 use `Pillow`, which is already a project dependency
 
-## Product Direction
-- Analyze images only for the first version.
-- Store scene complexity as metadata, not item tags.
-- Do not write detected complexity labels into captions.
-- Do not connect this to Tag Mismatch, Balance Phrases, primer mappings, or training config generation in v1.
-- Surface results in review and metadata only if the implementation remains small and low-noise.
-- Prefer a single compact score and bucket over a large set of derived fields.
+If later tuning proves this too weak, `numpy` would be a reasonable optional next step, but it is not required for the first shipped version.
 
-## Why Metadata, Not Tags
-Scene complexity is generated visual analysis, not a human semantic label. Keeping it in metadata avoids:
+## What the Metric Means
+`scene_complexity` estimates composition pressure, not semantic richness.
 
-- caption pollution
-- false Tag Mismatch failures
-- special-case workflow tags
-- accidental training-caption changes
-- coupling image analysis to existing caption logic
-
-## Detection Strategy
-V1 should avoid neural detection entirely.
-
-The recommended first pass is heuristic image analysis on a downscaled copy of each image, for example a thumbnail around `256px` to `384px` on the longest side. Candidate signals:
-
-- edge density
-- local contrast variation
-- saliency spread or focal concentration
-- count of visually distinct regions or blobs
-- ratio of dominant region area to total image area
-
-The goal is not to identify objects. The goal is to estimate whether visual attention is concentrated or scattered.
-
-## What "Complexity" Means
-For this feature, `scene_complexity` should mean:
-
+Buckets:
 - `simple`: one dominant focal subject or region, low visual competition
-- `moderate`: a clear subject exists, but background or secondary elements compete somewhat
-- `busy`: many competing regions, clutter, crowding, or no obvious focal dominance
+- `moderate`: a clear subject exists, but other regions compete somewhat
+- `busy`: many competing regions, clutter, crowding, or weak focal dominance
 - `unknown`: analysis failed or result is too ambiguous to trust
 
-This score is intentionally about composition pressure, not semantic richness. A highly detailed image is not automatically `busy` if attention is still concentrated on one subject.
+This is intentionally not a quality score.
 
-## Non-Goals
-V1 should not attempt to:
+Examples:
+- a detailed lace close-up may still read `busy`
+- a clean portrait may read `simple`
+- a semantically rich image is not automatically `busy`
 
-- detect named objects
-- segment people or backgrounds
-- infer caption text automatically
-- decide training inclusion automatically
-- override human judgment
-- load large ONNX, CLIP, YOLO, or segmentation models
+## Detection Strategy
+V1/V2 avoid neural inference entirely.
+
+The shipped heuristic uses a small grayscale thumbnail and combines a few cheap signals:
+- edge density
+- overall local contrast
+- spread of edge energy across the frame
+- dominance of the strongest visual region
+
+The result is reduced to a normalized `0..1` score, then bucketed.
 
 ## Data Shape
-Store a nested block under each image's existing `media_metadata.json` entry:
+Store this under each image entry in `media_metadata.json`:
 
 ```json
 {
@@ -78,23 +80,22 @@ Store a nested block under each image's existing `media_metadata.json` entry:
     "scene_complexity": {
       "bucket": "busy",
       "score": 0.74,
+      "method": "heuristic_v1",
       "version": 1
     }
   }
 }
 ```
 
-Suggested fields:
+Fields:
 - `bucket`: `simple`, `moderate`, `busy`, or `unknown`
-- `score`: normalized `0..1` complexity score
-- `method`: optional short method name such as `heuristic_v1`
+- `score`: normalized `0..1`
+- `method`: short analyzer name
 - `version`: cache invalidation version
-- `error`: optional string if analysis fails for this image
+- `error`: optional string when analysis fails
 
-V1 should keep this payload intentionally small.
-
-## Bucket Defaults
-Suggested initial thresholds:
+## Thresholds
+Initial defaults:
 
 | Bucket | Rule |
 | --- | --- |
@@ -103,73 +104,46 @@ Suggested initial thresholds:
 | `busy` | score >= 0.66 |
 | `unknown` | analysis failed or result is invalid |
 
-These thresholds are placeholders and should be tuned only after looking at real examples from the user's workflow.
+These are intentionally easy to retune later.
 
-## Likely Workflow Value
-This feature is only worth keeping if it changes curation behavior in a practical way.
+## Workflow Role
+This metric is useful primarily as a secondary signal.
 
-Examples of possible value:
-- quickly identifying images where the subject is visually lost in clutter
-- separating clean training samples from crowded ones during review
-- nudging caption effort toward simpler or richer descriptions depending on how much scene competition exists
+Good uses:
+- comparing multiple visually similar candidates
+- spotting cluttered scenes during review
+- gently preferring cleaner compositions in suggested-candidate lists
 
-If the score does not change human decisions, it should remain experimental or be removed.
-
-## Performance Expectations
-For V1, expected cost should be closer to image statistics than model inference:
-
-- no network access
-- no model download
-- no persistent GPU allocation
-- tiny RAM overhead beyond loading the image and a small thumbnail
-- per-image runtime expected to be low enough for metadata generation during normal folder refresh
-
-This should be materially lighter than loading even a "small" modern vision model.
+Bad uses:
+- automatic prune decisions
+- hard inclusion/exclusion rules
+- caption/tag generation
 
 ## Cache Behavior
-Reuse the existing metadata cache invalidation:
-
-- if file `mtime` and `size` match cached metadata, keep existing scene complexity analysis
-- if an image changes, rerun normal media probing and scene complexity analysis
-- if a file is removed, remove its metadata entry
-- if a media transform or crop runs, existing metadata refresh should also refresh scene complexity
-- scene complexity should run automatically whenever media metadata is generated, if implemented
+Reuse normal metadata invalidation:
+- keep cached values when `mtime` and `size` still match and `version` is current
+- recompute when the image changes
+- remove metadata when the file disappears
+- refresh after crop/transform flows that already refresh metadata
 
 ## Safety
-This feature must be read-only with respect to media files.
-
 Do:
-- read image files for analysis
+- read image files
 - write cached metadata into `media_metadata.json`
-- show errors visibly in the app or report
+- show per-image analysis failures as metadata
 
 Do not:
 - mutate media
 - add tags automatically
 - edit captions automatically
-- block review because analysis is missing
-- introduce heavyweight runtime dependencies for v1
+- block review when the metric is missing
 
-## Error Handling
-Follow `docs/copilot_rules.md`:
+## Minimal Code Shape
+Shipped shape:
+1. `tool/server/scene_complexity.py` analyzes thumbnails.
+2. `tool/server/media.py` stores `scene_complexity` into metadata responses and cache.
+3. Metadata views surface the value quietly.
+4. Suggested-candidate scoring uses complexity only as a light tie-breaker.
 
-- coded dependencies should fail loudly when missing
-- errors should be visible and actionable
-- analysis errors for one image should be recorded on that image's metadata entry rather than silently swallowed
-- report-level failures should state that scene complexity metadata could not be generated
-
-## Minimal Implementation Shape
-If implemented, the smallest viable shape is:
-
-1. Add `tool/server/scene_complexity.py` with one thumbnail-based analyzer.
-2. Extend `tool/server/media.py` to populate `scene_complexity` into metadata.
-3. Reuse the existing metadata response path.
-4. Surface the result in one existing review or metadata area without adding new workflow coupling.
-
-This keeps the feature easy to test, easy to remove, and low-risk to the current app.
-
-## Open Questions
-- Is a single score enough, or is one supporting sub-signal needed for trust?
-- Should V1 surface only a review summary first, before adding per-item metadata rows?
-- What real examples from the user's dataset would actually cause different captioning or curation choices?
-- Does `scene_complexity` describe the concept better than `busyness` or `clutter` in the UI?
+## Exit Criteria
+If this metric does not change real curation decisions, it should stay lightweight or be removed.

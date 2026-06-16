@@ -12,6 +12,7 @@ from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transfo
 from .face_focus import FACE_FOCUS_VERSION, analyze_image_face_focus, get_face_focus_detector, is_face_focus_image
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name, restore_original_media, restore_original_media_video_only
 from .permissions import normalize_path_permissions, run_with_directory_repair
+from .scene_complexity import SCENE_COMPLEXITY_METHOD, SCENE_COMPLEXITY_VERSION, analyze_image_scene_complexity, is_scene_complexity_image
 from .selection_pose import SELECTION_POSE_VERSION, analyze_image_selection_pose, get_selection_pose_analyzers, is_selection_pose_image
 
 safe_join_fs_root = app_config.safe_join_fs_root
@@ -150,6 +151,17 @@ def probe_media_metadata(file_path, face_detector=None, selection_pose_analyzers
             result["aspect_ratio"] = get_aspect_ratio(width, height)
         except Exception as e:
             result["error"] = str(e)
+        if is_scene_complexity_image(file_path):
+            try:
+                result["scene_complexity"] = analyze_image_scene_complexity(file_path)
+            except Exception as e:
+                result["scene_complexity"] = {
+                    "bucket": "unknown",
+                    "score": 0.0,
+                    "method": SCENE_COMPLEXITY_METHOD,
+                    "version": SCENE_COMPLEXITY_VERSION,
+                    "error": str(e),
+                }
         if face_detector is not None and is_face_focus_image(file_path):
             try:
                 result["face_focus"] = analyze_image_face_focus(file_path, face_detector)
@@ -216,9 +228,15 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
             isinstance(cached_selection_pose, dict)
             and cached_selection_pose.get("version") == SELECTION_POSE_VERSION
         )
+        cached_scene_complexity = cached.get("scene_complexity") if isinstance(cached, dict) else None
+        cached_has_current_scene_complexity = (
+            isinstance(cached_scene_complexity, dict)
+            and cached_scene_complexity.get("version") == SCENE_COMPLEXITY_VERSION
+        )
         needs_face_focus = bool(include_face_focus) and is_face_focus_image(entry) and not cached_has_current_face_focus
         needs_selection_pose = bool(include_selection_pose) and is_selection_pose_image(entry) and not cached_has_current_selection_pose
-        if cached and cached.get("mtime") == mtime and cached.get("size") == size and not needs_face_focus and not needs_selection_pose:
+        needs_scene_complexity = is_scene_complexity_image(entry) and not cached_has_current_scene_complexity
+        if cached and cached.get("mtime") == mtime and cached.get("size") == size and not needs_face_focus and not needs_selection_pose and not needs_scene_complexity:
             continue
         pending_entries.append(entry)
     if include_face_focus and any(is_face_focus_image(entry) for entry in pending_entries):
@@ -418,6 +436,17 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
                 record["selection_pose_body_orientation"] = selection_pose.get("body_orientation", "unknown")
                 record["selection_pose_pose_class"] = selection_pose.get("pose_class", "unknown")
                 record["selection_pose_arm_position"] = selection_pose.get("arm_position", "unknown")
+            scene_complexity = info.get("scene_complexity") if isinstance(info.get("scene_complexity"), dict) else None
+            if scene_complexity:
+                score = scene_complexity.get("score")
+                record["scene_complexity"] = scene_complexity
+                record["scene_complexity_bucket"] = scene_complexity.get("bucket", "unknown")
+                record["scene_complexity_score"] = score
+                if isinstance(score, (int, float)):
+                    record["scene_complexity_label"] = f"{scene_complexity.get('bucket', 'unknown').title()} ({round(float(score) * 100):d}%)"
+                else:
+                    record["scene_complexity_label"] = str(scene_complexity.get("bucket", "unknown")).title()
+                record["scene"] = record["scene_complexity_label"]
             metadata_list.append(record)
         return jsonify(metadata_list)
     except Exception as e:

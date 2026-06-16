@@ -70,7 +70,6 @@ ui = {
   utilityPathFlyoutEl: document.getElementById('utility-path-flyout'),
   utilityCurrentPathBtn: document.getElementById('utility-current-path-btn'),
   utilitySettingsBtn: document.getElementById('utility-settings-btn'),
-  utilityRebootBtn: document.getElementById('utility-reboot-btn'),
   utilityHelpBtn: document.getElementById('utility-help-btn'),
   utilityThemeBtn: document.getElementById('utility-theme-btn'),
   createSetFromResultsBtn: document.getElementById('create-set-from-results-btn'),

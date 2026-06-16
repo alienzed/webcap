@@ -143,9 +143,9 @@ function saveAppSettings(opts) {
     if (closeOnSuccess) {
       closeAppSettingsModal();
     } else {
-      setAppSettingsStatus('Saved. Click Reboot to apply runtime changes.', false);
+      setAppSettingsStatus('Saved. Click Save + Reboot to apply runtime changes.', false);
     }
-    setStatus('Settings saved. Use Reboot to apply runtime changes.');
+    setStatus('Settings saved. Use Save + Reboot to apply runtime changes.');
   });
 }
 
@@ -257,12 +257,6 @@ function openHelpReadmeInPreview() {
 function wireAppSettingsUi() {
   if (ui.utilitySettingsBtn) ui.utilitySettingsBtn.onclick = openAppSettingsModal;
   if (ui.utilityHelpBtn) ui.utilityHelpBtn.onclick = openHelpReadmeInPreview;
-  if (ui.utilityRebootBtn) {
-    ui.utilityRebootBtn.onclick = function () {
-      if (!confirm('Reload runtime settings from config.json now?')) return;
-      triggerRuntimeConfigReload(false);
-    };
-  }
   if (ui.utilityCurrentPathBtn) {
     ui.utilityCurrentPathBtn.onclick = function () {
       toggleUtilityPathFlyout();

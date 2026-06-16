@@ -483,12 +483,39 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
     ? getPrimerMappingsRows()
     : [];
   var defaultRows = getRequirementDefaultPrimerMappings();
-  // Custom mappings run first; requirement defaults fill in afterward.
-  var rows = customRows.concat(defaultRows);
   var mediaTags = [];
   if (mediaKey && typeof getTagsForMediaKey === 'function') {
     mediaTags = getTagsForMediaKey(mediaKey).map(function (tag) { return String(tag || '').toLowerCase(); });
   }
+  if (mediaTags.length && defaultRows.length) {
+    var mediaTagOrder = {};
+    mediaTags.forEach(function (tag, idx) {
+      if (typeof mediaTagOrder[tag] === 'undefined') {
+        mediaTagOrder[tag] = idx;
+      }
+    });
+    defaultRows = defaultRows.map(function (row, idx) {
+      return { row: row, idx: idx };
+    }).sort(function (a, b) {
+      var aRow = a.row || {};
+      var bRow = b.row || {};
+      var aScope = String(aRow.scope || 'file').toLowerCase();
+      var bScope = String(bRow.scope || 'file').toLowerCase();
+      if (aScope !== 'tag' || bScope !== 'tag') {
+        return a.idx - b.idx;
+      }
+      var aToken = String(aRow.token || '').trim().toLowerCase();
+      var bToken = String(bRow.token || '').trim().toLowerCase();
+      var aOrder = typeof mediaTagOrder[aToken] === 'number' ? mediaTagOrder[aToken] : Number.MAX_SAFE_INTEGER;
+      var bOrder = typeof mediaTagOrder[bToken] === 'number' ? mediaTagOrder[bToken] : Number.MAX_SAFE_INTEGER;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.idx - b.idx;
+    }).map(function (entry) {
+      return entry.row;
+    });
+  }
+  // Custom mappings run first; requirement defaults fill in afterward.
+  var rows = customRows.concat(defaultRows);
   rows.forEach(function (rawRow) {
     var row = rawRow || {};
     var enabled = row.enabled !== false;

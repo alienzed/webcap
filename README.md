@@ -132,7 +132,6 @@ Practical loop:
 
 - Current-path button opens a path flyout for quick jumps.
 - `Settings` opens app settings and advanced JSON editing.
-- `Reboot` reloads config from disk.
 - `Help` opens the current `README.md` in the preview pane.
 - Theme toggle switches light/dark mode and persists in local storage.
 
@@ -512,7 +511,7 @@ python -m pytest tests/test_prune_restore.py
 
 ### Config edits do not seem to apply
 
-- Use `Save + Reboot` in Settings, or click utility `Reboot`.
+- Use `Save + Reboot` in Settings.
 
 ### Deface fails
 

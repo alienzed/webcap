@@ -896,6 +896,10 @@ function saveChecklistGlobalTermPin(requirementLabel, termText, shouldPin) {
       }
     } catch (_e) {}
     setRuntimeAppConfig(saved);
+    refreshCurrentPrimerDerivedUi();
+    renderAnnotateStrip();
+    renderItemMetadataPanel();
+    renderItemTagsPanel();
     renderChecklistGroupTermsModalItems();
     renderChecklistGroupTermsModalResults('');
     setStatus(shouldPin ? ('Pinned term to global config: ' + term) : ('Unpinned global term: ' + term));
@@ -971,10 +975,10 @@ function saveChecklistTermAffixesModal() {
   }
   if (changed) {
     saveChecklistToFolderState();
-    refreshPrimerPreviewForCurrentItem();
-    updatePrimerCaptionResetUi();
+    refreshCurrentPrimerDerivedUi();
     renderAnnotateStrip();
     renderItemTagsPanel();
+    renderItemMetadataPanel();
   }
   closeChecklistTermAffixesModal();
 }
@@ -1032,10 +1036,11 @@ function applyChecklistGroupTermsModalChanges() {
     checklistGroupTermsModalState.terms
   );
   saveChecklistToFolderState();
+  refreshCurrentPrimerDerivedUi();
   renderChecklistPanel();
-  if (typeof renderItemMetadataPanel === 'function') {
-    renderItemMetadataPanel();
-  }
+  renderItemMetadataPanel();
+  renderAnnotateStrip();
+  renderItemTagsPanel();
 }
 
 function addChecklistGroupModalTerm(rawTerm) {
@@ -1221,7 +1226,11 @@ function openChecklistGroupTermsModal(requirementLabel) {
 function saveChecklistKeywordsModalAndClose() {
   checklistKeywordsByItem = JSON.parse(JSON.stringify(checklistKeywordsModalTemp || {}));
   saveChecklistToFolderState();
+  refreshCurrentPrimerDerivedUi();
   renderChecklistPanel();
+  renderItemMetadataPanel();
+  renderAnnotateStrip();
+  renderItemTagsPanel();
   closeChecklistKeywordsModal();
   checklistKeywordsModalTemp = null;
 }

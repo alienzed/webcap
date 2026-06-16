@@ -246,6 +246,11 @@ function refreshPrimerPreviewForCurrentItem() {
   return true;
 }
 
+function refreshCurrentPrimerDerivedUi() {
+  refreshPrimerPreviewForCurrentItem();
+  updatePrimerCaptionResetUi();
+}
+
 function debounceCreate(waitMs) {
   var timer = null;
   return function (callback) {
@@ -333,6 +338,7 @@ window.applyAppTheme = applyAppTheme;
 window.toggleAppTheme = toggleAppTheme;
 window.wireThemeToggleUi = wireThemeToggleUi;
 window.getCurrentAppTheme = getCurrentAppTheme;
+window.refreshCurrentPrimerDerivedUi = refreshCurrentPrimerDerivedUi;
 
 wireThemeToggleUi();
 

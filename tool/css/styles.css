@@ -1038,6 +1038,13 @@ iframe {
   padding: 0 9px;
 }
 
+.utility-settings-btn {
+  min-width: 92px;
+  padding: 0 11px 0 9px;
+  gap: 6px;
+  font-weight: 700;
+}
+
 .utility-theme-btn {
   min-width: 44px;
   padding: 0 10px;

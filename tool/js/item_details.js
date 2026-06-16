@@ -884,7 +884,38 @@ function shouldLiveSyncEditorToTemplateForMediaKey(mediaKey) {
 }
 
 function syncEditorToCurrentTemplatePreview() {
-  refreshPrimerPreviewForCurrentItem();
+  refreshCurrentPrimerDerivedUi();
+}
+
+function moveTagUpForMediaKey(mediaKey, tagText) {
+  var key = String(mediaKey || '').trim();
+  var target = normalizeItemTag(tagText).toLowerCase();
+  if (!key || !target) return false;
+  var current = getTagsForMediaKey(key);
+  if (current.length < 2) return false;
+  var idx = -1;
+  for (var i = 0; i < current.length; i++) {
+    if (normalizeItemTag(current[i]).toLowerCase() === target) {
+      idx = i;
+      break;
+    }
+  }
+  if (idx <= 0) return false;
+  var next = current.slice();
+  var temp = next[idx - 1];
+  next[idx - 1] = next[idx];
+  next[idx] = temp;
+  captionItemTagsByMedia[key] = next;
+  saveItemTagsToFolderState();
+  renderItemTagsPanel();
+  renderItemMetadataPanel();
+  renderFileList();
+  updateBalanceDistributionWheel();
+  renderAnnotateStrip();
+  if (shouldLiveSyncEditorToTemplateForMediaKey(key)) {
+    refreshCurrentPrimerDerivedUi();
+  }
+  return true;
 }
 
 function addTagToMediaKey(mediaKey, tagText) {
@@ -1031,16 +1062,7 @@ function renderItemTagsPanel() {
     : [];
 
   if (tags.length) {
-    tags.sort(function (a, b) {
-      var aText = String(a || '');
-      var bText = String(b || '');
-      var aPresent = tagAppearsInCurrentCaption(aText);
-      var bPresent = tagAppearsInCurrentCaption(bText);
-      if (aPresent !== bPresent) return aPresent ? 1 : -1;
-      return aText.toLowerCase().localeCompare(bText.toLowerCase());
-    });
-
-    tags.forEach(function (tag) {
+    tags.forEach(function (tag, idx) {
       var rowEl = document.createElement('div');
       rowEl.className = 'row-inline';
 
@@ -1056,8 +1078,19 @@ function renderItemTagsPanel() {
         renderItemTagsPanel();
       };
 
+      var upBtn = document.createElement('button');
+      upBtn.type = 'button';
+      upBtn.className = 'stats-phrase-mini-btn';
+      upBtn.textContent = '\u2191';
+      upBtn.title = 'Move tag up for primer order';
+      upBtn.disabled = idx === 0;
+      upBtn.onclick = function () {
+        moveTagUpForMediaKey(key, tag);
+      };
+
       var rmBtn = document.createElement('button');
       rmBtn.type = 'button';
+      rmBtn.className = 'stats-phrase-mini-btn';
       rmBtn.textContent = 'x';
       rmBtn.onclick = function () {
         removeTagFromMediaKey(key, tag);
@@ -1065,6 +1098,7 @@ function renderItemTagsPanel() {
       };
 
       rowEl.appendChild(tagBtn);
+      rowEl.appendChild(upBtn);
       rowEl.appendChild(rmBtn);
       listEl.appendChild(rowEl);
     });

@@ -511,7 +511,7 @@ function renderSelectionPreview(report, reviewedFileNames) {
     '<div class="summary-row"><span>Missing captions</span><strong>' + report.missingCaption + '</strong></div>' +
     '</div>' +
     '<div class="card"><h3>Scope</h3>' +
-    '<p class="small" style="margin:0;line-height:1.45;">Review Selections runs only on the currently visible media items. Use filters first, then click a group to open a focus set for rating and inspection.</p>' +
+    '<p class="small" style="margin:0;line-height:1.45;">Selection Analysis runs only on the currently visible media items. Use filters first, then click a group to open a focus set for rating and inspection.</p>' +
     '</div>' +
     '</div>' +
     '<div class="row"><div class="card"><h3>Suggested Candidates</h3><p class="small" style="margin:0 0 6px 0;color:#666;font-size:12px;" title="Items with high-confidence multimodal signals from face direction, expression, body orientation, and pose class.">Items with consistent pose and expression signals</p><div id="selection-suggested-candidates-panel">Loading...</div></div></div>' +

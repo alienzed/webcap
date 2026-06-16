@@ -208,7 +208,7 @@ function activateFocusSet(fileNames, source, reportType) {
 }
 
 function getFocusSetReportLabel(reportType) {
-  if (reportType === 'selection') return 'Review Selections';
+  if (reportType === 'selection') return 'Selection Analysis';
   if (reportType === 'captions') return 'Review Captions';
   return '';
 }
@@ -319,7 +319,7 @@ function updateReviewButtonAvailability() {
   if (ui.reviewSelectionsBtn) {
     ui.reviewSelectionsBtn.disabled = false;
     ui.reviewSelectionsBtn.classList.toggle('hidden', !availability.enabled);
-    ui.reviewSelectionsBtn.title = availability.message.replace('Review Captions', 'Review Selections').replace('Review captions', 'Review selections');
+    ui.reviewSelectionsBtn.title = availability.message.replace('Review Captions', 'Selection Analysis').replace('Review captions', 'Selection analysis');
   }
 }
 
@@ -554,7 +554,7 @@ function runReview() {
 function runSelectionReview() {
   var availability = getReviewAvailability();
   if (!availability.enabled) {
-    setStatus(availability.message.replace('Review Captions', 'Review Selections') + '.');
+    setStatus(availability.message.replace('Review Captions', 'Selection Analysis') + '.');
     updateReviewButtonAvailability();
     return;
   }

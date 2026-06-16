@@ -2158,7 +2158,6 @@ iframe {
   column-count: 2;
   column-gap: 12px;
   max-height: 140px;
-  /* Each column will fill up to 5 rows, then start a new column */
 }
 
 #checklist-items .row-inline {

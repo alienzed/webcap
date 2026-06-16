@@ -387,8 +387,8 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
       text: text || ''
     }, function(status, responseText) {
       if (status === 200) {
-        setStatus('Saved: ' + (media || '').replace(/\.[^.]+$/, '.txt'));
         var hasCaption = !!(text && text.trim().length);
+        setStatus((hasCaption ? 'Saved: ' : 'Cleared: ') + (media || '').replace(/\.[^.]+$/, '.txt'));
         var updatedKey = null;
         // Update state
         for (var i = 0; i < state.items.length; i++) {

@@ -891,6 +891,7 @@ function moveTagUpForMediaKey(mediaKey, tagText) {
   var key = String(mediaKey || '').trim();
   var target = normalizeItemTag(tagText).toLowerCase();
   if (!key || !target) return false;
+  var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
   var current = getTagsForMediaKey(key);
   if (current.length < 2) return false;
   var idx = -1;
@@ -912,7 +913,7 @@ function moveTagUpForMediaKey(mediaKey, tagText) {
   renderFileList();
   updateBalanceDistributionWheel();
   renderAnnotateStrip();
-  if (shouldLiveSyncEditorToTemplateForMediaKey(key)) {
+  if (shouldSyncTemplate) {
     refreshCurrentPrimerDerivedUi();
   }
   return true;

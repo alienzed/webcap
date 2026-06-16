@@ -763,11 +763,7 @@ function wirePrimerCaptionResetUi() {
         return;
       }
       var nextPrimer = buildAutoPrimer(mediaItem.fileName, mediaItem.key) || '';
-      if (!nextPrimer.trim()) {
-        if (!confirm('Primer output is empty. Clear current caption?')) return;
-      } else {
-        if (!confirm('Reset current caption to primer output?')) return;
-      }
+      if (!confirm('Delete current caption and follow primer for this item?')) return;
       var previousText = String((ui && ui.editorEl && ui.editorEl.value) || '');
       if (previousText === nextPrimer) {
         setStatus('Caption already matches primer output (nothing to reset).');
@@ -777,11 +773,15 @@ function wirePrimerCaptionResetUi() {
         mediaKey: mediaItem.key,
         text: previousText
       };
-      applyEditorTextAndTriggerInput(nextPrimer);
-      updatePrimerCaptionResetUi();
-      saveCaptionDirect(state.folder, mediaItem.fileName, nextPrimer, mediaItem.key).catch(function (err) {
-        setStatus(String(err && err.message ? err.message : err));
-      });
+      saveCaptionDirect(state.folder, mediaItem.fileName, '', mediaItem.key)
+        .then(function () {
+          applyEditorTextAndTriggerInput(nextPrimer);
+          refreshCurrentPrimerDerivedUi();
+        })
+        .catch(function (err) {
+          primerResetUndoState = null;
+          setStatus(String(err && err.message ? err.message : err));
+        });
     });
   }
 
@@ -795,12 +795,15 @@ function wirePrimerCaptionResetUi() {
         return;
       }
       var restoreText = String(primerResetUndoState.text || '');
-      primerResetUndoState = null;
-      applyEditorTextAndTriggerInput(restoreText);
-      updatePrimerCaptionResetUi();
-      saveCaptionDirect(state.folder, mediaItem.fileName, restoreText, mediaItem.key).catch(function (err) {
-        setStatus(String(err && err.message ? err.message : err));
-      });
+      saveCaptionDirect(state.folder, mediaItem.fileName, restoreText, mediaItem.key)
+        .then(function () {
+          primerResetUndoState = null;
+          applyEditorTextAndTriggerInput(restoreText);
+          updatePrimerCaptionResetUi();
+        })
+        .catch(function (err) {
+          setStatus(String(err && err.message ? err.message : err));
+        });
     });
   }
 
@@ -821,6 +824,7 @@ function wirePrimerCaptionResetUi() {
       var textToSave = String((ui && ui.editorEl && ui.editorEl.value) || '');
       saveCaptionDirect(state.folder, mediaItem.fileName, textToSave, mediaItem.key)
         .then(function () {
+          primerResetUndoState = null;
           updatePrimerCaptionResetUi();
         })
         .catch(function (err) {

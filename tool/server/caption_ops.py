@@ -64,11 +64,16 @@ def save_caption_text(folder: str, media_name: str, text: str):
     caption_name = _caption_name_for_media(media_name)
     caption_path = folder_path / caption_name
     app_config.debug_print(f'[BACKEND][WRITE] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
+    clean_text = text or ''
     caption_path.parent.mkdir(parents=True, exist_ok=True)
     normalize_path_permissions(caption_path.parent)
-    caption_path.write_text(text or '', encoding='utf-8')
-    app_config.debug_print('[BACKEND][WRITE] WROTE caption.')
-    normalize_path_permissions(caption_path)
+    if clean_text.strip():
+        caption_path.write_text(clean_text, encoding='utf-8')
+        app_config.debug_print('[BACKEND][WRITE] WROTE caption.')
+        normalize_path_permissions(caption_path)
+    elif caption_path.exists():
+        caption_path.unlink()
+        app_config.debug_print('[BACKEND][WRITE] DELETED caption.')
     return {'ok': True, 'caption_file': caption_name}
 
 def serve_media_file(folder: str, media_name: str):

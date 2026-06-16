@@ -390,6 +390,7 @@ textarea#editor {
   max-width: 100%;
   box-sizing: border-box;
   height: 100%;
+  padding-right: 90px;
   resize: none;
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 13px;

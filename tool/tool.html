@@ -596,6 +596,7 @@
                         <button id="preview-mutation-indicator" type="button" class="preview-action-btn preview-action-reset-btn hidden" title="Reset to original">Reset</button>
                         <button id="preview-action-primary-a" type="button" class="preview-action-btn hidden"></button>
                         <button id="preview-action-primary-b" type="button" class="preview-action-btn hidden"></button>
+                        <button id="preview-action-annotate" type="button" class="preview-action-btn hidden">Annotate</button>
                         <button id="preview-action-more" type="button" class="preview-action-btn hidden">More</button>
                     </div>
                 </div>
@@ -823,6 +824,53 @@
                 </div>
             </div>
         </div>
+        <div id="focused-annotation-modal" class="focused-annotation-modal hidden" aria-hidden="true">
+            <div class="focused-annotation-dialog" role="dialog" aria-modal="true" aria-labelledby="focused-annotation-title">
+                <div class="focused-annotation-header">
+                    <div class="focused-annotation-header-copy">
+                        <h2 id="focused-annotation-title">Focused Annotation</h2>
+                        <div id="focused-annotation-meta" class="focused-annotation-meta"></div>
+                    </div>
+                    <div class="focused-annotation-header-actions">
+                        <button id="focused-annotation-edit-terms-btn" type="button" class="btn">Edit Terms</button>
+                        <button id="focused-annotation-close-btn" type="button" class="btn">Exit</button>
+                    </div>
+                </div>
+                <div class="focused-annotation-body">
+                    <div class="focused-annotation-preview-pane">
+                        <div id="focused-annotation-preview-media" class="focused-annotation-preview-media"></div>
+                        <div class="focused-annotation-caption-section">
+                            <div class="focused-annotation-section-title">Current Caption</div>
+                            <div id="focused-annotation-caption-preview" class="focused-annotation-caption-preview"></div>
+                        </div>
+                    </div>
+                    <div class="focused-annotation-group-pane">
+                        <div class="focused-annotation-progress-row">
+                            <div id="focused-annotation-item-progress" class="focused-annotation-progress-pill"></div>
+                            <div id="focused-annotation-group-progress" class="focused-annotation-progress-pill"></div>
+                        </div>
+                        <div class="focused-annotation-group-header">
+                            <div class="focused-annotation-group-header-copy">
+                                <div id="focused-annotation-group-name" class="focused-annotation-group-name"></div>
+                                <div id="focused-annotation-group-status" class="focused-annotation-group-status"></div>
+                            </div>
+                        </div>
+                        <div id="focused-annotation-group-match-note" class="focused-annotation-group-match-note"></div>
+                        <div id="focused-annotation-term-list" class="focused-annotation-term-list"></div>
+                        <div class="focused-annotation-selected-section">
+                            <div class="focused-annotation-section-title">Selected Tags In This Group</div>
+                            <div id="focused-annotation-selected-tags" class="focused-annotation-selected-tags"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="focused-annotation-footer">
+                    <button id="focused-annotation-back-btn" type="button" class="btn">Back</button>
+                    <button id="focused-annotation-skip-btn" type="button" class="btn">Skip</button>
+                    <button id="focused-annotation-na-btn" type="button" class="btn">N/A</button>
+                    <button id="focused-annotation-done-btn" type="button" class="btn">Done</button>
+                </div>
+            </div>
+        </div>
         <!-- JS load order: shared globals first, feature files, then main.js wiring -->
         <script src="/static/js/constants.js"></script>
         <script src="/static/js/common.js"></script>
@@ -842,12 +890,14 @@
         <script src="/static/js/advanced_mappings_rules.js"></script>
         <script src="/static/js/editor.js"></script>
         <script src="/static/js/checklist.js"></script>
+        <script src="/static/js/checklist_modals.js"></script>
         <script src="/static/js/caption_helpers.js"></script>
         <script src="/static/js/caption_helpers_annotate.js"></script>
         <script src="/static/js/caption_helpers_catalog.js"></script>
         <script src="/static/js/caption_helpers_panel.js"></script>
         <script src="/static/js/caption_helpers_ui.js"></script>
         <script src="/static/js/item_details.js"></script>
+        <script src="/static/js/focused_annotation.js"></script>
         <script src="/static/js/balance_distribution_wheel.js"></script>
         <script src="/static/js/app_settings.js"></script>
         <script src="/static/js/smart_set.js"></script>

@@ -1,8 +1,13 @@
 This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-06-11.
 
+## Paint Points
+- filling in the primer, this should be generatable
+- Caption Template probably needs a 'i'
+- I'll start a set, rate enough samples 4,5 stars, but then everytime I come back into the set, I have to select 4 and 5 stars, but this is like, the final set I am captioning, it's somewhat annoying to have to reapple filters...
+- Another huge benefit of the future grid feature will be copy/pasting tags between very similar items.
+
 ## Bugs
-- Caption when in pimer mode doesn't seem to update always... sometimes it seems to get stuck between states. Any change that should update the caption when it has not yet been saved should be immediate. We may want to centralize this better.
 
 ## Enhancements
 - Add a conservative face ROI mode for face-specific analysis only: use the existing CenterFace / `face_focus` bbox as a padded crop for face direction / expression analysis when the padded ROI is both meaningfully smaller than the full frame and still at least `192 px` on its short side; keep body/pose analysis on the full image and fall back to full-image face analysis when ROI is not clearly beneficial.
@@ -47,6 +52,10 @@ Last reviewed: 2026-06-11.
 ## Cleanup Candidates
 - Consolidate set-context gating around shared helper usage and remove stale checks.
 
+
+## Validate
+- Caption when in pimer mode doesn't seem to update always... sometimes it seems to get stuck between states. Any change that should update the caption when it has not yet been saved should be immediate. We may want to centralize this better.
+- In a group, I can't remove a pinned item. Can't a removal last for the session at least? or even just while inside this folder?
 
 ## Implemented
 - Preview quick actions (pre-implementation decision):

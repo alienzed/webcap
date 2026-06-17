@@ -35,6 +35,7 @@ ui = {
   previewMutationIndicatorEl: document.getElementById('preview-mutation-indicator'),
   previewPrimaryActionAEl: document.getElementById('preview-action-primary-a'),
   previewPrimaryActionBEl: document.getElementById('preview-action-primary-b'),
+  previewAnnotateActionEl: document.getElementById('preview-action-annotate'),
   previewMoreActionsEl: document.getElementById('preview-action-more'),
   balanceDistributionWheelEl: document.getElementById('balance-distribution-wheel'),
   mediaListWrapperEl: document.getElementById('media-list-wrapper'),

@@ -259,6 +259,385 @@
   background: rgba(0, 0, 0, 0.58);
 }
 
+.focused-annotation-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.84)),
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.1), transparent 26%);
+  backdrop-filter: blur(6px);
+}
+
+.focused-annotation-modal.hidden {
+  display: none;
+}
+
+.focused-annotation-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100%;
+  color: #e2e8f0;
+  padding: 18px;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.focused-annotation-header,
+.focused-annotation-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.focused-annotation-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.focused-annotation-header h2 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.focused-annotation-meta {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.focused-annotation-header-actions,
+.focused-annotation-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.focused-annotation-dialog .btn {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.focused-annotation-dialog .btn:hover {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(251, 191, 36, 0.42);
+  transform: translateY(-1px);
+}
+
+.focused-annotation-dialog .btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+  transform: none;
+}
+
+.focused-annotation-dialog .btn:disabled:hover {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.focused-annotation-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(360px, 1.05fr) minmax(420px, 1fr);
+  gap: 18px;
+}
+
+.focused-annotation-preview-pane,
+.focused-annotation-group-pane {
+  min-height: 0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.68);
+  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.28);
+}
+
+.focused-annotation-preview-pane {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 14px;
+}
+
+.focused-annotation-preview-media {
+  flex: 1 1 auto;
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.9);
+}
+
+.focused-annotation-preview-image,
+.focused-annotation-preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 14px;
+}
+
+.focused-annotation-caption-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.focused-annotation-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fbbf24;
+}
+
+.focused-annotation-caption-preview {
+  max-height: 160px;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.84);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: #dbeafe;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.focused-annotation-group-pane {
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  gap: 16px;
+}
+
+.focused-annotation-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.focused-annotation-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(30, 41, 59, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.focused-annotation-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.focused-annotation-group-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.focused-annotation-group-name {
+  font-size: 34px;
+  line-height: 1.05;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.focused-annotation-group-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.focused-annotation-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(51, 65, 85, 0.92);
+  color: #e2e8f0;
+}
+
+.focused-annotation-badge-reviewed {
+  background: rgba(21, 128, 61, 0.24);
+  color: #bbf7d0;
+}
+
+.focused-annotation-badge-na {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+}
+
+.focused-annotation-badge-matched {
+  background: rgba(59, 130, 246, 0.22);
+  color: #bfdbfe;
+}
+
+.focused-annotation-badge-pinned {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+}
+
+.focused-annotation-badge-inline {
+  background: rgba(125, 211, 252, 0.18);
+  color: #bae6fd;
+}
+
+.focused-annotation-group-match-note {
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.focused-annotation-term-list,
+.focused-annotation-selected-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.focused-annotation-term-list {
+  flex: 1 1 auto;
+}
+
+.focused-annotation-term-row,
+.focused-annotation-selected-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.focused-annotation-term-btn {
+  appearance: none;
+  border: none;
+  background: rgba(30, 41, 59, 0.9);
+  color: #f8fafc;
+  border-radius: 14px;
+  padding: 16px 18px;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+}
+
+.focused-annotation-term-btn:hover {
+  background: rgba(51, 65, 85, 0.95);
+  transform: translateY(-1px);
+}
+
+.focused-annotation-term-btn.active {
+  background: linear-gradient(135deg, rgba(8, 145, 178, 0.92), rgba(14, 116, 144, 0.92));
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.28);
+}
+
+.focused-annotation-term-btn.matched:not(.active) {
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.5), rgba(29, 78, 216, 0.42));
+}
+
+.focused-annotation-term-badges,
+.focused-annotation-selected-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.focused-annotation-selected-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.focused-annotation-selected-label {
+  color: #f8fafc;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.focused-annotation-empty {
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.84);
+  border: 1px dashed rgba(148, 163, 184, 0.24);
+  color: #cbd5e1;
+}
+
+body.focused-annotation-open {
+  overflow: hidden;
+}
+
+@media (max-width: 1080px) {
+  .focused-annotation-body {
+    grid-template-columns: 1fr;
+  }
+
+  .focused-annotation-preview-media {
+    min-height: 280px;
+  }
+}
+
+@media (max-width: 720px) {
+  .focused-annotation-dialog {
+    padding: 12px;
+  }
+
+  .focused-annotation-header,
+  .focused-annotation-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .focused-annotation-group-name {
+    font-size: 26px;
+  }
+
+  .focused-annotation-term-btn {
+    font-size: 17px;
+    padding: 14px 15px;
+  }
+}
+
 .crop-modal.hidden {
   display: none !important;
 }

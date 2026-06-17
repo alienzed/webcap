@@ -239,6 +239,16 @@ function buildMediaContextMenuActions(mediaItem, key) {
       }
     });
   }
+  actions.push({
+    label: 'Focused Annotate...',
+    run: function () {
+      if (typeof openFocusedAnnotationForMediaItem === 'function') {
+        openFocusedAnnotationForMediaItem(mediaItem);
+      } else {
+        setStatus('Focused annotation is unavailable.');
+      }
+    }
+  });
   actions.push({ separator: true });
 
   actions.push({

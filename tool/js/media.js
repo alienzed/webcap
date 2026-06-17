@@ -91,7 +91,7 @@ function runPreviewActionByLabel(label) {
 }
 
 function updatePreviewActionControls() {
-  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
+  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewAnnotateActionEl || !ui.previewMoreActionsEl) return;
 
   var hideAll = function () {
     ui.previewActionsEl.classList.add('hidden');
@@ -99,6 +99,7 @@ function updatePreviewActionControls() {
     ui.previewMutationIndicatorEl.removeAttribute('data-action-label');
     ui.previewPrimaryActionAEl.classList.add('hidden');
     ui.previewPrimaryActionBEl.classList.add('hidden');
+    ui.previewAnnotateActionEl.classList.add('hidden');
     ui.previewMoreActionsEl.classList.add('hidden');
     ui.previewPrimaryActionAEl.removeAttribute('data-action-label');
     ui.previewPrimaryActionBEl.removeAttribute('data-action-label');
@@ -153,8 +154,9 @@ function updatePreviewActionControls() {
   var secondaryActions = filterPreviewSecondaryActions(actions, used);
   var hasMore = hasNonSeparatorActions(secondaryActions);
   ui.previewMoreActionsEl.classList.toggle('hidden', !hasMore);
+  ui.previewAnnotateActionEl.classList.toggle('hidden', !(typeof openFocusedAnnotationModal === 'function'));
 
-  if (primaryA || primaryB || hasMore || showMutationReset) {
+  if (primaryA || primaryB || hasMore || showMutationReset || typeof openFocusedAnnotationModal === 'function') {
     ui.previewActionsEl.classList.remove('hidden');
   } else {
     ui.previewActionsEl.classList.add('hidden');
@@ -162,7 +164,7 @@ function updatePreviewActionControls() {
 }
 
 function wirePreviewActionControls() {
-  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
+  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewAnnotateActionEl || !ui.previewMoreActionsEl) return;
   if (ui.previewActionsEl.__wired) return;
   ui.previewActionsEl.__wired = true;
 
@@ -179,6 +181,13 @@ function wirePreviewActionControls() {
   bindPrimaryButton(ui.previewPrimaryActionAEl);
   bindPrimaryButton(ui.previewPrimaryActionBEl);
   bindPrimaryButton(ui.previewMutationIndicatorEl);
+  ui.previewAnnotateActionEl.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof openFocusedAnnotationModal === 'function') {
+      openFocusedAnnotationModal();
+    }
+  });
 
   ui.previewMoreActionsEl.addEventListener('click', function (e) {
     e.preventDefault();

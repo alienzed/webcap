@@ -10,21 +10,16 @@ var focusedAnnotationState = {
 function getFocusedAnnotationEls() {
   return {
     modal: document.getElementById('focused-annotation-modal'),
-    meta: document.getElementById('focused-annotation-meta'),
     previewMedia: document.getElementById('focused-annotation-preview-media'),
-    captionPreview: document.getElementById('focused-annotation-caption-preview'),
     itemProgress: document.getElementById('focused-annotation-item-progress'),
     groupProgress: document.getElementById('focused-annotation-group-progress'),
     groupName: document.getElementById('focused-annotation-group-name'),
     groupStatus: document.getElementById('focused-annotation-group-status'),
-    matchNote: document.getElementById('focused-annotation-group-match-note'),
     termList: document.getElementById('focused-annotation-term-list'),
-    selectedTags: document.getElementById('focused-annotation-selected-tags'),
     editTermsBtn: document.getElementById('focused-annotation-edit-terms-btn'),
     closeBtn: document.getElementById('focused-annotation-close-btn'),
     backBtn: document.getElementById('focused-annotation-back-btn'),
     skipBtn: document.getElementById('focused-annotation-skip-btn'),
-    naBtn: document.getElementById('focused-annotation-na-btn'),
     doneBtn: document.getElementById('focused-annotation-done-btn')
   };
 }
@@ -159,12 +154,8 @@ function getFocusedAnnotationMediaUrl(mediaItem) {
 
 function renderFocusedAnnotationPreview(mediaItem) {
   var els = getFocusedAnnotationEls();
-  if (!els.previewMedia || !els.captionPreview) return;
+  if (!els.previewMedia) return;
   var mediaKey = String((mediaItem && mediaItem.key) || '').trim();
-  var liveCaption = (state.currentItem && state.currentItem.key === mediaKey && ui && ui.editorEl && typeof ui.editorEl.value === 'string')
-    ? ui.editorEl.value
-    : ((mediaItem && mediaItem.caption) || '');
-  els.captionPreview.textContent = String(liveCaption || '').trim() || 'No caption yet.';
   if (!mediaItem || !mediaItem.fileName) {
     els.previewMedia.innerHTML = '';
     els.previewMedia.removeAttribute('data-media-key');
@@ -207,32 +198,13 @@ function buildFocusedAnnotationBadge(text, kind) {
 
 function renderFocusedAnnotationStatus(mediaKey, requirementLabel) {
   var els = getFocusedAnnotationEls();
-  if (!els.groupStatus || !els.matchNote) return;
+  if (!els.groupStatus) return;
   els.groupStatus.innerHTML = '';
-  els.matchNote.textContent = '';
   var isChecked = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
     ? isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel)
     : false;
-  var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-    ? isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)
-    : false;
-  var captionText = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
-    ? ui.editorEl.value
-    : ((state.currentItem && state.currentItem.caption) || '');
-  var hasMatch = typeof requirementKeywordsMatch === 'function'
-    ? requirementKeywordsMatch(requirementLabel, captionText)
-    : false;
   if (isChecked) {
     els.groupStatus.appendChild(buildFocusedAnnotationBadge('Reviewed', 'focused-annotation-badge-reviewed'));
-  }
-  if (isNa) {
-    els.groupStatus.appendChild(buildFocusedAnnotationBadge('N/A', 'focused-annotation-badge-na'));
-  }
-  if (hasMatch) {
-    els.groupStatus.appendChild(buildFocusedAnnotationBadge('Matches Caption', 'focused-annotation-badge-matched'));
-    els.matchNote.textContent = 'This group is currently highlighted by the caption text.';
-  } else {
-    els.matchNote.textContent = 'Click terms to tag this item, then mark the group done or n/a.';
   }
 }
 
@@ -283,78 +255,7 @@ function renderFocusedAnnotationTerms(mediaKey, requirementLabel) {
       toggleFocusedAnnotationTerm(requirementLabel, term);
     };
     row.appendChild(btn);
-    var badges = document.createElement('div');
-    badges.className = 'focused-annotation-term-badges';
-    if (typeof isChecklistGroupTermPinnedGlobally === 'function' && isChecklistGroupTermPinnedGlobally(requirementLabel, term)) {
-      badges.appendChild(buildFocusedAnnotationBadge('Pinned', 'focused-annotation-badge-pinned'));
-    }
-    if (typeof tagAppearsInCurrentCaption === 'function' && tagAppearsInCurrentCaption(term)) {
-      badges.appendChild(buildFocusedAnnotationBadge('In Caption', 'focused-annotation-badge-inline'));
-    }
-    if (badges.childNodes.length) row.appendChild(badges);
     els.termList.appendChild(row);
-  });
-}
-
-function renderFocusedAnnotationSelectedTags(mediaKey, requirementLabel) {
-  var els = getFocusedAnnotationEls();
-  if (!els.selectedTags) return;
-  els.selectedTags.innerHTML = '';
-  var selectedTags = (typeof getChecklistSelectedTagsForRequirementForMediaKey === 'function')
-    ? getChecklistSelectedTagsForRequirementForMediaKey(mediaKey, requirementLabel)
-    : [];
-  if (!selectedTags.length) {
-    var empty = document.createElement('div');
-    empty.className = 'focused-annotation-empty';
-    empty.textContent = 'No selected tags in this group.';
-    els.selectedTags.appendChild(empty);
-    return;
-  }
-  selectedTags.forEach(function (tag, idx) {
-    var row = document.createElement('div');
-    row.className = 'focused-annotation-selected-row';
-    var label = document.createElement('div');
-    label.className = 'focused-annotation-selected-label';
-    label.textContent = tag;
-    row.appendChild(label);
-    var actions = document.createElement('div');
-    actions.className = 'focused-annotation-selected-actions';
-    var upBtn = document.createElement('button');
-    upBtn.type = 'button';
-    upBtn.className = 'btn';
-    upBtn.textContent = 'Up';
-    upBtn.disabled = idx === 0;
-    upBtn.onclick = function () {
-      if (typeof moveChecklistSelectedTagForRequirement === 'function' &&
-          moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tag, -1)) {
-        renderFocusedAnnotationModal();
-      }
-    };
-    actions.appendChild(upBtn);
-    var downBtn = document.createElement('button');
-    downBtn.type = 'button';
-    downBtn.className = 'btn';
-    downBtn.textContent = 'Down';
-    downBtn.disabled = idx === selectedTags.length - 1;
-    downBtn.onclick = function () {
-      if (typeof moveChecklistSelectedTagForRequirement === 'function' &&
-          moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tag, 1)) {
-        renderFocusedAnnotationModal();
-      }
-    };
-    actions.appendChild(downBtn);
-    var styleBtn = document.createElement('button');
-    styleBtn.type = 'button';
-    styleBtn.className = 'btn';
-    styleBtn.textContent = 'Style';
-    styleBtn.onclick = function () {
-      if (typeof openChecklistTermAffixesModal === 'function') {
-        openChecklistTermAffixesModal(tag);
-      }
-    };
-    actions.appendChild(styleBtn);
-    row.appendChild(actions);
-    els.selectedTags.appendChild(row);
   });
 }
 
@@ -390,12 +291,6 @@ function renderFocusedAnnotationModal() {
   var groupIndex = Math.max(0, Math.min(Math.max(0, requirements.length - 1), Number(focusedAnnotationState.groupIndex) || 0));
   focusedAnnotationState.groupIndex = groupIndex;
   var requirementLabel = requirements.length ? String(requirements[groupIndex] || '') : '';
-  var selectedCount = (typeof getChecklistSelectedTagsForRequirementForMediaKey === 'function' && requirementLabel)
-    ? getChecklistSelectedTagsForRequirementForMediaKey(mediaItem.key, requirementLabel).length
-    : 0;
-  if (els.meta) {
-    els.meta.textContent = String(mediaItem.fileName || '') + (focusedAnnotationState.sourceLabel ? (' - ' + focusedAnnotationState.sourceLabel) : '');
-  }
   if (els.itemProgress) {
     els.itemProgress.textContent = 'Item ' + (focusedAnnotationState.itemIndex + 1) + '/' + itemKeys.length;
   }
@@ -416,16 +311,12 @@ function renderFocusedAnnotationModal() {
   if (els.skipBtn) {
     els.skipBtn.disabled = !requirementLabel;
   }
-  if (els.naBtn) {
-    els.naBtn.disabled = !requirementLabel;
-  }
   if (els.doneBtn) {
     els.doneBtn.disabled = !requirementLabel;
   }
   renderFocusedAnnotationPreview(mediaItem);
   if (!requirementLabel) {
     if (els.groupStatus) els.groupStatus.innerHTML = '';
-    if (els.matchNote) els.matchNote.textContent = 'Add requirement groups to use focused annotation.';
     if (els.termList) {
       els.termList.innerHTML = '';
       var empty = document.createElement('div');
@@ -433,15 +324,10 @@ function renderFocusedAnnotationModal() {
       empty.textContent = 'No requirement groups configured.';
       els.termList.appendChild(empty);
     }
-    if (els.selectedTags) els.selectedTags.innerHTML = '';
     return;
   }
   renderFocusedAnnotationStatus(mediaItem.key, requirementLabel);
   renderFocusedAnnotationTerms(mediaItem.key, requirementLabel);
-  renderFocusedAnnotationSelectedTags(mediaItem.key, requirementLabel);
-  if (els.matchNote && selectedCount > 0) {
-    els.matchNote.textContent += ' Selected tags in this group: ' + selectedCount + '.';
-  }
 }
 
 function navigateFocusedAnnotation(itemIndex, groupIndex, options) {
@@ -527,16 +413,6 @@ function markFocusedAnnotationGroupDone() {
   }
   if (typeof setChecklistRequirementCheckedForMediaKey === 'function') {
     setChecklistRequirementCheckedForMediaKey(state.currentItem.key, requirementLabel, true);
-  }
-  advanceFocusedAnnotationStep();
-}
-
-function markFocusedAnnotationGroupNa() {
-  if (!state.currentItem || !state.currentItem.key) return;
-  var requirementLabel = getFocusedAnnotationCurrentRequirement();
-  if (!requirementLabel) return;
-  if (typeof setChecklistRequirementNaForMediaKey === 'function') {
-    setChecklistRequirementNaForMediaKey(state.currentItem.key, requirementLabel, true);
   }
   advanceFocusedAnnotationStep();
 }
@@ -628,9 +504,6 @@ function wireFocusedAnnotationModal() {
   if (els.skipBtn) {
     els.skipBtn.addEventListener('click', skipFocusedAnnotationGroup);
   }
-  if (els.naBtn) {
-    els.naBtn.addEventListener('click', markFocusedAnnotationGroupNa);
-  }
   if (els.doneBtn) {
     els.doneBtn.addEventListener('click', markFocusedAnnotationGroupDone);
   }
@@ -650,11 +523,6 @@ function wireFocusedAnnotationModal() {
     if (e.key === 'Enter') {
       e.preventDefault();
       markFocusedAnnotationGroupDone();
-      return;
-    }
-    if (e.key === 'n' || e.key === 'N') {
-      e.preventDefault();
-      markFocusedAnnotationGroupNa();
       return;
     }
     if (e.key === 's' || e.key === 'S') {

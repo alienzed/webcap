@@ -123,30 +123,24 @@ const MAPPINGS_SYSTEM_DEFAULTS = {
     items: [
       "Viewpoint",
       "Position",
+      "Traits",
+      "Clothing",
       "Expression",
       "Action",
-      "Clothing",
-      "Traits",
       "Setting",
-      "Jewelry",
       "Surface",
-      "Hair",
-      "Lighting",
       "Body"
     ],
     keywordsByItem: {
-      "Viewpoint": "close-up,front, low-position, medium close-up, overhead, portrait, rear, side, three-quarter, three-quarter rear",
+      "Viewpoint": "aerial, close-up, front, high-angle, high-position, low-angle, low-position, medium close-up, overhead, portrait, rear, rotated, side, side profile, three-quarter, three-quarter front, three-quarter rear, wide shot",
       "Position": "crouching, folded, kneeling, kneeling sitting, leaning back, leaning downward, leaning forward, leaning to the side, lying on back, lying on side, on all fours, posing, side sitting, sitting, squatting, standing, upside down",
-      "Expression": "closed-mouth smile, excited, faint smile, happy, neutral expression, sad, smiling, surprised, serious, smirking, upset",
+      "Traits": "braided hair, curly hair, face censored and blurred, face paint, hair ornaments, lip gloss, lipstick, make-up, painted nails, pigtails, ponytail, updo, wavy hair",
+      "Clothing": "anklet, armband, armlet, bare shoulders, boots, bracelet, bracelets, camisole, choker, dress, earring, earrings, hat, high-heels, jacket, naked, necklace, pants, ring, rings, shirt, shoes, shorts, skirt, sneakers, socks, suit, swimsuit, tiara, tie, topless, uniform",
+      "Expression": "alouf, angry, annoyed, biting lip, bored, closed-mouth smile, concerned, excited, eyebrows raised, eyes closed, eyes half closed, faint smile, fake smile, frowning, grinning, happy, kissy face, lips parted, mouth open, neutral, proud smile, puckered lips, raised eyebrows, sad, seductive expression, seductive smile, serious, slightly surprised, smiling, smirking, squinting, surprised, surprised smile, tongue out",
       "Action": "standing, sitting, running, walking, holding, looking, eating, drinking, touching, rubbing",
-      "Clothing": "shirt, pants, dress, jacket, coat, shoes, hat, uniform, skirt, shorts, suit, tie, swimsuit, high-heels, boots, sneakers,",
-      "Traits": "lipstick, make-up, styled hair, lip gloss, glistening skin, painted nails",
       "Setting": "photo studio, bedroom, living room, kitchen, office, outdoors", 
-      "Jewelry": "necklace, earrings, bracelet, ring, watch, tiara, anklet",
       "Surface": "bed, chair, couch, floor, table, ground, grass, sand, water",
-      "Hair": "braided hair, curly hair, hair covering face, long hair, pigtails, ponytail, short hair, styled hair, straight hair, updo, wavy hair",
-      "Lighting": "bright, bright background, candle, dark, dim, natural, neon, shadows, studio, sunlight, window",
-      "Body": "arms crossed, arms crossed with hands on shoulders, arms spread, arms up, back arched, hand on head, hand on hip, hand on knee, knees drawn up, legs crossed, legs spread, one arm down, one arm up, one knee drawn up, one leg crossed over the other, one leg up, supported on one arm, waving"
+      "Body": "arms crossed, arms raised halfway, arms up, back arched, bent at the hips, blowing a kiss, facing forward, feet together, folded, hand at chin, hand on back of thigh, hand on belly, hand on butt, hand on head, hand on hip, hand on knee, hand on mound, hand on thigh, hand up to wave, hands behind head, hands framing cheeks, hands on buttocks, hands on hips, hands on thighs, head angled down, head angled up, head tilted, head turned forward, head turned to the side, knees drawn up, legs crossed, legs open, legs spread, legs together, legs up, looking back, looking to the side, looking up, looking up and to the side, one arm down, one arm up, one knee drawn up, one leg up, palm up under face, palms under cheeks, palms up under face, supported by elbow, three-quarter head, three-quarter torso"
     }
   },
   primer: {

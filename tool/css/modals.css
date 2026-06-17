@@ -416,8 +416,7 @@
 .focused-annotation-group-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
 }
 
 .focused-annotation-group-name {
@@ -425,6 +424,7 @@
   line-height: 1.1;
   font-weight: 700;
   color: #f8fafc;
+  white-space: nowrap;
 }
 
 .focused-annotation-group-status {
@@ -432,6 +432,7 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .focused-annotation-badge {
@@ -503,21 +504,24 @@
   border-color: rgba(96, 165, 250, 0.24);
 }
 
+.focused-annotation-nav-btn {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px !important;
+  line-height: 1;
+}
+
 .focused-annotation-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   padding-top: 8px;
-  flex-wrap: wrap;
-}
-
-.focused-annotation-nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-start;
 }
 
 .focused-annotation-primary-action {
@@ -582,6 +586,11 @@ body.focused-annotation-open {
 
   .focused-annotation-group-name {
     font-size: 24px;
+    white-space: normal;
+  }
+
+  .focused-annotation-group-status {
+    margin-left: 0;
   }
 
   .focused-annotation-term-list {

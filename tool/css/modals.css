@@ -356,6 +356,34 @@
   flex: 0 0 auto;
 }
 
+.focused-annotation-preview-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.focused-annotation-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.focused-annotation-mode-btn {
+  min-width: 108px;
+}
+
+.focused-annotation-mode-btn.active {
+  border-color: rgba(125, 211, 252, 0.38) !important;
+  background: rgba(8, 47, 73, 0.9) !important;
+  color: #e0f2fe !important;
+}
+
+.focused-annotation-axis-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
 .focused-annotation-preview-media {
   flex: 1 1 auto;
   width: 100%;
@@ -392,13 +420,6 @@
   flex-wrap: wrap;
 }
 
-.focused-annotation-group-tools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .focused-annotation-progress-pill {
   display: inline-flex;
   align-items: center;
@@ -421,15 +442,15 @@
   flex-wrap: wrap;
 }
 
-.focused-annotation-title-nav,
+.focused-annotation-header-actions,
 .focused-annotation-group-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
 }
 
-.focused-annotation-title-nav {
-  gap: 14px;
+.focused-annotation-header-actions {
+  gap: 8px;
 }
 
 .focused-annotation-group-actions {
@@ -474,8 +495,15 @@
   color: #cbd5e1;
 }
 
-.focused-annotation-term-list {
+.focused-annotation-content {
   flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 14px;
+}
+
+.focused-annotation-term-list {
   min-height: 0;
   height: 100%;
   overflow-y: auto;
@@ -513,14 +541,100 @@
 }
 
 .focused-annotation-term-btn.active {
-  background: rgba(8, 145, 178, 0.18);
-  border-color: rgba(125, 211, 252, 0.42);
-  color: #f8fafc;
+  background: rgba(22, 163, 74, 0.24);
+  border-color: rgba(134, 239, 172, 0.55);
+  color: #f0fdf4;
+  box-shadow: inset 0 0 0 1px rgba(187, 247, 208, 0.16);
 }
 
 .focused-annotation-term-btn.matched:not(.active) {
-  background: rgba(30, 64, 175, 0.18);
-  border-color: rgba(96, 165, 250, 0.24);
+  background: rgba(20, 83, 45, 0.22);
+  border-color: rgba(74, 222, 128, 0.34);
+  color: #dcfce7;
+}
+
+.focused-annotation-term-btn.suggested:not(.active) {
+  background: rgba(8, 47, 73, 0.64);
+  border-color: rgba(125, 211, 252, 0.34);
+  color: #e0f2fe;
+}
+
+.focused-annotation-term-btn.matched.suggested:not(.active) {
+  background: linear-gradient(135deg, rgba(20, 83, 45, 0.26), rgba(8, 47, 73, 0.72));
+  border-color: rgba(110, 231, 183, 0.38);
+}
+
+.focused-annotation-quick-picks {
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.46);
+  padding: 12px;
+}
+
+.focused-annotation-quick-picks.hidden {
+  display: none;
+}
+
+.focused-annotation-quick-picks-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+.focused-annotation-quick-picks-empty {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.focused-annotation-quick-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.focused-annotation-quick-pick-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.focused-annotation-quick-pick-btn {
+  width: 100%;
+  border-radius: 10px !important;
+  text-align: left;
+  white-space: normal;
+  padding: 9px 11px !important;
+}
+
+.focused-annotation-quick-pick-btn.active {
+  border-color: rgba(134, 239, 172, 0.48) !important;
+  background: rgba(22, 163, 74, 0.2) !important;
+  color: #f0fdf4 !important;
+}
+
+.focused-annotation-quick-pick-btn.matched:not(.active) {
+  border-color: rgba(74, 222, 128, 0.26) !important;
+  background: rgba(20, 83, 45, 0.18) !important;
+  color: #dcfce7 !important;
+}
+
+.focused-annotation-quick-pick-btn.suggested:not(.active) {
+  border-color: rgba(125, 211, 252, 0.26) !important;
+  background: rgba(8, 47, 73, 0.6) !important;
+  color: #e0f2fe !important;
+}
+
+.focused-annotation-quick-pick-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.35;
+  padding-left: 2px;
 }
 
 .focused-annotation-nav-btn {
@@ -533,6 +647,27 @@
   justify-content: center;
   font-size: 28px !important;
   line-height: 1;
+}
+
+.focused-annotation-nav-btn-compact {
+  font-size: 20px !important;
+}
+
+.focused-annotation-btn-flash {
+  animation: focused-annotation-btn-flash 180ms ease-out;
+}
+
+@keyframes focused-annotation-btn-flash {
+  0% {
+    transform: scale(0.96);
+    border-color: rgba(125, 211, 252, 0.72);
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.32);
+  }
+  100% {
+    transform: scale(1);
+    border-color: inherit;
+    box-shadow: 0 0 0 10px rgba(56, 189, 248, 0);
+  }
 }
 
 .focused-annotation-primary-btn {
@@ -607,6 +742,10 @@ body.focused-annotation-open {
     min-height: 320px;
     height: auto;
   }
+
+  .focused-annotation-content {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -620,9 +759,21 @@ body.focused-annotation-open {
     align-items: stretch;
   }
 
-  .focused-annotation-title-nav,
+  .focused-annotation-header-actions,
   .focused-annotation-group-actions {
     justify-content: flex-start;
+  }
+
+  .focused-annotation-axis-nav {
+    flex-wrap: wrap;
+  }
+
+  .focused-annotation-preview-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .focused-annotation-preview-toolbar-spacer {
+    display: none;
   }
 
   .focused-annotation-group-name {

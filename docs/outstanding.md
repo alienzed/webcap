@@ -1,11 +1,12 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-06-11.
+Last reviewed: 2026-06-17.
 
 ## Paint Points
 - filling in the primer, this should be generatable
 - Caption Template probably needs a 'i'
 - I'll start a set, rate enough samples 4,5 stars, but then everytime I come back into the set, I have to select 4 and 5 stars, but this is like, the final set I am captioning, it's somewhat annoying to have to reapple filters...
 - Another huge benefit of the future grid feature will be copy/pasting tags between very similar items.
+- True batch tagging is increasingly clearly a grid feature; blind application from the one-item-at-a-time wizard does not make enough sense to be the primary solution.
 
 ## Bugs
 
@@ -14,6 +15,17 @@ Last reviewed: 2026-06-11.
 - Apply a tag to an entire set - or finally explore multi-select in the media list (probably more involved). Select All could be enough...
 - n/a in a group is sort of incompatible with having other tags selected. I am not sure we'd deselect tags on n/a click, but n/a probably shouldn't be available to click on if another item is selected - let's discuss if this is worth the complexity.
 - Consider making annotation an assisted Wizard like flow - provided by a modal entered into purposefully.
+- Focused annotation / wizard near-term enhancements:
+  1. Add a traversal mode toggle in the modal: `Item-first` vs `Group-first`.
+     - `Item-first`: complete all groups for one item, then advance to the next item.
+     - `Group-first`: sweep one group across all visible items, then advance to the next group.
+  2. Make wizard navigation keyboard-first:
+     - `Up` / `Down` changes item.
+     - `Left` / `Right` changes group.
+     - Wrapping/rotation should follow the active traversal mode so repeated navigation feels consistent rather than arbitrary.
+  3. `Enter` should mark the current group reviewed for the current item and advance according to the active traversal mode.
+  4. Bias the wizard toward speed and low click count rather than forcing mouse-driven progression through every control.
+  5. Revisit whether `Group-first` should become the default if it proves clearly faster in real annotation use.
 - Review Selections suggestion sanity layer:
   - Current tag suggestions and coverage nudges can over-infer from co-occurrence alone (for example `shoes` on a portrait close-up).
   - Explore a soft rule layer that combines requirement-group relationships, coverage hints, and review rules to down-rank or suppress implausible suggestions.
@@ -41,7 +53,8 @@ Last reviewed: 2026-06-11.
 - `spec.md` refreshed to match current route and workflow behavior.
 
 ## Backlog (Do Not Implement Yet)
-- Apply a single tag to all visible/selected items as a separate bulk action from item-to-item tag clipboard flow.
+- True batch tagging should be designed with the forthcoming grid view, where the user can actually see the scope they are about to stamp.
+- Avoid treating the current focused-annotation wizard as the primary home for blind "apply to all" tagging; at most, a sticky/stamping mode would be a temporary bridge, not the final UX.
 
 
 ## Nice to Haves (Out of Scope for Now)

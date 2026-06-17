@@ -829,25 +829,66 @@
                 <div class="focused-annotation-body">
                     <div class="focused-annotation-preview-pane">
                         <div class="focused-annotation-preview-toolbar">
-                            <div id="focused-annotation-item-progress" class="focused-annotation-progress-pill"></div>
+                            <div class="focused-annotation-axis-nav" aria-label="Item navigation">
+                                <button
+                                    id="focused-annotation-item-prev-btn"
+                                    type="button"
+                                    class="btn focused-annotation-nav-btn focused-annotation-nav-btn-compact"
+                                    title="Previous item (Up Arrow). In Group-first mode, wraps to the previous group at the last item."
+                                    aria-label="Previous item"
+                                >&#9650;</button>
+                                <div id="focused-annotation-item-progress" class="focused-annotation-progress-pill"></div>
+                                <button
+                                    id="focused-annotation-item-next-btn"
+                                    type="button"
+                                    class="btn focused-annotation-nav-btn focused-annotation-nav-btn-compact"
+                                    title="Next item (Down Arrow). In Group-first mode, wraps to the next group at the first item."
+                                    aria-label="Next item"
+                                >&#9660;</button>
+                            </div>
+                            <div class="focused-annotation-preview-toolbar-spacer"></div>
+                            <div class="focused-annotation-mode-switch" role="group" aria-label="Focused annotation traversal mode">
+                                <button
+                                    id="focused-annotation-mode-group-btn"
+                                    type="button"
+                                    class="btn focused-annotation-mode-btn"
+                                    title="Traverse one group across all visible items"
+                                    aria-pressed="true"
+                                >Group-first</button>
+                                <button
+                                    id="focused-annotation-mode-item-btn"
+                                    type="button"
+                                    class="btn focused-annotation-mode-btn"
+                                    title="Traverse all groups for one item before moving on"
+                                    aria-pressed="false"
+                                >Item-first</button>
+                            </div>
+                            <button id="focused-annotation-close-btn" type="button" class="btn focused-annotation-close-icon-btn" aria-label="Exit focused annotation" title="Exit focused annotation">&times;</button>
                         </div>
                         <div id="focused-annotation-preview-media" class="focused-annotation-preview-media"></div>
                     </div>
                     <div class="focused-annotation-group-pane">
                         <div class="focused-annotation-toolbar">
-                            <div class="focused-annotation-group-tools">
+                            <div class="focused-annotation-axis-nav" aria-label="Group navigation">
+                                <button
+                                    id="focused-annotation-group-prev-btn"
+                                    type="button"
+                                    class="btn focused-annotation-nav-btn"
+                                    title="Previous group (Left Arrow). In Item-first mode, wraps to the previous item at the last group."
+                                    aria-label="Previous group"
+                                >&#x2039;</button>
                                 <div id="focused-annotation-group-progress" class="focused-annotation-progress-pill"></div>
-                            </div>
-                            <div class="focused-annotation-header-actions">
-                                <button id="focused-annotation-close-btn" type="button" class="btn focused-annotation-close-icon-btn" aria-label="Exit focused annotation" title="Exit focused annotation">&times;</button>
+                                <button
+                                    id="focused-annotation-group-next-btn"
+                                    type="button"
+                                    class="btn focused-annotation-nav-btn"
+                                    title="Next group (Right Arrow). In Item-first mode, wraps to the next item at the first group."
+                                    aria-label="Next group"
+                                >&#x203A;</button>
                             </div>
                         </div>
                         <div class="focused-annotation-group-header">
-                            <div class="focused-annotation-title-nav">
-                                <button id="focused-annotation-back-btn" type="button" class="btn focused-annotation-nav-btn" title="Go to the previous step" aria-label="Previous step">&#x2039;</button>
-                                <div id="focused-annotation-group-name" class="focused-annotation-group-name"></div>
-                                <button id="focused-annotation-skip-btn" type="button" class="btn focused-annotation-nav-btn" title="Go to the next step without marking reviewed" aria-label="Next step">&#x203A;</button>
-                            </div>
+                            <div id="focused-annotation-group-name" class="focused-annotation-group-name"></div>
                             <div class="focused-annotation-group-actions">
                                 <button id="focused-annotation-na-btn" type="button" class="btn focused-annotation-secondary-action-btn" title="Mark this group not applicable and continue">Not Applicable</button>
                                 <button id="focused-annotation-done-btn" type="button" class="btn focused-annotation-primary-btn" title="Mark this group reviewed and continue">Mark Reviewed</button>
@@ -855,7 +896,10 @@
                                 <button id="focused-annotation-edit-terms-btn" type="button" class="btn focused-annotation-inline-btn">Edit Terms</button>
                             </div>
                         </div>
-                        <div id="focused-annotation-term-list" class="focused-annotation-term-list"></div>
+                        <div class="focused-annotation-content">
+                            <div id="focused-annotation-term-list" class="focused-annotation-term-list"></div>
+                            <aside id="focused-annotation-quick-picks" class="focused-annotation-quick-picks" aria-label="Quick picks"></aside>
+                        </div>
                     </div>
                 </div>
             </div>

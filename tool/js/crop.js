@@ -246,7 +246,7 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply, options) {
       aspectRatio: aspectRatio || 1,
       viewMode: 1,
       dragMode: 'move',
-      autoCropArea: 0.9,
+      autoCropArea: 1,
       background: false,
       responsive: true,
       movable: true,

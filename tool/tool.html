@@ -839,22 +839,23 @@
                                 <div id="focused-annotation-group-progress" class="focused-annotation-progress-pill"></div>
                             </div>
                             <div class="focused-annotation-header-actions">
-                                <button id="focused-annotation-edit-terms-btn" type="button" class="btn">Edit Terms</button>
-                                <button id="focused-annotation-close-btn" type="button" class="btn">Exit</button>
+                                <button id="focused-annotation-close-btn" type="button" class="btn focused-annotation-close-icon-btn" aria-label="Exit focused annotation" title="Exit focused annotation">&times;</button>
                             </div>
                         </div>
                         <div class="focused-annotation-group-header">
-                            <button id="focused-annotation-back-btn" type="button" class="btn focused-annotation-nav-btn" title="Go to the previous step" aria-label="Previous step">&#x2039;</button>
-                            <div id="focused-annotation-group-name" class="focused-annotation-group-name"></div>
-                            <button id="focused-annotation-skip-btn" type="button" class="btn focused-annotation-nav-btn" title="Go to the next step without marking reviewed" aria-label="Next step">&#x203A;</button>
-                            <div id="focused-annotation-group-status" class="focused-annotation-group-status"></div>
-                        </div>
-                        <div id="focused-annotation-term-list" class="focused-annotation-term-list"></div>
-                        <div class="focused-annotation-footer">
-                            <div class="focused-annotation-primary-action">
+                            <div class="focused-annotation-title-nav">
+                                <button id="focused-annotation-back-btn" type="button" class="btn focused-annotation-nav-btn" title="Go to the previous step" aria-label="Previous step">&#x2039;</button>
+                                <div id="focused-annotation-group-name" class="focused-annotation-group-name"></div>
+                                <button id="focused-annotation-skip-btn" type="button" class="btn focused-annotation-nav-btn" title="Go to the next step without marking reviewed" aria-label="Next step">&#x203A;</button>
+                            </div>
+                            <div class="focused-annotation-group-actions">
+                                <button id="focused-annotation-na-btn" type="button" class="btn focused-annotation-secondary-action-btn" title="Mark this group not applicable and continue">Not Applicable</button>
                                 <button id="focused-annotation-done-btn" type="button" class="btn focused-annotation-primary-btn" title="Mark this group reviewed and continue">Mark Reviewed</button>
+                                <div id="focused-annotation-group-status" class="focused-annotation-group-status"></div>
+                                <button id="focused-annotation-edit-terms-btn" type="button" class="btn focused-annotation-inline-btn">Edit Terms</button>
                             </div>
                         </div>
+                        <div id="focused-annotation-term-list" class="focused-annotation-term-list"></div>
                     </div>
                 </div>
             </div>

@@ -416,7 +416,24 @@
 .focused-annotation-group-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.focused-annotation-title-nav,
+.focused-annotation-group-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.focused-annotation-title-nav {
+  gap: 14px;
+}
+
+.focused-annotation-group-actions {
+  gap: 12px;
 }
 
 .focused-annotation-group-name {
@@ -430,9 +447,8 @@
 .focused-annotation-group-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
-  margin-left: auto;
 }
 
 .focused-annotation-badge {
@@ -461,9 +477,12 @@
 .focused-annotation-term-list {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
   column-width: 220px;
   column-gap: 12px;
+  column-fill: auto;
 }
 
 .focused-annotation-term-row {
@@ -505,6 +524,54 @@
 }
 
 .focused-annotation-nav-btn {
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px !important;
+  line-height: 1;
+}
+
+.focused-annotation-primary-btn {
+  border-color: rgba(74, 222, 128, 0.34) !important;
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.9), rgba(21, 128, 61, 0.92)) !important;
+  color: #f0fdf4 !important;
+  padding: 9px 18px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.focused-annotation-primary-btn:hover {
+  border-color: rgba(134, 239, 172, 0.52) !important;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(22, 163, 74, 0.95)) !important;
+}
+
+.focused-annotation-secondary-action-btn {
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  background: rgba(51, 65, 85, 0.9) !important;
+  color: #e2e8f0 !important;
+  padding: 9px 18px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  white-space: nowrap;
+}
+
+.focused-annotation-secondary-action-btn:hover {
+  border-color: rgba(203, 213, 225, 0.38) !important;
+  background: rgba(71, 85, 105, 0.96) !important;
+}
+
+.focused-annotation-inline-btn {
+  padding: 7px 12px !important;
+  font-size: 12px !important;
+}
+
+.focused-annotation-close-icon-btn {
   width: 42px;
   min-width: 42px;
   height: 42px;
@@ -512,38 +579,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px !important;
+  font-size: 22px !important;
   line-height: 1;
-}
-
-.focused-annotation-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  padding-top: 8px;
-}
-
-.focused-annotation-primary-action {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  margin-left: auto;
-}
-
-.focused-annotation-primary-btn {
-  border-color: rgba(74, 222, 128, 0.34) !important;
-  background: linear-gradient(135deg, rgba(22, 163, 74, 0.9), rgba(21, 128, 61, 0.92)) !important;
-  color: #f0fdf4 !important;
-  padding: 13px 26px !important;
-  font-size: 16px !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.02em;
-}
-
-.focused-annotation-primary-btn:hover {
-  border-color: rgba(134, 239, 172, 0.52) !important;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(22, 163, 74, 0.95)) !important;
 }
 
 .focused-annotation-empty {
@@ -578,19 +615,19 @@ body.focused-annotation-open {
   }
 
   .focused-annotation-toolbar,
-  .focused-annotation-group-header,
-  .focused-annotation-footer {
+  .focused-annotation-group-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .focused-annotation-title-nav,
+  .focused-annotation-group-actions {
+    justify-content: flex-start;
   }
 
   .focused-annotation-group-name {
     font-size: 24px;
     white-space: normal;
-  }
-
-  .focused-annotation-group-status {
-    margin-left: 0;
   }
 
   .focused-annotation-term-list {
@@ -603,14 +640,6 @@ body.focused-annotation-open {
     padding: 10px 12px;
   }
 
-  .focused-annotation-primary-action {
-    margin-left: 0;
-    justify-content: stretch;
-  }
-
-  .focused-annotation-primary-btn {
-    width: 100%;
-  }
 }
 
 .crop-modal.hidden {

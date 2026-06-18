@@ -533,13 +533,6 @@ function syncReviewedFromChecklist(mediaKey) {
   if (reviewed) state.reviewedSet.add(mediaKey);
   else state.reviewedSet.delete(mediaKey);
   setReviewedRowClass(mediaKey, reviewed);
-  if (reviewed) {
-    var currentFlag = String((state.flags && state.flags[mediaKey]) || '').trim().toLowerCase();
-    if (!currentFlag) {
-      setFlagValueForItem(mediaKey, 'green', { skipUndo: true, skipSave: true });
-      return true;
-    }
-  }
   return false;
 }
 
@@ -790,11 +783,8 @@ function loadChecklistFromFolderState(folderState) {
     }
   });
 
-  var autoFlaggedCompleteItems = syncReviewedFromChecklistAll();
+  syncReviewedFromChecklistAll();
   updatePrimerMappingsSummary();
-  if (autoFlaggedCompleteItems) {
-    saveChecklistToFolderState();
-  }
   renderChecklistPanel();
 }
 

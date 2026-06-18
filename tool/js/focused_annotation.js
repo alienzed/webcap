@@ -620,6 +620,7 @@ function renderFocusedAnnotationQuickPicks(requirementLabel, entries) {
     empty.className = 'focused-annotation-quick-picks-empty';
     empty.textContent = 'No strong quick picks for this group yet.';
     picksEl.appendChild(empty);
+    renderFocusedAnnotationCurrentTags(picksEl);
     return;
   }
   var list = document.createElement('div');
@@ -648,6 +649,41 @@ function renderFocusedAnnotationQuickPicks(requirementLabel, entries) {
     list.appendChild(row);
   });
   picksEl.appendChild(list);
+  renderFocusedAnnotationCurrentTags(picksEl);
+}
+
+function renderFocusedAnnotationCurrentTags(parentEl) {
+  if (!parentEl || !state.currentItem || !state.currentItem.key) return;
+  var section = document.createElement('div');
+  section.className = 'focused-annotation-current-tags';
+
+  var title = document.createElement('div');
+  title.className = 'focused-annotation-current-tags-title';
+  title.textContent = 'Current Tags';
+  section.appendChild(title);
+
+  var tags = (typeof getTagsForMediaKey === 'function')
+    ? getTagsForMediaKey(state.currentItem.key)
+    : [];
+  if (!tags.length) {
+    var empty = document.createElement('div');
+    empty.className = 'focused-annotation-current-tags-empty';
+    empty.textContent = 'No tags on this item yet.';
+    section.appendChild(empty);
+    parentEl.appendChild(section);
+    return;
+  }
+
+  var list = document.createElement('div');
+  list.className = 'focused-annotation-current-tag-list';
+  tags.forEach(function (tag) {
+    var chip = document.createElement('span');
+    chip.className = 'focused-annotation-current-tag';
+    chip.textContent = tag;
+    list.appendChild(chip);
+  });
+  section.appendChild(list);
+  parentEl.appendChild(section);
 }
 
 function toggleFocusedAnnotationTerm(requirementLabel, termText) {

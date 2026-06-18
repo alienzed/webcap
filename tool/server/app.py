@@ -614,4 +614,4 @@ def open_in_vscode():
 if __name__ == "__main__":
     # Only bind to localhost for desktop/offline use.
     # Disable Flask debug mode for a production-like local runtime.
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host="127.0.0.1", port=420, debug=False)

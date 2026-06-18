@@ -457,6 +457,13 @@
   gap: 12px;
 }
 
+.focused-annotation-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .focused-annotation-group-name {
   font-size: 28px;
   line-height: 1.1;
@@ -566,11 +573,14 @@
 
 .focused-annotation-quick-picks {
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: 14px;
   background: rgba(15, 23, 42, 0.46);
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .focused-annotation-quick-picks.hidden {
@@ -596,6 +606,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .focused-annotation-quick-pick-row {
@@ -635,6 +647,50 @@
   color: #94a3b8;
   line-height: 1.35;
   padding-left: 2px;
+}
+
+.focused-annotation-current-tags {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  flex: 0 0 auto;
+}
+
+.focused-annotation-current-tags-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+.focused-annotation-current-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 132px;
+  overflow-y: auto;
+}
+
+.focused-annotation-current-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(51, 65, 85, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.focused-annotation-current-tags-empty {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .focused-annotation-nav-btn {

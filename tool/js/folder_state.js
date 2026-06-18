@@ -9,6 +9,7 @@ function sanitizeFolderState(data) {
   var src = data || {};
   var stats = src.stats || {};
   var primer = src.primer || {};
+  var mediaFilters = (src.media_filters && typeof src.media_filters === 'object') ? src.media_filters : {};
   var reviewRulesValue = Array.isArray(stats.reviewRules)
     ? JSON.parse(JSON.stringify(stats.reviewRules))
     : (typeof stats.reviewRules === 'string' ? String(stats.reviewRules) : []);
@@ -88,6 +89,20 @@ function sanitizeFolderState(data) {
       }
     });
   }
+  var mediaFilterStars = Array.isArray(mediaFilters.stars) ? mediaFilters.stars : [];
+  mediaFilterStars = mediaFilterStars
+    .map(function (value) { return String(value || '').trim().toLowerCase(); })
+    .filter(function (value) {
+      return value === 'no_star' || /^[1-5]$/.test(value);
+    });
+  mediaFilterStars = Array.from(new Set(mediaFilterStars));
+  var mediaFilterFlags = Array.isArray(mediaFilters.flags) ? mediaFilters.flags : [];
+  mediaFilterFlags = mediaFilterFlags
+    .map(function (value) { return String(value || '').trim().toLowerCase(); })
+    .filter(function (value) {
+      return value === 'no_flag' || value === 'red' || value === 'yellow' || value === 'orange' || value === 'green' || value === 'blue';
+    });
+  mediaFilterFlags = Array.from(new Set(mediaFilterFlags));
   return {
     version: FOLDER_STATE_VERSION,
     stats: {
@@ -112,6 +127,19 @@ function sanitizeFolderState(data) {
     caption_set_notes: String(src.caption_set_notes || ''),
     annotate_strip_visible: !!src.annotate_strip_visible,
     caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,
+    media_filters: {
+      text: String(mediaFilters.text || ''),
+      panel_expanded: !!mediaFilters.panel_expanded,
+      missing_captions_only: !!mediaFilters.missing_captions_only,
+      reviewed_only: !!mediaFilters.reviewed_only,
+      unreviewed_only: !!mediaFilters.unreviewed_only,
+      tag_mismatch_only: !!mediaFilters.tag_mismatch_only,
+      incomplete_only: !!mediaFilters.incomplete_only,
+      invalid_ar_only: !!mediaFilters.invalid_ar_only,
+      superset_only: !!mediaFilters.superset_only,
+      stars: mediaFilterStars,
+      flags: mediaFilterFlags
+    },
     caption_tags_by_media: tagMap,
     ratings_by_media: ratingsByMedia,
     mutated_media_keys: mutatedMediaKeys
@@ -190,6 +218,19 @@ function snapshotFolderStateFromDom() {
     .map(function (k) { return String(k || '').trim(); })
     .filter(function (k) { return mediaKeys.has(k); })
     .sort();
+  var mediaFilters = {
+    text: String((ui.filterEl && ui.filterEl.value) || ''),
+    panel_expanded: !!(ui.advancedFilterPanel && !ui.advancedFilterPanel.classList.contains('hidden')),
+    missing_captions_only: !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked),
+    reviewed_only: !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked),
+    unreviewed_only: !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked),
+    tag_mismatch_only: !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked),
+    incomplete_only: !!(ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked),
+    invalid_ar_only: !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked),
+    superset_only: !!(ui.advancedFilterSupersetEl && ui.advancedFilterSupersetEl.checked),
+    stars: (typeof getAdvancedStarFilterValues === 'function') ? getAdvancedStarFilterValues() : [],
+    flags: (typeof getAdvancedFlagFilterValues === 'function') ? getAdvancedFlagFilterValues() : []
+  };
   // Add new fields here as needed
   return sanitizeFolderState({
     stats: stats,
@@ -207,6 +248,7 @@ function snapshotFolderStateFromDom() {
     caption_set_notes: String(window.captionHelperNotes || ''),
     annotate_strip_visible: !!window.annotateStripVisible,
     caption_helper_panel_collapsed: !!window.captionHelperPanelCollapsed,
+    media_filters: mediaFilters,
     caption_tags_by_media: tagsByMedia,
     ratings_by_media: ratingsByMedia,
     mutated_media_keys: mutatedKeys
@@ -258,6 +300,54 @@ function applyFolderStateToDom(folderState) {
   if (templateEl) {
     templateEl.value = clean.primer.template;
   }
+  if (ui.filterEl) {
+    ui.filterEl.value = String((clean.media_filters && clean.media_filters.text) || '');
+  }
+  if (ui.advancedFilterMissingCaptionsEl) {
+    ui.advancedFilterMissingCaptionsEl.checked = !!(clean.media_filters && clean.media_filters.missing_captions_only);
+  }
+  if (ui.advancedFilterReviewedEl) {
+    ui.advancedFilterReviewedEl.checked = !!(clean.media_filters && clean.media_filters.reviewed_only);
+  }
+  if (ui.advancedFilterUnreviewedEl) {
+    ui.advancedFilterUnreviewedEl.checked = !!(clean.media_filters && clean.media_filters.unreviewed_only);
+  }
+  if (ui.advancedFilterUntaggedEl) {
+    ui.advancedFilterUntaggedEl.checked = !!(clean.media_filters && clean.media_filters.tag_mismatch_only);
+  }
+  if (ui.advancedFilterIncompleteEl) {
+    ui.advancedFilterIncompleteEl.checked = !!(clean.media_filters && clean.media_filters.incomplete_only);
+  }
+  if (ui.advancedFilterInvalidArEl) {
+    ui.advancedFilterInvalidArEl.checked = !!(clean.media_filters && clean.media_filters.invalid_ar_only);
+  }
+  if (ui.advancedFilterSupersetEl) {
+    ui.advancedFilterSupersetEl.checked = !!(clean.media_filters && clean.media_filters.superset_only);
+    state.supersetArmed = !!ui.advancedFilterSupersetEl.checked;
+  } else {
+    state.supersetArmed = false;
+  }
+  if (ui.advancedFilterStarsEl) {
+    var starSelections = new Set(Array.isArray(clean.media_filters && clean.media_filters.stars) ? clean.media_filters.stars : []);
+    Array.prototype.forEach.call(ui.advancedFilterStarsEl.querySelectorAll('input[type="checkbox"]'), function (input) {
+      input.checked = starSelections.has(String(input.value || '').trim().toLowerCase());
+    });
+  }
+  if (ui.advancedFilterFlagEl) {
+    var flagSelections = new Set(Array.isArray(clean.media_filters && clean.media_filters.flags) ? clean.media_filters.flags : []);
+    Array.prototype.forEach.call(ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]'), function (input) {
+      input.checked = flagSelections.has(String(input.value || '').trim().toLowerCase());
+    });
+  }
+  if (ui.advancedFilterPanel) {
+    var panelExpanded = !!(clean.media_filters && clean.media_filters.panel_expanded);
+    ui.advancedFilterPanel.classList.toggle('hidden', !panelExpanded);
+    if (ui.advancedFilterToggleBtn) {
+      ui.advancedFilterToggleBtn.classList.toggle('expanded', panelExpanded);
+      ui.advancedFilterToggleBtn.setAttribute('aria-expanded', panelExpanded ? 'true' : 'false');
+    }
+  }
+  updateSuperSetControls();
   // Add new field restoration logic here as needed
 }
 

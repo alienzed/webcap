@@ -452,6 +452,7 @@ function wireAllUi() {
       ui.advancedFilterPanel.classList.toggle('hidden', !isHidden);
       ui.advancedFilterToggleBtn.classList.toggle('expanded', isHidden);
       ui.advancedFilterToggleBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+      saveFolderStateForCurrentRoot();
     };
   }
 

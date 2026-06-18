@@ -434,10 +434,12 @@ function clearCaptionFilters() {
   clearCaptionFilterInputs();
   if (typeof exitSuperSetSearch === 'function' && state && state.supersetActive) {
     exitSuperSetSearch({ uncheck: true });
+    saveFolderStateForCurrentRoot();
     return;
   }
   if (typeof updateSuperSetControls === 'function') updateSuperSetControls();
   renderFileList();
+  saveFolderStateForCurrentRoot();
 }
 
 function clearMediaFiltersForGeneratedDataset(path) {
@@ -836,9 +838,14 @@ function refreshCurrentDirectory() {
   xhr.send();
 }
 // Ensure live filtering as you type
+var debouncedSaveMediaFilters = debounceCreate(250);
+
 function handleMediaFilterChanged() {
   markSuperSetSearchDirty();
   renderFileList();
+  debouncedSaveMediaFilters(function () {
+    saveFolderStateForCurrentRoot();
+  });
 }
 
 if (ui.filterEl) {
@@ -880,11 +887,13 @@ if (ui.advancedFilterSupersetEl) {
   ui.advancedFilterSupersetEl.addEventListener('change', function () {
     if (!ui.advancedFilterSupersetEl.checked && state && state.supersetActive) {
       exitSuperSetSearch({ uncheck: false });
+      saveFolderStateForCurrentRoot();
       return;
     }
     state.supersetArmed = !!ui.advancedFilterSupersetEl.checked;
     if (state.supersetArmed) state.supersetSearchDirty = true;
     updateSuperSetControls();
+    saveFolderStateForCurrentRoot();
   });
 }
 if (ui.supersetSearchBtn) {

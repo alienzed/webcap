@@ -214,22 +214,22 @@ body {
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
-  padding: 4px;
+  padding: 3px;
   box-sizing: border-box;
 }
 
 .caption-context-menu-separator {
   height: 1px;
-  margin: 4px 6px;
+  margin: 3px 6px;
   background: var(--border-soft);
 }
 
 .caption-context-menu .flag-row {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: flex-start;
   align-items: center;
-  padding: 4px 0 4px 8px;
+  padding: 3px 0 3px 8px;
   width: auto;
   max-width: none;
   align-self: flex-start;
@@ -242,7 +242,7 @@ body {
   color: var(--text);
   border-radius: 6px;
   border: none;
-  padding: 8px 10px;
+  padding: 6px 10px;
   white-space: nowrap;
 }
 

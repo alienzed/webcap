@@ -234,15 +234,8 @@ function buildMediaContextMenuActions(mediaItem, key) {
   var fileName = mediaItem.fileName;
   var ext = (fileName || '').split('.').pop().toLowerCase();
   var isVideoFile = ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'avi', 'm4v'].indexOf(ext) !== -1;
-
-  actions.push(createFlagAction(key));
-  actions.push({
-    label: 'Open Containing Folder',
-    run: function () {
-      openPathInExplorer(buildRowRelativePath(key));
-    }
-  });
-  actions.push({ separator: true });
+  var isImageFile = isCroppableImageFile(fileName);
+  var flagAction = createFlagAction(key);
 
   if (isInOriginals) {
     actions.push({
@@ -251,9 +244,26 @@ function buildMediaContextMenuActions(mediaItem, key) {
         restoreMediaItem(mediaItem);
       }
     });
+    actions.push({
+      label: 'Open Containing Folder',
+      run: function () {
+        openPathInExplorer(buildRowRelativePath(key));
+      }
+    });
+    actions.push(flagAction);
     return actions;
   }
 
+  actions.push({
+    label: 'Focused Annotate...',
+    run: function () {
+      if (typeof openFocusedAnnotationForMediaItem === 'function') {
+        openFocusedAnnotationForMediaItem(mediaItem);
+      } else {
+        setStatus('Focused annotation is unavailable.');
+      }
+    }
+  });
   actions.push({
     label: 'Copy Tags',
     run: function () {
@@ -268,32 +278,150 @@ function buildMediaContextMenuActions(mediaItem, key) {
       }
     });
   }
-  actions.push({
-    label: 'Focused Annotate...',
-    run: function () {
-      if (typeof openFocusedAnnotationForMediaItem === 'function') {
-        openFocusedAnnotationForMediaItem(mediaItem);
-      } else {
-        setStatus('Focused annotation is unavailable.');
-      }
-    }
-  });
-  actions.push({ separator: true });
 
+  var defaceAction = null;
+  if (MEDIA_EXTENSIONS['.' + ext]) {
+    defaceAction = {
+      label: 'Deface...',
+      run: function () {
+        clearEditorAndPreview();
+        var defaultThresh = '0.4';
+        var t = prompt('Deface: Enter threshold (-t, 0.0-1.0)', defaultThresh);
+        if (t === null) return;
+        t = String(t).trim();
+        if (!/^0(\.\d+)?|1(\.0+)?$/.test(t)) {
+          setStatus('Invalid threshold');
+          return;
+        }
+        setStatus('Defacing file...');
+        var filePath = buildRowRelativePath(mediaItem.fileName);
+        streamPreviewFromFetch(
+          '/fs/deface',
+          { file: filePath, thresh: t },
+          ui,
+          function () {
+            setStatus('Defacing finished.');
+            markMediaMutated(mediaItem.key, 'best_effort');
+            saveFolderStateForCurrentRoot();
+            refreshMediaResolutionCache();
+            if (state.currentItem && state.currentItem.fileName === mediaItem.fileName) {
+              selectPathMedia(state.currentItem).catch(function () {});
+            }
+          }
+        );
+      }
+    };
+  }
+
+  if (isImageFile || defaceAction || isVideoFile) {
+    actions.push({ separator: true });
+  }
+
+  if (isImageFile) {
+    actions.push({
+      label: 'Crop...',
+      run: function () {
+        openImageCropModal(mediaItem);
+      }
+    });
+    actions.push({
+      label: 'Remove Background',
+      run: function () {
+        runRemoveBackground(mediaItem);
+      }
+    });
+    if (defaceAction) actions.push(defaceAction);
+    actions.push({ separator: true });
+    actions.push({
+      label: 'Rotate Left 90 deg',
+      run: function () {
+        runImageTransform(mediaItem, 'rotate_left_90', 'Rotating image left');
+      }
+    });
+    actions.push({
+      label: 'Rotate Right 90 deg',
+      run: function () {
+        runImageTransform(mediaItem, 'rotate_right_90', 'Rotating image right');
+      }
+    });
+    actions.push({
+      label: 'Flip Vertical',
+      run: function () {
+        runImageTransform(mediaItem, 'flip_vertical', 'Flipping image vertical');
+      }
+    });
+    actions.push({
+      label: 'Flip Horizontal',
+      run: function () {
+        runImageTransform(mediaItem, 'flip_horizontal', 'Flipping image horizontal');
+      }
+    });
+  } else if (defaceAction) {
+    actions.push(defaceAction);
+  }
+
+  if (isVideoFile) {
+    if (!isImageFile && !defaceAction) {
+      actions.push({ separator: true });
+    }
+    actions.push({
+      label: 'Flip Horizontal',
+      run: function () {
+        if (!confirm('Flip this video horizontally? This will overwrite the file.')) return;
+        setStatus('Flipping video...');
+        fetch('/media/flip_horizontal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder: state.folder, fileName: mediaItem.fileName })
+        })
+          .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
+          .then(function (res) {
+            if (res.status === 200 && res.data && res.data.ok) {
+              setStatus('Video flipped.');
+              markMediaMutated(mediaItem.key, 'best_effort');
+              saveFolderStateForCurrentRoot();
+              refreshMediaResolutionCache();
+              selectPathMedia(mediaItem).catch(function () {});
+            } else {
+              setStatus((res.data && res.data.error) ? res.data.error : 'Flip failed');
+            }
+          })
+          .catch(function (err) {
+            setStatus('Flip failed: ' + (err && err.message ? err.message : err));
+          });
+      }
+    });
+    actions.push({
+      label: 'Clip...',
+      run: function () {
+        openVideoClipModal(mediaItem);
+      }
+    });
+  }
+
+  actions.push({ separator: true });
   actions.push({
     label: 'Rename',
     run: function () {
       promptRenameMedia(mediaItem, ui, state);
     }
   });
+  if (isImageFile) {
+    actions.push({
+      label: 'Duplicate Image',
+      run: function () {
+        duplicateImageItem(mediaItem);
+      }
+    });
+  }
   actions.push({
-    label: 'Prune',
+    label: 'Open Containing Folder',
     run: function () {
-      pruneMedia(mediaItem).catch(function (err) {
-        setStatus(String(err && err.message ? err.message : err));
-      });
+      openPathInExplorer(buildRowRelativePath(key));
     }
   });
+
+  actions.push({ separator: true });
   actions.push({
     label: 'Reset',
     run: function () {
@@ -322,131 +450,15 @@ function buildMediaContextMenuActions(mediaItem, key) {
         });
     }
   });
-
-  var defaceAction = null;
-  if (MEDIA_EXTENSIONS['.' + ext]) {
-    defaceAction = {
-      label: 'Deface...',
-      run: function () {
-        clearEditorAndPreview();
-        var defaultThresh = '0.4';
-        var t = prompt('Deface: Enter threshold (-t, 0.0-1.0)', defaultThresh);
-        if (t === null) return;
-        t = String(t).trim();
-        if (!/^0(\.\d+)?|1(\.0+)?$/.test(t)) {
-          setStatus('Invalid threshold');
-          return;
-        }
-        setStatus('Defacing file...');
-        var filePath = buildRowRelativePath(mediaItem.fileName);
-        streamPreviewFromFetch(
-          '/fs/deface',
-          { file: filePath, thresh: t },
-          ui,
-          function () {
-            setStatus('Defacing finished.');
-            markMediaMutated(mediaItem.key, 'best_effort');
-            saveFolderStateForCurrentRoot();
-            refreshMediaResolutionCache();
-            // Reload preview for the current item (file was mutated in place)
-            if (state.currentItem && state.currentItem.fileName === mediaItem.fileName) {
-              selectPathMedia(state.currentItem).catch(function () {});
-            }
-          }
-        );
-      }
-    };
-  }
-
-  if (isCroppableImageFile(fileName)) {
-    actions.push({
-      label: 'Duplicate Image',
-      run: function () {
-        duplicateImageItem(mediaItem);
-      }
-    });
-    actions.push({ separator: true });
-    actions.push({
-      label: 'Crop...',
-      run: function () {
-        openImageCropModal(mediaItem);
-      }
-    });
-    actions.push({
-      label: 'Rotate Left 90°',
-      run: function () {
-        runImageTransform(mediaItem, 'rotate_left_90', 'Rotating image left');
-      }
-    });
-    actions.push({
-      label: 'Rotate Right 90°',
-      run: function () {
-        runImageTransform(mediaItem, 'rotate_right_90', 'Rotating image right');
-      }
-    });
-    actions.push({
-      label: 'Flip Vertical',
-      run: function () {
-        runImageTransform(mediaItem, 'flip_vertical', 'Flipping image vertical');
-      }
-    });
-    actions.push({
-      label: 'Flip Horizontal',
-      run: function () {
-        runImageTransform(mediaItem, 'flip_horizontal', 'Flipping image horizontal');
-      }
-    });
-    actions.push({
-      label: 'Remove Background',
-      run: function () {
-        runRemoveBackground(mediaItem);
-      }
-    });
-    if (defaceAction) actions.push(defaceAction);
-  }
-
-  if (defaceAction && !isCroppableImageFile(fileName)) actions.push(defaceAction);
-
-
-  // Add 'Flip Horizontal' for all video files
-  if (isVideoFile) {
-    actions.push({
-      label: 'Flip Horizontal',
-      run: function () {
-        if (!confirm('Flip this video horizontally? This will overwrite the file.')) return;
-        setStatus('Flipping video...');
-        fetch('/media/flip_horizontal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folder: state.folder, fileName: mediaItem.fileName })
-        })
-          .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
-          .then(function (res) {
-            if (res.status === 200 && res.data && res.data.ok) {
-              setStatus('Video flipped.');
-              markMediaMutated(mediaItem.key, 'best_effort');
-              saveFolderStateForCurrentRoot();
-              refreshMediaResolutionCache();
-              selectPathMedia(mediaItem).catch(function () {});
-            } else {
-              setStatus((res.data && res.data.error) ? res.data.error : 'Flip failed');
-            }
-          })
-          .catch(function (err) {
-            setStatus('Flip failed: ' + (err && err.message ? err.message : err));
-          });
-      }
-    });
-  }
-
-  if (isVideoFile) {
-    actions.push({
-      label: 'Clip...',
-      run: function () {
-        openVideoClipModal(mediaItem);
-      }
-    });
-  }
+  actions.push({
+    label: 'Prune',
+    run: function () {
+      pruneMedia(mediaItem).catch(function (err) {
+        setStatus(String(err && err.message ? err.message : err));
+      });
+    }
+  });
+  actions.push(flagAction);
 
   return actions;
 }

@@ -118,7 +118,7 @@ function showContextMenu(clientX, clientY, actions) {
   // Render custom renderers (e.g., flag row) at the bottom
   if (customRenderers.length) {
     var customContainer = document.createElement('div');
-    customContainer.style.marginTop = '8px';
+    customContainer.style.marginTop = '4px';
     // Use the central palette from constants.js (fail fast if missing)
     if (customRenderers.length === 1 && customRenderers[0].name === 'flagRowRenderer') {
       var flagRow = document.createElement('div');

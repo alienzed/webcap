@@ -316,7 +316,8 @@ def prepare_dataset_route():
     selected_media = data.get("selected_media")
     selection_criteria = data.get("selection_criteria")
     total_media_count = data.get("total_media_count")
-    return prepare_dataset_response(folder, selected_media, selection_criteria, total_media_count)
+    fallback_captions = data.get("fallback_captions")
+    return prepare_dataset_response(folder, selected_media, selection_criteria, total_media_count, fallback_captions)
 
 @app.route("/fs/generate_dataset_config", methods=["POST"])
 def generate_dataset_config_route():

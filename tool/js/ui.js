@@ -730,7 +730,7 @@ function refreshCurrentDirectory() {
   updateUtilityPathLabel(path);
   updateSetFolderScopedUi();
   updateReviewButtonAvailability();
-  debugLog('[webcap] refreshCurrentDirectory: called with path', path);
+  debugLog('[webcap] refreshCurrentDirectory: called.');
   // Ensure dirStack is initialized with root if empty or at root
   if (!state.dirStack || !Array.isArray(state.dirStack)) {
     state.dirStack = [];
@@ -745,7 +745,7 @@ function refreshCurrentDirectory() {
     state.dirStack = [{ name: '' }];
   }
   var last = state.dirStack && state.dirStack.length ? state.dirStack[state.dirStack.length - 1].name : '';
-  debugLog('[webcap] refreshCurrentDirectory: requesting /fs/describe', path);
+  debugLog('[webcap] refreshCurrentDirectory: requesting /fs/describe.');
   clearMediaFiltersForGeneratedDataset(path);
 
   var url = '/fs/describe' + (path ? ('?path=' + encodeURIComponent(path)) : '');

@@ -2,9 +2,8 @@ This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-06-17.
 
 ## Paint Points
-- filling in the primer, this should be generatable
+
 - Caption Template probably needs a 'i'
-- I'll start a set, rate enough samples 4,5 stars, but then everytime I come back into the set, I have to select 4 and 5 stars, but this is like, the final set I am captioning, it's somewhat annoying to have to reapple filters...
 - Another huge benefit of the future grid feature will be copy/pasting tags between very similar items.
 - True batch tagging is increasingly clearly a grid feature; blind application from the one-item-at-a-time wizard does not make enough sense to be the primary solution.
 
@@ -69,6 +68,9 @@ Last reviewed: 2026-06-17.
 ## Validate
 - Caption when in pimer mode doesn't seem to update always... sometimes it seems to get stuck between states. Any change that should update the caption when it has not yet been saved should be immediate. We may want to centralize this better.
 - In a group, I can't remove a pinned item. Can't a removal last for the session at least? or even just while inside this folder?
+- Console floats over focus annotation modal (maybe minimize it, or fix z-index?)
+- filling in the primer, this should be generatable
+- When running Prepare, items missing captions should take their primer preview equivalent... we can warn, but having to click apply on each one seems unecessary. If I click Prepare, Generate and Train, that's a very conscious decision, and maybe it's because the primer previews are good as is.
 
 ## Implemented
 - Preview quick actions (pre-implementation decision):

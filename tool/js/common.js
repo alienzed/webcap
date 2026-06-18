@@ -1,6 +1,12 @@
 // NOTE: This project intentionally uses plain global variables for all state and functions.
 // No IIFE, encapsulation, or modular patterns are used by design.
 var APP_CONFIG = {};
+var DEFAULT_PRIMER_TEMPLATE = [
+  '{position }{surface, }{setting, }{body, }',
+  '{clothing, }{traits, }{expression, }',
+  '{background, }',
+  '{lighting} lighting, {view } view.'
+].join('\n');
 
 function setRuntimeAppConfig(cfg) {
   var next = (cfg && typeof cfg === 'object') ? JSON.parse(JSON.stringify(cfg)) : {};
@@ -43,6 +49,10 @@ function debugLog() {
 function setStatus(text) {
   ui.statusEl.textContent = text || '';
   appendToConsolePanel(text || '');
+}
+
+function getDefaultPrimerTemplate() {
+  return DEFAULT_PRIMER_TEMPLATE;
 }
 
 function recordUndoOperation(op) {

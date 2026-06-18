@@ -679,7 +679,7 @@ function renderPreviewHtml(isImage, src) {
 }
 
 async function renderFileList() {
-  debugLog('[renderFileList] called. state.items:', state.items, 'state.childFolders:', state.childFolders, 'filterText:', ui.filterEl ? ui.filterEl.value : '');
+  debugLog('[renderFileList] Rendering file list.');
   var renderSeq = ++state.listRenderSeq;
   ui.mediaListEl.innerHTML = '';
   var mediaItems = getFilteredMediaItems(false);
@@ -822,7 +822,7 @@ function updateFlagDotForItem(itemKey, color) {
 
 function setFlagValueForItem(itemKey, color, options) {
   var opts = options || {};
-  debugLog('[setFlagValueForItem] itemKey:', itemKey, 'color:', color, 'options:', opts, 'state.folder:', state.folder);
+  debugLog('[setFlagValueForItem] Updating flag state.');
   if (!state.flags || typeof state.flags !== 'object') {
     state.flags = {};
   }
@@ -857,6 +857,6 @@ function saveFlags() {
   // Save the full folder state (including flags, reviewedKeys, stats, primer, etc.)
   var folderPath = state.folder || '';
   var snapshot = snapshotFolderStateFromDom();
-  debugLog('[saveFlags] folderPath:', folderPath, 'snapshot:', snapshot);
+  debugLog('[saveFlags] Saving folder state.');
   writeFolderStateFile(folderPath, snapshot);
 }

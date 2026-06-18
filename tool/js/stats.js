@@ -433,6 +433,28 @@ function openBalancePhrasesHelpInPreview() {
   );
 }
 
+function openPrimerTemplateHelpInPreview() {
+  if (typeof renderAdvancedHelpPreview !== 'function') {
+    setStatus('Help preview unavailable.');
+    return;
+  }
+  renderAdvancedHelpPreview(
+    'Caption Template Help',
+    '<p style="margin:0 0 10px 0;">Caption Template builds a starter caption from your tags and template keys.</p>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">How It Works</h4>' +
+    '<ul style="margin:0 0 8px 18px;padding:0;">' +
+    '<li style="margin:0 0 6px 0;">Write placeholders like <code>{position}</code>, <code>{lighting}</code>, and <code>{view}</code>.</li>' +
+    '<li style="margin:0 0 6px 0;">If a placeholder has no matching value, it disappears cleanly.</li>' +
+    '<li style="margin:0 0 6px 0;">Punctuation inside braces stays attached to the value, for example <code>{surface, }</code> becomes <code>wood floor, </code> only when a surface value exists.</li>' +
+    '</ul>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Default Template</h4>' +
+    '<pre style="margin:0 0 8px 0;padding:10px;border-radius:6px;background:#f8fafc;overflow:auto;"><code>{position }{surface, }{setting, }{body, }\n{clothing, }{traits, }{expression, }\n{background, }\n{lighting} lighting, {view } view.</code></pre>' +
+    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Example</h4>' +
+    '<p style="margin:0 0 6px 0;">If the current item resolves to <code>standing</code>, <code>studio</code>, <code>smiling</code>, <code>soft</code>, and <code>front</code>, the result becomes:</p>' +
+    '<p style="margin:0;"><code>standing studio, smiling,\nsoft lighting, front view.</code></p>'
+  );
+}
+
 function wireStatsBalancePhraseUi() {
   loadStatsBalancePhrasesFromTextarea();
   renderStatsBalancePhraseList();
@@ -440,6 +462,7 @@ function wireStatsBalancePhraseUi() {
   var addBtn = ui && ui.statsPhrasesAddBtnEl ? ui.statsPhrasesAddBtnEl : document.getElementById('stats-phrases-add-btn');
   var addInput = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
   var infoBtn = document.getElementById('stats-balance-info-btn');
+  var primerInfoBtn = document.getElementById('primer-template-info-btn');
   if (addBtn && !addBtn.__statsPhrasesBound) {
     addBtn.__statsPhrasesBound = true;
     addBtn.onclick = addStatsBalancePhraseFromInput;
@@ -447,6 +470,10 @@ function wireStatsBalancePhraseUi() {
   if (infoBtn && !infoBtn.__statsPhrasesBound) {
     infoBtn.__statsPhrasesBound = true;
     infoBtn.addEventListener('click', openBalancePhrasesHelpInPreview);
+  }
+  if (primerInfoBtn && !primerInfoBtn.__statsPhrasesBound) {
+    primerInfoBtn.__statsPhrasesBound = true;
+    primerInfoBtn.addEventListener('click', openPrimerTemplateHelpInPreview);
   }
   if (addInput && !addInput.__statsPhrasesBound) {
     addInput.__statsPhrasesBound = true;

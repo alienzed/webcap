@@ -328,10 +328,20 @@
                                 aria-hidden="true"
                             >
                                 <div class="stats-controls">
-                                    <label>Caption Template</label>
-                                    <textarea id="primer-template" rows="9" placeholder="{subject}
-                                          {view}
-                                          {lighting}"></textarea>
+                                    <div class="section-label-inline">
+                                        <label>Caption Template</label>
+                                        <button
+                                            id="primer-template-info-btn"
+                                            type="button"
+                                            class="mini-info-btn"
+                                            title="Caption template help"
+                                            aria-label="Caption template help"
+                                        >i</button>
+                                    </div>
+                                    <textarea id="primer-template" rows="9">{position }{surface, }{setting, }{body, }
+{clothing, }{traits, }{expression, }
+{background, }
+{lighting} lighting, {view } view.</textarea>
                                     <label>Set Notes</label>
                                     <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
                                 </div>

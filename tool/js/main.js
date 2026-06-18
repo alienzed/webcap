@@ -67,99 +67,103 @@ function resetSelectionForFolderAction() {
   renderFileList(ui.filterEl.value);
 }
 
-function buildCaptionAvailabilitySummaryForMediaKeys(mediaKeys) {
-  var keys = Array.isArray(mediaKeys) ? mediaKeys : [];
-  var byKey = {};
-  (state.items || []).forEach(function (item) {
-    if (item && item.key) byKey[item.key] = item;
-  });
-  var missing = 0;
-  var primerFallbacks = 0;
-  var stillEmpty = 0;
-  for (var i = 0; i < keys.length; i += 1) {
-    var key = String(keys[i] || '').trim();
-    if (!key) continue;
-    var item = byKey[key];
-    if (!item || !item.fileName) continue;
-    var hasCaption = !!(item.hasCaption || String(item.caption || '').trim().length);
-    if (hasCaption) continue;
-    missing += 1;
-    var primerText = String(buildAutoPrimer(item.fileName, item.key) || '').trim();
-    if (primerText) primerFallbacks += 1;
-    else stillEmpty += 1;
-  }
-  return {
-    missing: missing,
-    primerFallbacks: primerFallbacks,
-    stillEmpty: stillEmpty
-  };
-}
-
-function confirmMissingCaptionPreflight(mediaKeys, actionLabel) {
-  var summary = buildCaptionAvailabilitySummaryForMediaKeys(mediaKeys);
-  if (!summary.missing) return true;
-  var title = String(actionLabel || 'This action');
-  var message = '' +
-    title + ' detected missing captions.\n\n' +
-    'Missing captions: ' + summary.missing + '\n' +
-    'Primer fallbacks (in-memory): ' + summary.primerFallbacks + '\n' +
-    'Still empty: ' + summary.stillEmpty + '\n\n' +
-    'Continue?';
-  return confirm(message);
-}
-
-function runGenerateDatasetConfigsForCurrentFolder(onSuccess) {
-  if (!ensureFolderSelected('No folder selected for config generation.')) {
-    return;
-  }
-  resetSelectionForFolderAction();
-  setStatus('Generating dataset configs...');
-  streamPreviewFromFetch(
-    '/fs/generate_dataset_config',
-    { folder: state.folder },
-    ui,
-    function () {
-      if (typeof onSuccess === 'function') {
-        onSuccess();
-        return;
+function runTrainingActionRequest(url, body, options) {
+  function getOutputErrorMessage(outputText) {
+    var lines = String(outputText || '').split(/\r?\n/);
+    for (var i = 0; i < lines.length; i += 1) {
+      var line = String(lines[i] || '').trim();
+      if (line.indexOf('[ERROR]') === 0) {
+        return line.replace(/^\[ERROR\]\s*/, '') || line;
       }
-      setStatus('Dataset configs generated.');
-    },
-    function (err) {
-      setStatus('Dataset config generation failed: ' + err);
     }
-  );
+    return '';
+  }
+
+  return new Promise(function (resolve, reject) {
+    var runner = options && options.fetchText ? fetchPreviewText : streamPreviewFromFetch;
+    runner(
+      url,
+      body,
+      ui,
+      function (outputText) {
+        var errorMessage = getOutputErrorMessage(outputText);
+        if (errorMessage) {
+          reject(new Error(errorMessage));
+          return;
+        }
+        resolve(String(outputText || ''));
+      },
+      function (err) {
+        reject(err instanceof Error ? err : new Error(String(err || 'Request failed')));
+      }
+    );
+  });
 }
 
-function runPrepareDatasetForCurrentFolder() {
-  if (!ensureFolderSelected('No folder selected for dataset preparation.')) {
-    return;
-  }
+function formatTrainingActionErrorMessage(err) {
+  return String(err && err.message ? err.message : err).replace(/^\[ERROR\]\s*/, '').trim();
+}
+
+function buildCurrentFolderRelativePath(pathSuffix) {
+  var folder = String(state.folder || '').replace(/[\\/]+$/, '');
+  var suffix = String(pathSuffix || '').replace(/^[\\/]+/, '');
+  if (!folder) return suffix;
+  if (!suffix) return folder;
+  return folder + '/' + suffix;
+}
+
+function fetchPathExistsForCurrentFolder(pathSuffix) {
+  return fetch('/fs/path_exists?path=' + encodeURIComponent(buildCurrentFolderRelativePath(pathSuffix)))
+    .then(function (resp) {
+      return resp.json().then(function (data) {
+        return { status: resp.status, data: data };
+      });
+    })
+    .then(function (res) {
+      if (res.status !== 200 || !res.data || !res.data.ok) {
+        throw new Error((res.data && res.data.error) ? res.data.error : 'Path existence check failed');
+      }
+      return !!res.data.exists;
+    });
+}
+
+function getVisibleMediaSelectionForPrepare() {
   var visibleRows = Array.prototype.slice.call(
     ui.mediaListEl ? ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]') : []
   );
-  var selectedMedia = visibleRows
+  return visibleRows
     .map(function (row) { return String(row.getAttribute('data-key') || '').trim(); })
     .filter(Boolean);
-  var totalMediaCount = Array.isArray(state.items) ? state.items.length : 0;
-  if (!selectedMedia.length) {
-    setStatus('No visible media items to prepare.');
-    return;
-  }
-  if (totalMediaCount > 0 && selectedMedia.length < totalMediaCount) {
-    var confirmText = 'Prepare visible subset only? (' + selectedMedia.length + ' of ' + totalMediaCount + ' media items)';
-    if (!confirm(confirmText)) {
-      setStatus('Dataset preparation cancelled.');
-      return;
-    }
-  }
-  if (!confirmMissingCaptionPreflight(selectedMedia, 'Prepare Dataset')) {
-    setStatus('Dataset preparation cancelled.');
-    return;
-  }
+}
+
+function buildPrepareFallbackCaptions(selectedMedia) {
+  var selectedKeys = Array.isArray(selectedMedia) ? selectedMedia : [];
+  var byKey = {};
+  var fallbackCaptions = {};
+  var fallbackCount = 0;
+  (state.items || []).forEach(function (item) {
+    if (item && item.key) byKey[item.key] = item;
+  });
+  selectedKeys.forEach(function (key) {
+    var item = byKey[key];
+    if (!item || !item.fileName) return;
+    var hasCaption = !!(item.hasCaption || String(item.caption || '').trim().length);
+    if (hasCaption) return;
+    var primerText = String(buildAutoPrimer(item.fileName, item.key) || '').trim();
+    if (!primerText) return;
+    fallbackCaptions[item.fileName] = primerText;
+    fallbackCount += 1;
+  });
+  return {
+    fallbackCaptions: fallbackCaptions,
+    fallbackCount: fallbackCount
+  };
+}
+
+function buildPrepareSelectionCriteria() {
   var starsValue = (typeof getAdvancedStarFilterValue === 'function') ? getAdvancedStarFilterValue() : '';
   var flagValue = (typeof getAdvancedFlagFilterValue === 'function') ? getAdvancedFlagFilterValue() : '';
-  var criteria = {
+  return {
     source_folder: String(state.folder || ''),
     filter_text: String((ui.filterEl && ui.filterEl.value) || '').trim(),
     missing_captions_only: !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked),
@@ -175,25 +179,128 @@ function runPrepareDatasetForCurrentFolder() {
     focus_set_active: !!(state.focusSet && state.focusSet.keys && state.focusSet.keys.length),
     focus_set_source: String((state.focusSet && state.focusSet.source) || ''),
   };
+}
+
+function ensurePrepManifestForCurrentFolder() {
+  return fetchPathExistsForCurrentFolder('auto_dataset/prep_manifest.json')
+    .then(function (exists) {
+      if (exists) return '';
+      return runPrepareDatasetForCurrentFolder();
+    });
+}
+
+function ensureGeneratedTrainingArtifactsForCurrentFolder() {
+  return Promise.all([
+    fetchPathExistsForCurrentFolder('config.hi.toml'),
+    fetchPathExistsForCurrentFolder('config.lo.toml'),
+    fetchPathExistsForCurrentFolder('dataset.hi.toml'),
+    fetchPathExistsForCurrentFolder('dataset.lo.toml')
+  ]).then(function (results) {
+    var ready = results.every(function (value) { return !!value; });
+    if (ready) return '';
+    return runGenerateDatasetConfigsForCurrentFolder();
+  });
+}
+
+function runGenerateDatasetConfigsForCurrentFolder(onSuccess) {
+  if (!ensureFolderSelected('No folder selected for config generation.')) {
+    return Promise.reject(new Error('No folder selected for config generation.'));
+  }
+  return ensurePrepManifestForCurrentFolder()
+    .then(function () {
+      resetSelectionForFolderAction();
+      setStatus('Generating dataset configs...');
+      return runTrainingActionRequest('/fs/generate_dataset_config', { folder: state.folder });
+    })
+    .then(function (outputText) {
+      if (typeof onSuccess === 'function') {
+        onSuccess(outputText);
+      } else {
+        setStatus('Dataset configs generated.');
+      }
+      return outputText;
+    })
+    .catch(function (err) {
+      var message = formatTrainingActionErrorMessage(err);
+      setStatus('Dataset config generation failed: ' + message);
+      throw err;
+    });
+}
+
+function runPrepareDatasetForCurrentFolder() {
+  if (!ensureFolderSelected('No folder selected for dataset preparation.')) {
+    return Promise.reject(new Error('No folder selected for dataset preparation.'));
+  }
+  var selectedMedia = getVisibleMediaSelectionForPrepare();
+  var totalMediaCount = Array.isArray(state.items) ? state.items.length : 0;
+  if (!selectedMedia.length) {
+    setStatus('No visible media items to prepare.');
+    return Promise.reject(new Error('No visible media items to prepare.'));
+  }
+  var criteria = buildPrepareSelectionCriteria();
+  var fallbackResult = buildPrepareFallbackCaptions(selectedMedia);
   resetSelectionForFolderAction();
-  setStatus('Preparing dataset...');
-  streamPreviewFromFetch(
-    '/fs/prepare_dataset',
-    {
-      folder: state.folder,
-      selected_media: selectedMedia,
-      total_media_count: totalMediaCount,
-      selection_criteria: criteria
-    },
-    ui,
-    function () {
-      setStatus('Dataset preparation finished.');
+  if (totalMediaCount > 0 && selectedMedia.length < totalMediaCount) {
+    setStatus('Preparing visible subset: ' + selectedMedia.length + ' of ' + totalMediaCount + ' media items...');
+  } else {
+    setStatus('Preparing dataset...');
+  }
+  return runTrainingActionRequest('/fs/prepare_dataset', {
+    folder: state.folder,
+    selected_media: selectedMedia,
+    total_media_count: totalMediaCount,
+    selection_criteria: criteria,
+    fallback_captions: fallbackResult.fallbackCaptions
+  }).then(function (outputText) {
+      if (fallbackResult.fallbackCount > 0) {
+        setStatus('Dataset preparation finished. Primer fallbacks used: ' + fallbackResult.fallbackCount + '.');
+      } else {
+        setStatus('Dataset preparation finished.');
+      }
       refreshTrainingConfigList();
-    },
-    function (err) {
-      setStatus('Dataset preparation failed: ' + err);
-    }
-  );
+      return outputText;
+    })
+    .catch(function (err) {
+      var message = formatTrainingActionErrorMessage(err);
+      setStatus('Dataset preparation failed: ' + message);
+      throw err;
+    });
+}
+
+function runTrainCommandPreviewForCurrentFolder() {
+  if (!ensureFolderSelected('No folder selected for training.')) {
+    return Promise.reject(new Error('No folder selected for training.'));
+  }
+  return ensureGeneratedTrainingArtifactsForCurrentFolder()
+    .then(function () {
+      setStatus('Printing training commands...');
+      return runTrainingActionRequest('/fs/train_run', { folder: state.folder }, { fetchText: true });
+    })
+    .then(function (outputText) {
+      var chainCmd = extractTrainingChainCommand(outputText);
+      if (!chainCmd) {
+        setStatus('Training command preview finished.');
+        return outputText;
+      }
+      return new Promise(function (resolve, reject) {
+        copyTextToClipboard(
+          chainCmd,
+          function () {
+            setStatus('Training command preview finished. Chained HI;LO command copied to clipboard.');
+            resolve(outputText);
+          },
+          function () {
+            setStatus('Training command preview finished. Auto-copy failed; copy command from console.');
+            resolve(outputText);
+          }
+        );
+      });
+    })
+    .catch(function (err) {
+      var message = formatTrainingActionErrorMessage(err);
+      setStatus('Training command preview failed: ' + message);
+      throw err;
+    });
 }
 
 function isEditableElement(el) {

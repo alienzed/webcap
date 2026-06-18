@@ -156,10 +156,10 @@ function sanitizeFolderState(data) {
  */
 async function writeFolderStateFile(folderPath, folderState) {
   // folderPath: relative path from FS root ('' for root)
-  debugLog('[writeFolderStateFile] folderPath:', folderPath, 'folderState:', folderState);
+  debugLog('[writeFolderStateFile] Saving folder state.');
   try {
     const payload = { folder: folderPath, state: folderState };
-    debugLog('[writeFolderStateFile] Sending payload:', payload);
+    debugLog('[writeFolderStateFile] Sending save request.');
     const resp = await fetch('/fs/folder_state/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -266,6 +266,11 @@ function applyFolderStateToDom(folderState) {
   // IMPORTANT: If you add new fields to the folder state, you MUST handle them here
   // so they are restored to both the global state and the UI. This function must apply ALL fields.
   var clean = sanitizeFolderState(folderState);
+  var hasSavedPrimerTemplate = !!(
+    folderState &&
+    folderState.primer &&
+    Object.prototype.hasOwnProperty.call(folderState.primer, 'template')
+  );
   // Restore reviewedSet from reviewedKeys for persistence
   if (Array.isArray(clean.reviewedKeys)) {
     state.reviewedSet = new Set(clean.reviewedKeys);
@@ -298,7 +303,7 @@ function applyFolderStateToDom(folderState) {
   loadReviewRulesRows(clean.stats.reviewRules);
   
   if (templateEl) {
-    templateEl.value = clean.primer.template;
+    templateEl.value = hasSavedPrimerTemplate ? clean.primer.template : getDefaultPrimerTemplate();
   }
   if (ui.filterEl) {
     ui.filterEl.value = String((clean.media_filters && clean.media_filters.text) || '');

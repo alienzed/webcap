@@ -14,7 +14,7 @@ from . import config as app_config
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
 from .permissions import normalize_path_permissions
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, ensure_training_config_files
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
 
 
 class _QueueWriter:
@@ -86,7 +86,7 @@ def _bump_micro_batch_default_if_template_value(config_path: Path):
     return True
 
 
-def _run_prepare_dataset(folder_path: Path, output_queue, selected_media=None, selection_criteria=None, total_media_count=None):
+def _run_prepare_dataset(folder_path: Path, output_queue, selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None):
     writer = _QueueWriter(output_queue)
     try:
         with redirect_stdout(writer), redirect_stderr(writer):
@@ -97,6 +97,7 @@ def _run_prepare_dataset(folder_path: Path, output_queue, selected_media=None, s
                     selected_media=selected_media,
                     selection_criteria=selection_criteria,
                     total_media_count=total_media_count,
+                    fallback_captions=fallback_captions,
                 )
             )
     except Exception as e:
@@ -108,7 +109,7 @@ def _run_prepare_dataset(folder_path: Path, output_queue, selected_media=None, s
         output_queue.put(None)
 
 
-def prepare_dataset_response(folder: str, selected_media=None, selection_criteria=None, total_media_count=None):
+def prepare_dataset_response(folder: str, selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None):
     if not folder:
         return jsonify({"error": "Missing folder argument"}), 400
     try:
@@ -120,7 +121,7 @@ def prepare_dataset_response(folder: str, selected_media=None, selection_criteri
             output_queue = queue.Queue()
             thread = threading.Thread(
                 target=_run_prepare_dataset,
-                args=(folder_path, output_queue, selected_media, selection_criteria, total_media_count),
+                args=(folder_path, output_queue, selected_media, selection_criteria, total_media_count, fallback_captions),
                 daemon=True,
             )
             thread.start()
@@ -151,14 +152,8 @@ def generate_dataset_config_response(folder: str):
         mode = str(training.get("mode") or "normal").strip().lower()
         write_snapshot_comments = bool(training.get("write_selection_snapshot_comments"))
         prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
-        auto_prepare_attempted = False
-        prep_log = ""
         if not prep_manifest_path.exists():
-            auto_prepare_attempted = True
-            prep_log += "[INFO] Missing prep manifest; auto-running Prepare Dataset once.\n"
-            prep_text = prepare_dataset(folder_path, target_fps=16)
-            if prep_text:
-                prep_log += str(prep_text).rstrip() + "\n"
+            return Response(f"[ERROR] Missing prep manifest: {prep_manifest_path}\n", status=400, mimetype="text/plain")
 
         try:
             text = generate_dataset_configs(
@@ -177,15 +172,9 @@ def generate_dataset_config_response(folder: str):
                     updated.append(lo_name)
                 if updated:
                     text += "[INFO] Image-only set detected: defaulted micro_batch_size_per_gpu to 2 in " + ", ".join(updated) + ".\n"
-            return Response(prep_log + text, mimetype="text/plain")
+            return Response(text, mimetype="text/plain")
         except FileNotFoundError as e:
-            if auto_prepare_attempted:
-                return Response(
-                    prep_log + f"[ERROR] Generate failed after auto-prepare attempt: {e}\n",
-                    status=500,
-                    mimetype="text/plain",
-                )
-            raise
+            return Response(f"[ERROR] {e}\n", status=400, mimetype="text/plain")
     except Exception as e:
         app_config.debug_traceback()
         return Response(f"[ERROR] {e}\n", status=500, mimetype="text/plain")
@@ -219,51 +208,27 @@ def train_run_response(folder: str):
         if not folder_path.exists() or not folder_path.is_dir():
             return Response(f"[ERROR] Folder does not exist: {folder}\n", status=404, mimetype="text/plain")
 
-        warnings = []
         hi_path = folder_path / hi_name
         lo_path = folder_path / lo_name
         dataset_hi_path = folder_path / "dataset.hi.toml"
         dataset_lo_path = folder_path / "dataset.lo.toml"
-        missing_hi = not hi_path.exists() or not hi_path.is_file()
-        missing_lo = not lo_path.exists() or not lo_path.is_file()
-        missing_dataset_hi = not dataset_hi_path.exists() or not dataset_hi_path.is_file()
-        missing_dataset_lo = not dataset_lo_path.exists() or not dataset_lo_path.is_file()
+        missing_files = []
+        if not hi_path.exists() or not hi_path.is_file():
+            missing_files.append(hi_name)
+        if not lo_path.exists() or not lo_path.is_file():
+            missing_files.append(lo_name)
+        if not dataset_hi_path.exists() or not dataset_hi_path.is_file():
+            missing_files.append("dataset.hi.toml")
+        if not dataset_lo_path.exists() or not dataset_lo_path.is_file():
+            missing_files.append("dataset.lo.toml")
+        if missing_files:
+            return Response(
+                "[ERROR] Missing training prerequisites: " + ", ".join(missing_files) + ". Generate Dataset Configs first.\n",
+                status=400,
+                mimetype="text/plain",
+            )
 
-        if missing_hi or missing_lo or missing_dataset_hi or missing_dataset_lo:
-            warnings.append("[INFO] Missing training config or dataset files; auto-running Generate Dataset Configs.")
-            ensure_training_config_files(folder_path)
-            prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
-            if not prep_manifest_path.exists():
-                warnings.append("[INFO] Missing prep manifest; auto-running Prepare Dataset once.")
-                prep_text = prepare_dataset(folder_path, target_fps=16)
-                if prep_text:
-                    warnings.append(str(prep_text).rstrip())
-            try:
-                gen_text = generate_dataset_configs(
-                    folder_path,
-                    mode=mode,
-                    write_selection_snapshot_comments=write_snapshot_comments,
-                )
-                if gen_text:
-                    warnings.append(str(gen_text).rstrip())
-            except FileNotFoundError as e:
-                return Response(
-                    "[ERROR] Train failed while auto-generating configs: " + str(e) + "\n",
-                    status=500,
-                    mimetype="text/plain",
-                )
-            missing_hi = not hi_path.exists() or not hi_path.is_file()
-            missing_lo = not lo_path.exists() or not lo_path.is_file()
-            missing_dataset_hi = not dataset_hi_path.exists() or not dataset_hi_path.is_file()
-            missing_dataset_lo = not dataset_lo_path.exists() or not dataset_lo_path.is_file()
-            if missing_hi:
-                warnings.append(f"[WARN] Config file still missing after generate: {hi_name}")
-            if missing_lo:
-                warnings.append(f"[WARN] Config file still missing after generate: {lo_name}")
-            if missing_dataset_hi:
-                warnings.append("[WARN] Dataset HI config still missing after generate: dataset.hi.toml")
-            if missing_dataset_lo:
-                warnings.append("[WARN] Dataset LO config still missing after generate: dataset.lo.toml")
+        warnings = []
 
         try:
             hi_wsl = _to_wsl_path(hi_path)

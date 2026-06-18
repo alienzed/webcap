@@ -45,12 +45,12 @@ def load_caption_text(folder: str, media_name: str):
     media_name = _validate_media_name(media_name)
     caption_name = _caption_name_for_media(media_name)
     caption_path = folder_path / caption_name
-    app_config.debug_print(f'[BACKEND][READ] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
+    app_config.debug_print('[BACKEND][READ] Caption load requested.')
     def load():
         if not caption_path.exists():
             return {'caption': '', 'exists': False, 'caption_file': caption_name}
         text = caption_path.read_text(encoding='utf-8')
-        app_config.debug_print(f'[BACKEND][READ] FOUND caption: {text[:80]}...')
+        app_config.debug_print('[BACKEND][READ] Caption loaded.')
         return {
             'caption': text,
             'exists': True,
@@ -63,17 +63,17 @@ def save_caption_text(folder: str, media_name: str, text: str):
     media_name = _validate_media_name(media_name)
     caption_name = _caption_name_for_media(media_name)
     caption_path = folder_path / caption_name
-    app_config.debug_print(f'[BACKEND][WRITE] folder: {folder} file: {media_name} caption_file: {caption_name} path: {caption_path}')
+    app_config.debug_print('[BACKEND][WRITE] Caption save requested.')
     clean_text = text or ''
     caption_path.parent.mkdir(parents=True, exist_ok=True)
     normalize_path_permissions(caption_path.parent)
     if clean_text.strip():
         caption_path.write_text(clean_text, encoding='utf-8')
-        app_config.debug_print('[BACKEND][WRITE] WROTE caption.')
+        app_config.debug_print('[BACKEND][WRITE] Caption written.')
         normalize_path_permissions(caption_path)
     elif caption_path.exists():
         caption_path.unlink()
-        app_config.debug_print('[BACKEND][WRITE] DELETED caption.')
+        app_config.debug_print('[BACKEND][WRITE] Caption deleted.')
     return {'ok': True, 'caption_file': caption_name}
 
 def serve_media_file(folder: str, media_name: str):

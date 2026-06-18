@@ -44,8 +44,8 @@ function handleEditorInputAutosave(e) {
 
     var target = getAutosaveTargetAndPayload();
     if (!target) {
-        debugLog('[autosave] No valid target, skipping.');
-        return;
+      debugLog('[autosave] No valid target, skipping.');
+      return;
     }
 
     // Capture snapshot at event time
@@ -57,15 +57,15 @@ function handleEditorInputAutosave(e) {
         text: (target.payload && typeof target.payload.text === 'string' ? target.payload.text : ''),
         mediaKey: (state.currentItem && state.currentItem.key) || undefined
     };
-    debugLog('[autosave] input event snapshot:', JSON.stringify(snapshot));
+    debugLog('[autosave] Input event captured.');
 
     // Debounce per target
     if (autosaveTimers[target.key]) {
-        clearTimeout(autosaveTimers[target.key]);
-        debugLog('[autosave] Cleared existing debounce for', target.key);
+      clearTimeout(autosaveTimers[target.key]);
+        debugLog('[autosave] Cleared existing debounce.');
     }
     autosaveTimers[target.key] = setTimeout(function() {
-        debugLog('[autosave] Debounce fired for', target.key, 'with snapshot:', JSON.stringify(snapshot));
+        debugLog('[autosave] Debounce fired.');
         
         // Caption autosave
         if (snapshot.endpoint === '/caption/save') {
@@ -75,9 +75,9 @@ function handleEditorInputAutosave(e) {
                 primer = buildAutoPrimer(snapshot.media, snapshot.mediaKey);
             }
             if (primer && snapshot.text.trim() === primer.trim()) {
-                debugLog('[autosave] Skipped save: editor contains only primer caption');
+                debugLog('[autosave] Skipped save: primer-only content.');
             } else {
-                debugLog('[autosave] Saving caption:', JSON.stringify({folder: snapshot.folder, media: snapshot.media, text: snapshot.text, mediaKey: snapshot.mediaKey}));
+                debugLog('[autosave] Saving caption.');
                 saveCaptionDirect(snapshot.folder, snapshot.media, snapshot.text, snapshot.mediaKey)
                   .then(function() {
                     debugLog('[autosave] Save succeeded');
@@ -89,12 +89,12 @@ function handleEditorInputAutosave(e) {
         }
         // Config autosave
         else if (snapshot.endpoint === '/fs/save_config') {
-            debugLog('[autosave] Saving config:', JSON.stringify({folder: snapshot.folder, file: snapshot.file, text: snapshot.text}));
+            debugLog('[autosave] Saving config.');
             saveConfigDirect(snapshot.folder, snapshot.file, snapshot.text)
               .then(function() {
-                debugLog('[autosave] Save succeeded');
-              })
-              .catch(function(err) {
+                    debugLog('[autosave] Save succeeded');
+                  })
+                  .catch(function(err) {
                 debugLog('[autosave] Save failed:', err);
               });
         }

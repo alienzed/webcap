@@ -57,14 +57,11 @@ def clean_caption_text(text):
     return cleaned
 
 
-def copy_clean_caption(source_media_path: Path, dest_dir: Path):
-    source_caption = source_media_path.with_suffix(".txt")
-    if not source_caption.exists() or not source_caption.is_file():
-        raise RuntimeError(f"Missing caption file for media: {source_media_path.name}")
-    cleaned = clean_caption_text(source_caption.read_text(encoding="utf-8"))
+def write_prepared_caption(source_media_path: Path, dest_dir: Path, cleaned_text: str):
+    cleaned = clean_caption_text(cleaned_text)
     if not cleaned:
-        raise RuntimeError(f"Empty caption text for media: {source_media_path.name}")
-    dest_caption = dest_dir / source_caption.name
+        raise RuntimeError(f"Prepared caption text is empty for media: {source_media_path.name}")
+    dest_caption = dest_dir / source_media_path.with_suffix(".txt").name
     dest_caption.write_text(cleaned, encoding="utf-8")
     normalize_path_permissions(dest_caption)
     return cleaned
@@ -89,6 +86,38 @@ def normalize_selected_media(selected_media):
         seen.add(key)
         out.append(name)
     return out
+
+
+def normalize_fallback_captions(fallback_captions):
+    if fallback_captions is None:
+        return {}
+    if not isinstance(fallback_captions, dict):
+        raise RuntimeError("fallback_captions must be an object keyed by media filename.")
+    out = {}
+    for raw_name, raw_text in fallback_captions.items():
+        name = str(raw_name or "").strip()
+        if not name:
+            continue
+        if "/" in name or "\\" in name or ".." in name:
+            raise RuntimeError(f"Invalid fallback caption filename: {name}")
+        cleaned = clean_caption_text(raw_text)
+        if not cleaned:
+            raise RuntimeError(f"Fallback caption text is empty for media: {name}")
+        out[name.lower()] = cleaned
+    return out
+
+
+def resolve_prepared_caption_text(source_media_path: Path, fallback_caption_by_name: dict):
+    source_caption = source_media_path.with_suffix(".txt")
+    if source_caption.exists() and source_caption.is_file():
+        cleaned = clean_caption_text(source_caption.read_text(encoding="utf-8"))
+        if cleaned:
+            return cleaned, False
+    fallback = fallback_caption_by_name.get(source_media_path.name.lower(), "")
+    cleaned_fallback = clean_caption_text(fallback)
+    if cleaned_fallback:
+        return cleaned_fallback, True
+    return "", False
 
 
 def convert_video_to_fps(src_path: Path, dst_path: Path, target_fps: int):
@@ -126,18 +155,12 @@ def convert_video_to_fps(src_path: Path, dst_path: Path, target_fps: int):
         raise RuntimeError(f"ffmpeg failed for {src_path.name}: {stderr}")
 
 
-def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None, selection_criteria=None, total_media_count=None):
+def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
     lines = []
     lines.append(f"[INFO] Preparing dataset from: {folder}")
     lines.append(f"[INFO] Target FPS: {target_fps}")
-
-    if dataset_root.exists():
-        shutil.rmtree(dataset_root)
-    dataset_root.mkdir(parents=True, exist_ok=True)
-    normalize_path_permissions(dataset_root)
-    lines.append(f"[INFO] Rebuilt directory: {dataset_root}")
 
     metadata = update_media_metadata(folder)
 
@@ -168,6 +191,7 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
     if not selected_file_names:
         raise RuntimeError("No selected media items to prepare.")
     selected_set = set(selected_file_names)
+    fallback_caption_by_name = normalize_fallback_captions(fallback_captions)
 
     final_total_media_count = computed_total_media_count
     if total_media_count is not None:
@@ -189,6 +213,45 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
     lines.append(
         f"[INFO] Selection mode: {selection_mode} ({len(selected_file_names)} of {final_total_media_count} media files)"
     )
+
+    prepared_caption_by_file = {}
+    fallback_caption_count = 0
+    unresolved_caption_files = []
+    for file_name in file_names:
+        src = folder / file_name
+        ext = src.suffix.lower()
+        if ext not in VIDEO_EXTS and ext not in IMAGE_EXTS:
+            continue
+        if file_name not in selected_set:
+            continue
+
+        info = metadata.get(file_name) or {}
+        dims = parse_resolution(info.get("resolution"))
+        if not dims:
+            continue
+        width, height = dims
+        ar_label = classify_ar(width, height)
+        if not ar_label:
+            continue
+
+        caption_text, used_fallback = resolve_prepared_caption_text(src, fallback_caption_by_name)
+        if not caption_text:
+            unresolved_caption_files.append(file_name)
+            continue
+        prepared_caption_by_file[file_name] = caption_text
+        if used_fallback:
+            fallback_caption_count += 1
+
+    if unresolved_caption_files:
+        raise RuntimeError(
+            "Prepare requires captions or primer fallbacks for: " + ", ".join(sorted(unresolved_caption_files, key=lambda name: name.lower()))
+        )
+
+    if dataset_root.exists():
+        shutil.rmtree(dataset_root)
+    dataset_root.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(dataset_root)
+    lines.append(f"[INFO] Rebuilt directory: {dataset_root}")
 
     for file_name in file_names:
         src = folder / file_name
@@ -240,7 +303,7 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
                 shutil.copy2(src, dest_path)
                 action = "copied"
             normalize_path_permissions(dest_path)
-            copy_clean_caption(src, dest_dir)
+            write_prepared_caption(src, dest_dir, prepared_caption_by_file[file_name])
             manifest["videos"].append({
                 "file": file_name,
                 "ar": ar_label,
@@ -256,7 +319,7 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
         else:
             shutil.copy2(src, dest_path)
             normalize_path_permissions(dest_path)
-            copy_clean_caption(src, dest_dir)
+            write_prepared_caption(src, dest_dir, prepared_caption_by_file[file_name])
             manifest["images"].append({
                 "file": file_name,
                 "ar": ar_label,
@@ -272,6 +335,7 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
 
     lines.append(f"[INFO] Videos prepared: {len(manifest['videos'])}")
     lines.append(f"[INFO] Images prepared: {len(manifest['images'])}")
+    lines.append(f"[INFO] Primer fallback captions used: {fallback_caption_count}")
     lines.append(f"[INFO] Skipped: {len(manifest['skipped'])}")
     lines.append(f"[INFO] Wrote prep manifest: {manifest_path}")
     return "\n".join(lines) + "\n"

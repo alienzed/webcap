@@ -257,11 +257,11 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
 
 def media_restore_response(data):
     data = data or {}
-    app_config.debug_print("[caption_restore] Incoming data:", data)
+    app_config.debug_print("[caption_restore] Restore request received.")
     folder = data.get("folder", "").strip()
     file_name = data.get("fileName", "").strip()
     if not folder or not file_name:
-        app_config.debug_print("[caption_restore] Missing required parameters:", folder, file_name)
+        app_config.debug_print("[caption_restore] Missing required parameters.")
         return jsonify({"error": "Missing required parameters"}), 400
     try:
         folder_path = safe_join_fs_root(folder)
@@ -424,7 +424,7 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
                 scoped_filenames=scoped_filenames,
             ),
         )
-        app_config.debug_print(f"[metadata] generated for folder: {rel_path or '.'}")
+        app_config.debug_print("[metadata] Media metadata generated.")
         metadata_list = []
         for filename, info in metadata_dict.items():
             record = {

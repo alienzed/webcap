@@ -215,6 +215,91 @@ function getFocusedAnnotationCurrentRequirement() {
   return String(requirements[idx] || '');
 }
 
+function getFocusedAnnotationTraversalStepsForKeys(itemKeys, traversalMode) {
+  var keys = Array.isArray(itemKeys) ? itemKeys : [];
+  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  var steps = [];
+  if (!keys.length || !requirements.length) return steps;
+  var mode = String(traversalMode || getFocusedAnnotationTraversalMode()).trim().toLowerCase() === 'item-first'
+    ? 'item-first'
+    : 'group-first';
+  if (mode === 'item-first') {
+    for (var itemIndex = 0; itemIndex < keys.length; itemIndex++) {
+      for (var groupIndex = 0; groupIndex < requirements.length; groupIndex++) {
+        steps.push({ itemIndex: itemIndex, groupIndex: groupIndex });
+      }
+    }
+    return steps;
+  }
+  for (var nextGroupIndex = 0; nextGroupIndex < requirements.length; nextGroupIndex++) {
+    for (var nextItemIndex = 0; nextItemIndex < keys.length; nextItemIndex++) {
+      steps.push({ itemIndex: nextItemIndex, groupIndex: nextGroupIndex });
+    }
+  }
+  return steps;
+}
+
+function isFocusedAnnotationStepComplete(mediaKey, requirementLabel) {
+  return (typeof isChecklistRequirementCheckedForMediaKey === 'function' &&
+    isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel)) ||
+    (typeof isChecklistRequirementNaForMediaKey === 'function' &&
+    isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel));
+}
+
+function getFocusedAnnotationResumeStep(itemKeys, preferredMediaKey) {
+  var keys = Array.isArray(itemKeys) ? itemKeys : [];
+  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  if (!keys.length || !requirements.length) return null;
+
+  var steps = getFocusedAnnotationTraversalStepsForKeys(keys, getFocusedAnnotationTraversalMode());
+  if (!steps.length) return null;
+
+  var lastCompletedIndex = -1;
+  for (var i = 0; i < steps.length; i++) {
+    var step = steps[i];
+    var mediaKey = keys[step.itemIndex];
+    var requirementLabel = String(requirements[step.groupIndex] || '');
+    if (!mediaKey || !requirementLabel) continue;
+    if (isFocusedAnnotationStepComplete(mediaKey, requirementLabel)) {
+      lastCompletedIndex = i;
+    }
+  }
+
+  function findFirstPending(startIndex, endIndex) {
+    for (var idx = Math.max(0, startIndex); idx < Math.min(steps.length, endIndex); idx++) {
+      var candidate = steps[idx];
+      var candidateMediaKey = keys[candidate.itemIndex];
+      var candidateRequirementLabel = String(requirements[candidate.groupIndex] || '');
+      if (!candidateMediaKey || !candidateRequirementLabel) continue;
+      if (!isFocusedAnnotationStepComplete(candidateMediaKey, candidateRequirementLabel)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  if (lastCompletedIndex >= 0) {
+    var nextPending = findFirstPending(lastCompletedIndex + 1, steps.length);
+    if (nextPending) return nextPending;
+    return findFirstPending(0, lastCompletedIndex);
+  }
+
+  var preferredKey = String(preferredMediaKey || '').trim();
+  if (preferredKey) {
+    for (var j = 0; j < steps.length; j++) {
+      var preferredStep = steps[j];
+      if (keys[preferredStep.itemIndex] !== preferredKey) continue;
+      var preferredRequirement = String(requirements[preferredStep.groupIndex] || '');
+      if (!preferredRequirement) continue;
+      if (!isFocusedAnnotationStepComplete(preferredKey, preferredRequirement)) {
+        return preferredStep;
+      }
+    }
+  }
+
+  return findFirstPending(0, steps.length);
+}
+
 var FOCUSED_ANNOTATION_SUGGESTION_STOP_WORDS = {
   a: true,
   an: true,
@@ -844,40 +929,20 @@ function beginFocusedAnnotationRun(targetMediaKey) {
   var sequence = getFocusedAnnotationSequence();
   var items = Array.isArray(sequence.items) ? sequence.items.slice() : [];
   var targetKey = String(targetMediaKey || '').trim();
-  if (!items.length && state.currentItem && state.currentItem.key) {
-    items = [state.currentItem];
-  }
-  if (targetKey && !items.some(function (item) { return item && item.key === targetKey; })) {
-    var fallbackItem = findFocusedAnnotationMediaItemByKey(targetKey);
-    if (fallbackItem) {
-      items.unshift(fallbackItem);
-    }
-  }
   items = items.filter(function (item) { return !!(item && item.key); });
   if (!items.length) {
     setStatus('No media available for focused annotation.');
     return;
   }
   var itemKeys = items.map(function (item) { return item.key; });
-  var itemIndex = Math.max(0, itemKeys.indexOf(targetKey));
-  if (itemIndex < 0) itemIndex = 0;
   focusedAnnotationState.itemKeys = itemKeys;
-  var startItemIndex = -1;
-  var firstPendingGroupIndex = -1;
-  for (var offset = 0; offset < itemKeys.length; offset++) {
-    var candidateIndex = (itemIndex + offset) % itemKeys.length;
-    var pendingGroupIndex = getFocusedAnnotationFirstIncompleteGroupIndex(itemKeys[candidateIndex], 0);
-    if (pendingGroupIndex < 0) continue;
-    startItemIndex = candidateIndex;
-    firstPendingGroupIndex = pendingGroupIndex;
-    break;
-  }
-  if (startItemIndex < 0 || firstPendingGroupIndex < 0) {
+  var resumeStep = getFocusedAnnotationResumeStep(itemKeys, targetKey);
+  if (!resumeStep) {
     setStatus('Everything in this focused scope is already reviewed.');
     return;
   }
-  focusedAnnotationState.itemIndex = startItemIndex;
-  focusedAnnotationState.groupIndex = firstPendingGroupIndex;
+  focusedAnnotationState.itemIndex = resumeStep.itemIndex;
+  focusedAnnotationState.groupIndex = resumeStep.groupIndex;
   focusedAnnotationState.history = [];
   focusedAnnotationState.sourceLabel = String(sequence.sourceLabel || '');
   showFocusedAnnotationModal();
@@ -906,11 +971,7 @@ function openFocusedAnnotationForMediaItem(mediaItem) {
 }
 
 function openFocusedAnnotationModal() {
-  if (!state.currentItem || !state.currentItem.key) {
-    setStatus('Select a media item to annotate.');
-    return;
-  }
-  openFocusedAnnotationForMediaItem(state.currentItem);
+  beginFocusedAnnotationRun((state.currentItem && state.currentItem.key) || '');
 }
 
 function wireFocusedAnnotationModal() {

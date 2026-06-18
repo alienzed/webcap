@@ -32,7 +32,7 @@ function extractFrameAndOpenCropModal() {
   var dataUrl = canvas.toDataURL('image/png');
   openVideoCropModal(dataUrl, videoClipCropRatio, function(crop) {
     window.videoClipPendingCrop = crop;
-    setStatus('Crop: x=' + crop.x + ', y=' + crop.y + ', w=' + crop.width + ', h=' + crop.height);
+    setStatus('Crop updated.');
   });
 }
 // --- Wire up Crop This Frame button ---
@@ -61,11 +61,41 @@ function getVideoClipEl(id) {
   return document.getElementById(id);
 }
 
+function setVideoClipStatus(text, options) {
+  var statusEl = getVideoClipEl('video-clip-status');
+  var textEl = getVideoClipEl('video-clip-status-text');
+  if (!statusEl || !textEl) return;
+
+  var message = String(text || '').trim();
+  var kind = options && options.kind ? String(options.kind).toLowerCase() : '';
+
+  textEl.textContent = message;
+  statusEl.classList.toggle('hidden', !message);
+  statusEl.classList.remove('is-active', 'is-success', 'is-error', 'error');
+  statusEl.setAttribute('aria-busy', kind === 'active' ? 'true' : 'false');
+
+  if (!message) return;
+  if (kind === 'active') {
+    statusEl.classList.add('is-active');
+    return;
+  }
+  if (kind === 'success') {
+    statusEl.classList.add('is-success');
+    return;
+  }
+  if (kind === 'error') {
+    statusEl.classList.add('is-error', 'error');
+  }
+}
+
 
 function setVideoClipBusy(isBusy) {
   videoClipCropBusy = !!isBusy;
   var btn = getVideoClipEl('video-clip-export-btn');
-  if (btn) btn.disabled = videoClipCropBusy;
+  if (btn) {
+    btn.disabled = videoClipCropBusy;
+    btn.textContent = videoClipCropBusy ? 'Exporting...' : 'Export';
+  }
   var outputEl = getVideoClipEl('video-clip-output-input');
   if (outputEl) outputEl.disabled = videoClipCropBusy || videoClipOverwriteSourceMode;
   var startEl = getVideoClipEl('video-clip-start-input');
@@ -82,7 +112,7 @@ function finalizeVideoClipJob(payload, status, message) {
       markMediaMutated(payload.fileName, 'best_effort');
       state.pendingSelectFileName = payload.fileName;
     }
-    setStatus((payload && payload.overwriteSource ? 'In-place clip exported: ' : 'Clip exported: ') + (payload && payload.outputName ? payload.outputName : ''));
+    setStatus(payload && payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.');
     if (payload && payload.overwriteSource && payload.fileName) {
       Promise.resolve(saveFolderStateForCurrentRoot()).catch(function (err) {
         if (window.console && console.warn) {
@@ -94,9 +124,11 @@ function finalizeVideoClipJob(payload, status, message) {
     } else {
       refreshCurrentDirectory();
     }
+    setVideoClipStatus(payload && payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.', { kind: 'success' });
     return;
   }
   if (status === 'failed') {
+    setVideoClipStatus('Clip export failed: ' + (message || 'Unknown error'), { kind: 'error' });
     setStatus('Clip export failed: ' + (message || 'Unknown error'));
   }
 }
@@ -123,6 +155,14 @@ function pollVideoClipJob(jobId, payload) {
         if (res.status !== 200 || !res.data || !res.data.ok || !res.data.job) return;
         var job = res.data.job;
         var jobStatus = String(job.status || '').toLowerCase();
+        if (jobStatus === 'queued') {
+          setVideoClipStatus(payload && payload.overwriteSource ? 'In-place clip queued. Waiting for worker...' : 'Clip queued. Waiting for worker...', { kind: 'active' });
+          return;
+        }
+        if (jobStatus === 'running') {
+          setVideoClipStatus(payload && payload.overwriteSource ? 'Exporting in place...' : 'Exporting clip...', { kind: 'active' });
+          return;
+        }
         if (jobStatus === 'completed') {
           finalizeVideoClipJob(payload, 'completed');
           return;
@@ -246,6 +286,7 @@ function closeVideoClipModal() {
   videoClipSourceResolution = null;
   videoClipOverwriteSourceMode = false;
   setVideoClipBusy(false);
+  setVideoClipStatus('');
   setStatus('');
   setVideoClipSizeReadout(0, 0);
 
@@ -367,11 +408,13 @@ function toggleVideoClipCropMode() {
     btn.textContent = 'Hide Crop Tool';
     try {
       initializeVideoClipCropSurface(videoClipTargetItem);
+      setVideoClipStatus('');
       setStatus('');
     } catch (e) {
       videoClipCropEnabled = false;
       img.classList.add('hidden');
       btn.textContent = 'Set Crop Tool';
+      setVideoClipStatus(String(e && e.message ? e.message : e), { kind: 'error' });
       setStatus(String(e && e.message ? e.message : e));
     }
     return;
@@ -383,8 +426,8 @@ function toggleVideoClipCropMode() {
 }
 
 function openVideoClipModal(mediaItem) {
-  setStatus('[VideoClip] Opening video clip modal for', mediaItem.fileName);
   if (!mediaItem || !mediaItem.fileName || !isVideoFileName(mediaItem.fileName)) {
+    setVideoClipStatus('Clip is only available for video files.', { kind: 'error' });
     setStatus('Clip is only available for video files.');
     return;
   }
@@ -409,6 +452,7 @@ function openVideoClipModal(mediaItem) {
   videoClipOverwriteSourceMode = !isVideoClipInSrcVideosFolder();
   videoClipCropEnabled = false;
   setVideoClipBusy(false);
+  setVideoClipStatus('');
   setStatus('');
   setVideoClipSizeReadout(0, 0);
   setVideoClipRatio(1);
@@ -450,6 +494,7 @@ function openVideoClipModal(mediaItem) {
     syncVideoClipStartToPlayhead(3);
   };
   videoEl.onerror = function () {
+    setVideoClipStatus('Video failed to load. The codec may be unsupported in browser playback.', { kind: 'error' });
     setStatus('Video failed to load. The codec may be unsupported in browser playback.');
   };
 }
@@ -542,38 +587,47 @@ function applyVideoClip(overwrite) {
   try {
     payload = getVideoClipPayload(overwrite);
   } catch (e) {
+    setVideoClipStatus(String(e && e.message ? e.message : e), { kind: 'error' });
     setStatus(String(e && e.message ? e.message : e));
     return;
   }
 
   setVideoClipBusy(true);
-  setStatus((payload.overwriteSource ? 'Queueing in-place clip: ' : 'Queueing clip export: ') + payload.outputName);
+  setVideoClipStatus(payload.overwriteSource ? 'Queueing in-place clip export...' : 'Queueing clip export...', { kind: 'active' });
+  setStatus(payload.overwriteSource ? 'Queueing in-place clip export...' : 'Queueing clip export...');
   if (window.console && console.log) {
-    console.log('[VideoClip] Export payload:', payload);
+    console.log('[VideoClip] Export requested.');
   }
 
   HttpModule.postJson('/media/video_clip', payload, function (status, responseText) {
     if (window.console && console.log) {
-      console.log('[VideoClip] Export response:', status, responseText);
+      console.log('[VideoClip] Export response received.');
     }
     if (status === 200 || status === 202) {
       var parsed = null;
       try { parsed = JSON.parse(responseText); } catch (e) {}
       if (parsed && parsed.jobId) {
-        setStatus((payload.overwriteSource ? 'In-place clip queued: ' : 'Clip queued: ') + payload.outputName);
+        setVideoClipStatus(payload.overwriteSource ? 'In-place clip queued. Waiting for worker...' : 'Clip queued. Waiting for worker...', { kind: 'active' });
+        setStatus(payload.overwriteSource ? 'In-place clip queued.' : 'Clip queued.');
         setVideoClipBusy(true);
         pollVideoClipJob(parsed.jobId, payload);
         if (window.console && console.log) {
-          console.log('[VideoClip] Accepted:', payload.outputName, parsed.jobId);
+          console.log('[VideoClip] Export accepted.');
         }
         return;
       }
       setVideoClipBusy(false);
       // Leave modal open so user can create more clips.
-      var successText = status === 202 ? (payload.overwriteSource ? 'In-place clip queued: ' : 'Clip queued: ') : (payload.overwriteSource ? 'In-place clip exported: ' : 'Clip exported: ');
-      setStatus(successText + payload.outputName);
+      if (status === 202) {
+        setVideoClipStatus(payload.overwriteSource ? 'In-place clip queued.' : 'Clip queued.', { kind: 'active' });
+      } else {
+        setVideoClipStatus(payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.', { kind: 'success' });
+      }
+      setStatus(status === 202
+        ? (payload.overwriteSource ? 'In-place clip queued.' : 'Clip queued.')
+        : (payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.'));
       if (window.console && console.log) {
-        console.log('[VideoClip] Accepted:', payload.outputName);
+        console.log('[VideoClip] Export accepted.');
       }
       refreshCurrentDirectory();
       return;
@@ -588,17 +642,19 @@ function applyVideoClip(overwrite) {
         applyVideoClip(true);
         return;
       }
+      setVideoClipStatus('Export cancelled.');
       setStatus('Export cancelled.');
       return;
     }
     if (status === 409 && data && data.duplicateRequest) {
+      setVideoClipStatus('Duplicate export ignored.');
       setStatus('Duplicate export ignored.');
       return;
     }
-    setStatus(message);
+    setVideoClipStatus('Clip export failed: ' + message, { kind: 'error' });
     setStatus('Clip export failed: ' + message);
     if (window.console && console.error) {
-      console.error('[VideoClip] Export failed:', message, payload, responseText);
+      console.error('[VideoClip] Export failed:', message, 'status=' + status);
     }
   });
 }

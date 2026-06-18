@@ -246,58 +246,33 @@ function wireTrainingButtons() {
             setStatus('Dataset configs generated.');
           }
         }
-      );
+      ).catch(function (err) {
+        if (window.console && console.error) {
+          console.error('[Training] Generate failed:', err);
+        }
+      });
     };
   }
 
   var trainingPrepareDatasetBtn = document.getElementById('training-prepare-dataset-btn');
   if (trainingPrepareDatasetBtn) {
     trainingPrepareDatasetBtn.onclick = function () {
-      runPrepareDatasetForCurrentFolder();
+      runPrepareDatasetForCurrentFolder().catch(function (err) {
+        if (window.console && console.error) {
+          console.error('[Training] Prepare failed:', err);
+        }
+      });
     };
   }
 
   var trainingTrainBtn = document.getElementById('training-train-btn');
   if (trainingTrainBtn) {
     trainingTrainBtn.onclick = function () {
-      if (!ensureFolderSelected('No folder selected for training.')) {
-        return;
-      }
-      var allMediaKeys = (state.items || []).map(function (item) {
-        return item && item.key;
-      }).filter(Boolean);
-      if (typeof confirmMissingCaptionPreflight === 'function') {
-        if (!confirmMissingCaptionPreflight(allMediaKeys, 'Train')) {
-          setStatus('Training command preview cancelled.');
-          return;
+      runTrainCommandPreviewForCurrentFolder().catch(function (err) {
+        if (window.console && console.error) {
+          console.error('[Training] Train preview failed:', err);
         }
-      }
-      setStatus('Printing training commands...');
-      var runPreview = (typeof fetchPreviewText === 'function') ? fetchPreviewText : streamPreviewFromFetch;
-      runPreview(
-        '/fs/train_run',
-        { folder: state.folder },
-        ui,
-        function (outputText) {
-          var chainCmd = extractTrainingChainCommand(outputText);
-          if (!chainCmd) {
-            setStatus('Training command preview finished.');
-            return;
-          }
-          copyTextToClipboard(
-            chainCmd,
-            function () {
-              setStatus('Training command preview finished. Chained HI;LO command copied to clipboard.');
-            },
-            function () {
-              setStatus('Training command preview finished. Auto-copy failed; copy command from console.');
-            }
-          );
-        },
-        function (err) {
-          setStatus('Training command preview failed: ' + err);
-        }
-      );
+      });
     };
   }
 }

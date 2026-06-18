@@ -85,14 +85,14 @@ def duplicate_image_response(src_rel):
 
 def rename_response(data):
     data = data or {}
-    app_config.debug_print("[fs_rename] Incoming data:", data)
+    app_config.debug_print("[fs_rename] Rename request received.")
     folder = data.get("folder", "").strip()
     old_name = data.get("oldFile") or data.get("old_name") or ""
     new_name = data.get("newFile") or data.get("new_name") or ""
     old_name = old_name.strip()
     new_name = new_name.strip()
     if not old_name or not new_name:
-        app_config.debug_print("[fs_rename] Missing required parameters:", folder, old_name, new_name)
+        app_config.debug_print("[fs_rename] Missing required parameters.")
         return jsonify({"error": "Missing required parameters"}), 400
     try:
         folder_path = app_config.safe_join_fs_root(folder)
@@ -156,7 +156,7 @@ def rename_response(data):
                                 new_keys.append(k)
                         if changed:
                             folder_state["reviewedKeys"] = new_keys
-                            app_config.debug_print(f"[fs_rename] Updated reviewedKeys in {state_path}")
+                            app_config.debug_print("[fs_rename] Updated reviewedKeys.")
                     if (
                         isinstance(folder_state, dict)
                         and "mutated_media_keys" in folder_state
@@ -172,7 +172,7 @@ def rename_response(data):
                                 next_mutation_keys.append(key)
                         if changed_mutation:
                             folder_state["mutated_media_keys"] = next_mutation_keys
-                            app_config.debug_print(f"[fs_rename] Updated mutated_media_keys in {state_path}")
+                            app_config.debug_print("[fs_rename] Updated mutated_media_keys.")
                     with open(state_path, "w", encoding="utf-8") as f:
                         json.dump(folder_state, f, indent=2)
                     normalize_path_permissions(state_path)
@@ -243,12 +243,7 @@ def _launch_windows_explorer(abs_path: Path):
         raise ValueError("Empty Windows path")
 
     explorer = _windows_explorer_exe()
-    app_config.debug_print(
-        "[open_in_explorer] Windows reveal:",
-        win_path,
-        "file=" + str(abs_path.is_file()),
-        "wsl=" + str(_is_wsl_runtime()),
-    )
+    app_config.debug_print("[open_in_explorer] Windows reveal requested.")
 
     if abs_path.is_file():
         if _is_wsl_runtime():
@@ -267,13 +262,12 @@ def _launch_windows_explorer(abs_path: Path):
 
 def open_in_explorer_response(rel_path):
     rel_path = (rel_path or "").strip()
-    app_config.debug_print("[open_in_explorer] Received rel_path:", rel_path)
+    app_config.debug_print("[open_in_explorer] Request received.")
     if not rel_path:
         app_config.debug_print("[open_in_explorer] ERROR: Missing path")
         return jsonify({"error": "Missing path"}), 400
     try:
         abs_path = app_config.safe_join_fs_root(rel_path)
-        app_config.debug_print("[open_in_explorer] Resolved abs_path:", abs_path)
         if not abs_path.exists():
             app_config.debug_print("[open_in_explorer] ERROR: Path does not exist:", abs_path)
             return jsonify({"error": "Path does not exist"}), 404
@@ -296,10 +290,9 @@ def open_in_explorer_response(rel_path):
 
 def open_in_vscode_response(rel_path):
     rel_path = (rel_path or "").strip()
-    app_config.debug_print("[open_in_vscode] Received rel_path:", rel_path)
+    app_config.debug_print("[open_in_vscode] Request received.")
     try:
         abs_path = app_config.safe_join_fs_root(rel_path)
-        app_config.debug_print("[open_in_vscode] Resolved abs_path:", abs_path)
         if not abs_path.exists() or not abs_path.is_dir():
             return jsonify({"error": "Folder does not exist"}), 404
 

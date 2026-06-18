@@ -99,6 +99,9 @@ function runRemoveBackground(mediaItem) {
 }
 
 function buildCurrentFolderContextActions() {
+  var focusActionLabel = (state && state.focusSet && state.focusSet.keys && state.focusSet.keys.length)
+    ? 'Resume Focus Annotation...'
+    : 'Focused Annotate...';
   return [
     {
       label: 'Open in Explorer',
@@ -113,9 +116,23 @@ function buildCurrentFolderContextActions() {
       }
     },
     {
+      label: focusActionLabel,
+      run: function () {
+        if (typeof openFocusedAnnotationModal === 'function') {
+          openFocusedAnnotationModal();
+        } else {
+          setStatus('Focused annotation is unavailable.');
+        }
+      }
+    },
+    {
       label: 'Generate Dataset Configs',
       run: function () {
-        runGenerateDatasetConfigsForCurrentFolder();
+        runGenerateDatasetConfigsForCurrentFolder().catch(function (err) {
+          if (window.console && console.error) {
+            console.error('[Training] Context generate failed:', err);
+          }
+        });
       }
     },
     {

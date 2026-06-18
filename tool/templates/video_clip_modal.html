@@ -69,7 +69,10 @@
                 <button id="video-clip-cancel-btn" type="button">Cancel</button>
             </div>
         </div>
-        <div id="video-clip-status" class="crop-status"></div>
+        <div id="video-clip-status" class="crop-status video-clip-status hidden" aria-live="polite" aria-busy="false">
+            <span class="video-clip-status-indicator" aria-hidden="true"></span>
+            <span id="video-clip-status-text"></span>
+        </div>
 
     </div>
 </div>

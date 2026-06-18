@@ -7,6 +7,10 @@ Last reviewed: 2026-06-17.
 - Another huge benefit of the future grid feature will be copy/pasting tags between very similar items.
 - True batch tagging is increasingly clearly a grid feature; blind application from the one-item-at-a-time wizard does not make enough sense to be the primary solution.
 
+## Grid Enhancements
+- Right Click for Actions - all that are available in the media list unless this view breaks something (modal z-index beware!)
+- The 0 1 2 3 4 5 circles, these either need to be removed or changed to look like stars for consistency.
+
 ## Bugs
 
 ## Enhancements

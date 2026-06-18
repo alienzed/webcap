@@ -389,6 +389,7 @@
   width: 100%;
   min-height: 0;
   height: 100%;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -403,6 +404,39 @@
   height: 100%;
   object-fit: contain;
   border-radius: 12px;
+}
+
+.focused-annotation-rating {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.28);
+  backdrop-filter: blur(4px);
+}
+
+.focused-annotation-rating-star {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.78);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 3px;
+}
+
+.focused-annotation-rating-star:hover,
+.focused-annotation-rating-star.active {
+  color: #fbbf24;
 }
 
 .focused-annotation-group-pane {

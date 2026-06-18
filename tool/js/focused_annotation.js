@@ -443,6 +443,7 @@ function renderFocusedAnnotationPreview(mediaItem) {
     return;
   }
   if (els.previewMedia.getAttribute('data-media-key') === mediaKey && els.previewMedia.firstChild) {
+    renderFocusedAnnotationRating(mediaKey);
     return;
   }
   els.previewMedia.innerHTML = '';
@@ -459,6 +460,7 @@ function renderFocusedAnnotationPreview(mediaItem) {
     video.src = url;
     video.className = 'focused-annotation-preview-video';
     els.previewMedia.appendChild(video);
+    renderFocusedAnnotationRating(mediaKey);
     return;
   }
   var img = document.createElement('img');
@@ -466,6 +468,36 @@ function renderFocusedAnnotationPreview(mediaItem) {
   img.alt = mediaItem.fileName;
   img.className = 'focused-annotation-preview-image';
   els.previewMedia.appendChild(img);
+  renderFocusedAnnotationRating(mediaKey);
+}
+
+function renderFocusedAnnotationRating(mediaKey) {
+  var els = getFocusedAnnotationEls();
+  if (!els.previewMedia || !mediaKey) return;
+  var existing = els.previewMedia.querySelector('.focused-annotation-rating');
+  if (existing) existing.parentNode.removeChild(existing);
+
+  var currentRating = getRatingForMediaKey(mediaKey);
+  var wrap = document.createElement('div');
+  wrap.className = 'focused-annotation-rating';
+  wrap.setAttribute('aria-label', 'Rating');
+  for (var s = 1; s <= 5; s++) {
+    (function (value) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'focused-annotation-rating-star' + (value <= currentRating ? ' active' : '');
+      btn.textContent = value <= currentRating ? '\u2605' : '\u2606';
+      btn.title = 'Set rating to ' + value + ' star' + (value === 1 ? '' : 's');
+      btn.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setRatingForMediaKey(mediaKey, value);
+        renderFocusedAnnotationRating(mediaKey);
+      };
+      wrap.appendChild(btn);
+    })(s);
+  }
+  els.previewMedia.appendChild(wrap);
 }
 
 function buildFocusedAnnotationBadge(text, kind) {

@@ -138,8 +138,8 @@
 
 .media-grid-items {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
 }
 
 .media-grid-tile {
@@ -183,7 +183,6 @@
   display: block;
 }
 
-.media-grid-rating-badge,
 .media-grid-caption-badge,
 .media-grid-selected-badge {
   position: absolute;
@@ -198,11 +197,6 @@
   background: rgba(15, 23, 42, 0.78);
   color: #f8fafc;
   border: 1px solid rgba(255, 255, 255, 0.16);
-}
-
-.media-grid-rating-badge {
-  left: 7px;
-  top: 7px;
 }
 
 .media-grid-caption-badge {
@@ -325,5 +319,9 @@ body.media-grid-open {
 
   .media-grid-sidebar {
     max-height: 34vh;
+  }
+
+  .media-grid-items {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   }
 }

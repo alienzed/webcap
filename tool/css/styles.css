@@ -107,7 +107,8 @@ body {
 }
 
 .media-list-wrapper.focus-set-active .floating-refresh,
-.media-list-wrapper.focus-set-active .floating-up {
+.media-list-wrapper.focus-set-active .floating-up,
+.media-list-wrapper.focus-set-active .floating-grid {
   display: none;
 }
 
@@ -1668,6 +1669,27 @@ iframe {
   right: 40px;
   z-index: 20;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.floating-grid {
+  position: absolute;
+  top: 5px;
+  right: 72px;
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.media-grid-open-icon {
+  width: 14px;
+  height: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+}
+
+.media-grid-open-icon span {
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
 }
 
 .d-none {

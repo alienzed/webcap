@@ -57,17 +57,21 @@ function mediaGridMediaUrl(mediaItem) {
 }
 
 function mediaGridCreateEntryButton() {
-  var strip = document.querySelector('.sidebar-action-strip');
-  if (!strip) throw new Error('Media Grid entry target is missing.');
+  var wrapper = document.getElementById('media-list-wrapper');
+  if (!wrapper) throw new Error('Media Grid entry target is missing.');
   if (document.getElementById('media-grid-open-btn')) return;
   var btn = document.createElement('button');
   btn.id = 'media-grid-open-btn';
   btn.type = 'button';
-  btn.className = 'review-captions-btn';
+  btn.className = 'refresh-btn-square floating-grid';
   btn.title = 'Open Media Grid for the current visible items';
-  btn.innerHTML = '<span class="btn-glyph" aria-hidden="true">#</span><span>Grid</span>';
+  btn.setAttribute('aria-label', 'Open Media Grid');
+  btn.innerHTML =
+    '<span class="media-grid-open-icon" aria-hidden="true">' +
+      '<span></span><span></span><span></span><span></span>' +
+    '</span>';
   btn.onclick = openMediaGridModal;
-  strip.insertBefore(btn, strip.firstChild);
+  wrapper.insertBefore(btn, wrapper.firstChild);
 }
 
 function mediaGridCreateModal() {
@@ -212,14 +216,6 @@ function mediaGridBuildTile(mediaItem) {
     thumb.appendChild(img);
   }
 
-  var rating = getRatingForMediaKey(mediaItem.key);
-  if (rating > 0) {
-    var ratingBadge = document.createElement('span');
-    ratingBadge.className = 'media-grid-rating-badge';
-    ratingBadge.textContent = String(rating);
-    ratingBadge.title = rating + ' star rating';
-    thumb.appendChild(ratingBadge);
-  }
   if (!mediaItem.hasCaption) {
     var captionBadge = document.createElement('span');
     captionBadge.className = 'media-grid-caption-badge';
@@ -241,6 +237,33 @@ function mediaGridBuildTile(mediaItem) {
   return tile;
 }
 
+function mediaGridSyncSelectionDisplay() {
+  var els = mediaGridGetEls();
+  var tiles = els.canvas.querySelectorAll('.media-grid-tile[data-key]');
+  for (var i = 0; i < tiles.length; i++) {
+    var tile = tiles[i];
+    var key = tile.getAttribute('data-key');
+    var selected = mediaGridState.selectedKeys.has(key);
+    tile.classList.toggle('selected', selected);
+    var thumb = tile.querySelector('.media-grid-thumb-wrap');
+    var badge = tile.querySelector('.media-grid-selected-badge');
+    if (selected && !badge && thumb) {
+      badge = document.createElement('span');
+      badge.className = 'media-grid-selected-badge';
+      badge.textContent = 'Selected';
+      thumb.appendChild(badge);
+    } else if (!selected && badge) {
+      badge.parentNode.removeChild(badge);
+    }
+  }
+}
+
+function mediaGridRenderSelectionState() {
+  renderMediaGridHeader();
+  mediaGridSyncSelectionDisplay();
+  renderMediaGridSidebar();
+}
+
 function mediaGridHandleTileClick(itemKey, e) {
   var key = String(itemKey || '');
   if (!key) return;
@@ -254,7 +277,7 @@ function mediaGridHandleTileClick(itemKey, e) {
     }
   }
   mediaGridState.lastSelectedKey = key;
-  renderMediaGridModal();
+  mediaGridRenderSelectionState();
 }
 
 function mediaGridSelectRange(fromKey, toKey) {
@@ -282,14 +305,14 @@ function mediaGridSelectAll() {
   });
   mediaGridState.lastSelectedKey = mediaGridState.items.length ? mediaGridState.items[mediaGridState.items.length - 1].key : '';
   mediaGridSetStatus('Selected all visible Grid items.');
-  renderMediaGridModal();
+  mediaGridRenderSelectionState();
 }
 
 function mediaGridClearSelection() {
   mediaGridState.selectedKeys = new Set();
   mediaGridState.lastSelectedKey = '';
   mediaGridSetStatus('Selection cleared.');
-  renderMediaGridModal();
+  mediaGridRenderSelectionState();
 }
 
 function mediaGridApplyRating(rating) {

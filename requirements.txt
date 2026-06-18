@@ -3,3 +3,5 @@ Werkzeug>=3.0,<4.0
 Pillow>=10,<12
 deface
 mediapipe==0.10.35
+rembg
+onnxruntime

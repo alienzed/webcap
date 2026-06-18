@@ -215,6 +215,112 @@ function getFocusedAnnotationCurrentRequirement() {
   return String(requirements[idx] || '');
 }
 
+var FOCUSED_ANNOTATION_SUGGESTION_STOP_WORDS = {
+  a: true,
+  an: true,
+  her: true,
+  on: true,
+  the: true
+};
+
+var FOCUSED_ANNOTATION_SELECTION_POSE_ALIASES = {
+  '3 4': ['three quarter'],
+  'arms out': ['arms spread'],
+  'arms spread': ['arms out'],
+  'lying back': ['lying on her back', 'lying down', 'reclining'],
+  'lying down': ['lying back', 'lying on her back', 'reclining'],
+  'lying on her back': ['lying back', 'lying down', 'reclining'],
+  neutral: ['neutral expression'],
+  'neutral expression': ['neutral'],
+  reclining: ['lying back', 'lying down', 'lying on her back'],
+  seated: ['sitting'],
+  sitting: ['seated'],
+  'three quarter': ['3 4']
+};
+
+function canonicalizeFocusedAnnotationSuggestionText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildFocusedAnnotationSuggestionVariants(value) {
+  var canonical = canonicalizeFocusedAnnotationSuggestionText(value);
+  var variants = {};
+
+  function pushVariant(text) {
+    var next = canonicalizeFocusedAnnotationSuggestionText(text);
+    if (!next) return;
+    variants[next] = true;
+  }
+
+  pushVariant(canonical);
+  if (FOCUSED_ANNOTATION_SELECTION_POSE_ALIASES[canonical]) {
+    FOCUSED_ANNOTATION_SELECTION_POSE_ALIASES[canonical].forEach(pushVariant);
+  }
+  Object.keys(FOCUSED_ANNOTATION_SELECTION_POSE_ALIASES).forEach(function (key) {
+    var aliases = FOCUSED_ANNOTATION_SELECTION_POSE_ALIASES[key];
+    if (Array.isArray(aliases) && aliases.indexOf(canonical) !== -1) {
+      pushVariant(key);
+    }
+  });
+  return Object.keys(variants);
+}
+
+function tokenizeFocusedAnnotationSuggestion(value) {
+  return canonicalizeFocusedAnnotationSuggestionText(value)
+    .split(' ')
+    .filter(function (token) {
+      return !!token && !FOCUSED_ANNOTATION_SUGGESTION_STOP_WORDS[token];
+    });
+}
+
+function resolveFocusedAnnotationSuggestedTerm(suggestedTag, terms) {
+  var suggestedVariants = buildFocusedAnnotationSuggestionVariants(suggestedTag);
+  var bestMatch = '';
+  var bestScore = -1;
+
+  (Array.isArray(terms) ? terms : []).forEach(function (term) {
+    var termVariants = buildFocusedAnnotationSuggestionVariants(term);
+    for (var i = 0; i < termVariants.length; i += 1) {
+      if (suggestedVariants.indexOf(termVariants[i]) !== -1) {
+        bestMatch = term;
+        bestScore = 999;
+        return;
+      }
+    }
+    if (bestScore >= 999) return;
+
+    var termTokens = tokenizeFocusedAnnotationSuggestion(term);
+    var shared = 0;
+    suggestedVariants.forEach(function (variant) {
+      var suggestionTokens = tokenizeFocusedAnnotationSuggestion(variant);
+      if (!suggestionTokens.length || !termTokens.length) return;
+      var termLookup = {};
+      termTokens.forEach(function (token) {
+        termLookup[token] = true;
+      });
+      var overlap = 0;
+      suggestionTokens.forEach(function (token) {
+        if (termLookup[token]) overlap += 1;
+      });
+      if (!overlap) return;
+      var required = suggestionTokens.length <= 1 ? 1 : Math.min(2, suggestionTokens.length);
+      if (overlap < required) return;
+      var score = (overlap * 10) - Math.abs(termTokens.length - suggestionTokens.length);
+      if (score > shared) shared = score;
+    });
+    if (shared > bestScore) {
+      bestScore = shared;
+      bestMatch = term;
+    }
+  });
+
+  return bestScore > 0 ? bestMatch : '';
+}
+
 function closeFocusedAnnotationModal() {
   var els = getFocusedAnnotationEls();
   if (els.modal) els.modal.classList.add('hidden');
@@ -323,6 +429,7 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
   var terms = getFocusedAnnotationTermsForRequirement(requirementLabel);
   var termLookup = {};
   var entriesByKey = {};
+  var currentTags = getTagsForMediaKey(mediaKey);
   terms.forEach(function (term) {
     var normalized = normalizeChecklistTerm(term).toLowerCase();
     if (!normalized || termLookup[normalized]) return;
@@ -358,15 +465,24 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
     }
   });
 
+  var mediaItem = findFocusedAnnotationMediaItemByKey(mediaKey);
+  var metadataRow = mediaItem ? (mediaItem.metadata || getMetadataForMedia(mediaItem.fileName)) : null;
+  var selectionPoseSuggestions = getSelectionPoseSuggestedTags(metadataRow, currentTags);
+  selectionPoseSuggestions.forEach(function (suggestedTag) {
+    var resolvedTerm = resolveFocusedAnnotationSuggestedTerm(suggestedTag, terms);
+    if (!resolvedTerm) return;
+    addEntry(resolvedTerm, 'Selection pose', 74, 'suggested');
+  });
+
   if (typeof buildQaTagNeighborRows === 'function') {
     var summary = buildQaTagNeighborRows(mediaKey);
-    var currentTags = summary && Array.isArray(summary.currentTags) ? summary.currentTags : [];
+    var qaCurrentTags = summary && Array.isArray(summary.currentTags) ? summary.currentTags : [];
     var neighbors = summary && Array.isArray(summary.rows) ? summary.rows.filter(function (row) {
       return row.sharedCount >= 2 && row.overlapCurrent >= 0.5;
     }).slice(0, 6) : [];
-    if (currentTags.length >= 2 && neighbors.length >= 2) {
+    if (qaCurrentTags.length >= 2 && neighbors.length >= 2) {
       var currentLookup = {};
-      currentTags.forEach(function (tag) {
+      qaCurrentTags.forEach(function (tag) {
         currentLookup[String(tag || '').toLowerCase()] = true;
       });
       var counts = {};

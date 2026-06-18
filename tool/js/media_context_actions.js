@@ -69,6 +69,35 @@ function runImageTransform(mediaItem, operation, label) {
     });
 }
 
+function runRemoveBackground(mediaItem) {
+  if (!mediaItem || !mediaItem.fileName) return;
+  if (!confirm('Remove background?\n\nThis will overwrite the image file.\n\nJPEG images will be flattened onto a light grey background.')) return;
+  setStatus('Removing background...');
+  fetch('/media/remove_background', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder: state.folder || '',
+      fileName: mediaItem.fileName
+    })
+  })
+    .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
+    .then(function (res) {
+      if (res.status === 200 && res.data && res.data.ok) {
+        setStatus('Background removed: ' + mediaItem.fileName);
+        markMediaMutated(mediaItem.key, 'best_effort');
+        saveFolderStateForCurrentRoot();
+        refreshMediaResolutionCache();
+        selectPathMedia(mediaItem).catch(function () {});
+      } else {
+        setStatus((res.data && res.data.error) ? res.data.error : 'Background removal failed');
+      }
+    })
+    .catch(function (err) {
+      setStatus('Background removal failed: ' + (err && err.message ? err.message : err));
+    });
+}
+
 function buildCurrentFolderContextActions() {
   return [
     {
@@ -365,6 +394,12 @@ function buildMediaContextMenuActions(mediaItem, key) {
       label: 'Flip Horizontal',
       run: function () {
         runImageTransform(mediaItem, 'flip_horizontal', 'Flipping image horizontal');
+      }
+    });
+    actions.push({
+      label: 'Remove Background',
+      run: function () {
+        runRemoveBackground(mediaItem);
       }
     });
     if (defaceAction) actions.push(defaceAction);

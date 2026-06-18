@@ -12,6 +12,7 @@ from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transfo
 from .face_focus import FACE_FOCUS_VERSION, analyze_image_face_focus, get_face_focus_detector, is_face_focus_image
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name, restore_original_media, restore_original_media_video_only
 from .permissions import normalize_path_permissions, run_with_directory_repair
+from .rembg_ops import remove_background_in_place
 from .scene_complexity import SCENE_COMPLEXITY_METHOD, SCENE_COMPLEXITY_VERSION, analyze_image_scene_complexity, is_scene_complexity_image
 from .selection_pose import SELECTION_POSE_VERSION, analyze_image_selection_pose, get_selection_pose_analyzers, is_selection_pose_image
 
@@ -334,6 +335,25 @@ def media_image_transform_response(data):
         return jsonify({"error": str(e)}), 404
     except Exception as e:
         app_config.debug_print("[media_image_transform] ERROR:", e)
+        app_config.debug_traceback()
+        return jsonify({"error": str(e)}), 400
+
+
+def media_remove_background_response(data):
+    data = data or {}
+    folder = data.get("folder", "").strip()
+    file_name = (data.get("fileName") or data.get("media") or "").strip()
+    if not file_name:
+        return jsonify({"error": "Missing required parameters"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        result = remove_background_in_place(folder_path, file_name)
+        update_media_metadata(folder_path)
+        return jsonify({"ok": True, **result})
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        app_config.debug_print("[media_remove_background] ERROR:", e)
         app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 

@@ -11,7 +11,7 @@ from . import config as app_config
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .originals import copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, open_in_vscode_response, rename_response
-from .media import media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_reset_response, media_restore_response
+from .media import media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
@@ -277,6 +277,11 @@ def media_flip_horizontal():
 def media_image_transform():
     data = request.get_json(silent=True) or {}
     return media_image_transform_response(data)
+
+@app.route("/media/remove_background", methods=["POST"])
+def media_remove_background():
+    data = request.get_json(silent=True) or {}
+    return media_remove_background_response(data)
 
 @app.route("/media/prune", methods=["POST"])
 def caption_prune():

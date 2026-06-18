@@ -42,6 +42,7 @@ The wizard should preserve the strong parts of annotation guidance while making 
 - It should surface only the strongest candidates for the current group.
 - Initial signal sources:
   - current caption matches
+  - selection-pose tag suggestions constrained to the current group
   - similar-item tag suggestions constrained to the current group
   - already-selected terms in the current group
 

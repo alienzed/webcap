@@ -99,6 +99,54 @@ Do not include:
 
 Balance sort could reorder the grid by balance phrase adherence. This would help surface items that best or worst match the configured balance phrases, making the grid useful for visual QA beyond manual filtering.
 
+Reason badges could briefly show why an item entered a focus set or selection report when that report metadata is available. This is a nice-to-have, not required for the first mature Grid pass.
+
+Internal Grid filters may be useful later, but they should mirror existing app filters rather than introducing a second filtering language.
+
+## Grid Filters
+
+Grid may show a compact subset of filters in the modal header.
+
+These controls must mirror the existing media-list filters. Grid must not own separate filter state or duplicate filter logic.
+
+Initial Grid filter controls:
+
+- Search text
+- Unreviewed
+- Invalid AR
+- Stars
+- Flags
+
+Do not add Grid controls for:
+
+- SuperSet
+- Reviewed
+- Incomplete
+- Tag Mismatch
+- Captionless
+
+Implementation rules:
+
+- Grid controls read from the existing media-list filter inputs.
+- Grid controls write to the existing media-list filter inputs.
+- Grid changes dispatch the same input/change events as the normal controls.
+- The media list and Grid stay synchronized.
+- Hidden filters that Grid does not expose may still remain active.
+- If hidden filters are active, Grid should show a small passive hint such as `Other filters active`.
+- Grid should update/prune its tiles from `getFilteredMediaItems(false)` after filter changes.
+- Grid should not add list-level actions such as Create Set, reports, prepare, generate, or train.
+
+## Phase Two Polish
+
+- Keep selection until the user clicks `Clear Selections` or closes Grid.
+- Right-click actions are single-item only and should reuse the normal media context actions.
+- Copy tags from one right-clicked item; paste copied tags onto the current Grid selection.
+- Show `Paste Tags` only when copied tags exist and at least one Grid item is selected.
+- Match the existing star rating UI instead of using plain rating numbers.
+- Use action-oriented badges only: rating and invalid aspect ratio.
+- After Grid actions, prune items that no longer belong in the current visible set without rebuilding the full grid.
+- If no Grid items remain, show a clear empty state.
+
 ## Safety Model
 
 Grid may own its own temporary selection model.

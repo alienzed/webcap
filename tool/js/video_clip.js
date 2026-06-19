@@ -110,6 +110,7 @@ function finalizeVideoClipJob(payload, status, message) {
   if (status === 'completed') {
     if (payload && payload.overwriteSource && payload.fileName) {
       markMediaMutated(payload.fileName, 'best_effort');
+      bumpMediaCacheBustToken(payload.fileName);
       state.pendingSelectFileName = payload.fileName;
     }
     setStatus(payload && payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.');

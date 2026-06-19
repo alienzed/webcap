@@ -29,8 +29,12 @@ function handlePreviewWheelNavigate(deltaY) {
 
 function hideContextMenu() {
   if (contextMenuEl) {
+    var wasVisible = contextMenuEl.style.display !== 'none';
     contextMenuEl.style.display = 'none';
     contextMenuEl.innerHTML = '';
+    if (wasVisible) {
+      window.dispatchEvent(new CustomEvent('webcap:context-menu-hidden'));
+    }
   }
 }
 

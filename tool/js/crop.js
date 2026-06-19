@@ -363,6 +363,7 @@ function openImageCropModal(mediaItem) {
         closeCropModal();
         setStatus('Cropped: ' + fileName);
         markMediaMutated(fileName, 'best_effort');
+        bumpMediaCacheBustToken(fileName);
         saveFolderStateForCurrentRoot();
         refreshMediaResolutionCache();
         if (state.currentItem && state.currentItem.fileName === fileName) {

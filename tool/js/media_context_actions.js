@@ -57,6 +57,7 @@ function runImageTransform(mediaItem, operation, label) {
       if (res.status === 200 && res.data && res.data.ok) {
         setStatus(actionLabel + ': ' + mediaItem.fileName);
         markMediaMutated(mediaItem.key, 'best_effort');
+        bumpMediaCacheBustToken(mediaItem.key);
         saveFolderStateForCurrentRoot();
         refreshMediaResolutionCache();
         selectPathMedia(mediaItem).catch(function () {});
@@ -86,6 +87,7 @@ function runRemoveBackground(mediaItem) {
       if (res.status === 200 && res.data && res.data.ok) {
         setStatus('Background removed: ' + mediaItem.fileName);
         markMediaMutated(mediaItem.key, 'best_effort');
+        bumpMediaCacheBustToken(mediaItem.key);
         saveFolderStateForCurrentRoot();
         refreshMediaResolutionCache();
         selectPathMedia(mediaItem).catch(function () {});
@@ -148,6 +150,7 @@ function buildCurrentFolderContextActions() {
           function () {
             setStatus('Defacing finished.');
             markAllCurrentFolderMediaMutated('best_effort');
+            bumpAllCurrentFolderMediaCacheBustTokens();
             saveFolderStateForCurrentRoot();
             refreshCurrentDirectory();
           },
@@ -319,6 +322,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
           function () {
             setStatus('Defacing finished.');
             markMediaMutated(mediaItem.key, 'best_effort');
+            bumpMediaCacheBustToken(mediaItem.key);
             saveFolderStateForCurrentRoot();
             refreshMediaResolutionCache();
             if (state.currentItem && state.currentItem.fileName === mediaItem.fileName) {
@@ -396,6 +400,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
             if (res.status === 200 && res.data && res.data.ok) {
               setStatus('Video flipped.');
               markMediaMutated(mediaItem.key, 'best_effort');
+              bumpMediaCacheBustToken(mediaItem.key);
               saveFolderStateForCurrentRoot();
               refreshMediaResolutionCache();
               selectPathMedia(mediaItem).catch(function () {});
@@ -455,6 +460,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
           if (res.status === 200 && res.data && res.data.ok) {
             setStatus('File reset to original.');
             clearMediaMutated(mediaItem.key);
+            bumpMediaCacheBustToken(mediaItem.key);
             saveFolderStateForCurrentRoot();
             refreshMediaResolutionCache();
             selectPathMedia(mediaItem).catch(function () {});

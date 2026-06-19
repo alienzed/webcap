@@ -186,6 +186,7 @@ async function resetMediaItem(mediaItem) {
       if (xhr.status === 200) {
         setStatus('Reset to original: ' + fileName);
         clearMediaMutated(mediaItem.key);
+        bumpMediaCacheBustToken(mediaItem.key);
         saveFolderStateForCurrentRoot();
         refreshMediaResolutionCache();
         selectPathMedia(mediaItem).catch(function () {});

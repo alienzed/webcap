@@ -24,6 +24,7 @@ function getFocusedAnnotationEls() {
     groupStatus: document.getElementById('focused-annotation-group-status'),
     termList: document.getElementById('focused-annotation-term-list'),
     quickPicks: document.getElementById('focused-annotation-quick-picks'),
+    rating: document.getElementById('focused-annotation-rating'),
     editTermsBtn: document.getElementById('focused-annotation-edit-terms-btn'),
     closeBtn: document.getElementById('focused-annotation-close-btn'),
     naBtn: document.getElementById('focused-annotation-na-btn'),
@@ -440,6 +441,7 @@ function renderFocusedAnnotationPreview(mediaItem) {
     els.previewMedia.innerHTML = '';
     els.previewMedia.removeAttribute('data-media-key');
     els.previewMedia.textContent = 'No media selected.';
+    renderFocusedAnnotationRating('');
     return;
   }
   if (els.previewMedia.getAttribute('data-media-key') === mediaKey && els.previewMedia.firstChild) {
@@ -473,14 +475,11 @@ function renderFocusedAnnotationPreview(mediaItem) {
 
 function renderFocusedAnnotationRating(mediaKey) {
   var els = getFocusedAnnotationEls();
-  if (!els.previewMedia || !mediaKey) return;
-  var existing = els.previewMedia.querySelector('.focused-annotation-rating');
-  if (existing) existing.parentNode.removeChild(existing);
+  if (!els.rating) return;
+  els.rating.innerHTML = '';
+  if (!mediaKey) return;
 
   var currentRating = getRatingForMediaKey(mediaKey);
-  var wrap = document.createElement('div');
-  wrap.className = 'focused-annotation-rating';
-  wrap.setAttribute('aria-label', 'Rating');
   for (var s = 1; s <= 5; s++) {
     (function (value) {
       var btn = document.createElement('button');
@@ -494,10 +493,9 @@ function renderFocusedAnnotationRating(mediaKey) {
         setRatingForMediaKey(mediaKey, value);
         renderFocusedAnnotationRating(mediaKey);
       };
-      wrap.appendChild(btn);
+      els.rating.appendChild(btn);
     })(s);
   }
-  els.previewMedia.appendChild(wrap);
 }
 
 function buildFocusedAnnotationBadge(text, kind) {

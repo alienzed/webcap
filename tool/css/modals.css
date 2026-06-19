@@ -407,20 +407,14 @@
 }
 
 .focused-annotation-rating {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  flex: 0 0 auto;
   padding: 5px 8px;
   border-radius: 999px;
   background: rgba(2, 6, 23, 0.68);
   border: 1px solid rgba(148, 163, 184, 0.22);
-  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.28);
-  backdrop-filter: blur(4px);
 }
 
 .focused-annotation-rating-star {

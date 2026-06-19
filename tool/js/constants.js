@@ -22,6 +22,8 @@ state = {
   ratings: {}, // key: media file name, value: integer 1..5
   mutatedSet: new Set(), // key: media file name
   mutatedByMediaSource: {}, // key: media file name, value: 'best_effort' | 'deterministic'
+  mediaCacheBustByMedia: {}, // key: media file name, value: local cache-bust token
+  mediaCacheBustSeq: 0,
   mutationStatusSeq: 0,
   undoStack: [],
   undoSuppress: false

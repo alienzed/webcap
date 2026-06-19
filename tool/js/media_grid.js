@@ -3,7 +3,8 @@ var mediaGridState = {
   items: [],
   selectedKeys: new Set(),
   lastSelectedKey: '',
-  status: ''
+  status: '',
+  viewerKey: ''
 };
 
 function mediaGridGetEls() {
@@ -11,11 +12,17 @@ function mediaGridGetEls() {
     modal: document.getElementById('media-grid-modal'),
     meta: document.getElementById('media-grid-meta'),
     status: document.getElementById('media-grid-status'),
+    filters: document.getElementById('media-grid-filters'),
     canvas: document.getElementById('media-grid-canvas'),
     sidebar: document.getElementById('media-grid-sidebar'),
     selectAllBtn: document.getElementById('media-grid-select-all-btn'),
     clearBtn: document.getElementById('media-grid-clear-btn'),
-    closeBtn: document.getElementById('media-grid-close-btn')
+    pasteTagsBtn: document.getElementById('media-grid-paste-tags-btn'),
+    closeBtn: document.getElementById('media-grid-close-btn'),
+    viewerModal: document.getElementById('media-grid-viewer-modal'),
+    viewerTitle: document.getElementById('media-grid-viewer-title'),
+    viewerStage: document.getElementById('media-grid-viewer-stage'),
+    viewerCloseBtn: document.getElementById('media-grid-viewer-close-btn')
   };
 }
 
@@ -51,15 +58,22 @@ function mediaGridIsVideoFile(fileName) {
 }
 
 function mediaGridMediaUrl(mediaItem) {
-  return '/caption/media?folder=' + encodeURIComponent(state.folder || '') +
-    '&media=' + encodeURIComponent(mediaItem.fileName) +
-    '&t=' + Date.now();
+  var url = '/caption/media?folder=' + encodeURIComponent(state.folder || '') +
+    '&media=' + encodeURIComponent(mediaItem.fileName);
+  var cacheBust = getMediaCacheBustToken(mediaItem.key || mediaItem.fileName);
+  if (cacheBust) {
+    url += '&t=' + encodeURIComponent(cacheBust);
+  }
+  return url;
 }
 
 function mediaGridCreateEntryButton() {
   var wrapper = document.getElementById('media-list-wrapper');
   if (!wrapper) throw new Error('Media Grid entry target is missing.');
-  if (document.getElementById('media-grid-open-btn')) return;
+  if (document.getElementById('media-grid-open-btn')) {
+    mediaGridUpdateEntryVisibility();
+    return;
+  }
   var btn = document.createElement('button');
   btn.id = 'media-grid-open-btn';
   btn.type = 'button';
@@ -72,6 +86,14 @@ function mediaGridCreateEntryButton() {
     '</span>';
   btn.onclick = openMediaGridModal;
   wrapper.insertBefore(btn, wrapper.firstChild);
+  mediaGridUpdateEntryVisibility();
+}
+
+function mediaGridUpdateEntryVisibility() {
+  var btn = document.getElementById('media-grid-open-btn');
+  if (!btn) return;
+  var hasVisibleMedia = mediaGridGetVisibleItems().length > 0;
+  btn.classList.toggle('hidden', !hasVisibleMedia);
 }
 
 function mediaGridCreateModal() {
@@ -87,17 +109,19 @@ function mediaGridCreateModal() {
           '<h2 id="media-grid-title" class="media-grid-title">Media Grid</h2>' +
           '<div id="media-grid-meta" class="media-grid-meta"></div>' +
         '</div>' +
+        '<div id="media-grid-filters" class="media-grid-filters" aria-label="Grid filters"></div>' +
         '<div class="media-grid-header-actions">' +
           '<div id="media-grid-status" class="media-grid-status"></div>' +
           '<button id="media-grid-select-all-btn" type="button" class="media-grid-btn">Select All</button>' +
-          '<button id="media-grid-clear-btn" type="button" class="media-grid-btn">Clear</button>' +
-          '<div class="media-grid-rating-controls" aria-label="Apply rating to selected items">' +
-            '<button type="button" class="media-grid-btn media-grid-rating-btn" data-rating="0">0</button>' +
-            '<button type="button" class="media-grid-btn media-grid-rating-btn" data-rating="1">1</button>' +
-            '<button type="button" class="media-grid-btn media-grid-rating-btn" data-rating="2">2</button>' +
-            '<button type="button" class="media-grid-btn media-grid-rating-btn" data-rating="3">3</button>' +
-            '<button type="button" class="media-grid-btn media-grid-rating-btn" data-rating="4">4</button>' +
-            '<button type="button" class="media-grid-btn media-grid-rating-btn" data-rating="5">5</button>' +
+          '<button id="media-grid-clear-btn" type="button" class="media-grid-btn">Clear Selections</button>' +
+          '<button id="media-grid-paste-tags-btn" type="button" class="media-grid-btn hidden">Paste Tags</button>' +
+          '<div class="media-grid-rating-controls item-metadata-stars-row" aria-label="Apply rating to selected items">' +
+            '<button type="button" class="item-metadata-star-btn media-grid-rating-btn" title="Clear selected ratings" data-rating="0">&minus;</button>' +
+            '<button type="button" class="item-metadata-star-btn media-grid-rating-btn" title="Set selected rating to 1 star" data-rating="1">&#9734;</button>' +
+            '<button type="button" class="item-metadata-star-btn media-grid-rating-btn" title="Set selected rating to 2 stars" data-rating="2">&#9734;</button>' +
+            '<button type="button" class="item-metadata-star-btn media-grid-rating-btn" title="Set selected rating to 3 stars" data-rating="3">&#9734;</button>' +
+            '<button type="button" class="item-metadata-star-btn media-grid-rating-btn" title="Set selected rating to 4 stars" data-rating="4">&#9734;</button>' +
+            '<button type="button" class="item-metadata-star-btn media-grid-rating-btn" title="Set selected rating to 5 stars" data-rating="5">&#9734;</button>' +
           '</div>' +
           '<button id="media-grid-close-btn" type="button" class="media-grid-btn media-grid-close-btn" aria-label="Close Media Grid">x</button>' +
         '</div>' +
@@ -109,6 +133,7 @@ function mediaGridCreateModal() {
     '</div>';
   document.body.appendChild(modal);
   mediaGridWireModal();
+  mediaGridCreateViewerModal();
 }
 
 function mediaGridWireModal() {
@@ -117,6 +142,7 @@ function mediaGridWireModal() {
   els.closeBtn.onclick = closeMediaGridModal;
   els.selectAllBtn.onclick = mediaGridSelectAll;
   els.clearBtn.onclick = mediaGridClearSelection;
+  els.pasteTagsBtn.onclick = mediaGridPasteTagsToSelected;
   els.modal.addEventListener('click', function (e) {
     if (e.target === els.modal) closeMediaGridModal();
   });
@@ -126,6 +152,30 @@ function mediaGridWireModal() {
       mediaGridApplyRating(Number(this.getAttribute('data-rating')));
     };
   }
+  mediaGridBuildFilterControls();
+}
+
+function mediaGridCreateViewerModal() {
+  if (document.getElementById('media-grid-viewer-modal')) return;
+  var modal = document.createElement('div');
+  modal.id = 'media-grid-viewer-modal';
+  modal.className = 'media-grid-viewer-modal hidden';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.innerHTML =
+    '<div class="media-grid-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-viewer-title">' +
+      '<div class="media-grid-viewer-header">' +
+        '<div id="media-grid-viewer-title" class="media-grid-viewer-title"></div>' +
+        '<button id="media-grid-viewer-close-btn" type="button" class="media-grid-viewer-close-btn" aria-label="Close fullscreen viewer">&times;</button>' +
+      '</div>' +
+      '<div id="media-grid-viewer-stage" class="media-grid-viewer-stage"></div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  var els = mediaGridGetEls();
+  if (!els.viewerModal || !els.viewerCloseBtn) throw new Error('Media Grid viewer is missing.');
+  els.viewerCloseBtn.onclick = closeMediaGridViewer;
+  els.viewerModal.addEventListener('click', function (e) {
+    if (e.target === els.viewerModal) closeMediaGridViewer();
+  });
 }
 
 function openMediaGridModal() {
@@ -148,6 +198,7 @@ function openMediaGridModal() {
 
 function closeMediaGridModal() {
   var els = mediaGridGetEls();
+  closeMediaGridViewer();
   els.modal.classList.add('hidden');
   els.modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('media-grid-open');
@@ -156,11 +207,13 @@ function closeMediaGridModal() {
   mediaGridState.selectedKeys = new Set();
   mediaGridState.lastSelectedKey = '';
   mediaGridState.status = '';
+  mediaGridState.viewerKey = '';
 }
 
 function renderMediaGridModal() {
   if (!mediaGridState.open) return;
   renderMediaGridHeader();
+  mediaGridSyncFilterControls();
   renderMediaGridCanvas();
   renderMediaGridSidebar();
 }
@@ -173,12 +226,144 @@ function renderMediaGridHeader() {
     ' - ' + selectedCount + ' selected';
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
+  var canPaste = selectedCount > 0 && hasTagClipboardTags();
+  els.pasteTagsBtn.classList.toggle('hidden', !canPaste);
+  els.pasteTagsBtn.disabled = !canPaste;
   els.status.textContent = mediaGridState.status;
+}
+
+function mediaGridBuildFilterControls() {
+  var els = mediaGridGetEls();
+  if (!els.filters) throw new Error('Media Grid filters target is missing.');
+  els.filters.innerHTML =
+    '<input id="media-grid-search" class="media-grid-search" type="search" placeholder="Search filters..." aria-label="Search visible media">' +
+    '<label class="media-grid-filter-toggle"><input id="media-grid-filter-unreviewed" type="checkbox"><span>Unreviewed</span></label>' +
+    '<label class="media-grid-filter-toggle"><input id="media-grid-filter-invalid-ar" type="checkbox"><span>Invalid AR</span></label>' +
+    '<div id="media-grid-filter-stars" class="media-grid-filter-stars" aria-label="Star filters"></div>' +
+    '<div id="media-grid-filter-flags" class="media-grid-filter-flags" aria-label="Flag filters"></div>' +
+    '<span id="media-grid-other-filters" class="media-grid-other-filters hidden">Other filters active</span>';
+
+  mediaGridBuildStarsFilter();
+  mediaGridBuildFlagsFilter();
+
+  document.getElementById('media-grid-search').addEventListener('input', function () {
+    ui.filterEl.value = this.value;
+    mediaGridDispatchInput(ui.filterEl);
+  });
+  document.getElementById('media-grid-filter-unreviewed').addEventListener('change', function () {
+    ui.advancedFilterUnreviewedEl.checked = this.checked;
+    mediaGridDispatchChange(ui.advancedFilterUnreviewedEl);
+  });
+  document.getElementById('media-grid-filter-invalid-ar').addEventListener('change', function () {
+    ui.advancedFilterInvalidArEl.checked = this.checked;
+    mediaGridDispatchChange(ui.advancedFilterInvalidArEl);
+  });
+}
+
+function mediaGridBuildStarsFilter() {
+  var target = document.getElementById('media-grid-filter-stars');
+  target.innerHTML = '';
+  var values = ['no_star', '1', '2', '3', '4', '5'];
+  values.forEach(function (value) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'media-grid-filter-chip media-grid-filter-star';
+    btn.setAttribute('data-filter-value', value);
+    btn.textContent = value === 'no_star' ? '-' : '\u2605' + value;
+    btn.title = value === 'no_star' ? 'Show unrated items' : 'Show ' + value + ' star items';
+    btn.onclick = function () {
+      mediaGridToggleMirroredCheckbox(ui.advancedFilterStarsEl, value);
+    };
+    target.appendChild(btn);
+  });
+}
+
+function mediaGridBuildFlagsFilter() {
+  var target = document.getElementById('media-grid-filter-flags');
+  target.innerHTML = '';
+  ['no_flag'].concat(FLAG_COLORS).forEach(function (value) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'media-grid-filter-chip media-grid-filter-flag';
+    btn.setAttribute('data-filter-value', value);
+    btn.title = value === 'no_flag' ? 'Show unflagged items' : 'Show ' + value + ' flagged items';
+    if (value === 'no_flag') {
+      btn.textContent = '-';
+    } else {
+      var dot = document.createElement('span');
+      dot.className = 'flag-dot flag-dot--' + value;
+      btn.appendChild(dot);
+    }
+    btn.onclick = function () {
+      mediaGridToggleMirroredCheckbox(ui.advancedFilterFlagEl, value);
+    };
+    target.appendChild(btn);
+  });
+}
+
+function mediaGridToggleMirroredCheckbox(sourceEl, value) {
+  var input = sourceEl.querySelector('input[value="' + String(value).replace(/"/g, '\\"') + '"]');
+  if (!input) throw new Error('Media Grid filter source is missing: ' + value);
+  input.checked = !input.checked;
+  mediaGridDispatchChange(input);
+}
+
+function mediaGridDispatchInput(el) {
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function mediaGridDispatchChange(el) {
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function mediaGridSyncFilterControls() {
+  var search = document.getElementById('media-grid-search');
+  if (!search) return;
+  search.value = ui.filterEl.value || '';
+  document.getElementById('media-grid-filter-unreviewed').checked = !!ui.advancedFilterUnreviewedEl.checked;
+  document.getElementById('media-grid-filter-invalid-ar').checked = !!ui.advancedFilterInvalidArEl.checked;
+  mediaGridSyncFilterToggle('media-grid-filter-unreviewed');
+  mediaGridSyncFilterToggle('media-grid-filter-invalid-ar');
+  mediaGridSyncFilterChipGroup('media-grid-filter-stars', getAdvancedStarFilterValues());
+  mediaGridSyncFilterChipGroup('media-grid-filter-flags', getAdvancedFlagFilterValues());
+  var hiddenFiltersActive = !!(
+    ui.advancedFilterMissingCaptionsEl.checked ||
+    ui.advancedFilterReviewedEl.checked ||
+    ui.advancedFilterIncompleteEl.checked ||
+    ui.advancedFilterUntaggedEl.checked ||
+    ui.advancedFilterSupersetEl.checked
+  );
+  document.getElementById('media-grid-other-filters').classList.toggle('hidden', !hiddenFiltersActive);
+}
+
+function mediaGridSyncFilterToggle(inputId) {
+  var input = document.getElementById(inputId);
+  var label = input ? input.closest('.media-grid-filter-toggle') : null;
+  if (label) label.classList.toggle('active', !!input.checked);
+}
+
+function mediaGridSyncFilterChipGroup(containerId, activeValues) {
+  var active = {};
+  activeValues.forEach(function (value) {
+    active[String(value)] = true;
+  });
+  var buttons = document.getElementById(containerId).querySelectorAll('[data-filter-value]');
+  for (var i = 0; i < buttons.length; i++) {
+    var value = buttons[i].getAttribute('data-filter-value');
+    buttons[i].classList.toggle('active', !!active[value]);
+  }
 }
 
 function renderMediaGridCanvas() {
   var els = mediaGridGetEls();
   els.canvas.innerHTML = '';
+  if (!mediaGridState.items.length) {
+    var empty = document.createElement('div');
+    empty.className = 'media-grid-empty media-grid-empty-main';
+    empty.textContent = 'No items remain in this Grid view.';
+    els.canvas.appendChild(empty);
+    return;
+  }
   var grid = document.createElement('div');
   grid.className = 'media-grid-items';
   mediaGridState.items.forEach(function (item) {
@@ -196,6 +381,14 @@ function mediaGridBuildTile(mediaItem) {
   tile.title = mediaItem.fileName;
   tile.onclick = function (e) {
     mediaGridHandleTileClick(mediaItem.key, e);
+  };
+  tile.ondblclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    openMediaGridViewer(mediaItem.key);
+  };
+  tile.oncontextmenu = function (e) {
+    mediaGridHandleTileContextMenu(mediaItem, e);
   };
 
   var thumb = document.createElement('div');
@@ -216,12 +409,7 @@ function mediaGridBuildTile(mediaItem) {
     thumb.appendChild(img);
   }
 
-  if (!mediaItem.hasCaption) {
-    var captionBadge = document.createElement('span');
-    captionBadge.className = 'media-grid-caption-badge';
-    captionBadge.textContent = 'No caption';
-    thumb.appendChild(captionBadge);
-  }
+  mediaGridAppendTileBadges(thumb, mediaItem);
   if (selected) {
     var selectedBadge = document.createElement('span');
     selectedBadge.className = 'media-grid-selected-badge';
@@ -235,6 +423,33 @@ function mediaGridBuildTile(mediaItem) {
   tile.appendChild(thumb);
   tile.appendChild(label);
   return tile;
+}
+
+function mediaGridAppendTileBadges(thumb, mediaItem) {
+  var badges = document.createElement('div');
+  badges.className = 'media-grid-badges';
+
+  var rating = getRatingForMediaKey(mediaItem.key);
+  if (rating > 0) {
+    var ratingBadge = document.createElement('span');
+    ratingBadge.className = 'media-grid-badge media-grid-badge-rating';
+    ratingBadge.textContent = '\u2605 ' + rating;
+    ratingBadge.title = rating + ' star rating';
+    badges.appendChild(ratingBadge);
+  }
+
+  var aspect = String((mediaItem && mediaItem.metadata && mediaItem.metadata.aspect) || '').trim();
+  if (aspect && !hasSupportedAspectBucket(aspect)) {
+    var arBadge = document.createElement('span');
+    arBadge.className = 'media-grid-badge media-grid-badge-warning';
+    arBadge.textContent = 'Invalid AR';
+    arBadge.title = 'Aspect ratio is outside supported buckets.';
+    badges.appendChild(arBadge);
+  }
+
+  if (badges.childNodes.length) {
+    thumb.appendChild(badges);
+  }
 }
 
 function mediaGridSyncSelectionDisplay() {
@@ -264,9 +479,45 @@ function mediaGridRenderSelectionState() {
   renderMediaGridSidebar();
 }
 
+function mediaGridHandleTileContextMenu(mediaItem, e) {
+  e.preventDefault();
+  e.stopPropagation();
+  mediaGridMarkContextTarget(mediaItem.key);
+  var key = mediaItem.key || mediaItem.fileName;
+  var actions = buildMediaContextMenuActions(mediaItem, key).map(function (action) {
+    if (!action || action.separator || typeof action.run !== 'function') return action;
+    return {
+      label: action.label,
+      render: action.render,
+      run: function () {
+        action.run();
+        mediaGridRefreshAfterMutation();
+      }
+    };
+  });
+  showContextMenu(e.clientX, e.clientY, actions);
+}
+
+function mediaGridClearContextTarget() {
+  var els = mediaGridGetEls();
+  var tiles = els.canvas.querySelectorAll('.media-grid-tile.context-target');
+  for (var i = 0; i < tiles.length; i++) {
+    tiles[i].classList.remove('context-target');
+  }
+}
+
+function mediaGridMarkContextTarget(mediaKey) {
+  var els = mediaGridGetEls();
+  mediaGridClearContextTarget();
+  var key = String(mediaKey || '').replace(/"/g, '\\"');
+  var target = els.canvas.querySelector('.media-grid-tile[data-key="' + key + '"]');
+  if (target) target.classList.add('context-target');
+}
+
 function mediaGridHandleTileClick(itemKey, e) {
   var key = String(itemKey || '');
   if (!key) return;
+  mediaGridClearContextTarget();
   if (e.shiftKey && mediaGridState.lastSelectedKey) {
     mediaGridSelectRange(mediaGridState.lastSelectedKey, key);
   } else {
@@ -278,6 +529,66 @@ function mediaGridHandleTileClick(itemKey, e) {
   }
   mediaGridState.lastSelectedKey = key;
   mediaGridRenderSelectionState();
+}
+
+function mediaGridFindItemByKey(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  if (!key) return null;
+  for (var i = 0; i < mediaGridState.items.length; i++) {
+    var item = mediaGridState.items[i];
+    if (item && item.key === key) return item;
+  }
+  return null;
+}
+
+function openMediaGridViewer(mediaKey) {
+  var item = mediaGridFindItemByKey(mediaKey);
+  if (!item) {
+    mediaGridSetStatus('Item is no longer visible in Grid.');
+    return;
+  }
+  var els = mediaGridGetEls();
+  if (!els.viewerModal || !els.viewerStage || !els.viewerTitle) throw new Error('Media Grid viewer is missing.');
+  mediaGridState.viewerKey = item.key;
+  els.viewerTitle.textContent = item.label || item.fileName;
+  els.viewerStage.innerHTML = '';
+
+  var url = mediaGridMediaUrl(item);
+  if (mediaGridIsVideoFile(item.fileName)) {
+    var video = document.createElement('video');
+    video.className = 'media-grid-viewer-media';
+    video.controls = true;
+    video.autoplay = true;
+    video.loop = true;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.src = url;
+    els.viewerStage.appendChild(video);
+    var playPromise = video.play();
+    if (playPromise && playPromise.catch) playPromise.catch(function () {});
+  } else {
+    var img = document.createElement('img');
+    img.className = 'media-grid-viewer-media';
+    img.loading = 'eager';
+    img.src = url;
+    img.alt = item.label || item.fileName;
+    els.viewerStage.appendChild(img);
+  }
+
+  els.viewerModal.classList.remove('hidden');
+  els.viewerModal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('media-grid-viewer-open');
+}
+
+function closeMediaGridViewer() {
+  var els = mediaGridGetEls();
+  if (!els.viewerModal || !els.viewerStage) return;
+  els.viewerModal.classList.add('hidden');
+  els.viewerModal.setAttribute('aria-hidden', 'true');
+  els.viewerStage.innerHTML = '';
+  document.body.classList.remove('media-grid-viewer-open');
+  mediaGridState.viewerKey = '';
 }
 
 function mediaGridSelectRange(fromKey, toKey) {
@@ -326,7 +637,103 @@ function mediaGridApplyRating(rating) {
     setRatingForMediaKey(item.key, rating);
   });
   mediaGridSetStatus((rating > 0 ? 'Rated' : 'Cleared rating for') + ' ' + items.length + ' item' + (items.length === 1 ? '' : 's') + '.');
+  mediaGridRefreshAfterMutation();
+}
+
+function mediaGridPasteTagsToSelected() {
+  var items = mediaGridGetSelectedItems();
+  var tags = getTagClipboardTags();
+  if (!items.length || !tags.length) {
+    renderMediaGridHeader();
+    return;
+  }
+  var changedItems = 0;
+  items.forEach(function (item, index) {
+    mediaGridSetStatus('Pasting tags ' + (index + 1) + '/' + items.length + '...');
+    var result = mergeTagsIntoMediaKey(item.key, tags);
+    if (result && result.added > 0) changedItems += 1;
+  });
+  mediaGridSetStatus('Pasted tags onto ' + changedItems + ' item' + (changedItems === 1 ? '' : 's') + '.');
+  mediaGridRefreshAfterMutation();
+}
+
+function mediaGridRefreshAfterMutation() {
+  mediaGridPruneAgainstCurrentVisibleSet();
+  if (mediaGridState.viewerKey && !mediaGridFindItemByKey(mediaGridState.viewerKey)) {
+    closeMediaGridViewer();
+  }
+  renderMediaGridHeader();
+  if (!mediaGridState.items.length) {
+    renderMediaGridCanvas();
+    renderMediaGridSidebar();
+    return;
+  }
+  mediaGridSyncCanvasAfterMutation();
+  mediaGridSyncSelectionDisplay();
+  renderMediaGridSidebar();
+}
+
+function mediaGridRefreshFromCurrentFilters() {
+  if (!mediaGridState.open) return;
+  var nextItems = mediaGridGetVisibleItems();
+  var keep = {};
+  nextItems.forEach(function (item) {
+    keep[item.key] = true;
+  });
+  Array.from(mediaGridState.selectedKeys).forEach(function (key) {
+    if (!keep[key]) mediaGridState.selectedKeys.delete(key);
+  });
+  if (mediaGridState.lastSelectedKey && !keep[mediaGridState.lastSelectedKey]) {
+    mediaGridState.lastSelectedKey = '';
+  }
+  mediaGridState.items = nextItems;
+  if (mediaGridState.viewerKey && !keep[mediaGridState.viewerKey]) {
+    closeMediaGridViewer();
+  }
   renderMediaGridModal();
+}
+
+function mediaGridPruneAgainstCurrentVisibleSet() {
+  var visible = mediaGridGetVisibleItems();
+  var keep = {};
+  visible.forEach(function (item) {
+    keep[item.key] = true;
+  });
+  var nextItems = [];
+  mediaGridState.items.forEach(function (item) {
+    if (keep[item.key]) {
+      nextItems.push(item);
+      return;
+    }
+    mediaGridState.selectedKeys.delete(item.key);
+    if (mediaGridState.lastSelectedKey === item.key) {
+      mediaGridState.lastSelectedKey = '';
+    }
+  });
+  mediaGridState.items = nextItems;
+}
+
+function mediaGridSyncCanvasAfterMutation() {
+  var els = mediaGridGetEls();
+  var itemsByKey = {};
+  mediaGridState.items.forEach(function (item) {
+    itemsByKey[item.key] = item;
+  });
+  var tiles = els.canvas.querySelectorAll('.media-grid-tile[data-key]');
+  for (var i = 0; i < tiles.length; i++) {
+    var tile = tiles[i];
+    var key = tile.getAttribute('data-key');
+    var item = itemsByKey[key];
+    if (!item) {
+      tile.parentNode.removeChild(tile);
+      continue;
+    }
+    var thumb = tile.querySelector('.media-grid-thumb-wrap');
+    if (!thumb) continue;
+    var oldBadges = thumb.querySelector('.media-grid-badges');
+    if (oldBadges) oldBadges.parentNode.removeChild(oldBadges);
+    mediaGridAppendTileBadges(thumb, item);
+  }
 }
 
 function renderMediaGridSidebar() {
@@ -418,11 +825,18 @@ function mediaGridToggleTagForSelection(term, stateName) {
     if (ok) changed += 1;
   });
   mediaGridSetStatus((remove ? 'Removed' : 'Added') + ' "' + term + '" on ' + changed + ' item' + (changed === 1 ? '' : 's') + '.');
-  renderMediaGridModal();
+  mediaGridRefreshAfterMutation();
 }
 
 function mediaGridHandleKeydown(e) {
   if (!mediaGridState.open) return;
+  if (mediaGridState.viewerKey) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMediaGridViewer();
+    }
+    return;
+  }
   if (isEditableElement(document.activeElement)) return;
   if (e.key === 'Escape') {
     e.preventDefault();
@@ -432,6 +846,14 @@ function mediaGridHandleKeydown(e) {
   if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
     e.preventDefault();
     mediaGridSelectAll();
+    return;
+  }
+  if (e.key === 'Enter') {
+    var selected = mediaGridGetSelectedItems();
+    if (selected.length === 1) {
+      e.preventDefault();
+      openMediaGridViewer(selected[0].key);
+    }
     return;
   }
   if (/^[0-5]$/.test(e.key)) {
@@ -444,8 +866,18 @@ function initMediaGrid() {
   mediaGridCreateEntryButton();
   mediaGridCreateModal();
   document.addEventListener('keydown', mediaGridHandleKeydown);
+  window.addEventListener('webcap:context-menu-hidden', function () {
+    if (!mediaGridState.open) return;
+    mediaGridClearContextTarget();
+  });
+  window.addEventListener('webcap:media-metadata-updated', function () {
+    if (!mediaGridState.open) return;
+    mediaGridRefreshAfterMutation();
+  });
 }
 
 initMediaGrid();
 
 window.openMediaGridModal = openMediaGridModal;
+window.mediaGridUpdateEntryVisibility = mediaGridUpdateEntryVisibility;
+window.mediaGridRefreshFromCurrentFilters = mediaGridRefreshFromCurrentFilters;

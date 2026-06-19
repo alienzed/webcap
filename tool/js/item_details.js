@@ -1233,6 +1233,9 @@ function refreshMediaResolutionCache() {
         });
       }
       mediaMetadataLoading = false;
+      window.dispatchEvent(new CustomEvent('webcap:media-metadata-updated', {
+        detail: { folder: requestFolder }
+      }));
       if (state.currentItem) {
         setStatus(buildSelectedMediaStatus(state.currentItem));
         renderItemMetadataPanel();

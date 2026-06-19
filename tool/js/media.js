@@ -349,6 +349,7 @@ function hasAnyActiveMediaFilter() {
   if (ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked) return true;
   if (ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked) return true;
   if (ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked) return true;
+  if (ui.advancedFilterSupersetEl && ui.advancedFilterSupersetEl.checked) return true;
   if (ui.advancedFilterStarsEl && ui.advancedFilterStarsEl.querySelector('input[type="checkbox"]:checked')) return true;
   if (ui.advancedFilterFlagEl && ui.advancedFilterFlagEl.querySelector('input[type="checkbox"]:checked')) return true;
   return false;
@@ -691,6 +692,12 @@ async function renderFileList() {
   if (ui.createSetFromResultsBtn) {
     var showCreateSetBtn = filtersActive && mediaItems.length > 0;
     ui.createSetFromResultsBtn.classList.toggle('hidden', !showCreateSetBtn);
+  }
+  if (typeof mediaGridUpdateEntryVisibility === 'function') {
+    mediaGridUpdateEntryVisibility();
+  }
+  if (typeof mediaGridRefreshFromCurrentFilters === 'function') {
+    mediaGridRefreshFromCurrentFilters();
   }
   // Show count of matching media items, or SuperSet results when that mode is active.
   var countValue = mediaItems.length;

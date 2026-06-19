@@ -1,6 +1,8 @@
 // Global functions:
 // isMediaMutated, getMediaMutationSource, markMediaMutated, clearMediaMutated,
-// moveMediaMutationState, markAllCurrentFolderMediaMutated, refreshDeterministicMutationStatus
+// moveMediaMutationState, markAllCurrentFolderMediaMutated, refreshDeterministicMutationStatus,
+// getMediaCacheBustToken, bumpMediaCacheBustToken, moveMediaCacheBustToken,
+// bumpAllCurrentFolderMediaCacheBustTokens
 
 function normalizeMutationSource(source) {
   var value = String(source || '').trim().toLowerCase();
@@ -14,6 +16,12 @@ function ensureMutationStateShape() {
   }
   if (!state.mutatedByMediaSource || typeof state.mutatedByMediaSource !== 'object') {
     state.mutatedByMediaSource = {};
+  }
+  if (!state.mediaCacheBustByMedia || typeof state.mediaCacheBustByMedia !== 'object') {
+    state.mediaCacheBustByMedia = {};
+  }
+  if (!isFinite(Number(state.mediaCacheBustSeq))) {
+    state.mediaCacheBustSeq = 0;
   }
 }
 
@@ -66,6 +74,35 @@ function clearMediaMutated(mediaKey) {
   return setMediaMutated(mediaKey, false, '');
 }
 
+function getMediaCacheBustToken(mediaKey) {
+  ensureMutationStateShape();
+  var key = String(mediaKey || '').trim();
+  if (!key) return '';
+  return String(state.mediaCacheBustByMedia[key] || '');
+}
+
+function bumpMediaCacheBustToken(mediaKey) {
+  ensureMutationStateShape();
+  var key = String(mediaKey || '').trim();
+  if (!key) return '';
+  state.mediaCacheBustSeq = Number(state.mediaCacheBustSeq) + 1;
+  var token = String(Date.now()) + '-' + String(state.mediaCacheBustSeq);
+  state.mediaCacheBustByMedia[key] = token;
+  return token;
+}
+
+function moveMediaCacheBustToken(oldKey, newKey) {
+  ensureMutationStateShape();
+  var from = String(oldKey || '').trim();
+  var to = String(newKey || '').trim();
+  if (!from || !to || from === to) return false;
+  var token = getMediaCacheBustToken(from);
+  if (!token) return false;
+  state.mediaCacheBustByMedia[to] = token;
+  delete state.mediaCacheBustByMedia[from];
+  return true;
+}
+
 function moveMediaMutationState(oldKey, newKey) {
   ensureMutationStateShape();
   var from = String(oldKey || '').trim();
@@ -77,6 +114,7 @@ function moveMediaMutationState(oldKey, newKey) {
   if (wasMutated) {
     changed = setMediaMutated(to, true, src) || changed;
   }
+  changed = moveMediaCacheBustToken(from, to) || changed;
   return changed;
 }
 
@@ -88,6 +126,14 @@ function markAllCurrentFolderMediaMutated(source) {
     changed = markMediaMutated(item.key, source || 'best_effort') || changed;
   });
   return changed;
+}
+
+function bumpAllCurrentFolderMediaCacheBustTokens() {
+  ensureMutationStateShape();
+  (state.items || []).forEach(function (item) {
+    if (!item || !item.key) return;
+    bumpMediaCacheBustToken(item.key);
+  });
 }
 
 function applyDeterministicMutationStatus(statusByMedia) {
@@ -129,4 +175,3 @@ function refreshDeterministicMutationStatus() {
       // Hash verification is additive; best-effort state stays active if route fails.
     });
 }
-

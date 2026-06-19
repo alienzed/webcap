@@ -1674,7 +1674,7 @@ iframe {
 .floating-grid {
   position: absolute;
   top: 47px;
-  right: 8px;
+  right: 22px;
   z-index: 20;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }

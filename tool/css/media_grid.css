@@ -50,12 +50,20 @@
 
 .media-grid-viewer-title {
   min-width: 0;
-  color: #f8fafc;
   font-size: 14px;
-  font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.media-grid-viewer-title-name {
+  color: #f8fafc;
+  font-weight: 800;
+}
+
+.media-grid-viewer-title-caption {
+  color: rgba(226, 232, 240, 0.74);
+  font-weight: 500;
 }
 
 .media-grid-viewer-close-btn {

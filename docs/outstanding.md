@@ -1,34 +1,18 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-06-17.
+Last reviewed: 2026-06-19.
 
 ## Paint Points
 
 - Caption Template probably needs a 'i'
-- Another huge benefit of the future grid feature will be copy/pasting tags between very similar items.
-- True batch tagging is increasingly clearly a grid feature; blind application from the one-item-at-a-time wizard does not make enough sense to be the primary solution.
-
-## Grid Enhancements
-- Right Click for Actions - all that are available in the media list unless this view breaks something (modal z-index beware!)
-- The 0 1 2 3 4 5 circles, these either need to be removed or changed to look like stars for consistency.
 
 ## Bugs
 
 ## Enhancements
 - Add a conservative face ROI mode for face-specific analysis only: use the existing CenterFace / `face_focus` bbox as a padded crop for face direction / expression analysis when the padded ROI is both meaningfully smaller than the full frame and still at least `192 px` on its short side; keep body/pose analysis on the full image and fall back to full-image face analysis when ROI is not clearly beneficial.
-- Apply a tag to an entire set - or finally explore multi-select in the media list (probably more involved). Select All could be enough...
+- Decide whether the media list itself still needs multi-select now that Grid owns the current batch tagging workflow.
 - n/a in a group is sort of incompatible with having other tags selected. I am not sure we'd deselect tags on n/a click, but n/a probably shouldn't be available to click on if another item is selected - let's discuss if this is worth the complexity.
-- Consider making annotation an assisted Wizard like flow - provided by a modal entered into purposefully.
 - Focused annotation / wizard near-term enhancements:
-  1. Add a traversal mode toggle in the modal: `Item-first` vs `Group-first`.
-     - `Item-first`: complete all groups for one item, then advance to the next item.
-     - `Group-first`: sweep one group across all visible items, then advance to the next group.
-  2. Make wizard navigation keyboard-first:
-     - `Up` / `Down` changes item.
-     - `Left` / `Right` changes group.
-     - Wrapping/rotation should follow the active traversal mode so repeated navigation feels consistent rather than arbitrary.
-  3. `Enter` should mark the current group reviewed for the current item and advance according to the active traversal mode.
-  4. Bias the wizard toward speed and low click count rather than forcing mouse-driven progression through every control.
-  5. Revisit whether `Group-first` should become the default if it proves clearly faster in real annotation use.
+  1. Revisit whether `Group-first` should remain the default if real use shows `Item-first` is clearly faster or less error-prone.
 - Review Selections suggestion sanity layer:
   - Current tag suggestions and coverage nudges can over-infer from co-occurrence alone (for example `shoes` on a portrait close-up).
   - Explore a soft rule layer that combines requirement-group relationships, coverage hints, and review rules to down-rank or suppress implausible suggestions.
@@ -38,12 +22,7 @@ Last reviewed: 2026-06-17.
      - Value: High; gives clear annotation progress and "what is left" targeting.
      - Complexity: Medium (derived per-item status + filter hook).
      - Some media items will purposefully not meet certain groups, so we need to be careful about how loudly we visually indicate incompleteness, or provide means to strike a group for an item so that it doesn't knock it's score.
-  2. Batch apply tags on multi-select.
-     - Value: High in bursts, especially for contiguous scenes/outfits/locations.
-     - Complexity: Medium/high (selection model + safe bulk mutate UX).
-     - Note: Revisit after proving item-level annotate strip speed, since complexity is higher.
-     - Questionably useful if the idea is to pretag, but is a set has captions, filtering by some tokens could be a good opportunity to batch tag. It's less clear why I would do this though since tags right now primarily serve for the caption template.
-  3. Caption scaffold from annotation tags.
+  2. Caption scaffold from annotation tags.
      - Value: Medium; helps reduce blank-page start cost during Caption step.
      - Complexity: Medium (template mapping + insertion rules).
      - Note: Useful, but less urgent than annotation velocity wins above.
@@ -56,7 +35,6 @@ Last reviewed: 2026-06-17.
 - `spec.md` refreshed to match current route and workflow behavior.
 
 ## Backlog (Do Not Implement Yet)
-- True batch tagging should be designed with the forthcoming grid view, where the user can actually see the scope they are about to stamp.
 - Avoid treating the current focused-annotation wizard as the primary home for blind "apply to all" tagging; at most, a sticky/stamping mode would be a temporary bridge, not the final UX.
 
 
@@ -74,9 +52,17 @@ Last reviewed: 2026-06-17.
 - In a group, I can't remove a pinned item. Can't a removal last for the session at least? or even just while inside this folder?
 - Console floats over focus annotation modal (maybe minimize it, or fix z-index?)
 - filling in the primer, this should be generatable
-- When running Prepare, items missing captions should take their primer preview equivalent... we can warn, but having to click apply on each one seems unecessary. If I click Prepare, Generate and Train, that's a very conscious decision, and maybe it's because the primer previews are good as is.
 
 ## Implemented
+- Grid / batch curation updates:
+  - Media Grid now supports right-click parity with media-list actions.
+  - Grid supports batch tag application on multi-select.
+  - Tag copy/paste works inside Grid.
+  - Grid supports fullscreen item viewer with double-click open/close.
+  - Grid tile thumbnails now favor full-item framing (`contain`) over square cover crops.
+  - Grid sidebar tag groups support term editing entry points.
+  - Grid tag chips now show subtle set-wide usage intensity rather than reading as a flat wall of identical pills.
+  - Grid filter/header pass was simplified toward prune/tag/compare use instead of trying to mirror the full media list.
 - Preview quick actions (pre-implementation decision):
   - Images: always-visible primary actions are `Crop` and `Deface`.
   - Videos: always-visible primary actions are `Clip` and `Deface`.
@@ -209,3 +195,6 @@ Last reviewed: 2026-06-17.
 - Video: V2 features and polish tracked (see video_clip.md).
 - Config snapshot: Only file names are printed, not full captions.
 - Caption highlighting: hover requirements/phrases to highlight matching words or phrases in the editor.
+- Focused annotation workflow updates:
+  - Traversal mode toggle is implemented (`Group-first` / `Item-first`).
+  - Keyboard navigation is implemented (`Up`/`Down` items, `Left`/`Right` groups, `Enter` done, `N` for N/A, `S` skip).

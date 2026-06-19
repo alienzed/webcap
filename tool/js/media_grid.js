@@ -20,6 +20,8 @@ function mediaGridGetEls() {
     closeBtn: document.getElementById('media-grid-close-btn'),
     viewerModal: document.getElementById('media-grid-viewer-modal'),
     viewerTitle: document.getElementById('media-grid-viewer-title'),
+    viewerTitleName: document.getElementById('media-grid-viewer-title-name'),
+    viewerTitleCaption: document.getElementById('media-grid-viewer-title-caption'),
     viewerStage: document.getElementById('media-grid-viewer-stage'),
     viewerCloseBtn: document.getElementById('media-grid-viewer-close-btn')
   };
@@ -147,7 +149,10 @@ function mediaGridCreateViewerModal() {
   modal.innerHTML =
     '<div class="media-grid-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-viewer-title">' +
       '<div class="media-grid-viewer-header">' +
-        '<div id="media-grid-viewer-title" class="media-grid-viewer-title"></div>' +
+        '<div id="media-grid-viewer-title" class="media-grid-viewer-title">' +
+          '<span id="media-grid-viewer-title-name" class="media-grid-viewer-title-name"></span>' +
+          '<span id="media-grid-viewer-title-caption" class="media-grid-viewer-title-caption hidden"></span>' +
+        '</div>' +
         '<button id="media-grid-viewer-close-btn" type="button" class="media-grid-viewer-close-btn" aria-label="Close fullscreen viewer">&times;</button>' +
       '</div>' +
       '<div id="media-grid-viewer-stage" class="media-grid-viewer-stage"></div>' +
@@ -493,13 +498,15 @@ function mediaGridFindItemByKey(mediaKey) {
   return null;
 }
 
-function mediaGridBuildViewerTitleText(mediaItem) {
+function mediaGridBuildViewerTitleParts(mediaItem) {
   var fileName = String((mediaItem && mediaItem.fileName) || (mediaItem && mediaItem.label) || '').trim();
   var caption = String((mediaItem && mediaItem.caption) || '')
     .replace(/\s+/g, ' ')
     .trim();
-  if (!caption) return fileName;
-  return fileName + ' | ' + caption;
+  return {
+    fileName: fileName,
+    caption: caption
+  };
 }
 
 function openMediaGridViewer(mediaKey) {
@@ -509,9 +516,12 @@ function openMediaGridViewer(mediaKey) {
     return;
   }
   var els = mediaGridGetEls();
-  if (!els.viewerModal || !els.viewerStage || !els.viewerTitle) throw new Error('Media Grid viewer is missing.');
+  if (!els.viewerModal || !els.viewerStage || !els.viewerTitle || !els.viewerTitleName || !els.viewerTitleCaption) throw new Error('Media Grid viewer is missing.');
   mediaGridState.viewerKey = item.key;
-  els.viewerTitle.textContent = mediaGridBuildViewerTitleText(item);
+  var titleParts = mediaGridBuildViewerTitleParts(item);
+  els.viewerTitleName.textContent = titleParts.fileName;
+  els.viewerTitleCaption.textContent = titleParts.caption ? '| ' + titleParts.caption : '';
+  els.viewerTitleCaption.classList.toggle('hidden', !titleParts.caption);
   els.viewerTitle.title = String((item && item.fileName) || '');
   els.viewerStage.innerHTML = '';
   els.viewerStage.ondblclick = function (e) {

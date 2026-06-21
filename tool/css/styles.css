@@ -1336,7 +1336,6 @@ iframe {
   color: #4f5966;
 }
 
-#primer-mappings-modal,
 #review-rules-modal {
   width: min(860px, calc(100vw - 28px));
 }
@@ -1385,7 +1384,6 @@ iframe {
   display: block;
 }
 
-#primer-mappings-modal-add-btn,
 #review-rules-modal-add-btn {
   border: 1px solid #d9dde3;
   background: #f5f6f8;
@@ -1395,7 +1393,6 @@ iframe {
   font-size: 12px;
 }
 
-#primer-mappings-modal-add-btn:hover,
 #review-rules-modal-add-btn:hover {
   background: #eef1f5;
   color: #4f5966;
@@ -1484,6 +1481,44 @@ iframe {
 .stats-controls textarea,
 .stats-controls input {
   font-size: 13px;
+}
+
+.primer-template-placeholder-row {
+  margin-top: 6px;
+}
+
+.primer-template-placeholder-label {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.primer-template-placeholder-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.primer-template-placeholder-btn {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.primer-template-placeholder-btn:hover {
+  background: #eef2f7;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.primer-template-placeholder-empty {
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .training-controls {
@@ -3308,6 +3343,7 @@ html[data-theme="dark"] .review-captions-btn,
 html[data-theme="dark"] .annotate-strip-group-edit-btn,
 html[data-theme="dark"] .annotate-strip-group-na-btn,
 html[data-theme="dark"] .annotate-strip-group-reviewed-btn,
+html[data-theme="dark"] .primer-template-placeholder-btn,
 html[data-theme="dark"] .checklist-row-action-btn,
 html[data-theme="dark"] #checklist-group-terms-add-btn,
 html[data-theme="dark"] #caption-checklist-panel .annotate-strip-toggle-btn,
@@ -3341,6 +3377,7 @@ html[data-theme="dark"] .review-captions-btn:hover,
 html[data-theme="dark"] .annotate-strip-group-edit-btn:hover,
 html[data-theme="dark"] .annotate-strip-group-na-btn:hover,
 html[data-theme="dark"] .annotate-strip-group-reviewed-btn:hover,
+html[data-theme="dark"] .primer-template-placeholder-btn:hover,
 html[data-theme="dark"] .checklist-row-action-btn:hover,
 html[data-theme="dark"] #checklist-group-terms-add-btn:hover,
 html[data-theme="dark"] #caption-checklist-panel .annotate-strip-toggle-btn:hover,
@@ -3353,6 +3390,14 @@ html[data-theme="dark"] .checklist-close-btn:hover {
 
 html[data-theme="dark"] .utility-theme-btn {
   min-width: 52px;
+}
+
+html[data-theme="dark"] .primer-template-placeholder-label {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .primer-template-placeholder-empty {
+  color: #64748b;
 }
 
 html[data-theme="dark"] #caption-checklist-panel button {

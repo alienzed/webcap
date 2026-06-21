@@ -8,7 +8,6 @@ Last reviewed: 2026-06-19.
 ## Bugs
 
 ## Enhancements
-- Add a conservative face ROI mode for face-specific analysis only: use the existing CenterFace / `face_focus` bbox as a padded crop for face direction / expression analysis when the padded ROI is both meaningfully smaller than the full frame and still at least `192 px` on its short side; keep body/pose analysis on the full image and fall back to full-image face analysis when ROI is not clearly beneficial.
 - Decide whether the media list itself still needs multi-select now that Grid owns the current batch tagging workflow.
 - n/a in a group is sort of incompatible with having other tags selected. I am not sure we'd deselect tags on n/a click, but n/a probably shouldn't be available to click on if another item is selected - let's discuss if this is worth the complexity.
 - Focused annotation / wizard near-term enhancements:
@@ -18,11 +17,7 @@ Last reviewed: 2026-06-19.
   - Explore a soft rule layer that combines requirement-group relationships, coverage hints, and review rules to down-rank or suppress implausible suggestions.
   - Prefer reusable defaults derived from requirements groups over per-set manual rule entry, but keep the result advisory rather than hard-blocking.
 - Annotation throughput priorities (ranked by expected ROI):
-  1. Group completion indicator in media list. (Partial: Incomplete filter is implemented; per-row indicator is pending.)
-     - Value: High; gives clear annotation progress and "what is left" targeting.
-     - Complexity: Medium (derived per-item status + filter hook).
-     - Some media items will purposefully not meet certain groups, so we need to be careful about how loudly we visually indicate incompleteness, or provide means to strike a group for an item so that it doesn't knock it's score.
-  2. Caption scaffold from annotation tags.
+  1. Caption scaffold from annotation tags.
      - Value: Medium; helps reduce blank-page start cost during Caption step.
      - Complexity: Medium (template mapping + insertion rules).
      - Note: Useful, but less urgent than annotation velocity wins above.
@@ -48,7 +43,6 @@ Last reviewed: 2026-06-19.
 
 
 ## Validate
-- Caption when in pimer mode doesn't seem to update always... sometimes it seems to get stuck between states. Any change that should update the caption when it has not yet been saved should be immediate. We may want to centralize this better.
 - In a group, I can't remove a pinned item. Can't a removal last for the session at least? or even just while inside this folder?
 - Console floats over focus annotation modal (maybe minimize it, or fix z-index?)
 - filling in the primer, this should be generatable
@@ -198,3 +192,6 @@ Last reviewed: 2026-06-19.
 - Focused annotation workflow updates:
   - Traversal mode toggle is implemented (`Group-first` / `Item-first`).
   - Keyboard navigation is implemented (`Up`/`Down` items, `Left`/`Right` groups, `Enter` done, `N` for N/A, `S` skip).
+- Annotation progress / primer updates:
+  - Group completion indicator in the media list is implemented.
+  - Primer-mode caption updates are no longer tracked as an outstanding validation issue.

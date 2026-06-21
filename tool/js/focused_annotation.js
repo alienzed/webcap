@@ -41,8 +41,7 @@ function isFocusedAnnotationNestedModalOpen() {
     'checklist-group-terms-modal',
     'checklist-term-affixes-modal',
     'checklist-keywords-modal',
-    'review-rules-modal',
-    'primer-mappings-modal'
+    'review-rules-modal'
   ];
   for (var i = 0; i < ids.length; i++) {
     var el = document.getElementById(ids[i]);

@@ -227,10 +227,14 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply, options) {
   var imageEl = getCropEl('crop-image');
   var titleEl = getCropEl('crop-modal-title');
   var applyBtn = getCropEl('crop-apply-btn');
+  var ratioRow = getCropEl('crop-ratio-row');
   if (!modal || !imageEl || !titleEl || !applyBtn) throw new Error('Crop modal is missing from the page');
   destroyCropper();
   setCropBusy(false);
   setCropAspectRatio(aspectRatio || 1);
+  if (ratioRow) {
+    ratioRow.classList.toggle('hidden', options.showRatioControls === false);
+  }
   setCropRotationControlsVisible(cropRotationEnabled);
   setCropAngle(initialAngle);
   setCropSizeReadout(0, 0);
@@ -261,6 +265,9 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply, options) {
       },
       ready: function () {
         setCropAngle(initialAngle);
+        if (options.initialCrop) {
+          cropperInstance.setData(options.initialCrop);
+        }
         var data = cropperInstance.getData(true);
         setCropSizeReadout(data.width, data.height);
         setCropStatus('', false);
@@ -382,7 +389,7 @@ function openImageCropModal(mediaItem) {
 }
 
 // --- Video crop entry point ---
-function openVideoCropModal(dataUrl, aspect, onCrop) {
+function openVideoCropModal(dataUrl, aspect, initialCrop, onCrop) {
   setupCropModal(dataUrl, aspect, function() {
     getCropEl('crop-modal-title').textContent = 'Crop video frame';
   }, function() {
@@ -392,6 +399,8 @@ function openVideoCropModal(dataUrl, aspect, onCrop) {
     onCrop(data);
     closeCropModal();
   }, {
+    showRatioControls: false,
+    initialCrop: initialCrop,
     rotationEnabled: false,
     initialAngle: 0
   });

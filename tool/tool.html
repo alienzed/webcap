@@ -343,6 +343,10 @@
 {clothing, }{traits, }{expression, }
 {background, }
 {lighting} lighting, {view } view.</textarea>
+                                    <div class="primer-template-placeholder-row">
+                                        <div class="primer-template-placeholder-label">Insert group placeholder</div>
+                                        <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
+                                    </div>
                                     <label>Set Notes</label>
                                     <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
                                 </div>
@@ -619,7 +623,7 @@
                     <strong id="crop-modal-title">Crop image</strong>
                     <button id="crop-cancel-x" type="button" title="Close" aria-label="Close crop modal">x</button>
                 </div>
-                <div class="crop-ratio-row">
+                <div id="crop-ratio-row" class="crop-ratio-row">
                     <button type="button" class="crop-ratio-btn active" data-ratio="1">1:1</button>
                     <button type="button" class="crop-ratio-btn" data-ratio="1.3333333333">4:3</button>
                     <button type="button" class="crop-ratio-btn" data-ratio="0.75">3:4</button>

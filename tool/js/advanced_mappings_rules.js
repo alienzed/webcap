@@ -1,6 +1,5 @@
 var primerMappingsRows = [];
 var reviewRulesRows = [];
-var primerMappingsDraftRows = [];
 var reviewRulesDraftRows = [];
 
 function cloneRows(rows) {
@@ -117,7 +116,6 @@ function parseLegacyReviewRules(multiline) {
       enabled: true
     };
   });
-  return [];
 }
 
 function triggerAdvancedRulesAutosave() {
@@ -125,18 +123,6 @@ function triggerAdvancedRulesAutosave() {
   debouncedSaveFolderState(function () {
     saveFolderStateForCurrentRoot();
   });
-  return;
-  saveFolderStateForCurrentRoot();
-}
-
-function updatePrimerMappingsSummary() {
-  if (!ui || !ui.primerMappingsSummaryEl) return;
-  var total = primerMappingsRows.length;
-  if (!total) {
-    ui.primerMappingsSummaryEl.textContent = 'Legacy feature; no mappings configured.';
-    return;
-  }
-  ui.primerMappingsSummaryEl.textContent = 'Legacy feature: ' + total + ' custom mapping' + (total === 1 ? '' : 's');
 }
 
 function updateReviewRulesSummary() {
@@ -160,7 +146,6 @@ function getReviewRulesRows() {
 
 function setPrimerMappingsRows(rows, triggerAutosave) {
   primerMappingsRows = sanitizePrimerMappingsRows(rows);
-  updatePrimerMappingsSummary();
   if (triggerAutosave) {
     refreshPrimerPreviewForCurrentItem();
   }
@@ -274,41 +259,6 @@ function renderAdvancedHelpPreview(title, bodyHtml) {
   setStatus('Help loaded.');
 }
 
-function openPrimerMappingsHelpInPreview() {
-  var defaultsTotal = 0;
-  defaultsTotal = getRequirementDefaultPrimerMappings().length;
-  renderAdvancedHelpPreview(
-    'Mappings Help (Legacy)',
-    '<p style="margin:0 0 10px 0;"><strong>Legacy feature:</strong> mappings still work, but they are being deprecated in favor of annotations, affixes, and the caption template.</p>' +
-    '<p style="margin:0 0 10px 0;">Use mappings only for older sets or edge cases that annotations cannot express yet.</p>' +
-    '<h4 style="margin:12px 0 6px 0;font-size:14px;">How It Works</h4>' +
-    '<ol style="margin:0 0 8px 18px;padding:0;">' +
-    '<li style="margin:0 0 6px 0;">Write a Caption Template with placeholders like <code>{view}</code> and <code>{lighting}</code>.</li>' +
-    '<li style="margin:0 0 6px 0;">Add mapping rows that connect a trigger (usually a tag) to a placeholder key.</li>' +
-    '<li style="margin:0 0 6px 0;">When a row matches, that placeholder gets filled automatically.</li>' +
-    '</ol>' +
-    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Fields This Uses</h4>' +
-    '<ul style="margin:0 0 8px 18px;padding:0;">' +
-    '<li style="margin:0 0 6px 0;"><strong>Caption Template</strong>: where placeholders are written.</li>' +
-    '<li style="margin:0 0 6px 0;"><strong>Mappings rows</strong>: your manual mapping rules.</li>' +
-    '<li style="margin:0 0 6px 0;"><strong>Requirements keywords</strong>: auto default mappings for common terms.</li>' +
-    '<li style="margin:0 0 6px 0;"><strong>Item tags</strong>: main match source for defaults and tag-scope rows.</li>' +
-    '</ul>' +
-    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Important Rules</h4>' +
-    '<ul style="margin:0 0 8px 18px;padding:0;">' +
-    '<li style="margin:0 0 6px 0;">Manual rows run first, then requirement defaults.</li>' +
-    '<li style="margin:0 0 6px 0;">Current requirement default rows available: <strong>' + defaultsTotal + '</strong>.</li>' +
-    '<li style="margin:0 0 6px 0;">Default scope for new rows is <strong>tag</strong>.</li>' +
-    '<li style="margin:0 0 6px 0;">If Value is blank, Token is used as the value.</li>' +
-    '<li style="margin:0 0 6px 0;">Enabled off means the row is skipped.</li>' +
-    '</ul>' +
-    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Simple Example</h4>' +
-    '<p style="margin:0 0 6px 0;">Template has <code>{lighting}</code>.</p>' +
-    '<p style="margin:0 0 6px 0;">Mapping row: scope <strong>tag</strong>, token <code>indoor</code>, key <code>lighting</code>, value <code>indoor lighting</code>.</p>' +
-    '<p style="margin:0;">If item has tag <code>indoor</code>, template fills <code>{lighting}</code> with <code>indoor lighting</code>.</p>'
-  );
-}
-
 function openReviewRulesHelpInPreview() {
   renderAdvancedHelpPreview(
     'Rules Help',
@@ -326,123 +276,9 @@ function openReviewRulesHelpInPreview() {
   );
 }
 
-function addPrimerMappingDraftRow() {
-  primerMappingsDraftRows.push(normalizePrimerMappingRow({}));
-  renderPrimerMappingsDraft();
-}
-
 function addReviewRuleDraftRow() {
   reviewRulesDraftRows.push(normalizeReviewRuleRow({}));
   renderReviewRulesDraft();
-}
-
-function renderPrimerMappingsDraft() {
-  if (!ui || !ui.primerMappingsModalBodyEl) return;
-  var bodyEl = ui.primerMappingsModalBodyEl;
-  bodyEl.innerHTML = '';
-  var catalogTokens = getCaptionHelperCatalogTerms();
-
-  var header = document.createElement('div');
-  header.className = 'advanced-grid-row advanced-grid-row-header';
-  ['Scope', 'Token', 'Key', 'Value (optional)', 'Enabled', ''].forEach(function (text) {
-    var col = document.createElement('div');
-    col.className = 'advanced-grid-header-cell';
-    col.textContent = text;
-    header.appendChild(col);
-  });
-  bodyEl.appendChild(header);
-
-  primerMappingsDraftRows.forEach(function (row, idx) {
-    var gridRow = document.createElement('div');
-    gridRow.className = 'advanced-grid-row';
-
-    var scope = document.createElement('select');
-    ['file', 'tag'].forEach(function (value) {
-      var opt = document.createElement('option');
-      opt.value = value;
-      opt.textContent = value;
-      if (row.scope === value) opt.selected = true;
-      scope.appendChild(opt);
-    });
-    scope.addEventListener('change', function () {
-      primerMappingsDraftRows[idx].scope = scope.value;
-      renderPrimerMappingsDraft();
-    });
-    gridRow.appendChild(createAdvancedCell(scope));
-
-    if (row.scope === 'tag') {
-      var tokenSelect = document.createElement('select');
-      var tokenPlaceholderOpt = document.createElement('option');
-      tokenPlaceholderOpt.value = '';
-      tokenPlaceholderOpt.textContent = 'Select tag...';
-      tokenSelect.appendChild(tokenPlaceholderOpt);
-      var seenToken = {};
-      catalogTokens.forEach(function (tokenValue) {
-        var clean = String(tokenValue || '').trim();
-        var low = clean.toLowerCase();
-        if (!clean || seenToken[low]) return;
-        seenToken[low] = true;
-        var opt = document.createElement('option');
-        opt.value = clean;
-        opt.textContent = clean;
-        tokenSelect.appendChild(opt);
-      });
-      if (row.token && !seenToken[String(row.token).toLowerCase()]) {
-        var customOpt = document.createElement('option');
-        customOpt.value = row.token;
-        customOpt.textContent = row.token;
-        tokenSelect.appendChild(customOpt);
-      }
-      tokenSelect.value = row.token || '';
-      tokenSelect.addEventListener('change', function () {
-        primerMappingsDraftRows[idx].token = tokenSelect.value;
-      });
-      gridRow.appendChild(createAdvancedCell(tokenSelect));
-    } else {
-      var token = document.createElement('input');
-      token.type = 'text';
-      token.placeholder = 'e.g. fd';
-      token.value = row.token;
-      token.addEventListener('input', function () {
-        primerMappingsDraftRows[idx].token = token.value;
-      });
-      gridRow.appendChild(createAdvancedCell(token));
-    }
-
-    var key = document.createElement('input');
-    key.type = 'text';
-    key.placeholder = 'e.g. view';
-    key.value = row.key;
-    key.addEventListener('input', function () {
-      primerMappingsDraftRows[idx].key = key.value;
-    });
-    gridRow.appendChild(createAdvancedCell(key));
-
-    var value = document.createElement('input');
-    value.type = 'text';
-    value.placeholder = 'optional (defaults to token)';
-    value.value = row.value;
-    value.addEventListener('input', function () {
-      primerMappingsDraftRows[idx].value = value.value;
-    });
-    gridRow.appendChild(createAdvancedCell(value));
-
-    gridRow.appendChild(createCheckboxCell(row.enabled, function (nextValue) {
-      primerMappingsDraftRows[idx].enabled = nextValue;
-    }));
-
-    var removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'stats-phrase-mini-btn';
-    removeBtn.title = 'Remove mapping';
-    removeBtn.textContent = 'x';
-    removeBtn.addEventListener('click', function () {
-      primerMappingsDraftRows.splice(idx, 1);
-      renderPrimerMappingsDraft();
-    });
-    gridRow.appendChild(createAdvancedCell(removeBtn));
-    bodyEl.appendChild(gridRow);
-  });
 }
 
 function renderReviewRulesDraft() {
@@ -514,25 +350,6 @@ function renderReviewRulesDraft() {
 
 }
 
-function openPrimerMappingsModal() {
-  setStatus('Mappings are a legacy feature and may be removed in a future cleanup.');
-  primerMappingsDraftRows = getPrimerMappingsRows();
-  if (!primerMappingsDraftRows.length) {
-    primerMappingsDraftRows.push(normalizePrimerMappingRow({}));
-  }
-  renderPrimerMappingsDraft();
-  openAdvancedModal(ui && ui.primerMappingsModalEl);
-}
-
-function closePrimerMappingsModal() {
-  closeAdvancedModal(ui && ui.primerMappingsModalEl);
-}
-
-function savePrimerMappingsModal() {
-  setPrimerMappingsRows(primerMappingsDraftRows, true);
-  closePrimerMappingsModal();
-}
-
 function openReviewRulesModal() {
   reviewRulesDraftRows = getReviewRulesRows();
   if (!reviewRulesDraftRows.length) {
@@ -553,36 +370,17 @@ function saveReviewRulesModal() {
 
 function wireAdvancedMappingsRulesUi() {
   if (!ui) return;
-  updatePrimerMappingsSummary();
   updateReviewRulesSummary();
 
-  var mappingsInfoBtn = document.getElementById('primer-mappings-info-btn');
-  if (mappingsInfoBtn && !mappingsInfoBtn.__advancedInfoBound) {
-    mappingsInfoBtn.__advancedInfoBound = true;
-    mappingsInfoBtn.addEventListener('click', openPrimerMappingsHelpInPreview);
-  }
   var rulesInfoBtn = document.getElementById('review-rules-info-btn');
   if (rulesInfoBtn && !rulesInfoBtn.__advancedInfoBound) {
     rulesInfoBtn.__advancedInfoBound = true;
     rulesInfoBtn.addEventListener('click', openReviewRulesHelpInPreview);
   }
 
-  if (ui.primerMappingsEditBtnEl && !ui.primerMappingsEditBtnEl.__advancedMappingsBound) {
-    ui.primerMappingsEditBtnEl.__advancedMappingsBound = true;
-    ui.primerMappingsEditBtnEl.addEventListener('click', openPrimerMappingsModal);
-  }
   if (ui.reviewRulesEditBtnEl && !ui.reviewRulesEditBtnEl.__advancedRulesBound) {
     ui.reviewRulesEditBtnEl.__advancedRulesBound = true;
     ui.reviewRulesEditBtnEl.addEventListener('click', openReviewRulesModal);
-  }
-  if (ui.primerMappingsSaveBtnEl && !ui.primerMappingsSaveBtnEl.__advancedMappingsBound) {
-    ui.primerMappingsSaveBtnEl.__advancedMappingsBound = true;
-    ui.primerMappingsSaveBtnEl.addEventListener('click', savePrimerMappingsModal);
-  }
-  var primerMappingsAddBtnEl = document.getElementById('primer-mappings-modal-add-btn');
-  if (primerMappingsAddBtnEl && !primerMappingsAddBtnEl.__advancedMappingsBound) {
-    primerMappingsAddBtnEl.__advancedMappingsBound = true;
-    primerMappingsAddBtnEl.addEventListener('click', addPrimerMappingDraftRow);
   }
   if (ui.reviewRulesSaveBtnEl && !ui.reviewRulesSaveBtnEl.__advancedRulesBound) {
     ui.reviewRulesSaveBtnEl.__advancedRulesBound = true;
@@ -596,7 +394,6 @@ function wireAdvancedMappingsRulesUi() {
   if (ui.advancedModalOverlayEl && !ui.advancedModalOverlayEl.__advancedBound) {
     ui.advancedModalOverlayEl.__advancedBound = true;
     ui.advancedModalOverlayEl.addEventListener('click', function () {
-      closePrimerMappingsModal();
       closeReviewRulesModal();
     });
   }
@@ -605,10 +402,6 @@ function wireAdvancedMappingsRulesUi() {
     document.addEventListener('click', function (e) {
       var target = e.target;
       if (!target || !target.dataset) return;
-      if (target.dataset.closeModal === 'primer-mappings-modal') {
-        closePrimerMappingsModal();
-        return;
-      }
       if (target.dataset.closeModal === 'review-rules-modal') {
         closeReviewRulesModal();
       }

@@ -1,72 +1,114 @@
 <div id="video-clip-modal" class="video-clip-modal hidden" aria-hidden="true">
     <div class="crop-modal-dialog video-clip-dialog">
-        <div class="video-clip-layout">
-            <div class="video-clip-player-panel">
-                <div class="crop-modal-header">
-                    <strong id="video-clip-title">Clip video</strong>
-                    <button id="video-clip-cancel-x" type="button" title="Close" aria-label="Close video clip modal">x</button>
-                </div>
-                <div class="video-clip-player-wrap" style="position:relative;">
-                    <video
-                        id="video-clip-video"
-                        controls
-                        playsinline
-                        preload="metadata"
-                        style="display:block;width:100%;max-height:100%;background:#111;"
-                    ></video>
-                    <img
-                        id="video-clip-crop-image"
-                        class="video-clip-crop-image hidden"
-                        alt="Crop overlay"
-                        style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:10;pointer-events:auto;"
-                        draggable="false"
-                    >
-                </div>
-                <div class="video-clip-time-row">
-                    <span>Current:
-                        <span id="video-clip-current-time">0.000</span>s</span>
-                    <button id="video-clip-crop-frame-btn" type="button" class="video-clip-extract-frame-btn">Crop This Frame</button>
-                </div>
+        <div class="video-clip-topbar">
+            <div class="video-clip-title-stack">
+                <span class="video-clip-kicker">Video clipper</span>
+                <strong id="video-clip-title">Clip video</strong>
             </div>
-            <!-- Removed video-clip-crop-panel: all cropping is now via Crop This Frame and crop modal -->
+            <button id="video-clip-cancel-x" type="button" title="Close" aria-label="Close video clip modal">x</button>
         </div>
-        <div class="video-clip-form-grid">
-            <div class="video-clip-form-label">Start</div>
-            <div class="video-clip-form-label">Duration</div>
-            <div class="video-clip-form-label">Output</div>
-            <div class="video-clip-form-label">Controls</div>
 
-            <div class="video-clip-start-group">
-                <label for="video-clip-start-input" class="video-clip-accessible-label">Start (sec)</label>
-                <input
-                    id="video-clip-start-input"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value="0"
-                >
-                <button id="video-clip-use-current-btn" type="button" class="video-clip-inline-btn">Use Current Time</button>
+        <div class="video-clip-workspace">
+            <div class="video-clip-stage-panel">
+                <div id="video-clip-player-wrap" class="video-clip-player-wrap">
+                    <div id="video-clip-preview-stage" class="video-clip-preview-stage">
+                        <video
+                            id="video-clip-video"
+                            controls
+                            playsinline
+                            preload="metadata"
+                        ></video>
+                        <div id="video-clip-crop-edit-layer" class="video-clip-crop-edit-layer hidden" aria-hidden="true">
+                            <img id="video-clip-crop-edit-image" alt="Video crop edit frame">
+                        </div>
+                        <div id="video-clip-crop-overlay" class="video-clip-crop-overlay hidden" aria-hidden="true">
+                            <span class="video-clip-crop-overlay-label">Crop</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="video-clip-transport-row">
+                    <div class="video-clip-time-pill">
+                        <span>Playhead</span>
+                        <strong><span id="video-clip-current-time">0.000</span>s</strong>
+                    </div>
+                    <div class="video-clip-time-pill">
+                        <span>Out</span>
+                        <strong><span id="video-clip-end-time">2.000</span>s</strong>
+                    </div>
+                </div>
+                <div class="video-clip-timeline" aria-hidden="true">
+                    <div class="video-clip-timeline-track">
+                        <div id="video-clip-selection-range" class="video-clip-selection-range"></div>
+                        <div id="video-clip-playhead" class="video-clip-playhead"></div>
+                    </div>
+                    <div class="video-clip-timeline-ticks">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
             </div>
 
-            <div class="video-clip-duration-group">
-                <label for="video-clip-duration-input" class="video-clip-accessible-label">Duration (sec)</label>
-                <input
-                    id="video-clip-duration-input"
-                    type="number"
-                    step="0.5"
-                    min="0.1"
-                    value="3.0"
-                >
-            </div>
+            <div class="video-clip-settings-panel">
+                <div class="video-clip-setting-group">
+                    <div class="video-clip-form-label">Trim</div>
+                    <div class="video-clip-trim-grid">
+                        <div>
+                            <label for="video-clip-start-input" class="video-clip-field-label">Start</label>
+                            <input
+                                id="video-clip-start-input"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                value="0"
+                            >
+                        </div>
+                        <div>
+                            <label for="video-clip-duration-input" class="video-clip-field-label">Duration</label>
+                            <input
+                                id="video-clip-duration-input"
+                                type="number"
+                                step="0.5"
+                                min="0.1"
+                                value="3.0"
+                            >
+                        </div>
+                    </div>
+                    <button id="video-clip-use-current-btn" type="button" class="video-clip-inline-btn">Use Playhead</button>
+                </div>
 
-            <div class="video-clip-output-group">
-                <label for="video-clip-output-input" class="video-clip-accessible-label">Output Name</label>
-                <input id="video-clip-output-input" type="text" value="">
-            </div>
+                <div class="video-clip-setting-group">
+                    <div class="video-clip-form-label">Crop Ratio</div>
+                    <div id="video-clip-crop-summary" class="video-clip-section-note">
+                        Ratio: 1:1. No crop placed yet.
+                    </div>
+                    <div class="video-clip-ratio-row" role="group" aria-label="Crop aspect ratio">
+                        <button type="button" class="video-clip-ratio-btn active" data-ratio="1">1:1</button>
+                        <button type="button" class="video-clip-ratio-btn" data-ratio="1.3333333333">4:3</button>
+                        <button type="button" class="video-clip-ratio-btn" data-ratio="0.5625">9:16</button>
+                        <button type="button" class="video-clip-ratio-btn" data-ratio="1.7777778">16:9</button>
+                    </div>
+                    <div class="video-clip-crop-actions">
+                        <button id="video-clip-crop-frame-btn" type="button" class="video-clip-extract-frame-btn">Place Crop</button>
+                        <button id="video-clip-crop-apply-btn" type="button" class="video-clip-inline-btn hidden">Apply Crop</button>
+                        <button id="video-clip-crop-cancel-btn" type="button" class="video-clip-inline-btn hidden">Cancel</button>
+                        <button id="video-clip-crop-clear-btn" type="button" class="video-clip-inline-btn hidden">Clear</button>
+                        <span id="video-clip-size-readout" class="video-clip-size-readout">0 x 0 px</span>
+                    </div>
+                </div>
 
-            <div class="video-clip-controls-group">
-                <button id="video-clip-export-btn" type="button">Export</button>
-                <button id="video-clip-cancel-btn" type="button">Cancel</button>
+                <div class="video-clip-setting-group">
+                    <label for="video-clip-output-input" class="video-clip-form-label">Output</label>
+                    <input id="video-clip-output-input" type="text" value="">
+                    <div id="video-clip-export-summary" class="video-clip-section-note"></div>
+                </div>
+
+                <div class="video-clip-controls-group">
+                    <button id="video-clip-export-btn" type="button">Export</button>
+                    <button id="video-clip-cancel-btn" type="button">Cancel</button>
+                </div>
             </div>
         </div>
         <div id="video-clip-status" class="crop-status video-clip-status hidden" aria-live="polite" aria-busy="false">

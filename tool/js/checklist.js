@@ -551,6 +551,9 @@ function renderChecklistPanel() {
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   var itemsDiv = document.getElementById('checklist-items');
   if (!itemsDiv) return;
+  if (typeof renderPrimerTemplatePlaceholderButtons === 'function') {
+    renderPrimerTemplatePlaceholderButtons();
+  }
   // Only show if a media item is selected
   if (!state.currentItem) {
     setChecklistPanelVisible(false);
@@ -727,7 +730,6 @@ function saveChecklistToFolderState() {
   snapshot.caption_term_affixes = JSON.parse(JSON.stringify(checklistTermAffixesByKey));
   snapshot.caption_term_descriptor_defaults = JSON.parse(JSON.stringify(checklistTermDescriptorDefaultsByKey));
   snapshot.caption_term_descriptors_by_media = JSON.parse(JSON.stringify(checklistTermDescriptorsByMedia));
-  updatePrimerMappingsSummary();
   writeFolderStateFile(state.folder, snapshot);
 }
 
@@ -784,7 +786,6 @@ function loadChecklistFromFolderState(folderState) {
   });
 
   syncReviewedFromChecklistAll();
-  updatePrimerMappingsSummary();
   renderChecklistPanel();
 }
 

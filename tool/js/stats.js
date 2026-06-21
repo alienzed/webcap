@@ -433,6 +433,75 @@ function openBalancePhrasesHelpInPreview() {
   );
 }
 
+function getPrimerTemplatePlaceholderItems() {
+  var requirements = (
+    typeof checklistItems !== 'undefined' &&
+    Array.isArray(checklistItems) &&
+    checklistItems.length
+  )
+    ? checklistItems.slice()
+    : getDefaultRequirementItems().slice();
+  var seen = {};
+  var out = [];
+  requirements.forEach(function (requirementLabel) {
+    var label = String(requirementLabel || '').trim();
+    if (!label) return;
+    var key = typeof normalizeRequirementPrimerKey === 'function'
+      ? normalizeRequirementPrimerKey(label)
+      : label.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push({
+      label: label,
+      key: key,
+      placeholder: '{' + key + '}'
+    });
+  });
+  return out;
+}
+
+function insertPrimerTemplatePlaceholder(placeholderText) {
+  var templateEl = document.getElementById('primer-template');
+  if (!templateEl) return false;
+  var insertion = String(placeholderText || '');
+  if (!insertion) return false;
+  var value = String(templateEl.value || '');
+  var start = typeof templateEl.selectionStart === 'number' ? templateEl.selectionStart : value.length;
+  var end = typeof templateEl.selectionEnd === 'number' ? templateEl.selectionEnd : value.length;
+  templateEl.value = value.slice(0, start) + insertion + value.slice(end);
+  var caret = start + insertion.length;
+  templateEl.focus();
+  templateEl.setSelectionRange(caret, caret);
+  templateEl.dispatchEvent(new Event('input', { bubbles: true }));
+  setStatus('Inserted placeholder: ' + insertion);
+  return true;
+}
+
+function renderPrimerTemplatePlaceholderButtons() {
+  var target = document.getElementById('primer-template-placeholders');
+  if (!target) return;
+  target.innerHTML = '';
+  var items = getPrimerTemplatePlaceholderItems();
+  if (!items.length) {
+    var empty = document.createElement('div');
+    empty.className = 'primer-template-placeholder-empty';
+    empty.textContent = 'No requirement groups configured.';
+    target.appendChild(empty);
+    return;
+  }
+  items.forEach(function (item) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'primer-template-placeholder-btn';
+    btn.textContent = item.label;
+    btn.title = 'Insert placeholder for ' + item.label;
+    btn.addEventListener('click', function () {
+      insertPrimerTemplatePlaceholder(item.placeholder);
+    });
+    target.appendChild(btn);
+  });
+}
+
 function openPrimerTemplateHelpInPreview() {
   if (typeof renderAdvancedHelpPreview !== 'function') {
     setStatus('Help preview unavailable.');
@@ -444,6 +513,7 @@ function openPrimerTemplateHelpInPreview() {
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">How It Works</h4>' +
     '<ul style="margin:0 0 8px 18px;padding:0;">' +
     '<li style="margin:0 0 6px 0;">Write placeholders like <code>{position}</code>, <code>{lighting}</code>, and <code>{view}</code>.</li>' +
+    '<li style="margin:0 0 6px 0;">Use the live group placeholder buttons under the template to insert the current requirement keys without typing them manually.</li>' +
     '<li style="margin:0 0 6px 0;">If a placeholder has no matching value, it disappears cleanly.</li>' +
     '<li style="margin:0 0 6px 0;">Punctuation inside braces stays attached to the value, for example <code>{surface, }</code> becomes <code>wood floor, </code> only when a surface value exists.</li>' +
     '</ul>' +
@@ -458,6 +528,7 @@ function openPrimerTemplateHelpInPreview() {
 function wireStatsBalancePhraseUi() {
   loadStatsBalancePhrasesFromTextarea();
   renderStatsBalancePhraseList();
+  renderPrimerTemplatePlaceholderButtons();
 
   var addBtn = ui && ui.statsPhrasesAddBtnEl ? ui.statsPhrasesAddBtnEl : document.getElementById('stats-phrases-add-btn');
   var addInput = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');

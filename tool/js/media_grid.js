@@ -1,11 +1,102 @@
 var mediaGridState = {
   open: false,
   items: [],
+  baseItems: [],
+  focusSets: [],
+  focusSetKey: 'all',
+  railCollapsed: false,
   selectedKeys: new Set(),
   lastSelectedKey: '',
   status: '',
   viewerKey: ''
 };
+
+var MEDIA_GRID_FOCUS_SET_DEFS = [
+  {
+    key: 'all',
+    label: 'All',
+    why: 'Keep the current working scope intact.',
+    signals: 'Uses the current visible Grid scope after shared list filters and any active app focus set.',
+    bias: 'Not a precision subset. Includes everything currently in scope.'
+  },
+  {
+    key: 'suggested',
+    label: 'Suggested',
+    why: 'Start with the conservative keepers the app already trusts most.',
+    signals: 'Existing Suggested Candidates blend of face focus, pose coverage, expression, and scene simplicity.',
+    bias: 'Precision-first. May omit strong but unusual frames.'
+  },
+  {
+    key: 'face_close',
+    label: 'Face Close',
+    why: 'Close face crops are often the quickest quality/readability pass.',
+    signals: 'Face focus bucket close with one plausible detected face.',
+    bias: 'Misses medium/body shots and any image where the face detector stayed unknown.'
+  },
+  {
+    key: 'front_keepers',
+    label: 'Front Keepers',
+    why: 'Front-facing portraits are usually high-utility anchor shots.',
+    signals: 'Face direction front, body orientation front or three_quarter, single-face usable focus bucket.',
+    bias: 'May miss good profile, rear, or multi-person shots.'
+  },
+  {
+    key: 'three_quarter_keepers',
+    label: '3/4 Keepers',
+    why: 'Three-quarter portraits often read well while keeping some shape and depth.',
+    signals: 'Face direction three_quarter_left or three_quarter_right, body orientation front or three_quarter, single-face usable focus bucket.',
+    bias: 'Can miss strong side views or looser portraits.'
+  },
+  {
+    key: 'hands_near_face',
+    label: 'Hands Near Face',
+    why: 'Hands near the face often create expressive or useful gesture variants.',
+    signals: 'Selection pose arm position hands_near_face.',
+    bias: 'Only as good as the pose analyzer on the current framing.'
+  },
+  {
+    key: 'arms_up_gesture',
+    label: 'Arms Up / Gesture',
+    why: 'Raised or spread arms tend to produce distinct action silhouettes.',
+    signals: 'Selection pose arm position both_up, one_up, or arms_out.',
+    bias: 'May miss subtler gestures or mislabeled arm positions.'
+  },
+  {
+    key: 'simple_background_portraits',
+    label: 'Simple Background Portraits',
+    why: 'Cleaner portrait backgrounds are often faster to review and more reusable.',
+    signals: 'Scene complexity simple plus single-face close or medium face focus.',
+    bias: 'Will skip useful shots with intentionally busy environments.'
+  },
+  {
+    key: 'standing',
+    label: 'Standing',
+    why: 'Standing shots are a common full-pose curation slice.',
+    signals: 'Selection pose class standing.',
+    bias: 'Misses standing images when pose metadata is unknown.'
+  },
+  {
+    key: 'seated',
+    label: 'Seated',
+    why: 'Seated shots often cluster into a distinct composition family.',
+    signals: 'Selection pose class seated.',
+    bias: 'Misses borderline or mixed seated poses.'
+  },
+  {
+    key: 'kneeling_crouched',
+    label: 'Kneeling / Crouched',
+    why: 'Compressed poses are easy to miss without an explicit slice.',
+    signals: 'Selection pose class kneeling_crouched.',
+    bias: 'Depends on pose metadata being confident enough to separate from standing or seated.'
+  },
+  {
+    key: 'reclining',
+    label: 'Reclining',
+    why: 'Reclining shots are compositionally distinct and worth isolating.',
+    signals: 'Selection pose class reclining.',
+    bias: 'Misses reclining images when the pose model falls back to unknown.'
+  }
+];
 
 function mediaGridGetEls() {
   return {
@@ -13,6 +104,13 @@ function mediaGridGetEls() {
     meta: document.getElementById('media-grid-meta'),
     status: document.getElementById('media-grid-status'),
     filters: document.getElementById('media-grid-filters'),
+    rail: document.getElementById('media-grid-left-rail'),
+    railHint: document.getElementById('media-grid-rail-hint'),
+    railCollapseBtn: document.getElementById('media-grid-rail-collapse-btn'),
+    focusMeta: document.getElementById('media-grid-focus-meta'),
+    focusLoading: document.getElementById('media-grid-focus-loading'),
+    focusList: document.getElementById('media-grid-focus-list'),
+    activeSet: document.getElementById('media-grid-active-set'),
     canvas: document.getElementById('media-grid-canvas'),
     sidebar: document.getElementById('media-grid-sidebar'),
     selectAllBtn: document.getElementById('media-grid-select-all-btn'),
@@ -30,7 +128,9 @@ function mediaGridGetEls() {
 function mediaGridSetStatus(text) {
   mediaGridState.status = String(text || '');
   var els = mediaGridGetEls();
-  els.status.textContent = mediaGridState.status;
+  if (els.status) {
+    els.status.textContent = mediaGridState.status;
+  }
 }
 
 function mediaGridGetVisibleItems() {
@@ -66,6 +166,203 @@ function mediaGridMediaUrl(mediaItem) {
     url += '&t=' + encodeURIComponent(cacheBust);
   }
   return url;
+}
+
+function mediaGridGetMetadataRow(mediaItem) {
+  if (!mediaItem || !mediaItem.metadata || typeof mediaItem.metadata !== 'object') return null;
+  return mediaItem.metadata;
+}
+
+function mediaGridGetFaceFocus(mediaItem) {
+  var row = mediaGridGetMetadataRow(mediaItem);
+  return (typeof getFaceFocusFromMetadata === 'function') ? getFaceFocusFromMetadata(row) : null;
+}
+
+function mediaGridGetSelectionPose(mediaItem) {
+  var row = mediaGridGetMetadataRow(mediaItem);
+  return (typeof getSelectionPoseFromMetadata === 'function') ? getSelectionPoseFromMetadata(row) : null;
+}
+
+function mediaGridGetSceneComplexity(mediaItem) {
+  var row = mediaGridGetMetadataRow(mediaItem);
+  return (typeof getSceneComplexityFromMetadata === 'function') ? getSceneComplexityFromMetadata(row) : null;
+}
+
+function mediaGridNormalizeValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function mediaGridGetFaceFocusBucket(mediaItem) {
+  var focus = mediaGridGetFaceFocus(mediaItem);
+  if (!focus) return 'unknown';
+  if (typeof normalizeFaceFocusBucket === 'function') {
+    return normalizeFaceFocusBucket(focus.bucket);
+  }
+  return mediaGridNormalizeValue(focus.bucket) || 'unknown';
+}
+
+function mediaGridHasUsableSingleFace(mediaItem) {
+  var focus = mediaGridGetFaceFocus(mediaItem);
+  var bucket = mediaGridGetFaceFocusBucket(mediaItem);
+  var faceCount = focus ? Number(focus.face_count) : 0;
+  return (bucket === 'close' || bucket === 'medium' || bucket === 'body') && faceCount === 1;
+}
+
+function mediaGridGetPoseValue(mediaItem, key) {
+  var pose = mediaGridGetSelectionPose(mediaItem);
+  return mediaGridNormalizeValue(pose && pose[key]);
+}
+
+function mediaGridGetSceneBucket(mediaItem) {
+  var scene = mediaGridGetSceneComplexity(mediaItem);
+  return mediaGridNormalizeValue(scene && scene.bucket);
+}
+
+function mediaGridBuildSuggestedLookup(baseItems) {
+  var lookup = {};
+  if (typeof buildSuggestedSelectionRows !== 'function') return lookup;
+  var rows = [];
+  var scopedFileNames = [];
+  baseItems.forEach(function (item) {
+    var row = mediaGridGetMetadataRow(item);
+    if (!row || !item.fileName) return;
+    rows.push(row);
+    scopedFileNames.push(item.fileName);
+  });
+  var suggestionRows = buildSuggestedSelectionRows(rows, scopedFileNames);
+  if (!suggestionRows || !suggestionRows.length || !Array.isArray(suggestionRows[0].files)) {
+    return lookup;
+  }
+  suggestionRows[0].files.forEach(function (fileName) {
+    lookup[String(fileName || '')] = true;
+  });
+  return lookup;
+}
+
+function mediaGridFocusSetMatches(def, mediaItem, context) {
+  var faceBucket = mediaGridGetFaceFocusBucket(mediaItem);
+  var faceDirection = mediaGridGetPoseValue(mediaItem, 'face_direction');
+  var bodyOrientation = mediaGridGetPoseValue(mediaItem, 'body_orientation');
+  var poseClass = mediaGridGetPoseValue(mediaItem, 'pose_class');
+  var armPosition = mediaGridGetPoseValue(mediaItem, 'arm_position');
+  var sceneBucket = mediaGridGetSceneBucket(mediaItem);
+  var isSingleFaceUsable = mediaGridHasUsableSingleFace(mediaItem);
+
+  if (def.key === 'all') return true;
+  if (def.key === 'suggested') {
+    return !!(context && context.suggestedLookup && context.suggestedLookup[String(mediaItem.fileName || '')]);
+  }
+  if (def.key === 'face_close') {
+    return faceBucket === 'close' && isSingleFaceUsable;
+  }
+  if (def.key === 'front_keepers') {
+    return isSingleFaceUsable &&
+      faceDirection === 'front' &&
+      (bodyOrientation === 'front' || bodyOrientation === 'three_quarter');
+  }
+  if (def.key === 'three_quarter_keepers') {
+    return isSingleFaceUsable &&
+      (faceDirection === 'three_quarter_left' || faceDirection === 'three_quarter_right') &&
+      (bodyOrientation === 'front' || bodyOrientation === 'three_quarter');
+  }
+  if (def.key === 'hands_near_face') {
+    return armPosition === 'hands_near_face';
+  }
+  if (def.key === 'arms_up_gesture') {
+    return armPosition === 'both_up' || armPosition === 'one_up' || armPosition === 'arms_out';
+  }
+  if (def.key === 'simple_background_portraits') {
+    return isSingleFaceUsable &&
+      (faceBucket === 'close' || faceBucket === 'medium') &&
+      sceneBucket === 'simple';
+  }
+  if (def.key === 'standing') return poseClass === 'standing';
+  if (def.key === 'seated') return poseClass === 'seated';
+  if (def.key === 'kneeling_crouched') return poseClass === 'kneeling_crouched';
+  if (def.key === 'reclining') return poseClass === 'reclining';
+  return false;
+}
+
+function mediaGridBuildFocusSetTooltip(entry) {
+  return entry.label +
+    '\nWhy: ' + entry.why +
+    '\nSignals: ' + entry.signals +
+    '\nBias: ' + entry.bias;
+}
+
+function mediaGridBuildFocusSets(baseItems) {
+  var context = {
+    suggestedLookup: mediaGridBuildSuggestedLookup(baseItems)
+  };
+  return MEDIA_GRID_FOCUS_SET_DEFS.map(function (def) {
+    var matchedItems = baseItems.filter(function (item) {
+      return mediaGridFocusSetMatches(def, item, context);
+    });
+    return {
+      key: def.key,
+      label: def.label,
+      why: def.why,
+      signals: def.signals,
+      bias: def.bias,
+      count: matchedItems.length,
+      itemKeys: matchedItems.map(function (item) { return item.key; }),
+      tooltip: mediaGridBuildFocusSetTooltip(def)
+    };
+  });
+}
+
+function mediaGridGetActiveFocusSet() {
+  var focusSets = Array.isArray(mediaGridState.focusSets) ? mediaGridState.focusSets : [];
+  for (var i = 0; i < focusSets.length; i++) {
+    if (focusSets[i].key === mediaGridState.focusSetKey) return focusSets[i];
+  }
+  return focusSets[0] || null;
+}
+
+function mediaGridPruneSelectionToItems(items) {
+  var keep = {};
+  (items || []).forEach(function (item) {
+    keep[item.key] = true;
+  });
+  Array.from(mediaGridState.selectedKeys).forEach(function (key) {
+    if (!keep[key]) mediaGridState.selectedKeys.delete(key);
+  });
+  if (mediaGridState.lastSelectedKey && !keep[mediaGridState.lastSelectedKey]) {
+    mediaGridState.lastSelectedKey = '';
+  }
+  if (mediaGridState.viewerKey && !keep[mediaGridState.viewerKey]) {
+    closeMediaGridViewer();
+  }
+}
+
+function mediaGridSyncItemsToCurrentView() {
+  var baseItems = mediaGridGetVisibleItems();
+  var focusSets = mediaGridBuildFocusSets(baseItems);
+  mediaGridState.baseItems = baseItems;
+  mediaGridState.focusSets = focusSets;
+  if (!mediaGridState.focusSetKey) {
+    mediaGridState.focusSetKey = 'all';
+  }
+  var activeSet = mediaGridGetActiveFocusSet();
+  if (!activeSet) {
+    mediaGridState.focusSetKey = 'all';
+    activeSet = mediaGridGetActiveFocusSet();
+  }
+  if (activeSet && activeSet.key !== 'all' && activeSet.count <= 0 && baseItems.length > 0) {
+    mediaGridState.focusSetKey = 'all';
+    activeSet = mediaGridGetActiveFocusSet();
+  }
+  var allowed = {};
+  if (activeSet && Array.isArray(activeSet.itemKeys)) {
+    activeSet.itemKeys.forEach(function (key) {
+      allowed[key] = true;
+    });
+  }
+  var nextItems = baseItems.filter(function (item) {
+    return !!allowed[item.key];
+  });
+  mediaGridPruneSelectionToItems(nextItems);
+  mediaGridState.items = nextItems;
 }
 
 function mediaGridCreateEntryButton() {
@@ -119,8 +416,27 @@ function mediaGridCreateModal() {
         '</div>' +
       '</div>' +
       '<div class="media-grid-body">' +
-        '<main id="media-grid-canvas" class="media-grid-canvas" aria-label="Media thumbnails"></main>' +
-        '<aside id="media-grid-sidebar" class="media-grid-sidebar" aria-label="Grouped tags"></aside>' +
+        '<aside id="media-grid-left-rail" class="media-grid-left-rail" aria-label="Focus sets">' +
+          '<div class="media-grid-rail-panel">' +
+            '<div class="media-grid-rail-header">' +
+              '<div id="media-grid-rail-hint" class="media-grid-rail-hint"></div>' +
+              '<button id="media-grid-rail-collapse-btn" type="button" class="media-grid-rail-collapse-btn" aria-label="Collapse left rail"></button>' +
+            '</div>' +
+            '<section class="media-grid-rail-section media-grid-focus-section">' +
+              '<div class="media-grid-rail-section-head">' +
+                '<div class="media-grid-rail-section-title">Focus Sets</div>' +
+                '<div id="media-grid-focus-meta" class="media-grid-rail-section-meta"></div>' +
+              '</div>' +
+              '<div id="media-grid-focus-loading" class="media-grid-rail-section-note hidden"></div>' +
+              '<div id="media-grid-focus-list" class="media-grid-focus-list"></div>' +
+            '</section>' +
+          '</div>' +
+        '</aside>' +
+        '<div class="media-grid-main-column">' +
+          '<div id="media-grid-active-set" class="media-grid-active-set"></div>' +
+          '<main id="media-grid-canvas" class="media-grid-canvas" aria-label="Media thumbnails"></main>' +
+        '</div>' +
+        '<aside id="media-grid-sidebar" class="media-grid-sidebar" aria-label="Selection actions and grouped tags"></aside>' +
       '</div>' +
     '</div>';
   document.body.appendChild(modal);
@@ -138,6 +454,10 @@ function mediaGridWireModal() {
     if (e.target === els.modal) closeMediaGridModal();
   });
   mediaGridBuildFilterControls();
+  if (!els.railCollapseBtn) throw new Error('Media Grid rail controls are missing.');
+  els.railCollapseBtn.addEventListener('click', function () {
+    mediaGridSetRailCollapsed(!mediaGridState.railCollapsed);
+  });
 }
 
 function mediaGridCreateViewerModal() {
@@ -173,7 +493,7 @@ function openMediaGridModal() {
     return;
   }
   mediaGridState.open = true;
-  mediaGridState.items = items;
+  mediaGridState.focusSetKey = 'all';
   mediaGridState.selectedKeys = new Set();
   mediaGridState.lastSelectedKey = '';
   mediaGridState.status = '';
@@ -192,6 +512,9 @@ function closeMediaGridModal() {
   document.body.classList.remove('media-grid-open');
   mediaGridState.open = false;
   mediaGridState.items = [];
+  mediaGridState.baseItems = [];
+  mediaGridState.focusSets = [];
+  mediaGridState.focusSetKey = 'all';
   mediaGridState.selectedKeys = new Set();
   mediaGridState.lastSelectedKey = '';
   mediaGridState.status = '';
@@ -200,21 +523,30 @@ function closeMediaGridModal() {
 
 function renderMediaGridModal() {
   if (!mediaGridState.open) return;
+  mediaGridSyncItemsToCurrentView();
   renderMediaGridHeader();
-  mediaGridSyncFilterControls();
+  renderMediaGridLeftRail();
+  renderMediaGridActiveScope();
   renderMediaGridCanvas();
   renderMediaGridSidebar();
 }
 
 function renderMediaGridHeader() {
   var els = mediaGridGetEls();
+  var activeSet = mediaGridGetActiveFocusSet();
   var selectedCount = mediaGridState.selectedKeys.size;
   var totalCount = mediaGridState.items.length;
-  els.meta.textContent = mediaGridGetSourceLabel() + ' - ' + totalCount + ' item' + (totalCount === 1 ? '' : 's') +
-    ' - ' + selectedCount + ' selected';
+  var bits = [mediaGridGetSourceLabel()];
+  if (activeSet && activeSet.key !== 'all') {
+    bits.push(activeSet.label);
+  }
+  bits.push(totalCount + ' item' + (totalCount === 1 ? '' : 's'));
+  bits.push(selectedCount + ' selected');
+  els.meta.textContent = bits.join(' - ');
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
   els.status.textContent = mediaGridState.status;
+  mediaGridSyncFilterControls();
 }
 
 function mediaGridBuildFilterControls() {
@@ -222,18 +554,43 @@ function mediaGridBuildFilterControls() {
   if (!els.filters) throw new Error('Media Grid filters target is missing.');
   els.filters.innerHTML =
     '<div class="media-grid-filter-bar" aria-label="Grid filters">' +
-      '<span class="media-grid-filter-label">Filters</span>' +
+      '<label class="media-grid-search-field media-grid-search-field-inline">' +
+        '<span class="media-grid-filter-label">Search</span>' +
+        '<input id="media-grid-filter-search" type="search" placeholder="filter (comma terms, -exclude)">' +
+      '</label>' +
+      '<label class="media-grid-filter-toggle"><input id="media-grid-filter-unreviewed" type="checkbox"><span>Unreviewed</span></label>' +
       '<label class="media-grid-filter-toggle"><input id="media-grid-filter-invalid-ar" type="checkbox"><span>Invalid AR</span></label>' +
       '<div class="media-grid-filter-divider" aria-hidden="true"></div>' +
       '<div class="media-grid-filter-rating-block">' +
-        '<span class="media-grid-filter-subtitle">Rating</span>' +
+        '<span class="media-grid-filter-subtitle">Stars</span>' +
         '<div id="media-grid-filter-stars" class="media-grid-filter-stars" aria-label="Rating filters"></div>' +
+      '</div>' +
+      '<div class="media-grid-filter-rating-block">' +
+        '<span class="media-grid-filter-subtitle">Flags</span>' +
+        '<div id="media-grid-filter-flags" class="media-grid-filter-stars" aria-label="Flag filters"></div>' +
       '</div>' +
       '<span id="media-grid-other-filters" class="media-grid-other-filters hidden">Other list filters active</span>' +
     '</div>';
 
   mediaGridBuildStarsFilter();
-  document.getElementById('media-grid-filter-invalid-ar').addEventListener('change', function () {
+  mediaGridBuildFlagsFilter();
+
+  var searchInput = document.getElementById('media-grid-filter-search');
+  var unreviewedInput = document.getElementById('media-grid-filter-unreviewed');
+  var invalidArInput = document.getElementById('media-grid-filter-invalid-ar');
+  if (!searchInput || !unreviewedInput || !invalidArInput) {
+    throw new Error('Media Grid mirrored filter controls are missing.');
+  }
+
+  searchInput.addEventListener('input', function () {
+    ui.filterEl.value = this.value;
+    mediaGridDispatchInput(ui.filterEl);
+  });
+  unreviewedInput.addEventListener('change', function () {
+    ui.advancedFilterUnreviewedEl.checked = this.checked;
+    mediaGridDispatchChange(ui.advancedFilterUnreviewedEl);
+  });
+  invalidArInput.addEventListener('change', function () {
     ui.advancedFilterInvalidArEl.checked = this.checked;
     mediaGridDispatchChange(ui.advancedFilterInvalidArEl);
   });
@@ -241,6 +598,7 @@ function mediaGridBuildFilterControls() {
 
 function mediaGridBuildStarsFilter() {
   var target = document.getElementById('media-grid-filter-stars');
+  if (!target) return;
   target.innerHTML = '';
   var values = ['no_star', '1', '2', '3', '4', '5'];
   values.forEach(function (value) {
@@ -252,6 +610,36 @@ function mediaGridBuildStarsFilter() {
     btn.title = value === 'no_star' ? 'Show unrated items' : 'Show ' + value + ' star items';
     btn.onclick = function () {
       mediaGridToggleMirroredCheckbox(ui.advancedFilterStarsEl, value);
+    };
+    target.appendChild(btn);
+  });
+}
+
+function mediaGridBuildFlagsFilter() {
+  var target = document.getElementById('media-grid-filter-flags');
+  if (!target) return;
+  target.innerHTML = '';
+  var defs = [
+    { value: 'no_flag', title: 'Show items with no flag', text: '-' },
+    { value: 'red', title: 'Show red-flagged items', dot: 'red' },
+    { value: 'green', title: 'Show green-flagged items', dot: 'green' },
+    { value: 'blue', title: 'Show blue-flagged items', dot: 'blue' },
+    { value: 'yellow', title: 'Show yellow-flagged items', dot: 'yellow' },
+    { value: 'orange', title: 'Show orange-flagged items', dot: 'orange' }
+  ];
+  defs.forEach(function (def) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'media-grid-filter-chip media-grid-filter-flag';
+    btn.setAttribute('data-filter-value', def.value);
+    btn.title = def.title;
+    if (def.dot) {
+      btn.innerHTML = '<span class="flag-dot flag-dot--' + def.dot + '"></span>';
+    } else {
+      btn.textContent = def.text;
+    }
+    btn.onclick = function () {
+      mediaGridToggleMirroredCheckbox(ui.advancedFilterFlagEl, def.value);
     };
     target.appendChild(btn);
   });
@@ -272,23 +660,39 @@ function mediaGridDispatchChange(el) {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+function mediaGridGetMirroredFilterCount() {
+  var count = 0;
+  if (String(ui.filterEl.value || '').trim()) count += 1;
+  if (ui.advancedFilterUnreviewedEl.checked) count += 1;
+  if (ui.advancedFilterInvalidArEl.checked) count += 1;
+  if (getAdvancedStarFilterValues().length) count += 1;
+  if (getAdvancedFlagFilterValues().length) count += 1;
+  return count;
+}
+
 function mediaGridSyncFilterControls() {
-  var invalidAr = document.getElementById('media-grid-filter-invalid-ar');
-  if (!invalidAr) return;
-  document.getElementById('media-grid-filter-invalid-ar').checked = !!ui.advancedFilterInvalidArEl.checked;
+  var searchInput = document.getElementById('media-grid-filter-search');
+  var unreviewedInput = document.getElementById('media-grid-filter-unreviewed');
+  var invalidArInput = document.getElementById('media-grid-filter-invalid-ar');
+  if (!searchInput || !unreviewedInput || !invalidArInput) return;
+  searchInput.value = String(ui.filterEl.value || '');
+  unreviewedInput.checked = !!ui.advancedFilterUnreviewedEl.checked;
+  invalidArInput.checked = !!ui.advancedFilterInvalidArEl.checked;
+  mediaGridSyncFilterToggle('media-grid-filter-unreviewed');
   mediaGridSyncFilterToggle('media-grid-filter-invalid-ar');
   mediaGridSyncFilterChipGroup('media-grid-filter-stars', getAdvancedStarFilterValues());
+  mediaGridSyncFilterChipGroup('media-grid-filter-flags', getAdvancedFlagFilterValues());
   var hiddenFiltersActive = !!(
-    String(ui.filterEl.value || '').trim() ||
     ui.advancedFilterMissingCaptionsEl.checked ||
     ui.advancedFilterReviewedEl.checked ||
-    ui.advancedFilterUnreviewedEl.checked ||
     ui.advancedFilterIncompleteEl.checked ||
     ui.advancedFilterUntaggedEl.checked ||
-    ui.advancedFilterSupersetEl.checked ||
-    getAdvancedFlagFilterValues().length
+    ui.advancedFilterSupersetEl.checked
   );
-  document.getElementById('media-grid-other-filters').classList.toggle('hidden', !hiddenFiltersActive);
+  var otherFiltersHint = document.getElementById('media-grid-other-filters');
+  if (otherFiltersHint) {
+    otherFiltersHint.classList.toggle('hidden', !hiddenFiltersActive);
+  }
 }
 
 function mediaGridSyncFilterToggle(inputId) {
@@ -302,11 +706,99 @@ function mediaGridSyncFilterChipGroup(containerId, activeValues) {
   activeValues.forEach(function (value) {
     active[String(value)] = true;
   });
-  var buttons = document.getElementById(containerId).querySelectorAll('[data-filter-value]');
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  var buttons = container.querySelectorAll('[data-filter-value]');
   for (var i = 0; i < buttons.length; i++) {
     var value = buttons[i].getAttribute('data-filter-value');
     buttons[i].classList.toggle('active', !!active[value]);
   }
+}
+
+function mediaGridSetRailCollapsed(collapsed) {
+  mediaGridState.railCollapsed = !!collapsed;
+  renderMediaGridLeftRail();
+}
+
+function mediaGridRenderFocusList() {
+  var els = mediaGridGetEls();
+  if (!els.focusList) return;
+  els.focusList.innerHTML = '';
+  var activeSet = mediaGridGetActiveFocusSet();
+  (mediaGridState.focusSets || []).filter(function (entry) {
+    return entry && entry.count > 0;
+  }).forEach(function (entry) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'media-grid-focus-btn' + (activeSet && activeSet.key === entry.key ? ' active' : '');
+    btn.title = entry.tooltip;
+    btn.onclick = function () {
+      mediaGridState.focusSetKey = entry.key;
+      renderMediaGridModal();
+    };
+
+    var labelWrap = document.createElement('span');
+    labelWrap.className = 'media-grid-focus-btn-main';
+    var label = document.createElement('span');
+    label.className = 'media-grid-focus-btn-label';
+    label.textContent = entry.label;
+    labelWrap.appendChild(label);
+    btn.appendChild(labelWrap);
+
+    var count = document.createElement('span');
+    count.className = 'media-grid-focus-btn-count';
+    count.textContent = String(entry.count);
+    btn.appendChild(count);
+
+    els.focusList.appendChild(btn);
+  });
+}
+
+function renderMediaGridLeftRail() {
+  var els = mediaGridGetEls();
+  if (!els.rail || !els.railCollapseBtn) return;
+  els.rail.classList.toggle('is-collapsed', !!mediaGridState.railCollapsed);
+  els.railHint.textContent = mediaGridState.baseItems.length + ' visible in ' + mediaGridGetSourceLabel();
+  els.railCollapseBtn.textContent = mediaGridState.railCollapsed ? '>' : '<';
+  els.railCollapseBtn.title = mediaGridState.railCollapsed ? 'Expand left rail' : 'Collapse left rail';
+  els.railCollapseBtn.setAttribute('aria-label', mediaGridState.railCollapsed ? 'Expand left rail' : 'Collapse left rail');
+  els.focusMeta.textContent = mediaGridState.baseItems.length + ' visible';
+  var loading = typeof isMediaMetadataLoading === 'function' && isMediaMetadataLoading();
+  els.focusLoading.textContent = loading ? 'Metadata-driven sets will sharpen as analysis finishes.' : '';
+  els.focusLoading.classList.toggle('hidden', !loading);
+  mediaGridRenderFocusList();
+}
+
+function renderMediaGridActiveScope() {
+  var els = mediaGridGetEls();
+  if (!els.activeSet) return;
+  els.activeSet.innerHTML = '';
+  var activeSet = mediaGridGetActiveFocusSet();
+  if (!activeSet) return;
+
+  var titleWrap = document.createElement('div');
+  titleWrap.className = 'media-grid-active-set-copy';
+
+  var title = document.createElement('div');
+  title.className = 'media-grid-active-set-title';
+  title.textContent = activeSet.label;
+  title.title = activeSet.tooltip;
+  titleWrap.appendChild(title);
+
+  var meta = document.createElement('div');
+  meta.className = 'media-grid-active-set-meta';
+  if (activeSet.key === 'all') {
+    meta.textContent = mediaGridState.items.length + ' visible in the current working scope';
+  } else {
+    meta.textContent = mediaGridState.items.length + ' of ' + mediaGridState.baseItems.length + ' visible match this focus set';
+  }
+  titleWrap.appendChild(meta);
+  els.activeSet.appendChild(titleWrap);
+
+  var scopeBadge = document.createElement('div');
+  scopeBadge.className = 'media-grid-active-set-badge';
+  scopeBadge.textContent = mediaGridGetSourceLabel();
+  els.activeSet.appendChild(scopeBadge);
 }
 
 function renderMediaGridCanvas() {
@@ -645,123 +1137,13 @@ function mediaGridPasteTagsToSelected() {
 }
 
 function mediaGridRefreshAfterMutation() {
-  mediaGridPruneAgainstCurrentVisibleSet();
-  if (mediaGridState.viewerKey && !mediaGridFindItemByKey(mediaGridState.viewerKey)) {
-    closeMediaGridViewer();
-  }
-  renderMediaGridHeader();
-  if (!mediaGridState.items.length) {
-    renderMediaGridCanvas();
-    renderMediaGridSidebar();
-    return;
-  }
-  mediaGridSyncCanvasAfterMutation();
-  mediaGridSyncSelectionDisplay();
-  renderMediaGridSidebar();
+  if (!mediaGridState.open) return;
+  renderMediaGridModal();
 }
 
 function mediaGridRefreshFromCurrentFilters() {
   if (!mediaGridState.open) return;
-  var nextItems = mediaGridGetVisibleItems();
-  var keep = {};
-  nextItems.forEach(function (item) {
-    keep[item.key] = true;
-  });
-  Array.from(mediaGridState.selectedKeys).forEach(function (key) {
-    if (!keep[key]) mediaGridState.selectedKeys.delete(key);
-  });
-  if (mediaGridState.lastSelectedKey && !keep[mediaGridState.lastSelectedKey]) {
-    mediaGridState.lastSelectedKey = '';
-  }
-  mediaGridState.items = nextItems;
-  if (mediaGridState.viewerKey && !keep[mediaGridState.viewerKey]) {
-    closeMediaGridViewer();
-  }
   renderMediaGridModal();
-}
-
-function mediaGridPruneAgainstCurrentVisibleSet() {
-  var visible = mediaGridGetVisibleItems();
-  var keep = {};
-  visible.forEach(function (item) {
-    keep[item.key] = true;
-  });
-  var nextItems = [];
-  mediaGridState.items.forEach(function (item) {
-    if (keep[item.key]) {
-      nextItems.push(item);
-      return;
-    }
-    mediaGridState.selectedKeys.delete(item.key);
-    if (mediaGridState.lastSelectedKey === item.key) {
-      mediaGridState.lastSelectedKey = '';
-    }
-  });
-  mediaGridState.items = nextItems;
-}
-
-function mediaGridSyncCanvasAfterMutation() {
-  var els = mediaGridGetEls();
-  var itemsByKey = {};
-  mediaGridState.items.forEach(function (item) {
-    itemsByKey[item.key] = item;
-  });
-  var tiles = els.canvas.querySelectorAll('.media-grid-tile[data-key]');
-  for (var i = 0; i < tiles.length; i++) {
-    var tile = tiles[i];
-    var key = tile.getAttribute('data-key');
-    var item = itemsByKey[key];
-    if (!item) {
-      tile.parentNode.removeChild(tile);
-      continue;
-    }
-    var thumb = tile.querySelector('.media-grid-thumb-wrap');
-    if (!thumb) continue;
-    var oldBadges = thumb.querySelector('.media-grid-badges');
-    if (oldBadges) oldBadges.parentNode.removeChild(oldBadges);
-    mediaGridAppendTileBadges(thumb, item);
-  }
-}
-
-function renderMediaGridSidebar() {
-  var els = mediaGridGetEls();
-  els.sidebar.innerHTML = '';
-  els.sidebar.appendChild(mediaGridBuildSidebarHeader());
-
-  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
-  if (!requirements.length) {
-    var empty = document.createElement('div');
-    empty.className = 'media-grid-empty';
-    empty.textContent = 'No tag groups configured.';
-    els.sidebar.appendChild(empty);
-    return;
-  }
-
-  requirements.forEach(function (requirementLabel) {
-    var terms = getChecklistKeywordTermsForRequirement(requirementLabel);
-    var group = document.createElement('details');
-    group.className = 'media-grid-tag-group media-grid-tag-group--' + mediaGridGetTagGroupState(terms);
-    group.open = true;
-    var summary = document.createElement('summary');
-    summary.className = 'media-grid-tag-group-summary';
-    summary.appendChild(mediaGridBuildTagGroupHeader(requirementLabel));
-    group.appendChild(summary);
-
-    var list = document.createElement('div');
-    list.className = 'media-grid-tag-list';
-    if (!terms.length) {
-      var emptyTerms = document.createElement('div');
-      emptyTerms.className = 'media-grid-empty';
-      emptyTerms.textContent = 'No tags in this group.';
-      list.appendChild(emptyTerms);
-    } else {
-      terms.forEach(function (term) {
-        list.appendChild(mediaGridBuildTagChip(term));
-      });
-    }
-    group.appendChild(list);
-    els.sidebar.appendChild(group);
-  });
 }
 
 function mediaGridBuildSidebarHeader() {
@@ -774,12 +1156,12 @@ function mediaGridBuildSidebarHeader() {
 
   var title = document.createElement('div');
   title.className = 'media-grid-sidebar-title';
-  title.textContent = 'Tags';
+  title.textContent = 'Actions';
   titleWrap.appendChild(title);
 
   var hint = document.createElement('div');
   hint.className = 'media-grid-sidebar-hint';
-  hint.textContent = 'Select items, then click tags to add or remove them.';
+  hint.textContent = 'Select items, then rate or tag them from this rail.';
   titleWrap.appendChild(hint);
 
   var pasteBtn = document.createElement('button');
@@ -791,6 +1173,38 @@ function mediaGridBuildSidebarHeader() {
   pasteBtn.disabled = !canPaste;
   pasteBtn.onclick = mediaGridPasteTagsToSelected;
   wrap.appendChild(pasteBtn);
+
+  return wrap;
+}
+
+function mediaGridBuildSelectionPanel() {
+  var selectedCount = mediaGridState.selectedKeys.size;
+  var wrap = document.createElement('div');
+  wrap.className = 'media-grid-selection-panel';
+
+  var summary = document.createElement('div');
+  summary.className = 'media-grid-selection-summary';
+  summary.textContent = selectedCount > 0
+    ? (selectedCount + ' selected')
+    : 'No items selected';
+  wrap.appendChild(summary);
+
+  var ratingRow = document.createElement('div');
+  ratingRow.className = 'media-grid-rating-controls';
+  var values = [0, 1, 2, 3, 4, 5];
+  values.forEach(function (rating) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'media-grid-btn media-grid-rating-btn';
+    btn.disabled = selectedCount <= 0;
+    btn.textContent = rating <= 0 ? '0' : '\u2605' + rating;
+    btn.title = rating <= 0 ? 'Clear rating on selected items' : ('Set ' + rating + ' star rating on selected items');
+    btn.onclick = function () {
+      mediaGridApplyRating(rating);
+    };
+    ratingRow.appendChild(btn);
+  });
+  wrap.appendChild(ratingRow);
 
   return wrap;
 }
@@ -897,6 +1311,53 @@ function mediaGridToggleTagForSelection(term, stateName) {
   });
   mediaGridSetStatus((remove ? 'Removed' : 'Added') + ' "' + term + '" on ' + changed + ' item' + (changed === 1 ? '' : 's') + '.');
   mediaGridRefreshAfterMutation();
+}
+
+function renderMediaGridSidebar() {
+  var els = mediaGridGetEls();
+  els.sidebar.innerHTML = '';
+  els.sidebar.appendChild(mediaGridBuildSidebarHeader());
+  els.sidebar.appendChild(mediaGridBuildSelectionPanel());
+
+  var sectionTitle = document.createElement('div');
+  sectionTitle.className = 'media-grid-sidebar-title media-grid-sidebar-section-title';
+  sectionTitle.textContent = 'Tags';
+  els.sidebar.appendChild(sectionTitle);
+
+  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  if (!requirements.length) {
+    var empty = document.createElement('div');
+    empty.className = 'media-grid-empty';
+    empty.textContent = 'No tag groups configured.';
+    els.sidebar.appendChild(empty);
+    return;
+  }
+
+  requirements.forEach(function (requirementLabel) {
+    var terms = getChecklistKeywordTermsForRequirement(requirementLabel);
+    var group = document.createElement('details');
+    group.className = 'media-grid-tag-group media-grid-tag-group--' + mediaGridGetTagGroupState(terms);
+    group.open = true;
+    var summary = document.createElement('summary');
+    summary.className = 'media-grid-tag-group-summary';
+    summary.appendChild(mediaGridBuildTagGroupHeader(requirementLabel));
+    group.appendChild(summary);
+
+    var list = document.createElement('div');
+    list.className = 'media-grid-tag-list';
+    if (!terms.length) {
+      var emptyTerms = document.createElement('div');
+      emptyTerms.className = 'media-grid-empty';
+      emptyTerms.textContent = 'No tags in this group.';
+      list.appendChild(emptyTerms);
+    } else {
+      terms.forEach(function (term) {
+        list.appendChild(mediaGridBuildTagChip(term));
+      });
+    }
+    group.appendChild(list);
+    els.sidebar.appendChild(group);
+  });
 }
 
 function mediaGridHandleKeydown(e) {

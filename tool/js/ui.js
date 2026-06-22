@@ -239,6 +239,9 @@ function updateFocusSetUi() {
       ui.focusSetBannerMetaEl.textContent = '';
     }
   }
+  if (ui.focusSetGridBtn) {
+    ui.focusSetGridBtn.classList.toggle('hidden', !hasFocusSet);
+  }
   if (ui.focusSetReturnBtn) {
     ui.focusSetReturnBtn.classList.toggle('hidden', !(hasFocusSet && reportLabel));
     ui.focusSetReturnBtn.title = reportLabel ? 'Return to ' + reportLabel : 'Return to report';
@@ -248,6 +251,7 @@ function updateFocusSetUi() {
     ui.focusSetExitBtn.title = 'Exit focus set';
     ui.focusSetExitBtn.setAttribute('aria-label', 'Exit focus set');
   }
+  mediaGridUpdateEntryVisibility();
 }
 
 function clearFocusSet() {

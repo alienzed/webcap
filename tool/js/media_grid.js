@@ -389,9 +389,15 @@ function mediaGridCreateEntryButton() {
 
 function mediaGridUpdateEntryVisibility() {
   var btn = document.getElementById('media-grid-open-btn');
-  if (!btn) return;
+  var focusBtn = document.getElementById('focus-set-grid-btn');
   var hasVisibleMedia = mediaGridGetVisibleItems().length > 0;
-  btn.classList.toggle('hidden', !hasVisibleMedia);
+  var hasFocusSet = !!(state && state.focusSet && state.focusSet.keys && state.focusSet.keys.length);
+  if (btn) {
+    btn.classList.toggle('hidden', !hasVisibleMedia || hasFocusSet);
+  }
+  if (focusBtn) {
+    focusBtn.classList.toggle('hidden', !(hasVisibleMedia && hasFocusSet));
+  }
 }
 
 function mediaGridCreateModal() {
@@ -819,6 +825,16 @@ function renderMediaGridCanvas() {
   els.canvas.appendChild(grid);
 }
 
+function mediaGridOpenItemInMainWorkspace(mediaKey) {
+  var item = mediaGridFindItemByKey(mediaKey);
+  if (!item) {
+    mediaGridSetStatus('Item is no longer visible in Grid.');
+    return;
+  }
+  closeMediaGridModal();
+  selectByFileName(item.fileName);
+}
+
 function mediaGridBuildTile(mediaItem) {
   var selected = mediaGridState.selectedKeys.has(mediaItem.key);
   var tile = document.createElement('button');
@@ -832,7 +848,7 @@ function mediaGridBuildTile(mediaItem) {
   tile.ondblclick = function (e) {
     e.preventDefault();
     e.stopPropagation();
-    toggleMediaGridViewer(mediaItem.key);
+    mediaGridOpenItemInMainWorkspace(mediaItem.key);
   };
   tile.oncontextmenu = function (e) {
     mediaGridHandleTileContextMenu(mediaItem, e);

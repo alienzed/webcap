@@ -21,6 +21,12 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+#checklist-keywords-modal,
+#checklist-group-terms-modal,
+#checklist-term-affixes-modal {
+  z-index: 3151;
+}
+
 .modal.hidden {
   display: none;
 }
@@ -33,6 +39,10 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.3);
   z-index: 999;
+}
+
+#modal-overlay {
+  z-index: 3150;
 }
 
 .modal-overlay.hidden {

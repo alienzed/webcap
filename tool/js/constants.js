@@ -43,6 +43,7 @@ ui = {
   mediaListWrapperEl: document.getElementById('media-list-wrapper'),
   focusSetBannerEl: document.getElementById('focus-set-banner'),
   focusSetBannerMetaEl: document.getElementById('focus-set-banner-meta'),
+  focusSetGridBtn: document.getElementById('focus-set-grid-btn'),
   focusSetReturnBtn: document.getElementById('focus-set-return-btn'),
   mediaListEl: document.getElementById('media-list'),
   filterEl: document.getElementById('media-filter'),

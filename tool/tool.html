@@ -25,9 +25,17 @@
     </head>
     <body>
         <div class="app">
-            <div class="panel stack">
+            <div id="sidebar-panel" class="panel stack sidebar-panel">
                 <div class="panel-scrollable">
                     <div id="utility-bar" class="utility-bar">
+                        <button
+                            id="sidebar-collapse-toggle-btn"
+                            type="button"
+                            class="utility-btn utility-path-btn utility-collapse-btn"
+                            title="Collapse sidebar"
+                            aria-label="Collapse sidebar"
+                            aria-pressed="false"
+                        >&lt;</button>
                         <button
                             id="utility-current-path-btn"
                             type="button"
@@ -75,6 +83,7 @@
                             aria-pressed="false"
                         >Dark</button>
                     </div>
+                    <div id="sidebar-content" class="sidebar-content">
                     <div id="caption-filter-row" class="filter-row">
                         <input id="media-filter" type="search" placeholder="filter (comma terms, -exclude)">
                         <button
@@ -286,176 +295,205 @@
                         >Exit SuperSet Search</button>
                     </div>
                     <div class="stats-panel">
-                        <button id="create-set-from-results-btn" type="button" class="review-captions-btn hidden" title="Create a new set with the current filter results" style="width:100%;margin-bottom:6px;">
-                            <span class="btn-glyph" aria-hidden="true">&#8627;</span>
-                            <span>Create Set</span>
-                        </button>
-                        <div class="sidebar-action-strip">
-                            <button id="review-selections-btn" type="button" class="review-captions-btn hidden" title="Selection analysis with current filter results">
-                                <span class="btn-glyph" aria-hidden="true">&#9678;</span>
-                                <span>Selection Analysis</span>
-                            </button>
-                            <button id="review-captions-btn" type="button" class="review-captions-btn hidden" title="Review captions with current filter results">
-                                <span class="btn-glyph" aria-hidden="true">&#9654;</span>
-                                <span>Review Captions</span>
-                            </button>
-                        </div>
-                        <div id="sidebar-workspace" class="sidebar-workspace">
-                            <div class="sidebar-tabs" role="tablist" aria-label="Set tools">
+                        <div class="sidebar-tool-panel sidebar-view-tools">
+                            <div class="sidebar-tool-panel-header">Views</div>
+                            <div class="sidebar-view-actions">
                                 <button
-                                    id="sidebar-tab-config-btn"
+                                    id="sidebar-open-grid-btn"
                                     type="button"
-                                    class="sidebar-tab-btn"
-                                    data-sidebar-tab="config"
-                                    role="tab"
-                                    aria-selected="false"
-                                    aria-controls="primer-details"
-                                    tabindex="-1"
-                                >Config</button>
+                                    class="review-captions-btn sidebar-view-btn"
+                                    title="Open Media Grid for the current visible items"
+                                >
+                                    <span class="media-grid-open-icon" aria-hidden="true">
+                                        <span></span><span></span><span></span><span></span>
+                                    </span>
+                                    <span>Open Grid</span>
+                                </button>
                                 <button
-                                    id="sidebar-tab-review-btn"
+                                    id="sidebar-open-focused-btn"
                                     type="button"
-                                    class="sidebar-tab-btn active"
-                                    data-sidebar-tab="review"
-                                    role="tab"
-                                    aria-selected="true"
-                                    aria-controls="cation-review"
-                                >Review</button>
-                                <button
-                                    id="sidebar-tab-train-btn"
-                                    type="button"
-                                    class="sidebar-tab-btn"
-                                    data-sidebar-tab="train"
-                                    role="tab"
-                                    aria-selected="false"
-                                    aria-controls="training-details"
-                                    tabindex="-1"
-                                >Train</button>
+                                    class="review-captions-btn sidebar-view-btn"
+                                    title="Open Focused Annotation for the selected item"
+                                >
+                                    <span class="btn-glyph" aria-hidden="true">&#9998;</span>
+                                    <span>Focus Annotate</span>
+                                </button>
                             </div>
-                            <div
-                                id="primer-details"
-                                class="sidebar-tab-pane hidden"
-                                role="tabpanel"
-                                aria-labelledby="sidebar-tab-config-btn"
-                                aria-hidden="true"
-                            >
-                                <div class="stats-controls">
-                                    <div class="section-label-inline">
-                                        <label>Caption Template</label>
-                                        <button
-                                            id="primer-template-info-btn"
-                                            type="button"
-                                            class="mini-info-btn"
-                                            title="Caption template help"
-                                            aria-label="Caption template help"
-                                        >i</button>
-                                    </div>
-                                    <textarea id="primer-template" rows="9">{position }{surface, }{setting, }{body, }
+                        </div>
+                        <div class="sidebar-tool-panel sidebar-set-tools">
+                            <div class="sidebar-tool-panel-header">Set Tools</div>
+                            <button id="create-set-from-results-btn" type="button" class="review-captions-btn sidebar-create-set-btn hidden" title="Create a new set with the current filter results">
+                                <span class="btn-glyph" aria-hidden="true">&#8627;</span>
+                                <span>Create Set</span>
+                            </button>
+                            <div class="sidebar-action-strip">
+                                <button id="review-selections-btn" type="button" class="review-captions-btn hidden" title="Selection analysis with current filter results">
+                                    <span class="btn-glyph" aria-hidden="true">&#9678;</span>
+                                    <span>Selection Analysis</span>
+                                </button>
+                                <button id="review-captions-btn" type="button" class="review-captions-btn hidden" title="Review captions with current filter results">
+                                    <span class="btn-glyph" aria-hidden="true">&#9654;</span>
+                                    <span>Review Captions</span>
+                                </button>
+                            </div>
+                            <div id="sidebar-workspace" class="sidebar-workspace">
+                                <div class="sidebar-tabs" role="tablist" aria-label="Set tools">
+                                    <button
+                                        id="sidebar-tab-config-btn"
+                                        type="button"
+                                        class="sidebar-tab-btn"
+                                        data-sidebar-tab="config"
+                                        role="tab"
+                                        aria-selected="false"
+                                        aria-controls="primer-details"
+                                        tabindex="-1"
+                                    >Config</button>
+                                    <button
+                                        id="sidebar-tab-review-btn"
+                                        type="button"
+                                        class="sidebar-tab-btn active"
+                                        data-sidebar-tab="review"
+                                        role="tab"
+                                        aria-selected="true"
+                                        aria-controls="cation-review"
+                                    >Review</button>
+                                    <button
+                                        id="sidebar-tab-train-btn"
+                                        type="button"
+                                        class="sidebar-tab-btn"
+                                        data-sidebar-tab="train"
+                                        role="tab"
+                                        aria-selected="false"
+                                        aria-controls="training-details"
+                                        tabindex="-1"
+                                    >Train</button>
+                                </div>
+                                <div
+                                    id="primer-details"
+                                    class="sidebar-tab-pane hidden"
+                                    role="tabpanel"
+                                    aria-labelledby="sidebar-tab-config-btn"
+                                    aria-hidden="true"
+                                >
+                                    <div class="stats-controls">
+                                        <div class="section-label-inline">
+                                            <label>Caption Template</label>
+                                            <button
+                                                id="primer-template-info-btn"
+                                                type="button"
+                                                class="mini-info-btn"
+                                                title="Caption template help"
+                                                aria-label="Caption template help"
+                                            >i</button>
+                                        </div>
+                                        <textarea id="primer-template" rows="9">{position }{surface, }{setting, }{body, }
 {clothing, }{traits, }{expression, }
 {background, }
 {lighting} lighting, {view } view.</textarea>
-                                    <div class="primer-template-placeholder-row">
-                                        <div class="primer-template-placeholder-label">Insert group placeholder</div>
-                                        <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
+                                        <div class="primer-template-placeholder-row">
+                                            <div class="primer-template-placeholder-label">Insert group placeholder</div>
+                                            <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
+                                        </div>
+                                        <label>Set Notes</label>
+                                        <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
                                     </div>
-                                    <label>Set Notes</label>
-                                    <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
                                 </div>
-                            </div>
-                            <div
-                                id="cation-review"
-                                class="sidebar-tab-pane"
-                                role="tabpanel"
-                                aria-labelledby="sidebar-tab-review-btn"
-                                aria-hidden="false"
-                            >
-                                <div class="stats-controls">
-                                    <label>Required key phrase</label>
-                                    <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
-                                    <div class="section-label-inline">
-                                        <label>Balance Phrases</label>
-                                        <button
-                                            id="stats-balance-info-btn"
-                                            type="button"
-                                            class="mini-info-btn"
-                                            title="Balance phrases help"
-                                            aria-label="Balance phrases help"
-                                        >i</button>
-                                    </div>
-                                    <div class="checklist-input-row stats-balance-input-row term-input-row">
-                                        <input
-                                            id="stats-phrases-add-input"
-                                            type="text"
-                                            class="form-control"
-                                            placeholder="Add balance phrase..."
-                                        >
-                                        <button id="stats-phrases-add-btn" type="button">+</button>
-                                        <div id="stats-phrases-add-results" class="caption-term-results hidden"></div>
-                                    </div>
-                                    <div id="stats-phrases-items"></div>
-                                    <textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down
+                                <div
+                                    id="cation-review"
+                                    class="sidebar-tab-pane"
+                                    role="tabpanel"
+                                    aria-labelledby="sidebar-tab-review-btn"
+                                    aria-hidden="false"
+                                >
+                                    <div class="stats-controls">
+                                        <label>Required key phrase</label>
+                                        <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
+                                        <div class="section-label-inline">
+                                            <label>Balance Phrases</label>
+                                            <button
+                                                id="stats-balance-info-btn"
+                                                type="button"
+                                                class="mini-info-btn"
+                                                title="Balance phrases help"
+                                                aria-label="Balance phrases help"
+                                            >i</button>
+                                        </div>
+                                        <div class="checklist-input-row stats-balance-input-row term-input-row">
+                                            <input
+                                                id="stats-phrases-add-input"
+                                                type="text"
+                                                class="form-control"
+                                                placeholder="Add balance phrase..."
+                                            >
+                                            <button id="stats-phrases-add-btn" type="button">+</button>
+                                            <div id="stats-phrases-add-results" class="caption-term-results hidden"></div>
+                                        </div>
+                                        <div id="stats-phrases-items"></div>
+                                        <textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down
                                     face up
                                     front view
                                     back view"></textarea>
-                                    <div class="section-label-inline">
-                                        <label>Rules</label>
-                                        <button
-                                            id="review-rules-info-btn"
-                                            type="button"
-                                            class="mini-info-btn"
-                                            title="Rules help"
-                                            aria-label="Rules help"
-                                        >i</button>
-                                    </div>
-                                    <div class="stats-advanced-inline-row">
-                                        <button id="review-rules-edit-btn" type="button">Edit Rules</button>
-                                        <span id="review-rules-summary" class="small">No review rules configured.</span>
+                                        <div class="section-label-inline">
+                                            <label>Rules</label>
+                                            <button
+                                                id="review-rules-info-btn"
+                                                type="button"
+                                                class="mini-info-btn"
+                                                title="Rules help"
+                                                aria-label="Rules help"
+                                            >i</button>
+                                        </div>
+                                        <div class="stats-advanced-inline-row">
+                                            <button id="review-rules-edit-btn" type="button">Edit Rules</button>
+                                            <span id="review-rules-summary" class="small">No review rules configured.</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div
-                                id="training-details"
-                                class="sidebar-tab-pane hidden"
-                                role="tabpanel"
-                                aria-labelledby="sidebar-tab-train-btn"
-                                aria-hidden="true"
-                            >
-                                <div class="training-controls">
-                                    <div id="training-config-list" class="training-config-list">No config files.</div>
-                                    <div class="training-actions">
-                                        <button
-                                            id="training-prepare-dataset-btn"
-                                            type="button"
-                                            class="training-btn training-prepare-btn"
-                                            title="Sorts the files into Aspect Ratio folders while converting video to 16fps."
-                                        >
-                                            <span class="btn-glyph" aria-hidden="true">&#8635;</span>
-                                            <span>Prepare Dataset</span>
-                                        </button>
-                                        <div class="training-actions-secondary">
+                                <div
+                                    id="training-details"
+                                    class="sidebar-tab-pane hidden"
+                                    role="tabpanel"
+                                    aria-labelledby="sidebar-tab-train-btn"
+                                    aria-hidden="true"
+                                >
+                                    <div class="training-controls">
+                                        <div id="training-config-list" class="training-config-list">No config files.</div>
+                                        <div class="training-actions">
                                             <button
-                                                id="training-generate-btn"
+                                                id="training-prepare-dataset-btn"
                                                 type="button"
-                                                class="training-btn"
-                                                title="Generate config files"
+                                                class="training-btn training-prepare-btn"
+                                                title="Sorts the files into Aspect Ratio folders while converting video to 16fps."
                                             >
-                                                <span class="btn-glyph" aria-hidden="true">&#9881;</span>
-                                                <span>Generate</span>
+                                                <span class="btn-glyph" aria-hidden="true">&#8635;</span>
+                                                <span>Prepare Dataset</span>
                                             </button>
-                                            <button
-                                                id="training-train-btn"
-                                                type="button"
-                                                class="training-btn"
-                                                title="Run training"
-                                            >
-                                                <span class="btn-glyph" aria-hidden="true">&#9002;</span>
-                                                <span>Train</span>
-                                            </button>
+                                            <div class="training-actions-secondary">
+                                                <button
+                                                    id="training-generate-btn"
+                                                    type="button"
+                                                    class="training-btn"
+                                                    title="Generate config files"
+                                                >
+                                                    <span class="btn-glyph" aria-hidden="true">&#9881;</span>
+                                                    <span>Generate</span>
+                                                </button>
+                                                <button
+                                                    id="training-train-btn"
+                                                    type="button"
+                                                    class="training-btn"
+                                                    title="Run training"
+                                                >
+                                                    <span class="btn-glyph" aria-hidden="true">&#9002;</span>
+                                                    <span>Train</span>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
                 <div id="status" class="status status-bar">
@@ -616,6 +654,10 @@
             </div>
             <div class="panel">
                 <div id="preview-shell" class="preview-shell">
+                    <div id="preview-header" class="preview-header hidden" aria-label="Preview summary">
+                        <div id="preview-header-file" class="preview-header-file"></div>
+                        <div id="preview-header-meta" class="preview-header-meta"></div>
+                    </div>
                     <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
                     <div id="balance-distribution-wheel" class="balance-distribution-wheel hidden" tabindex="0" aria-label="Balance distribution"></div>
                     <div id="preview-actions" class="preview-actions hidden" aria-label="Preview actions">

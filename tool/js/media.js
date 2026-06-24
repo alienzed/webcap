@@ -519,6 +519,9 @@ function selectPathMedia(mediaItem) {
     }
     state.currentItem = mediaItem;
     state.currentConfigFile = null;
+    if (typeof setWorkspaceViewMode === 'function') {
+      setWorkspaceViewMode('single');
+    }
     ui.editorEl.removeAttribute('readonly');
     ui.editorEl.value = nextEditorValue;
     renderPathPreview(state.folder, mediaItem.fileName);
@@ -698,6 +701,9 @@ async function renderFileList() {
   }
   if (typeof mediaGridRefreshFromCurrentFilters === 'function') {
     mediaGridRefreshFromCurrentFilters();
+  }
+  if (typeof updateSidebarSurfaceTools === 'function') {
+    updateSidebarSurfaceTools();
   }
   // Show count of matching media items, or SuperSet results when that mode is active.
   var countValue = mediaItems.length;

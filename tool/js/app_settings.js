@@ -212,6 +212,10 @@ function updateUtilityPathLabel(pathText) {
     tooltipPath = tooltipPath ? (rootLabel + '/' + tooltipPath) : rootLabel;
   }
   ui.utilityCurrentPathBtn.title = tooltipPath ? ('Current folder: ' + tooltipPath) : 'Current folder';
+  var labelEl = document.getElementById('utility-path-label');
+  if (labelEl) {
+    labelEl.textContent = tooltipPath || 'Workspace';
+  }
   refreshUtilityPathFlyout();
 
 }

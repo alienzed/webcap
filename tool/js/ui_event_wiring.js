@@ -296,6 +296,22 @@ function wireMiscActionButtons() {
     };
   }
 
+  if (ui.sidebarGridBtnEl) {
+    ui.sidebarGridBtnEl.onclick = function () {
+      if (typeof openMediaGridModal === 'function') {
+        openMediaGridModal();
+      }
+    };
+  }
+
+  if (ui.sidebarFocusBtnEl) {
+    ui.sidebarFocusBtnEl.onclick = function () {
+      if (typeof openFocusedAnnotationModal === 'function') {
+        openFocusedAnnotationModal();
+      }
+    };
+  }
+
   if (ui.createSetFromResultsBtn) {
     ui.createSetFromResultsBtn.onclick = function () {
       runCreateSetFromResultsFlow();
@@ -370,4 +386,7 @@ function wireMainUiEvents() {
   wireTrainingButtons();
   wireMiscActionButtons();
   wireReportLinks();
+  if (typeof updateSidebarSurfaceTools === 'function') {
+    updateSidebarSurfaceTools();
+  }
 }

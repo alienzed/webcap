@@ -30,9 +30,13 @@ state = {
 };
 // Define global UI object (all static elements)
 ui = {
+  appEl: document.querySelector('.app'),
   editorEl: document.getElementById('editor'),
   editorApplyPrimerBtn: document.getElementById('editor-apply-primer-btn'),
   previewEl: document.getElementById('preview'),
+  previewHeaderEl: document.getElementById('preview-header'),
+  previewHeaderFileEl: document.getElementById('preview-header-file'),
+  previewHeaderMetaEl: document.getElementById('preview-header-meta'),
   previewActionsEl: document.getElementById('preview-actions'),
   previewMutationIndicatorEl: document.getElementById('preview-mutation-indicator'),
   previewPrimaryActionAEl: document.getElementById('preview-action-primary-a'),
@@ -45,6 +49,10 @@ ui = {
   focusSetBannerMetaEl: document.getElementById('focus-set-banner-meta'),
   focusSetGridBtn: document.getElementById('focus-set-grid-btn'),
   focusSetReturnBtn: document.getElementById('focus-set-return-btn'),
+  sidebarCollapseToggleBtn: document.getElementById('sidebar-collapse-toggle-btn'),
+  sidebarContentEl: document.getElementById('sidebar-content'),
+  sidebarGridBtnEl: document.getElementById('sidebar-open-grid-btn'),
+  sidebarFocusBtnEl: document.getElementById('sidebar-open-focused-btn'),
   mediaListEl: document.getElementById('media-list'),
   filterEl: document.getElementById('media-filter'),
   captionFilterClearAllBtn: document.getElementById('caption-filter-clear-all-btn'),

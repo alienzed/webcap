@@ -272,6 +272,7 @@ function debounceCreate(waitMs) {
 }
 
 var APP_THEME_STORAGE_KEY = 'webcap.theme';
+var APP_SIDEBAR_COLLAPSED_STORAGE_KEY = 'webcap.sidebarCollapsed';
 
 function getStoredAppTheme() {
   try {
@@ -344,13 +345,61 @@ function wireThemeToggleUi() {
   applyAppTheme(getInitialAppTheme(), false);
 }
 
+function getStoredSidebarCollapsed() {
+  try {
+    return localStorage.getItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
+  } catch (e) {}
+  return false;
+}
+
+function updateSidebarCollapseUi(collapsed) {
+  if (!ui || !ui.sidebarCollapseToggleBtn) return;
+  ui.sidebarCollapseToggleBtn.textContent = collapsed ? '>' : '<';
+  ui.sidebarCollapseToggleBtn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  ui.sidebarCollapseToggleBtn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  ui.sidebarCollapseToggleBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+}
+
+function setSidebarCollapsed(collapsed, persist) {
+  var next = !!collapsed;
+  if (ui && ui.appEl) {
+    ui.appEl.classList.toggle('left-rail-collapsed', next);
+  }
+  if (persist) {
+    try {
+      localStorage.setItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY, next ? 'true' : 'false');
+    } catch (e) {}
+  }
+  updateSidebarCollapseUi(next);
+  return next;
+}
+
+function toggleSidebarCollapsed() {
+  var next = !(ui && ui.appEl && ui.appEl.classList.contains('left-rail-collapsed'));
+  return setSidebarCollapsed(next, true);
+}
+
+function wireSidebarCollapseUi() {
+  if (ui && ui.sidebarCollapseToggleBtn && !ui.sidebarCollapseToggleBtn.__sidebarCollapseWired) {
+    ui.sidebarCollapseToggleBtn.__sidebarCollapseWired = true;
+    ui.sidebarCollapseToggleBtn.onclick = function () {
+      toggleSidebarCollapsed();
+    };
+  }
+  setSidebarCollapsed(getStoredSidebarCollapsed(), false);
+}
+
 window.applyAppTheme = applyAppTheme;
 window.toggleAppTheme = toggleAppTheme;
 window.wireThemeToggleUi = wireThemeToggleUi;
 window.getCurrentAppTheme = getCurrentAppTheme;
+window.setSidebarCollapsed = setSidebarCollapsed;
+window.toggleSidebarCollapsed = toggleSidebarCollapsed;
+window.wireSidebarCollapseUi = wireSidebarCollapseUi;
 window.refreshCurrentPrimerDerivedUi = refreshCurrentPrimerDerivedUi;
 
 wireThemeToggleUi();
+wireSidebarCollapseUi();
 
 
 // Network helper functions

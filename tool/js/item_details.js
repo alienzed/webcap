@@ -275,6 +275,32 @@ function getRatingForMediaKey(mediaKey) {
   return normalizeRatingValue(state.ratings[mediaKey]);
 }
 
+function renderPreviewHeaderMeta() {
+  if (!ui || !ui.previewHeaderEl || !ui.previewHeaderFileEl || !ui.previewHeaderMetaEl) return;
+  if (!state.currentItem || !state.currentItem.fileName) {
+    ui.previewHeaderEl.classList.add('hidden');
+    ui.previewHeaderFileEl.textContent = '';
+    ui.previewHeaderMetaEl.innerHTML = '';
+    return;
+  }
+  var currentItem = state.currentItem;
+  var currentMediaKey = currentItem.key || currentItem.fileName;
+  var rating = getRatingForMediaKey(currentMediaKey);
+  var resolution = getResolutionForMedia(currentItem.fileName);
+  ui.previewHeaderFileEl.textContent = currentItem.fileName;
+  ui.previewHeaderMetaEl.innerHTML = '';
+  var chips = [];
+  chips.push(rating > 0 ? (rating + ' star' + (rating === 1 ? '' : 's')) : 'Unrated');
+  if (resolution) chips.push(resolution);
+  chips.forEach(function (text) {
+    var chip = document.createElement('span');
+    chip.className = 'preview-header-chip';
+    chip.textContent = text;
+    ui.previewHeaderMetaEl.appendChild(chip);
+  });
+  ui.previewHeaderEl.classList.remove('hidden');
+}
+
 function parseRequirementProgressTerms(raw) {
   var seen = {};
   return String(raw || '')
@@ -444,12 +470,14 @@ function setRatingForMediaKey(mediaKey, rating) {
     state.ratings[mediaKey] = next;
   }
   debouncedItemRatingSave(saveItemRatingsToFolderState);
+  renderPreviewHeaderMeta();
   renderItemMetadataPanel();
   renderFileList();
 }
 
 function renderItemMetadataPanel() {
   renderItemAnalysisPanel();
+  renderPreviewHeaderMeta();
   var listEl = document.getElementById('item-metadata-list');
   if (!listEl) return;
   listEl.innerHTML = '';

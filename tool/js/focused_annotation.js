@@ -416,13 +416,26 @@ function closeFocusedAnnotationModal() {
   focusedAnnotationState.groupIndex = 0;
   focusedAnnotationState.history = [];
   focusedAnnotationState.sourceLabel = '';
+  if (typeof setWorkspaceViewMode === 'function') {
+    setWorkspaceViewMode('single');
+  }
 }
 
 function showFocusedAnnotationModal() {
   var els = getFocusedAnnotationEls();
+  var overlayHost = document.getElementById('workspace-overlays');
+  if (overlayHost && els.modal && els.modal.parentNode !== overlayHost) {
+    overlayHost.appendChild(els.modal);
+  }
   if (els.modal) els.modal.classList.remove('hidden');
   document.body.classList.add('focused-annotation-open');
   focusedAnnotationState.open = true;
+  if (typeof setWorkspaceViewMode === 'function') {
+    setWorkspaceViewMode('focus');
+  }
+  if (typeof setWorkspaceWorkflowMode === 'function') {
+    setWorkspaceWorkflowMode('annotate');
+  }
 }
 
 function getFocusedAnnotationMediaUrl(mediaItem) {

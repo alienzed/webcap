@@ -366,6 +366,11 @@ function mediaGridSyncItemsToCurrentView() {
 }
 
 function mediaGridCreateEntryButton() {
+  if (ui && ui.sidebarGridBtnEl) {
+    ui.sidebarGridBtnEl.onclick = openMediaGridModal;
+    mediaGridUpdateEntryVisibility();
+    return;
+  }
   var wrapper = document.getElementById('media-list-wrapper');
   if (!wrapper) throw new Error('Media Grid entry target is missing.');
   if (document.getElementById('media-grid-open-btn')) {
@@ -390,10 +395,17 @@ function mediaGridCreateEntryButton() {
 function mediaGridUpdateEntryVisibility() {
   var btn = document.getElementById('media-grid-open-btn');
   var focusBtn = document.getElementById('focus-set-grid-btn');
+  var sidebarBtn = ui && ui.sidebarGridBtnEl ? ui.sidebarGridBtnEl : null;
   var hasVisibleMedia = mediaGridGetVisibleItems().length > 0;
   var hasFocusSet = !!(state && state.focusSet && state.focusSet.keys && state.focusSet.keys.length);
   if (btn) {
     btn.classList.toggle('hidden', !hasVisibleMedia || hasFocusSet);
+  }
+  if (sidebarBtn) {
+    sidebarBtn.disabled = !hasVisibleMedia;
+    sidebarBtn.title = hasFocusSet
+      ? 'Open Media Grid for the current focus set'
+      : 'Open Media Grid for the current visible items';
   }
   if (focusBtn) {
     focusBtn.classList.toggle('hidden', !(hasVisibleMedia && hasFocusSet));
@@ -504,9 +516,19 @@ function openMediaGridModal() {
   mediaGridState.lastSelectedKey = '';
   mediaGridState.status = '';
   var els = mediaGridGetEls();
+  var overlayHost = document.getElementById('workspace-overlays');
+  if (overlayHost && els.modal && els.modal.parentNode !== overlayHost) {
+    overlayHost.appendChild(els.modal);
+  }
   els.modal.classList.remove('hidden');
   els.modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('media-grid-open');
+  if (typeof setWorkspaceViewMode === 'function') {
+    setWorkspaceViewMode('grid');
+  }
+  if (typeof setWorkspaceWorkflowMode === 'function') {
+    setWorkspaceWorkflowMode('select');
+  }
   renderMediaGridModal();
 }
 
@@ -525,6 +547,9 @@ function closeMediaGridModal() {
   mediaGridState.lastSelectedKey = '';
   mediaGridState.status = '';
   mediaGridState.viewerKey = '';
+  if (typeof setWorkspaceViewMode === 'function') {
+    setWorkspaceViewMode('single');
+  }
 }
 
 function renderMediaGridModal() {

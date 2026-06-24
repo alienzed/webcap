@@ -889,6 +889,38 @@ body.media-grid-open .caption-context-menu {
   z-index: 3060;
 }
 
+.app.shell-revamp .media-grid-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.app.shell-revamp .media-grid-dialog {
+  border-radius: 14px;
+}
+
+.app.shell-revamp .media-grid-filters {
+  display: none;
+}
+
+.app.shell-revamp .media-grid-header {
+  justify-content: space-between;
+}
+
+.app.shell-revamp .media-grid-left-rail {
+  display: none;
+}
+
+.app.shell-revamp .media-grid-body {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.app.shell-revamp .media-grid-items {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
 @media (max-width: 900px) {
   .media-grid-header {
     align-items: flex-start;

@@ -251,7 +251,29 @@ function updateFocusSetUi() {
     ui.focusSetExitBtn.title = 'Exit focus set';
     ui.focusSetExitBtn.setAttribute('aria-label', 'Exit focus set');
   }
+  updateSidebarSurfaceTools();
   mediaGridUpdateEntryVisibility();
+}
+
+function updateSidebarSurfaceTools() {
+  var hasVisibleMedia = false;
+  if (typeof getFilteredMediaItems === 'function') {
+    hasVisibleMedia = getFilteredMediaItems(false).length > 0;
+  }
+  var hasCurrentItem = !!(state && state.currentItem && state.currentItem.fileName);
+  var hasFocusSet = !!(state && state.focusSet && state.focusSet.keys && state.focusSet.keys.length);
+  if (ui.sidebarGridBtnEl) {
+    ui.sidebarGridBtnEl.disabled = !hasVisibleMedia;
+    ui.sidebarGridBtnEl.title = hasFocusSet
+      ? 'Open Media Grid for the current focus set'
+      : 'Open Media Grid for the current visible items';
+  }
+  if (ui.sidebarFocusBtnEl) {
+    ui.sidebarFocusBtnEl.disabled = !hasCurrentItem;
+    ui.sidebarFocusBtnEl.title = hasCurrentItem
+      ? 'Open Focused Annotation for the selected item'
+      : 'Select a media item to open Focused Annotation';
+  }
 }
 
 function clearFocusSet() {
@@ -514,6 +536,9 @@ function buildSelectionReport(items) {
 }
 
 function runReview() {
+  if (typeof setWorkspaceWorkflowMode === 'function') {
+    setWorkspaceWorkflowMode('review');
+  }
   var availability = getReviewAvailability();
   if (!availability.enabled) {
     setStatus(availability.message + '.');
@@ -562,6 +587,9 @@ function runReview() {
 }
 
 function runSelectionReview() {
+  if (typeof setWorkspaceWorkflowMode === 'function') {
+    setWorkspaceWorkflowMode('select');
+  }
   var availability = getReviewAvailability();
   if (!availability.enabled) {
     setStatus(availability.message.replace('Review Captions', 'Selection Analysis') + '.');

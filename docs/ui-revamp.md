@@ -1,420 +1,342 @@
-# UI Revamp Concept
+# UI Revamp
 
-Status: Planning only. Do not implement yet.
+Status: Planning only. Do not implement as one big jump.
 
-## Core Question
+Last updated: 2026-06-22
 
-If WebCap started today with the current feature set and no existing UI, would it still use the current layout?
+## Intent
 
-Probably not exactly.
+This revamp is not a feature redesign.
 
-The three-pane foundation is still strong, but the panes should be based on workflow roles instead of historical feature placement.
+It is a container/layout redesign for the feature set we already like.
 
-The app's real unit of work is not only a caption. It is a **training sample**.
+Rules:
 
-The UI should therefore be **sample-first** and **mode-adaptive**.
+- keep existing capability
+- reduce duplicated UI across views
+- stop mixing set-level tools with item-level work
+- give `Groups` a real home instead of treating it like an overlay
 
-## Core Direction
+## The Main Correction
 
-Keep the three-pane foundation, but redefine it:
+The old planning leaned too hard on abstract mode ideas.
 
-1. **Left: Queue**
-   - What am I working through?
-   - Folder, filters, focus sets, current subset, ratings, flags, reviewed state.
+The current sharper conclusion is:
 
-2. **Center: Sample Canvas**
-   - What am I looking at or editing?
-   - Preview first, with caption editor attached when captioning matters.
+- `Groups` are the hard layout problem
+- `Groups` need tall vertical space
+- `Caption` does not need to dominate the center pane
+- `Focused Annotation` is not a side feature anymore
+- the future UI should borrow its shell from `Focused Annotation`
 
-3. **Right: Inspector / Tools**
-   - What can I apply, check, or understand about this sample?
-   - Annotation groups, tags, metadata, QA, mode-specific controls.
+## Target Workspace
 
-This is closer to tools like Lightroom, Photo Mechanic, Resolve, labeling tools, and curation/review apps:
+The app should still feel like a three-area workspace, but with a more deliberate shape:
 
-- queue on one side
-- selected item in the center
-- tools/metadata/labels on the other side
-- mode-specific emphasis
-- hotkeys and batch operations for repeated work
+```text
++-----------------------------------------------------------------------------------+
+| Top bar: app/global controls                                                      |
++----------------------+-----------------------------------+------------------------+
+| Left rail            | Preview / Grid surface            | Right workspace        |
+|                      |                                   |                        |
+| path / filters       | large single-item preview         | Groups                 |
+| media list           | or media grid                     |                        |
+| set scope            |                                   | Caption                |
+| set tools            |                                   | Tags                   |
++----------------------+-----------------------------------+------------------------+
+```
 
-## Current Planning Synthesis
+### Top Bar
 
-Recent discussion points toward a fairly coherent next direction, even if it should not be implemented yet as one big jump.
+Global only:
 
-### Ratings Are Already The Main Selection System
+- home / current path entry
+- settings
+- help
+- theme
 
-In practice, stars are no longer only "quality" markers. They have become the user's curation intent system:
+Do not keep moving item/set tools into this area.
 
-- `4` and `5` stars: training-ready keepers
-- `3` stars: alternates, fill candidates, or "maybe useful later"
-- `1` and `2` stars: low-priority or effectively ignored
-- unrated: undecided
+### Left Rail
 
-This means future review/compare flows should lean into ratings instead of inventing a parallel "selected for training" mechanism.
+This area answers:
 
-Flags may still be useful, but they are no longer the primary per-item curation tool.
+- where am I?
+- what subset am I looking at?
+- which item is selected?
 
-### Compare Mode Is The Natural Home For Selection Review
+Contents:
 
-The current `Review Selections` surface is still closer to a report than a working compare tool.
+- filter
+- advanced filters
+- result count
+- media list
+- set/focus scope summary
+- set-level tools entry point
 
-The likely long-term direction is:
+This rail should become collapsible.
 
-- use `Review Selections` to launch small, purposeful focus sets
-- open those focus sets into a compare-friendly surface
-- make pruning redundancy and rerating stronger/weaker alternates the core activity
+In working-heavy views, especially `Focused`, it can auto-collapse, but the user's last choice should remain respected whenever practical.
 
-This matters because many of the desired selection improvements are awkward in a single-item preview flow but become natural in a multi-item compare flow.
+### Preview / Grid Surface
 
-### Suggested Candidate Logic Should Become More Actionable
+This is the main visual area.
 
-The current "suggested" area likely wants to split into a few clearer sections rather than remain one flat shortlist.
+It shows:
 
-The most promising shape is:
+- large single-item preview
+- or media grid
 
-- prune-first / redundancy groups
-- keepers or strong anchors
-- alternates worth checking
-- softer coverage hints
+These are not separate screens. They are two states of the same main surface.
 
-This should stay advisory and focus-set-oriented rather than trying to become an overconfident scoring engine.
+Expected flow:
 
-### Coverage Guidance Should Respect Limited Source Material
+- double-clicking a grid item returns to single-item view
+- switching between grid and single-item view does not replace the whole workspace
+- the surrounding annotation UI remains in place
 
-Coverage guidance is still useful, but it should assume that some missing material simply does not exist in the current set.
+### Right Workspace
 
-That means:
+This is the heart of the revamp.
 
-- prioritize obvious pruning and rerating work over idealized balance goals
-- treat `3`-star material as the main place to look for coverage upgrades
-- keep the tone suggestive rather than prescriptive
+It contains three stacked concerns:
 
-### Suggestion Sanity Likely Needs A Soft Rule Layer
+1. `Groups`
+2. `Caption`
+3. `Tags`
 
-Pure co-occurrence or analyzer-driven tag suggestions can become silly in some contexts, such as suggesting `shoes` on a portrait close-up.
+#### Caption
 
-The likely direction is not a hard rule system everywhere, but a soft advisory layer combining:
+The caption editor is important, but it does not need to be the biggest surface in the app.
 
-- analyzer/output evidence
-- requirement-group relationships
-- lightweight review rules where needed
+Placement:
 
-This should down-rank or suppress implausible suggestions without turning review into a rigid expert system.
+- below `Groups`
+- above `Tags`
+- modest height
 
-### Avoid Building Parallel Mechanisms Without Need
+Reason:
 
-A recurring theme is that the app already has the beginnings of the right primitives:
+- typical caption use is only a few lines
+- forcing caption to be the dominant full-height surface caused the overlay problem
 
-- stars for curation intent
-- focus sets for scoped work
-- tags for selected item concepts
-- requirement groups for semantic neighborhoods
+#### Tags
 
-The future UI should try to organize and expose these better rather than replacing them with new overlapping systems.
+Placement:
 
-## What Changes Conceptually
+- bottom of the right workspace
+- grows upward
 
-The current UI is mostly always-on:
+Reason:
 
-- left navigation
-- center caption editor
-- right preview/report
-- helper panel floating over caption text
+- tags are item-level and directly related to captioning
+- tags are smaller than groups and should not compete with them for prime height
 
-The revamp would become mode-adaptive:
+## Groups Are The Primary Layout Driver
 
-- culling gives preview more prominence
-- annotation gives labels/tools more prominence
-- captioning gives text composition more prominence
-- review becomes report/focus-set oriented
-- selection review becomes compare/cluster oriented
-- training becomes a set-operation/preflight surface
+The UI should be designed around the fact that `Groups` can be large, vertically scanned, and numerous.
 
-The features mostly remain, but their homes and visibility change.
+This means:
 
-## Does The Feature Set Change?
+- no more treating groups as a small helper overlay
+- no more assuming chip-wrapped clouds are an acceptable default
+- no more forcing all group interaction into a cramped bottom strip
 
-Conceptually, no.
+## Groups Workspace Model
 
-The revamp does not remove major capabilities. It reorganizes them around the job being done.
+The right workspace keeps one persistent `Groups` area with two modes:
 
-Practically, yes: features become mode-specific instead of always competing for attention.
+1. `All Groups`
+2. `Focused`
 
-### Same Features, Better Homes
+This is a local area mode, not a separate app screen.
 
-#### Queue / Browse
+Changing between `All Groups` and `Focused` should not replace the rest of the workspace.
 
-- folder navigation
-- filters
-- focus sets
-- stars
-- flags
-- reviewed state
-- current subset counts
-- selection/filter summary
+The mode should persist when moving between:
 
-#### Sample Canvas
+- list view
+- grid view
+- single-item preview
 
-- media preview
-- crop
-- deface
-- clip
-- reset
-- caption editor when captioning is active
-- report/card canvas when reviewing
+unless an explicit action intentionally opens a focused flow.
 
-#### Inspector / Tools
+### Focused Mode
 
-- requirement groups
-- annotation chips
-- tags
-- metadata
-- QA
-- affixes
-- item state
+Focused mode stays because it solves a real density problem.
 
-#### Review Captions
+It remains the best surface for:
 
-- caption report
-- missing required phrase
-- validation failures
-- similar captions
-- caption length issues
-- focus-set links
+- working one group deeply
+- traversing item/group axes
+- using quick picks without noise
 
-#### Review Selections / Compare
+The current focused-annotation shell is the closest thing to the new base layout:
 
-- near-duplicate clusters
-- face/framing/expression similarity
-- ratings and flags
-- compare weaker/stronger alternatives
-- prune decisions
-- focus-set/cluster traversal
+- big preview on the left
+- tall group workspace on the right
+- compact support areas below/right
 
-#### Train
+### All Groups Mode
 
-- Prepare Dataset
-- Generate
-- Train command preview
-- config files
-- training settings
-- preflight checks
+`All Groups` is still necessary for final review.
 
-## Proposed Modes
+The goal is not to eliminate the bird's-eye view. The goal is to make it viable.
 
-### 1. Browse Mode
+#### All Groups Rules
 
-Purpose:
+- all groups can be visible at once
+- group cards stay vertical
+- cards auto-fill based on available width
+- cards wrap into additional rows
+- no horizontal scrolling
+- the overall groups area scrolls vertically
+- cards may be squeezed somewhat to preserve bird's-eye visibility
 
-- Move through folders and media.
-- Filter, rate, flag, and select.
+This is intentionally a dense vertical card grid, not a chip cloud and not a horizontal lane system.
 
-Layout:
+#### Group Card Behavior
 
-- Left: queue dominates.
-- Center: selected sample preview.
-- Right: compact inspector.
+Each card keeps the current group-level capability, just in a better container.
 
-Best for:
+Each card should support:
 
-- orienting in a set
-- quick ratings/flags
-- finding items
-- jumping into a focused workflow
+- group title
+- reviewed / incomplete / n/a state
+- current group controls in the header
+- expandable/collapsible body
+- vertical term list
 
-### 2. Annotate / Caption Mode
+Terms should remain readable and vertically scannable.
 
-Purpose:
+Do not turn the all-groups view into a reduced-capability lite panel.
 
-- Add annotations/tags.
-- Write or refine captions.
+### Collapse Behavior
 
-Layout:
+Default behavior should help reduce chaos without hiding unfinished work.
 
-- Left: queue remains visible.
-- Center: preview plus caption composer.
-- Right: annotation and tag tools.
+Initial direction:
 
-Important shift:
+- unfinished groups stay expanded
+- reviewed groups may shrink or collapse
+- user can manually collapse/expand any group
 
-- The annotation panel should stop being a floating overlay over the caption text.
-- It should become a proper tool palette or dock.
+Required global controls:
 
-Best for:
+- `Collapse All`
+- `Expand All`
 
-- fast tagging
-- same-as-previous/nearby annotations
-- caption composition
-- requirement completion
+These are core controls for the all-groups surface, not a stretch goal.
 
-### 3. Review Captions Mode
+## Metadata And QA
 
-Purpose:
+`QA` no longer deserves a prime dedicated area in the main editing workspace.
 
-- Check text quality.
-- Find missing required phrases, validation failures, similar captions, and length outliers.
+Current direction:
 
-Layout:
+- remove QA from the primary annotation workspace
+- do not design the revamp around keeping it visible
 
-- Left: issue groups / focused result queue.
-- Center: report cards or selected issue detail.
-- Right: selected sample preview/inspector, if needed.
+`Metadata` should be reduced, not removed.
 
-Important shift:
+Primary metadata surface:
 
-- Review should not turn the caption editor into a report transcript by default.
-- Reports should feel like their own mode.
+- preview header
+- only compact facts such as resolution, rating, maybe one or two other high-value signals
 
-Best for:
+Possible secondary homes later:
 
-- caption QA
-- focus-set loops
-- targeted caption fixes
+- tooltip
+- drawer
+- expanded inspector
 
-### 4. Review Selections / Compare Mode
+But metadata should stop occupying the same rank as groups/tags/caption.
 
-Purpose:
+## Set-Level Tools
 
-- Decide which samples are worth keeping.
-- Compare near-duplicates.
-- Prune weaker alternatives.
+The app currently mixes set-level workflows into the left rail because space existed there.
 
-Layout:
+That should become more deliberate.
 
-- Left: clusters or candidate groups.
-- Center: 2-4 item compare grid or large selected preview.
-- Right: cluster evidence, rating/flag/prune state, metadata summary.
+Set-level tools include:
 
-Important shift:
+- Review Captions
+- Selection Analysis
+- Config
+- Train
 
-- Review Selections should probably not be just another report.
-- It should become a **compare/cluster surface**.
+These should share one clearer home under the left rail, likely as a dedicated `Set Tools` block.
 
-Best for:
+This is still in the left rail, but visually separated from the media navigation/listing job.
 
-- realistic pruning
-- choosing between very similar samples
-- spotting overrepresented face/framing/expression clusters
-- curating a stronger set from limited material
+## Non-Goals
 
-### 5. Train Mode
+This revamp does not aim to:
 
-Purpose:
+- reinvent annotation behavior
+- remove focused annotation
+- cut working features the user already relies on
+- force a totally different navigation model
+- introduce horizontal scrolling for group review
 
-- Prepare artifacts.
-- Generate configs.
-- Preview commands.
+## Likely Implementation Slices
 
-Layout:
+Do not ship this as one giant rewrite.
 
-- Left: set/config file list.
-- Center: generated artifacts, logs, command previews.
-- Right: settings and preflight checks.
+### Slice 1: Left Rail Clarification
 
-Best for:
+Low-risk structural cleanup:
 
-- dataset preparation
-- config inspection
-- command handoff
+- make the left rail collapsible
+- clean up `Set Tools` below the media list
+- give grid/focus entry points a clearer home
+- separate navigation/scope from set operations
 
-## Feature Visibility By Mode
+This slice can ship without finishing the groups redesign.
 
-| Feature | Browse | Annotate/Caption | Review Captions | Review Selections/Compare | Train |
-| --- | --- | --- | --- | --- | --- |
-| Folder/media queue | Primary | Primary | Focused | Cluster/focused | Secondary |
-| Text filters | Primary | Primary | Useful | Useful | Secondary |
-| Stars/flags | Primary | Useful | Useful | Primary | Secondary |
-| Reviewed state | Primary | Useful | Useful | Useful | Secondary |
-| Preview | Primary | Primary | Secondary | Primary | Secondary |
-| Caption editor | Secondary | Primary | Targeted | Secondary | Hidden/secondary |
-| Annotation groups | Secondary | Primary | Secondary | Secondary | Hidden |
-| Tags | Secondary | Primary | Secondary | Secondary | Hidden |
-| Metadata | Inspector | Inspector | Supporting | Supporting | Supporting |
-| QA | Inspector | Supporting | Supporting | Primary if cluster-based | Hidden |
-| Crop/deface/clip/reset | Primary actions | Primary actions | Contextual | Contextual | Hidden |
-| Review Captions report | Hidden | Hidden | Primary | Hidden | Hidden |
-| Review Selections report | Hidden | Hidden | Hidden | Primary | Hidden |
-| Prepare/Generate/Train | Hidden | Hidden | Hidden | Hidden | Primary |
+### Slice 2: Right Workspace Skeleton
 
-## What Becomes Less Prominent
+Introduce the new right-side hierarchy:
 
-- Raw `Analysis` tab.
-- Metadata inside the caption helper overlay.
-- Set-level training controls under the media list.
-- Reports taking over the caption editor as a plain text dump.
-- Always-visible tools that do not match the current task.
+- groups area
+- caption area
+- tags area
 
-## What Becomes More Prominent
+without yet perfecting every group rendering detail.
 
-- Preview as the center of sample judgment.
-- Annotation as a real tool palette.
-- Review Selections as compare/cluster workflow.
-- Batch tagging from reliable analysis.
-- Same-as-previous or same-as-nearby annotation.
-- Focus-set and cluster traversal.
-- Keyboard-first repeated actions.
+Main win:
 
-## Speed-First Implications
+- stop relying on the center overlay stack
 
-The revamp should not just make the app prettier. It should reduce work.
+### Slice 3: All Groups Layout Rebuild
 
-High-value speed directions:
+Rebuild the all-groups presentation as:
 
-1. **Batch Tagging From Reliable Analysis**
-   - Only conservative, high-confidence signals.
-   - Preview before apply.
-   - Strong undo.
+- auto-fill vertical card grid
+- wrap rows
+- vertical scrolling
+- collapse/expand behavior
 
-2. **Same-As-Previous / Nearby Annotation**
-   - Copy common tags/groups from adjacent or visually similar items.
-   - Useful for sequential clips and scene variants.
+This is the most important interaction redesign in the revamp.
 
-3. **Cluster-Based Review**
-   - Group similar samples.
-   - Help choose the best one or two instead of pruning blindly.
+### Slice 4: Focused / All Shared Shell
 
-4. **Keyboard-First Annotation**
-   - Reduce pointer travel.
-   - Make repeated tagging possible without hunting the UI.
+Unify focused annotation and normal item work so they feel like area modes inside one workspace, not separate screens.
 
-5. **Filtered Batch Operations**
-   - Apply tags, flags, ratings, or reviewed state to visible/focused subsets.
-   - Requires confirmation and undo.
+### Slice 5: Metadata Reduction
 
-## Design Principle
+Move compact metadata into preview header and remove it from prime editing space.
 
-Do not ask:
+## Short Version
 
-> Where can this feature fit?
+If this document needs one sentence:
 
-Ask:
+> WebCap should move from "caption editor with floating helpers" to "preview-first workspace with a real right-side annotation column."
 
-> During which workflow does this feature save time or prevent mistakes?
+And inside that annotation column:
 
-If a feature does not help the active workflow, it should be available but not prominent.
+- `Groups` are primary
+- `Caption` is secondary
+- `Tags` are tertiary
 
-## Recommendation
-
-Do not immediately rebuild the UI.
-
-First, create a wireframe/design pass for the mode-adaptive three-pane model:
-
-- Queue
-- Sample Canvas
-- Inspector / Tools
-- Explicit modes
-
-Then choose one speed feature to prototype inside that model.
-
-Best first candidates:
-
-1. same-as-previous / nearby annotation
-2. reliable batch tagging
-3. cluster-based Review Selections
-
-The most important conceptual change is:
-
-> WebCap should become sample-first, not caption-editor-first.
-
-That preserves the working feature set while making the app more deliberate, more intuitive, and more speed-oriented.
+That is the current working UI direction.

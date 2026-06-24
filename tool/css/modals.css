@@ -824,6 +824,18 @@ body.focused-annotation-open {
   overflow: hidden;
 }
 
+.app.shell-revamp .focused-annotation-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.app.shell-revamp .focused-annotation-dialog {
+  padding: 12px;
+}
+
 @media (max-width: 1080px) {
   .focused-annotation-body {
     grid-template-columns: 1fr;

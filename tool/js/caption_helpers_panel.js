@@ -5,35 +5,54 @@ function setCaptionHelperTab(tabName) {
     tabName = 'requirements';
   }
   captionHelperActiveTab = tabName;
-  document.getElementById('caption-helper-tab-requirements-btn').classList.remove('active');
-  document.getElementById('caption-helper-tab-tags-btn').classList.remove('active');
-  document.getElementById('caption-helper-tab-analysis-btn').classList.remove('active');
-  document.getElementById('caption-helper-tab-metadata-btn').classList.remove('active');
-  document.getElementById('caption-helper-tab-requirements').classList.add('hidden');
-  document.getElementById('caption-helper-tab-tags').classList.add('hidden');
-  document.getElementById('caption-helper-tab-analysis').classList.add('hidden');
-  document.getElementById('caption-helper-tab-metadata').classList.add('hidden');
+  var requirementsBtn = document.getElementById('caption-helper-tab-requirements-btn');
+  var tagsBtn = document.getElementById('caption-helper-tab-tags-btn');
+  var analysisBtn = document.getElementById('caption-helper-tab-analysis-btn');
+  var metadataBtn = document.getElementById('caption-helper-tab-metadata-btn');
+  var requirementsPane = document.getElementById('caption-helper-tab-requirements');
+  var tagsPane = document.getElementById('caption-helper-tab-tags');
+  var analysisPane = document.getElementById('caption-helper-tab-analysis');
+  var metadataPane = document.getElementById('caption-helper-tab-metadata');
+  var checklistPanel = document.getElementById('caption-checklist-panel');
+  var splitLayout = !!(checklistPanel && checklistPanel.getAttribute('data-layout') === 'split');
+
+  requirementsBtn.classList.remove('active');
+  tagsBtn.classList.remove('active');
+  analysisBtn.classList.remove('active');
+  metadataBtn.classList.remove('active');
+  requirementsPane.classList.add('hidden');
+  tagsPane.classList.add('hidden');
+  analysisPane.classList.add('hidden');
+  metadataPane.classList.add('hidden');
   var tagResults = document.getElementById('tag-term-results');
   if (tagResults) tagResults.classList.add('hidden');
 
+  if (splitLayout) {
+    requirementsPane.classList.remove('hidden');
+    tagsPane.classList.remove('hidden');
+    if (tabName === 'tags') tagsBtn.classList.add('active');
+    else requirementsBtn.classList.add('active');
+    return;
+  }
+
   if (tabName === 'requirements') {
-    document.getElementById('caption-helper-tab-requirements-btn').classList.add('active');
-    document.getElementById('caption-helper-tab-requirements').classList.remove('hidden');
+    requirementsBtn.classList.add('active');
+    requirementsPane.classList.remove('hidden');
     return;
   }
   if (tabName === 'tags') {
-    document.getElementById('caption-helper-tab-tags-btn').classList.add('active');
-    document.getElementById('caption-helper-tab-tags').classList.remove('hidden');
+    tagsBtn.classList.add('active');
+    tagsPane.classList.remove('hidden');
     return;
   }
   if (tabName === 'analysis') {
-    document.getElementById('caption-helper-tab-analysis-btn').classList.add('active');
-    document.getElementById('caption-helper-tab-analysis').classList.remove('hidden');
+    analysisBtn.classList.add('active');
+    analysisPane.classList.remove('hidden');
     return;
   }
   if (tabName === 'metadata') {
-    document.getElementById('caption-helper-tab-metadata-btn').classList.add('active');
-    document.getElementById('caption-helper-tab-metadata').classList.remove('hidden');
+    metadataBtn.classList.add('active');
+    metadataPane.classList.remove('hidden');
     return;
   }
 }

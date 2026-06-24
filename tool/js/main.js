@@ -1,3 +1,452 @@
+var workspaceUiState = {
+  viewMode: 'single',
+  workflowMode: 'annotate'
+};
+var WORKSPACE_SPLIT_STORAGE_KEY = 'webcap.workspace.previewSplit';
+var workspaceSplitState = {
+  ratio: 0.46,
+  dragging: false,
+  wired: false,
+  moveHandler: null,
+  upHandler: null,
+  observer: null
+};
+
+function clampWorkspaceSplitRatio(ratio, availableWidth, minPreviewWidth, minWorkbenchWidth) {
+  var total = Math.max(1, Number(availableWidth) || 1);
+  var minPreview = Math.max(240, Number(minPreviewWidth) || 0);
+  var minWorkbench = Math.max(320, Number(minWorkbenchWidth) || 0);
+  var minRatio = Math.min(0.8, Math.max(0.2, minPreview / total));
+  var maxRatio = Math.max(minRatio, Math.min(0.8, 1 - (minWorkbench / total)));
+  var nextRatio = Number(ratio);
+  if (!isFinite(nextRatio)) nextRatio = 0.46;
+  if (nextRatio < minRatio) nextRatio = minRatio;
+  if (nextRatio > maxRatio) nextRatio = maxRatio;
+  return nextRatio;
+}
+
+function getStoredWorkspaceSplitRatio() {
+  try {
+    return clampWorkspaceSplitRatio(localStorage.getItem(WORKSPACE_SPLIT_STORAGE_KEY), 1000, 320, 420);
+  } catch (e) {}
+  return 0.46;
+}
+
+function storeWorkspaceSplitRatio(ratio) {
+  try {
+    localStorage.setItem(WORKSPACE_SPLIT_STORAGE_KEY, String(ratio));
+  } catch (e) {}
+}
+
+function getWorkspaceHeaderEl() {
+  return null;
+}
+
+function getWorkspaceSplitResizerEl() {
+  return document.getElementById('workspace-main-resizer');
+}
+
+function isWorkspaceSplitDesktopLayout() {
+  return !!(ui && ui.appEl && window.innerWidth > 1180);
+}
+
+function getWorkspaceSidebarWidth() {
+  if (!ui || !ui.appEl) return 0;
+  if (ui.appEl.classList.contains('left-rail-collapsed')) return 0;
+  return 292;
+}
+
+function getWorkspaceSplitBounds(availableWidth) {
+  var annotateMode = !!(ui && ui.appEl && ui.appEl.classList.contains('workflow-annotate'));
+  var available = Math.max(640, Number(availableWidth) || 0);
+  var preferredPreview = annotateMode ? 320 : 300;
+  var preferredWorkbench = annotateMode ? 420 : 380;
+  var minPreview = preferredPreview;
+  var minWorkbench = preferredWorkbench;
+  if (available < (preferredPreview + preferredWorkbench)) {
+    minWorkbench = annotateMode ? 360 : 340;
+    minPreview = Math.max(260, available - minWorkbench);
+    if (minPreview < 260) {
+      minPreview = 260;
+      minWorkbench = Math.max(320, available - minPreview);
+    }
+  }
+  return {
+    minPreview: minPreview,
+    minWorkbench: minWorkbench
+  };
+}
+
+function clearWorkspaceSplitLayout() {
+  var resizerEl = getWorkspaceSplitResizerEl();
+  if (resizerEl) {
+    resizerEl.classList.add('hidden');
+  }
+}
+
+function updateWorkspaceSplitResizerPosition() {
+  var resizerEl = getWorkspaceSplitResizerEl();
+  if (!resizerEl || !ui || !ui.appEl) return;
+  var previewPanel = ui.appEl.querySelector('.preview-panel');
+  var workbenchPanel = ui.appEl.querySelector('.workbench-panel');
+  if (!previewPanel || !workbenchPanel || !isWorkspaceSplitDesktopLayout()) {
+    resizerEl.classList.add('hidden');
+    return;
+  }
+  if (ui.appEl.classList.contains('workspace-view-grid') || ui.appEl.classList.contains('workspace-view-focus')) {
+    resizerEl.classList.add('hidden');
+    return;
+  }
+  if (resizerEl.parentNode !== previewPanel) {
+    previewPanel.appendChild(resizerEl);
+  }
+  resizerEl.classList.remove('hidden');
+}
+
+function updateWorkspaceSplitLayout() {
+  clearWorkspaceSplitLayout();
+}
+
+function stopWorkspaceSplitDrag() {
+  if (!workspaceSplitState.dragging) return;
+  workspaceSplitState.dragging = false;
+  if (ui && ui.appEl) {
+    ui.appEl.classList.remove('workspace-resizing');
+  }
+  if (workspaceSplitState.moveHandler) {
+    window.removeEventListener('mousemove', workspaceSplitState.moveHandler);
+  }
+  if (workspaceSplitState.upHandler) {
+    window.removeEventListener('mouseup', workspaceSplitState.upHandler);
+  }
+  storeWorkspaceSplitRatio(workspaceSplitState.ratio);
+}
+
+function beginWorkspaceSplitDrag(event) {
+  if (!isWorkspaceSplitDesktopLayout() || event.button !== 0 || !ui || !ui.appEl) return;
+  event.preventDefault();
+  workspaceSplitState.dragging = true;
+  ui.appEl.classList.add('workspace-resizing');
+  workspaceSplitState.moveHandler = function (moveEvent) {
+    if (!workspaceSplitState.dragging || !ui || !ui.appEl) return;
+    var previewPanel = ui.appEl.querySelector('.preview-panel');
+    var workbenchPanel = ui.appEl.querySelector('.workbench-panel');
+    if (!previewPanel || !workbenchPanel) return;
+    var previewRect = previewPanel.getBoundingClientRect();
+    var workbenchRect = workbenchPanel.getBoundingClientRect();
+    var gap = Math.max(0, workbenchRect.left - previewRect.right);
+    var available = Math.max(0, previewRect.width + workbenchRect.width);
+    var bounds = getWorkspaceSplitBounds(available);
+    var rawPreviewWidth = moveEvent.clientX - previewRect.left - (gap / 2);
+    workspaceSplitState.ratio = clampWorkspaceSplitRatio(
+      rawPreviewWidth / Math.max(1, available),
+      available,
+      bounds.minPreview,
+      bounds.minWorkbench
+    );
+    updateWorkspaceSplitLayout();
+  };
+  workspaceSplitState.upHandler = function () {
+    stopWorkspaceSplitDrag();
+  };
+  window.addEventListener('mousemove', workspaceSplitState.moveHandler);
+  window.addEventListener('mouseup', workspaceSplitState.upHandler);
+}
+
+function wireWorkspaceSplitUi() {
+  clearWorkspaceSplitLayout();
+}
+
+function normalizeWorkspaceViewMode(mode) {
+  var value = String(mode || '').trim().toLowerCase();
+  if (value === 'grid' || value === 'focus') return value;
+  return 'single';
+}
+
+function normalizeWorkspaceWorkflowMode(mode) {
+  var value = String(mode || '').trim().toLowerCase();
+  if (value === 'select' || value === 'review') return value;
+  return 'annotate';
+}
+
+function syncWorkspaceHeaderUi() {
+  if (!ui || !ui.appEl) return;
+  var viewMode = normalizeWorkspaceViewMode(workspaceUiState.viewMode);
+  var workflowMode = normalizeWorkspaceWorkflowMode(workspaceUiState.workflowMode);
+  ui.appEl.classList.remove('workspace-view-single', 'workspace-view-grid', 'workspace-view-focus');
+  ui.appEl.classList.add('workspace-view-' + viewMode);
+  ui.appEl.classList.remove('workflow-select', 'workflow-annotate', 'workflow-review');
+  ui.appEl.classList.add('workflow-' + workflowMode);
+
+  var viewButtons = {
+    single: document.getElementById('workspace-view-single-btn'),
+    grid: document.getElementById('sidebar-open-grid-btn'),
+    focus: document.getElementById('sidebar-open-focused-btn')
+  };
+  Object.keys(viewButtons).forEach(function (key) {
+    var btn = viewButtons[key];
+    if (!btn) return;
+    var active = key === viewMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  var workflowButtons = {
+    select: document.getElementById('workspace-workflow-select-btn'),
+    annotate: document.getElementById('workspace-workflow-annotate-btn'),
+    review: document.getElementById('workspace-workflow-review-btn')
+  };
+  Object.keys(workflowButtons).forEach(function (key) {
+    var btn = workflowButtons[key];
+    if (!btn) return;
+    var active = key === workflowMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  updateWorkspaceSplitLayout();
+}
+
+function setWorkspaceViewMode(mode) {
+  workspaceUiState.viewMode = normalizeWorkspaceViewMode(mode);
+  syncWorkspaceHeaderUi();
+}
+
+function setWorkspaceWorkflowMode(mode) {
+  workspaceUiState.workflowMode = normalizeWorkspaceWorkflowMode(mode);
+  syncWorkspaceHeaderUi();
+}
+
+function ensureWorkspaceHeaderButton(id, label) {
+  var existing = document.getElementById(id);
+  if (existing) return existing;
+  var btn = document.createElement('button');
+  btn.id = id;
+  btn.type = 'button';
+  btn.className = 'app-header-segment-btn';
+  btn.textContent = label;
+  return btn;
+}
+
+function buildSidebarDrawer(title, className) {
+  var details = document.createElement('details');
+  details.className = 'sidebar-drawer ' + className;
+  var summary = document.createElement('summary');
+  summary.className = 'sidebar-drawer-summary';
+  summary.textContent = title;
+  details.appendChild(summary);
+  var body = document.createElement('div');
+  body.className = 'sidebar-drawer-body';
+  details.appendChild(body);
+  details._body = body;
+  return details;
+}
+
+function moveChildren(sourceEl, targetEl) {
+  while (sourceEl && sourceEl.firstChild) {
+    targetEl.appendChild(sourceEl.firstChild);
+  }
+}
+
+function rebuildUnifiedWorkspaceShell() {
+  if (!ui || !ui.appEl || ui.appEl.__workspaceRevampBuilt) return;
+  var appEl = ui.appEl;
+  var sidebarPanel = document.getElementById('sidebar-panel');
+  var sidebarScrollable = sidebarPanel ? sidebarPanel.querySelector('.panel-scrollable') : null;
+  var sidebarContent = document.getElementById('sidebar-content');
+  var editorPanel = appEl.querySelector('.editor-panel');
+  var previewShell = document.getElementById('preview-shell');
+  var previewPanel = previewShell ? previewShell.closest('.panel') : null;
+  var utilityBar = document.getElementById('utility-bar');
+  var utilityPathBtn = document.getElementById('utility-current-path-btn');
+  var utilitySettingsBtn = document.getElementById('utility-settings-btn');
+  var utilityHelpBtn = document.getElementById('utility-help-btn');
+  var utilityThemeBtn = document.getElementById('utility-theme-btn');
+  var sidebarCollapseBtn = document.getElementById('sidebar-collapse-toggle-btn');
+  var viewGridBtn = document.getElementById('sidebar-open-grid-btn');
+  var viewFocusBtn = document.getElementById('sidebar-open-focused-btn');
+  var viewToolsPanel = appEl.querySelector('.sidebar-view-tools');
+  var statsPanel = appEl.querySelector('.stats-panel');
+  var setToolsPanel = appEl.querySelector('.sidebar-set-tools');
+  var sidebarWorkspace = document.getElementById('sidebar-workspace');
+  var createSetBtn = document.getElementById('create-set-from-results-btn');
+  var reviewSelectionsBtn = document.getElementById('review-selections-btn');
+  var reviewCaptionsBtn = document.getElementById('review-captions-btn');
+  var primerDetails = document.getElementById('primer-details');
+  var checklistPanel = document.getElementById('caption-checklist-panel');
+  var checklistRequirementsPane = document.getElementById('caption-helper-tab-requirements');
+  var checklistTagsPane = document.getElementById('caption-helper-tab-tags');
+  var checklistAnalysisPane = document.getElementById('caption-helper-tab-analysis');
+  var checklistMetadataPane = document.getElementById('caption-helper-tab-metadata');
+  var checklistTabs = document.getElementById('caption-helper-tabs');
+  var annotateStrip = document.getElementById('annotate-strip');
+  var consolePanel = document.getElementById('console-panel');
+  var editorWrapper = editorPanel ? editorPanel.querySelector('.editor-wrapper') : null;
+  var setNotesEditor = document.getElementById('set-notes-editor');
+  var focusedModal = document.getElementById('focused-annotation-modal');
+  var mediaGridModal = document.getElementById('media-grid-modal');
+  var configTabBtn = document.getElementById('sidebar-tab-config-btn');
+
+  if (!sidebarPanel || !sidebarScrollable || !sidebarContent || !editorPanel || !previewPanel || !primerDetails || !checklistPanel || !editorWrapper) {
+    throw new Error('Workspace revamp could not find required shell nodes.');
+  }
+
+  appEl.__workspaceRevampBuilt = true;
+  appEl.classList.add('shell-revamp');
+
+  if (utilityBar && utilityBar.parentNode) {
+    utilityBar.parentNode.removeChild(utilityBar);
+  }
+  var sidebarUtilityStrip = document.createElement('div');
+  sidebarUtilityStrip.className = 'sidebar-utility-strip';
+  if (utilitySettingsBtn) sidebarUtilityStrip.appendChild(utilitySettingsBtn);
+  if (utilityHelpBtn) sidebarUtilityStrip.appendChild(utilityHelpBtn);
+  if (utilityThemeBtn) {
+    utilityThemeBtn.classList.add('hidden');
+    utilityThemeBtn.tabIndex = -1;
+    sidebarUtilityStrip.appendChild(utilityThemeBtn);
+  }
+  sidebarScrollable.insertBefore(sidebarUtilityStrip, sidebarContent);
+  if (viewToolsPanel && viewToolsPanel.parentNode) {
+    viewToolsPanel.parentNode.removeChild(viewToolsPanel);
+  }
+  if (configTabBtn && configTabBtn.parentNode) {
+    configTabBtn.parentNode.removeChild(configTabBtn);
+  }
+
+  if (previewPanel.parentNode === appEl) {
+    appEl.insertBefore(previewPanel, editorPanel);
+  }
+  previewPanel.classList.add('preview-panel');
+
+  var previewShellControls = document.createElement('div');
+  previewShellControls.className = 'workspace-canvas-toolbar';
+  if (sidebarCollapseBtn) previewShellControls.appendChild(sidebarCollapseBtn);
+  var singleBtn = ensureWorkspaceHeaderButton('workspace-view-single-btn', 'Item');
+  singleBtn.classList.add('workspace-canvas-btn');
+  singleBtn.classList.add('active');
+  singleBtn.setAttribute('aria-pressed', 'true');
+  previewShellControls.appendChild(singleBtn);
+  if (viewGridBtn) previewShellControls.appendChild(viewGridBtn);
+  if (viewFocusBtn) previewShellControls.appendChild(viewFocusBtn);
+  if (previewShell) {
+    previewShell.insertBefore(previewShellControls, previewShell.firstChild);
+  }
+
+  if (statsPanel) {
+    statsPanel.innerHTML = '';
+    statsPanel.classList.add('sidebar-drawer-zone');
+    var setDrawer = buildSidebarDrawer('Set Actions', 'sidebar-set-actions-drawer');
+    if (createSetBtn) setDrawer._body.appendChild(createSetBtn);
+    if (reviewSelectionsBtn) setDrawer._body.appendChild(reviewSelectionsBtn);
+    if (reviewCaptionsBtn) setDrawer._body.appendChild(reviewCaptionsBtn);
+    statsPanel.appendChild(setDrawer);
+
+    var projectDrawer = buildSidebarDrawer('Project Tools', 'sidebar-project-tools-drawer');
+    if (sidebarWorkspace) projectDrawer._body.appendChild(sidebarWorkspace);
+    statsPanel.appendChild(projectDrawer);
+  }
+  if (setToolsPanel && setToolsPanel.parentNode) {
+    setToolsPanel.parentNode.removeChild(setToolsPanel);
+  }
+
+  editorPanel.classList.add('workbench-panel');
+  editorPanel.innerHTML = '';
+
+  var workbenchTop = document.createElement('div');
+  workbenchTop.className = 'workbench-top';
+
+  var groupsCard = document.createElement('div');
+  groupsCard.className = 'workbench-card groups-card';
+  if (annotateStrip) groupsCard.appendChild(annotateStrip);
+
+  var sideStack = document.createElement('aside');
+  sideStack.className = 'workbench-side-stack';
+  checklistPanel.setAttribute('data-layout', 'split');
+  checklistPanel.classList.add('workbench-card', 'group-tools-card');
+  if (checklistTabs) {
+    checklistTabs.classList.add('hidden');
+    checklistPanel.appendChild(checklistTabs);
+  }
+  if (checklistRequirementsPane && checklistRequirementsPane.parentNode !== checklistPanel) {
+    checklistPanel.appendChild(checklistRequirementsPane);
+  }
+  sideStack.appendChild(checklistPanel);
+
+  primerDetails.classList.remove('sidebar-tab-pane', 'hidden');
+  primerDetails.classList.add('workbench-card', 'primer-card');
+  primerDetails.removeAttribute('role');
+  primerDetails.removeAttribute('aria-labelledby');
+  primerDetails.setAttribute('aria-hidden', 'false');
+  if (setNotesEditor) {
+    setNotesEditor.classList.add('hidden');
+    if (setNotesEditor.previousElementSibling && setNotesEditor.previousElementSibling.tagName === 'LABEL') {
+      setNotesEditor.previousElementSibling.classList.add('hidden');
+    }
+  }
+  sideStack.appendChild(primerDetails);
+
+  workbenchTop.appendChild(groupsCard);
+  workbenchTop.appendChild(sideStack);
+
+  var workbenchBottom = document.createElement('div');
+  workbenchBottom.className = 'workbench-bottom';
+
+  var editorSurface = document.createElement('div');
+  editorSurface.className = 'workbench-card editor-surface';
+  editorSurface.appendChild(editorWrapper);
+  if (consolePanel) editorSurface.appendChild(consolePanel);
+
+  var tagsCard = document.createElement('div');
+  tagsCard.className = 'workbench-card tags-card';
+  if (checklistTagsPane) {
+    checklistTagsPane.classList.remove('hidden');
+    tagsCard.appendChild(checklistTagsPane);
+  }
+  if (checklistAnalysisPane) {
+    checklistAnalysisPane.classList.add('hidden');
+    tagsCard.appendChild(checklistAnalysisPane);
+  }
+  if (checklistMetadataPane) {
+    checklistMetadataPane.classList.add('hidden');
+    tagsCard.appendChild(checklistMetadataPane);
+  }
+
+  workbenchBottom.appendChild(editorSurface);
+  workbenchBottom.appendChild(tagsCard);
+
+  editorPanel.appendChild(workbenchTop);
+  editorPanel.appendChild(workbenchBottom);
+
+  var overlayHost = document.createElement('div');
+  overlayHost.id = 'workspace-overlays';
+  overlayHost.className = 'workspace-overlays';
+  if (focusedModal) overlayHost.appendChild(focusedModal);
+  if (mediaGridModal) overlayHost.appendChild(mediaGridModal);
+  appEl.appendChild(overlayHost);
+
+  setWorkspaceViewMode('single');
+}
+
+function wireWorkspaceHeaderUi() {
+  var singleBtn = document.getElementById('workspace-view-single-btn');
+  if (singleBtn && !singleBtn.__workspaceWired) {
+    singleBtn.__workspaceWired = true;
+    singleBtn.onclick = function () {
+      if (typeof isFocusedAnnotationOpen === 'function' && isFocusedAnnotationOpen()) {
+        closeFocusedAnnotationModal();
+      }
+      if (typeof closeMediaGridModal === 'function' && typeof mediaGridState !== 'undefined' && mediaGridState.open) {
+        closeMediaGridModal();
+      }
+      setWorkspaceViewMode('single');
+    };
+  }
+  syncWorkspaceHeaderUi();
+}
+
+window.setWorkspaceViewMode = setWorkspaceViewMode;
+window.setWorkspaceWorkflowMode = setWorkspaceWorkflowMode;
+
 // Hide checklist panel and clear current media selection
 function clearEditorAndPreview() {
   if (ui && ui.editorEl) {
@@ -24,6 +473,9 @@ function clearEditorAndPreview() {
   renderItemTagsPanel();
   renderItemMetadataPanel();
   updatePreviewActionControls();
+  if (typeof updateSidebarSurfaceTools === 'function') {
+    updateSidebarSurfaceTools();
+  }
   updateBalanceDistributionWheel();
 }
 
@@ -40,6 +492,9 @@ function clearSelection() {
   renderItemTagsPanel();
   renderItemMetadataPanel();
   renderFileList(ui.filterEl.value);
+  if (typeof updateSidebarSurfaceTools === 'function') {
+    updateSidebarSurfaceTools();
+  }
 }
 
 function createFlagAction(itemKey) {
@@ -357,11 +812,10 @@ function moveSelectedMediaByOffset(offset) {
   return true;
 }
 
-var sidebarActiveTab = 'config';
+var sidebarActiveTab = 'review';
 
 function setSidebarTab(tabName) {
   var tabs = {
-    config: { buttonId: 'sidebar-tab-config-btn', paneId: 'primer-details' },
     review: { buttonId: 'sidebar-tab-review-btn', paneId: 'cation-review' },
     train: { buttonId: 'sidebar-tab-train-btn', paneId: 'training-details' }
   };
@@ -571,6 +1025,8 @@ function wireAllUi() {
 
 addEventListener('DOMContentLoaded', function () {
   console.log('[webcap] initializing');
+  rebuildUnifiedWorkspaceShell();
+  wireWorkspaceHeaderUi();
   refreshCurrentDirectory();
   wireAllUi();
 });

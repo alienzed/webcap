@@ -1093,6 +1093,10 @@ function mediaGridSyncSelectionDisplay() {
   }
 }
 
+function mediaGridGetSelectedKeysSnapshot() {
+  return Array.from(mediaGridState.selectedKeys || []);
+}
+
 function mediaGridRenderSelectionState() {
   if (mediaGridIsSurfaceMode()) {
     renderMediaGridSurfaceHeader();
@@ -1114,7 +1118,8 @@ function mediaGridRenderSharedWorkbench() {
   renderGroupWorkbench({
     mode: 'grid',
     targetEl: targetEl,
-    mediaKeys: Array.from(mediaGridState.selectedKeys || []),
+    mediaKeys: mediaGridGetSelectedKeysSnapshot(),
+    getMediaKeys: mediaGridGetSelectedKeysSnapshot,
     onAfterMutation: function () {
       if (typeof mediaGridRefreshAfterMutation === 'function') mediaGridRefreshAfterMutation();
       else if (typeof mediaGridRenderSelectionState === 'function') mediaGridRenderSelectionState();

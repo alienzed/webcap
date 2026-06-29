@@ -308,6 +308,21 @@ function syncWorkspaceSurfaceUi() {
   syncWorkspaceConfigEditorUi();
 }
 
+function refreshWorkspaceWorkbenchSurface() {
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  if (surface === 'grid'
+      && typeof isMediaGridSurfaceOpen === 'function'
+      && isMediaGridSurfaceOpen()
+      && typeof mediaGridRenderSharedWorkbench === 'function') {
+    mediaGridRenderSharedWorkbench();
+    return;
+  }
+  if ((surface === 'default' || surface === 'focus' || surface === 'grid')
+      && typeof renderChecklistPanel === 'function') {
+    renderChecklistPanel();
+  }
+}
+
 function setWorkspaceSurface(surface, options) {
   var nextSurface = normalizeWorkspaceSurface(surface);
   var currentSurface = normalizeWorkspaceSurface(workspaceState.surface);
@@ -325,6 +340,7 @@ function setWorkspaceSurface(surface, options) {
     setWorkspaceViewMode('single');
   }
   syncWorkspaceSurfaceUi();
+  refreshWorkspaceWorkbenchSurface();
 }
 
 function exitWorkspaceSurface(surfaceOverride) {

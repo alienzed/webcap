@@ -554,9 +554,12 @@ function resolveGroupWorkbenchOptions(options) {
   if (!currentMediaKey && mode === 'item' && state && state.currentItem && state.currentItem.key) {
     currentMediaKey = state.currentItem.key;
   }
+  var sourceMediaKeys = typeof opts.getMediaKeys === 'function'
+    ? opts.getMediaKeys()
+    : (typeof opts.mediaKeys === 'function' ? opts.mediaKeys() : opts.mediaKeys);
   var seenMediaKeys = {};
   var mediaKeys = [];
-  (Array.isArray(opts.mediaKeys) ? opts.mediaKeys : []).forEach(function (rawKey) {
+  (Array.isArray(sourceMediaKeys) ? sourceMediaKeys : []).forEach(function (rawKey) {
     var key = String(rawKey || '').trim();
     if (!key || seenMediaKeys[key]) return;
     seenMediaKeys[key] = true;
@@ -569,6 +572,22 @@ function resolveGroupWorkbenchOptions(options) {
     mode: mode,
     targetEl: opts.targetEl || document.getElementById('group-workbench-list'),
     mediaKeys: mediaKeys,
+    getMediaKeys: function () {
+      var freshSource = typeof opts.getMediaKeys === 'function'
+        ? opts.getMediaKeys()
+        : (typeof opts.mediaKeys === 'function' ? opts.mediaKeys() : mediaKeys);
+      var freshSeen = {};
+      var freshKeys = [];
+      (Array.isArray(freshSource) ? freshSource : []).forEach(function (rawKey) {
+        var key = String(rawKey || '').trim();
+        if (!key || freshSeen[key]) return;
+        freshSeen[key] = true;
+        freshKeys.push(key);
+      });
+      return mode === 'item'
+        ? (currentMediaKey ? [currentMediaKey] : [])
+        : freshKeys;
+    },
     currentMediaKey: currentMediaKey,
     onAfterMutation: opts.onAfterMutation
   };
@@ -796,10 +815,10 @@ function renderGroupWorkbench(options) {
         termBtn.classList.toggle('active', isActive);
         termBtn.classList.toggle('mixed', isMixed);
         termBtn.classList.toggle('mismatch', isMismatch);
-        (function (key, keys, label, termText, mode, afterMutation) {
+        (function (key, label, termText, mode, afterMutation, getMediaKeys) {
           termBtn.onclick = function () {
             if (mode === 'grid') {
-              toggleGroupWorkbenchTermForMediaKeys(keys, label, termText, {
+              toggleGroupWorkbenchTermForMediaKeys(getMediaKeys(), label, termText, {
                 targetEl: targetEl,
                 onAfterMutation: afterMutation
               });
@@ -813,7 +832,7 @@ function renderGroupWorkbench(options) {
               openChecklistTermAffixesModal(termText);
             }
           };
-        })(mediaKey, mediaKeys.slice(), requirementLabel, term, opts.mode, opts.onAfterMutation);
+        })(mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys);
         termRowEl.appendChild(termBtn);
         termListEl.appendChild(termRowEl);
       }

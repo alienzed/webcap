@@ -554,7 +554,14 @@ function resolveGroupWorkbenchOptions(options) {
   if (!currentMediaKey && mode === 'item' && state && state.currentItem && state.currentItem.key) {
     currentMediaKey = state.currentItem.key;
   }
-  var mediaKeys = Array.isArray(opts.mediaKeys) ? opts.mediaKeys.slice() : [];
+  var seenMediaKeys = {};
+  var mediaKeys = [];
+  (Array.isArray(opts.mediaKeys) ? opts.mediaKeys : []).forEach(function (rawKey) {
+    var key = String(rawKey || '').trim();
+    if (!key || seenMediaKeys[key]) return;
+    seenMediaKeys[key] = true;
+    mediaKeys.push(key);
+  });
   if (mode === 'item') {
     mediaKeys = currentMediaKey ? [currentMediaKey] : [];
   }
@@ -562,7 +569,8 @@ function resolveGroupWorkbenchOptions(options) {
     mode: mode,
     targetEl: opts.targetEl || document.getElementById('group-workbench-list'),
     mediaKeys: mediaKeys,
-    currentMediaKey: currentMediaKey
+    currentMediaKey: currentMediaKey,
+    onAfterMutation: opts.onAfterMutation
   };
 }
 
@@ -614,14 +622,61 @@ function toggleGroupWorkbenchTermForItem(mediaKey, requirementLabel, term) {
 }
 
 function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term, options) {
-  return false;
+  var opts = options || {};
+  var seen = {};
+  var keys = [];
+  (Array.isArray(mediaKeys) ? mediaKeys : []).forEach(function (rawKey) {
+    var key = String(rawKey || '').trim();
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    keys.push(key);
+  });
+  if (!keys.length) {
+    if (typeof setStatus === 'function') setStatus('Select Grid thumbnails to tag them.');
+    return false;
+  }
+  var allHaveTerm = typeof hasTagForMediaKey === 'function' && keys.every(function (key) {
+    return hasTagForMediaKey(key, term);
+  });
+  var changed = 0;
+  keys.forEach(function (key) {
+    var ok = false;
+    if (allHaveTerm) {
+      if (typeof removeTagFromMediaKey === 'function') ok = removeTagFromMediaKey(key, term);
+    } else {
+      if (isChecklistRequirementNaForMediaKey(key, requirementLabel)) {
+        setChecklistRequirementNaForMediaKey(key, requirementLabel, false, { skipRender: true });
+      }
+      if (typeof addTagToMediaKey === 'function') ok = addTagToMediaKey(key, term);
+    }
+    if (ok) changed += 1;
+  });
+  if (typeof setStatus === 'function') {
+    setStatus((allHaveTerm ? 'Removed' : 'Added') + ' "' + term + '" on ' + changed + ' Grid item' + (changed === 1 ? '' : 's') + '.');
+  }
+  if (typeof opts.onAfterMutation === 'function') {
+    opts.onAfterMutation();
+  } else {
+    renderGroupWorkbench({
+      mode: 'grid',
+      targetEl: opts.targetEl,
+      mediaKeys: keys,
+      onAfterMutation: opts.onAfterMutation
+    });
+  }
+  return true;
 }
 
 function renderGroupWorkbench(options) {
   var opts = resolveGroupWorkbenchOptions(options);
   var targetEl = opts.targetEl || document.getElementById('group-workbench-list');
   if (!targetEl) return;
-  if (opts.mode === 'item' && (!opts.currentMediaKey || !state.currentItem)) {
+  var isGridMode = opts.mode === 'grid';
+  if (isGridMode && !opts.mediaKeys.length) {
+    renderGroupWorkbenchEmpty(targetEl, 'Select Grid thumbnails to tag them.');
+    return;
+  }
+  if (!isGridMode && (!opts.currentMediaKey || !state.currentItem)) {
     renderGroupWorkbenchEmpty(targetEl, 'Select an item to review groups.');
     return;
   }
@@ -633,11 +688,12 @@ function renderGroupWorkbench(options) {
   targetEl.innerHTML = '';
   var fragment = document.createDocumentFragment();
   var mediaKey = opts.currentMediaKey || opts.mediaKeys[0] || '';
+  var mediaKeys = opts.mediaKeys;
 
   for (var i = 0; i < checklistItems.length; i++) {
     var requirementLabel = checklistItems[i];
-    var isReviewed = isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
-    var isNa = isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
+    var isReviewed = !isGridMode && isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
+    var isNa = !isGridMode && isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
     var terms = getChecklistKeywordTermsForRequirement(requirementLabel)
       .map(normalizeChecklistTerm)
       .filter(function (term, idx, arr) {
@@ -676,28 +732,30 @@ function renderGroupWorkbench(options) {
     })(requirementLabel);
     actionsEl.appendChild(editBtn);
 
-    var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', 'Done', 'Toggle reviewed');
-    reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
-    reviewedBtn.classList.toggle('active', isReviewed);
-    reviewedBtn.disabled = isNa;
-    (function (key, label) {
-      reviewedBtn.onclick = function () {
-        toggleChecklistRequirementCheckedForMediaKey(key, label);
-        refreshGroupWorkbenchForCurrentItem();
-      };
-    })(mediaKey, requirementLabel);
-    actionsEl.appendChild(reviewedBtn);
+    if (!isGridMode) {
+      var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', 'Done', 'Toggle reviewed');
+      reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
+      reviewedBtn.classList.toggle('active', isReviewed);
+      reviewedBtn.disabled = isNa;
+      (function (key, label) {
+        reviewedBtn.onclick = function () {
+          toggleChecklistRequirementCheckedForMediaKey(key, label);
+          refreshGroupWorkbenchForCurrentItem();
+        };
+      })(mediaKey, requirementLabel);
+      actionsEl.appendChild(reviewedBtn);
 
-    var naBtn = createGroupWorkbenchActionButton('group-workbench-na-btn', 'N/A', 'Toggle not applicable');
-    naBtn.setAttribute('aria-pressed', isNa ? 'true' : 'false');
-    naBtn.classList.toggle('active', isNa);
-    (function (key, label, nextIsNa) {
-      naBtn.onclick = function () {
-        setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
-        refreshGroupWorkbenchForCurrentItem();
-      };
-    })(mediaKey, requirementLabel, isNa);
-    actionsEl.appendChild(naBtn);
+      var naBtn = createGroupWorkbenchActionButton('group-workbench-na-btn', 'N/A', 'Toggle not applicable');
+      naBtn.setAttribute('aria-pressed', isNa ? 'true' : 'false');
+      naBtn.classList.toggle('active', isNa);
+      (function (key, label, nextIsNa) {
+        naBtn.onclick = function () {
+          setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
+          refreshGroupWorkbenchForCurrentItem();
+        };
+      })(mediaKey, requirementLabel, isNa);
+      actionsEl.appendChild(naBtn);
+    }
 
     headerEl.appendChild(actionsEl);
     groupEl.appendChild(headerEl);
@@ -707,14 +765,26 @@ function renderGroupWorkbench(options) {
       termListEl.className = 'group-workbench-term-list';
       for (var t = 0; t < terms.length; t++) {
         var term = terms[t];
-        var isActive = typeof hasTagForMediaKey === 'function' && hasTagForMediaKey(mediaKey, term);
-        var isMismatch = isActive
+        var activeCount = 0;
+        if (typeof hasTagForMediaKey === 'function') {
+          if (isGridMode) {
+            for (var mk = 0; mk < mediaKeys.length; mk++) {
+              if (hasTagForMediaKey(mediaKeys[mk], term)) activeCount += 1;
+            }
+          } else if (hasTagForMediaKey(mediaKey, term)) {
+            activeCount = 1;
+          }
+        }
+        var isActive = isGridMode ? activeCount === mediaKeys.length : activeCount > 0;
+        var isMixed = isGridMode && activeCount > 0 && activeCount < mediaKeys.length;
+        var isMismatch = !isGridMode && isActive
           && typeof tagAppearsInCurrentCaption === 'function'
           && !tagAppearsInCurrentCaption(term);
         var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
         var termRowEl = document.createElement('div');
         termRowEl.className = 'group-workbench-term-row';
         termRowEl.classList.toggle('is-active', isActive);
+        termRowEl.classList.toggle('is-mixed', isMixed);
         termRowEl.classList.toggle('is-mismatch', isMismatch);
 
         var termBtn = document.createElement('button');
@@ -724,9 +794,17 @@ function renderGroupWorkbench(options) {
         termBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         termBtn.title = renderedTerm && renderedTerm !== term ? renderedTerm : term;
         termBtn.classList.toggle('active', isActive);
+        termBtn.classList.toggle('mixed', isMixed);
         termBtn.classList.toggle('mismatch', isMismatch);
-        (function (key, label, termText) {
+        (function (key, keys, label, termText, mode, afterMutation) {
           termBtn.onclick = function () {
+            if (mode === 'grid') {
+              toggleGroupWorkbenchTermForMediaKeys(keys, label, termText, {
+                targetEl: targetEl,
+                onAfterMutation: afterMutation
+              });
+              return;
+            }
             toggleGroupWorkbenchTermForItem(key, label, termText);
           };
           termBtn.oncontextmenu = function (event) {
@@ -735,7 +813,7 @@ function renderGroupWorkbench(options) {
               openChecklistTermAffixesModal(termText);
             }
           };
-        })(mediaKey, requirementLabel, term);
+        })(mediaKey, mediaKeys.slice(), requirementLabel, term, opts.mode, opts.onAfterMutation);
         termRowEl.appendChild(termBtn);
         termListEl.appendChild(termRowEl);
       }

@@ -5695,6 +5695,11 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   background: rgba(245, 158, 11, 0.12);
 }
 
+.group-workbench-term-row.is-mixed .group-workbench-term-btn {
+  border-color: var(--accent);
+  background: rgba(217, 119, 24, 0.1);
+}
+
 .group-workbench-term-btn {
   display: block;
   width: 100%;
@@ -5725,6 +5730,11 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 .group-workbench-term-btn.mismatch {
   border-color: var(--accent);
   background: rgba(245, 158, 11, 0.12);
+}
+
+.group-workbench-term-btn.mixed {
+  border-color: var(--accent);
+  background: rgba(217, 119, 24, 0.1);
 }
 
 .app.shell-revamp #caption-checklist-panel.group-tools-card #checklist-items:empty {

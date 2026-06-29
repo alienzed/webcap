@@ -3,9 +3,13 @@ Last reviewed: 2026-06-19.
 
 ## Paint Points
 
-- Caption Template probably needs a 'i'
 
 ## Bugs
+- Modal z-index checkup, to make sure things like group terms modals always appear on top (of focus, grid...)
+- Focus annotate, rating that removes from filtered list may break JS
+- Grid: updating a term list does not add term, need to reload modal.
+- Clipping videos appears broken... I set the playhead and 3 seconds and somehow I got a tiny loop at the very end of the video. not sure if I exceeded the duration of the clip or something, from src_videos a similar but shorter cut did seem to work
+- Rename video clip requires manual folder refresh to show new name
 
 ## Enhancements
 - Decide whether the media list itself still needs multi-select now that Grid owns the current batch tagging workflow.

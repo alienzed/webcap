@@ -31,6 +31,10 @@ Wire Grid selected thumbnails to use the shared Group Workbench.
 - Grid term toggles use explicit media keys instead of current-item annotation helpers.
 - Keep Grid as its current modal/separate visual surface until Phase 3.
 
+## Phase 2.1
+
+Mount the shared Group Workbench inside the Grid sidebar and restore Item workbench ownership when Grid closes.
+
 ## Phase 3
 
 Fold Grid into the Visual Surface as a zoom level.

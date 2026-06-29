@@ -5741,6 +5741,15 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   display: none;
 }
 
+.media-grid-group-workbench {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.media-grid-sidebar .media-grid-group-workbench .group-workbench-list {
+  max-height: min(52vh, 520px);
+}
+
 html[data-theme="dark"] .app.shell-revamp .review-output-surface-subtitle,
 html[data-theme="dark"] .app.shell-revamp .config-editor-current-file {
   color: rgba(226, 232, 240, 0.72);

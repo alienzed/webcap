@@ -507,6 +507,9 @@ function closeMediaGridModal() {
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode('annotate');
   }
+  if (typeof renderChecklistPanel === 'function') {
+    renderChecklistPanel();
+  }
 }
 
 function renderMediaGridModal() {
@@ -930,9 +933,12 @@ function mediaGridRenderSelectionState() {
 
 function mediaGridRenderSharedWorkbench() {
   if (typeof renderGroupWorkbench !== 'function') return;
+  var targetEl =
+    document.getElementById('media-grid-group-workbench-list') ||
+    document.getElementById('group-workbench-list');
   renderGroupWorkbench({
     mode: 'grid',
-    targetEl: document.getElementById('group-workbench-list'),
+    targetEl: targetEl,
     mediaKeys: Array.from(mediaGridState.selectedKeys || []),
     onAfterMutation: function () {
       if (typeof mediaGridRefreshAfterMutation === 'function') mediaGridRefreshAfterMutation();
@@ -1338,10 +1344,17 @@ function renderMediaGridSidebar() {
   els.sidebar.appendChild(sectionTitle);
 
   if (typeof renderGroupWorkbench === 'function') {
-    var sharedNote = document.createElement('div');
-    sharedNote.className = 'media-grid-empty';
-    sharedNote.textContent = 'Use the shared Groups workbench for batch tags.';
-    els.sidebar.appendChild(sharedNote);
+    var workbenchWrap = document.createElement('section');
+    workbenchWrap.id = 'media-grid-group-workbench';
+    workbenchWrap.className = 'media-grid-group-workbench group-workbench';
+    workbenchWrap.setAttribute('aria-label', 'Grid Groups');
+
+    var workbenchList = document.createElement('div');
+    workbenchList.id = 'media-grid-group-workbench-list';
+    workbenchList.className = 'group-workbench-list';
+
+    workbenchWrap.appendChild(workbenchList);
+    els.sidebar.appendChild(workbenchWrap);
     return;
   }
 

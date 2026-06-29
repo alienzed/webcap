@@ -547,174 +547,215 @@ function syncReviewedFromChecklistAll() {
   return changed;
 }
 
+function resolveGroupWorkbenchOptions(options) {
+  var opts = options || {};
+  var mode = opts.mode || 'item';
+  var currentMediaKey = String(opts.currentMediaKey || '').trim();
+  if (!currentMediaKey && mode === 'item' && state && state.currentItem && state.currentItem.key) {
+    currentMediaKey = state.currentItem.key;
+  }
+  var mediaKeys = Array.isArray(opts.mediaKeys) ? opts.mediaKeys.slice() : [];
+  if (mode === 'item') {
+    mediaKeys = currentMediaKey ? [currentMediaKey] : [];
+  }
+  return {
+    mode: mode,
+    targetEl: opts.targetEl || document.getElementById('group-workbench-list'),
+    mediaKeys: mediaKeys,
+    currentMediaKey: currentMediaKey
+  };
+}
+
+function renderGroupWorkbenchEmpty(targetEl, message) {
+  targetEl.innerHTML = '';
+  var emptyEl = document.createElement('div');
+  emptyEl.className = 'group-workbench-empty';
+  emptyEl.textContent = message;
+  targetEl.appendChild(emptyEl);
+}
+
+function createGroupWorkbenchActionButton(className, text, title) {
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'group-workbench-action-btn ' + className;
+  btn.textContent = text;
+  btn.title = title;
+  return btn;
+}
+
+function toggleGroupWorkbenchTerm(mediaKey, requirementLabel, term) {
+  if (!mediaKey || !term) return;
+  if (isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)) {
+    setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, false, { skipRender: true });
+  }
+  if (typeof toggleAnnotateTag === 'function') {
+    toggleAnnotateTag(term);
+  } else if (typeof hasTagForMediaKey === 'function' && hasTagForMediaKey(mediaKey, term)) {
+    if (typeof removeTagFromCurrentMedia === 'function') removeTagFromCurrentMedia(term);
+    else if (typeof removeTagFromMediaKey === 'function') removeTagFromMediaKey(mediaKey, term);
+  } else {
+    if (typeof addTagToCurrentMedia === 'function') addTagToCurrentMedia(term);
+    else if (typeof addTagToMediaKey === 'function') addTagToMediaKey(mediaKey, term);
+  }
+  renderGroupWorkbench({
+    mode: 'item',
+    mediaKeys: [mediaKey],
+    currentMediaKey: mediaKey
+  });
+}
+
+function renderGroupWorkbench(options) {
+  var opts = resolveGroupWorkbenchOptions(options);
+  var targetEl = opts.targetEl || document.getElementById('group-workbench-list');
+  if (!targetEl) return;
+  if (opts.mode === 'item' && (!opts.currentMediaKey || !state.currentItem)) {
+    renderGroupWorkbenchEmpty(targetEl, 'Select an item to review groups.');
+    return;
+  }
+  if (!Array.isArray(checklistItems) || !checklistItems.length) {
+    renderGroupWorkbenchEmpty(targetEl, 'No groups configured.');
+    return;
+  }
+
+  targetEl.innerHTML = '';
+  var fragment = document.createDocumentFragment();
+  var mediaKey = opts.currentMediaKey || opts.mediaKeys[0] || '';
+
+  for (var i = 0; i < checklistItems.length; i++) {
+    var requirementLabel = checklistItems[i];
+    var isReviewed = isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
+    var isNa = isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
+    var terms = getChecklistKeywordTermsForRequirement(requirementLabel)
+      .map(normalizeChecklistTerm)
+      .filter(function (term, idx, arr) {
+        if (!term) return false;
+        var key = term.toLowerCase();
+        for (var j = 0; j < idx; j++) {
+          if (String(arr[j] || '').toLowerCase() === key) return false;
+        }
+        return true;
+      });
+    terms.sort(checklistSort);
+
+    var groupEl = document.createElement('section');
+    groupEl.className = 'group-workbench-group';
+    groupEl.classList.toggle('is-reviewed', isReviewed);
+    groupEl.classList.toggle('is-na', isNa);
+    groupEl.classList.toggle('is-complete', isReviewed || isNa);
+    groupEl.classList.toggle('is-incomplete', !isReviewed && !isNa);
+
+    var headerEl = document.createElement('div');
+    headerEl.className = 'group-workbench-group-header';
+
+    var titleEl = document.createElement('div');
+    titleEl.className = 'group-workbench-group-title';
+    titleEl.textContent = requirementLabel;
+    headerEl.appendChild(titleEl);
+
+    var actionsEl = document.createElement('div');
+    actionsEl.className = 'group-workbench-group-actions';
+
+    var editBtn = createGroupWorkbenchActionButton('group-workbench-edit-btn', 'Edit', 'Edit group terms');
+    (function (label) {
+      editBtn.onclick = function () {
+        openChecklistGroupTermsModal(label);
+      };
+    })(requirementLabel);
+    actionsEl.appendChild(editBtn);
+
+    var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', 'Done', 'Toggle reviewed');
+    reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
+    reviewedBtn.classList.toggle('active', isReviewed);
+    reviewedBtn.disabled = isNa;
+    (function (key, label) {
+      reviewedBtn.onclick = function () {
+        toggleChecklistRequirementCheckedForMediaKey(key, label);
+      };
+    })(mediaKey, requirementLabel);
+    actionsEl.appendChild(reviewedBtn);
+
+    var naBtn = createGroupWorkbenchActionButton('group-workbench-na-btn', 'N/A', 'Toggle not applicable');
+    naBtn.setAttribute('aria-pressed', isNa ? 'true' : 'false');
+    naBtn.classList.toggle('active', isNa);
+    (function (key, label, nextIsNa) {
+      naBtn.onclick = function () {
+        setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
+      };
+    })(mediaKey, requirementLabel, isNa);
+    actionsEl.appendChild(naBtn);
+
+    headerEl.appendChild(actionsEl);
+    groupEl.appendChild(headerEl);
+
+    if (terms.length) {
+      var termListEl = document.createElement('div');
+      termListEl.className = 'group-workbench-term-list';
+      for (var t = 0; t < terms.length; t++) {
+        var term = terms[t];
+        var isActive = typeof hasTagForMediaKey === 'function' && hasTagForMediaKey(mediaKey, term);
+        var isMismatch = isActive
+          && typeof tagAppearsInCurrentCaption === 'function'
+          && !tagAppearsInCurrentCaption(term);
+        var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
+        var termRowEl = document.createElement('div');
+        termRowEl.className = 'group-workbench-term-row';
+        termRowEl.classList.toggle('is-active', isActive);
+        termRowEl.classList.toggle('is-mismatch', isMismatch);
+
+        var termBtn = document.createElement('button');
+        termBtn.type = 'button';
+        termBtn.className = 'group-workbench-term-btn';
+        termBtn.textContent = term;
+        termBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        termBtn.title = renderedTerm && renderedTerm !== term ? renderedTerm : term;
+        termBtn.classList.toggle('active', isActive);
+        termBtn.classList.toggle('mismatch', isMismatch);
+        (function (key, label, termText) {
+          termBtn.onclick = function () {
+            toggleGroupWorkbenchTerm(key, label, termText);
+          };
+          termBtn.oncontextmenu = function (event) {
+            event.preventDefault();
+            if (typeof openChecklistTermAffixesModal === 'function') {
+              openChecklistTermAffixesModal(termText);
+            }
+          };
+        })(mediaKey, requirementLabel, term);
+        termRowEl.appendChild(termBtn);
+        termListEl.appendChild(termRowEl);
+      }
+      groupEl.appendChild(termListEl);
+    }
+
+    fragment.appendChild(groupEl);
+  }
+  targetEl.appendChild(fragment);
+}
+
 function renderChecklistPanel() {
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   var itemsDiv = document.getElementById('checklist-items');
-  if (!itemsDiv) return;
+  var groupWorkbenchList = document.getElementById('group-workbench-list');
+  var renderTarget = groupWorkbenchList || itemsDiv;
+  if (!renderTarget) return;
   if (typeof renderPrimerTemplatePlaceholderButtons === 'function') {
     renderPrimerTemplatePlaceholderButtons();
   }
   // Only show if a media item is selected
   if (!state.currentItem) {
+    renderGroupWorkbench({ mode: 'item', targetEl: renderTarget });
     setChecklistPanelVisible(false);
     renderAnnotateStrip();
     return;
   }
   setChecklistPanelVisible(true);
-  itemsDiv.innerHTML = '';
-  var checkedMap = checklistCheckedByMedia[state.currentItem.key] || {};
-  var naMap = getChecklistNaMapForMediaKey(state.currentItem.key);
-  var mediaKey = state.currentItem.key;
-  for (var i = 0; i < checklistItems.length; i++) {
-    var item = checklistItems[i];
-    var isNa = !!naMap[normalizeChecklistRequirementKey(item)];
-    var row = document.createElement('div');
-    row.className = 'checklist-row-block';
-    if (isNa) row.classList.add('checklist-row-na');
-    var summaryRow = document.createElement('div');
-    summaryRow.className = 'row-inline checklist-row-summary';
-    if (!!checkedMap[item] || isNa) summaryRow.classList.add('checklist-row-reviewed');
-    var label = document.createElement('div');
-    label.className = 'checklist-row-label';
-    var toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'checklist-row-toggle-btn';
-    toggleBtn.textContent = isChecklistRequirementExpanded(item) ? '\u25BE' : '\u25B8';
-    toggleBtn.title = isChecklistRequirementExpanded(item)
-      ? 'Hide selected tags for primer order'
-      : 'Show selected tags for primer order';
-    (function (requirementLabel) {
-      toggleBtn.onclick = function () {
-        toggleChecklistRequirementExpanded(requirementLabel);
-        renderChecklistPanel();
-      };
-    })(item);
-    var labelText = document.createElement('span');
-    labelText.className = 'checklist-row-label-text';
-    labelText.textContent = item;
-    label.appendChild(toggleBtn);
-    label.appendChild(labelText);
-    summaryRow.appendChild(label);
-    // Use live editor text first so highlight updates while typing.
-    var captionText = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
-      ? ui.editorEl.value
-      : (state.currentItem.caption || '');
-    if (requirementKeywordsMatch(item, captionText)) {
-      summaryRow.classList.add('checklist-item-matched');
-    }
-    var actions = document.createElement('div');
-    actions.className = 'checklist-row-actions';
-    var moveUpBtn = document.createElement('button');
-    moveUpBtn.textContent = '\u2191';
-    moveUpBtn.title = 'Move requirement up';
-    moveUpBtn.className = 'checklist-row-action-btn checklist-row-action-move';
-    moveUpBtn.disabled = (i === 0);
-    (function(idx, label) {
-      moveUpBtn.onclick = function() {
-        var moved = moveChecklistItemByOffset(idx, -1);
-        if (moved) {
-          setStatus('Moved requirement up: ' + label);
-        }
-      };
-    })(i, item);
-    actions.appendChild(moveUpBtn);
-    var editTermsBtn = document.createElement('button');
-    editTermsBtn.textContent = '\u270e';
-    editTermsBtn.title = 'Edit requirement terms';
-    editTermsBtn.className = 'checklist-row-action-btn checklist-group-edit-btn';
-    (function(requirementLabel) {
-      editTermsBtn.onclick = function() {
-        openChecklistGroupTermsModal(requirementLabel);
-      };
-    })(item);
-    actions.appendChild(editTermsBtn);
-    // Remove button
-    var rmBtn = document.createElement('button');
-    rmBtn.textContent = '\u00D7';
-    rmBtn.title = 'Remove requirement';
-    rmBtn.className = 'checklist-row-action-btn checklist-row-action-remove';
-    (function(idx, item) {
-      rmBtn.onclick = function() {
-        checklistItems.splice(idx, 1);
-        for (var k in checklistCheckedByMedia) {
-          if (checklistCheckedByMedia[k]) delete checklistCheckedByMedia[k][item];
-        }
-        for (var mediaKey in checklistRequirementsNaByMedia) {
-          if (checklistRequirementsNaByMedia[mediaKey]) {
-            delete checklistRequirementsNaByMedia[mediaKey][item];
-            if (!Object.keys(checklistRequirementsNaByMedia[mediaKey]).length) {
-              delete checklistRequirementsNaByMedia[mediaKey];
-            }
-          }
-        }
-        syncReviewedFromChecklistAll();
-        saveChecklistToFolderState();
-        renderChecklistPanel();
-      };
-    })(i, item);
-    actions.appendChild(rmBtn);
-    summaryRow.appendChild(actions);
-    row.appendChild(summaryRow);
-    if (isChecklistRequirementExpanded(item)) {
-      var selectedTags = getChecklistSelectedTagsForRequirementForMediaKey(mediaKey, item);
-      var selectedTagsEl = document.createElement('div');
-      selectedTagsEl.className = 'checklist-selected-tags';
-      if (selectedTags.length) {
-        selectedTags.forEach(function (tag, idx) {
-          var tagRow = document.createElement('div');
-          tagRow.className = 'checklist-selected-tag-row';
-          var tagLabel = document.createElement('span');
-          tagLabel.className = 'checklist-selected-tag-label';
-          tagLabel.textContent = tag;
-          var tagActions = document.createElement('div');
-          tagActions.className = 'checklist-selected-tag-actions';
-
-          var tagUpBtn = document.createElement('button');
-          tagUpBtn.type = 'button';
-          tagUpBtn.className = 'checklist-row-action-btn checklist-row-action-move';
-          tagUpBtn.textContent = '\u2191';
-          tagUpBtn.title = 'Move tag earlier in primer order for this group';
-          tagUpBtn.disabled = idx === 0;
-          (function (requirementLabel, tagText) {
-            tagUpBtn.onclick = function () {
-              var moved = moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tagText, -1);
-              if (moved) {
-                setStatus('Moved tag up in ' + requirementLabel + ': ' + tagText);
-              }
-            };
-          })(item, tag);
-
-          var tagDownBtn = document.createElement('button');
-          tagDownBtn.type = 'button';
-          tagDownBtn.className = 'checklist-row-action-btn checklist-row-action-move';
-          tagDownBtn.textContent = '\u2193';
-          tagDownBtn.title = 'Move tag later in primer order for this group';
-          tagDownBtn.disabled = idx === selectedTags.length - 1;
-          (function (requirementLabel, tagText) {
-            tagDownBtn.onclick = function () {
-              var moved = moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tagText, 1);
-              if (moved) {
-                setStatus('Moved tag down in ' + requirementLabel + ': ' + tagText);
-              }
-            };
-          })(item, tag);
-
-          tagActions.appendChild(tagUpBtn);
-          tagActions.appendChild(tagDownBtn);
-          tagRow.appendChild(tagLabel);
-          tagRow.appendChild(tagActions);
-          selectedTagsEl.appendChild(tagRow);
-        });
-      } else {
-        var emptySelectedTags = document.createElement('div');
-        emptySelectedTags.className = 'checklist-selected-tags-empty';
-        emptySelectedTags.textContent = 'No selected tags in this group.';
-        selectedTagsEl.appendChild(emptySelectedTags);
-      }
-      row.appendChild(selectedTagsEl);
-    }
-    itemsDiv.appendChild(row);
-  }
+  if (itemsDiv && groupWorkbenchList) itemsDiv.innerHTML = '';
+  renderGroupWorkbench({
+    mode: 'item',
+    targetEl: renderTarget,
+    mediaKeys: [state.currentItem.key],
+    currentMediaKey: state.currentItem.key
+  });
   renderItemTagsPanel();
   renderItemMetadataPanel();
   renderAnnotateStrip();
@@ -1058,6 +1099,7 @@ window.getChecklistTermDescriptorDefault = getChecklistTermDescriptorDefault;
 window.getChecklistTermDescriptorForMediaKey = getChecklistTermDescriptorForMediaKey;
 window.commitChecklistDescriptorSnapshotForMediaKey = commitChecklistDescriptorSnapshotForMediaKey;
 window.renderChecklistTermWithAffixes = renderChecklistTermWithAffixes;
+window.renderGroupWorkbench = renderGroupWorkbench;
 window.setChecklistRequirementNaForMediaKey = setChecklistRequirementNaForMediaKey;
 window.checklistTermWrappersByKey = checklistTermWrappersByKey;
 window.checklistTermDescriptorDefaultsByKey = checklistTermDescriptorDefaultsByKey;

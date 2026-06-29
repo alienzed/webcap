@@ -5578,6 +5578,148 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   min-height: calc(100vh - 320px);
 }
 
+.group-workbench {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 6px;
+}
+
+.group-workbench-header {
+  display: none;
+}
+
+.group-workbench-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.group-workbench-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.group-workbench-empty {
+  padding: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.group-workbench-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.group-workbench-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.group-workbench-group.is-reviewed .group-workbench-group-title,
+.group-workbench-group.is-complete .group-workbench-group-title {
+  color: var(--accent);
+}
+
+.group-workbench-group.is-na {
+  opacity: 0.62;
+}
+
+.group-workbench-group-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.group-workbench-group-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.group-workbench-group-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.group-workbench-action-btn {
+  min-height: 20px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.group-workbench-action-btn.active {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.group-workbench-action-btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.group-workbench-term-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.group-workbench-term-row {
+  min-width: 0;
+}
+
+.group-workbench-term-btn {
+  display: block;
+  width: 100%;
+  min-height: 22px;
+  padding: 2px 6px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.group-workbench-term-btn:hover {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.group-workbench-term-btn.active {
+  border-color: var(--accent);
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--text);
+}
+
+.group-workbench-term-btn.mismatch {
+  border-color: var(--accent);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.app.shell-revamp #caption-checklist-panel.group-tools-card #checklist-items:empty {
+  display: none;
+}
+
 html[data-theme="dark"] .app.shell-revamp .review-output-surface-subtitle,
 html[data-theme="dark"] .app.shell-revamp .config-editor-current-file {
   color: rgba(226, 232, 240, 0.72);

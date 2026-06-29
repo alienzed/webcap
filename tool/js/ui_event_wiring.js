@@ -138,6 +138,9 @@ function handleMediaListClick(e) {
   if (type !== 'media') return;
   var mediaItem = state.items.find(function (item) { return item.key === key; });
   if (!mediaItem) return;
+  if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen() && typeof closeMediaGridSurface === 'function') {
+    closeMediaGridSurface();
+  }
   if (state.currentItem && state.currentItem.key === mediaItem.key) return;
   if (state.currentItem && state.currentItem.fileName) {
     savePathCaption().then(function () {
@@ -307,8 +310,16 @@ function wireMiscActionButtons() {
 
   if (ui.sidebarGridBtnEl) {
     ui.sidebarGridBtnEl.onclick = function () {
-      if (typeof openMediaGridModal === 'function') {
-        openMediaGridModal();
+      if (typeof openMediaGridSurface === 'function') {
+        openMediaGridSurface();
+      }
+    };
+  }
+
+  if (ui.focusSetGridBtn) {
+    ui.focusSetGridBtn.onclick = function () {
+      if (typeof openMediaGridSurface === 'function') {
+        openMediaGridSurface();
       }
     };
   }

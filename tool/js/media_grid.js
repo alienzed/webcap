@@ -1,5 +1,6 @@
 var mediaGridState = {
   open: false,
+  presentation: '',
   items: [],
   baseItems: [],
   focusSets: [],
@@ -123,6 +124,124 @@ function mediaGridGetEls() {
     viewerStage: document.getElementById('media-grid-viewer-stage'),
     viewerCloseBtn: document.getElementById('media-grid-viewer-close-btn')
   };
+}
+
+function mediaGridGetSurfaceEls() {
+  return {
+    surface: document.getElementById('media-grid-surface'),
+    header: document.getElementById('media-grid-surface-header'),
+    meta: document.getElementById('media-grid-surface-meta'),
+    status: document.getElementById('media-grid-surface-status'),
+    canvas: document.getElementById('media-grid-surface-canvas'),
+    selectAllBtn: document.getElementById('media-grid-surface-select-all-btn'),
+    clearBtn: document.getElementById('media-grid-surface-clear-btn'),
+    closeBtn: document.getElementById('media-grid-surface-close-btn')
+  };
+}
+
+function mediaGridIsModalMode() {
+  return mediaGridState.open && mediaGridState.presentation === 'modal';
+}
+
+function mediaGridIsSurfaceMode() {
+  return mediaGridState.open && mediaGridState.presentation === 'surface';
+}
+
+function mediaGridGetActiveCanvasEl() {
+  if (mediaGridIsSurfaceMode()) {
+    return mediaGridGetSurfaceEls().canvas;
+  }
+  return mediaGridGetEls().canvas;
+}
+
+function mediaGridBuildMetaText() {
+  var activeSet = mediaGridGetActiveFocusSet();
+  var selectedCount = mediaGridState.selectedKeys.size;
+  var totalCount = mediaGridState.items.length;
+  var bits = [mediaGridGetSourceLabel()];
+  if (activeSet && activeSet.key !== 'all') {
+    bits.push(activeSet.label);
+  }
+  bits.push(totalCount + ' item' + (totalCount === 1 ? '' : 's'));
+  bits.push(selectedCount + ' selected');
+  return bits.join(' - ');
+}
+
+function mediaGridResetSessionState() {
+  mediaGridState.open = false;
+  mediaGridState.presentation = '';
+  mediaGridState.items = [];
+  mediaGridState.baseItems = [];
+  mediaGridState.focusSets = [];
+  mediaGridState.focusSetKey = 'all';
+  mediaGridState.selectedKeys = new Set();
+  mediaGridState.lastSelectedKey = '';
+  mediaGridState.status = '';
+  mediaGridState.viewerKey = '';
+}
+
+function mediaGridBeginSession(presentation) {
+  mediaGridState.open = true;
+  mediaGridState.presentation = presentation;
+  mediaGridState.focusSetKey = 'all';
+  mediaGridState.selectedKeys = new Set();
+  mediaGridState.lastSelectedKey = '';
+  mediaGridState.status = '';
+}
+
+function mediaGridHideSurfaceShell() {
+  var surfaceEls = mediaGridGetSurfaceEls();
+  if (surfaceEls.surface) {
+    surfaceEls.surface.classList.add('hidden');
+    surfaceEls.surface.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function mediaGridHideModalShell() {
+  var els = mediaGridGetEls();
+  if (els.modal) {
+    els.modal.classList.add('hidden');
+    els.modal.setAttribute('aria-hidden', 'true');
+  }
+  document.body.classList.remove('media-grid-open');
+}
+
+function mediaGridRestoreItemWorkspace() {
+  if (typeof setWorkspaceViewMode === 'function') {
+    setWorkspaceViewMode('single');
+  }
+  if (typeof exitWorkspaceSurface === 'function') {
+    exitWorkspaceSurface();
+  }
+  if (typeof setWorkspaceWorkflowMode === 'function') {
+    setWorkspaceWorkflowMode('annotate');
+  }
+  if (typeof renderChecklistPanel === 'function') {
+    renderChecklistPanel();
+  }
+}
+
+function mediaGridEnsureMainWorkbenchVisible() {
+  var checklistPanel = document.getElementById('caption-checklist-panel');
+  if (checklistPanel) {
+    checklistPanel.style.display = 'flex';
+  }
+  var editorPanel = checklistPanel ? checklistPanel.closest('.editor-panel') : null;
+  if (editorPanel) {
+    editorPanel.classList.add('checklist-visible');
+  }
+}
+
+function mediaGridCloseActivePresentation() {
+  if (mediaGridIsSurfaceMode()) {
+    closeMediaGridSurface();
+    return true;
+  }
+  if (mediaGridIsModalMode()) {
+    closeMediaGridModal();
+    return true;
+  }
+  return false;
 }
 
 function mediaGridSetStatus(text) {
@@ -367,7 +486,10 @@ function mediaGridSyncItemsToCurrentView() {
 
 function mediaGridCreateEntryButton() {
   if (ui && ui.sidebarGridBtnEl) {
-    ui.sidebarGridBtnEl.onclick = openMediaGridModal;
+    ui.sidebarGridBtnEl.onclick = openMediaGridSurface;
+    if (ui.focusSetGridBtn) {
+      ui.focusSetGridBtn.onclick = openMediaGridSurface;
+    }
     mediaGridUpdateEntryVisibility();
     return;
   }
@@ -387,7 +509,7 @@ function mediaGridCreateEntryButton() {
     '<span class="media-grid-open-icon" aria-hidden="true">' +
       '<span></span><span></span><span></span><span></span>' +
     '</span>';
-  btn.onclick = openMediaGridModal;
+  btn.onclick = openMediaGridSurface;
   wrapper.insertBefore(btn, wrapper.firstChild);
   mediaGridUpdateEntryVisibility();
 }
@@ -420,6 +542,13 @@ function mediaGridCreateModal() {
   mediaGridCreateViewerModal();
 }
 
+function mediaGridCreateSurface() {
+  if (!document.getElementById('media-grid-surface')) {
+    throw new Error('Media Grid surface is missing from tool.html.');
+  }
+  mediaGridWireSurface();
+}
+
 function mediaGridWireModal() {
   var els = mediaGridGetEls();
   if (!els.modal) throw new Error('Media Grid shell is missing.');
@@ -436,6 +565,19 @@ function mediaGridWireModal() {
   els.railCollapseBtn.addEventListener('click', function () {
     mediaGridSetRailCollapsed(!mediaGridState.railCollapsed);
   });
+}
+
+function mediaGridWireSurface() {
+  var els = mediaGridGetSurfaceEls();
+  if (!els.surface) throw new Error('Media Grid surface is missing.');
+  if (els.surface.__wired) return;
+  els.surface.__wired = true;
+  if (!els.selectAllBtn || !els.clearBtn || !els.closeBtn) {
+    throw new Error('Media Grid surface controls are missing.');
+  }
+  els.selectAllBtn.onclick = mediaGridSelectAll;
+  els.clearBtn.onclick = mediaGridClearSelection;
+  els.closeBtn.onclick = closeMediaGridSurface;
 }
 
 function mediaGridCreateViewerModal() {
@@ -458,11 +600,9 @@ function openMediaGridModal() {
     setStatus('No visible media items for Grid.');
     return;
   }
-  mediaGridState.open = true;
-  mediaGridState.focusSetKey = 'all';
-  mediaGridState.selectedKeys = new Set();
-  mediaGridState.lastSelectedKey = '';
-  mediaGridState.status = '';
+  closeMediaGridViewer();
+  mediaGridHideSurfaceShell();
+  mediaGridBeginSession('modal');
   var els = mediaGridGetEls();
   var overlayHost = document.getElementById('workspace-overlays');
   if (overlayHost && els.modal && els.modal.parentNode !== overlayHost) {
@@ -484,36 +624,50 @@ function openMediaGridModal() {
 }
 
 function closeMediaGridModal() {
-  var els = mediaGridGetEls();
   closeMediaGridViewer();
-  els.modal.classList.add('hidden');
-  els.modal.setAttribute('aria-hidden', 'true');
-  document.body.classList.remove('media-grid-open');
-  mediaGridState.open = false;
-  mediaGridState.items = [];
-  mediaGridState.baseItems = [];
-  mediaGridState.focusSets = [];
-  mediaGridState.focusSetKey = 'all';
-  mediaGridState.selectedKeys = new Set();
-  mediaGridState.lastSelectedKey = '';
-  mediaGridState.status = '';
-  mediaGridState.viewerKey = '';
-  if (typeof setWorkspaceViewMode === 'function') {
-    setWorkspaceViewMode('single');
+  mediaGridHideModalShell();
+  mediaGridResetSessionState();
+  mediaGridRestoreItemWorkspace();
+}
+
+function openMediaGridSurface() {
+  var items = mediaGridGetVisibleItems();
+  if (!items.length) {
+    setStatus('No visible media items for Grid.');
+    return;
   }
-  if (typeof exitWorkspaceSurface === 'function') {
-    exitWorkspaceSurface();
+  var surfaceEls = mediaGridGetSurfaceEls();
+  if (!surfaceEls.surface || !surfaceEls.canvas) {
+    openMediaGridModal();
+    return;
+  }
+  closeMediaGridViewer();
+  mediaGridHideModalShell();
+  mediaGridBeginSession('surface');
+  mediaGridEnsureMainWorkbenchVisible();
+  surfaceEls.surface.classList.remove('hidden');
+  surfaceEls.surface.setAttribute('aria-hidden', 'false');
+  if (typeof setWorkspaceViewMode === 'function') {
+    setWorkspaceViewMode('grid');
+  }
+  if (typeof setWorkspaceSurface === 'function') {
+    setWorkspaceSurface('grid');
   }
   if (typeof setWorkspaceWorkflowMode === 'function') {
-    setWorkspaceWorkflowMode('annotate');
+    setWorkspaceWorkflowMode('select');
   }
-  if (typeof renderChecklistPanel === 'function') {
-    renderChecklistPanel();
-  }
+  renderMediaGridSurface();
+}
+
+function closeMediaGridSurface() {
+  closeMediaGridViewer();
+  mediaGridHideSurfaceShell();
+  mediaGridResetSessionState();
+  mediaGridRestoreItemWorkspace();
 }
 
 function renderMediaGridModal() {
-  if (!mediaGridState.open) return;
+  if (!mediaGridIsModalMode()) return;
   mediaGridSyncItemsToCurrentView();
   renderMediaGridHeader();
   renderMediaGridLeftRail();
@@ -523,22 +677,35 @@ function renderMediaGridModal() {
   mediaGridRenderSharedWorkbench();
 }
 
+function renderMediaGridSurface() {
+  if (!mediaGridIsSurfaceMode()) return;
+  mediaGridSyncItemsToCurrentView();
+  mediaGridEnsureMainWorkbenchVisible();
+  renderMediaGridSurfaceHeader();
+  renderMediaGridCanvas();
+  mediaGridRenderSharedWorkbench();
+}
+
 function renderMediaGridHeader() {
   var els = mediaGridGetEls();
-  var activeSet = mediaGridGetActiveFocusSet();
   var selectedCount = mediaGridState.selectedKeys.size;
   var totalCount = mediaGridState.items.length;
-  var bits = [mediaGridGetSourceLabel()];
-  if (activeSet && activeSet.key !== 'all') {
-    bits.push(activeSet.label);
-  }
-  bits.push(totalCount + ' item' + (totalCount === 1 ? '' : 's'));
-  bits.push(selectedCount + ' selected');
-  els.meta.textContent = bits.join(' - ');
+  els.meta.textContent = mediaGridBuildMetaText();
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
   els.status.textContent = mediaGridState.status;
   mediaGridSyncFilterControls();
+}
+
+function renderMediaGridSurfaceHeader() {
+  var els = mediaGridGetSurfaceEls();
+  var selectedCount = mediaGridState.selectedKeys.size;
+  var totalCount = mediaGridState.items.length;
+  if (!els.meta || !els.status || !els.selectAllBtn || !els.clearBtn) return;
+  els.meta.textContent = mediaGridBuildMetaText();
+  els.status.textContent = mediaGridState.status;
+  els.clearBtn.disabled = selectedCount <= 0;
+  els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
 }
 
 function mediaGridBuildFilterControls() {
@@ -794,13 +961,14 @@ function renderMediaGridActiveScope() {
 }
 
 function renderMediaGridCanvas() {
-  var els = mediaGridGetEls();
-  els.canvas.innerHTML = '';
+  var canvas = mediaGridGetActiveCanvasEl();
+  if (!canvas) return;
+  canvas.innerHTML = '';
   if (!mediaGridState.items.length) {
     var empty = document.createElement('div');
     empty.className = 'media-grid-empty media-grid-empty-main';
     empty.textContent = 'No items remain in this Grid view.';
-    els.canvas.appendChild(empty);
+    canvas.appendChild(empty);
     return;
   }
   var grid = document.createElement('div');
@@ -808,7 +976,7 @@ function renderMediaGridCanvas() {
   mediaGridState.items.forEach(function (item) {
     grid.appendChild(mediaGridBuildTile(item));
   });
-  els.canvas.appendChild(grid);
+  canvas.appendChild(grid);
 }
 
 function mediaGridOpenItemInMainWorkspace(mediaKey) {
@@ -817,7 +985,7 @@ function mediaGridOpenItemInMainWorkspace(mediaKey) {
     mediaGridSetStatus('Item is no longer visible in Grid.');
     return;
   }
-  closeMediaGridModal();
+  mediaGridCloseActivePresentation();
   selectByFileName(item.fileName);
 }
 
@@ -904,8 +1072,9 @@ function mediaGridAppendTileBadges(thumb, mediaItem) {
 }
 
 function mediaGridSyncSelectionDisplay() {
-  var els = mediaGridGetEls();
-  var tiles = els.canvas.querySelectorAll('.media-grid-tile[data-key]');
+  var canvas = mediaGridGetActiveCanvasEl();
+  if (!canvas) return;
+  var tiles = canvas.querySelectorAll('.media-grid-tile[data-key]');
   for (var i = 0; i < tiles.length; i++) {
     var tile = tiles[i];
     var key = tile.getAttribute('data-key');
@@ -925,17 +1094,23 @@ function mediaGridSyncSelectionDisplay() {
 }
 
 function mediaGridRenderSelectionState() {
-  renderMediaGridHeader();
+  if (mediaGridIsSurfaceMode()) {
+    renderMediaGridSurfaceHeader();
+  } else {
+    renderMediaGridHeader();
+  }
   mediaGridSyncSelectionDisplay();
-  renderMediaGridSidebar();
+  if (mediaGridIsModalMode()) {
+    renderMediaGridSidebar();
+  }
   mediaGridRenderSharedWorkbench();
 }
 
 function mediaGridRenderSharedWorkbench() {
   if (typeof renderGroupWorkbench !== 'function') return;
-  var targetEl =
-    document.getElementById('media-grid-group-workbench-list') ||
-    document.getElementById('group-workbench-list');
+  var targetEl = mediaGridIsSurfaceMode()
+    ? document.getElementById('group-workbench-list')
+    : (document.getElementById('media-grid-group-workbench-list') || document.getElementById('group-workbench-list'));
   renderGroupWorkbench({
     mode: 'grid',
     targetEl: targetEl,
@@ -967,18 +1142,20 @@ function mediaGridHandleTileContextMenu(mediaItem, e) {
 }
 
 function mediaGridClearContextTarget() {
-  var els = mediaGridGetEls();
-  var tiles = els.canvas.querySelectorAll('.media-grid-tile.context-target');
+  var canvas = mediaGridGetActiveCanvasEl();
+  if (!canvas) return;
+  var tiles = canvas.querySelectorAll('.media-grid-tile.context-target');
   for (var i = 0; i < tiles.length; i++) {
     tiles[i].classList.remove('context-target');
   }
 }
 
 function mediaGridMarkContextTarget(mediaKey) {
-  var els = mediaGridGetEls();
+  var canvas = mediaGridGetActiveCanvasEl();
+  if (!canvas) return;
   mediaGridClearContextTarget();
   var key = String(mediaKey || '').replace(/"/g, '\\"');
-  var target = els.canvas.querySelector('.media-grid-tile[data-key="' + key + '"]');
+  var target = canvas.querySelector('.media-grid-tile[data-key="' + key + '"]');
   if (target) target.classList.add('context-target');
 }
 
@@ -1157,11 +1334,19 @@ function mediaGridPasteTagsToSelected() {
 
 function mediaGridRefreshAfterMutation() {
   if (!mediaGridState.open) return;
+  if (mediaGridIsSurfaceMode()) {
+    renderMediaGridSurface();
+    return;
+  }
   renderMediaGridModal();
 }
 
 function mediaGridRefreshFromCurrentFilters() {
   if (!mediaGridState.open) return;
+  if (mediaGridIsSurfaceMode()) {
+    renderMediaGridSurface();
+    return;
+  }
   renderMediaGridModal();
 }
 
@@ -1406,7 +1591,7 @@ function mediaGridHandleKeydown(e) {
   if (isEditableElement(document.activeElement)) return;
   if (e.key === 'Escape') {
     e.preventDefault();
-    closeMediaGridModal();
+    mediaGridCloseActivePresentation();
     return;
   }
   if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
@@ -1430,6 +1615,7 @@ function mediaGridHandleKeydown(e) {
 
 function initMediaGrid() {
   mediaGridCreateEntryButton();
+  mediaGridCreateSurface();
   mediaGridCreateModal();
   document.addEventListener('keydown', mediaGridHandleKeydown);
   window.addEventListener('webcap:context-menu-hidden', function () {
@@ -1445,5 +1631,8 @@ function initMediaGrid() {
 initMediaGrid();
 
 window.openMediaGridModal = openMediaGridModal;
+window.openMediaGridSurface = openMediaGridSurface;
+window.closeMediaGridSurface = closeMediaGridSurface;
+window.isMediaGridSurfaceOpen = mediaGridIsSurfaceMode;
 window.mediaGridUpdateEntryVisibility = mediaGridUpdateEntryVisibility;
 window.mediaGridRefreshFromCurrentFilters = mediaGridRefreshFromCurrentFilters;

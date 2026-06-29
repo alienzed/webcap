@@ -5311,14 +5311,12 @@ html[data-theme="dark"] .app.shell-revamp #caption-checklist-panel.group-tools-c
 }
 
 .app.shell-revamp.workspace-view-grid .preview-panel,
-.app.shell-revamp.workspace-view-grid .workbench-panel,
 .app.shell-revamp.workspace-view-focus .preview-panel,
 .app.shell-revamp.workspace-view-focus .workbench-panel {
   overflow: hidden;
 }
 
-.app.shell-revamp.workspace-view-grid .preview-panel > :not(.workspace-canvas-toolbar),
-.app.shell-revamp.workspace-view-grid .workbench-panel > *,
+.app.shell-revamp.workspace-view-grid .preview-shell > :not(.workspace-canvas-toolbar):not(#media-grid-surface),
 .app.shell-revamp.workspace-view-focus .preview-panel > :not(.workspace-canvas-toolbar),
 .app.shell-revamp.workspace-view-focus .workbench-panel > * {
   opacity: 0;

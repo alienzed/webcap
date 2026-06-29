@@ -633,6 +633,9 @@ function selectByFileName(fileName, focusFiles, focusSource, reportType) {
   if (!fileName) {
     return;
   }
+  if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen() && typeof closeMediaGridSurface === 'function') {
+    closeMediaGridSurface();
+  }
 
   function doSelect() {
     var target = null;

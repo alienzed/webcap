@@ -425,8 +425,13 @@ function wireWorkspaceHeaderUi() {
       if (typeof isFocusedAnnotationOpen === 'function' && isFocusedAnnotationOpen()) {
         closeFocusedAnnotationModal();
       }
+      if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen() && typeof closeMediaGridSurface === 'function') {
+        closeMediaGridSurface();
+        return;
+      }
       if (typeof closeMediaGridModal === 'function' && typeof mediaGridState !== 'undefined' && mediaGridState.open) {
         closeMediaGridModal();
+        return;
       }
       setWorkspaceViewMode('single');
     };

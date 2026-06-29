@@ -41,6 +41,9 @@ Fold Grid into the Visual Surface as a zoom level.
 
 - Treat Item, Grid, and Focus as surface levels rather than separate feature silos.
 - Keep the Scope Sidebar and Shared Workbench stable while surface behavior consolidates.
+- Grid now opens through an inline Visual Surface path in the main workspace.
+- The modal Grid path remains available as fallback while the inline path settles.
+- The Shared Group Workbench now follows Item or Grid mode on the same workspace shell.
 
 ## Phase 4
 

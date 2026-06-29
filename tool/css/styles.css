@@ -5572,6 +5572,19 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   min-height: calc(100vh - 180px);
 }
 
+.app.shell-revamp.workspace-surface-grid .workbench-top {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app.shell-revamp.workspace-surface-grid #primer-details,
+.app.shell-revamp.workspace-surface-grid .workbench-bottom {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-grid #caption-checklist-panel.checklist-panel {
+  display: flex !important;
+}
+
 .app.shell-revamp.workspace-surface-config-editor textarea#editor {
   min-height: calc(100vh - 320px);
 }
@@ -5604,6 +5617,12 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 
 .group-workbench-empty {
   padding: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.group-workbench-notice {
+  padding: 0 0 6px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -5717,6 +5736,14 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   border-color: var(--border);
   background: var(--panel);
   color: var(--text);
+}
+
+.group-workbench-term-btn:disabled,
+.group-workbench-term-btn:disabled:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
 }
 
 .group-workbench-term-btn.active {

@@ -484,6 +484,20 @@ function mediaGridSyncItemsToCurrentView() {
   mediaGridState.items = nextItems;
 }
 
+function mediaGridSeedSelectionFromCurrentItem() {
+  var currentKey = state && state.currentItem && state.currentItem.key
+    ? String(state.currentItem.key)
+    : '';
+  if (!currentKey) return;
+  for (var i = 0; i < mediaGridState.items.length; i++) {
+    if (mediaGridState.items[i] && mediaGridState.items[i].key === currentKey) {
+      mediaGridState.selectedKeys = new Set([currentKey]);
+      mediaGridState.lastSelectedKey = currentKey;
+      return;
+    }
+  }
+}
+
 function mediaGridCreateEntryButton() {
   if (ui && ui.sidebarGridBtnEl) {
     ui.sidebarGridBtnEl.onclick = openMediaGridSurface;
@@ -644,6 +658,8 @@ function openMediaGridSurface() {
   closeMediaGridViewer();
   mediaGridHideModalShell();
   mediaGridBeginSession('surface');
+  mediaGridSyncItemsToCurrentView();
+  mediaGridSeedSelectionFromCurrentItem();
   mediaGridEnsureMainWorkbenchVisible();
   surfaceEls.surface.classList.remove('hidden');
   surfaceEls.surface.setAttribute('aria-hidden', 'false');
@@ -651,7 +667,7 @@ function openMediaGridSurface() {
     setWorkspaceViewMode('grid');
   }
   if (typeof setWorkspaceSurface === 'function') {
-    setWorkspaceSurface('grid');
+    setWorkspaceSurface('grid', { sidebarHidden: true });
   }
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode('select');

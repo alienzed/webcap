@@ -601,6 +601,14 @@ function renderGroupWorkbenchEmpty(targetEl, message) {
   targetEl.appendChild(emptyEl);
 }
 
+function appendGroupWorkbenchNotice(targetEl, message) {
+  if (!message) return;
+  var noticeEl = document.createElement('div');
+  noticeEl.className = 'group-workbench-notice';
+  noticeEl.textContent = message;
+  targetEl.appendChild(noticeEl);
+}
+
 function createGroupWorkbenchActionButton(className, text, title) {
   var btn = document.createElement('button');
   btn.type = 'button';
@@ -691,28 +699,28 @@ function renderGroupWorkbench(options) {
   var targetEl = opts.targetEl || document.getElementById('group-workbench-list');
   if (!targetEl) return;
   var isGridMode = opts.mode === 'grid';
-  if (isGridMode && !opts.mediaKeys.length) {
-    renderGroupWorkbenchEmpty(targetEl, 'Select Grid thumbnails to tag them.');
-    return;
-  }
-  if (!isGridMode && (!opts.currentMediaKey || !state.currentItem)) {
-    renderGroupWorkbenchEmpty(targetEl, 'Select an item to review groups.');
-    return;
-  }
+  var hasGridTargets = isGridMode && opts.mediaKeys.length > 0;
+  var hasItemTarget = !isGridMode && !!opts.currentMediaKey;
+  var hasActionTarget = isGridMode ? hasGridTargets : hasItemTarget;
   if (!Array.isArray(checklistItems) || !checklistItems.length) {
     renderGroupWorkbenchEmpty(targetEl, 'No groups configured.');
     return;
   }
 
   targetEl.innerHTML = '';
+  if (!hasActionTarget) {
+    appendGroupWorkbenchNotice(targetEl, isGridMode
+      ? 'Select Grid thumbnails to tag them.'
+      : 'Select an item to review groups.');
+  }
   var fragment = document.createDocumentFragment();
   var mediaKey = opts.currentMediaKey || opts.mediaKeys[0] || '';
   var mediaKeys = opts.mediaKeys;
 
   for (var i = 0; i < checklistItems.length; i++) {
     var requirementLabel = checklistItems[i];
-    var isReviewed = !isGridMode && isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
-    var isNa = !isGridMode && isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
+    var isReviewed = hasItemTarget && isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
+    var isNa = hasItemTarget && isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
     var terms = getChecklistKeywordTermsForRequirement(requirementLabel)
       .map(normalizeChecklistTerm)
       .filter(function (term, idx, arr) {
@@ -731,6 +739,7 @@ function renderGroupWorkbench(options) {
     groupEl.classList.toggle('is-na', isNa);
     groupEl.classList.toggle('is-complete', isReviewed || isNa);
     groupEl.classList.toggle('is-incomplete', !isReviewed && !isNa);
+    groupEl.classList.toggle('is-disabled', !hasActionTarget);
 
     var headerEl = document.createElement('div');
     headerEl.className = 'group-workbench-group-header';
@@ -755,9 +764,10 @@ function renderGroupWorkbench(options) {
       var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', 'Done', 'Toggle reviewed');
       reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
       reviewedBtn.classList.toggle('active', isReviewed);
-      reviewedBtn.disabled = isNa;
+      reviewedBtn.disabled = !hasItemTarget || isNa;
       (function (key, label) {
         reviewedBtn.onclick = function () {
+          if (!key) return;
           toggleChecklistRequirementCheckedForMediaKey(key, label);
           refreshGroupWorkbenchForCurrentItem();
         };
@@ -767,8 +777,10 @@ function renderGroupWorkbench(options) {
       var naBtn = createGroupWorkbenchActionButton('group-workbench-na-btn', 'N/A', 'Toggle not applicable');
       naBtn.setAttribute('aria-pressed', isNa ? 'true' : 'false');
       naBtn.classList.toggle('active', isNa);
+      naBtn.disabled = !hasItemTarget;
       (function (key, label, nextIsNa) {
         naBtn.onclick = function () {
+          if (!key) return;
           setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
           refreshGroupWorkbenchForCurrentItem();
         };
@@ -785,7 +797,7 @@ function renderGroupWorkbench(options) {
       for (var t = 0; t < terms.length; t++) {
         var term = terms[t];
         var activeCount = 0;
-        if (typeof hasTagForMediaKey === 'function') {
+        if (hasActionTarget && typeof hasTagForMediaKey === 'function') {
           if (isGridMode) {
             for (var mk = 0; mk < mediaKeys.length; mk++) {
               if (hasTagForMediaKey(mediaKeys[mk], term)) activeCount += 1;
@@ -794,9 +806,11 @@ function renderGroupWorkbench(options) {
             activeCount = 1;
           }
         }
-        var isActive = isGridMode ? activeCount === mediaKeys.length : activeCount > 0;
-        var isMixed = isGridMode && activeCount > 0 && activeCount < mediaKeys.length;
-        var isMismatch = !isGridMode && isActive
+        var isActive = isGridMode
+          ? (hasGridTargets && activeCount === mediaKeys.length)
+          : (hasItemTarget && activeCount > 0);
+        var isMixed = isGridMode && hasGridTargets && activeCount > 0 && activeCount < mediaKeys.length;
+        var isMismatch = hasItemTarget && !isGridMode && isActive
           && typeof tagAppearsInCurrentCaption === 'function'
           && !tagAppearsInCurrentCaption(term);
         var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
@@ -805,6 +819,7 @@ function renderGroupWorkbench(options) {
         termRowEl.classList.toggle('is-active', isActive);
         termRowEl.classList.toggle('is-mixed', isMixed);
         termRowEl.classList.toggle('is-mismatch', isMismatch);
+        termRowEl.classList.toggle('is-disabled', !hasActionTarget);
 
         var termBtn = document.createElement('button');
         termBtn.type = 'button';
@@ -815,8 +830,10 @@ function renderGroupWorkbench(options) {
         termBtn.classList.toggle('active', isActive);
         termBtn.classList.toggle('mixed', isMixed);
         termBtn.classList.toggle('mismatch', isMismatch);
-        (function (key, label, termText, mode, afterMutation, getMediaKeys) {
-          termBtn.onclick = function () {
+        termBtn.disabled = !hasActionTarget;
+        (function (btn, key, label, termText, mode, afterMutation, getMediaKeys) {
+          btn.onclick = function () {
+            if (btn.disabled) return;
             if (mode === 'grid') {
               toggleGroupWorkbenchTermForMediaKeys(getMediaKeys(), label, termText, {
                 targetEl: targetEl,
@@ -826,13 +843,13 @@ function renderGroupWorkbench(options) {
             }
             toggleGroupWorkbenchTermForItem(key, label, termText);
           };
-          termBtn.oncontextmenu = function (event) {
+          btn.oncontextmenu = function (event) {
             event.preventDefault();
             if (typeof openChecklistTermAffixesModal === 'function') {
               openChecklistTermAffixesModal(termText);
             }
           };
-        })(mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys);
+        })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys);
         termRowEl.appendChild(termBtn);
         termListEl.appendChild(termRowEl);
       }
@@ -850,17 +867,29 @@ function renderChecklistPanel() {
   var groupWorkbenchList = document.getElementById('group-workbench-list');
   var renderTarget = groupWorkbenchList || itemsDiv;
   if (!renderTarget) return;
+  if (typeof workspaceState !== 'undefined'
+      && workspaceState
+      && workspaceState.surface === 'grid'
+      && typeof isMediaGridSurfaceOpen === 'function'
+      && isMediaGridSurfaceOpen()
+      && typeof mediaGridRenderSharedWorkbench === 'function') {
+    setChecklistPanelVisible(true);
+    if (itemsDiv && groupWorkbenchList) itemsDiv.innerHTML = '';
+    mediaGridRenderSharedWorkbench();
+    return;
+  }
   if (typeof renderPrimerTemplatePlaceholderButtons === 'function') {
     renderPrimerTemplatePlaceholderButtons();
   }
-  // Only show if a media item is selected
+  setChecklistPanelVisible(true);
   if (!state.currentItem) {
+    if (itemsDiv && groupWorkbenchList) itemsDiv.innerHTML = '';
     renderGroupWorkbench({ mode: 'item', targetEl: renderTarget });
-    setChecklistPanelVisible(false);
+    renderItemTagsPanel();
+    renderItemMetadataPanel();
     renderAnnotateStrip();
     return;
   }
-  setChecklistPanelVisible(true);
   if (itemsDiv && groupWorkbenchList) itemsDiv.innerHTML = '';
   renderGroupWorkbench({
     mode: 'item',

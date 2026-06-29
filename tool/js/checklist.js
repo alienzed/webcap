@@ -583,7 +583,20 @@ function createGroupWorkbenchActionButton(className, text, title) {
   return btn;
 }
 
-function toggleGroupWorkbenchTerm(mediaKey, requirementLabel, term) {
+function refreshGroupWorkbenchForCurrentItem() {
+  if (!state || !state.currentItem || !state.currentItem.key) {
+    renderGroupWorkbench({ mode: 'item' });
+    return;
+  }
+  renderGroupWorkbench({
+    mode: 'item',
+    targetEl: document.getElementById('group-workbench-list') || document.getElementById('checklist-items'),
+    mediaKeys: [state.currentItem.key],
+    currentMediaKey: state.currentItem.key
+  });
+}
+
+function toggleGroupWorkbenchTermForItem(mediaKey, requirementLabel, term) {
   if (!mediaKey || !term) return;
   if (isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)) {
     setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, false, { skipRender: true });
@@ -597,11 +610,11 @@ function toggleGroupWorkbenchTerm(mediaKey, requirementLabel, term) {
     if (typeof addTagToCurrentMedia === 'function') addTagToCurrentMedia(term);
     else if (typeof addTagToMediaKey === 'function') addTagToMediaKey(mediaKey, term);
   }
-  renderGroupWorkbench({
-    mode: 'item',
-    mediaKeys: [mediaKey],
-    currentMediaKey: mediaKey
-  });
+  refreshGroupWorkbenchForCurrentItem();
+}
+
+function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term, options) {
+  return false;
 }
 
 function renderGroupWorkbench(options) {
@@ -670,6 +683,7 @@ function renderGroupWorkbench(options) {
     (function (key, label) {
       reviewedBtn.onclick = function () {
         toggleChecklistRequirementCheckedForMediaKey(key, label);
+        refreshGroupWorkbenchForCurrentItem();
       };
     })(mediaKey, requirementLabel);
     actionsEl.appendChild(reviewedBtn);
@@ -680,6 +694,7 @@ function renderGroupWorkbench(options) {
     (function (key, label, nextIsNa) {
       naBtn.onclick = function () {
         setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
+        refreshGroupWorkbenchForCurrentItem();
       };
     })(mediaKey, requirementLabel, isNa);
     actionsEl.appendChild(naBtn);
@@ -712,7 +727,7 @@ function renderGroupWorkbench(options) {
         termBtn.classList.toggle('mismatch', isMismatch);
         (function (key, label, termText) {
           termBtn.onclick = function () {
-            toggleGroupWorkbenchTerm(key, label, termText);
+            toggleGroupWorkbenchTermForItem(key, label, termText);
           };
           termBtn.oncontextmenu = function (event) {
             event.preventDefault();

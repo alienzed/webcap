@@ -5684,6 +5684,17 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   min-width: 0;
 }
 
+.group-workbench-term-row.is-active .group-workbench-term-btn {
+  border-color: var(--accent);
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--text);
+}
+
+.group-workbench-term-row.is-mismatch .group-workbench-term-btn {
+  border-color: var(--accent);
+  background: rgba(245, 158, 11, 0.12);
+}
+
 .group-workbench-term-btn {
   display: block;
   width: 100%;

@@ -13,6 +13,14 @@ Create the shared Group Workbench seam and wire Item mode to render groups throu
 - Keep legacy checklist targets available while the shared renderer takes over the visible Item-mode group list.
 - Leave Grid, Focus, Review / Output, Config, backend routes, and broad shell behavior unchanged.
 
+## Phase 1.1
+
+Harden the shared Group Workbench seam before Grid integration.
+
+- Keep Item term toggles scoped to the current item.
+- Keep Grid and multi-media term application for Phase 2.
+- Refresh visible reviewed and N/A state through the shared renderer.
+
 ## Phase 2
 
 Wire Grid selected thumbnails to use the shared Group Workbench.

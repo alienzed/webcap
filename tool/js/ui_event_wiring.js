@@ -235,6 +235,9 @@ function wireTrainingButtons() {
   var trainingGenerateBtn = document.getElementById('training-generate-btn');
   if (trainingGenerateBtn) {
     trainingGenerateBtn.onclick = function () {
+      if (typeof setWorkspaceSurface === 'function') {
+        setWorkspaceSurface('reviewOutput');
+      }
       runGenerateDatasetConfigsForCurrentFolder(
         function () {
           refreshTrainingConfigList();
@@ -257,6 +260,9 @@ function wireTrainingButtons() {
   var trainingPrepareDatasetBtn = document.getElementById('training-prepare-dataset-btn');
   if (trainingPrepareDatasetBtn) {
     trainingPrepareDatasetBtn.onclick = function () {
+      if (typeof setWorkspaceSurface === 'function') {
+        setWorkspaceSurface('reviewOutput');
+      }
       runPrepareDatasetForCurrentFolder().catch(function (err) {
         if (window.console && console.error) {
           console.error('[Training] Prepare failed:', err);
@@ -268,6 +274,9 @@ function wireTrainingButtons() {
   var trainingTrainBtn = document.getElementById('training-train-btn');
   if (trainingTrainBtn) {
     trainingTrainBtn.onclick = function () {
+      if (typeof setWorkspaceSurface === 'function') {
+        setWorkspaceSurface('reviewOutput');
+      }
       runTrainCommandPreviewForCurrentFolder().catch(function (err) {
         if (window.console && console.error) {
           console.error('[Training] Train preview failed:', err);

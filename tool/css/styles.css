@@ -4942,7 +4942,7 @@ html[data-theme="dark"] .app.shell-revamp .workbench-card {
 }
 
 .app.shell-revamp.workflow-annotate .primer-card {
-  max-height: 170px;
+  max-height: 190px;
 }
 
 .app.shell-revamp.workflow-annotate .primer-card .stats-controls {
@@ -5155,11 +5155,13 @@ html[data-theme="dark"] .app.shell-revamp #caption-checklist-panel.group-tools-c
 
 /* Fourth-pass shell simplification: no mode header, three clearer workmodes. */
 .app.shell-revamp {
+  grid-template-columns: minmax(0, var(--sidebar-width)) minmax(340px, 0.9fr) minmax(560px, 1.1fr);
   grid-template-rows: minmax(0, 1fr);
   grid-template-areas: "sidebar preview workbench";
 }
 
 .app.shell-revamp.left-rail-collapsed {
+  grid-template-columns: minmax(340px, 0.9fr) minmax(560px, 1.1fr);
   grid-template-areas: "preview workbench";
 }
 
@@ -5229,7 +5231,7 @@ html[data-theme="dark"] .app.shell-revamp #caption-checklist-panel.group-tools-c
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .app.shell-revamp .sidebar-drawer {
@@ -5365,6 +5367,269 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     grid-template-areas:
       "sidebar"
       "preview"
+      "workbench";
+  }
+}
+
+.app.shell-revamp.sidebar-hidden {
+  grid-template-columns: minmax(340px, 0.9fr) minmax(560px, 1.1fr);
+}
+
+.app.shell-revamp.sidebar-hidden .sidebar-panel {
+  display: none;
+}
+
+.app.shell-revamp .sidebar-review-output-btn {
+  width: 100%;
+}
+
+.app.shell-revamp .review-output-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.app.shell-revamp .review-output-surface.hidden,
+.app.shell-revamp .config-editor-toolbar.hidden {
+  display: none !important;
+}
+
+.app.shell-revamp .review-output-surface-header,
+.app.shell-revamp .config-editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.app.shell-revamp .review-output-surface-copy,
+.app.shell-revamp .config-editor-title-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app.shell-revamp .config-editor-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.app.shell-revamp .workbench-panel {
+  gap: 8px;
+  padding: 8px;
+}
+
+.app.shell-revamp .workbench-top {
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 8px;
+}
+
+.app.shell-revamp.workflow-annotate .workbench-top {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.app.shell-revamp .workbench-side-stack {
+  gap: 8px;
+}
+
+.app.shell-revamp .workbench-bottom {
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 8px;
+  min-height: 260px;
+  flex: 0 0 260px;
+}
+
+.app.shell-revamp.workflow-annotate .workbench-bottom {
+  grid-template-columns: minmax(0, 1fr) 300px;
+  min-height: 260px;
+  flex: 0 0 260px;
+}
+
+.app.shell-revamp .group-tools-card,
+.app.shell-revamp .primer-card,
+.app.shell-revamp .tags-card {
+  padding: 6px;
+}
+
+.app.shell-revamp .group-tools-card .caption-helper-section-title-row,
+.app.shell-revamp .primer-card .section-label-inline,
+.app.shell-revamp .tags-card .caption-helper-section-title-row {
+  margin-bottom: 6px;
+}
+
+.app.shell-revamp .primer-card .stats-controls {
+  gap: 6px;
+}
+
+.app.shell-revamp .primer-card textarea {
+  min-height: 220px;
+  max-height: 320px;
+}
+
+.app.shell-revamp .editor-surface .editor-wrapper {
+  padding: 6px 8px 0;
+}
+
+.app.shell-revamp textarea#editor {
+  min-height: 170px;
+}
+
+.app.shell-revamp .tags-card {
+  padding-bottom: 4px;
+}
+
+.app.shell-revamp .tags-card #caption-helper-tab-tags {
+  gap: 6px;
+}
+
+.app.shell-revamp .tags-card #item-tags-list {
+  gap: 4px;
+  padding-right: 0;
+}
+
+.app.shell-revamp .review-output-surface-title,
+.app.shell-revamp .config-editor-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.app.shell-revamp .review-output-surface-subtitle,
+.app.shell-revamp .config-editor-current-file {
+  color: rgba(15, 23, 42, 0.64);
+  font-size: 12px;
+}
+
+.app.shell-revamp .review-output-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.app.shell-revamp .review-output-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+  gap: 16px;
+  min-height: 0;
+}
+
+.app.shell-revamp .review-output-column {
+  min-height: 0;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.72);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app.shell-revamp .review-output-column .stats-controls,
+.app.shell-revamp .review-output-column .training-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app.shell-revamp.workspace-surface-review-output .workbench-top,
+.app.shell-revamp.workspace-surface-config-editor .workbench-top,
+.app.shell-revamp.workspace-surface-config-editor .tags-card,
+.app.shell-revamp.workspace-surface-review-output .tags-card {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-config-editor .workbench-bottom {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app.shell-revamp.workspace-surface-config-editor {
+  grid-template-columns: minmax(0, var(--sidebar-width)) minmax(0, 1fr);
+  grid-template-areas: "sidebar workbench";
+}
+
+.app.shell-revamp.workspace-surface-config-editor.left-rail-collapsed,
+.app.shell-revamp.workspace-surface-config-editor.sidebar-hidden {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "workbench";
+}
+
+.app.shell-revamp.workspace-surface-config-editor .preview-panel {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-config-editor .workspace-overlays {
+  grid-column: 2 / 3;
+}
+
+.app.shell-revamp.workspace-surface-config-editor.left-rail-collapsed .workspace-overlays,
+.app.shell-revamp.workspace-surface-config-editor.sidebar-hidden .workspace-overlays {
+  grid-column: 1 / 2;
+}
+
+.app.shell-revamp.workspace-surface-config-editor .editor-surface {
+  min-height: calc(100vh - 180px);
+}
+
+.app.shell-revamp.workspace-surface-config-editor textarea#editor {
+  min-height: calc(100vh - 320px);
+}
+
+html[data-theme="dark"] .app.shell-revamp .review-output-surface-subtitle,
+html[data-theme="dark"] .app.shell-revamp .config-editor-current-file {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+html[data-theme="dark"] .app.shell-revamp .review-output-column {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.52);
+}
+
+@media (max-width: 1180px) {
+  .app.shell-revamp.sidebar-hidden {
+    grid-template-columns: 1fr;
+  }
+
+  .app.shell-revamp .workbench-top,
+  .app.shell-revamp.workflow-annotate .workbench-top,
+  .app.shell-revamp .workbench-bottom,
+  .app.shell-revamp.workflow-annotate .workbench-bottom {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+
+  .app.shell-revamp .review-output-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .app.shell-revamp.workspace-surface-config-editor,
+  .app.shell-revamp.workspace-surface-config-editor.left-rail-collapsed,
+  .app.shell-revamp.workspace-surface-config-editor.sidebar-hidden {
+    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+    grid-template-areas: "sidebar workbench";
+  }
+
+  .app.shell-revamp.workspace-surface-config-editor .workspace-overlays {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 880px) {
+  .app.shell-revamp .workbench-top,
+  .app.shell-revamp.workflow-annotate .workbench-top,
+  .app.shell-revamp .workbench-bottom,
+  .app.shell-revamp.workflow-annotate .workbench-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app.shell-revamp.workspace-surface-config-editor,
+  .app.shell-revamp.workspace-surface-config-editor.left-rail-collapsed,
+  .app.shell-revamp.workspace-surface-config-editor.sidebar-hidden {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "sidebar"
       "workbench";
   }
 }

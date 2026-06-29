@@ -901,6 +901,49 @@ body.media-grid-open .caption-context-menu {
   border-radius: 14px;
 }
 
+.app.shell-revamp.workspace-surface-grid .media-grid-modal {
+  background: rgba(241, 245, 249, 0.92);
+  backdrop-filter: none;
+  border-radius: 0;
+}
+
+.app.shell-revamp.workspace-surface-grid .media-grid-dialog {
+  color: #0f172a;
+  border-radius: 0;
+}
+
+.app.shell-revamp.workspace-surface-grid .media-grid-header {
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom-color: rgba(148, 163, 184, 0.22);
+}
+
+.app.shell-revamp.workspace-surface-grid .media-grid-title {
+  color: #0f172a;
+}
+
+.app.shell-revamp.workspace-surface-grid .media-grid-meta {
+  color: #475569;
+}
+
+.app.shell-revamp.workspace-surface-grid .media-grid-status {
+  color: #475569;
+}
+
+.app.shell-revamp.workspace-surface-grid .media-grid-body {
+  grid-template-columns: minmax(0, 1fr) 320px;
+  padding: 14px;
+  gap: 14px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(226, 232, 240, 0.88));
+}
+
+.app.shell-revamp.workspace-surface-grid .media-grid-main-column,
+.app.shell-revamp.workspace-surface-grid .media-grid-sidebar {
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
 .app.shell-revamp .media-grid-filters {
   display: none;
 }
@@ -919,6 +962,36 @@ body.media-grid-open .caption-context-menu {
 
 .app.shell-revamp .media-grid-items {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-modal {
+  background: rgba(2, 6, 23, 0.9);
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-dialog {
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-header {
+  background: rgba(15, 23, 42, 0.92);
+  border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-title,
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-meta,
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-status {
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-body {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.94), rgba(15, 23, 42, 0.9));
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-main-column,
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-sidebar {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.72);
+  box-shadow: none;
 }
 
 @media (max-width: 900px) {

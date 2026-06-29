@@ -539,6 +539,9 @@ function runReview() {
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode('review');
   }
+  if (typeof setWorkspaceSurface === 'function') {
+    setWorkspaceSurface('reviewOutput');
+  }
   var availability = getReviewAvailability();
   if (!availability.enabled) {
     setStatus(availability.message + '.');
@@ -589,6 +592,9 @@ function runReview() {
 function runSelectionReview() {
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode('select');
+  }
+  if (typeof setWorkspaceSurface === 'function') {
+    setWorkspaceSurface('reviewOutput');
   }
   var availability = getReviewAvailability();
   if (!availability.enabled) {

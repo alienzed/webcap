@@ -832,6 +832,14 @@ body.focused-annotation-open {
   overflow: hidden;
 }
 
+.app.shell-revamp .workspace-overlays > .modal-overlay {
+  z-index: 7;
+}
+
+.app.shell-revamp .workspace-overlays > .modal {
+  z-index: 8;
+}
+
 .app.shell-revamp .focused-annotation-dialog {
   padding: 12px;
 }

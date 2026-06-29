@@ -2,6 +2,11 @@ var workspaceUiState = {
   viewMode: 'single',
   workflowMode: 'annotate'
 };
+var workspaceState = {
+  surface: 'default',
+  previousSurface: 'default',
+  sidebarHidden: false
+};
 var WORKSPACE_SPLIT_STORAGE_KEY = 'webcap.workspace.previewSplit';
 var workspaceSplitState = {
   ratio: 0.46,
@@ -216,6 +221,120 @@ function setWorkspaceWorkflowMode(mode) {
   syncWorkspaceHeaderUi();
 }
 
+function normalizeWorkspaceSurface(surface) {
+  var value = String(surface || '').trim().toLowerCase();
+  if (value === 'grid') return 'grid';
+  if (value === 'focus') return 'focus';
+  if (value === 'reviewoutput') return 'reviewOutput';
+  if (value === 'configeditor') return 'configEditor';
+  return 'default';
+}
+
+function syncWorkspaceConfigEditorUi() {
+  var toolbar = document.getElementById('config-editor-toolbar');
+  var fileLabel = document.getElementById('config-editor-current-file');
+  var saveBtn = document.getElementById('config-editor-save-btn');
+  var generateBtn = document.getElementById('config-editor-generate-btn');
+  var trainBtn = document.getElementById('config-editor-train-btn');
+  var consoleBtn = document.getElementById('config-editor-console-btn');
+  var isConfigEditor = normalizeWorkspaceSurface(workspaceState.surface) === 'configEditor';
+  var hasConfigFile = !!(state && state.currentConfigFile && state.currentConfigFile.file);
+  var consoleVisible = !!(ui && ui.consolePanelEl && ui.consolePanelEl.style.display && ui.consolePanelEl.style.display !== 'none');
+  if (toolbar) {
+    toolbar.classList.toggle('hidden', !isConfigEditor);
+  }
+  if (fileLabel) {
+    fileLabel.textContent = hasConfigFile
+      ? state.currentConfigFile.file
+      : 'No config selected.';
+  }
+  if (saveBtn) {
+    saveBtn.disabled = !isConfigEditor || !hasConfigFile;
+  }
+  if (generateBtn) {
+    generateBtn.disabled = !isConfigEditor || !hasConfigFile;
+  }
+  if (trainBtn) {
+    trainBtn.disabled = !isConfigEditor || !hasConfigFile;
+  }
+  if (consoleBtn) {
+    consoleBtn.disabled = !isConfigEditor;
+    consoleBtn.classList.toggle('active', consoleVisible);
+    consoleBtn.setAttribute('aria-pressed', consoleVisible ? 'true' : 'false');
+  }
+}
+
+function syncWorkspaceSurfaceUi() {
+  if (!ui || !ui.appEl) return;
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  var reviewOutputSurface = document.getElementById('review-output-surface');
+  var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
+  var reviewOutputBackBtn = document.getElementById('review-output-back-btn');
+  var workbenchTop = ui.appEl.querySelector('.workbench-top');
+  var workbenchBottom = ui.appEl.querySelector('.workbench-bottom');
+  var sidebarWorkspace = document.getElementById('sidebar-workspace');
+
+  ui.appEl.classList.remove(
+    'workspace-surface-default',
+    'workspace-surface-grid',
+    'workspace-surface-focus',
+    'workspace-surface-review-output',
+    'workspace-surface-config-editor'
+  );
+  ui.appEl.classList.add('workspace-surface-' + surface.replace(/[A-Z]/g, function (m) { return '-' + m.toLowerCase(); }));
+  ui.appEl.classList.toggle('sidebar-hidden', !!workspaceState.sidebarHidden);
+
+  if (reviewOutputSurface) {
+    reviewOutputSurface.classList.toggle('hidden', surface !== 'reviewOutput');
+  }
+  if (workbenchTop) {
+    workbenchTop.classList.toggle('hidden', surface === 'reviewOutput' || surface === 'configEditor');
+  }
+  if (workbenchBottom) {
+    workbenchBottom.classList.toggle('workspace-bottom-config-editor', surface === 'configEditor');
+  }
+  if (sidebarWorkspace) {
+    sidebarWorkspace.classList.toggle('hidden', true);
+    sidebarWorkspace.setAttribute('aria-hidden', 'true');
+  }
+  if (reviewOutputBtn) {
+    var reviewOutputActive = surface === 'reviewOutput';
+    reviewOutputBtn.classList.toggle('active', reviewOutputActive);
+    reviewOutputBtn.setAttribute('aria-pressed', reviewOutputActive ? 'true' : 'false');
+  }
+  if (reviewOutputBackBtn) {
+    reviewOutputBackBtn.classList.toggle('hidden', surface !== 'reviewOutput');
+  }
+  syncWorkspaceConfigEditorUi();
+}
+
+function setWorkspaceSurface(surface, options) {
+  var nextSurface = normalizeWorkspaceSurface(surface);
+  var currentSurface = normalizeWorkspaceSurface(workspaceState.surface);
+  var opts = options || {};
+  if (!opts.skipRemember && nextSurface !== currentSurface && nextSurface !== 'default') {
+    workspaceState.previousSurface = currentSurface;
+  }
+  workspaceState.surface = nextSurface;
+  workspaceState.sidebarHidden = !!opts.sidebarHidden || nextSurface === 'focus';
+  if (nextSurface === 'grid') {
+    setWorkspaceViewMode('grid');
+  } else if (nextSurface === 'focus') {
+    setWorkspaceViewMode('focus');
+  } else {
+    setWorkspaceViewMode('single');
+  }
+  syncWorkspaceSurfaceUi();
+}
+
+function exitWorkspaceSurface(surfaceOverride) {
+  var targetSurface = surfaceOverride ? normalizeWorkspaceSurface(surfaceOverride) : normalizeWorkspaceSurface(workspaceState.previousSurface);
+  if (targetSurface === 'grid' || targetSurface === 'focus') {
+    targetSurface = 'default';
+  }
+  setWorkspaceSurface(targetSurface || 'default', { skipRemember: true });
+}
+
 function ensureWorkspaceHeaderButton(id, label) {
   var existing = document.getElementById(id);
   if (existing) return existing;
@@ -225,6 +344,30 @@ function ensureWorkspaceHeaderButton(id, label) {
   btn.className = 'app-header-segment-btn';
   btn.textContent = label;
   return btn;
+}
+
+function ensureWorkspaceOverlayHost() {
+  if (!ui || !ui.appEl) {
+    throw new Error('Workspace overlay host requested before app UI initialized.');
+  }
+  var overlayHost = document.getElementById('workspace-overlays');
+  if (!overlayHost) {
+    overlayHost = document.createElement('div');
+    overlayHost.id = 'workspace-overlays';
+    overlayHost.className = 'workspace-overlays';
+    ui.appEl.appendChild(overlayHost);
+  }
+  return overlayHost;
+}
+
+function ensureWorkspaceOverlayChildren(ids) {
+  var overlayHost = ensureWorkspaceOverlayHost();
+  (Array.isArray(ids) ? ids : []).forEach(function (id) {
+    var node = document.getElementById(String(id || '').trim());
+    if (!node || node.parentNode === overlayHost) return;
+    overlayHost.appendChild(node);
+  });
+  return overlayHost;
 }
 
 function buildSidebarDrawer(title, className) {
@@ -250,181 +393,28 @@ function moveChildren(sourceEl, targetEl) {
 function rebuildUnifiedWorkspaceShell() {
   if (!ui || !ui.appEl || ui.appEl.__workspaceRevampBuilt) return;
   var appEl = ui.appEl;
-  var sidebarPanel = document.getElementById('sidebar-panel');
-  var sidebarScrollable = sidebarPanel ? sidebarPanel.querySelector('.panel-scrollable') : null;
-  var sidebarContent = document.getElementById('sidebar-content');
-  var editorPanel = appEl.querySelector('.editor-panel');
-  var previewShell = document.getElementById('preview-shell');
-  var previewPanel = previewShell ? previewShell.closest('.panel') : null;
-  var utilityBar = document.getElementById('utility-bar');
-  var utilityPathBtn = document.getElementById('utility-current-path-btn');
-  var utilitySettingsBtn = document.getElementById('utility-settings-btn');
-  var utilityHelpBtn = document.getElementById('utility-help-btn');
   var utilityThemeBtn = document.getElementById('utility-theme-btn');
-  var sidebarCollapseBtn = document.getElementById('sidebar-collapse-toggle-btn');
-  var viewGridBtn = document.getElementById('sidebar-open-grid-btn');
-  var viewFocusBtn = document.getElementById('sidebar-open-focused-btn');
-  var viewToolsPanel = appEl.querySelector('.sidebar-view-tools');
-  var statsPanel = appEl.querySelector('.stats-panel');
-  var setToolsPanel = appEl.querySelector('.sidebar-set-tools');
-  var sidebarWorkspace = document.getElementById('sidebar-workspace');
-  var createSetBtn = document.getElementById('create-set-from-results-btn');
-  var reviewSelectionsBtn = document.getElementById('review-selections-btn');
-  var reviewCaptionsBtn = document.getElementById('review-captions-btn');
-  var primerDetails = document.getElementById('primer-details');
-  var checklistPanel = document.getElementById('caption-checklist-panel');
-  var checklistRequirementsPane = document.getElementById('caption-helper-tab-requirements');
-  var checklistTagsPane = document.getElementById('caption-helper-tab-tags');
-  var checklistAnalysisPane = document.getElementById('caption-helper-tab-analysis');
-  var checklistMetadataPane = document.getElementById('caption-helper-tab-metadata');
-  var checklistTabs = document.getElementById('caption-helper-tabs');
-  var annotateStrip = document.getElementById('annotate-strip');
-  var consolePanel = document.getElementById('console-panel');
-  var editorWrapper = editorPanel ? editorPanel.querySelector('.editor-wrapper') : null;
-  var setNotesEditor = document.getElementById('set-notes-editor');
-  var focusedModal = document.getElementById('focused-annotation-modal');
-  var mediaGridModal = document.getElementById('media-grid-modal');
-  var configTabBtn = document.getElementById('sidebar-tab-config-btn');
-
-  if (!sidebarPanel || !sidebarScrollable || !sidebarContent || !editorPanel || !previewPanel || !primerDetails || !checklistPanel || !editorWrapper) {
-    throw new Error('Workspace revamp could not find required shell nodes.');
-  }
-
   appEl.__workspaceRevampBuilt = true;
   appEl.classList.add('shell-revamp');
-
-  if (utilityBar && utilityBar.parentNode) {
-    utilityBar.parentNode.removeChild(utilityBar);
-  }
-  var sidebarUtilityStrip = document.createElement('div');
-  sidebarUtilityStrip.className = 'sidebar-utility-strip';
-  if (utilitySettingsBtn) sidebarUtilityStrip.appendChild(utilitySettingsBtn);
-  if (utilityHelpBtn) sidebarUtilityStrip.appendChild(utilityHelpBtn);
   if (utilityThemeBtn) {
     utilityThemeBtn.classList.add('hidden');
     utilityThemeBtn.tabIndex = -1;
-    sidebarUtilityStrip.appendChild(utilityThemeBtn);
-  }
-  sidebarScrollable.insertBefore(sidebarUtilityStrip, sidebarContent);
-  if (viewToolsPanel && viewToolsPanel.parentNode) {
-    viewToolsPanel.parentNode.removeChild(viewToolsPanel);
-  }
-  if (configTabBtn && configTabBtn.parentNode) {
-    configTabBtn.parentNode.removeChild(configTabBtn);
   }
 
-  if (previewPanel.parentNode === appEl) {
-    appEl.insertBefore(previewPanel, editorPanel);
-  }
-  previewPanel.classList.add('preview-panel');
-
-  var previewShellControls = document.createElement('div');
-  previewShellControls.className = 'workspace-canvas-toolbar';
-  if (sidebarCollapseBtn) previewShellControls.appendChild(sidebarCollapseBtn);
-  var singleBtn = ensureWorkspaceHeaderButton('workspace-view-single-btn', 'Item');
-  singleBtn.classList.add('workspace-canvas-btn');
-  singleBtn.classList.add('active');
-  singleBtn.setAttribute('aria-pressed', 'true');
-  previewShellControls.appendChild(singleBtn);
-  if (viewGridBtn) previewShellControls.appendChild(viewGridBtn);
-  if (viewFocusBtn) previewShellControls.appendChild(viewFocusBtn);
-  if (previewShell) {
-    previewShell.insertBefore(previewShellControls, previewShell.firstChild);
-  }
-
-  if (statsPanel) {
-    statsPanel.innerHTML = '';
-    statsPanel.classList.add('sidebar-drawer-zone');
-    var setDrawer = buildSidebarDrawer('Set Actions', 'sidebar-set-actions-drawer');
-    if (createSetBtn) setDrawer._body.appendChild(createSetBtn);
-    if (reviewSelectionsBtn) setDrawer._body.appendChild(reviewSelectionsBtn);
-    if (reviewCaptionsBtn) setDrawer._body.appendChild(reviewCaptionsBtn);
-    statsPanel.appendChild(setDrawer);
-
-    var projectDrawer = buildSidebarDrawer('Project Tools', 'sidebar-project-tools-drawer');
-    if (sidebarWorkspace) projectDrawer._body.appendChild(sidebarWorkspace);
-    statsPanel.appendChild(projectDrawer);
-  }
-  if (setToolsPanel && setToolsPanel.parentNode) {
-    setToolsPanel.parentNode.removeChild(setToolsPanel);
-  }
-
-  editorPanel.classList.add('workbench-panel');
-  editorPanel.innerHTML = '';
-
-  var workbenchTop = document.createElement('div');
-  workbenchTop.className = 'workbench-top';
-
-  var groupsCard = document.createElement('div');
-  groupsCard.className = 'workbench-card groups-card';
-  if (annotateStrip) groupsCard.appendChild(annotateStrip);
-
-  var sideStack = document.createElement('aside');
-  sideStack.className = 'workbench-side-stack';
-  checklistPanel.setAttribute('data-layout', 'split');
-  checklistPanel.classList.add('workbench-card', 'group-tools-card');
-  if (checklistTabs) {
-    checklistTabs.classList.add('hidden');
-    checklistPanel.appendChild(checklistTabs);
-  }
-  if (checklistRequirementsPane && checklistRequirementsPane.parentNode !== checklistPanel) {
-    checklistPanel.appendChild(checklistRequirementsPane);
-  }
-  sideStack.appendChild(checklistPanel);
-
-  primerDetails.classList.remove('sidebar-tab-pane', 'hidden');
-  primerDetails.classList.add('workbench-card', 'primer-card');
-  primerDetails.removeAttribute('role');
-  primerDetails.removeAttribute('aria-labelledby');
-  primerDetails.setAttribute('aria-hidden', 'false');
-  if (setNotesEditor) {
-    setNotesEditor.classList.add('hidden');
-    if (setNotesEditor.previousElementSibling && setNotesEditor.previousElementSibling.tagName === 'LABEL') {
-      setNotesEditor.previousElementSibling.classList.add('hidden');
-    }
-  }
-  sideStack.appendChild(primerDetails);
-
-  workbenchTop.appendChild(groupsCard);
-  workbenchTop.appendChild(sideStack);
-
-  var workbenchBottom = document.createElement('div');
-  workbenchBottom.className = 'workbench-bottom';
-
-  var editorSurface = document.createElement('div');
-  editorSurface.className = 'workbench-card editor-surface';
-  editorSurface.appendChild(editorWrapper);
-  if (consolePanel) editorSurface.appendChild(consolePanel);
-
-  var tagsCard = document.createElement('div');
-  tagsCard.className = 'workbench-card tags-card';
-  if (checklistTagsPane) {
-    checklistTagsPane.classList.remove('hidden');
-    tagsCard.appendChild(checklistTagsPane);
-  }
-  if (checklistAnalysisPane) {
-    checklistAnalysisPane.classList.add('hidden');
-    tagsCard.appendChild(checklistAnalysisPane);
-  }
-  if (checklistMetadataPane) {
-    checklistMetadataPane.classList.add('hidden');
-    tagsCard.appendChild(checklistMetadataPane);
-  }
-
-  workbenchBottom.appendChild(editorSurface);
-  workbenchBottom.appendChild(tagsCard);
-
-  editorPanel.appendChild(workbenchTop);
-  editorPanel.appendChild(workbenchBottom);
-
-  var overlayHost = document.createElement('div');
-  overlayHost.id = 'workspace-overlays';
-  overlayHost.className = 'workspace-overlays';
-  if (focusedModal) overlayHost.appendChild(focusedModal);
-  if (mediaGridModal) overlayHost.appendChild(mediaGridModal);
-  appEl.appendChild(overlayHost);
+  ensureWorkspaceOverlayChildren([
+    'focused-annotation-modal',
+    'media-grid-modal',
+    'media-grid-viewer-modal',
+    'advanced-modal-overlay',
+    'review-rules-modal',
+    'modal-overlay',
+    'checklist-keywords-modal',
+    'checklist-group-terms-modal',
+    'checklist-term-affixes-modal'
+  ]);
 
   setWorkspaceViewMode('single');
+  syncWorkspaceSurfaceUi();
 }
 
 function wireWorkspaceHeaderUi() {
@@ -441,11 +431,105 @@ function wireWorkspaceHeaderUi() {
       setWorkspaceViewMode('single');
     };
   }
+  var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
+  if (reviewOutputBtn && !reviewOutputBtn.__workspaceWired) {
+    reviewOutputBtn.__workspaceWired = true;
+    reviewOutputBtn.onclick = function () {
+      setWorkspaceSurface('reviewOutput');
+    };
+  }
+  var reviewOutputBackBtn = document.getElementById('review-output-back-btn');
+  if (reviewOutputBackBtn && !reviewOutputBackBtn.__workspaceWired) {
+    reviewOutputBackBtn.__workspaceWired = true;
+    reviewOutputBackBtn.onclick = function () {
+      exitWorkspaceSurface();
+    };
+  }
+  var configEditorBackBtn = document.getElementById('config-editor-back-btn');
+  if (configEditorBackBtn && !configEditorBackBtn.__workspaceWired) {
+    configEditorBackBtn.__workspaceWired = true;
+    configEditorBackBtn.onclick = function () {
+      exitWorkspaceSurface();
+    };
+  }
+  var configEditorSaveBtn = document.getElementById('config-editor-save-btn');
+  if (configEditorSaveBtn && !configEditorSaveBtn.__workspaceWired) {
+    configEditorSaveBtn.__workspaceWired = true;
+    configEditorSaveBtn.onclick = function () {
+      saveCurrentEditorContent();
+    };
+  }
+  var configEditorConsoleBtn = document.getElementById('config-editor-console-btn');
+  if (configEditorConsoleBtn && !configEditorConsoleBtn.__workspaceWired) {
+    configEditorConsoleBtn.__workspaceWired = true;
+    configEditorConsoleBtn.onclick = function () {
+      if (typeof toggleConsolePanel === 'function') {
+        toggleConsolePanel();
+      }
+      syncWorkspaceConfigEditorUi();
+    };
+  }
+  var configEditorGenerateBtn = document.getElementById('config-editor-generate-btn');
+  if (configEditorGenerateBtn && !configEditorGenerateBtn.__workspaceWired) {
+    configEditorGenerateBtn.__workspaceWired = true;
+    configEditorGenerateBtn.onclick = function () {
+      if (!(state && state.currentConfigFile && state.currentConfigFile.file)) {
+        setStatus('No config selected.');
+        return;
+      }
+      var currentFile = state.currentConfigFile.file;
+      Promise.resolve(saveCurrentEditorContent())
+        .then(function () {
+          return runGenerateDatasetConfigsForCurrentFolder(function () {
+            refreshTrainingConfigList();
+            setStatus('Dataset configs generated. Reloading ' + currentFile + '...');
+          });
+        })
+        .then(function () {
+          if (typeof loadConfigFileToEditor === 'function') {
+            loadConfigFileToEditor(currentFile);
+          }
+        })
+        .catch(function (err) {
+          if (window.console && console.error) {
+            console.error('[Config Editor] Generate failed:', err);
+          }
+        });
+    };
+  }
+  var configEditorTrainBtn = document.getElementById('config-editor-train-btn');
+  if (configEditorTrainBtn && !configEditorTrainBtn.__workspaceWired) {
+    configEditorTrainBtn.__workspaceWired = true;
+    configEditorTrainBtn.onclick = function () {
+      if (!(state && state.currentConfigFile && state.currentConfigFile.file)) {
+        setStatus('No config selected.');
+        return;
+      }
+      Promise.resolve(saveCurrentEditorContent())
+        .then(function () {
+          if (typeof showConsolePanel === 'function') {
+            showConsolePanel();
+          }
+          syncWorkspaceConfigEditorUi();
+          return runTrainCommandPreviewForCurrentFolder();
+        })
+        .catch(function (err) {
+          if (window.console && console.error) {
+            console.error('[Config Editor] Train preview failed:', err);
+          }
+        });
+    };
+  }
   syncWorkspaceHeaderUi();
+  syncWorkspaceSurfaceUi();
 }
 
 window.setWorkspaceViewMode = setWorkspaceViewMode;
 window.setWorkspaceWorkflowMode = setWorkspaceWorkflowMode;
+window.setWorkspaceSurface = setWorkspaceSurface;
+window.exitWorkspaceSurface = exitWorkspaceSurface;
+window.ensureWorkspaceOverlayChildren = ensureWorkspaceOverlayChildren;
+window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;
 
 // Hide checklist panel and clear current media selection
 function clearEditorAndPreview() {
@@ -815,6 +899,10 @@ function moveSelectedMediaByOffset(offset) {
 var sidebarActiveTab = 'review';
 
 function setSidebarTab(tabName) {
+  var sidebarWorkspace = document.getElementById('sidebar-workspace');
+  if (sidebarWorkspace && sidebarWorkspace.getAttribute('data-legacy-tabs-disabled') === 'true') {
+    return;
+  }
   var tabs = {
     review: { buttonId: 'sidebar-tab-review-btn', paneId: 'cation-review' },
     train: { buttonId: 'sidebar-tab-train-btn', paneId: 'training-details' }
@@ -840,6 +928,10 @@ function setSidebarTab(tabName) {
 }
 
 function wireSidebarTabs() {
+  var sidebarWorkspace = document.getElementById('sidebar-workspace');
+  if (sidebarWorkspace && sidebarWorkspace.getAttribute('data-legacy-tabs-disabled') === 'true') {
+    return;
+  }
   var buttons = document.querySelectorAll('[data-sidebar-tab]');
   if (!buttons.length) return;
   Array.prototype.forEach.call(buttons, function (btn) {

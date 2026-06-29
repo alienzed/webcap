@@ -413,58 +413,18 @@ function mediaGridUpdateEntryVisibility() {
 }
 
 function mediaGridCreateModal() {
-  if (document.getElementById('media-grid-modal')) return;
-  var modal = document.createElement('div');
-  modal.id = 'media-grid-modal';
-  modal.className = 'media-grid-modal hidden';
-  modal.setAttribute('aria-hidden', 'true');
-  modal.innerHTML =
-    '<div class="media-grid-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-title">' +
-      '<div class="media-grid-header">' +
-        '<div class="media-grid-title-block">' +
-          '<h2 id="media-grid-title" class="media-grid-title">Media Grid</h2>' +
-          '<div id="media-grid-meta" class="media-grid-meta"></div>' +
-        '</div>' +
-        '<div id="media-grid-filters" class="media-grid-filters" aria-label="Grid filters"></div>' +
-        '<div class="media-grid-header-actions">' +
-          '<div id="media-grid-status" class="media-grid-status"></div>' +
-          '<button id="media-grid-select-all-btn" type="button" class="media-grid-btn">Select All</button>' +
-          '<button id="media-grid-clear-btn" type="button" class="media-grid-btn">Clear Selections</button>' +
-          '<button id="media-grid-close-btn" type="button" class="media-grid-btn media-grid-close-btn" aria-label="Close Media Grid">&times;</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="media-grid-body">' +
-        '<aside id="media-grid-left-rail" class="media-grid-left-rail" aria-label="Focus sets">' +
-          '<div class="media-grid-rail-panel">' +
-            '<div class="media-grid-rail-header">' +
-              '<div id="media-grid-rail-hint" class="media-grid-rail-hint"></div>' +
-              '<button id="media-grid-rail-collapse-btn" type="button" class="media-grid-rail-collapse-btn" aria-label="Collapse left rail"></button>' +
-            '</div>' +
-            '<section class="media-grid-rail-section media-grid-focus-section">' +
-              '<div class="media-grid-rail-section-head">' +
-                '<div class="media-grid-rail-section-title">Focus Sets</div>' +
-                '<div id="media-grid-focus-meta" class="media-grid-rail-section-meta"></div>' +
-              '</div>' +
-              '<div id="media-grid-focus-loading" class="media-grid-rail-section-note hidden"></div>' +
-              '<div id="media-grid-focus-list" class="media-grid-focus-list"></div>' +
-            '</section>' +
-          '</div>' +
-        '</aside>' +
-        '<div class="media-grid-main-column">' +
-          '<div id="media-grid-active-set" class="media-grid-active-set"></div>' +
-          '<main id="media-grid-canvas" class="media-grid-canvas" aria-label="Media thumbnails"></main>' +
-        '</div>' +
-        '<aside id="media-grid-sidebar" class="media-grid-sidebar" aria-label="Selection actions and grouped tags"></aside>' +
-      '</div>' +
-    '</div>';
-  document.body.appendChild(modal);
+  if (!document.getElementById('media-grid-modal')) {
+    throw new Error('Media Grid shell is missing from tool.html.');
+  }
   mediaGridWireModal();
   mediaGridCreateViewerModal();
 }
 
 function mediaGridWireModal() {
   var els = mediaGridGetEls();
-  if (!els.modal) throw new Error('Media Grid modal is missing.');
+  if (!els.modal) throw new Error('Media Grid shell is missing.');
+  if (els.modal.__wired) return;
+  els.modal.__wired = true;
   els.closeBtn.onclick = closeMediaGridModal;
   els.selectAllBtn.onclick = mediaGridSelectAll;
   els.clearBtn.onclick = mediaGridClearSelection;
@@ -479,25 +439,13 @@ function mediaGridWireModal() {
 }
 
 function mediaGridCreateViewerModal() {
-  if (document.getElementById('media-grid-viewer-modal')) return;
-  var modal = document.createElement('div');
-  modal.id = 'media-grid-viewer-modal';
-  modal.className = 'media-grid-viewer-modal hidden';
-  modal.setAttribute('aria-hidden', 'true');
-  modal.innerHTML =
-    '<div class="media-grid-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-viewer-title">' +
-      '<div class="media-grid-viewer-header">' +
-        '<div id="media-grid-viewer-title" class="media-grid-viewer-title">' +
-          '<span id="media-grid-viewer-title-name" class="media-grid-viewer-title-name"></span>' +
-          '<span id="media-grid-viewer-title-caption" class="media-grid-viewer-title-caption hidden"></span>' +
-        '</div>' +
-        '<button id="media-grid-viewer-close-btn" type="button" class="media-grid-viewer-close-btn" aria-label="Close fullscreen viewer">&times;</button>' +
-      '</div>' +
-      '<div id="media-grid-viewer-stage" class="media-grid-viewer-stage"></div>' +
-    '</div>';
-  document.body.appendChild(modal);
+  if (!document.getElementById('media-grid-viewer-modal')) {
+    throw new Error('Media Grid viewer shell is missing from tool.html.');
+  }
   var els = mediaGridGetEls();
   if (!els.viewerModal || !els.viewerCloseBtn) throw new Error('Media Grid viewer is missing.');
+  if (els.viewerModal.__wired) return;
+  els.viewerModal.__wired = true;
   els.viewerCloseBtn.onclick = closeMediaGridViewer;
   els.viewerModal.addEventListener('click', function (e) {
     if (e.target === els.viewerModal) closeMediaGridViewer();
@@ -526,6 +474,9 @@ function openMediaGridModal() {
   if (typeof setWorkspaceViewMode === 'function') {
     setWorkspaceViewMode('grid');
   }
+  if (typeof setWorkspaceSurface === 'function') {
+    setWorkspaceSurface('grid');
+  }
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode('select');
   }
@@ -549,6 +500,12 @@ function closeMediaGridModal() {
   mediaGridState.viewerKey = '';
   if (typeof setWorkspaceViewMode === 'function') {
     setWorkspaceViewMode('single');
+  }
+  if (typeof exitWorkspaceSurface === 'function') {
+    exitWorkspaceSurface();
+  }
+  if (typeof setWorkspaceWorkflowMode === 'function') {
+    setWorkspaceWorkflowMode('annotate');
   }
 }
 

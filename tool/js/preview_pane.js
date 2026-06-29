@@ -589,6 +589,9 @@ function loadConfigFileToEditor(fileName) {
       ui.editorEl.removeAttribute('readonly'); // Ensure editor is editable for config files
       state.currentConfigFile = { folder: folder, file: fileName };
       state.currentCaptionFile = null;
+      if (typeof setWorkspaceSurface === 'function') {
+        setWorkspaceSurface('configEditor');
+      }
       setStatus('Editing config: ' + fileName);
     } else {
       setStatus('Failed to load config (' + xhr.status + ')');
@@ -600,29 +603,11 @@ function loadConfigFileToEditor(fileName) {
 // Save logic for config files (overrides caption save if editing config)
 function saveCurrentEditorContent() {
   if (state.currentItem && state.currentItem.fileName) {
-    saveCurrentCaption();
-    return;
+    return saveCurrentCaption();
   }
   if (state.currentConfigFile) {
-    // Save config file
-    var folder = state.folder || '';
-    var file = state.currentConfigFile;
-    var text = ui.editorEl.value;
-    setStatus('Saving config...');
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/fs/save_config');
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState !== 4) return;
-      if (xhr.status === 200) {
-        setStatus('Config saved.');
-      } else {
-        setStatus('Config save failed (' + xhr.status + ')');
-      }
-    };
-    xhr.send(JSON.stringify({folder: folder, file: file.file, text: text}));
-    return;
+    return saveCurrentCaption();
   }
   // Otherwise, save caption as usual
-  saveCurrentCaption();
+  return saveCurrentCaption();
 }

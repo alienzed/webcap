@@ -27,6 +27,7 @@ function syncConsoleToggleButton() {
   btn.innerHTML = expanded ? '&#x25BC;' : '&#x25B2;';
   btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
   btn.setAttribute('aria-label', expanded ? 'Hide console' : 'Show console');
+  syncWorkspaceConfigEditorUi();
 }
 
 function showConsolePanel() {

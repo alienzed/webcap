@@ -519,8 +519,17 @@ function selectPathMedia(mediaItem) {
     }
     state.currentItem = mediaItem;
     state.currentConfigFile = null;
-    if (typeof setWorkspaceViewMode === 'function') {
+    var keepSpecialWorkspaceSurface = typeof workspaceState !== 'undefined' &&
+      workspaceState &&
+      (workspaceState.surface === 'focus' || workspaceState.surface === 'grid');
+    if (typeof setWorkspaceViewMode === 'function' && !keepSpecialWorkspaceSurface) {
       setWorkspaceViewMode('single');
+    }
+    if (
+      typeof setWorkspaceSurface === 'function' &&
+      !keepSpecialWorkspaceSurface
+    ) {
+      setWorkspaceSurface('default', { skipRemember: true });
     }
     ui.editorEl.removeAttribute('readonly');
     ui.editorEl.value = nextEditorValue;

@@ -5,7 +5,8 @@ var focusedAnnotationState = {
   groupIndex: 0,
   traversalMode: 'group-first',
   history: [],
-  sourceLabel: ''
+  sourceLabel: '',
+  previousSurface: 'default'
 };
 
 function getFocusedAnnotationEls() {
@@ -416,8 +417,12 @@ function closeFocusedAnnotationModal() {
   focusedAnnotationState.groupIndex = 0;
   focusedAnnotationState.history = [];
   focusedAnnotationState.sourceLabel = '';
+  focusedAnnotationState.previousSurface = 'default';
   if (typeof setWorkspaceViewMode === 'function') {
     setWorkspaceViewMode('single');
+  }
+  if (typeof exitWorkspaceSurface === 'function') {
+    exitWorkspaceSurface();
   }
 }
 
@@ -433,9 +438,34 @@ function showFocusedAnnotationModal() {
   if (typeof setWorkspaceViewMode === 'function') {
     setWorkspaceViewMode('focus');
   }
+  if (typeof setWorkspaceSurface === 'function') {
+    setWorkspaceSurface('focus', { sidebarHidden: true });
+  }
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode('annotate');
   }
+}
+
+function moveFocusedAnnotationToAvailableItem(direction) {
+  var itemKeys = Array.isArray(focusedAnnotationState.itemKeys) ? focusedAnnotationState.itemKeys : [];
+  if (!itemKeys.length) return false;
+  var startIndex = Math.max(0, Math.min(itemKeys.length - 1, Number(focusedAnnotationState.itemIndex) || 0));
+  var step = direction < 0 ? -1 : 1;
+  for (var offset = 1; offset <= itemKeys.length; offset += 1) {
+    var candidateIndex = startIndex + (offset * step);
+    if (candidateIndex < 0 || candidateIndex >= itemKeys.length) continue;
+    if (!findFocusedAnnotationMediaItemByKey(itemKeys[candidateIndex])) continue;
+    focusedAnnotationState.itemIndex = candidateIndex;
+    renderFocusedAnnotationModal();
+    return true;
+  }
+  for (var i = 0; i < itemKeys.length; i += 1) {
+    if (!findFocusedAnnotationMediaItemByKey(itemKeys[i])) continue;
+    focusedAnnotationState.itemIndex = i;
+    renderFocusedAnnotationModal();
+    return true;
+  }
+  return false;
 }
 
 function getFocusedAnnotationMediaUrl(mediaItem) {
@@ -806,6 +836,10 @@ function renderFocusedAnnotationModal() {
   if (!state.currentItem || state.currentItem.key !== targetItemKey) {
     var targetItem = findFocusedAnnotationMediaItemByKey(targetItemKey);
     if (!targetItem || typeof selectPathMedia !== 'function') {
+      if (moveFocusedAnnotationToAvailableItem(1)) {
+        return;
+      }
+      setStatus('Focused annotation queue no longer has any available items.');
       closeFocusedAnnotationModal();
       return;
     }
@@ -908,6 +942,7 @@ function navigateFocusedAnnotation(itemIndex, groupIndex, options) {
   var opts = options || {};
   var itemKeys = Array.isArray(focusedAnnotationState.itemKeys) ? focusedAnnotationState.itemKeys : [];
   if (!itemKeys.length) return;
+  var previousItemIndex = Math.max(0, Number(focusedAnnotationState.itemIndex) || 0);
   var nextItemIndex = Math.max(0, Math.min(itemKeys.length - 1, Number(itemIndex) || 0));
   var requirements = Array.isArray(checklistItems) ? checklistItems : [];
   var maxGroupIndex = Math.max(0, requirements.length - 1);
@@ -922,6 +957,10 @@ function navigateFocusedAnnotation(itemIndex, groupIndex, options) {
   focusedAnnotationState.groupIndex = nextGroupIndex;
   var targetItem = findFocusedAnnotationMediaItemByKey(itemKeys[nextItemIndex]);
   if (!targetItem || typeof selectPathMedia !== 'function') {
+    if (moveFocusedAnnotationToAvailableItem(nextItemIndex < previousItemIndex ? -1 : 1)) {
+      return;
+    }
+    setStatus('Focused annotation queue no longer has any available items.');
     closeFocusedAnnotationModal();
     return;
   }
@@ -1023,6 +1062,9 @@ function beginFocusedAnnotationRun(targetMediaKey) {
   focusedAnnotationState.groupIndex = resumeStep.groupIndex;
   focusedAnnotationState.history = [];
   focusedAnnotationState.sourceLabel = String(sequence.sourceLabel || '');
+  focusedAnnotationState.previousSurface = (typeof workspaceState !== 'undefined' && workspaceState && workspaceState.surface)
+    ? String(workspaceState.surface)
+    : 'default';
   showFocusedAnnotationModal();
   renderFocusedAnnotationModal();
 }

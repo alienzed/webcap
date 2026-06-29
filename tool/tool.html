@@ -24,18 +24,10 @@
         <link rel="stylesheet" href="/static/vendor/cropperjs/dist/cropper.min.css">
     </head>
     <body>
-        <div class="app">
+        <div class="app shell-revamp workspace-view-single workflow-annotate workspace-surface-default">
             <div id="sidebar-panel" class="panel stack sidebar-panel">
                 <div class="panel-scrollable">
-                    <div id="utility-bar" class="utility-bar">
-                        <button
-                            id="sidebar-collapse-toggle-btn"
-                            type="button"
-                            class="utility-btn utility-path-btn utility-collapse-btn"
-                            title="Collapse sidebar"
-                            aria-label="Collapse sidebar"
-                            aria-pressed="false"
-                        >&lt;</button>
+                    <div id="utility-bar" class="utility-bar sidebar-utility-strip">
                         <button
                             id="utility-current-path-btn"
                             type="button"
@@ -78,7 +70,7 @@
                         <button
                             id="utility-theme-btn"
                             type="button"
-                            class="utility-btn utility-icon-btn utility-theme-btn"
+                            class="utility-btn utility-icon-btn utility-theme-btn hidden"
                             title="Toggle theme"
                             aria-pressed="false"
                         >Dark</button>
@@ -294,205 +286,29 @@
                             class="review-captions-btn superset-exit-btn hidden"
                         >Exit SuperSet Search</button>
                     </div>
-                    <div class="stats-panel">
-                        <div class="sidebar-tool-panel sidebar-view-tools">
-                            <div class="sidebar-tool-panel-header">Views</div>
-                            <div class="sidebar-view-actions">
+                    <div class="stats-panel sidebar-drawer-zone">
+                        <details class="sidebar-drawer sidebar-set-actions-drawer" open>
+                            <summary class="sidebar-drawer-summary">Set Actions</summary>
+                            <div class="sidebar-drawer-body">
+                                <button id="create-set-from-results-btn" type="button" class="review-captions-btn sidebar-create-set-btn hidden" title="Create a new set with the current filter results">
+                                    <span class="btn-glyph" aria-hidden="true">&#8627;</span>
+                                    <span>Create Set</span>
+                                </button>
+                            </div>
+                        </details>
+                        <details class="sidebar-drawer sidebar-project-tools-drawer" open>
+                            <summary class="sidebar-drawer-summary">Project Tools</summary>
+                            <div class="sidebar-drawer-body">
                                 <button
-                                    id="sidebar-open-grid-btn"
+                                    id="sidebar-open-review-output-btn"
                                     type="button"
-                                    class="review-captions-btn sidebar-view-btn"
-                                    title="Open Media Grid for the current visible items"
-                                >
-                                    <span class="media-grid-open-icon" aria-hidden="true">
-                                        <span></span><span></span><span></span><span></span>
-                                    </span>
-                                    <span>Open Grid</span>
-                                </button>
-                                <button
-                                    id="sidebar-open-focused-btn"
-                                    type="button"
-                                    class="review-captions-btn sidebar-view-btn"
-                                    title="Open Focused Annotation for the selected item"
-                                >
-                                    <span class="btn-glyph" aria-hidden="true">&#9998;</span>
-                                    <span>Focus Annotate</span>
-                                </button>
+                                    class="review-captions-btn sidebar-review-output-btn"
+                                    title="Open the review and output workspace"
+                                    aria-pressed="false"
+                                >Review / Output</button>
+                                <div id="sidebar-workspace" class="sidebar-workspace hidden" data-legacy-tabs-disabled="true" aria-hidden="true"></div>
                             </div>
-                        </div>
-                        <div class="sidebar-tool-panel sidebar-set-tools">
-                            <div class="sidebar-tool-panel-header">Set Tools</div>
-                            <button id="create-set-from-results-btn" type="button" class="review-captions-btn sidebar-create-set-btn hidden" title="Create a new set with the current filter results">
-                                <span class="btn-glyph" aria-hidden="true">&#8627;</span>
-                                <span>Create Set</span>
-                            </button>
-                            <div class="sidebar-action-strip">
-                                <button id="review-selections-btn" type="button" class="review-captions-btn hidden" title="Selection analysis with current filter results">
-                                    <span class="btn-glyph" aria-hidden="true">&#9678;</span>
-                                    <span>Selection Analysis</span>
-                                </button>
-                                <button id="review-captions-btn" type="button" class="review-captions-btn hidden" title="Review captions with current filter results">
-                                    <span class="btn-glyph" aria-hidden="true">&#9654;</span>
-                                    <span>Review Captions</span>
-                                </button>
-                            </div>
-                            <div id="sidebar-workspace" class="sidebar-workspace">
-                                <div class="sidebar-tabs" role="tablist" aria-label="Set tools">
-                                    <button
-                                        id="sidebar-tab-config-btn"
-                                        type="button"
-                                        class="sidebar-tab-btn"
-                                        data-sidebar-tab="config"
-                                        role="tab"
-                                        aria-selected="false"
-                                        aria-controls="primer-details"
-                                        tabindex="-1"
-                                    >Config</button>
-                                    <button
-                                        id="sidebar-tab-review-btn"
-                                        type="button"
-                                        class="sidebar-tab-btn active"
-                                        data-sidebar-tab="review"
-                                        role="tab"
-                                        aria-selected="true"
-                                        aria-controls="cation-review"
-                                    >Review</button>
-                                    <button
-                                        id="sidebar-tab-train-btn"
-                                        type="button"
-                                        class="sidebar-tab-btn"
-                                        data-sidebar-tab="train"
-                                        role="tab"
-                                        aria-selected="false"
-                                        aria-controls="training-details"
-                                        tabindex="-1"
-                                    >Train</button>
-                                </div>
-                                <div
-                                    id="primer-details"
-                                    class="sidebar-tab-pane hidden"
-                                    role="tabpanel"
-                                    aria-labelledby="sidebar-tab-config-btn"
-                                    aria-hidden="true"
-                                >
-                                    <div class="stats-controls">
-                                        <div class="section-label-inline">
-                                            <label>Caption Template</label>
-                                            <button
-                                                id="primer-template-info-btn"
-                                                type="button"
-                                                class="mini-info-btn"
-                                                title="Caption template help"
-                                                aria-label="Caption template help"
-                                            >i</button>
-                                        </div>
-                                        <textarea id="primer-template" rows="9">{position }{surface, }{setting, }{body, }
-{clothing, }{traits, }{expression, }
-{background, }
-{lighting} lighting, {view } view.</textarea>
-                                        <div class="primer-template-placeholder-row">
-                                            <div class="primer-template-placeholder-label">Insert group placeholder</div>
-                                            <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
-                                        </div>
-                                        <label>Set Notes</label>
-                                        <textarea id="set-notes-editor" rows="6" placeholder="Set notes..."></textarea>
-                                    </div>
-                                </div>
-                                <div
-                                    id="cation-review"
-                                    class="sidebar-tab-pane"
-                                    role="tabpanel"
-                                    aria-labelledby="sidebar-tab-review-btn"
-                                    aria-hidden="false"
-                                >
-                                    <div class="stats-controls">
-                                        <label>Required key phrase</label>
-                                        <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
-                                        <div class="section-label-inline">
-                                            <label>Balance Phrases</label>
-                                            <button
-                                                id="stats-balance-info-btn"
-                                                type="button"
-                                                class="mini-info-btn"
-                                                title="Balance phrases help"
-                                                aria-label="Balance phrases help"
-                                            >i</button>
-                                        </div>
-                                        <div class="checklist-input-row stats-balance-input-row term-input-row">
-                                            <input
-                                                id="stats-phrases-add-input"
-                                                type="text"
-                                                class="form-control"
-                                                placeholder="Add balance phrase..."
-                                            >
-                                            <button id="stats-phrases-add-btn" type="button">+</button>
-                                            <div id="stats-phrases-add-results" class="caption-term-results hidden"></div>
-                                        </div>
-                                        <div id="stats-phrases-items"></div>
-                                        <textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down
-                                    face up
-                                    front view
-                                    back view"></textarea>
-                                        <div class="section-label-inline">
-                                            <label>Rules</label>
-                                            <button
-                                                id="review-rules-info-btn"
-                                                type="button"
-                                                class="mini-info-btn"
-                                                title="Rules help"
-                                                aria-label="Rules help"
-                                            >i</button>
-                                        </div>
-                                        <div class="stats-advanced-inline-row">
-                                            <button id="review-rules-edit-btn" type="button">Edit Rules</button>
-                                            <span id="review-rules-summary" class="small">No review rules configured.</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div
-                                    id="training-details"
-                                    class="sidebar-tab-pane hidden"
-                                    role="tabpanel"
-                                    aria-labelledby="sidebar-tab-train-btn"
-                                    aria-hidden="true"
-                                >
-                                    <div class="training-controls">
-                                        <div id="training-config-list" class="training-config-list">No config files.</div>
-                                        <div class="training-actions">
-                                            <button
-                                                id="training-prepare-dataset-btn"
-                                                type="button"
-                                                class="training-btn training-prepare-btn"
-                                                title="Sorts the files into Aspect Ratio folders while converting video to 16fps."
-                                            >
-                                                <span class="btn-glyph" aria-hidden="true">&#8635;</span>
-                                                <span>Prepare Dataset</span>
-                                            </button>
-                                            <div class="training-actions-secondary">
-                                                <button
-                                                    id="training-generate-btn"
-                                                    type="button"
-                                                    class="training-btn"
-                                                    title="Generate config files"
-                                                >
-                                                    <span class="btn-glyph" aria-hidden="true">&#9881;</span>
-                                                    <span>Generate</span>
-                                                </button>
-                                                <button
-                                                    id="training-train-btn"
-                                                    type="button"
-                                                    class="training-btn"
-                                                    title="Run training"
-                                                >
-                                                    <span class="btn-glyph" aria-hidden="true">&#9002;</span>
-                                                    <span>Train</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        </details>
                     </div>
                     </div>
                 </div>
@@ -508,91 +324,253 @@
                     >&#x25B2;</button>
                 </div>
             </div>
-            <div class="panel editor-panel">
-                <div class="editor-wrapper">
-                    <div id="editor-floating-actions" class="editor-floating-actions">
-                        <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Save current primer text as this item's caption">Apply</button>
-                        <button id="primer-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Reset the current caption to the current primer output">Reset</button>
-                        <button id="primer-undo-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Undo last reset for current item">Undo Reset</button>
+            <div class="panel editor-panel workbench-panel">
+                <div class="workbench-top">
+                    <div class="workbench-card groups-card">
+                        <div id="annotate-strip" class="annotate-strip hidden" aria-label="Annotation strip"></div>
                     </div>
-                    <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
-                    <div id="annotate-strip" class="annotate-strip hidden" aria-label="Annotation strip"></div>
-                    <div id="caption-checklist-panel" class="checklist-panel" style="display:none;">
-                        <div id="caption-helper-tabs" class="caption-helper-tabs">
-                            <button
-                                id="caption-helper-tab-requirements-btn"
-                                class="caption-helper-tab-btn active"
-                                data-caption-helper-tab="requirements"
-                                type="button"
-                            >Groups</button>
-                            <button
-                                id="caption-helper-tab-tags-btn"
-                                class="caption-helper-tab-btn"
-                                data-caption-helper-tab="tags"
-                                type="button"
-                            >Tags</button>
-                            <button
-                                id="caption-helper-tab-analysis-btn"
-                                class="caption-helper-tab-btn"
-                                data-caption-helper-tab="analysis"
-                                type="button"
-                            >QA</button>
-                            <button
-                                id="caption-helper-tab-metadata-btn"
-                                class="caption-helper-tab-btn"
-                                data-caption-helper-tab="metadata"
-                                type="button"
-                            >Metadata</button>
-                            <div class="caption-helper-tabs-actions">
+                    <aside class="workbench-side-stack">
+                        <div id="caption-checklist-panel" class="checklist-panel workbench-card group-tools-card" data-layout="split" style="display:none;">
+                            <div id="caption-helper-tabs" class="caption-helper-tabs hidden">
                                 <button
-                                    id="annotate-strip-toggle-btn"
+                                    id="caption-helper-tab-requirements-btn"
+                                    class="caption-helper-tab-btn active"
+                                    data-caption-helper-tab="requirements"
                                     type="button"
-                                    class="annotate-strip-toggle-btn"
-                                    title="Show/hide annotation strip"
-                                    aria-expanded="false"
-                                >Annotate &#9650;</button>
+                                >Groups</button>
                                 <button
-                                    id="caption-helper-collapse-btn"
+                                    id="caption-helper-tab-tags-btn"
+                                    class="caption-helper-tab-btn"
+                                    data-caption-helper-tab="tags"
                                     type="button"
-                                    class="caption-helper-collapse-btn"
-                                    title="Collapse helper panel"
-                                    aria-label="Collapse helper panel"
-                                    aria-expanded="true"
-                                >&#9660;</button>
-                                <button id="checklist-close-btn" title="Close helper panel" aria-label="Close helper panel" class="checklist-close-btn">&times;</button>
-                            </div>
-                        </div>
-                        <div id="caption-helper-tab-requirements" class="caption-helper-tab-pane">
-                            <div class="caption-helper-section-title-row">
-                                <div class="caption-helper-section-title">Groups</div>
-                                <div class="caption-helper-section-controls">
+                                >Tags</button>
+                                <button
+                                    id="caption-helper-tab-analysis-btn"
+                                    class="caption-helper-tab-btn"
+                                    data-caption-helper-tab="analysis"
+                                    type="button"
+                                >QA</button>
+                                <button
+                                    id="caption-helper-tab-metadata-btn"
+                                    class="caption-helper-tab-btn"
+                                    data-caption-helper-tab="metadata"
+                                    type="button"
+                                >Metadata</button>
+                                <div class="caption-helper-tabs-actions">
                                     <button
-                                        id="annotate-strip-toggle-inline-btn"
+                                        id="annotate-strip-toggle-btn"
                                         type="button"
                                         class="annotate-strip-toggle-btn"
                                         title="Show/hide annotation strip"
                                         aria-expanded="false"
                                     >Annotate &#9650;</button>
                                     <button
-                                        id="checklist-settings-btn"
+                                        id="caption-helper-collapse-btn"
                                         type="button"
-                                        class="checklist-settings-btn"
-                                        title="Configure requirement keywords"
-                                        aria-label="Configure requirement keywords"
-                                    >&#9881;</button>
+                                        class="caption-helper-collapse-btn"
+                                        title="Collapse helper panel"
+                                        aria-label="Collapse helper panel"
+                                        aria-expanded="true"
+                                    >&#9660;</button>
+                                    <button id="checklist-close-btn" title="Close helper panel" aria-label="Close helper panel" class="checklist-close-btn">&times;</button>
                                 </div>
                             </div>
-                            <div class="checklist-input-row">
-                                <input
-                                    id="checklist-add-input"
-                                    type="text"
-                                    class="form-control"
-                                    placeholder="Add requirement..."
-                                >
-                                <button id="checklist-add-btn" type="button">+</button>
+                            <div id="caption-helper-tab-requirements" class="caption-helper-tab-pane">
+                                <div class="caption-helper-section-title-row">
+                                    <div class="caption-helper-section-title">Groups</div>
+                                    <div class="caption-helper-section-controls">
+                                        <button
+                                            id="annotate-strip-toggle-inline-btn"
+                                            type="button"
+                                            class="annotate-strip-toggle-btn"
+                                            title="Show/hide annotation strip"
+                                            aria-expanded="false"
+                                        >Annotate &#9650;</button>
+                                        <button
+                                            id="checklist-settings-btn"
+                                            type="button"
+                                            class="checklist-settings-btn"
+                                            title="Configure requirement keywords"
+                                            aria-label="Configure requirement keywords"
+                                        >&#9881;</button>
+                                    </div>
+                                </div>
+                                <div class="checklist-input-row">
+                                    <input
+                                        id="checklist-add-input"
+                                        type="text"
+                                        class="form-control"
+                                        placeholder="Add requirement..."
+                                    >
+                                    <button id="checklist-add-btn" type="button">+</button>
+                                </div>
+                                <div id="checklist-items"></div>
                             </div>
-                            <div id="checklist-items"></div>
                         </div>
+                        <div id="primer-details" class="workbench-card primer-card">
+                            <div class="stats-controls">
+                                <div class="section-label-inline">
+                                    <label>Caption Template</label>
+                                    <button
+                                        id="primer-template-info-btn"
+                                        type="button"
+                                        class="mini-info-btn"
+                                        title="Caption template help"
+                                        aria-label="Caption template help"
+                                    >i</button>
+                                </div>
+                                <textarea id="primer-template" rows="9">{position }{surface, }{setting, }{body, }
+{clothing, }{traits, }{expression, }
+{background, }
+{lighting} lighting, {view } view.</textarea>
+                                <div class="primer-template-placeholder-row">
+                                    <div class="primer-template-placeholder-label">Insert group placeholder</div>
+                                    <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
+                                </div>
+                                <label class="hidden">Set Notes</label>
+                                <textarea id="set-notes-editor" rows="6" class="hidden" placeholder="Set notes..."></textarea>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+                <section id="review-output-surface" class="workbench-card review-output-surface hidden">
+                    <div class="review-output-surface-header">
+                        <div class="review-output-surface-copy">
+                            <div class="review-output-surface-title">Review / Output</div>
+                            <div class="review-output-surface-subtitle">Reports, dataset prep, config generation, and training previews live here.</div>
+                        </div>
+                        <button id="review-output-back-btn" type="button" class="review-captions-btn">Back</button>
+                    </div>
+                    <div id="review-output-actions" class="review-output-actions">
+                        <button id="review-selections-btn" type="button" class="review-captions-btn hidden" title="Selection analysis with current filter results">
+                            <span class="btn-glyph" aria-hidden="true">&#9678;</span>
+                            <span>Selection Analysis</span>
+                        </button>
+                        <button id="review-captions-btn" type="button" class="review-captions-btn hidden" title="Review captions with current filter results">
+                            <span class="btn-glyph" aria-hidden="true">&#9654;</span>
+                            <span>Review Captions</span>
+                        </button>
+                    </div>
+                    <div class="review-output-columns">
+                        <section id="review-output-review-pane" class="review-output-column">
+                            <div
+                                id="cation-review"
+                                aria-hidden="false"
+                            >
+                                <div class="stats-controls">
+                                    <label>Required key phrase</label>
+                                    <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
+                                    <div class="section-label-inline">
+                                        <label>Balance Phrases</label>
+                                        <button
+                                            id="stats-balance-info-btn"
+                                            type="button"
+                                            class="mini-info-btn"
+                                            title="Balance phrases help"
+                                            aria-label="Balance phrases help"
+                                        >i</button>
+                                    </div>
+                                    <div class="checklist-input-row stats-balance-input-row term-input-row">
+                                        <input
+                                            id="stats-phrases-add-input"
+                                            type="text"
+                                            class="form-control"
+                                            placeholder="Add balance phrase..."
+                                        >
+                                        <button id="stats-phrases-add-btn" type="button">+</button>
+                                        <div id="stats-phrases-add-results" class="caption-term-results hidden"></div>
+                                    </div>
+                                    <div id="stats-phrases-items"></div>
+                                    <textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down
+                                face up
+                                front view
+                                back view"></textarea>
+                                    <div class="section-label-inline">
+                                        <label>Rules</label>
+                                        <button
+                                            id="review-rules-info-btn"
+                                            type="button"
+                                            class="mini-info-btn"
+                                            title="Rules help"
+                                            aria-label="Rules help"
+                                        >i</button>
+                                    </div>
+                                    <div class="stats-advanced-inline-row">
+                                        <button id="review-rules-edit-btn" type="button">Edit Rules</button>
+                                        <span id="review-rules-summary" class="small">No review rules configured.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                        <section id="review-output-training-pane" class="review-output-column">
+                            <div
+                                id="training-details"
+                                aria-hidden="false"
+                            >
+                                <div class="training-controls">
+                                    <div id="training-config-list" class="training-config-list">No config files.</div>
+                                    <div class="training-actions">
+                                        <button
+                                            id="training-prepare-dataset-btn"
+                                            type="button"
+                                            class="training-btn training-prepare-btn"
+                                            title="Sorts the files into Aspect Ratio folders while converting video to 16fps."
+                                        >
+                                            <span class="btn-glyph" aria-hidden="true">&#8635;</span>
+                                            <span>Prepare Dataset</span>
+                                        </button>
+                                        <div class="training-actions-secondary">
+                                            <button
+                                                id="training-generate-btn"
+                                                type="button"
+                                                class="training-btn"
+                                                title="Generate config files"
+                                            >
+                                                <span class="btn-glyph" aria-hidden="true">&#9881;</span>
+                                                <span>Generate</span>
+                                            </button>
+                                            <button
+                                                id="training-train-btn"
+                                                type="button"
+                                                class="training-btn"
+                                                title="Run training"
+                                            >
+                                                <span class="btn-glyph" aria-hidden="true">&#9002;</span>
+                                                <span>Train</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </section>
+                <div class="workbench-bottom">
+                    <div class="workbench-card editor-surface">
+                        <div id="config-editor-toolbar" class="config-editor-toolbar hidden">
+                            <button id="config-editor-back-btn" type="button" class="review-captions-btn">Back</button>
+                            <div class="config-editor-title-copy">
+                                <div class="config-editor-title">Config Editor</div>
+                                <div id="config-editor-current-file" class="config-editor-current-file">No config selected.</div>
+                            </div>
+                            <div class="config-editor-toolbar-actions">
+                                <button id="config-editor-console-btn" type="button" class="review-captions-btn">Console</button>
+                                <button id="config-editor-generate-btn" type="button" class="review-captions-btn">Generate</button>
+                                <button id="config-editor-train-btn" type="button" class="review-captions-btn">Train Preview</button>
+                                <button id="config-editor-save-btn" type="button" class="review-captions-btn">Save</button>
+                            </div>
+                        </div>
+                        <div class="editor-wrapper">
+                            <div id="editor-floating-actions" class="editor-floating-actions">
+                                <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Save current primer text as this item's caption">Apply</button>
+                                <button id="primer-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Reset the current caption to the current primer output">Reset</button>
+                                <button id="primer-undo-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Undo last reset for current item">Undo Reset</button>
+                            </div>
+                            <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
+                        </div>
+                        <div id="console-panel"></div>
+                    </div>
+                    <div class="workbench-card tags-card">
                         <div id="caption-helper-tab-tags" class="caption-helper-tab-pane hidden">
                             <div class="caption-helper-section-title-row">
                                 <div class="caption-helper-section-title">Tags</div>
@@ -650,10 +628,45 @@
                         </div>
                     </div>
                 </div>
-                <div id="console-panel"></div>
             </div>
-            <div class="panel">
+            <div class="panel preview-panel">
                 <div id="preview-shell" class="preview-shell">
+                    <div id="workspace-canvas-toolbar" class="workspace-canvas-toolbar">
+                        <button
+                            id="sidebar-collapse-toggle-btn"
+                            type="button"
+                            class="utility-btn utility-path-btn utility-collapse-btn"
+                            title="Collapse sidebar"
+                            aria-label="Collapse sidebar"
+                            aria-pressed="false"
+                        >&lt;</button>
+                        <button
+                            id="workspace-view-single-btn"
+                            type="button"
+                            class="app-header-segment-btn workspace-canvas-btn active"
+                            aria-pressed="true"
+                        >Item</button>
+                        <button
+                            id="sidebar-open-grid-btn"
+                            type="button"
+                            class="review-captions-btn"
+                            title="Open Media Grid for the current visible items"
+                        >
+                            <span class="media-grid-open-icon" aria-hidden="true">
+                                <span></span><span></span><span></span><span></span>
+                            </span>
+                            <span>Open Grid</span>
+                        </button>
+                        <button
+                            id="sidebar-open-focused-btn"
+                            type="button"
+                            class="review-captions-btn"
+                            title="Open Focused Annotation for the selected item"
+                        >
+                            <span class="btn-glyph" aria-hidden="true">&#9998;</span>
+                            <span>Focus Annotate</span>
+                        </button>
+                    </div>
                     <div id="preview-header" class="preview-header hidden" aria-label="Preview summary">
                         <div id="preview-header-file" class="preview-header-file"></div>
                         <div id="preview-header-meta" class="preview-header-meta"></div>
@@ -668,6 +681,60 @@
                         <button id="preview-action-more" type="button" class="preview-action-btn hidden">More</button>
                     </div>
                 </div>
+            </div>
+            <div id="workspace-overlays" class="workspace-overlays">
+                <div id="media-grid-modal" class="media-grid-modal hidden" aria-hidden="true">
+                    <div class="media-grid-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-title">
+                        <div class="media-grid-header">
+                            <div class="media-grid-title-block">
+                                <h2 id="media-grid-title" class="media-grid-title">Media Grid</h2>
+                                <div id="media-grid-meta" class="media-grid-meta"></div>
+                            </div>
+                            <div id="media-grid-filters" class="media-grid-filters" aria-label="Grid filters"></div>
+                            <div class="media-grid-header-actions">
+                                <div id="media-grid-status" class="media-grid-status"></div>
+                                <button id="media-grid-select-all-btn" type="button" class="media-grid-btn">Select All</button>
+                                <button id="media-grid-clear-btn" type="button" class="media-grid-btn">Clear Selections</button>
+                                <button id="media-grid-close-btn" type="button" class="media-grid-btn media-grid-close-btn" aria-label="Close Media Grid">&times;</button>
+                            </div>
+                        </div>
+                        <div class="media-grid-body">
+                            <aside id="media-grid-left-rail" class="media-grid-left-rail" aria-label="Focus sets">
+                                <div class="media-grid-rail-panel">
+                                    <div class="media-grid-rail-header">
+                                        <div id="media-grid-rail-hint" class="media-grid-rail-hint"></div>
+                                        <button id="media-grid-rail-collapse-btn" type="button" class="media-grid-rail-collapse-btn" aria-label="Collapse left rail"></button>
+                                    </div>
+                                    <section class="media-grid-rail-section media-grid-focus-section">
+                                        <div class="media-grid-rail-section-head">
+                                            <div class="media-grid-rail-section-title">Focus Sets</div>
+                                            <div id="media-grid-focus-meta" class="media-grid-rail-section-meta"></div>
+                                        </div>
+                                        <div id="media-grid-focus-loading" class="media-grid-rail-section-note hidden"></div>
+                                        <div id="media-grid-focus-list" class="media-grid-focus-list"></div>
+                                    </section>
+                                </div>
+                            </aside>
+                            <div class="media-grid-main-column">
+                                <div id="media-grid-active-set" class="media-grid-active-set"></div>
+                                <main id="media-grid-canvas" class="media-grid-canvas" aria-label="Media thumbnails"></main>
+                            </div>
+                            <aside id="media-grid-sidebar" class="media-grid-sidebar" aria-label="Selection actions and grouped tags"></aside>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="media-grid-viewer-modal" class="media-grid-viewer-modal hidden" aria-hidden="true">
+            <div class="media-grid-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-viewer-title">
+                <div class="media-grid-viewer-header">
+                    <div id="media-grid-viewer-title" class="media-grid-viewer-title">
+                        <span id="media-grid-viewer-title-name" class="media-grid-viewer-title-name"></span>
+                        <span id="media-grid-viewer-title-caption" class="media-grid-viewer-title-caption hidden"></span>
+                    </div>
+                    <button id="media-grid-viewer-close-btn" type="button" class="media-grid-viewer-close-btn" aria-label="Close fullscreen viewer">&times;</button>
+                </div>
+                <div id="media-grid-viewer-stage" class="media-grid-viewer-stage"></div>
             </div>
         </div>
         <div id="crop-modal" class="crop-modal hidden" aria-hidden="true">

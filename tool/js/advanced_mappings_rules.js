@@ -180,6 +180,10 @@ function loadReviewRulesRows(rowsOrLegacy) {
 
 function openAdvancedModal(modalEl) {
   if (!modalEl || !ui || !ui.advancedModalOverlayEl) return;
+  ensureWorkspaceOverlayChildren([
+    'advanced-modal-overlay',
+    modalEl.id
+  ]);
   ui.advancedModalOverlayEl.classList.remove('hidden');
   modalEl.classList.remove('hidden');
 }

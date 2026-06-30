@@ -618,6 +618,15 @@ function createGroupWorkbenchActionButton(className, text, title) {
   return btn;
 }
 
+function bindGroupWorkbenchHeaderButton(btn, handler) {
+  if (!btn || typeof handler !== 'function') return;
+  btn.onclick = function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    handler();
+  };
+}
+
 function refreshGroupWorkbenchForCurrentItem() {
   if (!state || !state.currentItem || !state.currentItem.key) {
     renderGroupWorkbench({ mode: 'item' });
@@ -733,30 +742,31 @@ function renderGroupWorkbench(options) {
       });
     terms.sort(checklistSort);
 
-    var groupEl = document.createElement('section');
+    var groupEl = document.createElement('details');
     groupEl.className = 'group-workbench-group';
+    groupEl.open = true;
     groupEl.classList.toggle('is-reviewed', isReviewed);
     groupEl.classList.toggle('is-na', isNa);
     groupEl.classList.toggle('is-complete', isReviewed || isNa);
     groupEl.classList.toggle('is-incomplete', !isReviewed && !isNa);
     groupEl.classList.toggle('is-disabled', !hasActionTarget);
 
-    var headerEl = document.createElement('div');
+    var headerEl = document.createElement('summary');
     headerEl.className = 'group-workbench-group-header';
 
-    var titleEl = document.createElement('div');
+    var titleEl = document.createElement('span');
     titleEl.className = 'group-workbench-group-title';
     titleEl.textContent = requirementLabel;
     headerEl.appendChild(titleEl);
 
-    var actionsEl = document.createElement('div');
+    var actionsEl = document.createElement('span');
     actionsEl.className = 'group-workbench-group-actions';
 
     var editBtn = createGroupWorkbenchActionButton('group-workbench-edit-btn', 'Edit', 'Edit group terms');
     (function (label) {
-      editBtn.onclick = function () {
+      bindGroupWorkbenchHeaderButton(editBtn, function () {
         openChecklistGroupTermsModal(label);
-      };
+      });
     })(requirementLabel);
     actionsEl.appendChild(editBtn);
 
@@ -766,11 +776,11 @@ function renderGroupWorkbench(options) {
       reviewedBtn.classList.toggle('active', isReviewed);
       reviewedBtn.disabled = !hasItemTarget || isNa;
       (function (key, label) {
-        reviewedBtn.onclick = function () {
+        bindGroupWorkbenchHeaderButton(reviewedBtn, function () {
           if (!key) return;
           toggleChecklistRequirementCheckedForMediaKey(key, label);
           refreshGroupWorkbenchForCurrentItem();
-        };
+        });
       })(mediaKey, requirementLabel);
       actionsEl.appendChild(reviewedBtn);
 
@@ -779,11 +789,11 @@ function renderGroupWorkbench(options) {
       naBtn.classList.toggle('active', isNa);
       naBtn.disabled = !hasItemTarget;
       (function (key, label, nextIsNa) {
-        naBtn.onclick = function () {
+        bindGroupWorkbenchHeaderButton(naBtn, function () {
           if (!key) return;
           setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
           refreshGroupWorkbenchForCurrentItem();
-        };
+        });
       })(mediaKey, requirementLabel, isNa);
       actionsEl.appendChild(naBtn);
     }
@@ -814,13 +824,6 @@ function renderGroupWorkbench(options) {
           && typeof tagAppearsInCurrentCaption === 'function'
           && !tagAppearsInCurrentCaption(term);
         var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
-        var termRowEl = document.createElement('div');
-        termRowEl.className = 'group-workbench-term-row';
-        termRowEl.classList.toggle('is-active', isActive);
-        termRowEl.classList.toggle('is-mixed', isMixed);
-        termRowEl.classList.toggle('is-mismatch', isMismatch);
-        termRowEl.classList.toggle('is-disabled', !hasActionTarget);
-
         var termBtn = document.createElement('button');
         termBtn.type = 'button';
         termBtn.className = 'group-workbench-term-btn';
@@ -850,8 +853,7 @@ function renderGroupWorkbench(options) {
             }
           };
         })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys);
-        termRowEl.appendChild(termBtn);
-        termListEl.appendChild(termRowEl);
+        termListEl.appendChild(termBtn);
       }
       groupEl.appendChild(termListEl);
     }

@@ -5592,10 +5592,35 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   flex: 1 1 auto;
 }
 
+.app.shell-revamp.workspace-view-single .groups-card,
+.app.shell-revamp.workspace-view-grid .groups-card,
 .app.shell-revamp.workspace-surface-grid .groups-card,
 .app.shell-revamp.workspace-surface-grid #primer-details,
 .app.shell-revamp.workspace-surface-grid .workbench-bottom {
   display: none;
+}
+
+.app.shell-revamp.workspace-view-single .workbench-top,
+.app.shell-revamp.workspace-view-grid .workbench-top {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app.shell-revamp.workspace-view-single .workbench-side-stack,
+.app.shell-revamp.workspace-view-grid .workbench-side-stack {
+  display: flex;
+  flex-direction: column;
+  grid-template-rows: none;
+  align-content: stretch;
+  align-self: stretch;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.app.shell-revamp.workspace-view-single #caption-checklist-panel.group-tools-card.checklist-panel,
+.app.shell-revamp.workspace-view-grid #caption-checklist-panel.group-tools-card.checklist-panel {
+  max-height: none;
+  height: 100%;
+  flex: 1 1 auto;
 }
 
 .app.shell-revamp.workspace-surface-grid #caption-checklist-panel.checklist-panel {
@@ -5732,10 +5757,8 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 }
 
 .group-workbench-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 0 6px;
+  display: block;
+  padding: 0 0 8px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -5757,7 +5780,14 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+  padding: 2px 0 8px;
+}
+
+.group-workbench-group-header::-webkit-details-marker {
+  display: none;
 }
 
 .group-workbench-group-title {
@@ -5765,21 +5795,21 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   color: var(--text);
 }
 
 .group-workbench-group-actions {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 6px;
 }
 
 .group-workbench-action-btn {
-  min-height: 20px;
-  padding: 1px 5px;
-  border-radius: 4px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
   font-size: 11px;
   line-height: 1.1;
 }
@@ -5797,43 +5827,27 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 
 .group-workbench-term-list {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.group-workbench-term-row {
-  min-width: 0;
-}
-
-.group-workbench-term-row.is-active .group-workbench-term-btn {
-  border-color: var(--accent);
-  background: rgba(16, 185, 129, 0.14);
-  color: var(--text);
-}
-
-.group-workbench-term-row.is-mismatch .group-workbench-term-btn {
-  border-color: var(--accent);
-  background: rgba(245, 158, 11, 0.12);
-}
-
-.group-workbench-term-row.is-mixed .group-workbench-term-btn {
-  border-color: var(--accent);
-  background: rgba(217, 119, 24, 0.1);
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .group-workbench-term-btn {
-  display: block;
-  width: 100%;
-  min-height: 22px;
-  padding: 2px 6px;
-  text-align: left;
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 5px 10px;
+  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border-color: transparent;
-  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
   color: var(--muted);
   font-size: 12px;
+  align-items: center;
+  justify-content: center;
 }
 
 .group-workbench-term-btn:hover {

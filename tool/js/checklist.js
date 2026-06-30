@@ -554,19 +554,30 @@ function resolveGroupWorkbenchOptions(options) {
   if (!currentMediaKey && mode === 'item' && state && state.currentItem && state.currentItem.key) {
     currentMediaKey = state.currentItem.key;
   }
+  function collectMediaKeys(source) {
+    var seen = {};
+    var keys = [];
+    (Array.isArray(source) ? source : []).forEach(function (rawKey) {
+      var key = String(rawKey || '').trim();
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      keys.push(key);
+    });
+    return keys;
+  }
   var sourceMediaKeys = typeof opts.getMediaKeys === 'function'
     ? opts.getMediaKeys()
     : (typeof opts.mediaKeys === 'function' ? opts.mediaKeys() : opts.mediaKeys);
-  var seenMediaKeys = {};
-  var mediaKeys = [];
-  (Array.isArray(sourceMediaKeys) ? sourceMediaKeys : []).forEach(function (rawKey) {
-    var key = String(rawKey || '').trim();
-    if (!key || seenMediaKeys[key]) return;
-    seenMediaKeys[key] = true;
-    mediaKeys.push(key);
-  });
+  var mediaKeys = collectMediaKeys(sourceMediaKeys);
+  var sourceContextMediaKeys = typeof opts.getContextMediaKeys === 'function'
+    ? opts.getContextMediaKeys()
+    : (typeof opts.contextMediaKeys === 'function' ? opts.contextMediaKeys() : opts.contextMediaKeys);
+  var contextMediaKeys = collectMediaKeys(sourceContextMediaKeys);
   if (mode === 'item') {
     mediaKeys = currentMediaKey ? [currentMediaKey] : [];
+    contextMediaKeys = mediaKeys.slice();
+  } else if (!contextMediaKeys.length) {
+    contextMediaKeys = mediaKeys.slice();
   }
   return {
     mode: mode,
@@ -576,17 +587,19 @@ function resolveGroupWorkbenchOptions(options) {
       var freshSource = typeof opts.getMediaKeys === 'function'
         ? opts.getMediaKeys()
         : (typeof opts.mediaKeys === 'function' ? opts.mediaKeys() : mediaKeys);
-      var freshSeen = {};
-      var freshKeys = [];
-      (Array.isArray(freshSource) ? freshSource : []).forEach(function (rawKey) {
-        var key = String(rawKey || '').trim();
-        if (!key || freshSeen[key]) return;
-        freshSeen[key] = true;
-        freshKeys.push(key);
-      });
+      var freshKeys = collectMediaKeys(freshSource);
       return mode === 'item'
         ? (currentMediaKey ? [currentMediaKey] : [])
         : freshKeys;
+    },
+    contextMediaKeys: contextMediaKeys,
+    getContextMediaKeys: function () {
+      var freshSource = typeof opts.getContextMediaKeys === 'function'
+        ? opts.getContextMediaKeys()
+        : (typeof opts.contextMediaKeys === 'function' ? opts.contextMediaKeys() : contextMediaKeys);
+      var freshKeys = collectMediaKeys(freshSource);
+      if (mode === 'item') return currentMediaKey ? [currentMediaKey] : [];
+      return freshKeys.length ? freshKeys : mediaKeys.slice();
     },
     currentMediaKey: currentMediaKey,
     onAfterMutation: opts.onAfterMutation
@@ -609,12 +622,13 @@ function appendGroupWorkbenchNotice(targetEl, message) {
   targetEl.appendChild(noticeEl);
 }
 
-function createGroupWorkbenchActionButton(className, text, title) {
+function createGroupWorkbenchActionButton(className, text, title, ariaLabel) {
   var btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'group-workbench-action-btn ' + className;
   btn.textContent = text;
   btn.title = title;
+  btn.setAttribute('aria-label', ariaLabel || title);
   return btn;
 }
 
@@ -697,10 +711,26 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
       mode: 'grid',
       targetEl: opts.targetEl,
       mediaKeys: keys,
+      contextMediaKeys: opts.contextMediaKeys,
+      getContextMediaKeys: opts.getContextMediaKeys,
       onAfterMutation: opts.onAfterMutation
     });
   }
   return true;
+}
+
+function getGroupWorkbenchGridUsageState(term, mediaKeys) {
+  var total = Array.isArray(mediaKeys) ? mediaKeys.length : 0;
+  if (total <= 0 || typeof hasTagForMediaKey !== 'function') return 'none';
+  var count = 0;
+  mediaKeys.forEach(function (key) {
+    if (hasTagForMediaKey(key, term)) count += 1;
+  });
+  if (count <= 0) return 'none';
+  var ratio = count / total;
+  if (ratio >= 0.7) return 'most';
+  if (ratio >= 0.35) return 'many';
+  return 'some';
 }
 
 function renderGroupWorkbench(options) {
@@ -725,11 +755,16 @@ function renderGroupWorkbench(options) {
   var fragment = document.createDocumentFragment();
   var mediaKey = opts.currentMediaKey || opts.mediaKeys[0] || '';
   var mediaKeys = opts.mediaKeys;
+  var contextMediaKeys = opts.getContextMediaKeys();
+  var captionText = (!isGridMode && ui && ui.editorEl && typeof ui.editorEl.value === 'string')
+    ? ui.editorEl.value
+    : (state && state.currentItem ? (state.currentItem.caption || '') : '');
 
   for (var i = 0; i < checklistItems.length; i++) {
     var requirementLabel = checklistItems[i];
     var isReviewed = hasItemTarget && isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
     var isNa = hasItemTarget && isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
+    var isCaptionMatched = !isGridMode && hasItemTarget && requirementKeywordsMatch(requirementLabel, captionText);
     var terms = getChecklistKeywordTermsForRequirement(requirementLabel)
       .map(normalizeChecklistTerm)
       .filter(function (term, idx, arr) {
@@ -750,6 +785,7 @@ function renderGroupWorkbench(options) {
     groupEl.classList.toggle('is-complete', isReviewed || isNa);
     groupEl.classList.toggle('is-incomplete', !isReviewed && !isNa);
     groupEl.classList.toggle('is-disabled', !hasActionTarget);
+    groupEl.classList.toggle('is-caption-matched', isCaptionMatched);
 
     var headerEl = document.createElement('summary');
     headerEl.className = 'group-workbench-group-header';
@@ -762,7 +798,7 @@ function renderGroupWorkbench(options) {
     var actionsEl = document.createElement('span');
     actionsEl.className = 'group-workbench-group-actions';
 
-    var editBtn = createGroupWorkbenchActionButton('group-workbench-edit-btn', 'Edit', 'Edit group terms');
+    var editBtn = createGroupWorkbenchActionButton('group-workbench-edit-btn', '\u270e', 'Edit group terms', 'Edit terms for ' + requirementLabel);
     (function (label) {
       bindGroupWorkbenchHeaderButton(editBtn, function () {
         openChecklistGroupTermsModal(label);
@@ -771,7 +807,7 @@ function renderGroupWorkbench(options) {
     actionsEl.appendChild(editBtn);
 
     if (!isGridMode) {
-      var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', 'Done', 'Toggle reviewed');
+      var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', '\u2713', 'Toggle reviewed', 'Toggle reviewed for ' + requirementLabel);
       reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
       reviewedBtn.classList.toggle('active', isReviewed);
       reviewedBtn.disabled = !hasItemTarget || isNa;
@@ -784,7 +820,7 @@ function renderGroupWorkbench(options) {
       })(mediaKey, requirementLabel);
       actionsEl.appendChild(reviewedBtn);
 
-      var naBtn = createGroupWorkbenchActionButton('group-workbench-na-btn', 'N/A', 'Toggle not applicable');
+      var naBtn = createGroupWorkbenchActionButton('group-workbench-na-btn', 'NA', 'Toggle not applicable', 'Toggle not applicable for ' + requirementLabel);
       naBtn.setAttribute('aria-pressed', isNa ? 'true' : 'false');
       naBtn.classList.toggle('active', isNa);
       naBtn.disabled = !hasItemTarget;
@@ -804,6 +840,9 @@ function renderGroupWorkbench(options) {
     if (terms.length) {
       var termListEl = document.createElement('div');
       termListEl.className = 'group-workbench-term-list';
+      var groupHasActiveTerm = false;
+      var groupHasMixedTerm = false;
+      var groupHasMismatchTerm = false;
       for (var t = 0; t < terms.length; t++) {
         var term = terms[t];
         var activeCount = 0;
@@ -824,9 +863,10 @@ function renderGroupWorkbench(options) {
           && typeof tagAppearsInCurrentCaption === 'function'
           && !tagAppearsInCurrentCaption(term);
         var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
+        var usageState = isGridMode ? getGroupWorkbenchGridUsageState(term, contextMediaKeys) : 'none';
         var termBtn = document.createElement('button');
         termBtn.type = 'button';
-        termBtn.className = 'group-workbench-term-btn';
+        termBtn.className = 'group-workbench-term-btn group-workbench-term-usage-' + usageState;
         termBtn.textContent = term;
         termBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         termBtn.title = renderedTerm && renderedTerm !== term ? renderedTerm : term;
@@ -834,12 +874,17 @@ function renderGroupWorkbench(options) {
         termBtn.classList.toggle('mixed', isMixed);
         termBtn.classList.toggle('mismatch', isMismatch);
         termBtn.disabled = !hasActionTarget;
-        (function (btn, key, label, termText, mode, afterMutation, getMediaKeys) {
+        groupHasActiveTerm = groupHasActiveTerm || isActive;
+        groupHasMixedTerm = groupHasMixedTerm || isMixed;
+        groupHasMismatchTerm = groupHasMismatchTerm || isMismatch;
+        (function (btn, key, label, termText, mode, afterMutation, getMediaKeys, getContextMediaKeys) {
           btn.onclick = function () {
             if (btn.disabled) return;
             if (mode === 'grid') {
               toggleGroupWorkbenchTermForMediaKeys(getMediaKeys(), label, termText, {
                 targetEl: targetEl,
+                contextMediaKeys: getContextMediaKeys(),
+                getContextMediaKeys: getContextMediaKeys,
                 onAfterMutation: afterMutation
               });
               return;
@@ -852,10 +897,18 @@ function renderGroupWorkbench(options) {
               openChecklistTermAffixesModal(termText);
             }
           };
-        })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys);
+        })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys, opts.getContextMediaKeys);
         termListEl.appendChild(termBtn);
       }
+      groupEl.classList.toggle('has-active-term', groupHasActiveTerm);
+      groupEl.classList.toggle('has-mixed-term', groupHasMixedTerm);
+      groupEl.classList.toggle('has-mismatch-term', groupHasMismatchTerm);
       groupEl.appendChild(termListEl);
+    } else {
+      var emptyTerms = document.createElement('div');
+      emptyTerms.className = 'group-workbench-empty group-workbench-empty-terms';
+      emptyTerms.textContent = 'No tags';
+      groupEl.appendChild(emptyTerms);
     }
 
     fragment.appendChild(groupEl);
@@ -867,8 +920,7 @@ function renderChecklistPanel() {
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   var itemsDiv = document.getElementById('checklist-items');
   var groupWorkbenchList = document.getElementById('group-workbench-list');
-  var renderTarget = groupWorkbenchList || itemsDiv;
-  if (!renderTarget) return;
+  if (!itemsDiv && !groupWorkbenchList) return;
   if (typeof workspaceState !== 'undefined'
       && workspaceState
       && workspaceState.surface === 'grid'
@@ -876,29 +928,204 @@ function renderChecklistPanel() {
       && isMediaGridSurfaceOpen()
       && typeof mediaGridRenderSharedWorkbench === 'function') {
     setChecklistPanelVisible(true);
-    if (itemsDiv && groupWorkbenchList) itemsDiv.innerHTML = '';
+    if (itemsDiv) itemsDiv.innerHTML = '';
     mediaGridRenderSharedWorkbench();
     return;
   }
   if (typeof renderPrimerTemplatePlaceholderButtons === 'function') {
     renderPrimerTemplatePlaceholderButtons();
   }
-  setChecklistPanelVisible(true);
   if (!state.currentItem) {
-    if (itemsDiv && groupWorkbenchList) itemsDiv.innerHTML = '';
-    renderGroupWorkbench({ mode: 'item', targetEl: renderTarget });
+    if (itemsDiv) itemsDiv.innerHTML = '';
+    if (groupWorkbenchList) {
+      renderGroupWorkbench({
+        mode: 'item',
+        targetEl: groupWorkbenchList,
+        mediaKeys: []
+      });
+    }
+    setChecklistPanelVisible(false);
     renderItemTagsPanel();
     renderItemMetadataPanel();
     renderAnnotateStrip();
     return;
   }
-  if (itemsDiv && groupWorkbenchList) itemsDiv.innerHTML = '';
-  renderGroupWorkbench({
-    mode: 'item',
-    targetEl: renderTarget,
-    mediaKeys: [state.currentItem.key],
-    currentMediaKey: state.currentItem.key
-  });
+  setChecklistPanelVisible(true);
+  if (groupWorkbenchList) {
+    renderGroupWorkbench({
+      mode: 'item',
+      targetEl: groupWorkbenchList,
+      mediaKeys: [state.currentItem.key],
+      currentMediaKey: state.currentItem.key
+    });
+  }
+  if (!itemsDiv) return;
+  itemsDiv.innerHTML = '';
+  var checkedMap = checklistCheckedByMedia[state.currentItem.key] || {};
+  var naMap = getChecklistNaMapForMediaKey(state.currentItem.key);
+  var mediaKey = state.currentItem.key;
+  for (var i = 0; i < checklistItems.length; i++) {
+    var item = checklistItems[i];
+    var isNa = !!naMap[normalizeChecklistRequirementKey(item)];
+    var row = document.createElement('div');
+    row.className = 'checklist-row-block';
+    if (isNa) row.classList.add('checklist-row-na');
+
+    var summaryRow = document.createElement('div');
+    summaryRow.className = 'row-inline checklist-row-summary';
+    if (!!checkedMap[item] || isNa) summaryRow.classList.add('checklist-row-reviewed');
+
+    var label = document.createElement('div');
+    label.className = 'checklist-row-label';
+
+    var toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'checklist-row-toggle-btn';
+    toggleBtn.textContent = isChecklistRequirementExpanded(item) ? '\u25BE' : '\u25B8';
+    toggleBtn.title = isChecklistRequirementExpanded(item)
+      ? 'Hide selected tags for primer order'
+      : 'Show selected tags for primer order';
+    (function (requirementLabel) {
+      toggleBtn.onclick = function () {
+        toggleChecklistRequirementExpanded(requirementLabel);
+        renderChecklistPanel();
+      };
+    })(item);
+
+    var labelText = document.createElement('span');
+    labelText.className = 'checklist-row-label-text';
+    labelText.textContent = item;
+    label.appendChild(toggleBtn);
+    label.appendChild(labelText);
+    summaryRow.appendChild(label);
+
+    var captionText = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
+      ? ui.editorEl.value
+      : (state.currentItem.caption || '');
+    if (requirementKeywordsMatch(item, captionText)) {
+      summaryRow.classList.add('checklist-item-matched');
+    }
+
+    var actions = document.createElement('div');
+    actions.className = 'checklist-row-actions';
+
+    var moveUpBtn = document.createElement('button');
+    moveUpBtn.textContent = '\u2191';
+    moveUpBtn.title = 'Move requirement up';
+    moveUpBtn.className = 'checklist-row-action-btn checklist-row-action-move';
+    moveUpBtn.disabled = (i === 0);
+    (function (idx, label) {
+      moveUpBtn.onclick = function () {
+        var moved = moveChecklistItemByOffset(idx, -1);
+        if (moved) {
+          setStatus('Moved requirement up: ' + label);
+        }
+      };
+    })(i, item);
+    actions.appendChild(moveUpBtn);
+
+    var editTermsBtn = document.createElement('button');
+    editTermsBtn.textContent = '\u270e';
+    editTermsBtn.title = 'Edit requirement terms';
+    editTermsBtn.className = 'checklist-row-action-btn checklist-group-edit-btn';
+    (function (requirementLabel) {
+      editTermsBtn.onclick = function () {
+        openChecklistGroupTermsModal(requirementLabel);
+      };
+    })(item);
+    actions.appendChild(editTermsBtn);
+
+    var rmBtn = document.createElement('button');
+    rmBtn.textContent = '\u00D7';
+    rmBtn.title = 'Remove requirement';
+    rmBtn.className = 'checklist-row-action-btn checklist-row-action-remove';
+    (function (idx, requirementLabel) {
+      rmBtn.onclick = function () {
+        checklistItems.splice(idx, 1);
+        for (var k in checklistCheckedByMedia) {
+          if (checklistCheckedByMedia[k]) delete checklistCheckedByMedia[k][requirementLabel];
+        }
+        for (var itemMediaKey in checklistRequirementsNaByMedia) {
+          if (checklistRequirementsNaByMedia[itemMediaKey]) {
+            delete checklistRequirementsNaByMedia[itemMediaKey][requirementLabel];
+            if (!Object.keys(checklistRequirementsNaByMedia[itemMediaKey]).length) {
+              delete checklistRequirementsNaByMedia[itemMediaKey];
+            }
+          }
+        }
+        syncReviewedFromChecklistAll();
+        saveChecklistToFolderState();
+        renderChecklistPanel();
+      };
+    })(i, item);
+    actions.appendChild(rmBtn);
+
+    summaryRow.appendChild(actions);
+    row.appendChild(summaryRow);
+
+    if (isChecklistRequirementExpanded(item)) {
+      var selectedTags = getChecklistSelectedTagsForRequirementForMediaKey(mediaKey, item);
+      var selectedTagsEl = document.createElement('div');
+      selectedTagsEl.className = 'checklist-selected-tags';
+      if (selectedTags.length) {
+        selectedTags.forEach(function (tag, idx) {
+          var tagRow = document.createElement('div');
+          tagRow.className = 'checklist-selected-tag-row';
+
+          var tagLabel = document.createElement('span');
+          tagLabel.className = 'checklist-selected-tag-label';
+          tagLabel.textContent = tag;
+
+          var tagActions = document.createElement('div');
+          tagActions.className = 'checklist-selected-tag-actions';
+
+          var tagUpBtn = document.createElement('button');
+          tagUpBtn.type = 'button';
+          tagUpBtn.className = 'checklist-row-action-btn checklist-row-action-move';
+          tagUpBtn.textContent = '\u2191';
+          tagUpBtn.title = 'Move tag earlier in primer order for this group';
+          tagUpBtn.disabled = idx === 0;
+          (function (requirementLabel, tagText) {
+            tagUpBtn.onclick = function () {
+              var moved = moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tagText, -1);
+              if (moved) {
+                setStatus('Moved tag up in ' + requirementLabel + ': ' + tagText);
+              }
+            };
+          })(item, tag);
+
+          var tagDownBtn = document.createElement('button');
+          tagDownBtn.type = 'button';
+          tagDownBtn.className = 'checklist-row-action-btn checklist-row-action-move';
+          tagDownBtn.textContent = '\u2193';
+          tagDownBtn.title = 'Move tag later in primer order for this group';
+          tagDownBtn.disabled = idx === selectedTags.length - 1;
+          (function (requirementLabel, tagText) {
+            tagDownBtn.onclick = function () {
+              var moved = moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tagText, 1);
+              if (moved) {
+                setStatus('Moved tag down in ' + requirementLabel + ': ' + tagText);
+              }
+            };
+          })(item, tag);
+
+          tagActions.appendChild(tagUpBtn);
+          tagActions.appendChild(tagDownBtn);
+          tagRow.appendChild(tagLabel);
+          tagRow.appendChild(tagActions);
+          selectedTagsEl.appendChild(tagRow);
+        });
+      } else {
+        var emptySelectedTags = document.createElement('div');
+        emptySelectedTags.className = 'checklist-selected-tags-empty';
+        emptySelectedTags.textContent = 'No selected tags in this group.';
+        selectedTagsEl.appendChild(emptySelectedTags);
+      }
+      row.appendChild(selectedTagsEl);
+    }
+
+    itemsDiv.appendChild(row);
+  }
   renderItemTagsPanel();
   renderItemMetadataPanel();
   renderAnnotateStrip();

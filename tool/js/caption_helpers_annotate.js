@@ -312,9 +312,24 @@ function toggleAnnotateGroupReviewed(mediaKey, requirementLabel) {
 
 function renderAnnotateStrip() {
   var stripEl = document.getElementById('annotate-strip');
-  if (!stripEl) return;
+  var editorPanelEl = document.querySelector('.editor-panel');
+  if (!stripEl) {
+    if (editorPanelEl) editorPanelEl.classList.remove('annotate-strip-visible');
+    return;
+  }
   var panelEl = document.getElementById('caption-checklist-panel');
-  var editorPanelEl = panelEl ? panelEl.closest('.editor-panel') : null;
+  editorPanelEl = panelEl ? panelEl.closest('.editor-panel') : editorPanelEl;
+  if (typeof ui !== 'undefined'
+      && ui
+      && ui.appEl
+      && ui.appEl.classList
+      && ui.appEl.classList.contains('shell-revamp')
+      && !ui.appEl.classList.contains('workspace-surface-focus')) {
+    stripEl.classList.add('hidden');
+    stripEl.innerHTML = '';
+    if (editorPanelEl) editorPanelEl.classList.remove('annotate-strip-visible');
+    return;
+  }
   var panelVisible = !!(panelEl && panelEl.style.display !== 'none');
   var canShow = !!(annotateStripVisible && panelVisible && state.currentItem && state.currentItem.key);
 

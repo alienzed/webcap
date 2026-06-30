@@ -1136,6 +1136,14 @@ function mediaGridGetSelectedKeysSnapshot() {
   return Array.from(mediaGridState.selectedKeys || []);
 }
 
+function mediaGridGetVisibleKeysSnapshot() {
+  var keys = [];
+  (Array.isArray(mediaGridState.items) ? mediaGridState.items : []).forEach(function (item) {
+    if (item && item.key) keys.push(item.key);
+  });
+  return keys;
+}
+
 function mediaGridRenderSelectionState() {
   if (mediaGridIsSurfaceMode()) {
     renderMediaGridSurfaceHeader();
@@ -1159,6 +1167,8 @@ function mediaGridRenderSharedWorkbench() {
     targetEl: targetEl,
     mediaKeys: mediaGridGetSelectedKeysSnapshot(),
     getMediaKeys: mediaGridGetSelectedKeysSnapshot,
+    contextMediaKeys: mediaGridGetVisibleKeysSnapshot(),
+    getContextMediaKeys: mediaGridGetVisibleKeysSnapshot,
     onAfterMutation: function () {
       if (typeof mediaGridRefreshAfterMutation === 'function') mediaGridRefreshAfterMutation();
       else if (typeof mediaGridRenderSelectionState === 'function') mediaGridRenderSelectionState();

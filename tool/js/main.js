@@ -288,7 +288,7 @@ function syncWorkspaceSurfaceUi() {
     reviewOutputSurface.classList.toggle('hidden', surface !== 'reviewOutput');
   }
   if (workbenchTop) {
-    workbenchTop.classList.toggle('hidden', surface === 'reviewOutput' || surface === 'configEditor');
+    workbenchTop.classList.toggle('hidden', surface === 'reviewOutput');
   }
   if (workbenchBottom) {
     workbenchBottom.classList.toggle('workspace-bottom-config-editor', surface === 'configEditor');

@@ -326,8 +326,41 @@
             </div>
             <div class="panel editor-panel workbench-panel">
                 <div class="workbench-top">
-                    <div class="workbench-card groups-card">
-                        <div id="annotate-strip" class="annotate-strip hidden" aria-label="Annotation strip"></div>
+                    <div class="workbench-main-stack">
+                        <div class="workbench-card groups-card">
+                            <section id="group-workbench" class="group-workbench" aria-label="Annotation groups">
+                                <div class="group-workbench-header">
+                                    <div class="group-workbench-title">Annotation Groups</div>
+                                </div>
+                                <div id="group-workbench-list" class="group-workbench-list"></div>
+                            </section>
+                        </div>
+                        <div class="workbench-bottom">
+                            <div class="workbench-card editor-surface">
+                                <div id="config-editor-toolbar" class="config-editor-toolbar hidden">
+                                    <button id="config-editor-back-btn" type="button" class="review-captions-btn">Back</button>
+                                    <div class="config-editor-title-copy">
+                                        <div class="config-editor-title">Config Editor</div>
+                                        <div id="config-editor-current-file" class="config-editor-current-file">No config selected.</div>
+                                    </div>
+                                    <div class="config-editor-toolbar-actions">
+                                        <button id="config-editor-console-btn" type="button" class="review-captions-btn">Console</button>
+                                        <button id="config-editor-generate-btn" type="button" class="review-captions-btn">Generate</button>
+                                        <button id="config-editor-train-btn" type="button" class="review-captions-btn">Train Preview</button>
+                                        <button id="config-editor-save-btn" type="button" class="review-captions-btn">Save</button>
+                                    </div>
+                                </div>
+                                <div class="editor-wrapper">
+                                    <div id="editor-floating-actions" class="editor-floating-actions">
+                                        <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Save current primer text as this item's caption">Apply</button>
+                                        <button id="primer-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Reset the current caption to the current primer output">Reset</button>
+                                        <button id="primer-undo-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Undo last reset for current item">Undo Reset</button>
+                                    </div>
+                                    <textarea id="editor" rows="6" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
+                                </div>
+                                <div id="console-panel"></div>
+                            </div>
+                        </div>
                     </div>
                     <aside class="workbench-side-stack">
                         <div id="caption-checklist-panel" class="checklist-panel workbench-card group-tools-card" data-layout="split" style="display:none;">
@@ -358,13 +391,6 @@
                                 >Metadata</button>
                                 <div class="caption-helper-tabs-actions">
                                     <button
-                                        id="annotate-strip-toggle-btn"
-                                        type="button"
-                                        class="annotate-strip-toggle-btn"
-                                        title="Show/hide annotation strip"
-                                        aria-expanded="false"
-                                    >Annotate &#9650;</button>
-                                    <button
                                         id="caption-helper-collapse-btn"
                                         type="button"
                                         class="caption-helper-collapse-btn"
@@ -379,13 +405,6 @@
                                 <div class="caption-helper-section-title-row">
                                     <div class="caption-helper-section-title">Groups</div>
                                     <div class="caption-helper-section-controls">
-                                        <button
-                                            id="annotate-strip-toggle-inline-btn"
-                                            type="button"
-                                            class="annotate-strip-toggle-btn"
-                                            title="Show/hide annotation strip"
-                                            aria-expanded="false"
-                                        >Annotate &#9650;</button>
                                         <button
                                             id="checklist-settings-btn"
                                             type="button"
@@ -404,12 +423,6 @@
                                     >
                                     <button id="checklist-add-btn" type="button">+</button>
                                 </div>
-                                <section id="group-workbench" class="group-workbench" aria-label="Groups">
-                                    <div class="group-workbench-header">
-                                        <div class="group-workbench-title">Groups</div>
-                                    </div>
-                                    <div id="group-workbench-list" class="group-workbench-list"></div>
-                                </section>
                                 <div id="checklist-items"></div>
                             </div>
                         </div>
@@ -435,6 +448,63 @@
                                 </div>
                                 <label class="hidden">Set Notes</label>
                                 <textarea id="set-notes-editor" rows="6" class="hidden" placeholder="Set notes..."></textarea>
+                            </div>
+                        </div>
+                        <div class="workbench-card tags-card">
+                            <div id="caption-helper-tab-tags" class="caption-helper-tab-pane hidden">
+                                <div class="caption-helper-section-title-row">
+                                    <div class="caption-helper-section-title">Tags</div>
+                                    <div class="caption-helper-section-controls">
+                                        <button
+                                            id="item-tags-copy-btn"
+                                            type="button"
+                                            class="checklist-settings-btn"
+                                            title="Copy current item tags"
+                                            aria-label="Copy current item tags"
+                                        >Copy</button>
+                                        <button
+                                            id="item-tags-paste-btn"
+                                            type="button"
+                                            class="checklist-settings-btn hidden"
+                                            title="Paste copied tags"
+                                            aria-label="Paste copied tags"
+                                        >Paste</button>
+                                    </div>
+                                </div>
+                                <div id="tag-term-row" class="checklist-input-row term-input-row">
+                                    <input
+                                        id="tag-term-input"
+                                        type="text"
+                                        class="form-control"
+                                        placeholder="Add/search tag..."
+                                    >
+                                    <button id="tag-term-apply-btn" type="button">+</button>
+                                    <div id="tag-term-results" class="caption-term-results hidden"></div>
+                                </div>
+                                <div id="item-tags-list"></div>
+                            </div>
+                            <div id="caption-helper-tab-analysis" class="caption-helper-tab-pane hidden">
+                                <div class="caption-helper-section-title-row">
+                                    <div class="caption-helper-section-title">Quality Assurance</div>
+                                </div>
+                                <div id="item-analysis-list"></div>
+                            </div>
+                            <div id="caption-helper-tab-metadata" class="caption-helper-tab-pane hidden">
+                                <div class="caption-helper-section-title-row">
+                                    <div class="caption-helper-section-title">Metadata</div>
+                                    <div class="caption-helper-section-controls">
+                                        <button
+                                            id="caption-helper-collapse-inline-btn"
+                                            type="button"
+                                            class="caption-helper-collapse-btn"
+                                            title="Collapse helper panel"
+                                            aria-label="Collapse helper panel"
+                                            aria-expanded="true"
+                                        >&#9660;</button>
+                                        <button id="checklist-close-inline-btn" title="Close helper panel" aria-label="Close helper panel" class="checklist-close-btn">&times;</button>
+                                    </div>
+                                </div>
+                                <div id="item-metadata-list"></div>
                             </div>
                         </div>
                     </aside>
@@ -551,89 +621,6 @@
                         </section>
                     </div>
                 </section>
-                <div class="workbench-bottom">
-                    <div class="workbench-card editor-surface">
-                        <div id="config-editor-toolbar" class="config-editor-toolbar hidden">
-                            <button id="config-editor-back-btn" type="button" class="review-captions-btn">Back</button>
-                            <div class="config-editor-title-copy">
-                                <div class="config-editor-title">Config Editor</div>
-                                <div id="config-editor-current-file" class="config-editor-current-file">No config selected.</div>
-                            </div>
-                            <div class="config-editor-toolbar-actions">
-                                <button id="config-editor-console-btn" type="button" class="review-captions-btn">Console</button>
-                                <button id="config-editor-generate-btn" type="button" class="review-captions-btn">Generate</button>
-                                <button id="config-editor-train-btn" type="button" class="review-captions-btn">Train Preview</button>
-                                <button id="config-editor-save-btn" type="button" class="review-captions-btn">Save</button>
-                            </div>
-                        </div>
-                        <div class="editor-wrapper">
-                            <div id="editor-floating-actions" class="editor-floating-actions">
-                                <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Save current primer text as this item's caption">Apply</button>
-                                <button id="primer-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Reset the current caption to the current primer output">Reset</button>
-                                <button id="primer-undo-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Undo last reset for current item">Undo Reset</button>
-                            </div>
-                            <textarea id="editor" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
-                        </div>
-                        <div id="console-panel"></div>
-                    </div>
-                    <div class="workbench-card tags-card">
-                        <div id="caption-helper-tab-tags" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title-row">
-                                <div class="caption-helper-section-title">Tags</div>
-                                <div class="caption-helper-section-controls">
-                                    <button
-                                        id="item-tags-copy-btn"
-                                        type="button"
-                                        class="checklist-settings-btn"
-                                        title="Copy current item tags"
-                                        aria-label="Copy current item tags"
-                                    >Copy</button>
-                                    <button
-                                        id="item-tags-paste-btn"
-                                        type="button"
-                                        class="checklist-settings-btn hidden"
-                                        title="Paste copied tags"
-                                        aria-label="Paste copied tags"
-                                    >Paste</button>
-                                </div>
-                            </div>
-                            <div id="tag-term-row" class="checklist-input-row term-input-row">
-                                <input
-                                    id="tag-term-input"
-                                    type="text"
-                                    class="form-control"
-                                    placeholder="Add/search tag..."
-                                >
-                                <button id="tag-term-apply-btn" type="button">+</button>
-                                <div id="tag-term-results" class="caption-term-results hidden"></div>
-                            </div>
-                            <div id="item-tags-list"></div>
-                        </div>
-                        <div id="caption-helper-tab-analysis" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title-row">
-                                <div class="caption-helper-section-title">Quality Assurance</div>
-                            </div>
-                            <div id="item-analysis-list"></div>
-                        </div>
-                        <div id="caption-helper-tab-metadata" class="caption-helper-tab-pane hidden">
-                            <div class="caption-helper-section-title-row">
-                                <div class="caption-helper-section-title">Metadata</div>
-                                <div class="caption-helper-section-controls">
-                                    <button
-                                        id="caption-helper-collapse-inline-btn"
-                                        type="button"
-                                        class="caption-helper-collapse-btn"
-                                        title="Collapse helper panel"
-                                        aria-label="Collapse helper panel"
-                                        aria-expanded="true"
-                                    >&#9660;</button>
-                                    <button id="checklist-close-inline-btn" title="Close helper panel" aria-label="Close helper panel" class="checklist-close-btn">&times;</button>
-                                </div>
-                            </div>
-                            <div id="item-metadata-list"></div>
-                        </div>
-                    </div>
-                </div>
             </div>
             <div class="panel preview-panel">
                 <div id="preview-shell" class="preview-shell">

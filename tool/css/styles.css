@@ -5785,7 +5785,7 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
-  columns: 2;
+  columns: 1;
   column-gap: 1.5rem;
 }
 

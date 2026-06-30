@@ -6136,6 +6136,10 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   min-height: 0;
 }
 
+.app.shell-revamp .workbench-card {
+  box-shadow: none;
+}
+
 .app.shell-revamp .groups-card #group-workbench,
 .app.shell-revamp .groups-card #group-workbench-list {
   flex: 1 1 auto;
@@ -6145,16 +6149,29 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 .app.shell-revamp .editor-surface {
   display: flex;
   flex-direction: column;
+  gap: 0;
+  padding: 10px;
 }
 
 .app.shell-revamp .editor-surface .editor-wrapper {
   flex: 1 1 auto;
   min-height: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .app.shell-revamp textarea#editor {
-  min-height: 0;
+  min-height: 170px;
   height: 100%;
+  background: transparent;
+  border-color: transparent;
+  border-radius: 8px;
+  box-shadow: none;
+  padding: 10px 72px 10px 10px;
+}
+
+.app.shell-revamp textarea#editor:focus {
+  background: transparent;
 }
 
 .app.shell-revamp .workbench-side-stack {
@@ -6165,27 +6182,15 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   gap: 8px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 2px;
+  padding-right: 0;
 }
 
 .app.shell-revamp .workbench-side-stack > .group-tools-card,
 .app.shell-revamp .workbench-side-stack > .primer-card,
 .app.shell-revamp .workbench-side-stack > .tags-card {
+  flex: 0 0 auto;
   min-height: 0;
-}
-
-.app.shell-revamp .workbench-side-stack > .group-tools-card {
-  flex: 0 0 auto;
-  min-height: 244px;
-}
-
-.app.shell-revamp .workbench-side-stack > .primer-card {
-  flex: 0 0 auto;
-  min-height: 330px;
-}
-
-.app.shell-revamp .workbench-side-stack > .tags-card {
-  flex: 1 1 220px;
+  overflow: visible;
 }
 
 .app.shell-revamp #caption-checklist-panel.group-tools-card.checklist-panel {
@@ -6194,22 +6199,39 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   min-height: 0;
   max-height: none;
   height: auto;
+  overflow: visible;
+  padding: 6px !important;
 }
 
 .app.shell-revamp #caption-checklist-panel.group-tools-card #caption-helper-tab-requirements {
-  flex: 1 1 auto;
+  flex: 0 0 auto !important;
   min-height: 0;
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .app.shell-revamp #caption-checklist-panel.group-tools-card #checklist-items {
-  flex: 0 1 auto;
+  flex: 0 0 auto !important;
   min-height: 0;
+  height: auto;
+  overflow-y: visible !important;
+  max-height: none !important;
+  padding-right: 0;
+}
+
+.app.shell-revamp.workspace-view-single #caption-checklist-panel.group-tools-card.checklist-panel,
+.app.shell-revamp.workspace-view-grid #caption-checklist-panel.group-tools-card.checklist-panel {
+  flex: 0 0 auto;
   max-height: none;
+  height: auto;
 }
 
 .app.shell-revamp .primer-card {
   display: flex;
   flex-direction: column;
+  overflow: visible;
+  max-height: none;
 }
 
 .app.shell-revamp .primer-card .stats-controls {
@@ -6217,32 +6239,90 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   flex-direction: column;
   flex: 0 0 auto;
   min-height: 0;
+  height: auto;
+  overflow: visible;
   gap: 6px;
 }
 
 .app.shell-revamp .primer-card textarea {
   flex: 0 0 auto;
-  min-height: 110px;
-  max-height: 168px;
+  min-height: 140px;
+  height: auto;
+  max-height: none;
   resize: vertical;
 }
 
+.app.shell-revamp.workflow-annotate .primer-card {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.app.shell-revamp.workflow-annotate .primer-card .stats-controls {
+  min-height: 0;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.app.shell-revamp.workflow-annotate .primer-card textarea {
+  min-height: 140px;
+  max-height: none !important;
+}
+
 .app.shell-revamp .workbench-side-stack .primer-card textarea {
-  min-height: 146px;
-  max-height: 220px;
+  min-height: 140px;
+  max-height: none;
 }
 
 .app.shell-revamp .tags-card {
   display: flex;
   flex-direction: column;
-  min-height: 180px;
+  overflow: visible;
 }
 
 .app.shell-revamp .tags-card #caption-helper-tab-tags {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  gap: 4px;
   min-height: 0;
+  height: auto;
+}
+
+.app.shell-revamp .tags-card .caption-helper-section-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 0;
+}
+
+.app.shell-revamp .tags-card .caption-helper-section-controls {
+  justify-content: flex-end;
+}
+
+.app.shell-revamp .tags-card .caption-helper-section-controls .checklist-settings-btn {
+  min-height: 24px;
+  padding: 3px 8px;
+}
+
+.app.shell-revamp .tags-card #tag-term-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px;
+  gap: 4px;
+  margin: 0;
+  align-items: start;
+}
+
+.app.shell-revamp .tags-card #tag-term-row #tag-term-results {
+  grid-column: 1 / -1;
+}
+
+.app.shell-revamp .tags-card #tag-term-apply-btn {
+  min-width: 22px;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
 }
 
 .app.shell-revamp .tags-card #item-tags-list {
@@ -6250,73 +6330,74 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   flex-direction: column;
   gap: 2px;
   min-height: 0;
-  max-height: none;
+  max-height: none !important;
   height: auto;
-  overflow-y: auto;
+  overflow-y: visible !important;
   font-size: 12px;
   color: var(--muted);
   padding-right: 0;
+  flex: 0 0 auto !important;
 }
 
 .app.shell-revamp .tags-card #item-tags-list .row-inline {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .app.shell-revamp .tags-card #item-tags-list .phrase-copy-item-btn {
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
-  min-height: 28px;
-  padding: 4px 8px;
+  min-height: 22px;
+  padding: 2px 7px;
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
   border-radius: 4px;
   font-size: 12px;
-  line-height: 1.2;
+  line-height: 1.25;
+  box-shadow: none;
 }
 
 .app.shell-revamp .tags-card #item-tags-list .stats-phrase-mini-btn {
   flex: 0 0 auto;
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  min-height: 24px;
-  padding: 0 0 1px;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
   border-radius: 4px;
 }
 
 .app.shell-revamp .tags-card #item-tags-list .item-tag-pill-present {
-  background: rgba(16, 185, 129, 0.14);
-  border-color: rgba(16, 185, 129, 0.42);
-  color: #ecfdf5;
+  background: rgba(22, 101, 52, 0.22);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #d1fae5;
 }
 
 .app.shell-revamp .tags-card #item-tags-list .item-tag-pill-present:hover {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: rgba(16, 185, 129, 0.56);
-  color: #f0fdf4;
+  background: rgba(22, 101, 52, 0.3);
+  border-color: rgba(34, 197, 94, 0.56);
+  color: #ecfdf5;
 }
 
 .app.shell-revamp .tags-card #item-tags-list .item-tag-pill-missing {
-  background: rgba(15, 23, 42, 0.58);
-  border-color: rgba(100, 116, 139, 0.42);
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(245, 158, 11, 0.34);
   color: #fde68a;
-  box-shadow: inset 0 -2px 0 rgba(245, 158, 11, 0.88);
+  box-shadow: inset 0 -1px 0 rgba(245, 158, 11, 0.92);
 }
 
 .app.shell-revamp .tags-card #item-tags-list .item-tag-pill-missing:hover {
-  background: rgba(15, 23, 42, 0.7);
-  border-color: rgba(148, 163, 184, 0.46);
+  background: rgba(15, 23, 42, 0.82);
+  border-color: rgba(245, 158, 11, 0.5);
   color: #fef3c7;
-  box-shadow: inset 0 -2px 0 rgba(245, 158, 11, 1);
+  box-shadow: inset 0 -1px 0 rgba(245, 158, 11, 1);
 }
 
 .app.shell-revamp .tags-card #item-tags-list .item-tags-suggested-header {
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -6325,15 +6406,15 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 
 .app.shell-revamp .tags-card #item-tags-list .item-tag-pill-suggested {
-  background: rgba(51, 65, 85, 0.42);
-  border-color: rgba(148, 163, 184, 0.34);
+  background: rgba(30, 41, 59, 0.68);
+  border-color: rgba(100, 116, 139, 0.42);
   color: #cbd5e1;
-  opacity: 0.94;
+  opacity: 1;
 }
 
 .app.shell-revamp .tags-card #item-tags-list .item-tag-pill-suggested:hover {
-  background: rgba(71, 85, 105, 0.54);
-  border-color: rgba(148, 163, 184, 0.5);
+  background: rgba(51, 65, 85, 0.82);
+  border-color: rgba(148, 163, 184, 0.52);
   color: #e2e8f0;
 }
 

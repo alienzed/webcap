@@ -5371,10 +5371,15 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 
 .app.shell-revamp.sidebar-hidden {
   grid-template-columns: minmax(340px, 0.9fr) minmax(560px, 1.1fr);
+  grid-template-areas: "preview workbench";
 }
 
 .app.shell-revamp.sidebar-hidden .sidebar-panel {
   display: none;
+}
+
+.app.shell-revamp.sidebar-hidden .workspace-overlays {
+  grid-column: 1 / -1;
 }
 
 .app.shell-revamp .sidebar-review-output-btn {
@@ -5574,8 +5579,20 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 
 .app.shell-revamp.workspace-surface-grid .workbench-top {
   grid-template-columns: minmax(0, 1fr);
+  flex: 1 1 auto;
 }
 
+.app.shell-revamp.workspace-surface-grid .workbench-side-stack {
+  display: flex;
+  flex-direction: column;
+  grid-template-rows: none;
+  align-content: stretch;
+  align-self: stretch;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.app.shell-revamp.workspace-surface-grid .groups-card,
 .app.shell-revamp.workspace-surface-grid #primer-details,
 .app.shell-revamp.workspace-surface-grid .workbench-bottom {
   display: none;
@@ -5583,6 +5600,93 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 
 .app.shell-revamp.workspace-surface-grid #caption-checklist-panel.checklist-panel {
   display: flex !important;
+  max-height: none;
+  height: 100%;
+}
+
+.app.shell-revamp.workspace-surface-grid #caption-helper-tab-requirements {
+  gap: 10px;
+}
+
+.app.shell-revamp.workspace-surface-grid #caption-helper-tab-requirements > .caption-helper-section-title-row,
+.app.shell-revamp.workspace-surface-grid #caption-helper-tab-requirements > .checklist-input-row,
+.app.shell-revamp.workspace-surface-grid #checklist-items {
+  display: none !important;
+}
+
+.app.shell-revamp.workspace-surface-grid #group-workbench,
+.app.shell-revamp.workspace-surface-grid #group-workbench-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.app.shell-revamp.workspace-surface-grid #group-workbench-list {
+  gap: 10px;
+  padding-right: 6px;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-notice {
+  padding-bottom: 2px;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-group {
+  gap: 8px;
+  padding: 0 0 10px;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-group-header {
+  align-items: start;
+  gap: 10px;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-group-title {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-group-actions {
+  gap: 6px;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-action-btn {
+  min-height: 24px;
+  padding: 3px 8px;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-term-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-term-row {
+  min-width: 0;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-term-btn {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: normal;
+  text-overflow: clip;
+  align-items: center;
+}
+
+.app.shell-revamp.workspace-surface-grid.sidebar-hidden {
+  grid-template-columns: minmax(560px, 1.35fr) minmax(380px, 0.85fr);
+  grid-template-areas: "preview workbench";
+}
+
+.app.shell-revamp.workspace-surface-grid.sidebar-hidden .preview-panel {
+  grid-area: preview;
+}
+
+.app.shell-revamp.workspace-surface-grid.sidebar-hidden .workbench-panel {
+  grid-area: workbench;
 }
 
 .app.shell-revamp.workspace-surface-config-editor textarea#editor {
@@ -5790,6 +5894,11 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
     grid-template-columns: 1fr;
   }
 
+  .app.shell-revamp.workspace-surface-grid.sidebar-hidden {
+    grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+    grid-template-areas: "preview workbench";
+  }
+
   .app.shell-revamp .workbench-top,
   .app.shell-revamp.workflow-annotate .workbench-top,
   .app.shell-revamp .workbench-bottom,
@@ -5814,6 +5923,13 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 
 @media (max-width: 880px) {
+  .app.shell-revamp.workspace-surface-grid.sidebar-hidden {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "preview"
+      "workbench";
+  }
+
   .app.shell-revamp .workbench-top,
   .app.shell-revamp.workflow-annotate .workbench-top,
   .app.shell-revamp .workbench-bottom,

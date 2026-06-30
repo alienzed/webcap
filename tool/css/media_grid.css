@@ -32,6 +32,7 @@
 
 .media-grid-surface-copy {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .media-grid-surface-title {
@@ -54,14 +55,19 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
+  flex: 0 1 auto;
 }
 
 .media-grid-surface-status {
-  min-width: 140px;
+  min-width: 160px;
   max-width: 320px;
   color: #475569;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.media-grid-surface-rating-controls {
+  flex: 0 0 auto;
 }
 
 .media-grid-surface-canvas {
@@ -1070,6 +1076,10 @@ body.media-grid-open .caption-context-menu {
 
 .app.shell-revamp .media-grid-items {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.app.shell-revamp.workspace-surface-grid .media-grid-items {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
 html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-modal {

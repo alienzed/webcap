@@ -409,13 +409,8 @@ function moveChildren(sourceEl, targetEl) {
 function rebuildUnifiedWorkspaceShell() {
   if (!ui || !ui.appEl || ui.appEl.__workspaceRevampBuilt) return;
   var appEl = ui.appEl;
-  var utilityThemeBtn = document.getElementById('utility-theme-btn');
   appEl.__workspaceRevampBuilt = true;
   appEl.classList.add('shell-revamp');
-  if (utilityThemeBtn) {
-    utilityThemeBtn.classList.add('hidden');
-    utilityThemeBtn.tabIndex = -1;
-  }
 
   ensureWorkspaceOverlayChildren([
     'focused-annotation-modal',
@@ -552,6 +547,16 @@ window.exitWorkspaceSurface = exitWorkspaceSurface;
 window.ensureWorkspaceOverlayChildren = ensureWorkspaceOverlayChildren;
 window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;
 
+function getThemedPreviewPlaceholderHtml(message) {
+  var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';
+  var isDark = String(theme || '').toLowerCase() === 'dark';
+  var bodyBg = isDark ? '#0f172a' : '#ffffff';
+  var bodyColor = isDark ? '#cbd5e1' : '#666666';
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+    '<style>html,body{margin:0;height:100%;}body{display:flex;align-items:center;justify-content:center;font-family:system-ui;padding:1rem;background:' + bodyBg + ';color:' + bodyColor + ';transition:background 120ms ease,color 120ms ease;}</style>' +
+    '</head><body><div id="preview-empty-message">' + String(message || 'No media to preview.') + '</div><script>(function(){function applyTheme(){try{var theme=(document.documentElement&&document.documentElement.getAttribute("data-theme"))||(window.parent&&window.parent.document&&window.parent.document.documentElement&&window.parent.document.documentElement.getAttribute("data-theme"))||"light";theme=String(theme).toLowerCase()==="dark"?"dark":"light";var dark=theme==="dark";document.documentElement.setAttribute("data-theme",theme);document.documentElement.style.colorScheme=theme;document.body.style.background=dark?"#0f172a":"#ffffff";document.body.style.color=dark?"#cbd5e1":"#666666";}catch(_err){}}applyTheme();try{var parentRoot=window.parent&&window.parent.document&&window.parent.document.documentElement;if(parentRoot&&window.MutationObserver){new MutationObserver(applyTheme).observe(parentRoot,{attributes:true,attributeFilter:["data-theme"]});}}catch(_err){};})();</script></body></html>';
+}
+
 // Hide checklist panel and clear current media selection
 function clearEditorAndPreview() {
   if (ui && ui.editorEl) {
@@ -565,7 +570,7 @@ function clearEditorAndPreview() {
     var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
     if (doc) {
       doc.open();
-      doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">No media to preview.</body></html>');
+      doc.write(getThemedPreviewPlaceholderHtml('No media to preview.'));
       doc.close();
     }
   }

@@ -83,7 +83,7 @@ ui = {
   utilityCurrentPathBtn: document.getElementById('utility-current-path-btn'),
   utilitySettingsBtn: document.getElementById('utility-settings-btn'),
   utilityHelpBtn: document.getElementById('utility-help-btn'),
-  utilityThemeBtn: document.getElementById('utility-theme-btn'),
+  themeToggleBtn: document.getElementById('app-settings-theme-btn'),
   createSetFromResultsBtn: document.getElementById('create-set-from-results-btn'),
   reviewSelectionsBtn: document.getElementById('review-selections-btn'),
   reviewBtn: document.getElementById('review-captions-btn'),

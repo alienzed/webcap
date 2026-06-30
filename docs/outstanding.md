@@ -8,21 +8,10 @@ Last reviewed: 2026-06-19.
 ## Bugs
 
 ## Enhancements
-- Decide whether the media list itself still needs multi-select now that Grid owns the current batch tagging workflow.
-- n/a in a group is sort of incompatible with having other tags selected. I am not sure we'd deselect tags on n/a click, but n/a probably shouldn't be available to click on if another item is selected - let's discuss if this is worth the complexity.
-- Focused annotation / wizard near-term enhancements:
-  1. Revisit whether `Group-first` should remain the default if real use shows `Item-first` is clearly faster or less error-prone.
-- Review Selections suggestion sanity layer:
-  - Current tag suggestions and coverage nudges can over-infer from co-occurrence alone (for example `shoes` on a portrait close-up).
-  - Explore a soft rule layer that combines requirement-group relationships, coverage hints, and review rules to down-rank or suppress implausible suggestions.
-  - Prefer reusable defaults derived from requirements groups over per-set manual rule entry, but keep the result advisory rather than hard-blocking.
-- Annotation throughput priorities (ranked by expected ROI):
-  1. Caption scaffold from annotation tags.
-     - Value: Medium; helps reduce blank-page start cost during Caption step.
-     - Complexity: Medium (template mapping + insertion rules).
-     - Note: Useful, but less urgent than annotation velocity wins above.
+
 
 ## 1.1 Ideas
+
 
 ## Documentation Sync Notes
 - `dataset_workflow.md` updated to reflect current in-app clip/crop/deface and `auto_dataset` behavior.

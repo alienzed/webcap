@@ -305,13 +305,13 @@ function getCurrentAppTheme() {
 }
 
 function updateThemeToggleUi(theme) {
-  if (!ui || !ui.utilityThemeBtn) return;
+  if (!ui || !ui.themeToggleBtn) return;
   var currentTheme = String(theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
   var nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  ui.utilityThemeBtn.textContent = nextTheme === 'dark' ? 'Dark' : 'Light';
-  ui.utilityThemeBtn.title = 'Switch to ' + nextTheme + ' theme';
-  ui.utilityThemeBtn.setAttribute('aria-pressed', currentTheme === 'dark' ? 'true' : 'false');
-  ui.utilityThemeBtn.setAttribute('aria-label', 'Switch to ' + nextTheme + ' theme');
+  ui.themeToggleBtn.textContent = nextTheme === 'dark' ? 'Dark' : 'Light';
+  ui.themeToggleBtn.title = 'Switch to ' + nextTheme + ' theme';
+  ui.themeToggleBtn.setAttribute('aria-pressed', currentTheme === 'dark' ? 'true' : 'false');
+  ui.themeToggleBtn.setAttribute('aria-label', 'Switch to ' + nextTheme + ' theme');
 }
 
 function applyAppTheme(theme, persist) {
@@ -336,9 +336,9 @@ function toggleAppTheme() {
 }
 
 function wireThemeToggleUi() {
-  if (ui && ui.utilityThemeBtn && !ui.utilityThemeBtn.__themeWired) {
-    ui.utilityThemeBtn.__themeWired = true;
-    ui.utilityThemeBtn.onclick = function () {
+  if (ui && ui.themeToggleBtn && !ui.themeToggleBtn.__themeWired) {
+    ui.themeToggleBtn.__themeWired = true;
+    ui.themeToggleBtn.onclick = function () {
       toggleAppTheme();
     };
   }

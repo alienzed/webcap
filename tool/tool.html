@@ -53,7 +53,6 @@
                                 <path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5z"></path>
                                 <path d="M19.02 10.94l1.23-.95-1.5-2.6-1.52.54a6.98 6.98 0 0 0-1.47-.86l-.25-1.6h-3l-.25 1.6c-.52.18-1.02.47-1.47.86l-1.52-.54-1.5 2.6 1.23.95a6.9 6.9 0 0 0 0 1.72l-1.23.95 1.5 2.6 1.52-.54c.45.39.95.68 1.47.86l.25 1.6h3l.25-1.6c.52-.18 1.02-.47 1.47-.86l1.52.54 1.5-2.6-1.23-.95a6.9 6.9 0 0 0 0-1.72z"></path>
                             </svg>
-                            <span>Settings</span>
                         </button>
                         <button
                             id="utility-help-btn"
@@ -67,13 +66,6 @@
                                 <path d="M12 16.75h.01"></path>
                             </svg>
                         </button>
-                        <button
-                            id="utility-theme-btn"
-                            type="button"
-                            class="utility-btn utility-icon-btn utility-theme-btn hidden"
-                            title="Toggle theme"
-                            aria-pressed="false"
-                        >Dark</button>
                     </div>
                     <div id="sidebar-content" class="sidebar-content">
                     <div id="caption-filter-row" class="filter-row">
@@ -680,7 +672,7 @@
                         </div>
                         <div id="media-grid-surface-canvas" class="media-grid-surface-canvas"></div>
                     </section>
-                    <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:system-ui;padding:1rem;color:#666;'>Select a media file to preview.</body></html>"></iframe>
+                    <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'><style>html,body{margin:0;height:100%;}body{display:flex;align-items:center;justify-content:center;font-family:system-ui;padding:1rem;transition:background 120ms ease,color 120ms ease;}</style></head><body><div id='preview-empty-message'>Select a media file to preview.</div><script>(function(){function applyTheme(){try{var theme=(document.documentElement&&document.documentElement.getAttribute('data-theme'))||(window.parent&&window.parent.document&&window.parent.document.documentElement&&window.parent.document.documentElement.getAttribute('data-theme'))||'light';theme=String(theme).toLowerCase()==='dark'?'dark':'light';var dark=theme==='dark';document.documentElement.setAttribute('data-theme',theme);document.documentElement.style.colorScheme=theme;document.body.style.background=dark?'#0f172a':'#ffffff';document.body.style.color=dark?'#cbd5e1':'#666666';}catch(e){}}applyTheme();try{var parentRoot=window.parent&&window.parent.document&&window.parent.document.documentElement;if(parentRoot&&window.MutationObserver){new MutationObserver(applyTheme).observe(parentRoot,{attributes:true,attributeFilter:['data-theme']});}}catch(e){};})();</script></body></html>"></iframe>
                     <div id="balance-distribution-wheel" class="balance-distribution-wheel hidden" tabindex="0" aria-label="Balance distribution"></div>
                     <div id="preview-actions" class="preview-actions hidden" aria-label="Preview actions">
                         <button id="preview-mutation-indicator" type="button" class="preview-action-btn preview-action-reset-btn hidden" title="Reset to original">Reset</button>
@@ -837,6 +829,11 @@
                         <input id="app-settings-enable-mediapipe-analysis" type="checkbox">
                         <span>Enable MediaPipe selection pose analysis</span>
                     </label>
+                    <span>Theme</span>
+                    <div class="app-settings-theme-row">
+                        <button id="app-settings-theme-btn" type="button" class="app-settings-theme-btn">Dark</button>
+                        <span class="app-settings-theme-note">Stored in this browser.</span>
+                    </div>
                 </div>
                 <label class="app-settings-debug-row">
                     <input id="app-settings-debug" type="checkbox">

@@ -413,7 +413,7 @@ textarea#editor {
   max-width: 100%;
   box-sizing: border-box;
   height: 100%;
-  padding-right: 90px;
+  padding-right: 80px;
   resize: none;
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 13px;
@@ -5489,8 +5489,8 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 
 .app.shell-revamp .workbench-side-stack .primer-card textarea {
   flex: 1 1 auto;
-  min-height: 92px;
-  max-height: none;
+  min-height: 146px;
+  max-height: 220px;
 }
 
 .app.shell-revamp .group-tools-card .caption-helper-section-title-row,
@@ -6183,7 +6183,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 
 .app.shell-revamp .workbench-side-stack > .primer-card {
   flex: 0 0 auto;
-  min-height: 208px;
+  min-height: 330px;
 }
 
 .app.shell-revamp .workbench-side-stack > .tags-card {
@@ -6407,7 +6407,6 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 
 .app.shell-revamp textarea#editor {
   min-height: 6.5em;
-  max-height: 9.5em;
   height: auto;
   resize: vertical;
 }

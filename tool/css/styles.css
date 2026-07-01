@@ -4556,6 +4556,8 @@ html[data-theme="dark"] .app.shell-revamp .workbench-card {
 .app.shell-revamp.workflow-annotate.left-rail-collapsed {
   --sidebar-width: 0px;
   grid-template-columns: minmax(360px, 0.88fr) minmax(500px, 1.12fr);
+  grid-template-areas:
+    "preview workbench";
 }
 
 .app.shell-revamp .app-header {

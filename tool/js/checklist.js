@@ -832,14 +832,28 @@ function renderGroupWorkbench(options) {
     groupEl.classList.toggle('is-incomplete', !isReviewed && !isNa);
     groupEl.classList.toggle('is-disabled', !hasActionTarget);
     groupEl.classList.toggle('is-caption-matched', isCaptionMatched);
+    if (!isGridMode && hasItemTarget && !isNa) {
+      (function (key, label) {
+        groupEl.ondblclick = function (event) {
+          if (!event || !event.target) return;
+          if (headerEl && headerEl.contains(event.target)) return;
+          var tagName = String(event.target.tagName || '').toLowerCase();
+          if (tagName === 'button' || tagName === 'input' || tagName === 'label') return;
+          toggleChecklistRequirementCheckedForMediaKey(key, label);
+          refreshGroupWorkbenchForCurrentItem();
+        };
+      })(mediaKey, requirementLabel);
+    }
 
     var headerEl = document.createElement('summary');
     headerEl.className = 'group-workbench-group-header';
 
+    var titleMainEl = document.createElement('span');
+    titleMainEl.className = 'group-workbench-group-title-main';
+
     var titleEl = document.createElement('span');
     titleEl.className = 'group-workbench-group-title';
     titleEl.textContent = requirementLabel;
-    headerEl.appendChild(titleEl);
 
     var actionsEl = document.createElement('span');
     actionsEl.className = 'group-workbench-group-actions';
@@ -853,6 +867,20 @@ function renderGroupWorkbench(options) {
     actionsEl.appendChild(editBtn);
 
     if (!isGridMode) {
+      var naCheckbox = document.createElement('input');
+      naCheckbox.type = 'checkbox';
+      naCheckbox.className = 'group-workbench-na-checkbox';
+      naCheckbox.checked = isNa;
+      naCheckbox.title = 'Toggle not applicable for ' + requirementLabel;
+      naCheckbox.setAttribute('aria-label', 'Toggle not applicable for ' + requirementLabel);
+      naCheckbox.disabled = !hasItemTarget;
+      naCheckbox.addEventListener('click', function (event) {
+        event.stopPropagation();
+      });
+      naCheckbox.addEventListener('mousedown', function (event) {
+        event.stopPropagation();
+      });
+
       var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', '\u2713', 'Toggle reviewed', 'Toggle reviewed for ' + requirementLabel);
       reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
       reviewedBtn.classList.toggle('active', isReviewed);
@@ -866,16 +894,6 @@ function renderGroupWorkbench(options) {
       })(mediaKey, requirementLabel);
       actionsEl.appendChild(reviewedBtn);
 
-      // Checkbox for NA toggle instead of button
-      var naCheckbox = document.createElement('input');
-      naCheckbox.type = 'checkbox';
-      naCheckbox.className = 'group-workbench-na-checkbox';
-      naCheckbox.checked = isNa;
-      naCheckbox.title = 'Toggle not applicable for ' + requirementLabel;
-      naCheckbox.setAttribute('aria-label', 'Toggle not applicable for ' + requirementLabel);
-      naCheckbox.disabled = !hasItemTarget;
-
-      // Add click handler to toggle the NA state
       (function (key, label, nextIsNa) {
         naCheckbox.addEventListener('change', function () {
           if (!key) return;
@@ -883,11 +901,11 @@ function renderGroupWorkbench(options) {
           refreshGroupWorkbenchForCurrentItem();
         });
       })(mediaKey, requirementLabel, isNa);
-
-      actionsEl.appendChild(naCheckbox);
-
+      titleMainEl.appendChild(naCheckbox);
     }
 
+    titleMainEl.appendChild(titleEl);
+    headerEl.appendChild(titleMainEl);
     headerEl.appendChild(actionsEl);
     groupEl.appendChild(headerEl);
 

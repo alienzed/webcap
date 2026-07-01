@@ -305,6 +305,9 @@ function syncWorkspaceSurfaceUi() {
   if (reviewOutputBackBtn) {
     reviewOutputBackBtn.classList.toggle('hidden', surface !== 'reviewOutput');
   }
+  if (typeof updateSidebarCollapseUi === 'function') {
+    updateSidebarCollapseUi(ui.appEl.classList.contains('left-rail-collapsed'));
+  }
   syncWorkspaceConfigEditorUi();
 }
 

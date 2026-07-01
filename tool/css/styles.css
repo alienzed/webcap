@@ -4856,6 +4856,7 @@ html[data-theme="dark"] .app.shell-revamp .workbench-card {
 
 .app.shell-revamp .groups-card #group-workbench-list {
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 .app.shell-revamp.workflow-annotate .groups-card {
@@ -5739,9 +5740,12 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 .group-workbench-list {
   column-count: 1;
   column-gap: 12px;
+  column-fill: auto;
+  height: 100%;
   min-height: 0;
-  overflow: visible;
-  padding-right: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 2px 12px 0;
 }
 
 .group-workbench-list[data-columns="2"] {

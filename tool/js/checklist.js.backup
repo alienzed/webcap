@@ -743,46 +743,20 @@ function getGroupWorkbenchColumnCount(targetEl) {
   return 1;
 }
 
-function applyGroupWorkbenchColumnLayout(targetEl, groupElements) {
+function applyGroupWorkbenchColumnLayout(targetEl, groupCount) {
   if (!targetEl) return;
-  var elements = Array.isArray(groupElements) ? groupElements : [];
-  var totalGroups = elements.length;
+  var totalGroups = Math.max(0, Number(groupCount) || 0);
   var requestedColumnCount = getGroupWorkbenchColumnCount(targetEl);
   var effectiveColumnCount = Math.max(1, Math.min(requestedColumnCount, totalGroups || 1));
-  var groupsPerColumn = Math.ceil(totalGroups / effectiveColumnCount);
   targetEl._groupWorkbenchGroupCount = totalGroups;
   targetEl._groupWorkbenchLayoutColumnCount = effectiveColumnCount;
   targetEl.setAttribute('data-columns', String(effectiveColumnCount));
-  if (!totalGroups) return;
-
-  for (var columnIndex = 0; columnIndex < effectiveColumnCount; columnIndex++) {
-    var columnEl = document.createElement('div');
-    columnEl.className = 'group-workbench-column';
-    var startIndex = columnIndex * groupsPerColumn;
-    var endIndex = Math.min(startIndex + groupsPerColumn, totalGroups);
-    for (var groupIndex = startIndex; groupIndex < endIndex; groupIndex++) {
-      columnEl.appendChild(elements[groupIndex]);
-    }
-    if (columnEl.childNodes.length) {
-      targetEl.appendChild(columnEl);
-    }
-  }
 }
 
 function renderGroupWorkbench(options) {
   var opts = resolveGroupWorkbenchOptions(options);
   var targetEl = opts.targetEl || document.getElementById('group-workbench-list');
   if (!targetEl) return;
-  targetEl._groupWorkbenchRenderOptions = {
-    mode: opts.mode,
-    targetEl: targetEl,
-    mediaKeys: opts.mediaKeys.slice(),
-    getMediaKeys: opts.getMediaKeys,
-    contextMediaKeys: opts.contextMediaKeys.slice(),
-    getContextMediaKeys: opts.getContextMediaKeys,
-    currentMediaKey: opts.currentMediaKey,
-    onAfterMutation: opts.onAfterMutation
-  };
   var isGridMode = opts.mode === 'grid';
   var hasGridTargets = isGridMode && opts.mediaKeys.length > 0;
   var hasItemTarget = !isGridMode && !!opts.currentMediaKey;
@@ -836,10 +810,40 @@ function renderGroupWorkbench(options) {
     var headerEl = document.createElement('summary');
     headerEl.className = 'group-workbench-group-header';
 
+    var titleMainEl = document.createElement('span');
+    titleMainEl.className = 'group-workbench-group-title-main';
+
     var titleEl = document.createElement('span');
     titleEl.className = 'group-workbench-group-title';
     titleEl.textContent = requirementLabel;
-    headerEl.appendChild(titleEl);
+
+    if (!isGridMode) {
+      var naCheckbox = document.createElement('input');
+      naCheckbox.type = 'checkbox';
+      naCheckbox.className = 'group-workbench-group-na-checkbox';
+      naCheckbox.checked = !isNa;
+      naCheckbox.setAttribute('aria-label', isNa
+        ? ('Enable group for ' + requirementLabel)
+        : ('Disable group for ' + requirementLabel + ' (mark not applicable)'));
+      naCheckbox.title = isNa
+        ? 'Enable group for current item'
+        : 'Disable group for current item (mark not applicable)';
+      naCheckbox.onclick = function (event) {
+        event.stopPropagation();
+      };
+      (function (checkbox, key, label, nextIsNa) {
+        checkbox.onchange = function (event) {
+          event.stopPropagation();
+          if (!key) return;
+          setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
+          refreshGroupWorkbenchForCurrentItem();
+        };
+      })(naCheckbox, mediaKey, requirementLabel, isNa);
+      titleMainEl.appendChild(naCheckbox);
+    }
+
+    titleMainEl.appendChild(titleEl);
+    headerEl.appendChild(titleMainEl);
 
     var actionsEl = document.createElement('span');
     actionsEl.className = 'group-workbench-group-actions';
@@ -865,26 +869,6 @@ function renderGroupWorkbench(options) {
         });
       })(mediaKey, requirementLabel);
       actionsEl.appendChild(reviewedBtn);
-
-      // Checkbox for NA toggle instead of button
-      var naCheckbox = document.createElement('input');
-      naCheckbox.type = 'checkbox';
-      naCheckbox.className = 'group-workbench-na-checkbox';
-      naCheckbox.checked = isNa;
-      naCheckbox.title = 'Toggle not applicable for ' + requirementLabel;
-      naCheckbox.setAttribute('aria-label', 'Toggle not applicable for ' + requirementLabel);
-      naCheckbox.disabled = !hasItemTarget;
-
-      // Add click handler to toggle the NA state
-      (function (key, label, nextIsNa) {
-        naCheckbox.addEventListener('change', function () {
-          if (!key) return;
-          setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
-          refreshGroupWorkbenchForCurrentItem();
-        });
-      })(mediaKey, requirementLabel, isNa);
-
-      actionsEl.appendChild(naCheckbox);
 
     }
 
@@ -967,7 +951,10 @@ function renderGroupWorkbench(options) {
 
     groupElements.push(groupEl);
   }
-  applyGroupWorkbenchColumnLayout(targetEl, groupElements);
+  applyGroupWorkbenchColumnLayout(targetEl, groupElements.length);
+  for (var groupIndex = 0; groupIndex < groupElements.length; groupIndex++) {
+    targetEl.appendChild(groupElements[groupIndex]);
+  }
 }
 
 var groupWorkbenchResizeFrame = 0;
@@ -980,11 +967,12 @@ window.addEventListener('resize', function () {
     var lists = document.querySelectorAll('.group-workbench-list');
     for (var i = 0; i < lists.length; i++) {
       var listEl = lists[i];
-      if (!listEl || !listEl.isConnected || !listEl._groupWorkbenchRenderOptions) continue;
+      if (!listEl || !listEl.isConnected) continue;
       var groupCount = Math.max(0, Number(listEl._groupWorkbenchGroupCount) || 0);
       var nextColumnCount = Math.max(1, Math.min(getGroupWorkbenchColumnCount(listEl), groupCount || 1));
       if (listEl._groupWorkbenchLayoutColumnCount === nextColumnCount) continue;
-      renderGroupWorkbench(listEl._groupWorkbenchRenderOptions);
+      listEl._groupWorkbenchLayoutColumnCount = nextColumnCount;
+      listEl.setAttribute('data-columns', String(nextColumnCount));
     }
   });
 });

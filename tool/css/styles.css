@@ -5740,8 +5740,6 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 .group-workbench-list {
   column-count: 1;
   column-gap: 12px;
-  column-fill: auto;
-  height: 100%;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;

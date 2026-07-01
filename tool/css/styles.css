@@ -35,7 +35,7 @@ body {
   grid-template-columns: 280px 1fr 1fr;
   height: 100vh;
   gap: 12px;
-  padding: 12px;
+  padding: 1px;
   box-sizing: border-box;
   transition: grid-template-columns 0.16s ease;
 }
@@ -5357,6 +5357,23 @@ html[data-theme="dark"] .app.shell-revamp #caption-checklist-panel.group-tools-c
   overflow: hidden;
 }
 
+.app.shell-revamp.workspace-view-grid .workspace-canvas-toolbar {
+  display: none;
+}
+
+.app.shell-revamp.workspace-view-grid #media-grid-surface {
+  padding-top: 0;
+}
+
+.app.shell-revamp.workspace-surface-grid .preview-panel {
+  padding: 6px;
+}
+
+.app.shell-revamp.workspace-surface-grid .workbench-panel {
+  gap: 6px;
+  padding: 6px;
+}
+
 .app.shell-revamp.workspace-view-grid .preview-shell > :not(.workspace-canvas-toolbar):not(#media-grid-surface),
 .app.shell-revamp.workspace-view-focus .preview-panel > :not(.workspace-canvas-toolbar),
 .app.shell-revamp.workspace-view-focus .workbench-panel > * {
@@ -5684,7 +5701,7 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 }
 
 .app.shell-revamp.workspace-surface-grid #caption-helper-tab-requirements {
-  gap: 10px;
+  gap: 6px;
 }
 
 .app.shell-revamp.workspace-surface-grid #checklist-items {
@@ -5698,11 +5715,11 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 }
 
 .app.shell-revamp.workspace-surface-grid #group-workbench-list {
-  padding-right: 4px;
+  padding-right: 0;
 }
 
 .app.shell-revamp.workspace-surface-grid.sidebar-hidden {
-  grid-template-columns: minmax(560px, 1.35fr) minmax(380px, 0.85fr);
+  grid-template-columns: minmax(620px, 1.48fr) minmax(320px, 0.72fr);
   grid-template-areas: "preview workbench";
 }
 
@@ -5747,6 +5764,20 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 2px 12px 0;
+}
+
+.app.shell-revamp.workspace-surface-grid #caption-checklist-panel.group-tools-card.checklist-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0 !important;
+}
+
+.app.shell-revamp.workspace-surface-grid .workbench-main-stack > .groups-card {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .group-workbench-list[data-columns="2"] {
@@ -6198,7 +6229,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   }
 
   .app.shell-revamp.workspace-surface-grid.sidebar-hidden {
-    grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+    grid-template-columns: minmax(0, 1.16fr) minmax(280px, 0.84fr);
     grid-template-areas: "preview workbench";
   }
 

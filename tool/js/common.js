@@ -272,7 +272,6 @@ function debounceCreate(waitMs) {
 }
 
 var APP_THEME_STORAGE_KEY = 'webcap.theme';
-var APP_SIDEBAR_COLLAPSED_STORAGE_KEY = 'webcap.sidebarCollapsed';
 
 function getStoredAppTheme() {
   try {
@@ -345,13 +344,6 @@ function wireThemeToggleUi() {
   applyAppTheme(getInitialAppTheme(), false);
 }
 
-function getStoredSidebarCollapsed() {
-  try {
-    return localStorage.getItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
-  } catch (e) {}
-  return false;
-}
-
 function updateSidebarCollapseUi(collapsed) {
   if (!ui || !ui.sidebarCollapseToggleBtn) return;
   if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen()) {
@@ -367,15 +359,10 @@ function updateSidebarCollapseUi(collapsed) {
   ui.sidebarCollapseToggleBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
 }
 
-function setSidebarCollapsed(collapsed, persist) {
+function setSidebarCollapsed(collapsed) {
   var next = !!collapsed;
   if (ui && ui.appEl) {
     ui.appEl.classList.toggle('left-rail-collapsed', next);
-  }
-  if (persist) {
-    try {
-      localStorage.setItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY, next ? 'true' : 'false');
-    } catch (e) {}
   }
   updateSidebarCollapseUi(next);
   return next;
@@ -383,7 +370,7 @@ function setSidebarCollapsed(collapsed, persist) {
 
 function toggleSidebarCollapsed() {
   var next = !(ui && ui.appEl && ui.appEl.classList.contains('left-rail-collapsed'));
-  return setSidebarCollapsed(next, true);
+  return setSidebarCollapsed(next);
 }
 
 function wireSidebarCollapseUi() {
@@ -397,7 +384,7 @@ function wireSidebarCollapseUi() {
       toggleSidebarCollapsed();
     };
   }
-  setSidebarCollapsed(getStoredSidebarCollapsed(), false);
+  setSidebarCollapsed(false);
 }
 
 window.applyAppTheme = applyAppTheme;

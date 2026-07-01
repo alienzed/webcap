@@ -132,7 +132,6 @@ function mediaGridGetSurfaceEls() {
     header: document.getElementById('media-grid-surface-header'),
     meta: document.getElementById('media-grid-surface-meta'),
     status: document.getElementById('media-grid-surface-status'),
-    ratingControls: document.getElementById('media-grid-surface-rating-controls'),
     canvas: document.getElementById('media-grid-surface-canvas'),
     selectAllBtn: document.getElementById('media-grid-surface-select-all-btn'),
     clearBtn: document.getElementById('media-grid-surface-clear-btn'),
@@ -160,6 +159,19 @@ function mediaGridBuildMetaText() {
   var selectedCount = mediaGridState.selectedKeys.size;
   var totalCount = mediaGridState.items.length;
   var bits = [mediaGridGetSourceLabel()];
+  if (activeSet && activeSet.key !== 'all') {
+    bits.push(activeSet.label);
+  }
+  bits.push(totalCount + ' item' + (totalCount === 1 ? '' : 's'));
+  bits.push(selectedCount + ' selected');
+  return bits.join(' - ');
+}
+
+function mediaGridBuildSurfaceMetaText() {
+  var activeSet = mediaGridGetActiveFocusSet();
+  var selectedCount = mediaGridState.selectedKeys.size;
+  var totalCount = mediaGridState.items.length;
+  var bits = [];
   if (activeSet && activeSet.key !== 'all') {
     bits.push(activeSet.label);
   }
@@ -719,32 +731,11 @@ function renderMediaGridSurfaceHeader() {
   var selectedCount = mediaGridState.selectedKeys.size;
   var totalCount = mediaGridState.items.length;
   if (!els.meta || !els.status || !els.selectAllBtn || !els.clearBtn) return;
-  els.meta.textContent = mediaGridBuildMetaText();
+  els.meta.textContent = mediaGridBuildSurfaceMetaText();
   els.status.textContent = mediaGridState.status;
+  els.status.classList.toggle('hidden', !mediaGridState.status);
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
-  mediaGridRenderSurfaceRatingControls();
-}
-
-function mediaGridRenderSurfaceRatingControls() {
-  var els = mediaGridGetSurfaceEls();
-  var target = els.ratingControls;
-  if (!target) return;
-  var selectedCount = mediaGridState.selectedKeys.size;
-  target.innerHTML = '';
-  var values = [0, 1, 2, 3, 4, 5];
-  values.forEach(function (rating) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'media-grid-btn media-grid-rating-btn';
-    btn.disabled = selectedCount <= 0;
-    btn.textContent = rating <= 0 ? '0' : '\u2605' + rating;
-    btn.title = rating <= 0 ? 'Clear rating on selected items' : ('Set ' + rating + ' star rating on selected items');
-    btn.onclick = function () {
-      mediaGridApplyRating(rating);
-    };
-    target.appendChild(btn);
-  });
 }
 
 function mediaGridBuildFilterControls() {

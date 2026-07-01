@@ -317,6 +317,15 @@ function wireReviewActions() {
       reselectCurrentMediaFromPreview();
       return;
     }
+    if (data.type === 'media-preview-open-grid') {
+      if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen()) {
+        return;
+      }
+      if (typeof openMediaGridSurface === 'function') {
+        openMediaGridSurface();
+      }
+      return;
+    }
     if (data.type === 'media-preview-wheel-navigate') {
       handlePreviewWheelNavigate(data.deltaY);
       return;

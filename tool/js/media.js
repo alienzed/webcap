@@ -640,6 +640,14 @@ function renderPreviewHtml(isImage, src) {
     '  } catch (_err) {}\n' +
     '}\n' +
     'document.addEventListener("click", sendPreviewReselect, true);\n' +
+    'function sendPreviewOpenGrid(){\n' +
+    '  try {\n' +
+    '    if(window.parent && window.parent.postMessage){\n' +
+    '      window.parent.postMessage({ type: "media-preview-open-grid" }, "*");\n' +
+    '    }\n' +
+    '  } catch (_err) {}\n' +
+    '}\n' +
+    'document.addEventListener("dblclick", sendPreviewOpenGrid, true);\n' +
     'function sendPreviewWheelNavigate(deltaY){\n' +
     '  try {\n' +
     '    if(window.parent && window.parent.postMessage){\n' +
@@ -675,6 +683,16 @@ function renderPreviewHtml(isImage, src) {
       }
     }, true);
   } catch (_bindErr) {}
+  try {
+    doc.addEventListener('dblclick', function () {
+      if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen()) {
+        return;
+      }
+      if (typeof openMediaGridSurface === 'function') {
+        openMediaGridSurface();
+      }
+    }, true);
+  } catch (_dblClickBindErr) {}
   try {
     doc.addEventListener('wheel', function (e) {
       if (!e) return;

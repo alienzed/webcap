@@ -445,16 +445,21 @@ function moveChecklistItemByOffset(index, offset) {
   return true;
 }
 
-function requirementKeywordsMatch(requirementLabel, captionText) {
+function requirementKeywordsMatch(requirementLabel, captionText, mediaKey) {
   var keywords = getChecklistKeywordTermsForRequirement(requirementLabel);
   if (!keywords) return false;
 
-  var keywordList = parseChecklistKeywordTerms(keywords).map(function (k) { return String(k || '').toLowerCase(); });
+  var captionValue = String(captionText || '');
+  var keywordList = parseChecklistKeywordTerms(keywords);
   if (!keywordList.length) return false;
 
-  var captionLower = String(captionText || '').toLowerCase();
   for (var i = 0; i < keywordList.length; i++) {
-    if (captionLower.indexOf(keywordList[i]) !== -1) {
+    var keyword = keywordList[i];
+    var renderedKeyword = renderChecklistTermWithAffixes(keyword, mediaKey);
+    if (renderedKeyword && renderedKeyword !== keyword && typeof captionContainsPhrase === 'function' && captionContainsPhrase(captionValue, renderedKeyword)) {
+      return true;
+    }
+    if (typeof captionContainsPhrase === 'function' && captionContainsPhrase(captionValue, keyword)) {
       return true;
     }
   }
@@ -509,11 +514,15 @@ function checklistAllCheckedForMedia(mediaKey) {
   if (!mediaKey || !checklistItems || !checklistItems.length) return false;
   var checkedMap = checklistCheckedByMedia[mediaKey] || {};
   var naMap = getChecklistNaMapForMediaKey(mediaKey);
+  var actionableRequirementCount = 0;
   for (var i = 0; i < checklistItems.length; i++) {
     var requirementLabel = checklistItems[i];
+    var terms = getChecklistKeywordTermsForRequirement(requirementLabel);
+    if (!terms.length) continue;
+    actionableRequirementCount += 1;
     if (!checkedMap[requirementLabel] && !naMap[normalizeChecklistRequirementKey(requirementLabel)]) return false;
   }
-  return true;
+  return actionableRequirementCount > 0;
 }
 
 function setReviewedRowClass(mediaKey, reviewed) {
@@ -789,6 +798,11 @@ function renderGroupWorkbench(options) {
   var mediaKey = opts.currentMediaKey || opts.mediaKeys[0] || '';
   var mediaKeys = opts.mediaKeys;
   var contextMediaKeys = opts.getContextMediaKeys();
+  if (!isGridMode && (!Array.isArray(contextMediaKeys) || contextMediaKeys.length <= 1) && state && Array.isArray(state.items)) {
+    contextMediaKeys = state.items.map(function (item) {
+      return item && item.key;
+    }).filter(Boolean);
+  }
   var captionText = (!isGridMode && ui && ui.editorEl && typeof ui.editorEl.value === 'string')
     ? ui.editorEl.value
     : (state && state.currentItem ? (state.currentItem.caption || '') : '');
@@ -927,7 +941,7 @@ function renderGroupWorkbench(options) {
         && typeof tagAppearsInCurrentCaption === 'function'
         && !tagAppearsInCurrentCaption(term);
       var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
-      var usageState = isGridMode ? getGroupWorkbenchGridUsageState(term, contextMediaKeys) : 'none';
+      var usageState = getGroupWorkbenchGridUsageState(term, contextMediaKeys);
       var termBtn = document.createElement('button');
       termBtn.type = 'button';
       termBtn.className = 'group-workbench-term-btn group-workbench-term-usage-' + usageState;
@@ -1106,7 +1120,7 @@ function renderChecklistPanel() {
     var captionText = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
       ? ui.editorEl.value
       : (state.currentItem.caption || '');
-    if (requirementKeywordsMatch(item, captionText)) {
+    if (requirementKeywordsMatch(item, captionText, mediaKey)) {
       summaryRow.classList.add('checklist-item-matched');
     }
 

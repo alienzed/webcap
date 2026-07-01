@@ -275,8 +275,6 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  xborder: 1px solid rgba(148, 163, 184, 0.2);
-  xborder-radius: 999px;
   background: rgba(15, 23, 42, 0.54);
   color: #f8fafc;
   padding: 7px 10px;
@@ -1079,7 +1077,7 @@ body.media-grid-open .caption-context-menu {
 }
 
 .app.shell-revamp.workspace-surface-grid .media-grid-items {
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
 }
 
 html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-modal {

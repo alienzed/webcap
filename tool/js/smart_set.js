@@ -65,6 +65,12 @@ function updateSuperSetControls() {
   } else if (ui.createSetFromResultsBtn) {
     ui.createSetFromResultsBtn.title = 'Create a new set with the current filter results';
   }
+  var setActionsDrawer = ui.createSetFromResultsBtn ? ui.createSetFromResultsBtn.closest('.sidebar-set-actions-drawer') : null;
+  if (setActionsDrawer) {
+    var hasVisibleSetAction = ui.createSetFromResultsBtn && !ui.createSetFromResultsBtn.classList.contains('hidden');
+    setActionsDrawer.classList.toggle('hidden', !hasVisibleSetAction);
+    setActionsDrawer.setAttribute('aria-hidden', hasVisibleSetAction ? 'false' : 'true');
+  }
 }
 
 function markSuperSetSearchDirty() {

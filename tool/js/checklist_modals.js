@@ -144,12 +144,18 @@ function applyChecklistGroupTermsModalChanges() {
     checklistGroupTermsModalState.requirement,
     checklistGroupTermsModalState.terms
   );
+  if (typeof syncReviewedFromChecklistAll === 'function') {
+    syncReviewedFromChecklistAll();
+  }
   saveChecklistToFolderState();
   refreshCurrentPrimerDerivedUi();
   renderChecklistPanel();
   renderItemMetadataPanel();
   renderAnnotateStrip();
   renderItemTagsPanel();
+  if (typeof renderFileList === 'function') {
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  }
   if (typeof renderFocusedAnnotationModal === 'function') {
     renderFocusedAnnotationModal();
   }
@@ -370,12 +376,18 @@ function openChecklistGroupTermsModal(requirementLabel) {
 
 function saveChecklistKeywordsModalAndClose() {
   checklistKeywordsByItem = JSON.parse(JSON.stringify(checklistKeywordsModalTemp || {}));
+  if (typeof syncReviewedFromChecklistAll === 'function') {
+    syncReviewedFromChecklistAll();
+  }
   saveChecklistToFolderState();
   refreshCurrentPrimerDerivedUi();
   renderChecklistPanel();
   renderItemMetadataPanel();
   renderAnnotateStrip();
   renderItemTagsPanel();
+  if (typeof renderFileList === 'function') {
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  }
   closeChecklistKeywordsModal();
   checklistKeywordsModalTemp = null;
 }

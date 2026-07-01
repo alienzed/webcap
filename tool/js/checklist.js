@@ -737,9 +737,6 @@ function getGroupWorkbenchGridUsageState(term, mediaKeys) {
 }
 
 function getGroupWorkbenchColumnCount(targetEl) {
-  var width = targetEl && targetEl.clientWidth ? targetEl.clientWidth : 0;
-  if (width >= 840) return 3;
-  if (width >= 560) return 2;
   return 1;
 }
 
@@ -812,10 +809,10 @@ function renderGroupWorkbench(options) {
         return true;
       });
     terms.sort(checklistSort);
+    if (!terms.length) continue;
 
-    var groupEl = document.createElement('details');
+    var groupEl = document.createElement('div');
     groupEl.className = 'group-workbench-group';
-    groupEl.open = true;
     groupEl.classList.toggle('is-reviewed', isReviewed);
     groupEl.classList.toggle('is-na', isNa);
     groupEl.classList.toggle('is-complete', isReviewed || isNa);
@@ -835,17 +832,20 @@ function renderGroupWorkbench(options) {
       })(mediaKey, requirementLabel);
     }
 
-    var headerEl = document.createElement('summary');
+    var headerEl = document.createElement('div');
     headerEl.className = 'group-workbench-group-header';
 
-    var titleMainEl = document.createElement('span');
+    var headerRowEl = document.createElement('div');
+    headerRowEl.className = 'group-workbench-group-header-row';
+
+    var titleMainEl = document.createElement('div');
     titleMainEl.className = 'group-workbench-group-title-main';
 
-    var titleEl = document.createElement('span');
+    var titleEl = document.createElement('div');
     titleEl.className = 'group-workbench-group-title';
     titleEl.textContent = requirementLabel;
 
-    var actionsEl = document.createElement('span');
+    var actionsEl = document.createElement('div');
     actionsEl.className = 'group-workbench-group-actions';
 
     var editBtn = createGroupWorkbenchActionButton('group-workbench-edit-btn', '\u270e', 'Edit group terms', 'Edit terms for ' + requirementLabel);
@@ -895,85 +895,108 @@ function renderGroupWorkbench(options) {
     }
 
     titleMainEl.appendChild(titleEl);
-    headerEl.appendChild(titleMainEl);
-    headerEl.appendChild(actionsEl);
+    headerRowEl.appendChild(titleMainEl);
+    headerRowEl.appendChild(actionsEl);
+    headerEl.appendChild(headerRowEl);
     groupEl.appendChild(headerEl);
 
-    if (terms.length) {
-      var termListEl = document.createElement('div');
-      termListEl.className = 'group-workbench-term-list';
-      var groupHasActiveTerm = false;
-      var groupHasMixedTerm = false;
-      var groupHasMismatchTerm = false;
-      for (var t = 0; t < terms.length; t++) {
-        var term = terms[t];
-        var activeCount = 0;
-        if (hasActionTarget && typeof hasTagForMediaKey === 'function') {
-          if (isGridMode) {
-            for (var mk = 0; mk < mediaKeys.length; mk++) {
-              if (hasTagForMediaKey(mediaKeys[mk], term)) activeCount += 1;
-            }
-          } else if (hasTagForMediaKey(mediaKey, term)) {
-            activeCount = 1;
+    var termListEl = document.createElement('div');
+    termListEl.className = 'group-workbench-term-list';
+    var groupHasActiveTerm = false;
+    var groupHasMixedTerm = false;
+    var groupHasMismatchTerm = false;
+    var selectedTermCount = 0;
+    var mixedTermCount = 0;
+    for (var t = 0; t < terms.length; t++) {
+      var term = terms[t];
+      var activeCount = 0;
+      if (hasActionTarget && typeof hasTagForMediaKey === 'function') {
+        if (isGridMode) {
+          for (var mk = 0; mk < mediaKeys.length; mk++) {
+            if (hasTagForMediaKey(mediaKeys[mk], term)) activeCount += 1;
           }
+        } else if (hasTagForMediaKey(mediaKey, term)) {
+          activeCount = 1;
         }
-        var isActive = isGridMode
-          ? (hasGridTargets && activeCount === mediaKeys.length)
-          : (hasItemTarget && activeCount > 0);
-        var isMixed = isGridMode && hasGridTargets && activeCount > 0 && activeCount < mediaKeys.length;
-        var isMismatch = hasItemTarget && !isGridMode && isActive
-          && typeof tagAppearsInCurrentCaption === 'function'
-          && !tagAppearsInCurrentCaption(term);
-        var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
-        var usageState = isGridMode ? getGroupWorkbenchGridUsageState(term, contextMediaKeys) : 'none';
-        var termBtn = document.createElement('button');
-        termBtn.type = 'button';
-        termBtn.className = 'group-workbench-term-btn group-workbench-term-usage-' + usageState;
-        termBtn.textContent = term;
-        termBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-        termBtn.title = renderedTerm && renderedTerm !== term ? renderedTerm : term;
-        termBtn.classList.toggle('active', isActive);
-        termBtn.classList.toggle('mixed', isMixed);
-        termBtn.classList.toggle('mismatch', isMismatch);
-        termBtn.disabled = !hasActionTarget;
-        groupHasActiveTerm = groupHasActiveTerm || isActive;
-        groupHasMixedTerm = groupHasMixedTerm || isMixed;
-        groupHasMismatchTerm = groupHasMismatchTerm || isMismatch;
-        (function (btn, key, label, termText, mode, afterMutation, getMediaKeys, getContextMediaKeys) {
-          btn.onclick = function () {
-            if (btn.disabled) return;
-            if (mode === 'grid') {
-              toggleGroupWorkbenchTermForMediaKeys(getMediaKeys(), label, termText, {
-                targetEl: targetEl,
-                contextMediaKeys: getContextMediaKeys(),
-                getContextMediaKeys: getContextMediaKeys,
-                onAfterMutation: afterMutation
-              });
-              return;
-            }
-            toggleGroupWorkbenchTermForItem(key, label, termText);
-          };
-          btn.oncontextmenu = function (event) {
-            event.preventDefault();
-            if (typeof openChecklistTermAffixesModal === 'function') {
-              openChecklistTermAffixesModal(termText);
-            }
-          };
-        })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys, opts.getContextMediaKeys);
-        termListEl.appendChild(termBtn);
       }
-      groupEl.classList.toggle('has-active-term', groupHasActiveTerm);
-      groupEl.classList.toggle('has-mixed-term', groupHasMixedTerm);
-      groupEl.classList.toggle('has-mismatch-term', groupHasMismatchTerm);
-      groupEl.appendChild(termListEl);
-    } else {
-      var emptyTerms = document.createElement('div');
-      emptyTerms.className = 'group-workbench-empty group-workbench-empty-terms';
-      emptyTerms.textContent = 'No tags';
-      groupEl.appendChild(emptyTerms);
+      var isActive = isGridMode
+        ? (hasGridTargets && activeCount === mediaKeys.length)
+        : (hasItemTarget && activeCount > 0);
+      var isMixed = isGridMode && hasGridTargets && activeCount > 0 && activeCount < mediaKeys.length;
+      var isMismatch = hasItemTarget && !isGridMode && isActive
+        && typeof tagAppearsInCurrentCaption === 'function'
+        && !tagAppearsInCurrentCaption(term);
+      var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
+      var usageState = isGridMode ? getGroupWorkbenchGridUsageState(term, contextMediaKeys) : 'none';
+      var termBtn = document.createElement('button');
+      termBtn.type = 'button';
+      termBtn.className = 'group-workbench-term-btn group-workbench-term-usage-' + usageState;
+      termBtn.textContent = term;
+      termBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      termBtn.title = renderedTerm && renderedTerm !== term ? renderedTerm : term;
+      termBtn.classList.toggle('active', isActive);
+      termBtn.classList.toggle('mixed', isMixed);
+      termBtn.classList.toggle('mismatch', isMismatch);
+      termBtn.disabled = !hasActionTarget;
+      groupHasActiveTerm = groupHasActiveTerm || isActive;
+      groupHasMixedTerm = groupHasMixedTerm || isMixed;
+      groupHasMismatchTerm = groupHasMismatchTerm || isMismatch;
+      if (isActive) selectedTermCount += 1;
+      if (isMixed) mixedTermCount += 1;
+      (function (btn, key, label, termText, mode, afterMutation, getMediaKeys, getContextMediaKeys) {
+        btn.onclick = function () {
+          if (btn.disabled) return;
+          if (mode === 'grid') {
+            toggleGroupWorkbenchTermForMediaKeys(getMediaKeys(), label, termText, {
+              targetEl: targetEl,
+              contextMediaKeys: getContextMediaKeys(),
+              getContextMediaKeys: getContextMediaKeys,
+              onAfterMutation: afterMutation
+            });
+            return;
+          }
+          toggleGroupWorkbenchTermForItem(key, label, termText);
+        };
+        btn.oncontextmenu = function (event) {
+          event.preventDefault();
+          if (typeof openChecklistTermAffixesModal === 'function') {
+            openChecklistTermAffixesModal(termText);
+          }
+        };
+      })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys, opts.getContextMediaKeys);
+      termListEl.appendChild(termBtn);
     }
 
+    var metaEl = document.createElement('div');
+    metaEl.className = 'group-workbench-group-meta';
+    var statusEl = document.createElement('div');
+    statusEl.className = 'group-workbench-group-status';
+    var statusText = '';
+    if (isGridMode) {
+      if (!hasGridTargets) statusText = 'No selection';
+      else if (groupHasMixedTerm) statusText = 'Mixed';
+      else if (groupHasActiveTerm) statusText = 'Selected';
+      else statusText = 'Unselected';
+    } else {
+      if (isNa) statusText = 'N/A';
+      else if (!isReviewed) statusText = 'Not reviewed';
+    }
+    if (statusText) {
+      statusEl.textContent = statusText;
+      metaEl.appendChild(statusEl);
+      headerEl.appendChild(metaEl);
+    }
+
+    groupEl.classList.toggle('has-active-term', groupHasActiveTerm);
+    groupEl.classList.toggle('has-mixed-term', groupHasMixedTerm);
+    groupEl.classList.toggle('has-mismatch-term', groupHasMismatchTerm);
+    groupEl.appendChild(termListEl);
+
     groupElements.push(groupEl);
+  }
+  if (!groupElements.length) {
+    renderGroupWorkbenchEmpty(targetEl, 'No groups with terms configured.');
+    return;
   }
   applyGroupWorkbenchColumnLayout(targetEl, groupElements);
 }

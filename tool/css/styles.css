@@ -5737,21 +5737,19 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 }
 
 .group-workbench-list {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: 12px;
-  align-content: start;
+  column-count: 1;
+  column-gap: 12px;
   min-height: 0;
   overflow: visible;
   padding-right: 2px;
 }
 
 .group-workbench-list[data-columns="2"] {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-count: 2;
 }
 
 .group-workbench-list[data-columns="3"] {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-count: 3;
 }
 
 .group-workbench-column {
@@ -5762,9 +5760,11 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 }
 
 .group-workbench-list details {
+  display: inline-block;
+  width: 100%;
   break-inside: avoid;
   page-break-inside: avoid;
-  margin: 0;
+  margin: 0 0 12px;
 }
 
 .group-workbench-empty {

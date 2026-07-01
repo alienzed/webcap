@@ -749,23 +749,13 @@ function applyGroupWorkbenchColumnLayout(targetEl, groupElements) {
   var totalGroups = elements.length;
   var requestedColumnCount = getGroupWorkbenchColumnCount(targetEl);
   var effectiveColumnCount = Math.max(1, Math.min(requestedColumnCount, totalGroups || 1));
-  var groupsPerColumn = Math.ceil(totalGroups / effectiveColumnCount);
   targetEl._groupWorkbenchGroupCount = totalGroups;
   targetEl._groupWorkbenchLayoutColumnCount = effectiveColumnCount;
   targetEl.setAttribute('data-columns', String(effectiveColumnCount));
   if (!totalGroups) return;
 
-  for (var columnIndex = 0; columnIndex < effectiveColumnCount; columnIndex++) {
-    var columnEl = document.createElement('div');
-    columnEl.className = 'group-workbench-column';
-    var startIndex = columnIndex * groupsPerColumn;
-    var endIndex = Math.min(startIndex + groupsPerColumn, totalGroups);
-    for (var groupIndex = startIndex; groupIndex < endIndex; groupIndex++) {
-      columnEl.appendChild(elements[groupIndex]);
-    }
-    if (columnEl.childNodes.length) {
-      targetEl.appendChild(columnEl);
-    }
+  for (var groupIndex = 0; groupIndex < totalGroups; groupIndex++) {
+    targetEl.appendChild(elements[groupIndex]);
   }
 }
 

@@ -263,7 +263,7 @@
 }
 
 .group-workbench-group.is-caption-matched:not(.is-reviewed) .group-workbench-group-title {
-  color: #0f766e;
+  color: #1d4ed8;
 }
 
 .group-workbench-group.is-disabled .group-workbench-group-title,
@@ -476,7 +476,7 @@
 }
 
 .group-workbench-group.is-caption-matched:not(.is-reviewed) .group-workbench-group-header {
-  background: rgba(20, 184, 166, 0.10);
+  background: rgba(59, 130, 246, 0.10);
 }
 
 .group-workbench-group.has-mixed-term .group-workbench-group-header,
@@ -493,7 +493,7 @@ html[data-theme="dark"] .group-workbench-group.is-reviewed .group-workbench-grou
 }
 
 html[data-theme="dark"] .group-workbench-group.is-caption-matched:not(.is-reviewed) .group-workbench-group-title {
-  color: #5eead4;
+  color: #93c5fd;
 }
 
 html[data-theme="dark"] .group-workbench-group.has-mixed-term .group-workbench-group-title,
@@ -1106,5 +1106,4 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
     min-height: auto;
   }
 }
-
 

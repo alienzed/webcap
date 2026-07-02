@@ -91,7 +91,7 @@ function runPreviewActionByLabel(label) {
 }
 
 function updatePreviewActionControls() {
-  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewAnnotateActionEl || !ui.previewMoreActionsEl) return;
+  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
   if (typeof renderPreviewHeaderMeta === 'function') {
     renderPreviewHeaderMeta();
   }
@@ -102,7 +102,6 @@ function updatePreviewActionControls() {
     ui.previewMutationIndicatorEl.removeAttribute('data-action-label');
     ui.previewPrimaryActionAEl.classList.add('hidden');
     ui.previewPrimaryActionBEl.classList.add('hidden');
-    ui.previewAnnotateActionEl.classList.add('hidden');
     ui.previewMoreActionsEl.classList.add('hidden');
     ui.previewPrimaryActionAEl.removeAttribute('data-action-label');
     ui.previewPrimaryActionBEl.removeAttribute('data-action-label');
@@ -157,9 +156,8 @@ function updatePreviewActionControls() {
   var secondaryActions = filterPreviewSecondaryActions(actions, used);
   var hasMore = hasNonSeparatorActions(secondaryActions);
   ui.previewMoreActionsEl.classList.toggle('hidden', !hasMore);
-  ui.previewAnnotateActionEl.classList.toggle('hidden', !(typeof openFocusedAnnotationModal === 'function'));
 
-  if (primaryA || primaryB || hasMore || showMutationReset || typeof openFocusedAnnotationModal === 'function') {
+  if (primaryA || primaryB || hasMore || showMutationReset) {
     ui.previewActionsEl.classList.remove('hidden');
   } else {
     ui.previewActionsEl.classList.add('hidden');
@@ -167,7 +165,7 @@ function updatePreviewActionControls() {
 }
 
 function wirePreviewActionControls() {
-  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewAnnotateActionEl || !ui.previewMoreActionsEl) return;
+  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
   if (ui.previewActionsEl.__wired) return;
   ui.previewActionsEl.__wired = true;
 
@@ -184,13 +182,6 @@ function wirePreviewActionControls() {
   bindPrimaryButton(ui.previewPrimaryActionAEl);
   bindPrimaryButton(ui.previewPrimaryActionBEl);
   bindPrimaryButton(ui.previewMutationIndicatorEl);
-  ui.previewAnnotateActionEl.addEventListener('click', function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (typeof openFocusedAnnotationModal === 'function') {
-      openFocusedAnnotationModal();
-    }
-  });
 
   ui.previewMoreActionsEl.addEventListener('click', function (e) {
     e.preventDefault();
@@ -568,9 +559,11 @@ function reselectCurrentMediaFromPreview() {
   if (activeEl && typeof isEditableElement === 'function' && isEditableElement(activeEl)) {
     try { activeEl.blur(); } catch (_err) {}
   }
+  if (ui.previewEl && document.activeElement === ui.previewEl) {
+    try { ui.previewEl.blur(); } catch (_previewBlurErr) {}
+  }
   if (!row.hasAttribute('tabindex')) row.setAttribute('tabindex', '-1');
   try { row.focus({ preventScroll: true }); } catch (_focusErr) { try { row.focus(); } catch (_focusErr2) {} }
-  try { row.click(); } catch (_clickErr) {}
   return true;
 }
 
@@ -635,37 +628,6 @@ function renderPreviewHtml(isImage, src) {
     '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
     tag +
     '<script>\n' +
-    'function sendPreviewReselect(){\n' +
-    '  try {\n' +
-    '    if(window.parent && window.parent.postMessage){\n' +
-    '      window.parent.postMessage({ type: "media-preview-reselect" }, "*");\n' +
-    '    }\n' +
-    '  } catch (_err) {}\n' +
-    '}\n' +
-    'document.addEventListener("click", sendPreviewReselect, true);\n' +
-    'function sendPreviewOpenGrid(){\n' +
-    '  try {\n' +
-    '    if(window.parent && window.parent.postMessage){\n' +
-    '      window.parent.postMessage({ type: "media-preview-open-grid" }, "*");\n' +
-    '    }\n' +
-    '  } catch (_err) {}\n' +
-    '}\n' +
-    'document.addEventListener("dblclick", sendPreviewOpenGrid, true);\n' +
-    'function sendPreviewWheelNavigate(deltaY){\n' +
-    '  try {\n' +
-    '    if(window.parent && window.parent.postMessage){\n' +
-    '      window.parent.postMessage({ type: "media-preview-wheel-navigate", deltaY: Number(deltaY) || 0 }, "*");\n' +
-    '    }\n' +
-    '  } catch (_err) {}\n' +
-    '}\n' +
-    'document.addEventListener("wheel", function(evt){\n' +
-    '  if (!evt) return;\n' +
-    '  if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey) return;\n' +
-    '  var deltaY = (typeof evt.deltaY === "number") ? evt.deltaY : 0;\n' +
-    '  if (!deltaY) return;\n' +
-    '  try { evt.preventDefault(); } catch (_err) {}\n' +
-    '  sendPreviewWheelNavigate(deltaY);\n' +
-    '}, { passive: false, capture: true });\n' +
     'var video=document.getElementById("media-video");\n' +
     'if(video){\n' +
     '  var error=document.getElementById("video-error");\n' +
@@ -677,8 +639,8 @@ function renderPreviewHtml(isImage, src) {
     '<\/script></body></html>'
   );
   doc.close();
-  // Fallback binding from parent context so reselect still works
-  // even if iframe inline scripts are blocked or not executed.
+  // Bind preview interactions from the parent context so preview
+  // clicks/wheel gestures use a single navigation path.
   try {
     doc.addEventListener('click', function () {
       if (typeof reselectCurrentMediaFromPreview === 'function') {

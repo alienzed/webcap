@@ -487,15 +487,14 @@ function setChecklistPanelVisible(visible) {
 function checklistAllCheckedForMedia(mediaKey) {
   if (!mediaKey || !checklistItems || !checklistItems.length) return false;
   var checkedMap = checklistCheckedByMedia[mediaKey] || {};
-  var actionableRequirementCount = 0;
+  var requirementCount = 0;
   for (var i = 0; i < checklistItems.length; i++) {
-    var requirementLabel = checklistItems[i];
-    var terms = getChecklistKeywordTermsForRequirement(requirementLabel);
-    if (!terms.length) continue;
-    actionableRequirementCount += 1;
-    if (!checkedMap[requirementLabel]) return false;
+    var requirementKey = normalizeChecklistRequirementKey(checklistItems[i]);
+    if (!requirementKey) continue;
+    requirementCount += 1;
+    if (!checkedMap[requirementKey]) return false;
   }
-  return actionableRequirementCount > 0;
+  return requirementCount > 0;
 }
 
 function setReviewedRowClass(mediaKey, reviewed) {
@@ -915,6 +914,7 @@ function renderGroupWorkbench(options) {
   var opts = resolveGroupWorkbenchOptions(options);
   var targetEl = opts.targetEl || document.getElementById('group-workbench-list');
   if (!targetEl) return;
+  var previousScrollTop = targetEl.scrollTop || 0;
   targetEl._groupWorkbenchRenderOptions = {
     mode: opts.mode,
     targetEl: targetEl,
@@ -1127,9 +1127,11 @@ function renderGroupWorkbench(options) {
   }
   if (!groupElements.length) {
     renderGroupWorkbenchEmpty(targetEl, 'No groups with terms configured.');
+    targetEl.scrollTop = Math.max(0, previousScrollTop);
     return;
   }
   applyGroupWorkbenchColumnLayout(targetEl, groupElements);
+  targetEl.scrollTop = Math.max(0, previousScrollTop);
 }
 
 var groupWorkbenchResizeFrame = 0;

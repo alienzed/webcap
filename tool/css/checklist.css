@@ -71,7 +71,7 @@
 }
 
 .annotate-strip-group-complete {
-  border-color: #bbf7d0;
+  border-color: #93c5fd;
 }
 
 .annotate-strip-group-gap-hints {
@@ -144,6 +144,10 @@
   background: rgba(34, 197, 94, 0.10);
 }
 
+.annotate-strip-group-complete .annotate-strip-group-title-row {
+  background: rgba(59, 130, 246, 0.10);
+}
+
 .annotate-strip-group-controls {
   display: inline-flex;
   align-items: center;
@@ -206,7 +210,7 @@
 }
 
 .annotate-strip-group-title-complete {
-  color: #166534;
+  color: #1d4ed8;
 }
 
 .annotate-strip-group-title-reviewed {
@@ -1450,12 +1454,20 @@ html[data-theme="dark"] .annotate-strip-group-reviewed {
   border-color: rgba(34, 197, 94, 0.6);
 }
 
+html[data-theme="dark"] .annotate-strip-group-complete {
+  border-color: rgba(59, 130, 246, 0.55);
+}
+
 html[data-theme="dark"] .annotate-strip-group-incomplete .annotate-strip-group-title-row {
   background: rgba(248, 113, 113, 0.16);
 }
 
 html[data-theme="dark"] .annotate-strip-group-reviewed .annotate-strip-group-title-row {
   background: rgba(34, 197, 94, 0.16);
+}
+
+html[data-theme="dark"] .annotate-strip-group-complete .annotate-strip-group-title-row {
+  background: rgba(59, 130, 246, 0.16);
 }
 
 html[data-theme="dark"] .annotate-strip-chip {
@@ -1521,7 +1533,10 @@ html[data-theme="dark"] .annotate-strip-group-status-pill {
   color: #fbbf24;
 }
 
-html[data-theme="dark"] .annotate-strip-group-title-complete,
+html[data-theme="dark"] .annotate-strip-group-title-complete {
+  color: #93c5fd;
+}
+
 html[data-theme="dark"] .annotate-strip-group-title-reviewed {
   color: #86efac;
 }

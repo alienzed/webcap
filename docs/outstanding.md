@@ -6,8 +6,18 @@ Last reviewed: 2026-06-19.
 - Caption Template probably needs a 'i'
 
 ## Bugs
+- 2026-07-02 triage pass
+  - Quick wins / small-to-medium fixes:
+    - Workbench layout regression: after collapsing the sidebar, entering Grid, then returning to item view, annotation groups can come back in the wrong horizontal/multi-column layout.
+    - Group header highlight no longer clearly distinguishes `reviewed` from `caption-matched`; non-reviewed groups can read as green.
+    - Auto-reviewed media-row state still feels spotty after N/A removal; verify checklist completion still drives `.media-item.reviewed`.
 
 ## Enhancements
+- 2026-07-02 triage pass
+  - Needs deeper discussion or inspection:
+    - Strict saved-caption term reordering when group term order changes, only when exact term/affix matching succeeds.
+    - Preview header polish pass: rethink information grouping and action layout instead of incremental patching.
+    - Console behavior pass: define when the console is shown, hidden, or relocated across default, Grid, Focus, and config/editor surfaces.
 
 
 ## 1.1 Ideas
@@ -32,6 +42,12 @@ Last reviewed: 2026-06-19.
 
 
 ## Validate
+- 2026-07-02 triage pass
+  - Confirm whether the sidebar-collapse/Grid/item regression is a pure layout restore bug or an intentional multi-column threshold firing at the wrong time.
+  - Confirm whether reviewed-row drift is caused by sync timing, invalidation logic, or stale render assumptions after N/A removal.
+  - Recommended next implementation slice:
+    - Check whether the remaining sidebar-collapse/Grid/item regression is CSS restore only or tied to workbench column-threshold recalculation.
+    - Re-check auto-reviewed row sync after the N/A removal cleanup.
 - In a group, I can't remove a pinned item. Can't a removal last for the session at least? or even just while inside this folder?
 - Console floats over focus annotation modal (maybe minimize it, or fix z-index?)
 - filling in the primer, this should be generatable
@@ -181,6 +197,11 @@ Last reviewed: 2026-06-19.
 - Focused annotation workflow updates:
   - Traversal mode toggle is implemented (`Group-first` / `Item-first`).
   - Keyboard navigation is implemented (`Up`/`Down` items, `Left`/`Right` groups, `Enter` done, `N` for N/A, `S` skip).
+- Quick-win cleanup follow-up:
+  - Removed the stale Focus Set Grid action from the focus-set banner.
+  - Preserved group-workbench scroll position across tag-triggered rerenders.
+  - Deduplicated preview wheel navigation wiring so one gesture maps to one navigation step.
+  - Simplified preview click reselection to restore list focus without re-clicking the active row.
 - Annotation progress / primer updates:
   - Group completion indicator in the media list is implemented.
   - Primer-mode caption updates are no longer tracked as an outstanding validation issue.

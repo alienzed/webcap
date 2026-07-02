@@ -520,44 +520,69 @@ button[disabled]:active {
   left: 10px;
   z-index: 20;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   gap: 6px;
-  max-width: calc(100% - 240px);
-  padding: 8px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.72);
-  backdrop-filter: blur(6px);
-}
-
-.preview-header-file {
-  color: #f8fafc;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: calc(100% - 20px);
+  max-width: none;
+  padding: 0;
 }
 
 .preview-header-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 10px;
+  min-width: 0;
 }
 
-.preview-header-chip {
+.preview-header-detail {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(30, 41, 59, 0.92);
-  border: 1px solid rgba(148, 163, 184, 0.3);
   color: #e2e8f0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.1;
+  white-space: nowrap;
+}
+
+.preview-header-detail.with-divider::before {
+  content: "/";
+  margin-right: 10px;
+  color: #64748b;
+}
+
+.preview-header-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #94a3b8;
+  line-height: 1;
+}
+
+.preview-header-star {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  padding: 0;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.preview-header-star:hover {
+  color: #cbd5e1;
+}
+
+.preview-header-star.active {
+  color: #fbbf24;
 }
 
 iframe {
@@ -2035,13 +2060,11 @@ html[data-theme="dark"] .sidebar-tool-panel-header {
 }
 
 html[data-theme="dark"] .preview-header {
-  background: rgba(2, 6, 23, 0.78);
-  border-color: rgba(100, 116, 139, 0.38);
+  background: transparent;
+  border-color: transparent;
 }
 
-html[data-theme="dark"] .preview-header-chip {
-  background: rgba(15, 23, 42, 0.96);
-  border-color: rgba(100, 116, 139, 0.4);
+html[data-theme="dark"] .preview-header-detail {
   color: #e2e8f0;
 }
 

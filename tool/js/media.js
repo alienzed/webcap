@@ -92,6 +92,9 @@ function runPreviewActionByLabel(label) {
 
 function updatePreviewActionControls() {
   if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewAnnotateActionEl || !ui.previewMoreActionsEl) return;
+  if (typeof renderPreviewHeaderMeta === 'function') {
+    renderPreviewHeaderMeta();
+  }
 
   var hideAll = function () {
     ui.previewActionsEl.classList.add('hidden');

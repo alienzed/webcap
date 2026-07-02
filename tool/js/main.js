@@ -184,7 +184,6 @@ function syncWorkspaceHeaderUi() {
   ui.appEl.classList.add('workflow-' + workflowMode);
 
   var viewButtons = {
-    single: document.getElementById('workspace-view-single-btn'),
     grid: document.getElementById('sidebar-open-grid-btn'),
     focus: document.getElementById('sidebar-open-focused-btn')
   };
@@ -432,24 +431,6 @@ function rebuildUnifiedWorkspaceShell() {
 }
 
 function wireWorkspaceHeaderUi() {
-  var singleBtn = document.getElementById('workspace-view-single-btn');
-  if (singleBtn && !singleBtn.__workspaceWired) {
-    singleBtn.__workspaceWired = true;
-    singleBtn.onclick = function () {
-      if (typeof isFocusedAnnotationOpen === 'function' && isFocusedAnnotationOpen()) {
-        closeFocusedAnnotationModal();
-      }
-      if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen() && typeof closeMediaGridSurface === 'function') {
-        closeMediaGridSurface();
-        return;
-      }
-      if (typeof closeMediaGridModal === 'function' && typeof mediaGridState !== 'undefined' && mediaGridState.open) {
-        closeMediaGridModal();
-        return;
-      }
-      setWorkspaceViewMode('single');
-    };
-  }
   var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
   if (reviewOutputBtn && !reviewOutputBtn.__workspaceWired) {
     reviewOutputBtn.__workspaceWired = true;

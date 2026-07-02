@@ -378,11 +378,12 @@ function setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, isNa, 
   return true;
 }
 
-function setChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel, isChecked) {
+function setChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel, isChecked, options) {
   if (typeof requirementLabel === 'undefined') {
     requirementLabel = mediaKey;
     mediaKey = (state && state.currentItem && state.currentItem.key) ? state.currentItem.key : '';
   }
+  var opts = options || {};
   var key = String(mediaKey || '').trim();
   var req = normalizeChecklistRequirementKey(requirementLabel);
   if (!key || !req) return false;
@@ -406,12 +407,12 @@ function setChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel, i
     if (Object.keys(map).length) checklistCheckedByMedia[key] = map;
     else delete checklistCheckedByMedia[key];
   }
-  syncReviewedFromChecklist(key);
-  saveChecklistToFolderState();
-  renderChecklistPanel();
-  renderItemMetadataPanel();
-  renderAnnotateStrip();
-  renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  if (!opts.skipSync) syncReviewedFromChecklist(key);
+  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipRender) renderChecklistPanel();
+  if (!opts.skipRender) renderItemMetadataPanel();
+  if (!opts.skipRender) renderAnnotateStrip();
+  if (!opts.skipRender) renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
   return true;
 }
 
@@ -666,6 +667,116 @@ function refreshGroupWorkbenchForCurrentItem() {
   });
 }
 
+function getDistinctGroupWorkbenchMediaKeys(mediaKeys) {
+  var seen = {};
+  var keys = [];
+  (Array.isArray(mediaKeys) ? mediaKeys : []).forEach(function (rawKey) {
+    var key = String(rawKey || '').trim();
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    keys.push(key);
+  });
+  return keys;
+}
+
+function getChecklistRequirementBatchState(mediaKeys, requirementLabel) {
+  var keys = getDistinctGroupWorkbenchMediaKeys(mediaKeys);
+  var reviewedCount = 0;
+  var naCount = 0;
+  keys.forEach(function (key) {
+    if (isChecklistRequirementCheckedForMediaKey(key, requirementLabel)) reviewedCount += 1;
+    if (isChecklistRequirementNaForMediaKey(key, requirementLabel)) naCount += 1;
+  });
+  return {
+    keys: keys,
+    total: keys.length,
+    reviewedCount: reviewedCount,
+    naCount: naCount,
+    allReviewed: keys.length > 0 && reviewedCount === keys.length,
+    someReviewed: reviewedCount > 0,
+    allNa: keys.length > 0 && naCount === keys.length,
+    someNa: naCount > 0
+  };
+}
+
+function finalizeChecklistBatchMutation(keys, requirementLabel, mutationLabel, changedCount, options) {
+  var opts = options || {};
+  keys.forEach(function (key) {
+    syncReviewedFromChecklist(key);
+  });
+  saveChecklistToFolderState();
+  renderChecklistPanel();
+  renderItemMetadataPanel();
+  renderAnnotateStrip();
+  renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  if (typeof setStatus === 'function' && mutationLabel) {
+    setStatus(mutationLabel + ' "' + requirementLabel + '" on ' + changedCount + ' Grid item' + (changedCount === 1 ? '' : 's') + '.');
+  }
+  if (typeof opts.onAfterMutation === 'function') {
+    opts.onAfterMutation();
+    return;
+  }
+  renderGroupWorkbench({
+    mode: 'grid',
+    targetEl: opts.targetEl,
+    mediaKeys: keys,
+    contextMediaKeys: opts.contextMediaKeys,
+    getContextMediaKeys: opts.getContextMediaKeys,
+    onAfterMutation: opts.onAfterMutation
+  });
+}
+
+function setChecklistRequirementCheckedForMediaKeys(mediaKeys, requirementLabel, isChecked, options) {
+  var opts = options || {};
+  var keys = getDistinctGroupWorkbenchMediaKeys(mediaKeys);
+  if (!keys.length) {
+    if (typeof setStatus === 'function') setStatus('Select Grid thumbnails to update groups.');
+    return false;
+  }
+  var nextChecked = !!isChecked;
+  var changedCount = 0;
+  keys.forEach(function (key) {
+    if (nextChecked && isChecklistRequirementNaForMediaKey(key, requirementLabel)) {
+      setChecklistRequirementNaForMediaKey(key, requirementLabel, false, {
+        skipSync: true,
+        skipSave: true,
+        skipRender: true
+      });
+    }
+    var previous = isChecklistRequirementCheckedForMediaKey(key, requirementLabel);
+    setChecklistRequirementCheckedForMediaKey(key, requirementLabel, nextChecked, {
+      skipSync: true,
+      skipSave: true,
+      skipRender: true
+    });
+    if (previous !== nextChecked) changedCount += 1;
+  });
+  finalizeChecklistBatchMutation(keys, requirementLabel, nextChecked ? 'Marked reviewed for' : 'Cleared reviewed for', changedCount, opts);
+  return true;
+}
+
+function setChecklistRequirementNaForMediaKeys(mediaKeys, requirementLabel, isNa, options) {
+  var opts = options || {};
+  var keys = getDistinctGroupWorkbenchMediaKeys(mediaKeys);
+  if (!keys.length) {
+    if (typeof setStatus === 'function') setStatus('Select Grid thumbnails to update groups.');
+    return false;
+  }
+  var nextNa = !!isNa;
+  var changedCount = 0;
+  keys.forEach(function (key) {
+    var previous = isChecklistRequirementNaForMediaKey(key, requirementLabel);
+    setChecklistRequirementNaForMediaKey(key, requirementLabel, nextNa, {
+      skipSync: true,
+      skipSave: true,
+      skipRender: true
+    });
+    if (previous !== nextNa) changedCount += 1;
+  });
+  finalizeChecklistBatchMutation(keys, requirementLabel, nextNa ? 'Marked N/A for' : 'Cleared N/A for', changedCount, opts);
+  return true;
+}
+
 function toggleGroupWorkbenchTermForItem(mediaKey, requirementLabel, term) {
   if (!mediaKey || !term) return;
   if (isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)) {
@@ -685,14 +796,7 @@ function toggleGroupWorkbenchTermForItem(mediaKey, requirementLabel, term) {
 
 function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term, options) {
   var opts = options || {};
-  var seen = {};
-  var keys = [];
-  (Array.isArray(mediaKeys) ? mediaKeys : []).forEach(function (rawKey) {
-    var key = String(rawKey || '').trim();
-    if (!key || seen[key]) return;
-    seen[key] = true;
-    keys.push(key);
-  });
+  var keys = getDistinctGroupWorkbenchMediaKeys(mediaKeys);
   if (!keys.length) {
     if (typeof setStatus === 'function') setStatus('Select Grid thumbnails to tag them.');
     return false;
@@ -919,8 +1023,15 @@ function renderGroupWorkbench(options) {
 
   for (var i = 0; i < checklistItems.length; i++) {
     var requirementLabel = checklistItems[i];
-    var isReviewed = hasItemTarget && isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
-    var isNa = hasItemTarget && isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
+    var batchState = isGridMode ? getChecklistRequirementBatchState(mediaKeys, requirementLabel) : null;
+    var isReviewed = isGridMode
+      ? (hasGridTargets && batchState.allReviewed)
+      : (hasItemTarget && isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel));
+    var isReviewedMixed = isGridMode && hasGridTargets && batchState.someReviewed && !batchState.allReviewed;
+    var isNa = isGridMode
+      ? (hasGridTargets && batchState.allNa)
+      : (hasItemTarget && isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel));
+    var isNaMixed = isGridMode && hasGridTargets && batchState.someNa && !batchState.allNa;
     var isCaptionMatched = !isGridMode && hasItemTarget && requirementKeywordsMatch(requirementLabel, captionText);
     var terms = getChecklistKeywordTermsForRequirement(requirementLabel)
       .map(normalizeChecklistTerm)
@@ -980,43 +1091,65 @@ function renderGroupWorkbench(options) {
     })(requirementLabel);
     actionsEl.appendChild(editBtn);
 
-    if (!isGridMode) {
-      var naCheckbox = document.createElement('input');
-      naCheckbox.type = 'checkbox';
-      naCheckbox.className = 'group-workbench-na-checkbox';
-      naCheckbox.checked = isNa;
-      naCheckbox.title = 'Toggle not applicable for ' + requirementLabel;
-      naCheckbox.setAttribute('aria-label', 'Toggle not applicable for ' + requirementLabel);
-      naCheckbox.disabled = !hasItemTarget;
-      naCheckbox.addEventListener('click', function (event) {
-        event.stopPropagation();
-      });
-      naCheckbox.addEventListener('mousedown', function (event) {
-        event.stopPropagation();
-      });
+    var naCheckbox = document.createElement('input');
+    naCheckbox.type = 'checkbox';
+    naCheckbox.className = 'group-workbench-na-checkbox';
+    naCheckbox.checked = isNa;
+    naCheckbox.indeterminate = isNaMixed;
+    naCheckbox.title = 'Toggle not applicable for ' + requirementLabel;
+    naCheckbox.setAttribute('aria-label', 'Toggle not applicable for ' + requirementLabel);
+    naCheckbox.disabled = !hasActionTarget;
+    naCheckbox.addEventListener('click', function (event) {
+      event.stopPropagation();
+    });
+    naCheckbox.addEventListener('mousedown', function (event) {
+      event.stopPropagation();
+    });
 
-      var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', '\u2713', 'Toggle reviewed', 'Toggle reviewed for ' + requirementLabel);
-      reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
-      reviewedBtn.classList.toggle('active', isReviewed);
-      reviewedBtn.disabled = !hasItemTarget || isNa;
-      (function (key, label) {
-        bindGroupWorkbenchHeaderButton(reviewedBtn, function () {
-          if (!key) return;
-          toggleChecklistRequirementCheckedForMediaKey(key, label);
-          refreshGroupWorkbenchForCurrentItem();
-        });
-      })(mediaKey, requirementLabel);
-      actionsEl.appendChild(reviewedBtn);
-
-      (function (key, label, nextIsNa) {
-        naCheckbox.addEventListener('change', function () {
-          if (!key) return;
-          setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
-          refreshGroupWorkbenchForCurrentItem();
-        });
-      })(mediaKey, requirementLabel, isNa);
-      titleMainEl.appendChild(naCheckbox);
+    var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', '\u2713', 'Toggle reviewed', 'Toggle reviewed for ' + requirementLabel);
+    reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
+    reviewedBtn.classList.toggle('active', isReviewed);
+    reviewedBtn.classList.toggle('mixed', isReviewedMixed);
+    reviewedBtn.disabled = !hasActionTarget || isNa;
+    if (isReviewedMixed) {
+      reviewedBtn.title = 'Mixed reviewed state for ' + requirementLabel;
+      reviewedBtn.setAttribute('aria-label', 'Mixed reviewed state for ' + requirementLabel);
     }
+    (function (key, label, mode, getMediaKeys, afterMutation, getContextMediaKeys, nextIsReviewed) {
+      bindGroupWorkbenchHeaderButton(reviewedBtn, function () {
+        if (mode === 'grid') {
+          setChecklistRequirementCheckedForMediaKeys(getMediaKeys(), label, !nextIsReviewed, {
+            targetEl: targetEl,
+            contextMediaKeys: getContextMediaKeys(),
+            getContextMediaKeys: getContextMediaKeys,
+            onAfterMutation: afterMutation
+          });
+          return;
+        }
+        if (!key) return;
+        toggleChecklistRequirementCheckedForMediaKey(key, label);
+        refreshGroupWorkbenchForCurrentItem();
+      });
+    })(mediaKey, requirementLabel, opts.mode, opts.getMediaKeys, opts.onAfterMutation, opts.getContextMediaKeys, isReviewed);
+    actionsEl.appendChild(reviewedBtn);
+
+    (function (key, label, mode, getMediaKeys, afterMutation, getContextMediaKeys, nextIsNa) {
+      naCheckbox.addEventListener('change', function () {
+        if (mode === 'grid') {
+          setChecklistRequirementNaForMediaKeys(getMediaKeys(), label, !nextIsNa, {
+            targetEl: targetEl,
+            contextMediaKeys: getContextMediaKeys(),
+            getContextMediaKeys: getContextMediaKeys,
+            onAfterMutation: afterMutation
+          });
+          return;
+        }
+        if (!key) return;
+        setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
+        refreshGroupWorkbenchForCurrentItem();
+      });
+    })(mediaKey, requirementLabel, opts.mode, opts.getMediaKeys, opts.onAfterMutation, opts.getContextMediaKeys, isNa);
+    titleMainEl.appendChild(naCheckbox);
 
     titleMainEl.appendChild(titleEl);
     headerRowEl.appendChild(titleMainEl);

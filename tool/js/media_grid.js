@@ -9,7 +9,8 @@ var mediaGridState = {
   selectedKeys: new Set(),
   lastSelectedKey: '',
   status: '',
-  viewerKey: ''
+  viewerKey: '',
+  previousWorkspaceState: null
 };
 
 var MEDIA_GRID_FOCUS_SET_DEFS = [
@@ -191,6 +192,7 @@ function mediaGridResetSessionState() {
   mediaGridState.lastSelectedKey = '';
   mediaGridState.status = '';
   mediaGridState.viewerKey = '';
+  mediaGridState.previousWorkspaceState = null;
 }
 
 function mediaGridBeginSession(presentation) {
@@ -219,18 +221,35 @@ function mediaGridHideModalShell() {
   document.body.classList.remove('media-grid-open');
 }
 
-function mediaGridRestoreItemWorkspace() {
-  if (typeof setWorkspaceViewMode === 'function') {
+function mediaGridCaptureWorkspaceState() {
+  if (mediaGridState.previousWorkspaceState) return;
+  mediaGridState.previousWorkspaceState = {
+    surface: typeof workspaceState !== 'undefined' && workspaceState ? workspaceState.surface : 'default',
+    workflowMode: typeof workspaceUiState !== 'undefined' && workspaceUiState ? workspaceUiState.workflowMode : 'annotate',
+    sidebarCollapsed: !!(ui && ui.appEl && ui.appEl.classList.contains('left-rail-collapsed'))
+  };
+}
+
+function mediaGridRestoreItemWorkspace(previousWorkspaceState) {
+  var restoreState = previousWorkspaceState || mediaGridState.previousWorkspaceState || {};
+  var restoreSurface = restoreState.surface || 'default';
+  if (restoreSurface === 'grid') restoreSurface = 'default';
+  if (typeof setWorkspaceSurface === 'function') {
+    setWorkspaceSurface(restoreSurface, { skipRemember: true, sidebarHidden: restoreSurface === 'focus' });
+  } else if (typeof setWorkspaceViewMode === 'function') {
     setWorkspaceViewMode('single');
   }
-  if (typeof exitWorkspaceSurface === 'function') {
-    exitWorkspaceSurface();
+  if (typeof setSidebarCollapsed === 'function') {
+    setSidebarCollapsed(!!restoreState.sidebarCollapsed);
   }
   if (typeof setWorkspaceWorkflowMode === 'function') {
-    setWorkspaceWorkflowMode('annotate');
+    setWorkspaceWorkflowMode(restoreState.workflowMode || 'annotate');
   }
   if (typeof renderChecklistPanel === 'function') {
     renderChecklistPanel();
+  }
+  if (typeof renderPreviewHeaderMeta === 'function') {
+    renderPreviewHeaderMeta();
   }
 }
 
@@ -551,13 +570,17 @@ function mediaGridUpdateEntryVisibility() {
     btn.classList.toggle('hidden', !hasVisibleMedia || hasFocusSet);
   }
   if (sidebarBtn) {
-    sidebarBtn.disabled = !hasVisibleMedia;
+    sidebarBtn.disabled = false;
+    sidebarBtn.classList.toggle('hidden', !hasVisibleMedia);
     sidebarBtn.title = hasFocusSet
       ? 'Open Media Grid for the current focus set'
       : 'Open Media Grid for the current visible items';
   }
   if (focusBtn) {
     focusBtn.classList.toggle('hidden', !(hasVisibleMedia && hasFocusSet));
+  }
+  if (typeof renderPreviewHeaderMeta === 'function') {
+    renderPreviewHeaderMeta();
   }
 }
 
@@ -629,6 +652,7 @@ function openMediaGridModal() {
   }
   closeMediaGridViewer();
   mediaGridHideSurfaceShell();
+  mediaGridCaptureWorkspaceState();
   mediaGridBeginSession('modal');
   var els = mediaGridGetEls();
   var overlayHost = document.getElementById('workspace-overlays');
@@ -647,14 +671,18 @@ function openMediaGridModal() {
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode('select');
   }
+  if (typeof renderPreviewHeaderMeta === 'function') {
+    renderPreviewHeaderMeta();
+  }
   renderMediaGridModal();
 }
 
 function closeMediaGridModal() {
   closeMediaGridViewer();
   mediaGridHideModalShell();
+  var previousWorkspaceState = mediaGridState.previousWorkspaceState;
   mediaGridResetSessionState();
-  mediaGridRestoreItemWorkspace();
+  mediaGridRestoreItemWorkspace(previousWorkspaceState);
 }
 
 function openMediaGridSurface() {
@@ -670,6 +698,7 @@ function openMediaGridSurface() {
   }
   closeMediaGridViewer();
   mediaGridHideModalShell();
+  mediaGridCaptureWorkspaceState();
   mediaGridBeginSession('surface');
   mediaGridSyncItemsToCurrentView();
   mediaGridSeedSelectionFromCurrentItem();
@@ -685,14 +714,18 @@ function openMediaGridSurface() {
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode('select');
   }
+  if (typeof renderPreviewHeaderMeta === 'function') {
+    renderPreviewHeaderMeta();
+  }
   renderMediaGridSurface();
 }
 
 function closeMediaGridSurface() {
   closeMediaGridViewer();
   mediaGridHideSurfaceShell();
+  var previousWorkspaceState = mediaGridState.previousWorkspaceState;
   mediaGridResetSessionState();
-  mediaGridRestoreItemWorkspace();
+  mediaGridRestoreItemWorkspace(previousWorkspaceState);
 }
 
 function renderMediaGridModal() {

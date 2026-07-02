@@ -419,7 +419,7 @@ function openAdvancedFilterHelpInPreview() {
     '<li style="margin:0 0 6px 0;"><strong>Captionless</strong>: items without captions.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Reviewed</strong>: items marked reviewed.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Unreviewed</strong>: items not marked reviewed yet.</li>' +
-    '<li style="margin:0 0 6px 0;"><strong>Incomplete</strong>: requirement groups not fully satisfied (N/A counts as complete).</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Incomplete</strong>: requirement groups not fully satisfied.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Invalid AR</strong>: items with unsupported aspect buckets.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Tag Mismatch</strong>: items with no tags, or with item tags not found in the caption.</li>' +
     '</ul>' +

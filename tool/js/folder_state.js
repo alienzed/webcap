@@ -71,24 +71,6 @@ function sanitizeFolderState(data) {
       captionTermDescriptorsByMedia[key] = cleanMap;
     });
   }
-  var requirementsNaByMedia = {};
-  if (typeof src.caption_requirements_na_by_media === 'object' && src.caption_requirements_na_by_media) {
-    Object.keys(src.caption_requirements_na_by_media).forEach(function (mediaKey) {
-      var rawMap = src.caption_requirements_na_by_media[mediaKey];
-      if (!rawMap || typeof rawMap !== 'object') return;
-      var cleanMap = {};
-      Object.keys(rawMap).forEach(function (requirementLabel) {
-        var req = String(requirementLabel || '').trim();
-        if (!req) return;
-        if (rawMap[requirementLabel]) {
-          cleanMap[req] = true;
-        }
-      });
-      if (Object.keys(cleanMap).length) {
-        requirementsNaByMedia[String(mediaKey || '').trim()] = cleanMap;
-      }
-    });
-  }
   var mediaFilterStars = Array.isArray(mediaFilters.stars) ? mediaFilters.stars : [];
   mediaFilterStars = mediaFilterStars
     .map(function (value) { return String(value || '').trim().toLowerCase(); })
@@ -119,7 +101,6 @@ function sanitizeFolderState(data) {
     caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : getDefaultRequirementItems().slice(),
     caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : {},
     caption_requirement_keywords: (typeof src.caption_requirement_keywords === 'object' && src.caption_requirement_keywords) ? JSON.parse(JSON.stringify(src.caption_requirement_keywords)) : {},
-    caption_requirements_na_by_media: requirementsNaByMedia,
     caption_term_wrappers: captionTermWrappers,
     caption_term_affixes: JSON.parse(JSON.stringify(captionTermWrappers)),
     caption_term_descriptor_defaults: captionTermDescriptorDefaults,
@@ -240,7 +221,6 @@ function snapshotFolderStateFromDom() {
     caption_requirements: (typeof window.checklistItems !== 'undefined') ? window.checklistItems.slice() : undefined,
     caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined,
     caption_requirement_keywords: (typeof window.checklistKeywordsByItem !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistKeywordsByItem)) : undefined,
-    caption_requirements_na_by_media: (typeof window.checklistRequirementsNaByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistRequirementsNaByMedia)) : undefined,
     caption_term_wrappers: (typeof window.checklistTermWrappersByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermWrappersByKey)) : undefined,
     caption_term_affixes: (typeof window.checklistTermAffixesByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermAffixesByKey)) : undefined,
     caption_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorDefaultsByKey)) : undefined,

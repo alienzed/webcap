@@ -115,17 +115,6 @@ function undoLastOperation() {
       }
       return true;
     }
-    if (op.type === 'checklist-na') {
-      setChecklistRequirementNaForMediaKey(op.mediaKey, op.requirementLabel, !!op.previousValue);
-      if (!op.previousValue && op.previousCheckedValue) {
-        setChecklistRequirementCheckedForMediaKey(op.mediaKey, op.requirementLabel, true);
-      }
-      var naStatus = op.previousValue ? 'Undid group n/a clear.' : 'Undid group n/a mark.';
-      if (!restoreUndoMediaSelection(op.mediaKey, naStatus)) {
-        setStatus(naStatus);
-      }
-      return true;
-    }
     if (op.type === 'tag') {
       if (op.previousValue) {
         addTagToMediaKey(op.mediaKey, op.tagText);
@@ -447,14 +436,44 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
         var hasCaption = !!(text && text.trim().length);
         setStatus((hasCaption ? 'Saved: ' : 'Cleared: ') + (media || '').replace(/\.[^.]+$/, '.txt'));
         var updatedKey = null;
+        var previousHasCaption = false;
         // Update state
         for (var i = 0; i < state.items.length; i++) {
           if (state.items[i].fileName === media) {
+            previousHasCaption = !!state.items[i].hasCaption;
             state.items[i].caption = text;
-            state.items[i].hasCaption = hasCaption;
             updatedKey = state.items[i].key;
             break;
           }
+        }
+        updatedKey = updatedKey || mediaKey || '';
+        if (
+          hasCaption &&
+          updatedKey &&
+          typeof getTagsForMediaKey === 'function' &&
+          typeof commitChecklistDescriptorSnapshotsForMediaKey === 'function'
+        ) {
+          commitChecklistDescriptorSnapshotsForMediaKey(updatedKey, getTagsForMediaKey(updatedKey));
+        } else if (
+          !hasCaption &&
+          updatedKey &&
+          previousHasCaption &&
+          typeof clearChecklistDescriptorSnapshotsForMediaKey === 'function'
+        ) {
+          clearChecklistDescriptorSnapshotsForMediaKey(updatedKey);
+        }
+        for (var j = 0; j < state.items.length; j++) {
+          if (state.items[j].fileName === media) {
+            state.items[j].hasCaption = hasCaption;
+            break;
+          }
+        }
+        if (
+          updatedKey &&
+          (hasCaption || previousHasCaption) &&
+          typeof saveChecklistToFolderState === 'function'
+        ) {
+          saveChecklistToFolderState();
         }
         // Toggle class on row
         var row = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + (updatedKey || mediaKey) + '"]');

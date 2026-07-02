@@ -357,13 +357,6 @@ function computeRequirementProgressForMediaKey(mediaKey) {
     var terms = parseRequirementProgressTerms(getChecklistKeywordTermsForRequirement(requirementLabel).join(', '));
     if (!terms.length) continue;
     total += 1;
-    var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-      ? isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)
-      : false;
-    if (isNa) {
-      completed += 1;
-      continue;
-    }
     var hasMatch = terms.some(function (term) {
       return hasTagForMediaKey(mediaKey, term);
     });
@@ -388,10 +381,7 @@ function computeReviewedProgressForMediaKey(mediaKey) {
     var requirementLabel = String(requirements[requirementIdx] || '').trim();
     if (!requirementLabel) continue;
     total += 1;
-    var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-      ? isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)
-      : false;
-    if (checkedMap[requirementLabel] || isNa) {
+    if (checkedMap[requirementLabel]) {
       completed += 1;
     } else {
       missing.push(requirementLabel);

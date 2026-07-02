@@ -282,26 +282,6 @@ function toggleAnnotateTag(term) {
   renderAnnotateStrip();
 }
 
-function toggleAnnotateGroupNa(requirementLabel, nextIsNa) {
-  if (!state.currentItem || !state.currentItem.key) {
-    setStatus('Select a media item to annotate.');
-    return;
-  }
-  if (typeof isChecklistRequirementNaForMediaKey !== 'function' || typeof setChecklistRequirementNaForMediaKey !== 'function') {
-    setStatus('Mute toggle is unavailable.');
-    return;
-  }
-  var mediaKey = state.currentItem.key;
-  var isNa = isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel);
-  var targetIsNa = typeof nextIsNa === 'boolean' ? nextIsNa : !isNa;
-  if (targetIsNa === isNa) {
-    return;
-  }
-  setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, targetIsNa);
-  setStatus(targetIsNa ? ('Muted group: ' + requirementLabel) : ('Unmuted group: ' + requirementLabel));
-  renderAnnotateStrip();
-}
-
 function toggleAnnotateGroupReviewed(mediaKey, requirementLabel) {
   if (typeof toggleChecklistRequirementCheckedForMediaKey !== 'function') {
     setStatus('Reviewed toggle is unavailable.');
@@ -369,9 +349,6 @@ function renderAnnotateStrip() {
     var reviewed = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
       ? isChecklistRequirementCheckedForMediaKey(mediaKey, groupRequirementLabel)
       : false;
-    var groupIsNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-      ? isChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel)
-      : false;
 
     var titleRowEl = document.createElement('div');
     titleRowEl.className = 'annotate-strip-group-title-row';
@@ -382,22 +359,6 @@ function renderAnnotateStrip() {
 
     var titleLabelEl = document.createElement('label');
     titleLabelEl.className = 'annotate-strip-group-title-label';
-    titleLabelEl.title = groupIsNa ? 'Unmute group for current item' : 'Mute group for current item';
-
-    var naCheckbox = document.createElement('input');
-    naCheckbox.type = 'checkbox';
-    naCheckbox.className = 'annotate-strip-group-na-checkbox';
-    naCheckbox.checked = !groupIsNa;
-    naCheckbox.setAttribute('aria-label', groupIsNa ? 'Unmute group for current item' : 'Mute group for current item');
-    naCheckbox.title = groupIsNa ? 'Unmute group for current item' : 'Mute group for current item';
-    naCheckbox.onclick = function (e) {
-      e.stopPropagation();
-    };
-    naCheckbox.onchange = function (e) {
-      e.stopPropagation();
-      toggleAnnotateGroupNa(groupRequirementLabel, !naCheckbox.checked);
-    };
-    titleLabelEl.appendChild(naCheckbox);
 
     var titleEl = document.createElement('div');
     titleEl.className = 'annotate-strip-group-title';
@@ -439,12 +400,7 @@ function renderAnnotateStrip() {
     if (!reviewedState) {
       var statusEl = document.createElement('span');
       statusEl.className = 'annotate-strip-group-status-pill';
-      if (groupIsNa) {
-        statusEl.classList.add('annotate-strip-group-status-pill-muted');
-        statusEl.textContent = 'Muted';
-      } else {
-        statusEl.textContent = 'Not reviewed';
-      }
+      statusEl.textContent = 'Not reviewed';
       titleMainEl.appendChild(statusEl);
     }
     var hasActiveTerm = false;
@@ -453,14 +409,12 @@ function renderAnnotateStrip() {
         hasActiveTerm = true;
       }
     });
-    isComplete = !!(groupIsNa || hasActiveTerm);
+    isComplete = !!hasActiveTerm;
     if (reviewedState) {
       groupEl.classList.add('annotate-strip-group-reviewed');
       titleEl.classList.add('annotate-strip-group-title-reviewed');
     } else if (!isComplete) {
       groupEl.classList.add('annotate-strip-group-incomplete');
-    } else if (groupIsNa) {
-      groupEl.classList.add('annotate-strip-group-na');
     } else {
       groupEl.classList.add('annotate-strip-group-complete');
     }
@@ -541,9 +495,6 @@ function renderAnnotateStrip() {
       chipTitle += ' - right-click to edit prefix/suffix';
       chip.title = chipTitle;
       chip.onclick = function () {
-        if (groupIsNa && typeof setChecklistRequirementNaForMediaKey === 'function') {
-          setChecklistRequirementNaForMediaKey(mediaKey, groupRequirementLabel, false);
-        }
         toggleAnnotateTag(term);
       };
       chip.oncontextmenu = function (e) {
@@ -553,8 +504,7 @@ function renderAnnotateStrip() {
       chipWrap.appendChild(chip);
     });
     if (!reviewedState) {
-      if (groupIsNa) titleEl.classList.add('annotate-strip-group-title-na');
-      else titleEl.classList.add(isComplete ? 'annotate-strip-group-title-complete' : 'annotate-strip-group-title-incomplete');
+      titleEl.classList.add(isComplete ? 'annotate-strip-group-title-complete' : 'annotate-strip-group-title-incomplete');
     }
 
     groupEl.appendChild(chipWrap);

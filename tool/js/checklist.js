@@ -6,7 +6,6 @@ var checklistCheckedByMedia = {}; // { mediaKey: { item: true/false, ... } }
 var debouncedChecklistSave = debounceCreate(400); // Debounce saves for checkbox changes
 var checklistKeywordsByItem = {}; // { requirement: "keyword1, keyword2, ..." }
 var checklistSessionHiddenTermsByRequirement = {}; // { requirement: { termLower: true } } session-only
-var checklistRequirementsNaByMedia = {}; // { mediaKey: { requirement: true } }
 var checklistTermWrappersByKey = {}; // { termLower: { prefix: "", suffix: "" } }
 var checklistTermDescriptorDefaultsByKey = {}; // { termLower: { prefix: "", suffix: "" } }
 var checklistTermDescriptorsByMedia = {}; // { mediaKey: { termLower: { prefix: "", suffix: "" } } }
@@ -96,6 +95,21 @@ function resolveChecklistTermMediaKey(mediaKey) {
   return '';
 }
 
+function mediaKeyHasSavedCaption(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  if (!key || !state) return false;
+  if (state.currentItem && state.currentItem.key === key) {
+    return !!state.currentItem.hasCaption;
+  }
+  if (!Array.isArray(state.items)) return false;
+  for (var i = 0; i < state.items.length; i++) {
+    var item = state.items[i];
+    if (!item || item.key !== key) continue;
+    return !!item.hasCaption;
+  }
+  return false;
+}
+
 function checklistMediaHasTag(mediaKey, termText) {
   var key = String(mediaKey || '').trim();
   var term = normalizeChecklistTerm(termText);
@@ -163,8 +177,11 @@ function getChecklistTermDescriptorForMediaKey(mediaKey, termText) {
 }
 
 function getChecklistEffectiveTermDescriptor(termText, mediaKey) {
-  var mediaDescriptor = getChecklistTermDescriptorForMediaKey(mediaKey, termText);
-  if (mediaDescriptor) return mediaDescriptor;
+  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
+  if (resolvedMediaKey && mediaKeyHasSavedCaption(resolvedMediaKey)) {
+    var mediaDescriptor = getChecklistTermDescriptorForMediaKey(resolvedMediaKey, termText);
+    if (mediaDescriptor) return mediaDescriptor;
+  }
   return getChecklistTermDescriptorDefault(termText);
 }
 
@@ -267,6 +284,26 @@ function commitChecklistDescriptorSnapshotForMediaKey(mediaKey, termText, source
   );
 }
 
+function commitChecklistDescriptorSnapshotsForMediaKey(mediaKey, termList) {
+  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
+  var terms = Array.isArray(termList) ? termList : [];
+  if (!resolvedMediaKey || !terms.length) return false;
+  var changed = false;
+  terms.forEach(function (termText) {
+    if (commitChecklistDescriptorSnapshotForMediaKey(resolvedMediaKey, termText)) {
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function clearChecklistDescriptorSnapshotsForMediaKey(mediaKey) {
+  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
+  if (!resolvedMediaKey || !checklistTermDescriptorsByMedia[resolvedMediaKey]) return false;
+  delete checklistTermDescriptorsByMedia[resolvedMediaKey];
+  return true;
+}
+
 function normalizeChecklistRequirementKey(requirementLabel) {
   return String(requirementLabel || '').trim();
 }
@@ -300,13 +337,6 @@ function setChecklistSessionHiddenTermForRequirement(requirementLabel, termText,
   return true;
 }
 
-function getChecklistNaMapForMediaKey(mediaKey) {
-  var key = String(mediaKey || '').trim();
-  if (!key) return {};
-  var map = checklistRequirementsNaByMedia[key];
-  return (map && typeof map === 'object') ? map : {};
-}
-
 function getChecklistCheckedMapForMediaKey(mediaKey) {
   var key = String(mediaKey || '').trim();
   if (!key) return {};
@@ -319,63 +349,6 @@ function isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel) {
   if (!req) return false;
   var map = getChecklistCheckedMapForMediaKey(mediaKey);
   return !!map[req];
-}
-
-function isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel) {
-  var req = normalizeChecklistRequirementKey(requirementLabel);
-  if (!req) return false;
-  var map = getChecklistNaMapForMediaKey(mediaKey);
-  return !!map[req];
-}
-
-function isChecklistRequirementNaForCurrentMedia(requirementLabel) {
-  if (!state || !state.currentItem || !state.currentItem.key) return false;
-  return isChecklistRequirementNaForMediaKey(state.currentItem.key, requirementLabel);
-}
-
-function setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, isNa, options) {
-  var key = String(mediaKey || '').trim();
-  var req = normalizeChecklistRequirementKey(requirementLabel);
-  var opts = options || {};
-  if (!key || !req) return false;
-  var previous = isChecklistRequirementNaForMediaKey(key, requirementLabel);
-  var next = !!isNa;
-  if (previous !== next) {
-    recordUndoOperation({
-      type: 'checklist-na',
-      mediaKey: key,
-      requirementLabel: requirementLabel,
-      previousValue: previous,
-      nextValue: next,
-      previousCheckedValue: isChecklistRequirementCheckedForMediaKey(key, requirementLabel)
-    });
-  }
-  var map = JSON.parse(JSON.stringify(getChecklistNaMapForMediaKey(key)));
-  if (isNa) {
-    map[req] = true;
-    checklistRequirementsNaByMedia[key] = map;
-    var checkedMap = JSON.parse(JSON.stringify(getChecklistCheckedMapForMediaKey(key)));
-    delete checkedMap[req];
-    if (Object.keys(checkedMap).length) checklistCheckedByMedia[key] = checkedMap;
-    else delete checklistCheckedByMedia[key];
-  } else {
-    delete map[req];
-    if (Object.keys(map).length) checklistRequirementsNaByMedia[key] = map;
-    else delete checklistRequirementsNaByMedia[key];
-  }
-  if (!opts.skipSync) syncReviewedFromChecklist(key);
-  if (!opts.skipSave) saveChecklistToFolderState();
-  if (!opts.skipRender) renderChecklistPanel();
-  if (!opts.skipRender) {
-    renderItemMetadataPanel();
-  }
-  if (!opts.skipRender) {
-    renderAnnotateStrip();
-  }
-  if (!opts.skipRender) {
-    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
-  }
-  return true;
 }
 
 function setChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel, isChecked, options) {
@@ -514,14 +487,13 @@ function setChecklistPanelVisible(visible) {
 function checklistAllCheckedForMedia(mediaKey) {
   if (!mediaKey || !checklistItems || !checklistItems.length) return false;
   var checkedMap = checklistCheckedByMedia[mediaKey] || {};
-  var naMap = getChecklistNaMapForMediaKey(mediaKey);
   var actionableRequirementCount = 0;
   for (var i = 0; i < checklistItems.length; i++) {
     var requirementLabel = checklistItems[i];
     var terms = getChecklistKeywordTermsForRequirement(requirementLabel);
     if (!terms.length) continue;
     actionableRequirementCount += 1;
-    if (!checkedMap[requirementLabel] && !naMap[normalizeChecklistRequirementKey(requirementLabel)]) return false;
+    if (!checkedMap[requirementLabel]) return false;
   }
   return actionableRequirementCount > 0;
 }
@@ -682,20 +654,15 @@ function getDistinctGroupWorkbenchMediaKeys(mediaKeys) {
 function getChecklistRequirementBatchState(mediaKeys, requirementLabel) {
   var keys = getDistinctGroupWorkbenchMediaKeys(mediaKeys);
   var reviewedCount = 0;
-  var naCount = 0;
   keys.forEach(function (key) {
     if (isChecklistRequirementCheckedForMediaKey(key, requirementLabel)) reviewedCount += 1;
-    if (isChecklistRequirementNaForMediaKey(key, requirementLabel)) naCount += 1;
   });
   return {
     keys: keys,
     total: keys.length,
     reviewedCount: reviewedCount,
-    naCount: naCount,
     allReviewed: keys.length > 0 && reviewedCount === keys.length,
-    someReviewed: reviewedCount > 0,
-    allNa: keys.length > 0 && naCount === keys.length,
-    someNa: naCount > 0
+    someReviewed: reviewedCount > 0
   };
 }
 
@@ -736,13 +703,6 @@ function setChecklistRequirementCheckedForMediaKeys(mediaKeys, requirementLabel,
   var nextChecked = !!isChecked;
   var changedCount = 0;
   keys.forEach(function (key) {
-    if (nextChecked && isChecklistRequirementNaForMediaKey(key, requirementLabel)) {
-      setChecklistRequirementNaForMediaKey(key, requirementLabel, false, {
-        skipSync: true,
-        skipSave: true,
-        skipRender: true
-      });
-    }
     var previous = isChecklistRequirementCheckedForMediaKey(key, requirementLabel);
     setChecklistRequirementCheckedForMediaKey(key, requirementLabel, nextChecked, {
       skipSync: true,
@@ -755,33 +715,8 @@ function setChecklistRequirementCheckedForMediaKeys(mediaKeys, requirementLabel,
   return true;
 }
 
-function setChecklistRequirementNaForMediaKeys(mediaKeys, requirementLabel, isNa, options) {
-  var opts = options || {};
-  var keys = getDistinctGroupWorkbenchMediaKeys(mediaKeys);
-  if (!keys.length) {
-    if (typeof setStatus === 'function') setStatus('Select Grid thumbnails to update groups.');
-    return false;
-  }
-  var nextNa = !!isNa;
-  var changedCount = 0;
-  keys.forEach(function (key) {
-    var previous = isChecklistRequirementNaForMediaKey(key, requirementLabel);
-    setChecklistRequirementNaForMediaKey(key, requirementLabel, nextNa, {
-      skipSync: true,
-      skipSave: true,
-      skipRender: true
-    });
-    if (previous !== nextNa) changedCount += 1;
-  });
-  finalizeChecklistBatchMutation(keys, requirementLabel, nextNa ? 'Marked N/A for' : 'Cleared N/A for', changedCount, opts);
-  return true;
-}
-
 function toggleGroupWorkbenchTermForItem(mediaKey, requirementLabel, term) {
   if (!mediaKey || !term) return;
-  if (isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)) {
-    setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, false, { skipRender: true });
-  }
   if (typeof toggleAnnotateTag === 'function') {
     toggleAnnotateTag(term);
   } else if (typeof hasTagForMediaKey === 'function' && hasTagForMediaKey(mediaKey, term)) {
@@ -810,9 +745,6 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
     if (allHaveTerm) {
       if (typeof removeTagFromMediaKey === 'function') ok = removeTagFromMediaKey(key, term);
     } else {
-      if (isChecklistRequirementNaForMediaKey(key, requirementLabel)) {
-        setChecklistRequirementNaForMediaKey(key, requirementLabel, false, { skipRender: true });
-      }
       if (typeof addTagToMediaKey === 'function') ok = addTagToMediaKey(key, term);
     }
     if (ok) changed += 1;
@@ -853,8 +785,8 @@ function getGroupWorkbenchColumnCount(targetEl) {
   if (!targetEl || !targetEl.isConnected) return 1;
   var width = Math.max(0, targetEl.clientWidth || targetEl.getBoundingClientRect().width || 0);
   if (!width) return 1;
-  var minCardWidth = 192;
-  var columnGap = 12;
+  var minCardWidth = 210;
+  var columnGap = 8;
   var isGridSurface = !!targetEl.closest && !!targetEl.closest('.workspace-surface-grid');
   var maxColumns = isGridSurface ? 2 : 4;
   return Math.max(1, Math.min(maxColumns, Math.floor((width + columnGap) / (minCardWidth + columnGap)) || 1));
@@ -1028,10 +960,6 @@ function renderGroupWorkbench(options) {
       ? (hasGridTargets && batchState.allReviewed)
       : (hasItemTarget && isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel));
     var isReviewedMixed = isGridMode && hasGridTargets && batchState.someReviewed && !batchState.allReviewed;
-    var isNa = isGridMode
-      ? (hasGridTargets && batchState.allNa)
-      : (hasItemTarget && isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel));
-    var isNaMixed = isGridMode && hasGridTargets && batchState.someNa && !batchState.allNa;
     var isCaptionMatched = !isGridMode && hasItemTarget && requirementKeywordsMatch(requirementLabel, captionText);
     var terms = getChecklistKeywordTermsForRequirement(requirementLabel)
       .map(normalizeChecklistTerm)
@@ -1049,12 +977,11 @@ function renderGroupWorkbench(options) {
     var groupEl = document.createElement('div');
     groupEl.className = 'group-workbench-group';
     groupEl.classList.toggle('is-reviewed', isReviewed);
-    groupEl.classList.toggle('is-na', isNa);
-    groupEl.classList.toggle('is-complete', isReviewed || isNa);
-    groupEl.classList.toggle('is-incomplete', !isReviewed && !isNa);
+    groupEl.classList.toggle('is-complete', isReviewed);
+    groupEl.classList.toggle('is-incomplete', !isReviewed);
     groupEl.classList.toggle('is-disabled', !hasActionTarget);
     groupEl.classList.toggle('is-caption-matched', isCaptionMatched);
-    if (!isGridMode && hasItemTarget && !isNa) {
+    if (!isGridMode && hasItemTarget) {
       (function (key, label) {
         groupEl.ondblclick = function (event) {
           if (!event || !event.target) return;
@@ -1091,26 +1018,11 @@ function renderGroupWorkbench(options) {
     })(requirementLabel);
     actionsEl.appendChild(editBtn);
 
-    var naCheckbox = document.createElement('input');
-    naCheckbox.type = 'checkbox';
-    naCheckbox.className = 'group-workbench-na-checkbox';
-    naCheckbox.checked = isNa;
-    naCheckbox.indeterminate = isNaMixed;
-    naCheckbox.title = 'Toggle not applicable for ' + requirementLabel;
-    naCheckbox.setAttribute('aria-label', 'Toggle not applicable for ' + requirementLabel);
-    naCheckbox.disabled = !hasActionTarget;
-    naCheckbox.addEventListener('click', function (event) {
-      event.stopPropagation();
-    });
-    naCheckbox.addEventListener('mousedown', function (event) {
-      event.stopPropagation();
-    });
-
     var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', '\u2713', 'Toggle reviewed', 'Toggle reviewed for ' + requirementLabel);
     reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
     reviewedBtn.classList.toggle('active', isReviewed);
     reviewedBtn.classList.toggle('mixed', isReviewedMixed);
-    reviewedBtn.disabled = !hasActionTarget || isNa;
+    reviewedBtn.disabled = !hasActionTarget;
     if (isReviewedMixed) {
       reviewedBtn.title = 'Mixed reviewed state for ' + requirementLabel;
       reviewedBtn.setAttribute('aria-label', 'Mixed reviewed state for ' + requirementLabel);
@@ -1132,24 +1044,6 @@ function renderGroupWorkbench(options) {
       });
     })(mediaKey, requirementLabel, opts.mode, opts.getMediaKeys, opts.onAfterMutation, opts.getContextMediaKeys, isReviewed);
     actionsEl.appendChild(reviewedBtn);
-
-    (function (key, label, mode, getMediaKeys, afterMutation, getContextMediaKeys, nextIsNa) {
-      naCheckbox.addEventListener('change', function () {
-        if (mode === 'grid') {
-          setChecklistRequirementNaForMediaKeys(getMediaKeys(), label, !nextIsNa, {
-            targetEl: targetEl,
-            contextMediaKeys: getContextMediaKeys(),
-            getContextMediaKeys: getContextMediaKeys,
-            onAfterMutation: afterMutation
-          });
-          return;
-        }
-        if (!key) return;
-        setChecklistRequirementNaForMediaKey(key, label, !nextIsNa);
-        refreshGroupWorkbenchForCurrentItem();
-      });
-    })(mediaKey, requirementLabel, opts.mode, opts.getMediaKeys, opts.onAfterMutation, opts.getContextMediaKeys, isNa);
-    titleMainEl.appendChild(naCheckbox);
 
     titleMainEl.appendChild(titleEl);
     headerRowEl.appendChild(titleMainEl);
@@ -1305,18 +1199,15 @@ function renderChecklistPanel() {
   if (!itemsDiv) return;
   itemsDiv.innerHTML = '';
   var checkedMap = checklistCheckedByMedia[state.currentItem.key] || {};
-  var naMap = getChecklistNaMapForMediaKey(state.currentItem.key);
   var mediaKey = state.currentItem.key;
   for (var i = 0; i < checklistItems.length; i++) {
     var item = checklistItems[i];
-    var isNa = !!naMap[normalizeChecklistRequirementKey(item)];
     var row = document.createElement('div');
     row.className = 'checklist-row-block';
-    if (isNa) row.classList.add('checklist-row-na');
 
     var summaryRow = document.createElement('div');
     summaryRow.className = 'row-inline checklist-row-summary';
-    if (!!checkedMap[item] || isNa) summaryRow.classList.add('checklist-row-reviewed');
+    if (!!checkedMap[item]) summaryRow.classList.add('checklist-row-reviewed');
 
     var label = document.createElement('div');
     label.className = 'checklist-row-label';
@@ -1387,14 +1278,6 @@ function renderChecklistPanel() {
         checklistItems.splice(idx, 1);
         for (var k in checklistCheckedByMedia) {
           if (checklistCheckedByMedia[k]) delete checklistCheckedByMedia[k][requirementLabel];
-        }
-        for (var itemMediaKey in checklistRequirementsNaByMedia) {
-          if (checklistRequirementsNaByMedia[itemMediaKey]) {
-            delete checklistRequirementsNaByMedia[itemMediaKey][requirementLabel];
-            if (!Object.keys(checklistRequirementsNaByMedia[itemMediaKey]).length) {
-              delete checklistRequirementsNaByMedia[itemMediaKey];
-            }
-          }
         }
         syncReviewedFromChecklistAll();
         saveChecklistToFolderState();
@@ -1479,7 +1362,6 @@ function saveChecklistToFolderState() {
   snapshot.caption_requirements = checklistItems.slice();
   snapshot.caption_requirements_checked = JSON.parse(JSON.stringify(checklistCheckedByMedia));
   snapshot.caption_requirement_keywords = JSON.parse(JSON.stringify(checklistKeywordsByItem));
-  snapshot.caption_requirements_na_by_media = JSON.parse(JSON.stringify(checklistRequirementsNaByMedia));
   snapshot.caption_term_wrappers = JSON.parse(JSON.stringify(checklistTermWrappersByKey));
   snapshot.caption_term_affixes = JSON.parse(JSON.stringify(checklistTermAffixesByKey));
   snapshot.caption_term_descriptor_defaults = JSON.parse(JSON.stringify(checklistTermDescriptorDefaultsByKey));
@@ -1505,39 +1387,12 @@ function loadChecklistFromFolderState(folderState) {
   } else {
     checklistKeywordsByItem = {};
   }
-  if (folderState.caption_requirements_na_by_media && typeof folderState.caption_requirements_na_by_media === 'object') {
-    checklistRequirementsNaByMedia = JSON.parse(JSON.stringify(folderState.caption_requirements_na_by_media));
-  } else {
-    checklistRequirementsNaByMedia = {};
-  }
   checklistTermWrappersByKey = sanitizeChecklistTermAffixesMap(
     folderState.caption_term_wrappers || folderState.caption_term_affixes
   );
   checklistTermDescriptorDefaultsByKey = sanitizeChecklistTermAffixesMap(folderState.caption_term_descriptor_defaults);
   checklistTermDescriptorsByMedia = sanitizeChecklistTermDescriptorsByMedia(folderState.caption_term_descriptors_by_media);
   syncChecklistLegacyAffixesMirror();
-
-  // Drop stale NA flags for requirement labels that no longer exist.
-  var requirementSet = {};
-  checklistItems.forEach(function (req) {
-    var key = normalizeChecklistRequirementKey(req);
-    if (key) requirementSet[key] = true;
-  });
-  Object.keys(checklistRequirementsNaByMedia).forEach(function (mediaKey) {
-    var map = checklistRequirementsNaByMedia[mediaKey];
-    if (!map || typeof map !== 'object') {
-      delete checklistRequirementsNaByMedia[mediaKey];
-      return;
-    }
-    Object.keys(map).forEach(function (req) {
-      if (!requirementSet[normalizeChecklistRequirementKey(req)]) {
-        delete map[req];
-      }
-    });
-    if (!Object.keys(map).length) {
-      delete checklistRequirementsNaByMedia[mediaKey];
-    }
-  });
 
   syncReviewedFromChecklistAll();
   renderChecklistPanel();
@@ -1804,16 +1659,15 @@ function saveChecklistGlobalTermPin(requirementLabel, termText, shouldPin) {
   });
 }
 
-window.isChecklistRequirementNaForMediaKey = isChecklistRequirementNaForMediaKey;
-window.isChecklistRequirementNaForCurrentMedia = isChecklistRequirementNaForCurrentMedia;
 window.getChecklistTermAffixes = getChecklistTermAffixes;
 window.getChecklistTermWrapper = getChecklistTermWrapper;
 window.getChecklistTermDescriptorDefault = getChecklistTermDescriptorDefault;
 window.getChecklistTermDescriptorForMediaKey = getChecklistTermDescriptorForMediaKey;
 window.commitChecklistDescriptorSnapshotForMediaKey = commitChecklistDescriptorSnapshotForMediaKey;
+window.commitChecklistDescriptorSnapshotsForMediaKey = commitChecklistDescriptorSnapshotsForMediaKey;
+window.clearChecklistDescriptorSnapshotsForMediaKey = clearChecklistDescriptorSnapshotsForMediaKey;
 window.renderChecklistTermWithAffixes = renderChecklistTermWithAffixes;
 window.renderGroupWorkbench = renderGroupWorkbench;
-window.setChecklistRequirementNaForMediaKey = setChecklistRequirementNaForMediaKey;
 window.checklistTermWrappersByKey = checklistTermWrappersByKey;
 window.checklistTermDescriptorDefaultsByKey = checklistTermDescriptorDefaultsByKey;
 window.checklistTermDescriptorsByMedia = checklistTermDescriptorsByMedia;

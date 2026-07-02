@@ -746,7 +746,95 @@ function getGroupWorkbenchGridUsageState(term, mediaKeys) {
 }
 
 function getGroupWorkbenchColumnCount(targetEl) {
-  return 1;
+  if (!targetEl || !targetEl.isConnected) return 1;
+  var width = Math.max(0, targetEl.clientWidth || targetEl.getBoundingClientRect().width || 0);
+  if (!width) return 1;
+  var minCardWidth = 192;
+  var columnGap = 12;
+  var isGridSurface = !!targetEl.closest && !!targetEl.closest('.workspace-surface-grid');
+  var maxColumns = isGridSurface ? 2 : 4;
+  return Math.max(1, Math.min(maxColumns, Math.floor((width + columnGap) / (minCardWidth + columnGap)) || 1));
+}
+
+function getGroupWorkbenchColumnHeights(prefixSums, startIdx, endIdx, columnGap) {
+  if (endIdx < startIdx) return 0;
+  var height = prefixSums[endIdx + 1] - prefixSums[startIdx];
+  var gapCount = Math.max(0, endIdx - startIdx);
+  return height + (gapCount * columnGap);
+}
+
+function partitionGroupWorkbenchColumns(groupHeights, columnCount, columnGap) {
+  var totalGroups = Array.isArray(groupHeights) ? groupHeights.length : 0;
+  var effectiveColumnCount = Math.max(1, Math.min(columnCount || 1, totalGroups || 1));
+  if (!totalGroups) return [];
+  if (effectiveColumnCount <= 1) return [[0, totalGroups - 1]];
+
+  var prefixSums = [0];
+  for (var i = 0; i < totalGroups; i++) {
+    prefixSums.push(prefixSums[prefixSums.length - 1] + Math.max(0, groupHeights[i] || 0));
+  }
+
+  var dp = [];
+  var splitAt = [];
+  for (var groupIdx = 0; groupIdx < totalGroups; groupIdx++) {
+    dp[groupIdx] = [];
+    splitAt[groupIdx] = [];
+    dp[groupIdx][0] = getGroupWorkbenchColumnHeights(prefixSums, 0, groupIdx, columnGap);
+    splitAt[groupIdx][0] = -1;
+  }
+
+  for (var partIdx = 1; partIdx < effectiveColumnCount; partIdx++) {
+    for (var endIdx = 0; endIdx < totalGroups; endIdx++) {
+      if (partIdx > endIdx) {
+        dp[endIdx][partIdx] = 0;
+        splitAt[endIdx][partIdx] = endIdx - 1;
+        continue;
+      }
+      var bestCost = Number.POSITIVE_INFINITY;
+      var bestSplit = partIdx - 1;
+      for (var prevEnd = partIdx - 1; prevEnd < endIdx; prevEnd++) {
+        var previousCost = dp[prevEnd][partIdx - 1];
+        var nextCost = getGroupWorkbenchColumnHeights(prefixSums, prevEnd + 1, endIdx, columnGap);
+        var candidateCost = Math.max(previousCost, nextCost);
+        if (candidateCost < bestCost) {
+          bestCost = candidateCost;
+          bestSplit = prevEnd;
+        }
+      }
+      dp[endIdx][partIdx] = bestCost;
+      splitAt[endIdx][partIdx] = bestSplit;
+    }
+  }
+
+  var partitions = new Array(effectiveColumnCount);
+  var endCursor = totalGroups - 1;
+  for (var columnIdx = effectiveColumnCount - 1; columnIdx >= 0; columnIdx--) {
+    var startCursor = columnIdx === 0 ? 0 : (splitAt[endCursor][columnIdx] + 1);
+    partitions[columnIdx] = [startCursor, endCursor];
+    endCursor = startCursor - 1;
+  }
+  return partitions;
+}
+
+function measureGroupWorkbenchHeights(targetEl, groupElements, columnWidth) {
+  var elements = Array.isArray(groupElements) ? groupElements : [];
+  var widths = [];
+  if (!targetEl || !targetEl.isConnected || !elements.length) return widths;
+
+  var measureWrap = document.createElement('div');
+  measureWrap.className = 'group-workbench-measure';
+  measureWrap.style.width = Math.max(0, columnWidth || 0) + 'px';
+  targetEl.appendChild(measureWrap);
+
+  for (var i = 0; i < elements.length; i++) {
+    var clone = elements[i].cloneNode(true);
+    clone.style.width = '100%';
+    measureWrap.appendChild(clone);
+    widths.push(clone.getBoundingClientRect().height || clone.offsetHeight || 0);
+  }
+
+  measureWrap.remove();
+  return widths;
 }
 
 function applyGroupWorkbenchColumnLayout(targetEl, groupElements) {
@@ -755,13 +843,35 @@ function applyGroupWorkbenchColumnLayout(targetEl, groupElements) {
   var totalGroups = elements.length;
   var requestedColumnCount = getGroupWorkbenchColumnCount(targetEl);
   var effectiveColumnCount = Math.max(1, Math.min(requestedColumnCount, totalGroups || 1));
+  var columnGap = 12;
   targetEl._groupWorkbenchGroupCount = totalGroups;
   targetEl._groupWorkbenchLayoutColumnCount = effectiveColumnCount;
+  targetEl._groupWorkbenchLayoutWidth = Math.round(targetEl.clientWidth || targetEl.getBoundingClientRect().width || 0);
   targetEl.setAttribute('data-columns', String(effectiveColumnCount));
   if (!totalGroups) return;
 
-  for (var groupIndex = 0; groupIndex < totalGroups; groupIndex++) {
-    targetEl.appendChild(elements[groupIndex]);
+  targetEl.style.setProperty('--group-workbench-columns', String(effectiveColumnCount));
+  if (effectiveColumnCount <= 1) {
+    for (var groupIndex = 0; groupIndex < totalGroups; groupIndex++) {
+      targetEl.appendChild(elements[groupIndex]);
+    }
+    return;
+  }
+
+  var targetWidth = Math.max(0, targetEl.clientWidth || targetEl.getBoundingClientRect().width || 0);
+  var columnWidth = Math.max(0, (targetWidth - (columnGap * (effectiveColumnCount - 1))) / effectiveColumnCount);
+  var groupHeights = measureGroupWorkbenchHeights(targetEl, elements, columnWidth);
+  var partitions = partitionGroupWorkbenchColumns(groupHeights, effectiveColumnCount, columnGap);
+
+  for (var columnIdx = 0; columnIdx < partitions.length; columnIdx++) {
+    var partition = partitions[columnIdx];
+    var columnEl = document.createElement('div');
+    columnEl.className = 'group-workbench-column';
+    columnEl.style.setProperty('--group-workbench-column-width', columnWidth + 'px');
+    for (var groupIdx = partition[0]; groupIdx <= partition[1]; groupIdx++) {
+      columnEl.appendChild(elements[groupIdx]);
+    }
+    targetEl.appendChild(columnEl);
   }
 }
 
@@ -981,26 +1091,6 @@ function renderGroupWorkbench(options) {
       termListEl.appendChild(termBtn);
     }
 
-    var metaEl = document.createElement('div');
-    metaEl.className = 'group-workbench-group-meta';
-    var statusEl = document.createElement('div');
-    statusEl.className = 'group-workbench-group-status';
-    var statusText = '';
-    if (isGridMode) {
-      if (!hasGridTargets) statusText = 'No selection';
-      else if (groupHasMixedTerm) statusText = 'Mixed';
-      else if (groupHasActiveTerm) statusText = 'Selected';
-      else statusText = 'Unselected';
-    } else {
-      if (isNa) statusText = 'N/A';
-      else if (!isReviewed) statusText = 'Not reviewed';
-    }
-    if (statusText) {
-      statusEl.textContent = statusText;
-      metaEl.appendChild(statusEl);
-      headerEl.appendChild(metaEl);
-    }
-
     groupEl.classList.toggle('has-active-term', groupHasActiveTerm);
     groupEl.classList.toggle('has-mixed-term', groupHasMixedTerm);
     groupEl.classList.toggle('has-mismatch-term', groupHasMismatchTerm);
@@ -1027,8 +1117,10 @@ window.addEventListener('resize', function () {
       var listEl = lists[i];
       if (!listEl || !listEl.isConnected || !listEl._groupWorkbenchRenderOptions) continue;
       var groupCount = Math.max(0, Number(listEl._groupWorkbenchGroupCount) || 0);
+      var nextWidth = Math.round(listEl.clientWidth || listEl.getBoundingClientRect().width || 0);
       var nextColumnCount = Math.max(1, Math.min(getGroupWorkbenchColumnCount(listEl), groupCount || 1));
-      if (listEl._groupWorkbenchLayoutColumnCount === nextColumnCount) continue;
+      if (listEl._groupWorkbenchLayoutColumnCount === nextColumnCount
+          && listEl._groupWorkbenchLayoutWidth === nextWidth) continue;
       renderGroupWorkbench(listEl._groupWorkbenchRenderOptions);
     }
   });

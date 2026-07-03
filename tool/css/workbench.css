@@ -273,10 +273,11 @@
   overflow: visible;
   text-overflow: clip;
   white-space: normal;
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text);
   line-height: 1.25;
+  text-transform: uppercase;
 }
 
 .group-workbench-group-title-main {

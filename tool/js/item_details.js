@@ -321,14 +321,30 @@ function buildPreviewHeaderStars(mediaKey, rating) {
 function renderPreviewHeaderMeta() {
   if (!ui || !ui.previewHeaderEl || !ui.previewHeaderMetaEl) return;
   var previewShellEl = document.getElementById('preview-shell');
+  var workflowActionsEl = ui.previewWorkflowActionsEl || document.getElementById('preview-workflow-actions');
+  var ratingEl = ui.previewActionRatingEl || document.getElementById('preview-action-rating');
   var gridOpen = typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen();
   var visibleMedia = (typeof getFilteredMediaItems === 'function') ? getFilteredMediaItems(false) : [];
   var hasVisibleMedia = Array.isArray(visibleMedia) && visibleMedia.length > 0;
   var hasItem = !!(state.currentItem && state.currentItem.fileName);
+  function clearPreviewHeaderUi() {
+    ui.previewHeaderMetaEl.innerHTML = '';
+    if (ratingEl) {
+      ratingEl.innerHTML = '';
+      ratingEl.classList.add('hidden');
+    }
+  }
+  function updateWorkflowVisibility() {
+    if (!workflowActionsEl) return;
+    var showGrid = !!(ui.sidebarGridBtnEl && !ui.sidebarGridBtnEl.classList.contains('hidden'));
+    var showFocus = !!(ui.sidebarFocusBtnEl && !ui.sidebarFocusBtnEl.classList.contains('hidden'));
+    workflowActionsEl.classList.toggle('hidden', !(showGrid || showFocus));
+  }
   if (gridOpen) {
     if (previewShellEl) previewShellEl.classList.remove('preview-header-active');
     ui.previewHeaderEl.classList.add('hidden');
-    ui.previewHeaderMetaEl.innerHTML = '';
+    clearPreviewHeaderUi();
+    if (workflowActionsEl) workflowActionsEl.classList.add('hidden');
     if (previewShellEl) previewShellEl.removeAttribute('title');
     if (ui.previewEl) ui.previewEl.removeAttribute('title');
     return;
@@ -345,37 +361,59 @@ function renderPreviewHeaderMeta() {
     ui.sidebarFocusBtnEl.classList.toggle('hidden', !hasItem);
     ui.sidebarFocusBtnEl.disabled = false;
   }
+  updateWorkflowVisibility();
 
-  if (!hasItem && !hasVisibleMedia) {
+  if (!hasItem) {
     if (previewShellEl) previewShellEl.classList.remove('preview-header-active');
     ui.previewHeaderEl.classList.add('hidden');
-    ui.previewHeaderMetaEl.innerHTML = '';
+    clearPreviewHeaderUi();
     if (previewShellEl) previewShellEl.removeAttribute('title');
     if (ui.previewEl) ui.previewEl.removeAttribute('title');
     return;
   }
 
-  ui.previewHeaderMetaEl.innerHTML = '';
-  if (hasItem) {
-    var currentItem = state.currentItem;
-    var currentMediaKey = currentItem.key || currentItem.fileName;
-    var rating = getRatingForMediaKey(currentMediaKey);
-    var resolution = getResolutionForMedia(currentItem.fileName);
-    var duration = isPreviewVideoFileName(currentItem.fileName) ? getDurationForMedia(currentItem.fileName) : '';
-    var details = [resolution, duration].filter(Boolean);
-    ui.previewHeaderMetaEl.appendChild(buildPreviewHeaderStars(currentMediaKey, rating));
-    details.forEach(function (text, index) {
-      var detail = document.createElement('span');
-      detail.className = 'preview-header-detail' + (index > 0 ? ' with-divider' : '');
-      detail.textContent = text;
-      ui.previewHeaderMetaEl.appendChild(detail);
-    });
-    if (previewShellEl) previewShellEl.title = currentItem.fileName;
-    if (ui.previewEl) ui.previewEl.title = currentItem.fileName;
-  } else {
-    if (previewShellEl) previewShellEl.removeAttribute('title');
-    if (ui.previewEl) ui.previewEl.removeAttribute('title');
+  clearPreviewHeaderUi();
+  var currentItem = state.currentItem;
+  var currentMediaKey = currentItem.key || currentItem.fileName;
+  var rating = getRatingForMediaKey(currentMediaKey);
+  var resolution = getResolutionForMedia(currentItem.fileName);
+  var duration = isPreviewVideoFileName(currentItem.fileName) ? getDurationForMedia(currentItem.fileName) : '';
+  var details = [];
+  var currentIndex = -1;
+  for (var i = 0; i < visibleMedia.length; i += 1) {
+    var visibleItem = visibleMedia[i];
+    if ((visibleItem && (visibleItem.key || visibleItem.fileName)) === currentMediaKey) {
+      currentIndex = i;
+      break;
+    }
   }
+  if (currentIndex < 0 && Array.isArray(state.items)) {
+    for (var j = 0; j < state.items.length; j += 1) {
+      var stateItem = state.items[j];
+      if ((stateItem && (stateItem.key || stateItem.fileName)) === currentMediaKey) {
+        currentIndex = j;
+        visibleMedia = state.items;
+        break;
+      }
+    }
+  }
+  if (currentIndex >= 0 && visibleMedia.length > 0) {
+    details.push('Item ' + (currentIndex + 1) + '/' + visibleMedia.length);
+  }
+  if (resolution) details.push(resolution);
+  if (duration) details.push(duration);
+  details.forEach(function (text, index) {
+    var detail = document.createElement('span');
+    detail.className = 'preview-header-detail' + (index > 0 ? ' with-divider' : '');
+    detail.textContent = text;
+    ui.previewHeaderMetaEl.appendChild(detail);
+  });
+  if (ratingEl) {
+    ratingEl.appendChild(buildPreviewHeaderStars(currentMediaKey, rating));
+    ratingEl.classList.remove('hidden');
+  }
+  if (previewShellEl) previewShellEl.title = currentItem.fileName;
+  if (ui.previewEl) ui.previewEl.title = currentItem.fileName;
   if (previewShellEl) previewShellEl.classList.add('preview-header-active');
   ui.previewHeaderEl.classList.remove('hidden');
 }

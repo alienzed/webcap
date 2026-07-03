@@ -73,7 +73,7 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
   if (typeof showConsolePanel === 'function') {
     showConsolePanel();
   } else {
-    ui.consolePanelEl.style.display = 'block';
+    ui.consolePanelEl.style.display = 'flex';
     if (typeof syncConsoleToggleButton === 'function') {
       syncConsoleToggleButton();
     }
@@ -116,8 +116,6 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
         var chunk = decoder.decode(result.value, { stream: true });
         output += chunk;
         appendToConsolePanel(chunk.replace(/</g, '<').replace(/>/g, '>'));
-        // Auto-scroll
-        if (ui.consolePanelEl) ui.consolePanelEl.scrollTop = ui.consolePanelEl.scrollHeight;
         readChunk();
       });
     }
@@ -133,7 +131,7 @@ function fetchPreviewText(url, body, ui, onDone, onError) {
   if (typeof showConsolePanel === 'function') {
     showConsolePanel();
   } else {
-    ui.consolePanelEl.style.display = 'block';
+    ui.consolePanelEl.style.display = 'flex';
     if (typeof syncConsoleToggleButton === 'function') {
       syncConsoleToggleButton();
     }

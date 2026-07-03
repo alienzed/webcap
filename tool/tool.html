@@ -342,7 +342,13 @@
                                     </div>
                                     <textarea id="editor" rows="6" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
                                 </div>
-                                <div id="console-panel"></div>
+                                <div id="console-panel" aria-hidden="true">
+                                    <div class="console-panel-header">
+                                        <strong class="console-panel-title">Console</strong>
+                                        <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
+                                    </div>
+                                    <div id="console-panel-log" class="console-panel-log" aria-live="polite"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -607,17 +613,38 @@
                 </section>
             </div>
             <div class="panel preview-panel">
-                <div id="preview-shell" class="preview-shell">
-                    <div id="preview-header" class="preview-header hidden" aria-label="Preview summary">
-                        <div id="preview-header-actions" class="preview-header-actions">
-                            <button
-                                id="sidebar-collapse-toggle-btn"
+                    <div id="preview-shell" class="preview-shell">
+                        <div id="preview-header" class="preview-header hidden" aria-label="Preview summary">
+                            <div id="preview-header-actions" class="preview-header-actions">
+                                <button
+                                    id="sidebar-collapse-toggle-btn"
                                 type="button"
                                 class="utility-btn utility-path-btn utility-collapse-btn preview-header-btn"
                                 title="Collapse sidebar"
                                 aria-label="Collapse sidebar"
                                 aria-pressed="false"
-                            >&lt;</button>
+                                >&lt;</button>
+                        </div>
+                        <div class="preview-header-copy">
+                            <div id="preview-header-meta" class="preview-header-meta"></div>
+                        </div>
+                    </div>
+                    <section id="media-grid-surface" class="media-grid-surface hidden" aria-label="Media Grid">
+                        <div id="media-grid-surface-header" class="media-grid-surface-header">
+                            <div class="media-grid-surface-copy">
+                                <button id="media-grid-surface-close-btn" type="button" class="media-grid-btn media-grid-surface-back-btn" aria-label="Return to item view" title="Return to item view">&lt;</button>
+                                <div id="media-grid-surface-meta" class="media-grid-surface-meta"></div>
+                            </div>
+                            <div class="media-grid-surface-actions">
+                                <div id="media-grid-surface-status" class="media-grid-surface-status"></div>
+                                <button id="media-grid-surface-select-all-btn" type="button" class="media-grid-btn">Select All</button>
+                                <button id="media-grid-surface-clear-btn" type="button" class="media-grid-btn">Clear</button>
+                            </div>
+                        </div>
+                        <div id="media-grid-surface-canvas" class="media-grid-surface-canvas"></div>
+                    </section>
+                    <div class="preview-stage">
+                        <div id="preview-workflow-actions" class="preview-workflow-actions hidden" aria-label="Preview workflow actions">
                             <button
                                 id="sidebar-open-grid-btn"
                                 type="button"
@@ -639,29 +666,11 @@
                                 <span>Focus Annotate</span>
                             </button>
                         </div>
-                        <div class="preview-header-copy">
-                            <div id="preview-header-meta" class="preview-header-meta"></div>
-                        </div>
-                    </div>
-                    <section id="media-grid-surface" class="media-grid-surface hidden" aria-label="Media Grid">
-                        <div id="media-grid-surface-header" class="media-grid-surface-header">
-                            <div class="media-grid-surface-copy">
-                                <button id="media-grid-surface-close-btn" type="button" class="media-grid-btn media-grid-surface-back-btn" aria-label="Return to item view" title="Return to item view">&lt;</button>
-                                <div id="media-grid-surface-meta" class="media-grid-surface-meta"></div>
-                            </div>
-                            <div class="media-grid-surface-actions">
-                                <div id="media-grid-surface-status" class="media-grid-surface-status"></div>
-                                <button id="media-grid-surface-select-all-btn" type="button" class="media-grid-btn">Select All</button>
-                                <button id="media-grid-surface-clear-btn" type="button" class="media-grid-btn">Clear</button>
-                            </div>
-                        </div>
-                        <div id="media-grid-surface-canvas" class="media-grid-surface-canvas"></div>
-                    </section>
-                    <div class="preview-stage">
                         <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'><style>html,body{margin:0;height:100%;}body{display:flex;align-items:center;justify-content:center;font-family:system-ui;padding:1rem;transition:background 120ms ease,color 120ms ease;}</style></head><body><div id='preview-empty-message'>Select a media file to preview.</div><script>(function(){function applyTheme(){try{var theme=(document.documentElement&&document.documentElement.getAttribute('data-theme'))||(window.parent&&window.parent.document&&window.parent.document.documentElement&&window.parent.document.documentElement.getAttribute('data-theme'))||'light';theme=String(theme).toLowerCase()==='dark'?'dark':'light';var dark=theme==='dark';document.documentElement.setAttribute('data-theme',theme);document.documentElement.style.colorScheme=theme;document.body.style.background=dark?'#0f172a':'#ffffff';document.body.style.color=dark?'#cbd5e1':'#666666';}catch(e){}}applyTheme();try{var parentRoot=window.parent&&window.parent.document&&window.parent.document.documentElement;if(parentRoot&&window.MutationObserver){new MutationObserver(applyTheme).observe(parentRoot,{attributes:true,attributeFilter:['data-theme']});}}catch(e){};})();</script></body></html>"></iframe>
                         <div id="balance-distribution-wheel" class="balance-distribution-wheel hidden" tabindex="0" aria-label="Balance distribution"></div>
                         <div id="preview-actions" class="preview-actions hidden" aria-label="Preview actions">
                             <button id="preview-mutation-indicator" type="button" class="preview-action-btn preview-action-reset-btn hidden" title="Reset to original">Reset</button>
+                            <div id="preview-action-rating" class="preview-action-rating hidden" aria-label="Item rating"></div>
                             <button id="preview-action-primary-a" type="button" class="preview-action-btn hidden"></button>
                             <button id="preview-action-primary-b" type="button" class="preview-action-btn hidden"></button>
                             <button id="preview-action-more" type="button" class="preview-action-btn hidden">More</button>

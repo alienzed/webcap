@@ -96,8 +96,10 @@ function updatePreviewActionControls() {
     renderPreviewHeaderMeta();
   }
 
-  var hideAll = function () {
-    ui.previewActionsEl.classList.add('hidden');
+  var hasRating = function () {
+    return !!(ui.previewActionRatingEl && !ui.previewActionRatingEl.classList.contains('hidden') && ui.previewActionRatingEl.childNodes.length);
+  };
+  var hideActionButtons = function () {
     ui.previewMutationIndicatorEl.classList.add('hidden');
     ui.previewMutationIndicatorEl.removeAttribute('data-action-label');
     ui.previewPrimaryActionAEl.classList.add('hidden');
@@ -108,13 +110,15 @@ function updatePreviewActionControls() {
   };
 
   if (!state || !state.currentItem || !state.currentItem.fileName) {
-    hideAll();
+    hideActionButtons();
+    ui.previewActionsEl.classList.add('hidden');
     return;
   }
 
   var actions = getPreviewContextActionsForCurrentItem();
   if (!hasNonSeparatorActions(actions)) {
-    hideAll();
+    hideActionButtons();
+    ui.previewActionsEl.classList.toggle('hidden', !hasRating());
     return;
   }
   // This element is a contextual "Reset" quick action (not a passive mutation badge).
@@ -157,7 +161,7 @@ function updatePreviewActionControls() {
   var hasMore = hasNonSeparatorActions(secondaryActions);
   ui.previewMoreActionsEl.classList.toggle('hidden', !hasMore);
 
-  if (primaryA || primaryB || hasMore || showMutationReset) {
+  if (primaryA || primaryB || hasMore || showMutationReset || hasRating()) {
     ui.previewActionsEl.classList.remove('hidden');
   } else {
     ui.previewActionsEl.classList.add('hidden');

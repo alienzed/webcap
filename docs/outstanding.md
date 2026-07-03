@@ -1,15 +1,11 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-06-19.
+Last reviewed: 2026-07-02.
 
-## Pain Points
-- When opening any modal, the first/only text box should probably automatically get focus, saves a click...
-
-## Bugs
-- 2026-07-02 triage pass
-  - Quick wins / small-to-medium fixes:
-    - Workbench layout regression: after collapsing the sidebar, entering Grid, then returning to item view, annotation groups can come back in the wrong horizontal/multi-column layout.
-    - Group header highlight no longer clearly distinguishes `reviewed` from `caption-matched`; non-reviewed groups can read as green.
-    - Auto-reviewed media-row state still feels spotty after N/A removal; verify checklist completion still drives `.media-item.reviewed`.
+## Recently Completed
+- Modal autofocus now lands on the first available text field when a modal opens.
+- Workspace layout stabilization: collapsing the sidebar, entering Grid, and returning to item view no longer restores the wrong annotation-group layout.
+- Settings modal spacing and alignment were cleaned up so the section labels, checkbox rows, and theme row read consistently.
+- Workspace shell/config editor logic now lives in `tool/js/workspace_shell.js`, and old checklist-era editor/console sizing is gated away from `shell-revamp`.
 
 ## Enhancements
 - 2026-07-02 triage pass
@@ -40,12 +36,6 @@ Last reviewed: 2026-06-19.
 
 
 ## Validate
-- 2026-07-02 triage pass
-  - Confirm whether the sidebar-collapse/Grid/item regression is a pure layout restore bug or an intentional multi-column threshold firing at the wrong time.
-  - Confirm whether reviewed-row drift is caused by sync timing, invalidation logic, or stale render assumptions after N/A removal.
-  - Recommended next implementation slice:
-    - Check whether the remaining sidebar-collapse/Grid/item regression is CSS restore only or tied to workbench column-threshold recalculation.
-    - Re-check auto-reviewed row sync after the N/A removal cleanup.
 - In a group, I can't remove a pinned item. Can't a removal last for the session at least? or even just while inside this folder?
 - Console floats over focus annotation modal (maybe minimize it, or fix z-index?)
 - filling in the primer, this should be generatable

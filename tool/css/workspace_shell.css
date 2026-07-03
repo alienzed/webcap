@@ -145,6 +145,71 @@
   margin-right: 2px;
 }
 
+.app.shell-revamp .preview-workflow-actions {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 20;
+}
+
+.app.shell-revamp .preview-workflow-actions.hidden {
+  display: none !important;
+}
+
+.app.shell-revamp .preview-workflow-actions .review-captions-btn {
+  width: auto;
+  min-width: 0;
+  min-height: 30px;
+  margin: 0;
+  padding: 5px 9px;
+  border-radius: 5px;
+  border-left-width: 1px;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.app.shell-revamp .preview-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.app.shell-revamp .preview-action-rating {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+}
+
+.app.shell-revamp .preview-action-rating.hidden {
+  display: none !important;
+}
+
+.app.shell-revamp .preview-actions .preview-header-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #cbd5e1;
+  line-height: 1;
+}
+
+.app.shell-revamp .preview-actions .preview-header-star {
+  min-width: 18px;
+  padding: 0;
+  color: #94a3b8;
+  font-size: 18px;
+}
+
+.app.shell-revamp .preview-actions .preview-header-star:hover {
+  color: #e2e8f0;
+}
+
+.app.shell-revamp .preview-actions .preview-header-star.active {
+  color: #fbbf24;
+}
+
 .app.shell-revamp .stats-panel.sidebar-drawer-zone {
   display: flex;
   flex-direction: column;
@@ -290,4 +355,88 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 
 .app.shell-revamp .sidebar-review-output-btn {
   width: 100%;
+}
+
+.app.shell-revamp #console-panel {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  margin: 0;
+  min-height: 140px;
+  max-height: min(42vh, 360px);
+  padding: 0;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+  z-index: 5;
+}
+
+.app.shell-revamp .console-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(30, 41, 59, 0.92);
+}
+
+.app.shell-revamp .console-panel-title {
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app.shell-revamp .console-panel-close-btn {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(51, 65, 85, 0.92);
+  color: #e2e8f0;
+  line-height: 1;
+}
+
+.app.shell-revamp .console-panel-close-btn:hover {
+  background: rgba(71, 85, 105, 0.96);
+}
+
+.app.shell-revamp .console-panel-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 12px 12px 12px;
+  overflow-y: auto;
+  color: #e5e7eb;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+html[data-theme="dark"] .app.shell-revamp #console-panel {
+  border-color: rgba(51, 65, 85, 0.85);
+  background: rgba(2, 6, 23, 0.98);
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="dark"] .app.shell-revamp .console-panel-header {
+  border-bottom-color: rgba(71, 85, 105, 0.5);
+  background: rgba(15, 23, 42, 0.96);
+}
+
+@media (max-width: 720px) {
+  .app.shell-revamp #console-panel {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    max-height: min(48vh, 320px);
+  }
 }

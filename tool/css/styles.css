@@ -631,8 +631,8 @@ iframe {
 
 .balance-distribution-wheel {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 50px;
+  left: 4px;
   width: 100px;
   height: 100px;
   z-index: 19;

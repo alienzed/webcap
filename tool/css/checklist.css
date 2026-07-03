@@ -1,6 +1,6 @@
 /* Checklist and annotation UI */
 /* Checklist overlay floats above editor, does not block typing */
-.editor-wrapper {
+.app:not(.shell-revamp) .editor-wrapper {
   position: relative;
   width: 100%;
   height: 100%;
@@ -554,7 +554,7 @@
     grid-column: 1;
     grid-row: 2;
   }
-  #console-panel {
+  .app:not(.shell-revamp) #console-panel {
     grid-column: 1;
     grid-row: 3;
   }

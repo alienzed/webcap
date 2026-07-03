@@ -126,23 +126,6 @@
   min-height: calc(100vh - 180px);
 }
 
-.app.shell-revamp.workspace-view-single .workbench-side-stack,
-.app.shell-revamp.workspace-view-grid .workbench-side-stack {
-  display: flex;
-  flex-direction: column;
-  grid-template-rows: none;
-  align-content: stretch;
-  align-self: stretch;
-  min-height: 0;
-  flex: 1 1 auto;
-}
-
-.app.shell-revamp.workspace-view-single #caption-checklist-panel.group-tools-card.checklist-panel,
-.app.shell-revamp.workspace-view-grid #caption-checklist-panel.group-tools-card.checklist-panel {
-  max-height: none;
-  height: auto;
-  flex: 1 1 0;
-}
 .app.shell-revamp.workspace-surface-config-editor textarea#editor {
   min-height: calc(100vh - 320px);
 }
@@ -176,20 +159,6 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 2px 12px 0;
-}
-
-.app.shell-revamp.workspace-surface-grid #caption-checklist-panel.group-tools-card.checklist-panel {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  padding: 0 !important;
-}
-
-.app.shell-revamp.workspace-surface-grid .workbench-main-stack > .groups-card {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
 .group-workbench-list[data-columns="2"],
@@ -743,9 +712,6 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 
 .app.shell-revamp .workbench-card {
   min-height: 0;
-  xborder: 1px solid var(--border);
-  xborder-radius: 6px;
-  xbackground: var(--panel-soft);
   box-shadow: none;
 }
 
@@ -1106,4 +1072,3 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
     min-height: auto;
   }
 }
-

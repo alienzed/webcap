@@ -46,6 +46,58 @@ function debugLog() {
   }
 }
 
+function focusFirstModalTextField(modalEl) {
+  var modal = typeof modalEl === 'string' ? document.getElementById(modalEl) : modalEl;
+  if (!modal) return false;
+
+  setTimeout(function () {
+    if (!modal || modal.classList.contains('hidden')) return;
+
+    var fields = modal.querySelectorAll('input[type="text"], input[type="search"], textarea, [contenteditable="true"]');
+    var target = null;
+
+    for (var i = 0; i < fields.length; i += 1) {
+      var field = fields[i];
+      if (!field || field.disabled) continue;
+      if (field.closest && field.closest('[hidden]')) continue;
+      if (field.getClientRects && !field.getClientRects().length) continue;
+      target = field;
+      break;
+    }
+
+    if (!target) return;
+
+    try {
+      target.focus({ preventScroll: true });
+    } catch (focusErr) {
+      try {
+        target.focus();
+      } catch (_focusErr) {}
+    }
+  }, 0);
+
+  return true;
+}
+
+var workspaceWorkbenchRefreshFrame = 0;
+
+function requestWorkspaceWorkbenchRefresh() {
+  if (workspaceWorkbenchRefreshFrame) return;
+  var scheduleFrame = window.requestAnimationFrame || function (callback) {
+    return setTimeout(callback, 0);
+  };
+  workspaceWorkbenchRefreshFrame = scheduleFrame(function () {
+    workspaceWorkbenchRefreshFrame = 0;
+    if (typeof refreshWorkspaceWorkbenchSurface === 'function') {
+      refreshWorkspaceWorkbenchSurface();
+      return;
+    }
+    if (typeof renderChecklistPanel === 'function') {
+      renderChecklistPanel();
+    }
+  });
+}
+
 function setStatus(text) {
   ui.statusEl.textContent = text || '';
   appendToConsolePanel(text || '');
@@ -354,6 +406,7 @@ function setSidebarCollapsed(collapsed) {
     ui.appEl.classList.toggle('left-rail-collapsed', next);
   }
   updateSidebarCollapseUi(next);
+  requestWorkspaceWorkbenchRefresh();
   return next;
 }
 
@@ -384,6 +437,7 @@ window.setSidebarCollapsed = setSidebarCollapsed;
 window.toggleSidebarCollapsed = toggleSidebarCollapsed;
 window.wireSidebarCollapseUi = wireSidebarCollapseUi;
 window.refreshCurrentPrimerDerivedUi = refreshCurrentPrimerDerivedUi;
+window.requestWorkspaceWorkbenchRefresh = requestWorkspaceWorkbenchRefresh;
 
 wireThemeToggleUi();
 wireSidebarCollapseUi();

@@ -488,6 +488,7 @@ function openVideoClipModal(mediaItem) {
     : ('Clip video: ' + mediaItem.fileName);
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
+  focusFirstModalTextField(modal);
 
   var src = '/caption/media?folder=' + encodeURIComponent(state.folder || '') + '&media=' + encodeURIComponent(mediaItem.fileName) + '&t=' + Date.now();
   videoEl.src = src;

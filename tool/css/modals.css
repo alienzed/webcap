@@ -185,7 +185,15 @@
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: 6px 10px;
-  align-items: center;
+  align-items: start;
+}
+
+.app-settings-grid > span {
+  padding-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--muted);
 }
 
 .app-settings-grid label {
@@ -212,17 +220,24 @@
 }
 
 .app-settings-radio-label {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   gap: 8px;
   font-size: 12px;
+  line-height: 1.35;
   color: var(--muted);
   cursor: pointer;
+  min-width: 0;
 }
 
 .app-settings-radio-label input {
   width: auto;
   cursor: pointer;
+  margin-top: 2px;
+}
+
+.app-settings-radio-label > span {
+  min-width: 0;
 }
 
 .app-settings-advanced {

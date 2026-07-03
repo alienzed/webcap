@@ -136,6 +136,7 @@ function openChecklistTermAffixesModal(termText) {
   renderChecklistTermAffixesPreview();
   if (modal) modal.classList.remove('hidden');
   if (overlay) overlay.classList.remove('hidden');
+  focusFirstModalTextField(modal);
 }
 
 function applyChecklistGroupTermsModalChanges() {
@@ -372,6 +373,7 @@ function openChecklistGroupTermsModal(requirementLabel) {
   var overlay = document.getElementById('modal-overlay');
   if (modal) modal.classList.remove('hidden');
   if (overlay) overlay.classList.remove('hidden');
+  focusFirstModalTextField(modal);
 }
 
 function saveChecklistKeywordsModalAndClose() {
@@ -436,6 +438,7 @@ function openChecklistKeywordsModal() {
   var overlay = document.getElementById('modal-overlay');
   if (modal) modal.classList.remove('hidden');
   if (overlay) overlay.classList.remove('hidden');
+  focusFirstModalTextField(modal);
 }
 
 function closeChecklistKeywordsModal() {

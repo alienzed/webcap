@@ -245,7 +245,9 @@ function mediaGridRestoreItemWorkspace(previousWorkspaceState) {
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode(restoreState.workflowMode || 'annotate');
   }
-  if (typeof renderChecklistPanel === 'function') {
+  if (typeof requestWorkspaceWorkbenchRefresh === 'function') {
+    requestWorkspaceWorkbenchRefresh();
+  } else if (typeof renderChecklistPanel === 'function') {
     renderChecklistPanel();
   }
   if (typeof renderPreviewHeaderMeta === 'function') {
@@ -675,6 +677,7 @@ function openMediaGridModal() {
     renderPreviewHeaderMeta();
   }
   renderMediaGridModal();
+  focusFirstModalTextField(els.modal);
 }
 
 function closeMediaGridModal() {

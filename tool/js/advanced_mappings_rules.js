@@ -186,6 +186,7 @@ function openAdvancedModal(modalEl) {
   ]);
   ui.advancedModalOverlayEl.classList.remove('hidden');
   modalEl.classList.remove('hidden');
+  focusFirstModalTextField(modalEl);
 }
 
 function closeAdvancedModal(modalEl) {

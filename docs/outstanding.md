@@ -1,9 +1,8 @@
 This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-06-19.
 
-## Paint Points
-
-- Caption Template probably needs a 'i'
+## Pain Points
+- When opening any modal, the first/only text box should probably automatically get focus, saves a click...
 
 ## Bugs
 - 2026-07-02 triage pass
@@ -16,7 +15,6 @@ Last reviewed: 2026-06-19.
 - 2026-07-02 triage pass
   - Needs deeper discussion or inspection:
     - Strict saved-caption term reordering when group term order changes, only when exact term/affix matching succeeds.
-    - Preview header polish pass: rethink information grouping and action layout instead of incremental patching.
     - Console behavior pass: define when the console is shown, hidden, or relocated across default, Grid, Focus, and config/editor surfaces.
 
 

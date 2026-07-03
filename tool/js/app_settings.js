@@ -77,6 +77,7 @@ function openAppSettingsModal() {
   setAppSettingsStatus('Loading settings...', false);
   ui.appSettingsModalEl.classList.remove('hidden');
   ui.appSettingsModalEl.setAttribute('aria-hidden', 'false');
+  focusFirstModalTextField(ui.appSettingsModalEl);
   HttpModule.get('/app/config', function (status, responseText) {
     if (status !== 200) {
       setAppSettingsStatus('Failed to load settings.', true);

@@ -1,9 +1,11 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-07-02.
+Last reviewed: 2026-07-03.
 
 ## Recently Completed
 - Modal autofocus now lands on the first available text field when a modal opens.
 - Workspace layout stabilization: collapsing the sidebar, entering Grid, and returning to item view no longer restores the wrong annotation-group layout.
+- Preview header/layout stabilization: `Open Grid` and `Focus Annotate` now live in the preview surface, rating stars sit beside `Crop`, and `Reset` stays close to the media actions.
+- Focus Annotate group tags now have dedicated `Copy Tags` / `Paste Tags` controls, and closing the modal resyncs the visible list so hidden items do not leave the UI in a stale state.
 - Settings modal spacing and alignment were cleaned up so the section labels, checkbox rows, and theme row read consistently.
 - Workspace shell/config editor logic now lives in `tool/js/workspace_shell.js`, and old checklist-era editor/console sizing is gated away from `shell-revamp`.
 
@@ -11,7 +13,7 @@ Last reviewed: 2026-07-02.
 - 2026-07-02 triage pass
   - Needs deeper discussion or inspection:
     - Strict saved-caption term reordering when group term order changes, only when exact term/affix matching succeeds.
-    - Console behavior pass: define when the console is shown, hidden, or relocated across default, Grid, Focus, and config/editor surfaces.
+    - Console behavior pass is paused for now; do not expand that surface until the preview and annotation layout work settles.
 
 
 ## 1.1 Ideas
@@ -37,7 +39,6 @@ Last reviewed: 2026-07-02.
 
 ## Validate
 - In a group, I can't remove a pinned item. Can't a removal last for the session at least? or even just while inside this folder?
-- Console floats over focus annotation modal (maybe minimize it, or fix z-index?)
 - filling in the primer, this should be generatable
 
 ## Implemented
@@ -49,11 +50,14 @@ Last reviewed: 2026-07-02.
   - Grid tile thumbnails now favor full-item framing (`contain`) over square cover crops.
   - Grid sidebar tag groups support term editing entry points.
   - Grid tag chips now show subtle set-wide usage intensity rather than reading as a flat wall of identical pills.
-  - Grid filter/header pass was simplified toward prune/tag/compare use instead of trying to mirror the full media list.
-- Preview quick actions (pre-implementation decision):
+- Grid filter/header pass was simplified toward prune/tag/compare use instead of trying to mirror the full media list.
+- Preview / media action layout:
   - Images: always-visible primary actions are `Crop` and `Deface`.
   - Videos: always-visible primary actions are `Clip` and `Deface`.
-  - Keep full action parity via a secondary `More/Actions` menu (do not hide capabilities relative to media-list context menu).
+  - `Open Grid` and `Focus Annotate` live in the preview surface instead of taking a full header row.
+  - Rating stars sit immediately to the left of `Crop`.
+  - `Reset` stays adjacent to `Crop` instead of being separated by rating stars.
+  - Full action parity still lives behind the secondary `More/Actions` menu.
 - Mutation indicators:
   - Media rows now show a mutation badge when media differs from baseline/original.
   - Preview overlay now shows a `Mutated` indicator for the selected media.
@@ -185,6 +189,8 @@ Last reviewed: 2026-07-02.
 - Focused annotation workflow updates:
   - Traversal mode toggle is implemented (`Group-first` / `Item-first`).
   - Keyboard navigation is implemented (`Up`/`Down` items, `Left`/`Right` groups, `Enter` done, `N` for N/A, `S` skip).
+  - Group-level `Copy Tags` / `Paste Tags` works for shared term sets.
+  - Closing Focus Annotate resyncs the visible list so filtered-hidden items do not leave stale selection state behind.
 - Quick-win cleanup follow-up:
   - Removed the stale Focus Set Grid action from the focus-set banner.
   - Preserved group-workbench scroll position across tag-triggered rerenders.

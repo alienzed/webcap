@@ -141,25 +141,10 @@ function openChecklistTermAffixesModal(termText) {
 
 function applyChecklistGroupTermsModalChanges() {
   if (!checklistGroupTermsModalState || !checklistGroupTermsModalState.requirement) return;
-  setChecklistKeywordTermsForRequirement(
+  applyChecklistKeywordTermsForRequirement(
     checklistGroupTermsModalState.requirement,
     checklistGroupTermsModalState.terms
   );
-  if (typeof syncReviewedFromChecklistAll === 'function') {
-    syncReviewedFromChecklistAll();
-  }
-  saveChecklistToFolderState();
-  refreshCurrentPrimerDerivedUi();
-  renderChecklistPanel();
-  renderItemMetadataPanel();
-  renderAnnotateStrip();
-  renderItemTagsPanel();
-  if (typeof renderFileList === 'function') {
-    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
-  }
-  if (typeof renderFocusedAnnotationModal === 'function') {
-    renderFocusedAnnotationModal();
-  }
 }
 
 function removeChecklistGroupModalTerm(rawTerm) {

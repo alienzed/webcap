@@ -387,16 +387,6 @@ function renderPreviewHeaderMeta() {
       break;
     }
   }
-  if (currentIndex < 0 && Array.isArray(state.items)) {
-    for (var j = 0; j < state.items.length; j += 1) {
-      var stateItem = state.items[j];
-      if ((stateItem && (stateItem.key || stateItem.fileName)) === currentMediaKey) {
-        currentIndex = j;
-        visibleMedia = state.items;
-        break;
-      }
-    }
-  }
   if (currentIndex >= 0 && visibleMedia.length > 0) {
     details.push('Item ' + (currentIndex + 1) + '/' + visibleMedia.length);
   }

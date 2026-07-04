@@ -26,6 +26,8 @@ function getFocusedAnnotationEls() {
     termList: document.getElementById('focused-annotation-term-list'),
     quickPicks: document.getElementById('focused-annotation-quick-picks'),
     rating: document.getElementById('focused-annotation-rating'),
+    copyTagsBtn: document.getElementById('focused-annotation-copy-tags-btn'),
+    pasteTagsBtn: document.getElementById('focused-annotation-paste-tags-btn'),
     editTermsBtn: document.getElementById('focused-annotation-edit-terms-btn'),
     closeBtn: document.getElementById('focused-annotation-close-btn'),
     doneBtn: document.getElementById('focused-annotation-done-btn')
@@ -418,6 +420,9 @@ function closeFocusedAnnotationModal() {
   if (typeof exitWorkspaceSurface === 'function') {
     exitWorkspaceSurface();
   }
+  if (typeof renderFileList === 'function') {
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  }
 }
 
 function showFocusedAnnotationModal() {
@@ -532,6 +537,26 @@ function renderFocusedAnnotationRating(mediaKey) {
       els.rating.appendChild(btn);
     })(s);
   }
+}
+
+function updateFocusedAnnotationGroupClipboardUi() {
+  var els = getFocusedAnnotationEls();
+  if (!els.copyTagsBtn || !els.pasteTagsBtn) return;
+  var requirementLabel = getFocusedAnnotationCurrentRequirement();
+  var hasRequirement = !!requirementLabel;
+  var clipboard = (typeof getChecklistGroupTermsClipboard === 'function')
+    ? getChecklistGroupTermsClipboard()
+    : [];
+  var clipboardCount = Array.isArray(clipboard) ? clipboard.length : 0;
+  els.copyTagsBtn.disabled = !hasRequirement;
+  els.copyTagsBtn.title = hasRequirement
+    ? 'Copy the current group tags'
+    : 'Select a group to copy tags from';
+  els.pasteTagsBtn.classList.toggle('hidden', !hasRequirement || clipboardCount <= 0);
+  els.pasteTagsBtn.disabled = !hasRequirement || clipboardCount <= 0;
+  els.pasteTagsBtn.title = clipboardCount > 0
+    ? 'Paste ' + clipboardCount + ' copied tag' + (clipboardCount === 1 ? '' : 's') + ' into this group'
+    : 'Paste copied tags';
 }
 
 function buildFocusedAnnotationBadge(text, kind) {
@@ -880,6 +905,7 @@ function renderFocusedAnnotationModal() {
   if (els.editTermsBtn) {
     els.editTermsBtn.disabled = !requirementLabel;
   }
+  updateFocusedAnnotationGroupClipboardUi();
   if (els.doneBtn) {
     els.doneBtn.disabled = !requirementLabel;
   }
@@ -1120,6 +1146,16 @@ function wireFocusedAnnotationModal() {
   }
   if (els.editTermsBtn) {
     els.editTermsBtn.addEventListener('click', openFocusedAnnotationTermsEditor);
+  }
+  if (els.copyTagsBtn) {
+    els.copyTagsBtn.addEventListener('click', function () {
+      copyChecklistGroupTermsToClipboard(getFocusedAnnotationCurrentRequirement());
+    });
+  }
+  if (els.pasteTagsBtn) {
+    els.pasteTagsBtn.addEventListener('click', function () {
+      pasteChecklistGroupTermsToRequirement(getFocusedAnnotationCurrentRequirement());
+    });
   }
   if (els.doneBtn) {
     els.doneBtn.addEventListener('click', function () {

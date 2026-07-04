@@ -393,6 +393,9 @@ function syncSelectionWithVisibleMedia(mediaItems) {
     return item && item.key === currentKey;
   });
   if (isVisible) return;
+  if (typeof isFocusedAnnotationOpen === 'function' && isFocusedAnnotationOpen()) {
+    return;
+  }
 
   if (!Array.isArray(mediaItems) || !mediaItems.length) {
     if (typeof clearEditorAndPreview === 'function') clearEditorAndPreview();

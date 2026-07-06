@@ -32,7 +32,7 @@
                         <strong><span id="video-clip-current-time">0.000</span>s</strong>
                     </div>
                     <div class="video-clip-time-pill">
-                        <span>Out</span>
+                        <span>End</span>
                         <strong><span id="video-clip-end-time">2.000</span>s</strong>
                     </div>
                 </div>
@@ -53,6 +53,25 @@
 
             <div class="video-clip-settings-panel">
                 <div class="video-clip-setting-group">
+                    <div class="video-clip-form-label">Navigation</div>
+                    <div class="video-clip-nav-grid">
+                        <button id="video-clip-skip-back-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">-5s</button>
+                        <button id="video-clip-skip-forward-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">+5s</button>
+                        <button id="video-clip-go-start-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">Go to Start</button>
+                        <button id="video-clip-go-end-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">Go to End</button>
+                    </div>
+                    <div class="video-clip-nav-row">
+                        <span class="video-clip-field-label">Scan Speed</span>
+                        <div class="video-clip-rate-row" role="group" aria-label="Playback rate">
+                            <button type="button" class="video-clip-rate-btn active" data-rate="1">1x</button>
+                            <button type="button" class="video-clip-rate-btn" data-rate="2">2x</button>
+                            <button type="button" class="video-clip-rate-btn" data-rate="4">4x</button>
+                        </div>
+                    </div>
+                    <button id="video-clip-loop-preview-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">Loop Preview</button>
+                </div>
+
+                <div class="video-clip-setting-group">
                     <div class="video-clip-form-label">Trim</div>
                     <div class="video-clip-trim-grid">
                         <div>
@@ -66,17 +85,30 @@
                             >
                         </div>
                         <div>
+                            <label for="video-clip-end-input" class="video-clip-field-label">End</label>
+                            <input
+                                id="video-clip-end-input"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                value="2.0"
+                            >
+                        </div>
+                        <div>
                             <label for="video-clip-duration-input" class="video-clip-field-label">Duration</label>
                             <input
                                 id="video-clip-duration-input"
                                 type="number"
-                                step="0.5"
+                                step="0.1"
                                 min="0.1"
-                                value="3.0"
+                                value="2.0"
                             >
                         </div>
                     </div>
-                    <button id="video-clip-use-current-btn" type="button" class="video-clip-inline-btn">Use Playhead</button>
+                    <div class="video-clip-trim-actions">
+                        <button id="video-clip-mark-start-btn" type="button" class="video-clip-inline-btn video-clip-mark-btn">Mark Start</button>
+                        <button id="video-clip-mark-end-btn" type="button" class="video-clip-inline-btn video-clip-mark-btn">Mark End</button>
+                    </div>
                 </div>
 
                 <div class="video-clip-setting-group">
@@ -103,6 +135,7 @@
                     <label for="video-clip-output-input" class="video-clip-form-label">Output</label>
                     <input id="video-clip-output-input" type="text" value="">
                     <div id="video-clip-export-summary" class="video-clip-section-note"></div>
+                    <div id="video-clip-export-state-note" class="video-clip-section-note hidden"></div>
                 </div>
 
                 <div class="video-clip-controls-group">

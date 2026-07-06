@@ -35,8 +35,7 @@
   flex-wrap: wrap;
 }
 
-.app.shell-revamp .group-tools-card .caption-helper-section-title-row,
-.app.shell-revamp .primer-card .section-label-inline {
+.app.shell-revamp .group-tools-card .caption-helper-section-title-row {
   margin-bottom: 6px;
 }
 
@@ -62,6 +61,39 @@
   gap: 10px;
 }
 
+.app.shell-revamp .review-output-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app.shell-revamp .review-output-summary-card {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.92);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app.shell-revamp .review-output-summary-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.48);
+}
+
+.app.shell-revamp .review-output-summary-value {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
 .app.shell-revamp .review-output-columns {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
@@ -78,6 +110,26 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.app.shell-revamp .review-output-column-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.app.shell-revamp .review-output-column-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app.shell-revamp .review-output-column-subtitle {
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(15, 23, 42, 0.62);
 }
 
 .app.shell-revamp .review-output-column .stats-controls,
@@ -572,6 +624,24 @@ html[data-theme="dark"] .app.shell-revamp .config-editor-current-file {
   color: rgba(226, 232, 240, 0.72);
 }
 
+html[data-theme="dark"] .app.shell-revamp .review-output-summary-card {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.62);
+}
+
+html[data-theme="dark"] .app.shell-revamp .review-output-summary-label {
+  color: rgba(226, 232, 240, 0.46);
+}
+
+html[data-theme="dark"] .app.shell-revamp .review-output-summary-value,
+html[data-theme="dark"] .app.shell-revamp .review-output-column-title {
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .app.shell-revamp .review-output-column-subtitle {
+  color: rgba(226, 232, 240, 0.66);
+}
+
 html[data-theme="dark"] .app.shell-revamp .review-output-column {
   border-color: rgba(148, 163, 184, 0.2);
   background: rgba(15, 23, 42, 0.52);
@@ -599,6 +669,10 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   }
 
   .app.shell-revamp .review-output-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .app.shell-revamp .review-output-summary {
     grid-template-columns: 1fr;
   }
 
@@ -701,9 +775,9 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 
 .app.shell-revamp .workbench-main-stack > .workbench-bottom {
-  flex: 0 0 260px;
+  flex: 0 0 172px;
   gap: 8px;
-  min-height: 260px;
+  min-height: 172px;
 }
 
 .app.shell-revamp .workbench-main-stack > .workbench-bottom > .editor-surface {
@@ -722,7 +796,6 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 
 .app.shell-revamp .group-tools-card,
-.app.shell-revamp .primer-card,
 .app.shell-revamp .tags-card {
   min-height: 0;
   padding: 6px;
@@ -765,7 +838,6 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 
 .app.shell-revamp .workbench-side-stack > .group-tools-card,
-.app.shell-revamp .workbench-side-stack > .primer-card,
 .app.shell-revamp .workbench-side-stack > .tags-card {
   flex: 0 0 auto;
   min-height: 0;
@@ -795,6 +867,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto !important;
+  gap: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -808,57 +881,27 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   padding-right: 2px;
 }
 
+.app.shell-revamp #caption-checklist-panel.group-tools-card .caption-helper-template-drawer {
+  flex: 0 0 auto;
+}
+
+.app.shell-revamp #caption-checklist-panel.group-tools-card .caption-helper-template-body {
+  overflow: hidden;
+}
+
+.app.shell-revamp #caption-checklist-panel.group-tools-card #primer-template {
+  flex: 0 0 auto;
+  min-height: 120px;
+  height: auto;
+  max-height: 180px;
+  resize: vertical;
+}
+
 .app.shell-revamp.workspace-view-single #caption-checklist-panel.group-tools-card.checklist-panel,
 .app.shell-revamp.workspace-view-grid #caption-checklist-panel.group-tools-card.checklist-panel {
   flex: 0 0 auto;
   max-height: none;
   height: auto;
-}
-
-.app.shell-revamp .primer-card {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  max-height: none;
-}
-
-.app.shell-revamp .primer-card .stats-controls {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  height: auto;
-  overflow: hidden;
-  gap: 6px;
-}
-
-.app.shell-revamp .primer-card textarea {
-  flex: 0 0 auto;
-  min-height: 140px;
-  height: auto;
-  max-height: 220px;
-  resize: vertical;
-}
-
-.app.shell-revamp.workflow-annotate .primer-card {
-  max-height: none !important;
-  overflow: visible !important;
-}
-
-.app.shell-revamp.workflow-annotate .primer-card .stats-controls {
-  min-height: 0;
-  max-height: none !important;
-  overflow: visible !important;
-}
-
-.app.shell-revamp.workflow-annotate .primer-card textarea {
-  min-height: 140px;
-  max-height: none !important;
-}
-
-.app.shell-revamp .workbench-side-stack .primer-card textarea {
-  min-height: 140px;
-  max-height: none;
 }
 
 .app.shell-revamp .tags-card {

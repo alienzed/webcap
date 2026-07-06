@@ -218,6 +218,55 @@ function buildCroppedImageDataUrl() {
   };
 }
 
+function cropMetadataGcd(a, b) {
+  var x = Math.abs(Math.round(Number(a) || 0));
+  var y = Math.abs(Math.round(Number(b) || 0));
+  while (y) {
+    var next = x % y;
+    x = y;
+    y = next;
+  }
+  return x || 1;
+}
+
+function cropReducedAspectText(width, height) {
+  var w = Math.round(Number(width) || 0);
+  var h = Math.round(Number(height) || 0);
+  if (w <= 0 || h <= 0) return '';
+  var divisor = cropMetadataGcd(w, h);
+  return Math.round(w / divisor) + ':' + Math.round(h / divisor);
+}
+
+function applyOptimisticCropMetadata(fileName, width, height) {
+  var w = Math.round(Number(width) || 0);
+  var h = Math.round(Number(height) || 0);
+  if (!fileName || w <= 0 || h <= 0 || !state || !Array.isArray(state.items)) return false;
+  var aspect = cropReducedAspectText(w, h);
+  if (!aspect) return false;
+  var updated = false;
+  state.items.forEach(function (item) {
+    if (!item || item.fileName !== fileName) return;
+    var nextMetadata = (item.metadata && typeof item.metadata === 'object')
+      ? Object.assign({}, item.metadata)
+      : {};
+    nextMetadata.file = fileName;
+    nextMetadata.resolution = w + 'x' + h;
+    nextMetadata.aspect = aspect;
+    item.metadata = nextMetadata;
+    updated = true;
+  });
+  if (state.currentItem && state.currentItem.fileName === fileName) {
+    var currentMetadata = (state.currentItem.metadata && typeof state.currentItem.metadata === 'object')
+      ? Object.assign({}, state.currentItem.metadata)
+      : {};
+    currentMetadata.file = fileName;
+    currentMetadata.resolution = w + 'x' + h;
+    currentMetadata.aspect = aspect;
+    state.currentItem.metadata = currentMetadata;
+  }
+  return updated;
+}
+
 // --- Shared modal/Cropper setup ---
 function setupCropModal(imageSrc, aspectRatio, onReady, onApply, options) {
   options = options || {};
@@ -367,11 +416,21 @@ function openImageCropModal(mediaItem) {
     }, function (status, responseText) {
       setCropBusy(false);
       if (status === 200) {
+        var cropResponse = null;
+        try {
+          cropResponse = responseText ? JSON.parse(responseText) : null;
+        } catch (e) {
+          cropResponse = null;
+        }
         closeCropModal();
         setStatus('Cropped: ' + fileName);
         markMediaMutated(fileName, 'best_effort');
         bumpMediaCacheBustToken(fileName);
         saveFolderStateForCurrentRoot();
+        if (cropResponse) {
+          applyOptimisticCropMetadata(fileName, cropResponse.width, cropResponse.height);
+          renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+        }
         refreshMediaResolutionCache();
         if (state.currentItem && state.currentItem.fileName === fileName) {
           selectPathMedia(state.currentItem).catch(function () {});

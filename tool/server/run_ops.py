@@ -14,7 +14,7 @@ from . import config as app_config
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
 from .permissions import normalize_path_permissions
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, ensure_training_config_files
 
 
 class _QueueWriter:
@@ -212,6 +212,20 @@ def train_run_response(folder: str):
         lo_path = folder_path / lo_name
         dataset_hi_path = folder_path / "dataset.hi.toml"
         dataset_lo_path = folder_path / "dataset.lo.toml"
+
+        if (
+            not hi_path.exists() or
+            not lo_path.exists() or
+            not dataset_hi_path.exists() or
+            not dataset_lo_path.exists()
+        ):
+            ensure_training_config_files(folder_path)
+            generate_dataset_configs(
+                folder_path,
+                mode=mode,
+                write_selection_snapshot_comments=write_snapshot_comments,
+            )
+
         missing_files = []
         if not hi_path.exists() or not hi_path.is_file():
             missing_files.append(hi_name)

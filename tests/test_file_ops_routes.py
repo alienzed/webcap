@@ -116,14 +116,19 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
                 "mode": "normal",
                 "write_selection_snapshot_comments": True,
             },
+            "primer": {
+                "template": "{subject}\n{view}\n{lighting}"
+            },
         },
     )
 
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["config"]["training"]["write_selection_snapshot_comments"] is True
+    assert payload["config"]["primer"]["template"] == "{subject}\n{view}\n{lighting}"
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     assert saved["training"]["write_selection_snapshot_comments"] is True
+    assert saved["primer"]["template"] == "{subject}\n{view}\n{lighting}"
 
 
 def test_validate_config_payload_strips_legacy_chmod_training_root_on_load():

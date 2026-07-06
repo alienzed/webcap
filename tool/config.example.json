@@ -12,6 +12,9 @@
     "enableFaceAnalysis": false,
     "enableMediaPipeAnalysis": false
   },
+  "primer": {
+    "template": "{position }{surface, }{setting, }{body, }\n{clothing, }{traits, }{expression, }\n{background, }\n{lighting} lighting, {view} view."
+  },
   "set_destinations": {
     "presets": [
       {

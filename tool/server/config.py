@@ -118,6 +118,15 @@ def validate_config_payload(payload):
         "enableMediaPipeAnalysis": bool(analysis.get("enableMediaPipeAnalysis", False)),
     }
 
+    primer = out.get("primer")
+    if primer is None:
+        primer = {}
+    if not isinstance(primer, dict):
+        raise ValueError("Config.primer must be an object when provided.")
+    out["primer"] = {
+        "template": str(primer.get("template") or "").replace("\r\n", "\n"),
+    }
+
     return out
 
 def load_config_from_disk():

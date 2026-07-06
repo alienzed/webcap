@@ -113,7 +113,7 @@ Open:
 1. Open a set folder.
 2. Filter the visible working subset.
 3. Use `Review Selections` to triage candidates, weak items, and focus sets.
-4. Curate files with rename, prune, reset, restore, duplicate, crop, rotate, flip, deface, and clip.
+4. Curate files with rename, prune, reset, restore, duplicate, crop, blur background, remove background, rotate, flip, deface, and clip.
 5. Build captions with requirements, tags, primer mappings, and set notes.
 6. Use `QA` and `Review Captions` to tighten consistency and coverage.
 7. Run `Prepare Dataset` on the current visible subset.
@@ -342,6 +342,8 @@ Media row context menu supports:
 - reset
 - duplicate image
 - crop
+- blur background
+- remove background
 - rotate left 90 deg
 - rotate right 90 deg
 - flip vertical
@@ -454,6 +456,8 @@ Media mutation and restore:
 - `/media/reset`
 - `/media/restore`
 - `/media/crop`
+- `/media/blur_background`
+- `/media/remove_background`
 - `/media/image_transform`
 - `/media/flip_horizontal`
 - `/media/video_clip`

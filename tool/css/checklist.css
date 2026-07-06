@@ -316,7 +316,7 @@
   flex: 1;
 }
 
-/* Add bottom padding to textarea when checklist is open */
+/* Add bottom padding to textarea when checklist is open
 .editor-panel.checklist-visible textarea#editor {
   padding-bottom: 90px !important;
 }
@@ -328,6 +328,7 @@
 .editor-panel.checklist-visible.annotate-strip-visible textarea#editor {
   padding-bottom: 260px !important;
 }
+*/
 @media (max-width: 700px) {
   #caption-checklist-panel.checklist-panel {
     left: 0;
@@ -650,6 +651,56 @@
   margin: 0 0 8px 0;
   letter-spacing: 0.3px;
 }
+
+.caption-helper-drawer {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #d8dde6;
+}
+
+.caption-helper-drawer-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.caption-helper-drawer-summary::-webkit-details-marker {
+  display: none;
+}
+
+.caption-helper-drawer-summary::before {
+  content: '\25B8';
+  font-size: 12px;
+  color: #64748b;
+  flex: 0 0 auto;
+}
+
+.caption-helper-drawer[open] > .caption-helper-drawer-summary::before {
+  content: '\25BE';
+}
+
+.caption-helper-drawer-summary-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.caption-helper-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.caption-helper-template-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+
 .term-input-row {
   position: relative;
   margin-bottom: 6px;
@@ -1378,6 +1429,18 @@ html[data-theme="dark"] .caption-helper-tab-btn,
 html[data-theme="dark"] #caption-checklist-panel.checklist-panel,
 html[data-theme="dark"] .annotate-strip {
   background: #151b24;
+}
+
+html[data-theme="dark"] .caption-helper-drawer {
+  border-top-color: #2a3648;
+}
+
+html[data-theme="dark"] .caption-helper-drawer-summary::before {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .caption-helper-drawer-summary-title {
+  color: #e2e8f0;
 }
 
 html[data-theme="dark"] .sidebar-tab-btn.active,

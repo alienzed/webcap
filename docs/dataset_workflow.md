@@ -15,7 +15,7 @@ Notes:
 
 ## 2. Create Working Media
 1. Use `Clip...` on videos in `src_videos` to export clips into the parent set folder.
-2. Use image and video transforms from context menus as needed (crop, rotate, flips, deface).
+2. Use image and video transforms from context menus as needed (crop, blur background, remove background, rotate, flips, deface).
 3. Keep only intended training media in the set folder root.
 
 Notes:

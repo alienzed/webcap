@@ -1199,7 +1199,6 @@ html[data-theme="dark"] .app.shell-revamp.workspace-surface-grid .media-grid-sid
   flex: 1 1 auto;
 }
 
-.app.shell-revamp.workspace-surface-grid #primer-details,
 .app.shell-revamp.workspace-surface-grid .workbench-side-stack,
 .app.shell-revamp.workspace-surface-grid .workbench-bottom {
   display: none;

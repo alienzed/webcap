@@ -100,6 +100,36 @@ function runRemoveBackground(mediaItem) {
     });
 }
 
+function runBlurBackground(mediaItem) {
+  if (!mediaItem || !mediaItem.fileName) return;
+  if (!confirm('Blur background?\n\nThis will overwrite the image file.\n\nThe subject stays sharp while the original background is softened with a fixed blur.')) return;
+  setStatus('Blurring background...');
+  fetch('/media/blur_background', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder: state.folder || '',
+      fileName: mediaItem.fileName
+    })
+  })
+    .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
+    .then(function (res) {
+      if (res.status === 200 && res.data && res.data.ok) {
+        setStatus('Background blurred: ' + mediaItem.fileName);
+        markMediaMutated(mediaItem.key, 'best_effort');
+        bumpMediaCacheBustToken(mediaItem.key);
+        saveFolderStateForCurrentRoot();
+        refreshMediaResolutionCache();
+        selectPathMedia(mediaItem).catch(function () {});
+      } else {
+        setStatus((res.data && res.data.error) ? res.data.error : 'Background blur failed');
+      }
+    })
+    .catch(function (err) {
+      setStatus('Background blur failed: ' + (err && err.message ? err.message : err));
+    });
+}
+
 function buildCurrentFolderContextActions() {
   var focusActionLabel = (state && state.focusSet && state.focusSet.keys && state.focusSet.keys.length)
     ? 'Resume Focus Annotation...'
@@ -343,6 +373,12 @@ function buildMediaContextMenuActions(mediaItem, key) {
       label: 'Crop...',
       run: function () {
         openImageCropModal(mediaItem);
+      }
+    });
+    actions.push({
+      label: 'Blur Background',
+      run: function () {
+        runBlurBackground(mediaItem);
       }
     });
     actions.push({

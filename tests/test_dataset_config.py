@@ -386,8 +386,10 @@ def test_validate_config_payload_persists_training_mode():
     normalized = validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},
         "training": {"mode": "poc"},
+        "primer": {"template": "{subject}\n{view}"},
     })
     assert normalized["training"]["mode"] == "poc"
+    assert normalized["primer"]["template"] == "{subject}\n{view}"
 
     normalized_quality = validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},

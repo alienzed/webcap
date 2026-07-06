@@ -10,6 +10,7 @@ function normalizeAppConfigShape(cfg) {
   var out = (cfg && typeof cfg === 'object') ? JSON.parse(JSON.stringify(cfg)) : {};
   if (!out.filesystem || typeof out.filesystem !== 'object') out.filesystem = {};
   if (!out.training || typeof out.training !== 'object') out.training = {};
+  if (!out.primer || typeof out.primer !== 'object') out.primer = {};
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
   if (!out.filesystem.root) out.filesystem.root = '';
   if (!out.filesystem.models) out.filesystem.models = '';
@@ -17,6 +18,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.activate_script) out.training.activate_script = '';
   if (!out.training.mode || ['poc', 'normal', 'quality'].indexOf(out.training.mode) === -1) out.training.mode = 'normal';
   if (typeof out.training.write_selection_snapshot_comments !== 'boolean') out.training.write_selection_snapshot_comments = false;
+  if (typeof out.primer.template !== 'string') out.primer.template = '';
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
   if (typeof out.analysis.enableFaceAnalysis !== 'boolean') out.analysis.enableFaceAnalysis = false;
   if (typeof out.analysis.enableMediaPipeAnalysis !== 'boolean') out.analysis.enableMediaPipeAnalysis = false;
@@ -35,6 +37,7 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingDiffusionPipeWslEl) ui.appSettingsTrainingDiffusionPipeWslEl.value = c.training.diffusion_pipe_wsl || '';
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
   if (ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl) ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked = !!c.training.write_selection_snapshot_comments;
+  if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
   var mode = c.training.mode || 'normal';
   if (mode === 'poc' && ui.appSettingsTrainingModePocEl) ui.appSettingsTrainingModePocEl.checked = true;
   else if (mode === 'quality' && ui.appSettingsTrainingModeQualityEl) ui.appSettingsTrainingModeQualityEl.checked = true;
@@ -56,6 +59,7 @@ function collectAppSettingsFormConfig() {
   base.training.diffusion_pipe_wsl = ui.appSettingsTrainingDiffusionPipeWslEl ? ui.appSettingsTrainingDiffusionPipeWslEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
   base.training.write_selection_snapshot_comments = !!(ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl && ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked);
+  base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
   base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);
   base.training.mode = mode;
@@ -108,6 +112,12 @@ function setRootFolderLabelFromConfig(cfg) {
   ROOT_FOLDER_LABEL = String(rootPath).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || ROOT_FOLDER_LABEL;
 }
 
+function syncUnsavedPrimerTemplateFromAppConfig() {
+  if (typeof syncCurrentFolderPrimerTemplateFromAppDefault === 'function') {
+    syncCurrentFolderPrimerTemplateFromAppDefault();
+  }
+}
+
 function saveAppSettings(opts) {
   var saveAndReload = !!(opts && opts.reloadAfterSave);
   var closeOnSuccess = !opts || opts.closeOnSuccess !== false;
@@ -135,6 +145,7 @@ function saveAppSettings(opts) {
     setRuntimeAppConfig(saved);
     fillAppSettingsForm(saved);
     setRootFolderLabelFromConfig(saved);
+    syncUnsavedPrimerTemplateFromAppConfig();
     if (saveAndReload) {
       if (closeOnSuccess) closeAppSettingsModal();
       setStatus('Settings saved. Reloading runtime settings...');
@@ -171,6 +182,7 @@ function resetAppSettings() {
     setRuntimeAppConfig(saved);
     fillAppSettingsForm(saved);
     setRootFolderLabelFromConfig(saved);
+    syncUnsavedPrimerTemplateFromAppConfig();
     setAppSettingsStatus('App requirements reset to defaults.', false);
     setStatus('App requirements reset to defaults.');
     refreshCurrentDirectory();
@@ -197,6 +209,7 @@ function triggerRuntimeConfigReload(quietInModal) {
       setRuntimeAppConfig(cfg);
       fillAppSettingsForm(cfg);
       setRootFolderLabelFromConfig(cfg);
+      syncUnsavedPrimerTemplateFromAppConfig();
     }
     if (!quietInModal) setAppSettingsStatus('Runtime settings reloaded.', false);
     setStatus('Runtime settings reloaded from config.json.');
@@ -302,6 +315,7 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingDiffusionPipeWslEl,
     ui.appSettingsTrainingActivateScriptEl,
     ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl,
+    ui.appSettingsPrimerTemplateEl,
     ui.appSettingsEnableFaceAnalysisEl,
     ui.appSettingsEnableMediaPipeAnalysisEl,
     ui.appSettingsTrainingModePocEl,

@@ -18,6 +18,7 @@ state = {
   supersetCurrentResult: null,
   supersetSourceFolder: '',
   supersetSearchDirty: false,
+  folderHasSavedPrimerTemplate: false,
   flags: {}, // key: file or folder name, value: color string (red/yellow/orange/green)
   ratings: {}, // key: media file name, value: integer 1..5
   mutatedSet: new Set(), // key: media file name
@@ -107,6 +108,7 @@ ui = {
   appSettingsTrainingModeQualityEl: document.getElementById('app-settings-training-mode-quality'),
   appSettingsEnableFaceAnalysisEl: document.getElementById('app-settings-enable-face-analysis'),
   appSettingsEnableMediaPipeAnalysisEl: document.getElementById('app-settings-enable-mediapipe-analysis'),
+  appSettingsPrimerTemplateEl: document.getElementById('app-settings-primer-template'),
   appSettingsDebugEl: document.getElementById('app-settings-debug'),
   appSettingsJsonEl: document.getElementById('app-settings-json'),
   statsPhrasesEl: document.getElementById('stats-phrases'),

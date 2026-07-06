@@ -810,6 +810,9 @@ async function renderFileList() {
   if (typeof updateFocusSetUi === 'function') {
     updateFocusSetUi();
   }
+  if (typeof refreshReviewOutputSummary === 'function') {
+    refreshReviewOutputSummary();
+  }
   if (typeof updateSuperSetControls === 'function') {
     updateSuperSetControls();
   }

@@ -1,10 +1,12 @@
 # Create Set From Results
 
-Last updated: 2026-06-01
+Status: Current behavior. Verified against `tool/server/smart_set.py` and `tool/js/smart_set.js`.
+
+Last updated: 2026-07-04
 
 ## Purpose
 
-Create a brand-new set folder from visible search results.
+Create a brand-new set folder from matched result references.
 
 This feature is intentionally independent of any single list implementation. It can be called from normal media-list results or dedicated SuperSet results.
 
@@ -29,12 +31,16 @@ In scope:
   - `flags`
   - `caption_tags_by_media`
   - `ratings_by_media`
-- Carry structural annotation state, but not local term baselines:
+- Carry structural annotation state:
   - carry `caption_requirements`
+  - carry `caption_requirements_checked`
+  - carry `caption_term_wrappers` and legacy mirror `caption_term_affixes`
+  - carry `caption_term_descriptor_defaults`
+  - carry per-item `caption_term_descriptors_by_media`
+- Do not carry local requirement keyword baselines:
   - do not carry `caption_requirement_keywords`
 - Carry source `primer` block into destination `.webcap_state.json`:
-  - `primer.template`
-  - structured primer rows/fields (for example mappings/defaults when present)
+  - full `primer` object from the first source folder encountered after deterministic input sort
 - Carry available `media_metadata.json` entries for copied items into destination cache
 - Deterministic filename collision handling (`_2`, `_3`, ...)
 
@@ -116,11 +122,9 @@ Write destination `.webcap_state.json` with baseline expected shape plus carried
 
 Also write destination `media_metadata.json` when source entries are available for copied media.
 
-## API Shape (Proposed)
+## API Shape (Current)
 
-Route name can vary, but contract should match:
-
-- `POST /fs/create_set_from_results`
+- Route: `POST /fs/create_set_from_results`
 
 Request:
 
@@ -146,6 +150,8 @@ Success response:
   "created_items": [
     {
       "source_media_rel": "sets/a/img_001.png",
+      "source_folder": "sets/a",
+      "source_media_name": "img_001.png",
       "dest_media_name": "img_001.png"
     }
   ]
@@ -154,15 +160,14 @@ Success response:
 
 Error response examples:
 
-- missing/invalid inputs
-- destination exists
-- source item not found
+- `400` for missing/invalid inputs or source item validation failures
+- `409` when destination set folder already exists
 
 ## UX Contract
 
 This component requires explicit user confirmation action before execution.
 
-When invoked from SuperSet results, input should include the full matched result set, not only currently rendered/visible rows.
+When invoked from SuperSet results, input includes the full matched result set, not only currently rendered rows.
 
 After successful creation:
 

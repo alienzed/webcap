@@ -5,8 +5,16 @@ var DEFAULT_PRIMER_TEMPLATE = [
   '{position }{surface, }{setting, }{body, }',
   '{clothing, }{traits, }{expression, }',
   '{background, }',
-  '{lighting} lighting, {view } view.'
+  '{lighting} lighting, {view} view.'
 ].join('\n');
+
+function getConfiguredPrimerTemplate() {
+  var appTemplate = APP_CONFIG && APP_CONFIG.primer && typeof APP_CONFIG.primer.template === 'string'
+    ? APP_CONFIG.primer.template
+    : '';
+  var text = String(appTemplate || '');
+  return text.trim() ? text : DEFAULT_PRIMER_TEMPLATE;
+}
 
 function setRuntimeAppConfig(cfg) {
   var next = (cfg && typeof cfg === 'object') ? JSON.parse(JSON.stringify(cfg)) : {};
@@ -104,7 +112,7 @@ function setStatus(text) {
 }
 
 function getDefaultPrimerTemplate() {
-  return DEFAULT_PRIMER_TEMPLATE;
+  return getConfiguredPrimerTemplate();
 }
 
 function recordUndoOperation(op) {

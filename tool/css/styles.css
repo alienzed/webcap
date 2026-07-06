@@ -601,7 +601,21 @@ iframe {
   right: 10px;
   display: inline-flex;
   gap: 6px;
+  margin: -4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.12);
   z-index: 20;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.preview-actions:hover,
+.preview-actions:focus-within {
+  background: rgba(2, 6, 23, 0.68);
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.28);
+  backdrop-filter: blur(8px);
 }
 
 .preview-action-btn {
@@ -1588,18 +1602,6 @@ iframe {
   font-weight: 600;
 }
 
-#primer-details .stats-controls > label {
-  margin-top: 4px;
-}
-
-#primer-details .stats-controls > label:first-child {
-  margin-top: 0;
-}
-
-#primer-details .stats-controls .stats-advanced-inline-row {
-  margin-bottom: 2px;
-}
-
 .section-label-inline {
   display: inline-flex;
   align-items: center;
@@ -1615,6 +1617,14 @@ iframe {
 }
 
 .stats-controls .section-label-inline:first-child {
+  margin-top: 0;
+}
+
+.caption-helper-template-body > label {
+  margin-top: 4px;
+}
+
+.caption-helper-template-body > label:first-child {
   margin-top: 0;
 }
 

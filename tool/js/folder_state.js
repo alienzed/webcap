@@ -251,6 +251,7 @@ function applyFolderStateToDom(folderState) {
     folderState.primer &&
     Object.prototype.hasOwnProperty.call(folderState.primer, 'template')
   );
+  state.folderHasSavedPrimerTemplate = hasSavedPrimerTemplate;
   // Restore reviewedSet from reviewedKeys for persistence
   if (Array.isArray(clean.reviewedKeys)) {
     state.reviewedSet = new Set(clean.reviewedKeys);
@@ -284,6 +285,9 @@ function applyFolderStateToDom(folderState) {
   
   if (templateEl) {
     templateEl.value = hasSavedPrimerTemplate ? clean.primer.template : getDefaultPrimerTemplate();
+  }
+  if (typeof resetPrimerTemplateSectionCollapsed === 'function') {
+    resetPrimerTemplateSectionCollapsed();
   }
   if (ui.filterEl) {
     ui.filterEl.value = String((clean.media_filters && clean.media_filters.text) || '');

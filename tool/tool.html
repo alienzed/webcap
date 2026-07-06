@@ -414,28 +414,30 @@
                                     <button id="checklist-add-btn" type="button">+</button>
                                 </div>
                                 <div id="checklist-items"></div>
-                            </div>
-                        </div>
-                        <div id="primer-details" class="workbench-card primer-card">
-                            <div class="stats-controls">
-                                <div class="section-label-inline">
-                                    <label>Caption Template</label>
-                                    <button
-                                        id="primer-template-info-btn"
-                                        type="button"
-                                        class="mini-info-btn"
-                                        title="Caption template help"
-                                        aria-label="Caption template help"
-                                    >i</button>
-                                </div>
-                                <textarea id="primer-template" rows="9">{position }{surface, }{setting, }{body, }
+                                <details id="primer-template-section" class="caption-helper-drawer caption-helper-template-drawer">
+                                    <summary class="caption-helper-drawer-summary">
+                                        <span class="caption-helper-drawer-summary-title">Caption Template</span>
+                                    </summary>
+                                    <div class="caption-helper-drawer-body caption-helper-template-body">
+                                        <div class="caption-helper-template-actions">
+                                            <button
+                                                id="primer-template-info-btn"
+                                                type="button"
+                                                class="mini-info-btn"
+                                                title="Caption template help"
+                                                aria-label="Caption template help"
+                                            >i</button>
+                                        </div>
+                                        <textarea id="primer-template" rows="9">{position }{surface, }{setting, }{body, }
 {clothing, }{traits, }{expression, }
 {background, }
-{lighting} lighting, {view } view.</textarea>
-                                <div class="primer-template-placeholder-row">
-                                    <div class="primer-template-placeholder-label">Insert group placeholder</div>
-                                    <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
-                                </div>
+{lighting} lighting, {view} view.</textarea>
+                                        <div class="primer-template-placeholder-row">
+                                            <div class="primer-template-placeholder-label">Insert group placeholder</div>
+                                            <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
+                                        </div>
+                                    </div>
+                                </details>
                                 <label class="hidden">Set Notes</label>
                                 <textarea id="set-notes-editor" rows="6" class="hidden" placeholder="Set notes..."></textarea>
                             </div>
@@ -517,8 +519,26 @@
                             <span>Review Captions</span>
                         </button>
                     </div>
+                    <div class="review-output-summary" aria-label="Review output summary">
+                        <div class="review-output-summary-card">
+                            <div class="review-output-summary-label">Folder</div>
+                            <div id="review-output-summary-folder" class="review-output-summary-value">No folder selected</div>
+                        </div>
+                        <div class="review-output-summary-card">
+                            <div class="review-output-summary-label">Visible</div>
+                            <div id="review-output-summary-visible" class="review-output-summary-value">No media loaded</div>
+                        </div>
+                        <div class="review-output-summary-card">
+                            <div class="review-output-summary-label">Scope</div>
+                            <div id="review-output-summary-scope" class="review-output-summary-value">Current folder scope</div>
+                        </div>
+                    </div>
                     <div class="review-output-columns">
                         <section id="review-output-review-pane" class="review-output-column">
+                            <div class="review-output-column-header">
+                                <div class="review-output-column-title">Caption Checks</div>
+                                <div class="review-output-column-subtitle">Tune phrase coverage, balance targets, and rules before running a report.</div>
+                            </div>
                             <div
                                 id="cation-review"
                                 aria-hidden="false"
@@ -569,6 +589,10 @@
                             </div>
                         </section>
                         <section id="review-output-training-pane" class="review-output-column">
+                            <div class="review-output-column-header">
+                                <div class="review-output-column-title">Dataset / Training</div>
+                                <div class="review-output-column-subtitle">Prepare the visible set, manage generated TOMLs, and preview the training chain.</div>
+                            </div>
                             <div
                                 id="training-details"
                                 aria-hidden="false"
@@ -767,73 +791,119 @@
         <div id="app-settings-modal" class="app-settings-modal hidden" aria-hidden="true">
             <div class="app-settings-dialog">
                 <div class="app-settings-header">
-                    <strong>App Settings</strong>
+                    <div class="app-settings-title-wrap">
+                        <strong>App Settings</strong>
+                        <div class="app-settings-subtitle">Global paths, caption defaults, and runtime toggles.</div>
+                    </div>
                     <button id="app-settings-close-btn" type="button" title="Close" aria-label="Close app settings">x</button>
                 </div>
-                <div class="app-settings-grid">
-                    <label for="app-settings-filesystem-root">Filesystem Root</label>
-                    <input id="app-settings-filesystem-root" type="text" placeholder="C:\path\to\training">
-                    <label for="app-settings-filesystem-models">Models Root</label>
-                    <input id="app-settings-filesystem-models" type="text" placeholder="C:\path\to\models">
-                    <label for="app-settings-training-diffusion-pipe-wsl">Diffusion Pipe WSL</label>
-                    <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/home/user/diffusion-pipe">
-                    <label for="app-settings-training-activate-script">Activate Script</label>
-                    <input id="app-settings-training-activate-script" type="text" placeholder="dp-clean/bin/activate">
-                    <span>Selection Snapshot Comments</span>
-                    <label class="app-settings-radio-label">
-                        <input id="app-settings-training-write-selection-snapshot-comments" type="checkbox">
-                        <span>Write selection snapshot comments into dataset TOMLs</span>
-                    </label>
-                    <span>Training Mode</span>
-                    <div class="app-settings-radio-group">
-                        <label class="app-settings-radio-label">
-                            <input
-                                id="app-settings-training-mode-poc"
-                                type="radio"
-                                name="training-mode"
-                                value="poc"
-                            >
-                            <span>POC (30 min)</span>
+                <div class="app-settings-sections">
+                    <section class="app-settings-section">
+                        <div class="app-settings-section-header">
+                            <div class="app-settings-section-title">Paths</div>
+                            <div class="app-settings-section-copy">Workspace and training locations used by the backend and generated config files.</div>
+                        </div>
+                        <div class="app-settings-form-grid">
+                            <label class="app-settings-field">
+                                <span class="app-settings-field-label">Filesystem Root</span>
+                                <input id="app-settings-filesystem-root" type="text" placeholder="C:\path\to\training">
+                            </label>
+                            <label class="app-settings-field">
+                                <span class="app-settings-field-label">Models Root</span>
+                                <input id="app-settings-filesystem-models" type="text" placeholder="C:\path\to\models">
+                            </label>
+                            <label class="app-settings-field">
+                                <span class="app-settings-field-label">Diffusion Pipe WSL</span>
+                                <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/home/user/diffusion-pipe">
+                            </label>
+                            <label class="app-settings-field">
+                                <span class="app-settings-field-label">Activate Script</span>
+                                <input id="app-settings-training-activate-script" type="text" placeholder="dp-clean/bin/activate">
+                            </label>
+                        </div>
+                    </section>
+                    <section class="app-settings-section">
+                        <div class="app-settings-section-header">
+                            <div class="app-settings-section-title">Caption Editor</div>
+                            <div class="app-settings-section-copy">Used when a folder does not have its own saved caption template.</div>
+                        </div>
+                        <label class="app-settings-field app-settings-field-wide">
+                            <span class="app-settings-field-label">Default Caption Template</span>
+                            <textarea id="app-settings-primer-template" rows="6" class="app-settings-caption-template" spellcheck="false" placeholder="{position }{surface, }{setting, }{body, }"></textarea>
+                            <span class="app-settings-note">Leave blank to fall back to the built-in starter template.</span>
                         </label>
-                        <label class="app-settings-radio-label">
-                            <input
-                                id="app-settings-training-mode-normal"
-                                type="radio"
-                                name="training-mode"
-                                value="normal"
-                                checked
-                            >
-                            <span>Normal (2-6h)</span>
+                    </section>
+                    <section class="app-settings-section">
+                        <div class="app-settings-section-header">
+                            <div class="app-settings-section-title">Training</div>
+                            <div class="app-settings-section-copy">Generation defaults and training-prep behavior.</div>
+                        </div>
+                        <label class="app-settings-toggle">
+                            <input id="app-settings-training-write-selection-snapshot-comments" type="checkbox">
+                            <span>Write selection snapshot comments into dataset TOMLs</span>
                         </label>
-                        <label class="app-settings-radio-label">
-                            <input
-                                id="app-settings-training-mode-quality"
-                                type="radio"
-                                name="training-mode"
-                                value="quality"
-                            >
-                            <span>Quality (Best fit)</span>
-                        </label>
-                    </div>
-                    <span>Analysis</span>
-                    <label class="app-settings-radio-label">
-                        <input id="app-settings-enable-face-analysis" type="checkbox">
-                        <span>Enable Face Focus analysis</span>
-                    </label>
-                    <label class="app-settings-radio-label">
-                        <input id="app-settings-enable-mediapipe-analysis" type="checkbox">
-                        <span>Enable MediaPipe selection pose analysis</span>
-                    </label>
-                    <span>Theme</span>
-                    <div class="app-settings-theme-row">
-                        <button id="app-settings-theme-btn" type="button" class="app-settings-theme-btn">Dark</button>
-                        <span class="app-settings-theme-note">Stored in this browser.</span>
-                    </div>
+                        <div class="app-settings-field app-settings-field-wide">
+                            <span class="app-settings-field-label">Training Mode</span>
+                            <div class="app-settings-radio-group">
+                                <label class="app-settings-radio-label">
+                                    <input
+                                        id="app-settings-training-mode-poc"
+                                        type="radio"
+                                        name="training-mode"
+                                        value="poc"
+                                    >
+                                    <span>POC (30 min)</span>
+                                </label>
+                                <label class="app-settings-radio-label">
+                                    <input
+                                        id="app-settings-training-mode-normal"
+                                        type="radio"
+                                        name="training-mode"
+                                        value="normal"
+                                        checked
+                                    >
+                                    <span>Normal (2-6h)</span>
+                                </label>
+                                <label class="app-settings-radio-label">
+                                    <input
+                                        id="app-settings-training-mode-quality"
+                                        type="radio"
+                                        name="training-mode"
+                                        value="quality"
+                                    >
+                                    <span>Quality (Best fit)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="app-settings-section">
+                        <div class="app-settings-section-header">
+                            <div class="app-settings-section-title">Analysis & Appearance</div>
+                            <div class="app-settings-section-copy">Optional local analyzers plus browser-scoped display state.</div>
+                        </div>
+                        <div class="app-settings-form-grid">
+                            <label class="app-settings-toggle">
+                                <input id="app-settings-enable-face-analysis" type="checkbox">
+                                <span>Enable Face Focus analysis</span>
+                            </label>
+                            <label class="app-settings-toggle">
+                                <input id="app-settings-enable-mediapipe-analysis" type="checkbox">
+                                <span>Enable MediaPipe selection pose analysis</span>
+                            </label>
+                            <div class="app-settings-field">
+                                <span class="app-settings-field-label">Theme</span>
+                                <div class="app-settings-theme-row">
+                                    <button id="app-settings-theme-btn" type="button" class="app-settings-theme-btn">Dark</button>
+                                    <span class="app-settings-theme-note">Stored in this browser.</span>
+                                </div>
+                            </div>
+                            <label class="app-settings-toggle">
+                                <input id="app-settings-debug" type="checkbox">
+                                <span>Debug mode</span>
+                            </label>
+                        </div>
+                    </section>
                 </div>
-                <label class="app-settings-debug-row">
-                    <input id="app-settings-debug" type="checkbox">
-                    <span>Debug mode</span>
-                </label>
                 <details class="app-settings-advanced">
                     <summary>Advanced JSON</summary>
                     <textarea id="app-settings-json" rows="10" spellcheck="false"></textarea>
@@ -1060,11 +1130,15 @@
         <script src="/static/js/media_actions.js"></script>
         <script src="/static/js/crop.js"></script>
         <script src="/static/js/video_clip.js"></script>
+        <script src="/static/js/review_output.js"></script>
         <script src="/static/js/stats.js"></script>
+        <script src="/static/js/primer_settings.js"></script>
         <script src="/static/js/folder_state.js"></script>
         <script src="/static/js/advanced_mappings_rules.js"></script>
         <script src="/static/js/editor.js"></script>
-        <script src="/static/js/checklist.js"></script>
+        <script src="/static/js/checklist_state.js"></script>
+        <script src="/static/js/group_workbench.js"></script>
+        <script src="/static/js/checklist_panel.js"></script>
         <script src="/static/js/checklist_modals.js"></script>
         <script src="/static/js/caption_helpers.js"></script>
         <script src="/static/js/caption_helpers_annotate.js"></script>
@@ -1072,7 +1146,11 @@
         <script src="/static/js/caption_helpers_panel.js"></script>
         <script src="/static/js/caption_helpers_ui.js"></script>
         <script src="/static/js/item_details.js"></script>
-        <script src="/static/js/media_grid.js"></script>
+        <script src="/static/js/media_grid_state.js"></script>
+        <script src="/static/js/media_grid_filters.js"></script>
+        <script src="/static/js/media_grid_tiles.js"></script>
+        <script src="/static/js/media_grid_viewer.js"></script>
+        <script src="/static/js/media_grid_actions.js"></script>
         <script src="/static/js/focused_annotation.js"></script>
         <script src="/static/js/balance_distribution_wheel.js"></script>
         <script src="/static/js/app_settings.js"></script>

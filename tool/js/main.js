@@ -394,6 +394,14 @@ function wireAllUi() {
   if (typeof wireAppSettingsUi === 'function') {
     wireAppSettingsUi();
   }
+  if (!window.__webcapMetadataRefreshListBound) {
+    window.__webcapMetadataRefreshListBound = true;
+    window.addEventListener('webcap:media-metadata-updated', function (event) {
+      var detail = event && event.detail ? event.detail : {};
+      if (!state || detail.folder !== state.folder) return;
+      renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+    });
+  }
   var addInput = document.getElementById('checklist-add-input');
   var addBtn = document.getElementById('checklist-add-btn');
   if (addBtn && addInput) {

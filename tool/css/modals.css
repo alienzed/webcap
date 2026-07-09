@@ -425,8 +425,7 @@ html[data-theme="dark"] .app-settings-radio-label {
   box-sizing: border-box;
 }
 
-.focused-annotation-header-actions,
-.focused-annotation-footer {
+.focused-annotation-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -679,11 +678,6 @@ html[data-theme="dark"] .app-settings-radio-label {
 .focused-annotation-badge-reviewed {
   background: rgba(21, 128, 61, 0.24);
   color: #bbf7d0;
-}
-
-.focused-annotation-badge-na {
-  background: rgba(148, 163, 184, 0.2);
-  color: #cbd5e1;
 }
 
 .focused-annotation-content {
@@ -1547,7 +1541,7 @@ body.focused-annotation-open .caption-context-menu {
 
 .video-clip-nav-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1556,6 +1550,7 @@ body.focused-annotation-open .caption-context-menu {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .video-clip-rate-row,
@@ -1564,6 +1559,15 @@ body.focused-annotation-open .caption-context-menu {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.video-clip-rate-row {
+  flex-wrap: nowrap;
+}
+
+.video-clip-nav-btn {
+  width: 100%;
+  min-width: 0;
 }
 
 .video-clip-rate-btn {
@@ -1775,8 +1779,8 @@ body.focused-annotation-open .caption-context-menu {
   }
 
   .video-clip-nav-row {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
   }
 }
 

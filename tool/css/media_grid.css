@@ -38,14 +38,6 @@
   flex: 1 1 auto;
 }
 
-.media-grid-surface-title {
-  color: #0f172a;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.15;
-  display: none;
-}
-
 .media-grid-surface-meta {
   margin-top: 0;
   color: #0f766e;
@@ -82,10 +74,6 @@
   color: #475569;
   font-size: 12px;
   line-height: 1.35;
-}
-
-.media-grid-surface-rating-controls {
-  flex: 0 0 auto;
 }
 
 .media-grid-surface-canvas {
@@ -416,10 +404,6 @@ html[data-theme="dark"] .media-grid-surface-header {
   border-color: rgba(148, 163, 184, 0.18);
   background: rgba(6, 20, 18, 0.74);
   box-shadow: 0 12px 32px rgba(2, 6, 23, 0.24);
-}
-
-html[data-theme="dark"] .media-grid-surface-title {
-  color: #f8fafc;
 }
 
 html[data-theme="dark"] .media-grid-surface-meta {

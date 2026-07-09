@@ -15,10 +15,6 @@
   grid-template-areas: "preview workbench";
 }
 
-.app.shell-revamp .app-header {
-  display: none !important;
-}
-
 .app.shell-revamp .sidebar-panel {
   grid-area: sidebar;
   min-width: 0;
@@ -278,11 +274,6 @@
 .app.shell-revamp .sidebar-drawer-body .review-captions-btn,
 .app.shell-revamp .sidebar-drawer-body .sidebar-create-set-btn {
   width: 100%;
-}
-
-.app.shell-revamp .sidebar-drawer-body .sidebar-action-strip {
-  flex-direction: column;
-  gap: 8px;
 }
 
 .app.shell-revamp .sidebar-drawer-body .sidebar-workspace {

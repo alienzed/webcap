@@ -192,12 +192,6 @@
   justify-content: center;
 }
 
-.annotate-strip-group-btn-icon {
-  width: 12px;
-  height: 12px;
-  display: block;
-}
-
 .annotate-strip-group-reviewed-btn:hover {
   background: #eef2f7;
   color: #364152;
@@ -763,16 +757,6 @@
   break-inside: avoid;
 }
 
-#phrase-copy-items .phrase-row-inline {
-  grid-template-columns: 1fr auto auto;
-}
-
-.phrase-copy-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
 #stats-phrases-items {
   display: flex;
   flex-direction: column;
@@ -1273,10 +1257,6 @@
   transition: background 0.15s, border-color 0.15s;
 }
 
-.checklist-settings-tabs-btn {
-  display: none;
-}
-
 .caption-helper-section-controls {
   display: inline-flex;
   align-items: center;
@@ -1412,7 +1392,6 @@ html[data-theme="dark"] #caption-checklist-panel button:not(.group-workbench-act
 }
 
 html[data-theme="dark"] .caption-helper-tab-btn,
-html[data-theme="dark"] .sidebar-tab-btn,
 html[data-theme="dark"] .review-captions-btn,
 html[data-theme="dark"] .checklist-settings-btn,
 html[data-theme="dark"] #caption-checklist-panel .annotate-strip-toggle-btn {
@@ -1443,8 +1422,6 @@ html[data-theme="dark"] .caption-helper-drawer-summary-title {
   color: #e2e8f0;
 }
 
-html[data-theme="dark"] .sidebar-tab-btn.active,
-html[data-theme="dark"] .sidebar-tab-btn.active:hover,
 html[data-theme="dark"] .caption-helper-tab-btn.active {
   background: #111827;
   color: #ffffff;

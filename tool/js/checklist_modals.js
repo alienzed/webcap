@@ -46,25 +46,18 @@ function renderChecklistTermAffixesPreview() {
 function updateChecklistTermAffixesWrapperUi() {
   var wrapperPrefixEl = document.getElementById('checklist-term-wrapper-prefix');
   var wrapperSuffixEl = document.getElementById('checklist-term-wrapper-suffix');
-  var noteEl = document.getElementById('checklist-term-wrapper-global-note');
   if (!checklistTermAffixesModalState) return;
   var isPinned = !!checklistTermAffixesModalState.isPinnedGlobally;
+  var tooltip = isPinned
+    ? 'Saved here and synced to global config for this pinned term.'
+    : 'Saved in this folder. Pin the term globally to make wrapper text reusable across fresh sets.';
   if (wrapperPrefixEl) {
-    wrapperPrefixEl.disabled = !isPinned;
-    wrapperPrefixEl.title = isPinned
-      ? 'Saving will update the global wrapper in config for this pinned term.'
-      : 'Pin this term globally before saving reusable wrapper text.';
+    wrapperPrefixEl.disabled = false;
+    wrapperPrefixEl.title = tooltip;
   }
   if (wrapperSuffixEl) {
-    wrapperSuffixEl.disabled = !isPinned;
-    wrapperSuffixEl.title = isPinned
-      ? 'Saving will update the global wrapper in config for this pinned term.'
-      : 'Pin this term globally before saving reusable wrapper text.';
-  }
-  if (noteEl) {
-    noteEl.textContent = isPinned
-      ? 'Wrapper Prefix and Wrapper Suffix save globally for this pinned term and survive fresh sets.'
-      : 'Wrapper Prefix and Wrapper Suffix are only reusable for pinned/global terms. Pin this term first to save them globally.';
+    wrapperSuffixEl.disabled = false;
+    wrapperSuffixEl.title = tooltip;
   }
 }
 
@@ -90,6 +83,10 @@ function saveChecklistTermAffixesModal() {
   var wrapperSuffix = wrapperSuffixEl ? wrapperSuffixEl.value : '';
   var descriptorPrefix = descriptorPrefixEl ? descriptorPrefixEl.value : '';
   var descriptorSuffix = descriptorSuffixEl ? descriptorSuffixEl.value : '';
+  function applyLocalWrapperChanges() {
+    if (isPinned) return false;
+    return setChecklistTermWrapper(term, wrapperPrefix, wrapperSuffix);
+  }
   function applyLocalDescriptorChanges() {
     var changed = false;
     if (setChecklistTermDescriptorDefault(term, descriptorPrefix, descriptorSuffix)) {
@@ -103,11 +100,12 @@ function saveChecklistTermAffixesModal() {
     return changed;
   }
   function finalizeAfterSave(globalChanged) {
+    var localWrapperChanged = applyLocalWrapperChanges();
     var localChanged = applyLocalDescriptorChanges();
-    if (localChanged) {
+    if (localWrapperChanged || localChanged) {
       saveChecklistToFolderState();
     }
-    if (globalChanged || localChanged) {
+    if (globalChanged || localWrapperChanged || localChanged) {
       if (typeof refreshChecklistConfigDrivenUi === 'function') {
         refreshChecklistConfigDrivenUi();
       } else {
@@ -152,8 +150,8 @@ function clearChecklistTermAffixesModal() {
   var wrapperSuffixEl = document.getElementById('checklist-term-wrapper-suffix');
   var descriptorPrefixEl = document.getElementById('checklist-term-descriptor-prefix');
   var descriptorSuffixEl = document.getElementById('checklist-term-descriptor-suffix');
-  if (wrapperPrefixEl && !wrapperPrefixEl.disabled) wrapperPrefixEl.value = '';
-  if (wrapperSuffixEl && !wrapperSuffixEl.disabled) wrapperSuffixEl.value = '';
+  if (wrapperPrefixEl) wrapperPrefixEl.value = '';
+  if (wrapperSuffixEl) wrapperSuffixEl.value = '';
   if (descriptorPrefixEl) descriptorPrefixEl.value = '';
   if (descriptorSuffixEl) descriptorSuffixEl.value = '';
   renderChecklistTermAffixesPreview();

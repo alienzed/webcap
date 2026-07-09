@@ -30,7 +30,7 @@
         <div class="app shell-revamp workspace-view-single workflow-annotate workspace-surface-default">
             <div id="sidebar-panel" class="panel stack sidebar-panel">
                 <div class="panel-scrollable">
-                    <div id="utility-bar" class="utility-bar sidebar-utility-strip">
+                    <div id="utility-bar" class="utility-bar">
                         <button
                             id="utility-current-path-btn"
                             type="button"
@@ -137,23 +137,23 @@
                                 </label>
                                 <label class="star-filter-choice" title="1 star">
                                     <input type="checkbox" value="1">
-                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                    <span aria-hidden="true">&#9733;</span>
                                 </label>
                                 <label class="star-filter-choice" title="2 stars">
                                     <input type="checkbox" value="2">
-                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                    <span aria-hidden="true">&#9733;</span>
                                 </label>
                                 <label class="star-filter-choice" title="3 stars">
                                     <input type="checkbox" value="3">
-                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                    <span aria-hidden="true">&#9733;</span>
                                 </label>
                                 <label class="star-filter-choice" title="4 stars">
                                     <input type="checkbox" value="4">
-                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                    <span aria-hidden="true">&#9733;</span>
                                 </label>
                                 <label class="star-filter-choice" title="5 stars">
                                     <input type="checkbox" value="5">
-                                    <span class="star-filter-glyph" aria-hidden="true">&#9733;</span>
+                                    <span aria-hidden="true">&#9733;</span>
                                 </label>
                             </div>
                         </label>
@@ -255,14 +255,14 @@
                             </div>
                         </div>
                         <div id="media-list-header">
-                            <div id="current-folder-row" class="media-item folder-item header-item current-folder-item current-folder-bordered" data-type="current-folder">
+                            <div id="current-folder-row" class="media-item folder-item header-item current-folder-bordered" data-type="current-folder">
                                 <div>
                                     &#128193;
                                     <span id="current-folder-label"></span>
                                 </div>
                             </div>
                         </div>
-                        <div id="media-list" class="media-list with-stats-pane"></div>
+                        <div id="media-list" class="media-list"></div>
                         <div id="superset-results" class="media-list superset-results hidden"></div>
                         <button
                             id="superset-exit-btn"
@@ -280,7 +280,7 @@
                                 </button>
                             </div>
                         </details>
-                        <details class="sidebar-drawer sidebar-project-tools-drawer" open>
+                        <details class="sidebar-drawer" open>
                             <summary class="sidebar-drawer-summary">Project Tools</summary>
                             <div class="sidebar-drawer-body">
                                 <button
@@ -556,7 +556,7 @@
                                             aria-label="Balance phrases help"
                                         >i</button>
                                     </div>
-                                    <div class="checklist-input-row stats-balance-input-row term-input-row">
+                                    <div class="checklist-input-row term-input-row">
                                         <input
                                             id="stats-phrases-add-input"
                                             type="text"
@@ -643,7 +643,7 @@
                                 <button
                                     id="sidebar-collapse-toggle-btn"
                                 type="button"
-                                class="utility-btn utility-path-btn utility-collapse-btn preview-header-btn"
+                                class="utility-btn utility-path-btn utility-collapse-btn"
                                 title="Collapse sidebar"
                                 aria-label="Collapse sidebar"
                                 aria-pressed="false"
@@ -652,7 +652,7 @@
                                     <button
                                         id="sidebar-open-grid-btn"
                                         type="button"
-                                        class="review-captions-btn preview-header-btn"
+                                        class="review-captions-btn"
                                         title="Open Media Grid for the current visible items"
                                         aria-label="Open Media Grid for the current visible items"
                                     >
@@ -664,7 +664,7 @@
                                     <button
                                         id="sidebar-open-focused-btn"
                                         type="button"
-                                        class="review-captions-btn preview-header-btn"
+                                        class="review-captions-btn"
                                         title="Open Focused Annotation for the selected item"
                                         aria-label="Open Focused Annotation for the selected item"
                                     >
@@ -1015,7 +1015,6 @@
                     <div class="modal-body-row-label">Wrapper Suffix</div>
                     <input id="checklist-term-wrapper-suffix" type="text" class="form-control" placeholder="optional trailing text">
                 </div>
-                <div id="checklist-term-wrapper-global-note" class="small" style="margin-top:4px;"></div>
                 <div class="modal-body-row">
                     <div class="modal-body-row-label">Descriptor Prefix</div>
                     <input id="checklist-term-descriptor-prefix" type="text" class="form-control" placeholder="e.g. red, carpeted">

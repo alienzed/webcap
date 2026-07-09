@@ -1080,8 +1080,8 @@ function wireVideoClipModal() {
   var cropClearBtn = getVideoClipEl('video-clip-crop-clear-btn');
   var skipBackBtn = getVideoClipEl('video-clip-skip-back-btn');
   var skipForwardBtn = getVideoClipEl('video-clip-skip-forward-btn');
-  var goStartBtn = getVideoClipEl('video-clip-go-start-btn');
-  var goEndBtn = getVideoClipEl('video-clip-go-end-btn');
+  var skipForward15Btn = getVideoClipEl('video-clip-skip-forward-15-btn');
+  var skipForward30Btn = getVideoClipEl('video-clip-skip-forward-30-btn');
   var loopPreviewBtn = getVideoClipEl('video-clip-loop-preview-btn');
   var markStartBtn = getVideoClipEl('video-clip-mark-start-btn');
   var markEndBtn = getVideoClipEl('video-clip-mark-end-btn');
@@ -1099,14 +1099,8 @@ function wireVideoClipModal() {
   if (cropClearBtn) cropClearBtn.onclick = clearVideoClipCrop;
   if (skipBackBtn) skipBackBtn.onclick = function () { stepVideoClipPlayhead(-5); };
   if (skipForwardBtn) skipForwardBtn.onclick = function () { stepVideoClipPlayhead(5); };
-  if (goStartBtn) goStartBtn.onclick = function () {
-    var range = readVideoClipTrimState();
-    if (range) seekVideoClipPlayhead(range.start);
-  };
-  if (goEndBtn) goEndBtn.onclick = function () {
-    var range = readVideoClipTrimState();
-    if (range) seekVideoClipPlayhead(range.end);
-  };
+  if (skipForward15Btn) skipForward15Btn.onclick = function () { stepVideoClipPlayhead(15); };
+  if (skipForward30Btn) skipForward30Btn.onclick = function () { stepVideoClipPlayhead(30); };
   if (loopPreviewBtn) loopPreviewBtn.onclick = toggleVideoClipLoopPreview;
   if (markStartBtn && startEl && videoEl) {
     markStartBtn.onclick = function () {

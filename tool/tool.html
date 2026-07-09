@@ -673,6 +673,7 @@
                                     </button>
                                 </div>
                             </div>
+                            <div id="preview-header-position" class="preview-header-position hidden" aria-label="Item position"></div>
                             <div class="preview-header-copy">
                                 <div id="preview-actions" class="preview-actions hidden" aria-label="Preview actions">
                                     <div id="preview-action-rating" class="preview-action-rating hidden" aria-label="Item rating"></div>
@@ -697,13 +698,10 @@
                         </div>
                         <div id="media-grid-surface-canvas" class="media-grid-surface-canvas"></div>
                     </section>
-                    <div class="preview-stage">
+                    <div id="preview-stage" class="preview-stage">
                         <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'><style>html,body{margin:0;height:100%;}body{display:flex;align-items:center;justify-content:center;font-family:system-ui;padding:1rem;transition:background 120ms ease,color 120ms ease;}</style></head><body><div id='preview-empty-message'>Select a media file to preview.</div><script>(function(){function applyTheme(){try{var theme=(document.documentElement&&document.documentElement.getAttribute('data-theme'))||(window.parent&&window.parent.document&&window.parent.document.documentElement&&window.parent.document.documentElement.getAttribute('data-theme'))||'light';theme=String(theme).toLowerCase()==='dark'?'dark':'light';var dark=theme==='dark';document.documentElement.setAttribute('data-theme',theme);document.documentElement.style.colorScheme=theme;document.body.style.background=dark?'#0f172a':'#ffffff';document.body.style.color=dark?'#cbd5e1':'#666666';}catch(e){}}applyTheme();try{var parentRoot=window.parent&&window.parent.document&&window.parent.document.documentElement;if(parentRoot&&window.MutationObserver){new MutationObserver(applyTheme).observe(parentRoot,{attributes:true,attributeFilter:['data-theme']});}}catch(e){};})();</script></body></html>"></iframe>
+                        <div id="preview-stage-status" class="preview-stage-status hidden" aria-label="Preview warning"></div>
                         <div id="balance-distribution-wheel" class="balance-distribution-wheel hidden" tabindex="0" aria-label="Balance distribution"></div>
-                    </div>
-                    <div id="preview-info-strip" class="preview-info-strip hidden" aria-label="Preview details">
-                        <div id="preview-header-meta" class="preview-header-meta"></div>
-                        <div id="preview-header-status" class="preview-header-status hidden"></div>
                     </div>
                     </div>
                 </div>
@@ -1039,7 +1037,6 @@
         </div>
         <div id="focused-annotation-modal" class="focused-annotation-modal hidden" aria-hidden="true">
             <div class="focused-annotation-dialog" role="dialog" aria-modal="true" aria-labelledby="focused-annotation-group-name">
-                <button id="focused-annotation-close-btn" type="button" class="btn focused-annotation-close-icon-btn" aria-label="Exit focused annotation" title="Exit focused annotation">&times;</button>
                 <div class="focused-annotation-body">
                     <div class="focused-annotation-preview-pane">
                         <div class="focused-annotation-preview-toolbar">
@@ -1061,6 +1058,7 @@
                                 >&#9660;</button>
                             </div>
                             <div id="focused-annotation-rating" class="focused-annotation-rating" aria-label="Rating"></div>
+                            <div id="focused-annotation-preview-actions" class="focused-annotation-preview-actions hidden" aria-label="Media actions"></div>
                         </div>
                         <div id="focused-annotation-preview-media" class="focused-annotation-preview-media"></div>
                     </div>
@@ -1083,6 +1081,7 @@
                                     aria-label="Next group"
                                 >&#x203A;</button>
                             </div>
+                            <button id="focused-annotation-close-btn" type="button" class="btn focused-annotation-close-icon-btn" aria-label="Exit focused annotation" title="Exit focused annotation">&times;</button>
                         </div>
                         <div class="focused-annotation-group-header">
                             <div class="focused-annotation-title-row">

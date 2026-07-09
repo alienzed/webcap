@@ -319,28 +319,38 @@ function buildPreviewHeaderStars(mediaKey, rating) {
 }
 
 function renderPreviewHeaderMeta() {
-  if (!ui || !ui.previewHeaderEl || !ui.previewHeaderMetaEl) return;
+  if (!ui || !ui.previewHeaderEl || !ui.previewHeaderPositionEl) return;
   var previewShellEl = document.getElementById('preview-shell');
-  var infoStripEl = ui.previewInfoStripEl || document.getElementById('preview-info-strip');
-  var statusEl = ui.previewHeaderStatusEl || document.getElementById('preview-header-status');
+  var positionEl = ui.previewHeaderPositionEl || document.getElementById('preview-header-position');
+  var previewStageEl = ui.previewStageEl || document.getElementById('preview-stage');
+  var overlayStatusEl = ui.previewStageStatusEl || document.getElementById('preview-stage-status');
   var workflowActionsEl = ui.previewWorkflowActionsEl || document.getElementById('preview-workflow-actions');
   var ratingEl = ui.previewActionRatingEl || document.getElementById('preview-action-rating');
   var gridOpen = typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen();
   var visibleMedia = (typeof getFilteredMediaItems === 'function') ? getFilteredMediaItems(false) : [];
   var hasVisibleMedia = Array.isArray(visibleMedia) && visibleMedia.length > 0;
   var hasItem = !!(state.currentItem && state.currentItem.fileName);
+  function clearPreviewTooltip() {
+    [previewShellEl, previewStageEl, ui.previewEl].forEach(function (el) {
+      if (el) el.removeAttribute('title');
+    });
+  }
+  function setPreviewTooltip(text) {
+    [previewShellEl, previewStageEl, ui.previewEl].forEach(function (el) {
+      if (el) el.title = text;
+    });
+  }
   function clearPreviewHeaderUi() {
-    ui.previewHeaderMetaEl.innerHTML = '';
-    if (statusEl) {
-      statusEl.innerHTML = '';
-      statusEl.classList.add('hidden');
+    positionEl.textContent = '';
+    positionEl.classList.add('hidden');
+    clearPreviewTooltip();
+    if (overlayStatusEl) {
+      overlayStatusEl.innerHTML = '';
+      overlayStatusEl.classList.add('hidden');
     }
     if (ratingEl) {
       ratingEl.innerHTML = '';
       ratingEl.classList.add('hidden');
-    }
-    if (infoStripEl) {
-      infoStripEl.classList.add('hidden');
     }
   }
   function updateWorkflowVisibility() {
@@ -349,23 +359,19 @@ function renderPreviewHeaderMeta() {
     var showFocus = !!(ui.sidebarFocusBtnEl && !ui.sidebarFocusBtnEl.classList.contains('hidden'));
     workflowActionsEl.classList.toggle('hidden', !(showGrid || showFocus));
   }
-  function appendStatusPill(text, tone) {
-    if (!statusEl || !text) return;
+  function appendOverlayWarning(text) {
+    if (!overlayStatusEl || !text) return;
     var pill = document.createElement('span');
-    pill.className = 'preview-header-status-pill';
-    if (tone) {
-      pill.className += ' is-' + tone;
-    }
+    pill.className = 'preview-stage-status-pill';
     pill.textContent = text;
-    statusEl.appendChild(pill);
+    overlayStatusEl.appendChild(pill);
+    overlayStatusEl.classList.remove('hidden');
   }
   if (gridOpen) {
     if (previewShellEl) previewShellEl.classList.remove('preview-header-active');
     ui.previewHeaderEl.classList.add('hidden');
     clearPreviewHeaderUi();
     if (workflowActionsEl) workflowActionsEl.classList.add('hidden');
-    if (previewShellEl) previewShellEl.removeAttribute('title');
-    if (ui.previewEl) ui.previewEl.removeAttribute('title');
     return;
   }
 
@@ -386,8 +392,6 @@ function renderPreviewHeaderMeta() {
     if (previewShellEl) previewShellEl.classList.remove('preview-header-active');
     ui.previewHeaderEl.classList.add('hidden');
     clearPreviewHeaderUi();
-    if (previewShellEl) previewShellEl.removeAttribute('title');
-    if (ui.previewEl) ui.previewEl.removeAttribute('title');
     return;
   }
 
@@ -396,11 +400,8 @@ function renderPreviewHeaderMeta() {
   var currentMediaKey = currentItem.key || currentItem.fileName;
   var rating = getRatingForMediaKey(currentMediaKey);
   var resolution = getResolutionForMedia(currentItem.fileName);
-  var duration = isPreviewVideoFileName(currentItem.fileName) ? getDurationForMedia(currentItem.fileName) : '';
   var metadata = getMetadataForMedia(currentItem.fileName) || {};
   var aspect = String(metadata.aspect || '').trim();
-  var isReviewed = !!(state.reviewedSet && state.reviewedSet.has(currentMediaKey));
-  var details = [];
   var currentIndex = -1;
   for (var i = 0; i < visibleMedia.length; i += 1) {
     var visibleItem = visibleMedia[i];
@@ -410,36 +411,21 @@ function renderPreviewHeaderMeta() {
     }
   }
   if (currentIndex >= 0 && visibleMedia.length > 0) {
-    details.push('Item ' + (currentIndex + 1) + '/' + visibleMedia.length);
+    positionEl.textContent = 'Item ' + (currentIndex + 1) + '/' + visibleMedia.length;
+    positionEl.classList.remove('hidden');
   }
-  if (resolution) details.push(resolution);
-  if (duration) details.push(duration);
-  details.forEach(function (text, index) {
-    var detail = document.createElement('span');
-    detail.className = 'preview-header-detail' + (index > 0 ? ' with-divider' : '');
-    detail.textContent = text;
-    ui.previewHeaderMetaEl.appendChild(detail);
-  });
   if (aspect && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(aspect)) {
-    appendStatusPill('Invalid AR', 'warning');
-  }
-  if (!isReviewed) {
-    appendStatusPill('Not Reviewed', 'pending');
-  }
-  if (statusEl && statusEl.childNodes.length) {
-    statusEl.classList.remove('hidden');
+    appendOverlayWarning('Invalid AR');
   }
   if (ratingEl) {
     ratingEl.appendChild(buildPreviewHeaderStars(currentMediaKey, rating));
     ratingEl.classList.remove('hidden');
   }
-  if (previewShellEl) previewShellEl.title = currentItem.fileName;
-  if (ui.previewEl) ui.previewEl.title = currentItem.fileName;
+  var tooltipLines = [currentItem.fileName];
+  if (resolution) tooltipLines.push(resolution);
+  setPreviewTooltip(tooltipLines.join('\n'));
   if (previewShellEl) previewShellEl.classList.add('preview-header-active');
   ui.previewHeaderEl.classList.remove('hidden');
-  if (infoStripEl && (ui.previewHeaderMetaEl.childNodes.length || (statusEl && statusEl.childNodes.length))) {
-    infoStripEl.classList.remove('hidden');
-  }
 }
 
 function parseRequirementProgressTerms(raw) {

@@ -38,6 +38,7 @@
   overflow: hidden;
   position: relative;
   box-shadow: none;
+  padding:0;
 }
 
 .app.shell-revamp .workbench-panel {
@@ -64,24 +65,18 @@
 .app.shell-revamp .preview-header {
   position: static;
   z-index: 2;
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
   max-width: none;
   min-height: 40px;
-  padding: 0;
+  padding: 6px;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
-}
-
-.app.shell-revamp .preview-info-strip {
-  min-height: 26px;
-  padding: 6px 2px 0;
 }
 
 .app.shell-revamp .preview-header.hidden {
@@ -96,8 +91,8 @@
   gap: 8px;
   flex-wrap: nowrap;
   padding: 0;
-  flex: 1 1 auto;
   justify-content: flex-end;
+  justify-self: end;
 }
 
 .app.shell-revamp .preview-header-actions {
@@ -105,7 +100,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  flex: 0 0 auto;
+  justify-self: start;
 }
 
 .app.shell-revamp .preview-header-actions .utility-btn,
@@ -131,12 +126,11 @@
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
+  border:0;
 }
 
-.app.shell-revamp .preview-header-meta {
-  flex-wrap: nowrap;
-  overflow: hidden;
-  justify-content: flex-start;
+.app.shell-revamp .preview-stage-status {
+  top: 10px;
 }
 
 .app.shell-revamp .preview-header-actions .utility-collapse-btn {

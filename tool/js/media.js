@@ -610,17 +610,24 @@ function renderPathPreview(folder, mediaName) {
   // Add cache-busting timestamp
   var ts = Date.now();
   var mediaUrl = '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(mediaName) + '&t=' + ts;
-  renderPreviewHtml(!!IMAGE_EXTENSIONS[ext], mediaUrl);
+  var tooltipLines = [String(mediaName || '')];
+  var resolution = getResolutionForMedia(mediaName);
+  if (resolution) tooltipLines.push(resolution);
+  renderPreviewHtml(!!IMAGE_EXTENSIONS[ext], mediaUrl, tooltipLines.join('\n'));
 }
 
-function renderPreviewHtml(isImage, src) {
+function renderPreviewHtml(isImage, src, titleText) {
+  var titleAttr = '';
+  if (titleText) {
+    titleAttr = ' title="' + escapeHtml(String(titleText || '')).replace(/\r?\n/g, '&#10;') + '"';
+  }
   var tag = '';
   if (isImage) {
-    tag = '<img src="' + src + '" alt="preview" style="max-width:100%;max-height:100%;object-fit:contain;">';
+    tag = '<img src="' + src + '" alt="preview"' + titleAttr + ' style="max-width:100%;max-height:100%;object-fit:contain;">';
   } else {
     tag = '' +
-      '<div id="video-wrap" style="max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">' +
-      '  <video id="media-video" controls autoplay loop muted playsinline preload="metadata" style="max-width:100%;max-height:100%;">' +
+      '<div id="video-wrap"' + titleAttr + ' style="max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">' +
+      '  <video id="media-video" controls autoplay loop muted playsinline preload="metadata"' + titleAttr + ' style="max-width:100%;max-height:100%;">' +
       '    <source src="' + src + '">' +
       '  </video>' +
       '  <div id="video-error" style="display:none;color:#ddd;font:13px system-ui;text-align:center;max-width:420px;">' +
@@ -632,7 +639,7 @@ function renderPreviewHtml(isImage, src) {
   var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
   doc.open();
   doc.write(
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body' + titleAttr + ' style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
     tag +
     '<script>\n' +
     'var video=document.getElementById("media-video");\n' +

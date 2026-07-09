@@ -414,6 +414,7 @@ html[data-theme="dark"] .app-settings-radio-label {
 }
 
 .focused-annotation-dialog {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
@@ -538,6 +539,39 @@ html[data-theme="dark"] .app-settings-radio-label {
   border: 1px solid rgba(148, 163, 184, 0.22);
 }
 
+.focused-annotation-preview-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  grid-column: 3;
+  justify-self: end;
+  min-width: 0;
+}
+
+.focused-annotation-preview-action-btn {
+  padding: 7px 12px !important;
+  font-size: 12px !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  background: rgba(30, 41, 59, 0.72) !important;
+}
+
+.focused-annotation-preview-action-btn:hover {
+  border-color: rgba(203, 213, 225, 0.34) !important;
+  background: rgba(51, 65, 85, 0.9) !important;
+}
+
+.focused-annotation-preview-action-btn.focused-annotation-preview-reset-btn {
+  background: rgba(245, 158, 11, 0.22) !important;
+  border-color: rgba(251, 191, 36, 0.34) !important;
+  color: #fde68a !important;
+}
+
+.focused-annotation-preview-action-btn.focused-annotation-preview-reset-btn:hover {
+  background: rgba(245, 158, 11, 0.3) !important;
+  border-color: rgba(251, 191, 36, 0.48) !important;
+}
+
 .focused-annotation-rating-star {
   appearance: none;
   border: 0;
@@ -585,7 +619,7 @@ html[data-theme="dark"] .app-settings-radio-label {
 
 .focused-annotation-group-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
   flex-wrap: wrap;
@@ -604,6 +638,7 @@ html[data-theme="dark"] .app-settings-radio-label {
 
 .focused-annotation-group-actions {
   gap: 12px;
+  align-self: flex-start;
 }
 
 .focused-annotation-title-row {
@@ -919,7 +954,6 @@ html[data-theme="dark"] .app-settings-radio-label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  justify-self: end;
   font-size: 22px !important;
   line-height: 1;
 }
@@ -934,6 +968,10 @@ html[data-theme="dark"] .app-settings-radio-label {
 
 body.focused-annotation-open {
   overflow: hidden;
+}
+
+body.focused-annotation-open .caption-context-menu {
+  z-index: 3160;
 }
 
 .app.shell-revamp .focused-annotation-modal {
@@ -1001,6 +1039,12 @@ body.focused-annotation-open {
 
   .focused-annotation-rating {
     grid-column: 1;
+  }
+
+  .focused-annotation-preview-actions {
+    grid-column: 1;
+    justify-self: start;
+    flex-wrap: wrap;
   }
 
   .focused-annotation-group-name {

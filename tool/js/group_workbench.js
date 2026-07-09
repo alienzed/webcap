@@ -544,9 +544,11 @@ function renderGroupWorkbench(options) {
         ? (hasGridTargets && activeCount === mediaKeys.length)
         : (hasItemTarget && activeCount > 0);
       var isMixed = isGridMode && hasGridTargets && activeCount > 0 && activeCount < mediaKeys.length;
-      var isMismatch = hasItemTarget && !isGridMode && isActive
+      var appearsInCaption = hasItemTarget && !isGridMode
         && typeof tagAppearsInCurrentCaption === 'function'
-        && !tagAppearsInCurrentCaption(term);
+        && tagAppearsInCurrentCaption(term);
+      var isMismatch = hasItemTarget && !isGridMode && isActive && !appearsInCaption;
+      var isMatched = hasItemTarget && !isGridMode && !isActive && appearsInCaption;
       var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
       var usageState = getGroupWorkbenchGridUsageState(term, contextMediaKeys);
       var termBtn = document.createElement('button');
@@ -557,6 +559,7 @@ function renderGroupWorkbench(options) {
       termBtn.title = renderedTerm && renderedTerm !== term ? renderedTerm : term;
       termBtn.classList.toggle('active', isActive);
       termBtn.classList.toggle('mixed', isMixed);
+      termBtn.classList.toggle('matched', isMatched);
       termBtn.classList.toggle('mismatch', isMismatch);
       termBtn.disabled = !hasActionTarget;
       groupHasActiveTerm = groupHasActiveTerm || isActive;

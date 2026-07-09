@@ -153,10 +153,16 @@ function getChecklistTermWrapper(termText) {
   var key = normalizeChecklistTermAffixKey(termText);
   if (!key) return { prefix: '', suffix: '' };
   var entry = checklistTermWrappersByKey[key];
-  if (!entry || typeof entry !== 'object') return { prefix: '', suffix: '' };
+  var localPrefix = '';
+  var localSuffix = '';
+  if (entry && typeof entry === 'object') {
+    localPrefix = normalizeChecklistAffixValue(entry.prefix);
+    localSuffix = normalizeChecklistAffixValue(entry.suffix);
+  }
+  var globalWrapper = getChecklistGlobalWrapper(termText);
   return {
-    prefix: normalizeChecklistAffixValue(entry.prefix),
-    suffix: normalizeChecklistAffixValue(entry.suffix),
+    prefix: globalWrapper.prefix || localPrefix,
+    suffix: globalWrapper.suffix || localSuffix,
   };
 }
 
@@ -811,6 +817,34 @@ function getConfigRequirementKeywordsByItemMap() {
   return out;
 }
 
+function getConfigRequirementTermWrappersByTerm(requirements) {
+  var out = {};
+  var req = (requirements && typeof requirements === 'object')
+    ? requirements
+    : ((window && window.APP_CONFIG && window.APP_CONFIG.requirements && typeof window.APP_CONFIG.requirements === 'object')
+      ? window.APP_CONFIG.requirements
+      : null);
+  var legacyPrefixes = (req && req.termWrapperPrefixesByTerm && typeof req.termWrapperPrefixesByTerm === 'object')
+    ? req.termWrapperPrefixesByTerm
+    : {};
+  Object.keys(legacyPrefixes).forEach(function (key) {
+    var termKey = normalizeChecklistTermAffixKey(key);
+    var prefix = normalizeChecklistAffixValue(legacyPrefixes[key]);
+    if (!termKey || !prefix) return;
+    out[termKey] = { prefix: prefix, suffix: '' };
+  });
+  var src = (req && req.termWrappersByTerm && typeof req.termWrappersByTerm === 'object')
+    ? req.termWrappersByTerm
+    : {};
+  Object.keys(src).forEach(function (key) {
+    var termKey = normalizeChecklistTermAffixKey(key);
+    var entry = sanitizeChecklistAffixEntry(src[key], false);
+    if (!termKey || !entry) return;
+    out[termKey] = entry;
+  });
+  return out;
+}
+
 function getConfigRequirementKeywordCatalogTerms() {
   var out = [];
   var seen = {};
@@ -841,6 +875,40 @@ function isChecklistGroupTermPinnedGlobally(requirementLabel, termText) {
   return false;
 }
 
+function isChecklistTermPinnedGloballyAnywhere(termText) {
+  var term = normalizeChecklistTerm(termText).toLowerCase();
+  if (!term) return false;
+  var byItem = getConfigRequirementKeywordsByItemMap();
+  var requirements = Object.keys(byItem);
+  for (var i = 0; i < requirements.length; i++) {
+    var terms = Array.isArray(byItem[requirements[i]]) ? byItem[requirements[i]] : [];
+    for (var j = 0; j < terms.length; j++) {
+      if (String(terms[j] || '').toLowerCase() === term) return true;
+    }
+  }
+  return false;
+}
+
+function getChecklistGlobalWrapper(termText) {
+  var key = normalizeChecklistTermAffixKey(termText);
+  if (!key || !isChecklistTermPinnedGloballyAnywhere(termText)) return { prefix: '', suffix: '' };
+  var byTerm = getConfigRequirementTermWrappersByTerm();
+  var entry = byTerm[key];
+  if (!entry || typeof entry !== 'object') return { prefix: '', suffix: '' };
+  return {
+    prefix: normalizeChecklistAffixValue(entry.prefix),
+    suffix: normalizeChecklistAffixValue(entry.suffix),
+  };
+}
+
+function getChecklistGlobalWrapperPrefix(termText) {
+  return getChecklistGlobalWrapper(termText).prefix;
+}
+
+function getChecklistGlobalWrapperSuffix(termText) {
+  return getChecklistGlobalWrapper(termText).suffix;
+}
+
 function normalizeRequirementLabelList(labels) {
   var seen = {};
   var out = [];
@@ -852,6 +920,17 @@ function normalizeRequirementLabelList(labels) {
     out.push(clean);
   });
   return out;
+}
+
+function refreshChecklistConfigDrivenUi() {
+  refreshCurrentPrimerDerivedUi();
+  renderAnnotateStrip();
+  renderChecklistPanel();
+  renderItemMetadataPanel();
+  renderItemTagsPanel();
+  if (typeof renderFocusedAnnotationModal === 'function') {
+    renderFocusedAnnotationModal();
+  }
 }
 
 function saveChecklistGlobalTermPin(requirementLabel, termText, shouldPin) {
@@ -909,16 +988,53 @@ function saveChecklistGlobalTermPin(requirementLabel, termText, shouldPin) {
       }
     } catch (_e) {}
     setRuntimeAppConfig(saved);
-    refreshCurrentPrimerDerivedUi();
-    renderAnnotateStrip();
-    renderItemMetadataPanel();
-    renderItemTagsPanel();
-    if (typeof renderFocusedAnnotationModal === 'function') {
-      renderFocusedAnnotationModal();
-    }
+    refreshChecklistConfigDrivenUi();
     renderChecklistGroupTermsModalItems();
     renderChecklistGroupTermsModalResults('');
     setStatus(shouldPin ? ('Pinned term to global config: ' + term) : ('Unpinned global term: ' + term));
+  });
+}
+
+function saveChecklistGlobalWrapper(termText, prefix, suffix, onDone) {
+  var term = normalizeChecklistTerm(termText);
+  var nextPrefix = normalizeChecklistAffixValue(prefix);
+  var nextSuffix = normalizeChecklistAffixValue(suffix);
+  var callback = typeof onDone === 'function' ? onDone : function () {};
+  if (!term) {
+    callback(false, 'Missing term for global wrapper save.');
+    return;
+  }
+  var cfg = (window && window.APP_CONFIG && typeof window.APP_CONFIG === 'object') ? window.APP_CONFIG : {};
+  var nextCfg = JSON.parse(JSON.stringify(cfg));
+  if (!nextCfg.requirements || typeof nextCfg.requirements !== 'object') nextCfg.requirements = {};
+  var req = nextCfg.requirements;
+  var byTerm = getConfigRequirementTermWrappersByTerm(req);
+  var key = normalizeChecklistTermAffixKey(term);
+  var previousEntry = byTerm[key] && typeof byTerm[key] === 'object' ? byTerm[key] : {};
+  var previousPrefix = normalizeChecklistAffixValue(previousEntry.prefix);
+  var previousSuffix = normalizeChecklistAffixValue(previousEntry.suffix);
+  if (previousPrefix === nextPrefix && previousSuffix === nextSuffix) {
+    callback(true, nextCfg);
+    return;
+  }
+  if (nextPrefix || nextSuffix) byTerm[key] = { prefix: nextPrefix, suffix: nextSuffix };
+  else delete byTerm[key];
+  req.termWrappersByTerm = byTerm;
+  delete req.termWrapperPrefixesByTerm;
+  HttpModule.postJson('/app/config', nextCfg, function (status, responseText) {
+    if (status !== 200) {
+      callback(false, getErrorMessage(responseText, 'Failed to update global wrapper in config.'));
+      return;
+    }
+    var saved = nextCfg;
+    try {
+      var parsed = JSON.parse(responseText);
+      if (parsed && parsed.config && typeof parsed.config === 'object') {
+        saved = parsed.config;
+      }
+    } catch (_e) {}
+    setRuntimeAppConfig(saved);
+    callback(true, saved);
   });
 }
 

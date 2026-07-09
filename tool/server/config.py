@@ -65,8 +65,19 @@ def apply_requirement_defaults(payload):
     if requirement_defaults_are_empty(normalized):
         defaults = load_default_requirements_block()
         if defaults:
-            normalized['requirements'] = defaults
+            existing = normalized.get('requirements') if isinstance(normalized.get('requirements'), dict) else {}
+            merged = copy.deepcopy(defaults)
+            merged.update(existing)
+            normalized['requirements'] = merged
     return normalized
+
+
+def _normalize_requirement_term_key(value):
+    return re.sub(r"\s+", " ", str(value or "").strip()).lower()
+
+
+def _normalize_wrapper_affix_value(value):
+    return re.sub(r"\s+", " ", str(value or "").replace("\r", " ").replace("\n", " ").strip())
 
 
 def validate_config_payload(payload):
@@ -126,6 +137,46 @@ def validate_config_payload(payload):
     out["primer"] = {
         "template": str(primer.get("template") or "").replace("\r\n", "\n"),
     }
+
+    requirements = out.get("requirements")
+    if requirements is not None and not isinstance(requirements, dict):
+        raise ValueError("Config.requirements must be an object when provided.")
+    if isinstance(requirements, dict):
+        wrappers = requirements.get("termWrappersByTerm")
+        prefixes = requirements.get("termWrapperPrefixesByTerm")
+        if wrappers is not None and not isinstance(wrappers, dict):
+            raise ValueError("Config.requirements.termWrappersByTerm must be an object when provided.")
+        if prefixes is not None and not isinstance(prefixes, dict):
+            raise ValueError("Config.requirements.termWrapperPrefixesByTerm must be an object when provided.")
+        clean_wrappers = {}
+        if isinstance(prefixes, dict):
+            for raw_term, raw_prefix in prefixes.items():
+                term_key = _normalize_requirement_term_key(raw_term)
+                prefix_value = _normalize_wrapper_affix_value(raw_prefix)
+                if not term_key or not prefix_value:
+                    continue
+                clean_wrappers[term_key] = {
+                    "prefix": prefix_value,
+                    "suffix": "",
+                }
+        if isinstance(wrappers, dict):
+            for raw_term, raw_wrapper in wrappers.items():
+                term_key = _normalize_requirement_term_key(raw_term)
+                if not term_key:
+                    continue
+                if not isinstance(raw_wrapper, dict):
+                    raise ValueError("Each Config.requirements.termWrappersByTerm entry must be an object.")
+                prefix_value = _normalize_wrapper_affix_value(raw_wrapper.get("prefix"))
+                suffix_value = _normalize_wrapper_affix_value(raw_wrapper.get("suffix"))
+                if not prefix_value and not suffix_value:
+                    clean_wrappers.pop(term_key, None)
+                    continue
+                clean_wrappers[term_key] = {
+                    "prefix": prefix_value,
+                    "suffix": suffix_value,
+                }
+        out["requirements"]["termWrappersByTerm"] = clean_wrappers
+        out["requirements"].pop("termWrapperPrefixesByTerm", None)
 
     return out
 

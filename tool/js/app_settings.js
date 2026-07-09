@@ -11,6 +11,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.filesystem || typeof out.filesystem !== 'object') out.filesystem = {};
   if (!out.training || typeof out.training !== 'object') out.training = {};
   if (!out.primer || typeof out.primer !== 'object') out.primer = {};
+  if (!out.requirements || typeof out.requirements !== 'object') out.requirements = {};
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
   if (!out.filesystem.root) out.filesystem.root = '';
   if (!out.filesystem.models) out.filesystem.models = '';
@@ -22,6 +23,20 @@ function normalizeAppConfigShape(cfg) {
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
   if (typeof out.analysis.enableFaceAnalysis !== 'boolean') out.analysis.enableFaceAnalysis = false;
   if (typeof out.analysis.enableMediaPipeAnalysis !== 'boolean') out.analysis.enableMediaPipeAnalysis = false;
+  if (!out.requirements.termWrappersByTerm || typeof out.requirements.termWrappersByTerm !== 'object') {
+    out.requirements.termWrappersByTerm = {};
+  }
+  if (out.requirements.termWrapperPrefixesByTerm && typeof out.requirements.termWrapperPrefixesByTerm === 'object') {
+    Object.keys(out.requirements.termWrapperPrefixesByTerm).forEach(function (termKey) {
+      if (!Object.prototype.hasOwnProperty.call(out.requirements.termWrappersByTerm, termKey)) {
+        out.requirements.termWrappersByTerm[termKey] = {
+          prefix: String(out.requirements.termWrapperPrefixesByTerm[termKey] || '').trim(),
+          suffix: ''
+        };
+      }
+    });
+  }
+  delete out.requirements.termWrapperPrefixesByTerm;
   return out;
 }
 

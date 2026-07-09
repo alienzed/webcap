@@ -3,7 +3,6 @@ var focusedAnnotationState = {
   itemKeys: [],
   itemIndex: 0,
   groupIndex: 0,
-  traversalMode: 'group-first',
   history: [],
   sourceLabel: '',
   previousSurface: 'default'
@@ -16,8 +15,6 @@ function getFocusedAnnotationEls() {
     itemProgress: document.getElementById('focused-annotation-item-progress'),
     itemPrevBtn: document.getElementById('focused-annotation-item-prev-btn'),
     itemNextBtn: document.getElementById('focused-annotation-item-next-btn'),
-    modeGroupBtn: document.getElementById('focused-annotation-mode-group-btn'),
-    modeItemBtn: document.getElementById('focused-annotation-mode-item-btn'),
     groupProgress: document.getElementById('focused-annotation-group-progress'),
     groupPrevBtn: document.getElementById('focused-annotation-group-prev-btn'),
     groupNextBtn: document.getElementById('focused-annotation-group-next-btn'),
@@ -52,19 +49,6 @@ function isFocusedAnnotationNestedModalOpen() {
     }
   }
   return false;
-}
-
-function getFocusedAnnotationTraversalMode() {
-  return focusedAnnotationState.traversalMode === 'item-first' ? 'item-first' : 'group-first';
-}
-
-function setFocusedAnnotationTraversalMode(mode, options) {
-  var nextMode = String(mode || '').trim().toLowerCase() === 'item-first' ? 'item-first' : 'group-first';
-  var opts = options || {};
-  focusedAnnotationState.traversalMode = nextMode;
-  if (!opts.skipRender) {
-    renderFocusedAnnotationModal();
-  }
 }
 
 function findFocusedAnnotationMediaItemByKey(mediaKey) {
@@ -153,24 +137,7 @@ function isFocusedAnnotationPendingStep(itemIndex, groupIndex) {
 
 function getFocusedAnnotationTraversalSteps() {
   var itemKeys = Array.isArray(focusedAnnotationState.itemKeys) ? focusedAnnotationState.itemKeys : [];
-  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
-  var steps = [];
-  if (!itemKeys.length || !requirements.length) return steps;
-  var mode = getFocusedAnnotationTraversalMode();
-  if (mode === 'item-first') {
-    for (var itemIndex = 0; itemIndex < itemKeys.length; itemIndex++) {
-      for (var groupIndex = 0; groupIndex < requirements.length; groupIndex++) {
-        steps.push({ itemIndex: itemIndex, groupIndex: groupIndex });
-      }
-    }
-    return steps;
-  }
-  for (var nextGroupIndex = 0; nextGroupIndex < requirements.length; nextGroupIndex++) {
-    for (var nextItemIndex = 0; nextItemIndex < itemKeys.length; nextItemIndex++) {
-      steps.push({ itemIndex: nextItemIndex, groupIndex: nextGroupIndex });
-    }
-  }
-  return steps;
+  return getFocusedAnnotationTraversalStepsForKeys(itemKeys);
 }
 
 function getFocusedAnnotationNextPendingStep(itemIndex, groupIndex) {
@@ -214,22 +181,11 @@ function getFocusedAnnotationCurrentRequirement() {
   return String(requirements[idx] || '');
 }
 
-function getFocusedAnnotationTraversalStepsForKeys(itemKeys, traversalMode) {
+function getFocusedAnnotationTraversalStepsForKeys(itemKeys) {
   var keys = Array.isArray(itemKeys) ? itemKeys : [];
   var requirements = Array.isArray(checklistItems) ? checklistItems : [];
   var steps = [];
   if (!keys.length || !requirements.length) return steps;
-  var mode = String(traversalMode || getFocusedAnnotationTraversalMode()).trim().toLowerCase() === 'item-first'
-    ? 'item-first'
-    : 'group-first';
-  if (mode === 'item-first') {
-    for (var itemIndex = 0; itemIndex < keys.length; itemIndex++) {
-      for (var groupIndex = 0; groupIndex < requirements.length; groupIndex++) {
-        steps.push({ itemIndex: itemIndex, groupIndex: groupIndex });
-      }
-    }
-    return steps;
-  }
   for (var nextGroupIndex = 0; nextGroupIndex < requirements.length; nextGroupIndex++) {
     for (var nextItemIndex = 0; nextItemIndex < keys.length; nextItemIndex++) {
       steps.push({ itemIndex: nextItemIndex, groupIndex: nextGroupIndex });
@@ -248,7 +204,7 @@ function getFocusedAnnotationResumeStep(itemKeys, preferredMediaKey) {
   var requirements = Array.isArray(checklistItems) ? checklistItems : [];
   if (!keys.length || !requirements.length) return null;
 
-  var steps = getFocusedAnnotationTraversalStepsForKeys(keys, getFocusedAnnotationTraversalMode());
+  var steps = getFocusedAnnotationTraversalStepsForKeys(keys);
   if (!steps.length) return null;
 
   var lastCompletedIndex = -1;
@@ -884,16 +840,6 @@ function renderFocusedAnnotationModal() {
   if (els.itemProgress) {
     els.itemProgress.textContent = 'Item ' + (focusedAnnotationState.itemIndex + 1) + '/' + itemKeys.length;
   }
-  if (els.modeGroupBtn) {
-    var isGroupFirst = getFocusedAnnotationTraversalMode() === 'group-first';
-    els.modeGroupBtn.classList.toggle('active', isGroupFirst);
-    els.modeGroupBtn.setAttribute('aria-pressed', isGroupFirst ? 'true' : 'false');
-  }
-  if (els.modeItemBtn) {
-    var isItemFirst = getFocusedAnnotationTraversalMode() === 'item-first';
-    els.modeItemBtn.classList.toggle('active', isItemFirst);
-    els.modeItemBtn.setAttribute('aria-pressed', isItemFirst ? 'true' : 'false');
-  }
   if (els.groupProgress) {
     els.groupProgress.textContent = requirements.length
       ? ('Group ' + (groupIndex + 1) + '/' + requirements.length)
@@ -939,7 +885,6 @@ function moveFocusedAnnotationByItem(delta) {
     navigateFocusedAnnotation(nextItemIndex, currentGroupIndex);
     return;
   }
-  if (getFocusedAnnotationTraversalMode() !== 'group-first') return;
   var nextGroupIndex = currentGroupIndex + (delta < 0 ? -1 : 1);
   if (nextGroupIndex < 0 || nextGroupIndex >= requirements.length) return;
   navigateFocusedAnnotation(delta < 0 ? itemKeys.length - 1 : 0, nextGroupIndex);
@@ -954,12 +899,7 @@ function moveFocusedAnnotationByGroup(delta) {
   var nextGroupIndex = currentGroupIndex + (delta < 0 ? -1 : 1);
   if (nextGroupIndex >= 0 && nextGroupIndex < requirements.length) {
     navigateFocusedAnnotation(currentItemIndex, nextGroupIndex);
-    return;
   }
-  if (getFocusedAnnotationTraversalMode() !== 'item-first') return;
-  var nextItemIndex = currentItemIndex + (delta < 0 ? -1 : 1);
-  if (nextItemIndex < 0 || nextItemIndex >= itemKeys.length) return;
-  navigateFocusedAnnotation(nextItemIndex, delta < 0 ? requirements.length - 1 : 0);
 }
 
 function navigateFocusedAnnotation(itemIndex, groupIndex, options) {
@@ -1109,16 +1049,6 @@ function wireFocusedAnnotationModal() {
   els.modal.__wired = true;
   if (els.closeBtn) {
     els.closeBtn.addEventListener('click', closeFocusedAnnotationModal);
-  }
-  if (els.modeGroupBtn) {
-    els.modeGroupBtn.addEventListener('click', function () {
-      setFocusedAnnotationTraversalMode('group-first');
-    });
-  }
-  if (els.modeItemBtn) {
-    els.modeItemBtn.addEventListener('click', function () {
-      setFocusedAnnotationTraversalMode('item-first');
-    });
   }
   if (els.itemPrevBtn) {
     els.itemPrevBtn.addEventListener('click', function () {

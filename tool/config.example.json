@@ -79,7 +79,8 @@
       "Hair": "braided hair, curly hair, hair covering face, long hair, pigtails, ponytail, short hair, styled hair, straight hair, updo, wavy hair",
       "Limbs": "arms crossed, arms spread, arms up, hand on head, hand on hip, knees drawn up, legs crossed, legs spread, one arm down, one arm up, one leg crossed over the other, one leg up",
       "Lighting": "bright, bright background, candle, dark, dim, natural, neon, shadows, studio, sunlight, window"
-    }
+    },
+    "termWrapperPrefixesByTerm": {}
   },
   "debug": true
 }

@@ -533,10 +533,54 @@ button[disabled]:active {
 .preview-header-meta {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: nowrap;
   gap: 10px;
   min-width: 0;
+}
+
+.preview-info-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+  padding: 6px 2px 0;
+}
+
+.preview-header-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preview-header-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  color: #dbeafe;
+  background: rgba(30, 41, 59, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.preview-header-status-pill.is-warning {
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.82);
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+.preview-header-status-pill.is-pending {
+  color: #e2e8f0;
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(148, 163, 184, 0.3);
 }
 
 .preview-header-detail {
@@ -645,7 +689,7 @@ iframe {
 
 .balance-distribution-wheel {
   position: absolute;
-  top: 50px;
+  top: 8px;
   left: 4px;
   width: 100px;
   height: 100px;
@@ -2077,6 +2121,10 @@ html[data-theme="dark"] .preview-header {
 
 html[data-theme="dark"] .preview-header-detail {
   color: #e2e8f0;
+}
+
+html[data-theme="dark"] .preview-header-status-pill {
+  color: #dbeafe;
 }
 
 html[data-theme="dark"] .media-list-wrapper.focus-set-active {

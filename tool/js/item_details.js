@@ -321,6 +321,8 @@ function buildPreviewHeaderStars(mediaKey, rating) {
 function renderPreviewHeaderMeta() {
   if (!ui || !ui.previewHeaderEl || !ui.previewHeaderMetaEl) return;
   var previewShellEl = document.getElementById('preview-shell');
+  var infoStripEl = ui.previewInfoStripEl || document.getElementById('preview-info-strip');
+  var statusEl = ui.previewHeaderStatusEl || document.getElementById('preview-header-status');
   var workflowActionsEl = ui.previewWorkflowActionsEl || document.getElementById('preview-workflow-actions');
   var ratingEl = ui.previewActionRatingEl || document.getElementById('preview-action-rating');
   var gridOpen = typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen();
@@ -329,9 +331,16 @@ function renderPreviewHeaderMeta() {
   var hasItem = !!(state.currentItem && state.currentItem.fileName);
   function clearPreviewHeaderUi() {
     ui.previewHeaderMetaEl.innerHTML = '';
+    if (statusEl) {
+      statusEl.innerHTML = '';
+      statusEl.classList.add('hidden');
+    }
     if (ratingEl) {
       ratingEl.innerHTML = '';
       ratingEl.classList.add('hidden');
+    }
+    if (infoStripEl) {
+      infoStripEl.classList.add('hidden');
     }
   }
   function updateWorkflowVisibility() {
@@ -339,6 +348,16 @@ function renderPreviewHeaderMeta() {
     var showGrid = !!(ui.sidebarGridBtnEl && !ui.sidebarGridBtnEl.classList.contains('hidden'));
     var showFocus = !!(ui.sidebarFocusBtnEl && !ui.sidebarFocusBtnEl.classList.contains('hidden'));
     workflowActionsEl.classList.toggle('hidden', !(showGrid || showFocus));
+  }
+  function appendStatusPill(text, tone) {
+    if (!statusEl || !text) return;
+    var pill = document.createElement('span');
+    pill.className = 'preview-header-status-pill';
+    if (tone) {
+      pill.className += ' is-' + tone;
+    }
+    pill.textContent = text;
+    statusEl.appendChild(pill);
   }
   if (gridOpen) {
     if (previewShellEl) previewShellEl.classList.remove('preview-header-active');
@@ -378,6 +397,9 @@ function renderPreviewHeaderMeta() {
   var rating = getRatingForMediaKey(currentMediaKey);
   var resolution = getResolutionForMedia(currentItem.fileName);
   var duration = isPreviewVideoFileName(currentItem.fileName) ? getDurationForMedia(currentItem.fileName) : '';
+  var metadata = getMetadataForMedia(currentItem.fileName) || {};
+  var aspect = String(metadata.aspect || '').trim();
+  var isReviewed = !!(state.reviewedSet && state.reviewedSet.has(currentMediaKey));
   var details = [];
   var currentIndex = -1;
   for (var i = 0; i < visibleMedia.length; i += 1) {
@@ -398,6 +420,15 @@ function renderPreviewHeaderMeta() {
     detail.textContent = text;
     ui.previewHeaderMetaEl.appendChild(detail);
   });
+  if (aspect && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(aspect)) {
+    appendStatusPill('Invalid AR', 'warning');
+  }
+  if (!isReviewed) {
+    appendStatusPill('Not Reviewed', 'pending');
+  }
+  if (statusEl && statusEl.childNodes.length) {
+    statusEl.classList.remove('hidden');
+  }
   if (ratingEl) {
     ratingEl.appendChild(buildPreviewHeaderStars(currentMediaKey, rating));
     ratingEl.classList.remove('hidden');
@@ -406,6 +437,9 @@ function renderPreviewHeaderMeta() {
   if (ui.previewEl) ui.previewEl.title = currentItem.fileName;
   if (previewShellEl) previewShellEl.classList.add('preview-header-active');
   ui.previewHeaderEl.classList.remove('hidden');
+  if (infoStripEl && (ui.previewHeaderMetaEl.childNodes.length || (statusEl && statusEl.childNodes.length))) {
+    infoStripEl.classList.remove('hidden');
+  }
 }
 
 function parseRequirementProgressTerms(raw) {

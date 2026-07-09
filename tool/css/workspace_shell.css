@@ -79,6 +79,11 @@
   backdrop-filter: none;
 }
 
+.app.shell-revamp .preview-info-strip {
+  min-height: 26px;
+  padding: 6px 2px 0;
+}
+
 .app.shell-revamp .preview-header.hidden {
   display: none !important;
 }
@@ -131,7 +136,7 @@
 .app.shell-revamp .preview-header-meta {
   flex-wrap: nowrap;
   overflow: hidden;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .app.shell-revamp .preview-header-actions .utility-collapse-btn {
@@ -146,13 +151,11 @@
 }
 
 .app.shell-revamp .preview-workflow-actions {
-  position: absolute;
-  top: 10px;
-  left: 10px;
+  position: static;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  z-index: 20;
+  z-index: auto;
 }
 
 .app.shell-revamp .preview-workflow-actions.hidden {
@@ -160,21 +163,48 @@
 }
 
 .app.shell-revamp .preview-workflow-actions .review-captions-btn {
-  width: auto;
-  min-width: 0;
+  width: 32px;
+  min-width: 32px;
   min-height: 30px;
   margin: 0;
-  padding: 5px 9px;
+  padding: 5px 0;
   border-radius: 5px;
   border-left-width: 1px;
   box-shadow: none;
   white-space: nowrap;
+  justify-content: center;
+}
+
+.app.shell-revamp .preview-workflow-actions .preview-header-btn-label {
+  display: none;
+}
+
+.app.shell-revamp .preview-workflow-actions .media-grid-open-icon {
+  margin-right: 0;
 }
 
 .app.shell-revamp .preview-actions {
+  position: static;
+  top: auto;
+  right: auto;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  z-index: auto;
+  transition: none;
+}
+
+.app.shell-revamp .preview-actions:hover,
+.app.shell-revamp .preview-actions:focus-within {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .app.shell-revamp .preview-action-rating {

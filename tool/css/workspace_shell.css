@@ -373,13 +373,15 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 }
 
 .app.shell-revamp #console-panel {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  width: auto;
+  height: min(42%, 360px);
   margin: 0;
   min-height: 140px;
-  max-height: min(42vh, 360px);
+  max-height: calc(100% - 16px);
   padding: 0;
   display: none;
   flex-direction: column;
@@ -389,6 +391,18 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   background: rgba(15, 23, 42, 0.96);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
   z-index: 5;
+}
+
+.app.shell-revamp .preview-panel > #console-panel {
+  position: absolute;
+}
+
+.app.shell-revamp .editor-surface > #console-panel {
+  position: absolute;
+}
+
+.app.shell-revamp .editor-surface {
+  position: relative;
 }
 
 .app.shell-revamp .console-panel-header {
@@ -449,9 +463,6 @@ html[data-theme="dark"] .app.shell-revamp .console-panel-header {
 
 @media (max-width: 720px) {
   .app.shell-revamp #console-panel {
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    max-height: min(48vh, 320px);
+    height: min(48%, 320px);
   }
 }

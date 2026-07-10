@@ -379,6 +379,16 @@
   cursor: default;
 }
 
+.media-grid-prune-btn {
+  border-color: rgba(248, 113, 113, 0.46);
+  color: #fecaca;
+}
+
+.media-grid-prune-btn:hover:not(:disabled) {
+  border-color: rgba(252, 165, 165, 0.82);
+  background: rgba(127, 29, 29, 0.78);
+}
+
 .media-grid-rating-controls {
   display: inline-flex;
   align-items: center;

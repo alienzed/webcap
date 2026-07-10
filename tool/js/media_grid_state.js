@@ -6,6 +6,7 @@ var mediaGridState = {
   focusSets: [],
   focusSetKey: 'all',
   railCollapsed: false,
+  pruning: false,
   selectedKeys: new Set(),
   lastSelectedKey: '',
   status: '',
@@ -117,6 +118,7 @@ function mediaGridGetEls() {
     sidebar: document.getElementById('media-grid-sidebar'),
     selectAllBtn: document.getElementById('media-grid-select-all-btn'),
     clearBtn: document.getElementById('media-grid-clear-btn'),
+    pruneBtn: document.getElementById('media-grid-prune-btn'),
     closeBtn: document.getElementById('media-grid-close-btn'),
     viewerModal: document.getElementById('media-grid-viewer-modal'),
     viewerTitle: document.getElementById('media-grid-viewer-title'),
@@ -136,6 +138,7 @@ function mediaGridGetSurfaceEls() {
     canvas: document.getElementById('media-grid-surface-canvas'),
     selectAllBtn: document.getElementById('media-grid-surface-select-all-btn'),
     clearBtn: document.getElementById('media-grid-surface-clear-btn'),
+    pruneBtn: document.getElementById('media-grid-surface-prune-btn'),
     closeBtn: document.getElementById('media-grid-surface-close-btn')
   };
 }
@@ -188,6 +191,7 @@ function mediaGridResetSessionState() {
   mediaGridState.baseItems = [];
   mediaGridState.focusSets = [];
   mediaGridState.focusSetKey = 'all';
+  mediaGridState.pruning = false;
   mediaGridState.selectedKeys = new Set();
   mediaGridState.lastSelectedKey = '';
   mediaGridState.status = '';
@@ -199,6 +203,7 @@ function mediaGridBeginSession(presentation) {
   mediaGridState.open = true;
   mediaGridState.presentation = presentation;
   mediaGridState.focusSetKey = 'all';
+  mediaGridState.pruning = false;
   mediaGridState.selectedKeys = new Set();
   mediaGridState.lastSelectedKey = '';
   mediaGridState.status = '';
@@ -283,6 +288,11 @@ function mediaGridSetStatus(text) {
   var els = mediaGridGetEls();
   if (els.status) {
     els.status.textContent = mediaGridState.status;
+  }
+  var surfaceEls = mediaGridGetSurfaceEls();
+  if (surfaceEls.status) {
+    surfaceEls.status.textContent = mediaGridState.status;
+    surfaceEls.status.classList.toggle('hidden', !mediaGridState.status);
   }
 }
 

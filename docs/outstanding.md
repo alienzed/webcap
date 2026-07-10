@@ -1,5 +1,25 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-07-03.
+Last reviewed: 2026-07-10.
+
+## Active UX Work
+
+### Phase 1: Console Architecture
+- Establish one reliable console model across the app. It should be a resizable secondary activity pane, not a full-width bottom drawer and not the sole place important results appear.
+- Make console visibility and toggling consistent across media workspaces, Review, and Training.
+- Keep training command handoff visible in Training independently of console output.
+- Preserve existing streamed output behavior so the console can support future managed training runs.
+- Stabilize the right workbench rail width; it currently changes with workspace content and should use explicit sizing rules.
+- Add a collapsible right workbench rail with session-persisted state for single-item work, without hiding Training's navigator or other purpose-built workspace surfaces. Grid keeps its dedicated batch Groups workspace and has no inspector rail.
+
+### Phase 2: Selection And Filters
+- Restore and retain Selection Analysis as a legacy report until each useful panel has an explicit replacement. The all-file metadata view, especially Aspect Ratio groups, must remain available.
+- Audit stale status and flag filters before removing or demoting them. `Invalid AR` remains valuable; `Incomplete`, `Reviewed`, `Unreviewed`, and flags require workflow confirmation.
+- Reduce SuperSet Search vertical chrome by moving the include-subfolders explanation to its existing info affordance.
+- Revisit the promoted focus-set presentation if a clearer compact control emerges. Do not force full filter controls into Grid in this phase.
+
+### Phase 3: Review Captions
+- Keep the existing report intact as low-priority legacy analysis.
+- Later, surface actionable findings such as likely typos or repeated full phrases above raw token and list panels, while retaining the detailed views.
 
 ## Enhancements
 - Eventually I'd like for us to work on the post captioning UX... the Review / Output, maybe even like detect cache in the auto_dataset folder... maybe try to internalize training and set flags based on the outcome of training. The output folder actually does happen to be inside the training folder so there's probably a lot we can do with this. Alas, I think the app's UX needs to be at least technically split, between captioning and then running training. We kind of dumped all of the Review / Output into a single pane... forgot about the caption collation screen, broke the console visibility once there, etc... it's a bit of a mess.

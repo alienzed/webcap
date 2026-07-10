@@ -7,6 +7,60 @@ var workspaceState = {
   previousSurface: 'default',
   sidebarHidden: false
 };
+var WORKBENCH_RAIL_SESSION_KEY = 'webcap.workbenchRailCollapsedByView';
+var workbenchRailCollapsedByView = loadWorkbenchRailSessionState();
+
+function loadWorkbenchRailSessionState() {
+  try {
+    var saved = sessionStorage.getItem(WORKBENCH_RAIL_SESSION_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch (err) {
+    console.warn('[Workspace] Could not restore workbench rail state:', err);
+    return {};
+  }
+}
+
+function getWorkbenchRailViewMode() {
+  return normalizeWorkspaceViewMode(workspaceUiState.viewMode);
+}
+
+function isWorkbenchRailAvailable() {
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  return surface === 'default' || surface === 'focus';
+}
+
+function isWorkbenchRailCollapsed() {
+  var viewMode = getWorkbenchRailViewMode();
+  if (Object.prototype.hasOwnProperty.call(workbenchRailCollapsedByView, viewMode)) {
+    return !!workbenchRailCollapsedByView[viewMode];
+  }
+  return viewMode === 'grid';
+}
+
+function setWorkbenchRailCollapsed(collapsed) {
+  var viewMode = getWorkbenchRailViewMode();
+  workbenchRailCollapsedByView[viewMode] = !!collapsed;
+  try {
+    sessionStorage.setItem(WORKBENCH_RAIL_SESSION_KEY, JSON.stringify(workbenchRailCollapsedByView));
+  } catch (err) {
+    console.warn('[Workspace] Could not persist workbench rail state:', err);
+  }
+  syncWorkbenchRailUi();
+}
+
+function syncWorkbenchRailUi() {
+  if (!ui || !ui.appEl) return;
+  var toggleBtn = document.getElementById('workbench-rail-toggle-btn');
+  var available = isWorkbenchRailAvailable();
+  var collapsed = available && isWorkbenchRailCollapsed();
+  ui.appEl.classList.toggle('workbench-rail-collapsed', collapsed);
+  if (!toggleBtn) return;
+  toggleBtn.classList.toggle('hidden', !available);
+  toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  toggleBtn.setAttribute('aria-label', collapsed ? 'Expand workbench rail' : 'Collapse workbench rail');
+  toggleBtn.title = collapsed ? 'Expand workbench rail' : 'Collapse workbench rail';
+  toggleBtn.innerHTML = collapsed ? '&#9664;' : '&#9654;';
+}
 function updateWorkspaceSplitLayout() {
 }
 
@@ -55,6 +109,7 @@ function syncWorkspaceHeaderUi() {
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
+  syncWorkbenchRailUi();
   updateWorkspaceSplitLayout();
 }
 
@@ -118,6 +173,17 @@ function syncWorkspaceConfigEditorUi() {
   }
 }
 
+function syncConsolePanelHost() {
+  if (!ui || !ui.consolePanelEl) return;
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  var host = surface === 'configEditor'
+    ? document.querySelector('.editor-surface')
+    : document.querySelector('.preview-panel');
+  if (host && ui.consolePanelEl.parentNode !== host) {
+    host.appendChild(ui.consolePanelEl);
+  }
+}
+
 function syncWorkspaceSurfaceUi() {
   if (!ui || !ui.appEl) return;
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
@@ -173,6 +239,8 @@ function syncWorkspaceSurfaceUi() {
   if (typeof updateSidebarCollapseUi === 'function') {
     updateSidebarCollapseUi(ui.appEl.classList.contains('left-rail-collapsed'));
   }
+  syncConsolePanelHost();
+  syncWorkbenchRailUi();
   syncWorkspaceConfigEditorUi();
   syncTrainingWorkspaceUi();
 }
@@ -281,6 +349,13 @@ function wireWorkspaceHeaderUi() {
       exitWorkspaceSurface();
     };
   }
+  var workbenchRailToggleBtn = document.getElementById('workbench-rail-toggle-btn');
+  if (workbenchRailToggleBtn && !workbenchRailToggleBtn.__workspaceWired) {
+    workbenchRailToggleBtn.__workspaceWired = true;
+    workbenchRailToggleBtn.onclick = function () {
+      setWorkbenchRailCollapsed(!isWorkbenchRailCollapsed());
+    };
+  }
   var trainingBtn = document.getElementById('sidebar-open-training-btn');
   if (trainingBtn && !trainingBtn.__workspaceWired) {
     trainingBtn.__workspaceWired = true;
@@ -306,9 +381,7 @@ function wireWorkspaceHeaderUi() {
   if (configEditorConsoleBtn && !configEditorConsoleBtn.__workspaceWired) {
     configEditorConsoleBtn.__workspaceWired = true;
     configEditorConsoleBtn.onclick = function () {
-      if (typeof toggleConsolePanel === 'function') {
-        toggleConsolePanel();
-      }
+      toggleConsolePanel();
       syncWorkspaceConfigEditorUi();
     };
   }
@@ -324,7 +397,7 @@ function wireWorkspaceHeaderUi() {
       Promise.resolve(saveCurrentEditorContent())
         .then(function () {
           return runGenerateDatasetConfigsForCurrentFolder(function () {
-            refreshTrainingConfigList();
+            refreshTrainingWorkspace();
             setStatus('Dataset configs generated. Reloading ' + currentFile + '...');
           });
         })
@@ -350,9 +423,7 @@ function wireWorkspaceHeaderUi() {
       }
       Promise.resolve(saveCurrentEditorContent())
         .then(function () {
-          if (typeof showConsolePanel === 'function') {
-            showConsolePanel();
-          }
+          showConsolePanel();
           syncWorkspaceConfigEditorUi();
           return runTrainCommandPreviewForCurrentFolder();
         })

@@ -234,61 +234,6 @@ function copyTextToClipboard(text, onOk, onErr) {
   }
 }
 
-function wireTrainingButtons() {
-  var trainingGenerateBtn = document.getElementById('training-generate-btn');
-  if (trainingGenerateBtn) {
-    trainingGenerateBtn.onclick = function () {
-      if (typeof setWorkspaceSurface === 'function') {
-        setWorkspaceSurface('reviewOutput');
-      }
-      runGenerateDatasetConfigsForCurrentFolder(
-        function () {
-          refreshTrainingConfigList();
-          if (state.currentConfigFile) {
-            ui.editorEl.value = '';
-            setStatus('Dataset configs generated. Please reload the config file to see changes.');
-            state.currentConfigFile = null;
-          } else {
-            setStatus('Dataset configs generated.');
-          }
-        }
-      ).catch(function (err) {
-        if (window.console && console.error) {
-          console.error('[Training] Generate failed:', err);
-        }
-      });
-    };
-  }
-
-  var trainingPrepareDatasetBtn = document.getElementById('training-prepare-dataset-btn');
-  if (trainingPrepareDatasetBtn) {
-    trainingPrepareDatasetBtn.onclick = function () {
-      if (typeof setWorkspaceSurface === 'function') {
-        setWorkspaceSurface('reviewOutput');
-      }
-      runPrepareDatasetForCurrentFolder().catch(function (err) {
-        if (window.console && console.error) {
-          console.error('[Training] Prepare failed:', err);
-        }
-      });
-    };
-  }
-
-  var trainingTrainBtn = document.getElementById('training-train-btn');
-  if (trainingTrainBtn) {
-    trainingTrainBtn.onclick = function () {
-      if (typeof setWorkspaceSurface === 'function') {
-        setWorkspaceSurface('reviewOutput');
-      }
-      runTrainCommandPreviewForCurrentFolder().catch(function (err) {
-        if (window.console && console.error) {
-          console.error('[Training] Train preview failed:', err);
-        }
-      });
-    };
-  }
-}
-
 function wireMiscActionButtons() {
   if (ui.refreshBtn) {
     ui.refreshBtn.onclick = function () {
@@ -403,7 +348,6 @@ function wireMainUiEvents() {
     ui.mediaListEl.oncontextmenu = handleMediaListContextMenu;
   }
   wireConsoleToggleButton();
-  wireTrainingButtons();
   wireMiscActionButtons();
   wireReportLinks();
   if (typeof updateSidebarSurfaceTools === 'function') {

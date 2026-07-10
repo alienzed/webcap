@@ -381,21 +381,6 @@ textarea:focus, input:focus {
   background: rgba(13, 148, 136, 0.96);
 }
 
-#console-panel {
-  margin-top: 8px;
-  max-height: 49%;
-  min-height: 80px;
-  overflow-y: auto;
-  resize: vertical;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-  white-space: pre-wrap;
-  display: none;
-  z-index: 1000;
-  grid-column: 1 / -1;
-  grid-row: 2;
-  margin-top: 0;
-}
-
 textarea#editor {
   min-height: calc(50vh - 40px);
   width: 100%;
@@ -1653,13 +1638,6 @@ iframe {
   color: #94a3b8;
 }
 
-.training-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-}
-
 .training-config-list {
   display: block;
   font-size: 12px;
@@ -1712,25 +1690,6 @@ iframe {
   text-decoration: underline;
 }
 
-.training-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.training-actions-secondary {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px;
-}
-
-.training-actions-secondary .training-btn {
-  width: 100%;
-  border: 1px solid var(--border);
-  background: #fff;
-  color: #334155;
-}
-
 .training-prepare-btn {
   width: 100%;
   border: 1px solid #cbd3dd;
@@ -1750,18 +1709,6 @@ iframe {
   line-height: 1.2;
   border-radius: 2px;
   box-shadow: none;
-}
-
-.training-actions-secondary .training-btn:hover {
-  border-color: #b9c2cd;
-  background: #f8fafc;
-  color: #111827;
-}
-
-.training-actions-secondary .training-btn:active {
-  border-color: #9aa6b2;
-  background: #eef2f6;
-  color: #111827;
 }
 
 .training-prepare-btn:hover {
@@ -1891,19 +1838,12 @@ iframe {
   font-size: 13px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  margin-top: 8px;
-  padding: 8px;
-  max-height: 49%;
-  min-height: 80px;
-  overflow-y: auto;
-  resize: vertical;
   box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-  white-space: pre-wrap;
   display: none;
-  z-index: 1000;
-  grid-column: 1 / -1;
-  grid-row: 2;
-  margin-top: 0;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  z-index: 10;
 }
 
 /* Utility classes for inline style removal */

@@ -1,83 +1,6 @@
-// Render config panel into the report iframe
-function renderConfigPanel(doc) {
-  var panel = doc.getElementById('config-panel');
-  if (!panel) return;
-  var configListEl = doc.getElementById('config-list');
-  function getCurrentFolder() {
-    // Defensive: parent.state.folder is the canonical folder
-    if (parent && parent.state && typeof parent.state.folder === 'string') {
-      return parent.state.folder;
-    }
-    return '';
-  }
-
-  function listConfigFiles() {
-    configListEl.textContent = 'Loading...';
-    var folder = encodeURIComponent(getCurrentFolder());
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/fs/list_config?folder=' + folder);
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState !== 4) return;
-      if (xhr.status === 200) {
-        try {
-          var resp = JSON.parse(xhr.responseText);
-          var files = resp.files || [];
-          renderConfigList(files);
-        } catch (e) {
-          configListEl.textContent = 'Failed to parse config list.';
-        }
-      } else {
-        configListEl.textContent = 'Failed to load config list (' + xhr.status + ')';
-      }
-    };
-    xhr.send();
-  }
-
-  function renderConfigList(files) {
-    if (!Array.isArray(files) || !files.length) {
-      configListEl.textContent = 'No config files found.';
-      return;
-    }
-    var html = '<ul style="padding-left:0;list-style:none;">' + files.map(function(f) {
-      return '<li><a href="#" class="config-file-link" data-file="' + encodeURIComponent(f) + '">' + f + '</a></li>';
-    }).join('') + '</ul>';
-    configListEl.innerHTML = html;
-    Array.prototype.forEach.call(configListEl.querySelectorAll('.config-file-link'), function(link) {
-      link.onclick = function(e) {
-        e.preventDefault();
-        selectConfigFile(decodeURIComponent(link.getAttribute('data-file')));
-      };
-    });
-  }
-
-  function selectConfigFile(filename) {
-    // Notify parent to load config file into main editor
-    if (parent && parent.postMessage) {
-      parent.postMessage({ type: 'config-file-select', fileName: filename }, '*');
-    }
-    // Unset any caption/media selection (strict separation)
-    if (parent && parent.clearSelection) parent.clearSelection();
-  }
-
-  function escapeHtml(str) {
-    return String(str).replace(/[&<>"']/g, function(s) {
-      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[s];
-    });
-  }
-
-  // Initial load
-  listConfigFiles();
-}
 // Utility: Stream fetch output to preview pane
 function streamPreviewFromFetch(url, body, ui, onDone, onError) {
-  if (typeof showConsolePanel === 'function') {
-    showConsolePanel();
-  } else {
-    ui.consolePanelEl.style.display = 'flex';
-    if (typeof syncConsoleToggleButton === 'function') {
-      syncConsoleToggleButton();
-    }
-  }
+  showConsolePanel();
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -128,14 +51,6 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
 
 // Utility: Fetch full preview output as one payload (no chunk streaming)
 function fetchPreviewText(url, body, ui, onDone, onError) {
-  if (typeof showConsolePanel === 'function') {
-    showConsolePanel();
-  } else {
-    ui.consolePanelEl.style.display = 'flex';
-    if (typeof syncConsoleToggleButton === 'function') {
-      syncConsoleToggleButton();
-    }
-  }
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -419,7 +334,6 @@ function renderReportPreview(report, reviewedFileNames) {
     '<div class="summary-row"><span>Missing captions</span><strong>' + report.missingCaption + '</strong></div>' +
     '<div class="summary-row"><span>Required phrase</span><strong>' + escapeHtml(requiredLabel) + '</strong></div>' +
     '<div class="summary-row"><span>Required hits</span><strong>' + report.requiredHits + ' (' + report.requiredPercent + '%)</strong></div></div>' +
-    '<div class="config-panel" id="config-panel"><h3>Config Files</h3><div id="config-list">Loading...</div></div>' +
     '</div>' +
     '<div class="row">' +
     '<div class="card"><h3>Missing Required Phrase</h3><ul>' + requiredRows + '</ul></div>' +
@@ -488,8 +402,6 @@ function renderReportPreview(report, reviewedFileNames) {
         }
       });
     });
-    // Render config and media metadata panels after iframe is loaded
-    renderConfigPanel(doc);
   }, 50);
 }
 
@@ -541,41 +453,14 @@ function renderSelectionPreview(report, reviewedFileNames) {
   }, 50);
 }
 
-// Handle config file selection from config panel (iframe)
-window.addEventListener('message', function(event) {
-  var msg = event.data;
-  if (!msg || typeof msg !== 'object') return;
-  if (msg.type === 'config-file-select' && typeof msg.fileName === 'string') {
-    loadConfigFileToEditor(msg.fileName);
-  }
-});
-
 // Loads config file content into the main editor for editing
 function loadConfigFileToEditor(fileName) {
   setStatus('Loading config: ' + fileName);
-  if (typeof hideConsolePanel === 'function') {
-    hideConsolePanel();
-  } else if (ui && ui.consolePanelEl) {
-    ui.consolePanelEl.style.display = 'none';
-  }
-  var consoleToggleBtn = document.getElementById('console-toggle-btn');
-  if (consoleToggleBtn && typeof syncConsoleToggleButton === 'function') {
-    syncConsoleToggleButton();
-  }
+  hideConsolePanel();
   var folder = state.folder || '';
-  var keepReviewPreview = false;
-  if (ui && ui.previewEl) {
-    var previewDoc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
-    keepReviewPreview = !!(previewDoc && previewDoc.getElementById && previewDoc.getElementById('config-panel'));
-  }
   state.currentItem = null;
-  if (!keepReviewPreview) {
-    clearEditorAndPreview();
-    renderChecklistPanel();
-  } else if (state.objectUrl) {
-    URL.revokeObjectURL(state.objectUrl);
-    state.objectUrl = '';
-  }
+  clearEditorAndPreview();
+  renderChecklistPanel();
   renderFileList(ui.filterEl.value);
   var xhr = new XMLHttpRequest();
   xhr.open('GET', '/fs/read_config?folder=' + encodeURIComponent(folder) + '&file=' + encodeURIComponent(fileName));

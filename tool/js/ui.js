@@ -403,7 +403,6 @@ function refreshCurrentDirectory() {
             updateUtilityPathLabel(state.folder || '');
           }
            setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
-           refreshTrainingConfigList();
            refreshTrainingWorkspace();
           // If a file was just renamed, reselect it
           if (window.state && state.pendingSelectFileName) {
@@ -417,7 +416,6 @@ function refreshCurrentDirectory() {
           state.items = [];
           if (ui.upBtn) ui.upBtn.classList.add('hidden');
            renderFileList(ui.filterEl.value);
-           refreshTrainingConfigList();
            refreshTrainingWorkspace();
         }
       } else {
@@ -426,7 +424,6 @@ function refreshCurrentDirectory() {
         state.items = [];
         if (ui.upBtn) ui.upBtn.classList.add('hidden');
         renderFileList(ui.filterEl.value);
-        refreshTrainingConfigList();
         refreshTrainingWorkspace();
       }
       updateSetFolderScopedUi();

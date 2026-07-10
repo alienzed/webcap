@@ -213,7 +213,7 @@ function runPrepareDatasetForCurrentFolder() {
       } else {
         setStatus('Dataset preparation finished.');
       }
-      refreshTrainingConfigList();
+      refreshTrainingWorkspace();
       return outputText;
     })
     .catch(function (err) {

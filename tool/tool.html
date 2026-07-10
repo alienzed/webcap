@@ -288,9 +288,9 @@
                                     id="sidebar-open-review-output-btn"
                                     type="button"
                                     class="review-captions-btn sidebar-review-output-btn"
-                                    title="Open the review and output workspace"
+                                    title="Open caption review tools"
                                     aria-pressed="false"
-                                >Review / Output</button>
+                                >Review</button>
                                 <button
                                     id="sidebar-open-training-btn"
                                     type="button"
@@ -346,25 +346,26 @@
                                     <strong>Select a config file</strong>
                                     <span>Dataset readiness and generated configs stay visible in the Training navigator.</span>
                                 </div>
-                                <div class="editor-wrapper">
+                                 <div class="editor-wrapper">
                                     <div id="editor-floating-actions" class="editor-floating-actions">
                                         <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Save current primer text as this item's caption">Apply</button>
                                         <button id="primer-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Reset the current caption to the current primer output">Reset</button>
                                         <button id="primer-undo-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Undo last reset for current item">Undo Reset</button>
                                     </div>
-                                    <textarea id="editor" rows="6" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
-                                </div>
-                                <div id="console-panel" aria-hidden="true">
-                                    <div class="console-panel-header">
-                                        <strong class="console-panel-title">Console</strong>
-                                        <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
-                                    </div>
-                                    <div id="console-panel-log" class="console-panel-log" aria-live="polite"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <aside class="workbench-side-stack">
+                                     <textarea id="editor" rows="6" spellcheck="true" placeholder="Caption text (.txt)"></textarea>
+                                 </div>
+                             </div>
+                         </div>
+                        <button
+                            id="workbench-rail-toggle-btn"
+                            type="button"
+                            class="workbench-rail-toggle-btn"
+                            title="Collapse workbench rail"
+                            aria-label="Collapse workbench rail"
+                            aria-expanded="true"
+                        >&#9654;</button>
+                     </div>
+                     <aside class="workbench-side-stack">
                         <div id="caption-checklist-panel" class="checklist-panel workbench-card group-tools-card" data-layout="split" style="display:none;">
                             <div id="caption-helper-tabs" class="caption-helper-tabs hidden">
                                 <button
@@ -516,8 +517,8 @@
                 <section id="review-output-surface" class="workbench-card review-output-surface hidden">
                     <div class="review-output-surface-header">
                         <div class="review-output-surface-copy">
-                            <div class="review-output-surface-title">Review / Output</div>
-                            <div class="review-output-surface-subtitle">Reports, dataset prep, config generation, and training previews live here.</div>
+                            <div class="review-output-surface-title">Review</div>
+                            <div class="review-output-surface-subtitle">Caption checks and the legacy caption report live here.</div>
                         </div>
                         <button id="review-output-back-btn" type="button" class="review-captions-btn">Back</button>
                     </div>
@@ -596,51 +597,6 @@
                                     <div class="stats-advanced-inline-row">
                                         <button id="review-rules-edit-btn" type="button">Edit Rules</button>
                                         <span id="review-rules-summary" class="small">No review rules configured.</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-                        <section id="review-output-training-pane" class="review-output-column">
-                            <div class="review-output-column-header">
-                                <div class="review-output-column-title">Dataset / Training</div>
-                                <div class="review-output-column-subtitle">Prepare the visible set, manage generated TOMLs, and preview the training chain.</div>
-                            </div>
-                            <div
-                                id="training-details"
-                                aria-hidden="false"
-                            >
-                                <div class="training-controls">
-                                    <div id="training-config-list" class="training-config-list">No config files.</div>
-                                    <div class="training-actions">
-                                        <button
-                                            id="training-prepare-dataset-btn"
-                                            type="button"
-                                            class="training-btn training-prepare-btn"
-                                            title="Sorts the files into Aspect Ratio folders while converting video to 16fps."
-                                        >
-                                            <span class="btn-glyph" aria-hidden="true">&#8635;</span>
-                                            <span>Prepare Dataset</span>
-                                        </button>
-                                        <div class="training-actions-secondary">
-                                            <button
-                                                id="training-generate-btn"
-                                                type="button"
-                                                class="training-btn"
-                                                title="Generate config files"
-                                            >
-                                                <span class="btn-glyph" aria-hidden="true">&#9881;</span>
-                                                <span>Generate</span>
-                                            </button>
-                                            <button
-                                                id="training-train-btn"
-                                                type="button"
-                                                class="training-btn"
-                                                title="Run training"
-                                            >
-                                                <span class="btn-glyph" aria-hidden="true">&#9002;</span>
-                                                <span>Train</span>
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -735,6 +691,7 @@
                                 <div id="media-grid-surface-status" class="media-grid-surface-status"></div>
                                 <button id="media-grid-surface-select-all-btn" type="button" class="media-grid-btn">Select All</button>
                                 <button id="media-grid-surface-clear-btn" type="button" class="media-grid-btn">Clear</button>
+                                <button id="media-grid-surface-prune-btn" type="button" class="media-grid-btn media-grid-prune-btn hidden">Prune</button>
                             </div>
                         </div>
                         <div id="media-grid-surface-canvas" class="media-grid-surface-canvas"></div>
@@ -744,6 +701,13 @@
                         <div id="preview-stage-status" class="preview-stage-status hidden" aria-label="Preview warning"></div>
                         <div id="balance-distribution-wheel" class="balance-distribution-wheel hidden" tabindex="0" aria-label="Balance distribution"></div>
                     </div>
+                    </div>
+                    <div id="console-panel" aria-hidden="true">
+                        <div class="console-panel-header">
+                            <strong class="console-panel-title">Console</strong>
+                            <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
+                        </div>
+                        <div id="console-panel-log" class="console-panel-log" aria-live="polite"></div>
                     </div>
                 </div>
             </div>
@@ -760,6 +724,7 @@
                                 <div id="media-grid-status" class="media-grid-status"></div>
                                 <button id="media-grid-select-all-btn" type="button" class="media-grid-btn">Select All</button>
                                 <button id="media-grid-clear-btn" type="button" class="media-grid-btn">Clear Selections</button>
+                                <button id="media-grid-prune-btn" type="button" class="media-grid-btn media-grid-prune-btn hidden">Prune</button>
                                 <button id="media-grid-close-btn" type="button" class="media-grid-btn media-grid-close-btn" aria-label="Close Media Grid">&times;</button>
                             </div>
                         </div>

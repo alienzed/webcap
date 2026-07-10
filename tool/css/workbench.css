@@ -96,7 +96,7 @@
 
 .app.shell-revamp .review-output-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   min-height: 0;
 }
@@ -132,8 +132,7 @@
   color: rgba(15, 23, 42, 0.62);
 }
 
-.app.shell-revamp .review-output-column .stats-controls,
-.app.shell-revamp .review-output-column .training-controls {
+.app.shell-revamp .review-output-column .stats-controls {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -379,8 +378,7 @@
   font-size: 16px;
 }
 
-.app.shell-revamp.workspace-surface-training:not(.training-config-selected) .editor-wrapper,
-.app.shell-revamp.workspace-surface-training:not(.training-config-selected) #console-panel {
+.app.shell-revamp.workspace-surface-training:not(.training-config-selected) .editor-wrapper {
   display: none !important;
 }
 
@@ -989,6 +987,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 /* Workbench layout reset: shared annotation groups on the left, full-height utility rail on the right. */
 .app.shell-revamp .workbench-panel {
+  --workbench-rail-width: 224px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -998,16 +997,45 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 
 .app.shell-revamp .workbench-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 296px;
+  grid-template-columns: minmax(0, 1fr) var(--workbench-rail-width);
   gap: 8px;
   flex: 1 1 auto;
   min-height: 0;
   align-items: stretch;
   overflow: hidden;
+  position: relative;
 }
 
 .app.shell-revamp.workflow-annotate .workbench-top {
-  grid-template-columns: minmax(0, 1fr) 224px;
+  grid-template-columns: minmax(0, 1fr) var(--workbench-rail-width);
+}
+
+.app.shell-revamp .workbench-rail-toggle-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  width: 24px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.app.shell-revamp .workbench-rail-toggle-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.app.shell-revamp.workbench-rail-collapsed .workbench-top {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app.shell-revamp.workbench-rail-collapsed .workbench-side-stack {
+  display: none;
 }
 
 .app.shell-revamp .workbench-main-stack {
@@ -1016,6 +1044,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   flex-direction: column;
   gap: 8px;
   overflow: hidden;
+  position: relative;
 }
 
 .app.shell-revamp .workbench-main-stack > .groups-card,
@@ -1370,5 +1399,9 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 
   .app.shell-revamp .workbench-side-stack {
     min-height: auto;
+  }
+
+  .app.shell-revamp .workbench-rail-toggle-btn {
+    display: none;
   }
 }

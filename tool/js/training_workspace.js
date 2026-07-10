@@ -3,6 +3,16 @@ var trainingWorkspaceState = {
   configFiles: []
 };
 
+function classifyTrainingConfigFile(fileName) {
+  var lower = String(fileName || '').toLowerCase();
+  if (/(^|[._-])hi([._-]|$)/.test(lower)) return 'hi';
+  if (/(^|[._-])lo([._-]|$)/.test(lower)) return 'lo';
+  var hasHi = lower.indexOf('hi') !== -1;
+  var hasLo = lower.indexOf('lo') !== -1;
+  if (hasHi && !hasLo) return 'hi';
+  return 'lo';
+}
+
 function isTrainingWorkspaceActive() {
   return normalizeWorkspaceSurface(workspaceState.surface) === 'training';
 }
@@ -150,7 +160,6 @@ function runTrainingWorkspaceAction(action) {
   syncWorkspaceConfigEditorUi();
   Promise.resolve(request)
     .then(function () {
-      refreshTrainingConfigList();
       refreshTrainingWorkspace();
       syncWorkspaceConfigEditorUi();
     })
@@ -182,12 +191,21 @@ function wireTrainingWorkspace() {
   };
   consoleBtn.onclick = function () {
     toggleConsolePanel();
-    syncWorkspaceConfigEditorUi();
+    syncTrainingConsoleUi();
   };
+}
+
+function syncTrainingConsoleUi() {
+  var consoleBtn = document.getElementById('training-console-btn');
+  if (!consoleBtn) return;
+  var visible = isConsolePanelVisible();
+  consoleBtn.classList.toggle('active', visible);
+  consoleBtn.setAttribute('aria-pressed', visible ? 'true' : 'false');
 }
 
 function syncTrainingWorkspaceUi() {
   if (!isTrainingWorkspaceActive()) return;
+  syncTrainingConsoleUi();
   refreshTrainingWorkspace();
 }
 

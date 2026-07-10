@@ -118,7 +118,6 @@ function mediaGridGetEls() {
     sidebar: document.getElementById('media-grid-sidebar'),
     selectAllBtn: document.getElementById('media-grid-select-all-btn'),
     clearBtn: document.getElementById('media-grid-clear-btn'),
-    pruneBtn: document.getElementById('media-grid-prune-btn'),
     closeBtn: document.getElementById('media-grid-close-btn'),
     viewerModal: document.getElementById('media-grid-viewer-modal'),
     viewerTitle: document.getElementById('media-grid-viewer-title'),
@@ -138,7 +137,6 @@ function mediaGridGetSurfaceEls() {
     canvas: document.getElementById('media-grid-surface-canvas'),
     selectAllBtn: document.getElementById('media-grid-surface-select-all-btn'),
     clearBtn: document.getElementById('media-grid-surface-clear-btn'),
-    pruneBtn: document.getElementById('media-grid-surface-prune-btn'),
     closeBtn: document.getElementById('media-grid-surface-close-btn')
   };
 }

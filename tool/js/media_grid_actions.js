@@ -75,7 +75,6 @@ function mediaGridWireModal() {
   els.closeBtn.onclick = closeMediaGridModal;
   els.selectAllBtn.onclick = mediaGridSelectAll;
   els.clearBtn.onclick = mediaGridClearSelection;
-  els.pruneBtn.onclick = mediaGridPruneSelected;
   els.modal.addEventListener('click', function (e) {
     if (e.target === els.modal) closeMediaGridModal();
   });
@@ -91,12 +90,11 @@ function mediaGridWireSurface() {
   if (!els.surface) throw new Error('Media Grid surface is missing.');
   if (els.surface.__wired) return;
   els.surface.__wired = true;
-  if (!els.selectAllBtn || !els.clearBtn || !els.pruneBtn || !els.closeBtn) {
+  if (!els.selectAllBtn || !els.clearBtn || !els.closeBtn) {
     throw new Error('Media Grid surface controls are missing.');
   }
   els.selectAllBtn.onclick = mediaGridSelectAll;
   els.clearBtn.onclick = mediaGridClearSelection;
-  els.pruneBtn.onclick = mediaGridPruneSelected;
   els.closeBtn.onclick = closeMediaGridSurface;
 }
 
@@ -213,9 +211,6 @@ function renderMediaGridHeader() {
   els.meta.textContent = mediaGridBuildMetaText();
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
-  els.pruneBtn.disabled = selectedCount <= 0 || mediaGridState.pruning;
-  els.pruneBtn.classList.toggle('hidden', selectedCount <= 0);
-  els.pruneBtn.textContent = selectedCount ? 'Prune ' + selectedCount : 'Prune';
   els.status.textContent = mediaGridState.status;
   mediaGridSyncFilterControls();
 }
@@ -224,15 +219,12 @@ function renderMediaGridSurfaceHeader() {
   var els = mediaGridGetSurfaceEls();
   var selectedCount = mediaGridState.selectedKeys.size;
   var totalCount = mediaGridState.items.length;
-  if (!els.meta || !els.status || !els.selectAllBtn || !els.clearBtn || !els.pruneBtn) return;
+  if (!els.meta || !els.status || !els.selectAllBtn || !els.clearBtn) return;
   els.meta.textContent = mediaGridBuildSurfaceMetaText();
   els.status.textContent = mediaGridState.status;
   els.status.classList.toggle('hidden', !mediaGridState.status);
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
-  els.pruneBtn.disabled = selectedCount <= 0 || mediaGridState.pruning;
-  els.pruneBtn.classList.toggle('hidden', selectedCount <= 0);
-  els.pruneBtn.textContent = selectedCount ? 'Prune ' + selectedCount : 'Prune';
 }
 
 
@@ -629,6 +621,11 @@ function mediaGridHandleKeydown(e) {
   if (e.key === 'Escape') {
     e.preventDefault();
     mediaGridCloseActivePresentation();
+    return;
+  }
+  if (e.key === 'Delete') {
+    e.preventDefault();
+    mediaGridPruneSelected();
     return;
   }
   if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {

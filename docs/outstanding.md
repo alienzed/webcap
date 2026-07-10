@@ -2,11 +2,7 @@ This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-07-03.
 
 ## Enhancements
-- What if flags, at least on set folders, became training status. Maybe it's time we consider internalizing training runs... maybe coupled with a real revamp of the features not directly related to captioning/annotation.
-- Save Term Wrapper prefix to config/settings: these tend to remain valid across sets ('on sand' vs 'on a sand' vs 'in a sand'... it's always 'on sand'...). So, stays configurable, but survives new sets?
-- Preview header is better but still feels a bit weird... the Item X/Y and Resolution and actions are great, but they still feel lopsided, unhealed. I'm going to assume that some other big software titles have better layouts for things like this without giving everything it's own row.
-- Focus Annotate: bring over some of the common functions, affixes, actions like CROP, More...
-
+- Eventually I'd like for us to work on the post captioning UX... the Review / Output, maybe even like detect cache in the auto_dataset folder... maybe try to internalize training and set flags based on the outcome of training. The output folder actually does happen to be inside the training folder so there's probably a lot we can do with this. Alas, I think the app's UX needs to be at least technically split, between captioning and then running training. We kind of dumped all of the Review / Output into a single pane... forgot about the caption collation screen, broke the console visibility once there, etc... it's a bit of a mess.
 
 
 ## Requires Discussion

@@ -1340,6 +1340,80 @@ iframe {
   margin-bottom: 6px;
 }
 
+.focus-set-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.focus-set-controls--sidebar {
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.focus-set-controls--grid {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.focus-set-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 27px;
+  padding: 4px 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.focus-set-preset span {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.focus-set-preset:hover:not(:disabled),
+.focus-set-preset.active {
+  border-color: #0f766e;
+  background: #ecfdf5;
+  color: #115e59;
+}
+
+.focus-set-preset.active span {
+  color: inherit;
+}
+
+.focus-set-preset:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.focus-set-controls-status {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.focus-set-settings-btn,
+.focus-set-retry-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0f766e;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 .review-captions-btn {
   display: inline-flex;
   align-items: center;

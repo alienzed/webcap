@@ -73,16 +73,6 @@ function openMediaGridViewer(mediaKey) {
   document.body.classList.add('media-grid-viewer-open');
 }
 
-function toggleMediaGridViewer(mediaKey) {
-  var key = String(mediaKey || '').trim();
-  if (!key) return;
-  if (mediaGridState.viewerKey === key) {
-    closeMediaGridViewer();
-    return;
-  }
-  openMediaGridViewer(key);
-}
-
 function closeMediaGridViewer() {
   var els = mediaGridGetEls();
   if (!els.viewerModal || !els.viewerStage) return;

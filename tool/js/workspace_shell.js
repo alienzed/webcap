@@ -7,159 +7,7 @@ var workspaceState = {
   previousSurface: 'default',
   sidebarHidden: false
 };
-var WORKSPACE_SPLIT_STORAGE_KEY = 'webcap.workspace.previewSplit';
-var workspaceSplitState = {
-  ratio: 0.46,
-  dragging: false,
-  wired: false,
-  moveHandler: null,
-  upHandler: null,
-  observer: null
-};
-
-function clampWorkspaceSplitRatio(ratio, availableWidth, minPreviewWidth, minWorkbenchWidth) {
-  var total = Math.max(1, Number(availableWidth) || 1);
-  var minPreview = Math.max(240, Number(minPreviewWidth) || 0);
-  var minWorkbench = Math.max(320, Number(minWorkbenchWidth) || 0);
-  var minRatio = Math.min(0.8, Math.max(0.2, minPreview / total));
-  var maxRatio = Math.max(minRatio, Math.min(0.8, 1 - (minWorkbench / total)));
-  var nextRatio = Number(ratio);
-  if (!isFinite(nextRatio)) nextRatio = 0.46;
-  if (nextRatio < minRatio) nextRatio = minRatio;
-  if (nextRatio > maxRatio) nextRatio = maxRatio;
-  return nextRatio;
-}
-
-function getStoredWorkspaceSplitRatio() {
-  try {
-    return clampWorkspaceSplitRatio(localStorage.getItem(WORKSPACE_SPLIT_STORAGE_KEY), 1000, 320, 420);
-  } catch (e) {}
-  return 0.46;
-}
-
-function storeWorkspaceSplitRatio(ratio) {
-  try {
-    localStorage.setItem(WORKSPACE_SPLIT_STORAGE_KEY, String(ratio));
-  } catch (e) {}
-}
-
-function getWorkspaceHeaderEl() {
-  return null;
-}
-
-function getWorkspaceSplitResizerEl() {
-  return document.getElementById('workspace-main-resizer');
-}
-
-function isWorkspaceSplitDesktopLayout() {
-  return !!(ui && ui.appEl && window.innerWidth > 1180);
-}
-
-function getWorkspaceSidebarWidth() {
-  if (!ui || !ui.appEl) return 0;
-  if (ui.appEl.classList.contains('left-rail-collapsed')) return 0;
-  return 292;
-}
-
-function getWorkspaceSplitBounds(availableWidth) {
-  var annotateMode = !!(ui && ui.appEl && ui.appEl.classList.contains('workflow-annotate'));
-  var available = Math.max(640, Number(availableWidth) || 0);
-  var preferredPreview = annotateMode ? 320 : 300;
-  var preferredWorkbench = annotateMode ? 420 : 380;
-  var minPreview = preferredPreview;
-  var minWorkbench = preferredWorkbench;
-  if (available < (preferredPreview + preferredWorkbench)) {
-    minWorkbench = annotateMode ? 360 : 340;
-    minPreview = Math.max(260, available - minWorkbench);
-    if (minPreview < 260) {
-      minPreview = 260;
-      minWorkbench = Math.max(320, available - minPreview);
-    }
-  }
-  return {
-    minPreview: minPreview,
-    minWorkbench: minWorkbench
-  };
-}
-
-function clearWorkspaceSplitLayout() {
-  var resizerEl = getWorkspaceSplitResizerEl();
-  if (resizerEl) {
-    resizerEl.classList.add('hidden');
-  }
-}
-
-function updateWorkspaceSplitResizerPosition() {
-  var resizerEl = getWorkspaceSplitResizerEl();
-  if (!resizerEl || !ui || !ui.appEl) return;
-  var previewPanel = ui.appEl.querySelector('.preview-panel');
-  var workbenchPanel = ui.appEl.querySelector('.workbench-panel');
-  if (!previewPanel || !workbenchPanel || !isWorkspaceSplitDesktopLayout()) {
-    resizerEl.classList.add('hidden');
-    return;
-  }
-  if (ui.appEl.classList.contains('workspace-view-grid') || ui.appEl.classList.contains('workspace-view-focus')) {
-    resizerEl.classList.add('hidden');
-    return;
-  }
-  if (resizerEl.parentNode !== previewPanel) {
-    previewPanel.appendChild(resizerEl);
-  }
-  resizerEl.classList.remove('hidden');
-}
-
 function updateWorkspaceSplitLayout() {
-  clearWorkspaceSplitLayout();
-}
-
-function stopWorkspaceSplitDrag() {
-  if (!workspaceSplitState.dragging) return;
-  workspaceSplitState.dragging = false;
-  if (ui && ui.appEl) {
-    ui.appEl.classList.remove('workspace-resizing');
-  }
-  if (workspaceSplitState.moveHandler) {
-    window.removeEventListener('mousemove', workspaceSplitState.moveHandler);
-  }
-  if (workspaceSplitState.upHandler) {
-    window.removeEventListener('mouseup', workspaceSplitState.upHandler);
-  }
-  storeWorkspaceSplitRatio(workspaceSplitState.ratio);
-}
-
-function beginWorkspaceSplitDrag(event) {
-  if (!isWorkspaceSplitDesktopLayout() || event.button !== 0 || !ui || !ui.appEl) return;
-  event.preventDefault();
-  workspaceSplitState.dragging = true;
-  ui.appEl.classList.add('workspace-resizing');
-  workspaceSplitState.moveHandler = function (moveEvent) {
-    if (!workspaceSplitState.dragging || !ui || !ui.appEl) return;
-    var previewPanel = ui.appEl.querySelector('.preview-panel');
-    var workbenchPanel = ui.appEl.querySelector('.workbench-panel');
-    if (!previewPanel || !workbenchPanel) return;
-    var previewRect = previewPanel.getBoundingClientRect();
-    var workbenchRect = workbenchPanel.getBoundingClientRect();
-    var gap = Math.max(0, workbenchRect.left - previewRect.right);
-    var available = Math.max(0, previewRect.width + workbenchRect.width);
-    var bounds = getWorkspaceSplitBounds(available);
-    var rawPreviewWidth = moveEvent.clientX - previewRect.left - (gap / 2);
-    workspaceSplitState.ratio = clampWorkspaceSplitRatio(
-      rawPreviewWidth / Math.max(1, available),
-      available,
-      bounds.minPreview,
-      bounds.minWorkbench
-    );
-    updateWorkspaceSplitLayout();
-  };
-  workspaceSplitState.upHandler = function () {
-    stopWorkspaceSplitDrag();
-  };
-  window.addEventListener('mousemove', workspaceSplitState.moveHandler);
-  window.addEventListener('mouseup', workspaceSplitState.upHandler);
-}
-
-function wireWorkspaceSplitUi() {
-  clearWorkspaceSplitLayout();
 }
 
 function normalizeWorkspaceViewMode(mode) {
@@ -225,6 +73,7 @@ function normalizeWorkspaceSurface(surface) {
   if (value === 'grid') return 'grid';
   if (value === 'focus') return 'focus';
   if (value === 'reviewoutput') return 'reviewOutput';
+  if (value === 'training') return 'training';
   if (value === 'configeditor') return 'configEditor';
   return 'default';
 }
@@ -236,28 +85,34 @@ function syncWorkspaceConfigEditorUi() {
   var generateBtn = document.getElementById('config-editor-generate-btn');
   var trainBtn = document.getElementById('config-editor-train-btn');
   var consoleBtn = document.getElementById('config-editor-console-btn');
-  var isConfigEditor = normalizeWorkspaceSurface(workspaceState.surface) === 'configEditor';
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  var isConfigEditor = surface === 'configEditor';
+  var isTraining = surface === 'training';
+  var isConfigWorkspace = isConfigEditor || isTraining;
   var hasConfigFile = !!(state && state.currentConfigFile && state.currentConfigFile.file);
+  var hasTrainingConfigFile = hasConfigFile && state.currentConfigFile.folder === state.folder;
+  var hasConfigForSurface = isTraining ? hasTrainingConfigFile : hasConfigFile;
   var consoleVisible = !!(ui && ui.consolePanelEl && ui.consolePanelEl.style.display && ui.consolePanelEl.style.display !== 'none');
   if (toolbar) {
-    toolbar.classList.toggle('hidden', !isConfigEditor);
+    toolbar.classList.toggle('hidden', !isConfigWorkspace || !hasConfigForSurface);
   }
+  ui.appEl.classList.toggle('training-config-selected', isTraining && hasConfigForSurface);
   if (fileLabel) {
     fileLabel.textContent = hasConfigFile
       ? state.currentConfigFile.file
       : 'No config selected.';
   }
   if (saveBtn) {
-    saveBtn.disabled = !isConfigEditor || !hasConfigFile;
+    saveBtn.disabled = !isConfigWorkspace || !hasConfigForSurface;
   }
   if (generateBtn) {
-    generateBtn.disabled = !isConfigEditor || !hasConfigFile;
+    generateBtn.disabled = !isConfigEditor || !hasConfigForSurface;
   }
   if (trainBtn) {
-    trainBtn.disabled = !isConfigEditor || !hasConfigFile;
+    trainBtn.disabled = !isConfigEditor || !hasConfigForSurface;
   }
   if (consoleBtn) {
-    consoleBtn.disabled = !isConfigEditor;
+    consoleBtn.disabled = !isConfigWorkspace;
     consoleBtn.classList.toggle('active', consoleVisible);
     consoleBtn.setAttribute('aria-pressed', consoleVisible ? 'true' : 'false');
   }
@@ -268,6 +123,8 @@ function syncWorkspaceSurfaceUi() {
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var reviewOutputSurface = document.getElementById('review-output-surface');
   var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
+  var trainingBtn = document.getElementById('sidebar-open-training-btn');
+  var trainingNavigator = document.getElementById('training-navigator');
   var reviewOutputBackBtn = document.getElementById('review-output-back-btn');
   var workbenchTop = ui.appEl.querySelector('.workbench-top');
   var workbenchBottom = ui.appEl.querySelector('.workbench-bottom');
@@ -278,6 +135,7 @@ function syncWorkspaceSurfaceUi() {
     'workspace-surface-grid',
     'workspace-surface-focus',
     'workspace-surface-review-output',
+    'workspace-surface-training',
     'workspace-surface-config-editor'
   );
   ui.appEl.classList.add('workspace-surface-' + surface.replace(/[A-Z]/g, function (m) { return '-' + m.toLowerCase(); }));
@@ -286,11 +144,14 @@ function syncWorkspaceSurfaceUi() {
   if (reviewOutputSurface) {
     reviewOutputSurface.classList.toggle('hidden', surface !== 'reviewOutput');
   }
+  if (trainingNavigator) {
+    trainingNavigator.classList.toggle('hidden', surface !== 'training');
+  }
   if (workbenchTop) {
     workbenchTop.classList.toggle('hidden', surface === 'reviewOutput');
   }
   if (workbenchBottom) {
-    workbenchBottom.classList.toggle('workspace-bottom-config-editor', surface === 'configEditor');
+    workbenchBottom.classList.toggle('workspace-bottom-config-editor', surface === 'configEditor' || surface === 'training');
   }
   if (sidebarWorkspace) {
     sidebarWorkspace.classList.toggle('hidden', true);
@@ -301,6 +162,11 @@ function syncWorkspaceSurfaceUi() {
     reviewOutputBtn.classList.toggle('active', reviewOutputActive);
     reviewOutputBtn.setAttribute('aria-pressed', reviewOutputActive ? 'true' : 'false');
   }
+  if (trainingBtn) {
+    var trainingActive = surface === 'training';
+    trainingBtn.classList.toggle('active', trainingActive);
+    trainingBtn.setAttribute('aria-pressed', trainingActive ? 'true' : 'false');
+  }
   if (reviewOutputBackBtn) {
     reviewOutputBackBtn.classList.toggle('hidden', surface !== 'reviewOutput');
   }
@@ -308,6 +174,7 @@ function syncWorkspaceSurfaceUi() {
     updateSidebarCollapseUi(ui.appEl.classList.contains('left-rail-collapsed'));
   }
   syncWorkspaceConfigEditorUi();
+  syncTrainingWorkspaceUi();
 }
 
 function refreshWorkspaceWorkbenchSurface() {
@@ -353,17 +220,6 @@ function exitWorkspaceSurface(surfaceOverride) {
   setWorkspaceSurface(targetSurface || 'default', { skipRemember: true });
 }
 
-function ensureWorkspaceHeaderButton(id, label) {
-  var existing = document.getElementById(id);
-  if (existing) return existing;
-  var btn = document.createElement('button');
-  btn.id = id;
-  btn.type = 'button';
-  btn.className = 'app-header-segment-btn';
-  btn.textContent = label;
-  return btn;
-}
-
 function ensureWorkspaceOverlayHost() {
   if (!ui || !ui.appEl) {
     throw new Error('Workspace overlay host requested before app UI initialized.');
@@ -386,26 +242,6 @@ function ensureWorkspaceOverlayChildren(ids) {
     overlayHost.appendChild(node);
   });
   return overlayHost;
-}
-
-function buildSidebarDrawer(title, className) {
-  var details = document.createElement('details');
-  details.className = 'sidebar-drawer ' + className;
-  var summary = document.createElement('summary');
-  summary.className = 'sidebar-drawer-summary';
-  summary.textContent = title;
-  details.appendChild(summary);
-  var body = document.createElement('div');
-  body.className = 'sidebar-drawer-body';
-  details.appendChild(body);
-  details._body = body;
-  return details;
-}
-
-function moveChildren(sourceEl, targetEl) {
-  while (sourceEl && sourceEl.firstChild) {
-    targetEl.appendChild(sourceEl.firstChild);
-  }
 }
 
 function rebuildUnifiedWorkspaceShell() {
@@ -443,6 +279,13 @@ function wireWorkspaceHeaderUi() {
     reviewOutputBackBtn.__workspaceWired = true;
     reviewOutputBackBtn.onclick = function () {
       exitWorkspaceSurface();
+    };
+  }
+  var trainingBtn = document.getElementById('sidebar-open-training-btn');
+  if (trainingBtn && !trainingBtn.__workspaceWired) {
+    trainingBtn.__workspaceWired = true;
+    trainingBtn.onclick = function () {
+      setWorkspaceSurface('training');
     };
   }
   var configEditorBackBtn = document.getElementById('config-editor-back-btn');

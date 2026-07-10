@@ -46,31 +46,6 @@ function getFaceFocusBucketLabel(bucket) {
   return 'Unknown';
 }
 
-function appendFaceFocusMetadataRows(listEl, row) {
-  var focus = getFaceFocusFromMetadata(row);
-  if (!focus) return;
-  var bucket = normalizeFaceFocusBucket(focus.bucket);
-  var fields = [
-    ['Face Focus', getFaceFocusBucketLabel(bucket), bucket],
-    ['Largest Face', formatFaceFocusPercent(focus.largest_height_pct) + ' height', ''],
-    ['Face Score', formatFaceFocusScore(focus.largest_score), '']
-  ];
-  fields.forEach(function (field) {
-    var itemRow = document.createElement('div');
-    itemRow.className = 'item-metadata-row';
-    var labelEl = document.createElement('strong');
-    labelEl.textContent = field[0];
-    var valueEl = document.createElement('span');
-    valueEl.textContent = field[1];
-    if (field[2]) {
-      valueEl.classList.add(field[2] === 'unknown' ? 'item-metadata-value-error' : 'item-metadata-value-ok');
-    }
-    itemRow.appendChild(labelEl);
-    itemRow.appendChild(valueEl);
-    listEl.appendChild(itemRow);
-  });
-}
-
 function buildFaceFocusSummaryRows(rows, scopedFileNames) {
   var allowed = null;
   if (Array.isArray(scopedFileNames)) {

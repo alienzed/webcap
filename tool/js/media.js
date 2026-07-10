@@ -708,6 +708,7 @@ async function renderFileList() {
   if (typeof mediaGridRefreshFromCurrentFilters === 'function') {
     mediaGridRefreshFromCurrentFilters();
   }
+  renderFocusSetControls();
   if (typeof updateSidebarSurfaceTools === 'function') {
     updateSidebarSurfaceTools();
   }

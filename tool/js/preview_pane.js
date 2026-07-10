@@ -587,8 +587,11 @@ function loadConfigFileToEditor(fileName) {
       ui.editorEl.removeAttribute('readonly'); // Ensure editor is editable for config files
       state.currentConfigFile = { folder: folder, file: fileName };
       state.currentCaptionFile = null;
-      if (typeof setWorkspaceSurface === 'function') {
+      if (workspaceState.surface !== 'training') {
         setWorkspaceSurface('configEditor');
+      } else {
+        syncWorkspaceConfigEditorUi();
+        refreshTrainingWorkspace();
       }
       setStatus('Editing config: ' + fileName);
     } else {

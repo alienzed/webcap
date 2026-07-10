@@ -211,6 +211,7 @@
                                 title="Search current folder and subfolders"
                             >Search</button>
                         </div>
+                        <div id="focus-set-filter-controls" class="focus-set-controls focus-set-controls--sidebar" aria-label="Selection focus sets"></div>
                     </div>
                     <div id="caption-filter-count">
                         <span id="caption-filter-count-text"></span>
@@ -290,6 +291,13 @@
                                     title="Open the review and output workspace"
                                     aria-pressed="false"
                                 >Review / Output</button>
+                                <button
+                                    id="sidebar-open-training-btn"
+                                    type="button"
+                                    class="review-captions-btn sidebar-review-output-btn"
+                                    title="Open the training workspace"
+                                    aria-pressed="false"
+                                >Training</button>
                                 <div id="sidebar-workspace" class="sidebar-workspace hidden" data-legacy-tabs-disabled="true" aria-hidden="true"></div>
                             </div>
                         </details>
@@ -333,6 +341,10 @@
                                         <button id="config-editor-train-btn" type="button" class="review-captions-btn">Train Preview</button>
                                         <button id="config-editor-save-btn" type="button" class="review-captions-btn">Save</button>
                                     </div>
+                                </div>
+                                <div id="training-editor-empty" class="training-editor-empty hidden">
+                                    <strong>Select a config file</strong>
+                                    <span>Dataset readiness and generated configs stay visible in the Training navigator.</span>
                                 </div>
                                 <div class="editor-wrapper">
                                     <div id="editor-floating-actions" class="editor-floating-actions">
@@ -637,6 +649,34 @@
                 </section>
             </div>
             <div class="panel preview-panel">
+                    <section id="training-navigator" class="training-navigator hidden" aria-label="Training workspace">
+                        <div class="training-navigator-header">
+                            <div>
+                                <div class="training-navigator-title">Training</div>
+                                <div id="training-navigator-folder" class="training-navigator-subtitle">No folder selected</div>
+                            </div>
+                            <button id="training-workspace-back-btn" type="button" class="review-captions-btn">Back</button>
+                        </div>
+                        <div id="training-readiness" class="training-readiness">Loading training readiness...</div>
+                        <div class="training-workspace-actions">
+                            <button id="training-workspace-prepare-btn" type="button" class="training-btn training-prepare-btn">Prepare Dataset</button>
+                            <button id="training-workspace-generate-btn" type="button" class="training-btn">Generate</button>
+                            <button id="training-workspace-train-btn" type="button" class="training-btn">Train</button>
+                        </div>
+                        <section class="training-workspace-section" aria-label="Training config files">
+                            <div class="training-workspace-section-title">Config Files</div>
+                            <div id="training-workspace-config-list" class="training-config-list">No config files.</div>
+                        </section>
+                        <section class="training-command-card" aria-label="Training command">
+                            <div class="training-workspace-section-title">Training Command</div>
+                            <div id="training-command-status" class="training-command-status">Run Train to generate and copy the command.</div>
+                            <pre id="training-command-text" class="training-command-text hidden"></pre>
+                            <div class="training-command-actions">
+                                <button id="training-copy-command-btn" type="button" class="training-btn hidden">Copy Command</button>
+                                <button id="training-console-btn" type="button" class="review-captions-btn">Console</button>
+                            </div>
+                        </section>
+                    </section>
                     <div id="preview-shell" class="preview-shell">
                         <div id="preview-header" class="preview-header hidden" aria-label="Preview actions">
                             <div id="preview-header-actions" class="preview-header-actions">
@@ -690,6 +730,7 @@
                                 <button id="media-grid-surface-close-btn" type="button" class="media-grid-btn media-grid-surface-back-btn" aria-label="Return to item view" title="Return to item view">&lt;</button>
                                 <div id="media-grid-surface-meta" class="media-grid-surface-meta"></div>
                             </div>
+                            <div id="focus-set-grid-controls" class="focus-set-controls focus-set-controls--grid" aria-label="Selection focus sets"></div>
                             <div class="media-grid-surface-actions">
                                 <div id="media-grid-surface-status" class="media-grid-surface-status"></div>
                                 <button id="media-grid-surface-select-all-btn" type="button" class="media-grid-btn">Select All</button>
@@ -1119,6 +1160,7 @@
         <script src="/static/js/crop.js"></script>
         <script src="/static/js/video_clip.js"></script>
         <script src="/static/js/review_output.js"></script>
+        <script src="/static/js/focus_sets.js"></script>
         <script src="/static/js/stats.js"></script>
         <script src="/static/js/primer_settings.js"></script>
         <script src="/static/js/folder_state.js"></script>
@@ -1145,6 +1187,7 @@
         <script src="/static/js/smart_set.js"></script>
         <script src="/static/js/media_context_actions.js"></script>
         <script src="/static/js/ui_event_wiring.js"></script>
+        <script src="/static/js/training_workspace.js"></script>
         <script src="/static/js/workspace_shell.js"></script>
         <script src="/static/js/main.js"></script>
     </body>

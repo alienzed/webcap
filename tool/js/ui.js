@@ -381,9 +381,10 @@ function refreshCurrentDirectory() {
           loadCaptionHelpersFromFolderState(folderState);
           loadItemTagsFromFolderState(folderState);
           refreshMediaResolutionCache();
-          state.reviewedSet = state.reviewedSet || new Set();
-          renderFileList(ui.filterEl.value);
-          refreshDeterministicMutationStatus();
+           state.reviewedSet = state.reviewedSet || new Set();
+           renderFileList(ui.filterEl.value);
+           ensureFocusSetMetadataForCurrentFolder();
+           refreshDeterministicMutationStatus();
           
           // --- Static header toggling (display only, wiring in main.js) ---
           if (ui.upBtn) {
@@ -401,8 +402,9 @@ function refreshCurrentDirectory() {
           if (typeof updateUtilityPathLabel === 'function') {
             updateUtilityPathLabel(state.folder || '');
           }
-          setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
-          refreshTrainingConfigList();
+           setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
+           refreshTrainingConfigList();
+           refreshTrainingWorkspace();
           // If a file was just renamed, reselect it
           if (window.state && state.pendingSelectFileName) {
             var fname = state.pendingSelectFileName;
@@ -414,8 +416,9 @@ function refreshCurrentDirectory() {
           state.childFolders = [];
           state.items = [];
           if (ui.upBtn) ui.upBtn.classList.add('hidden');
-          renderFileList(ui.filterEl.value);
-          refreshTrainingConfigList();
+           renderFileList(ui.filterEl.value);
+           refreshTrainingConfigList();
+           refreshTrainingWorkspace();
         }
       } else {
         setStatus('Error loading folder: ' + xhr.status);
@@ -424,6 +427,7 @@ function refreshCurrentDirectory() {
         if (ui.upBtn) ui.upBtn.classList.add('hidden');
         renderFileList(ui.filterEl.value);
         refreshTrainingConfigList();
+        refreshTrainingWorkspace();
       }
       updateSetFolderScopedUi();
       updateReviewButtonAvailability();

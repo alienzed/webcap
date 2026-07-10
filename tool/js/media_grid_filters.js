@@ -109,16 +109,6 @@ function mediaGridDispatchChange(el) {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-function mediaGridGetMirroredFilterCount() {
-  var count = 0;
-  if (String(ui.filterEl.value || '').trim()) count += 1;
-  if (ui.advancedFilterUnreviewedEl.checked) count += 1;
-  if (ui.advancedFilterInvalidArEl.checked) count += 1;
-  if (getAdvancedStarFilterValues().length) count += 1;
-  if (getAdvancedFlagFilterValues().length) count += 1;
-  return count;
-}
-
 function mediaGridSyncFilterControls() {
   var searchInput = document.getElementById('media-grid-filter-search');
   var unreviewedInput = document.getElementById('media-grid-filter-unreviewed');

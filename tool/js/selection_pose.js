@@ -135,50 +135,6 @@ function getSelectionPoseFromMetadata(row) {
   };
 }
 
-function appendSelectionPoseMetadataRows(listEl, row) {
-  var pose = getSelectionPoseFromMetadata(row);
-  if (!pose) return;
-  var expressionList = Array.isArray(pose.expressions) ? pose.expressions.map(function (value) {
-    return String(value || '').replace(/_/g, ' ');
-  }).filter(Boolean) : [];
-  var expressionScoresStr = '';
-  if (typeof pose.expression_scores === 'object' && pose.expression_scores) {
-    var scorePairs = [];
-    for (var key in pose.expression_scores) {
-      if (pose.expression_scores.hasOwnProperty(key)) {
-        scorePairs.push(key.replace(/_/g, ' ') + ': ' + Math.round(pose.expression_scores[key] * 100) + '%');
-      }
-    }
-    expressionScoresStr = scorePairs.join(', ');
-  }
-  var fields = [
-    ['Face Direction', pose.face_direction ? String(pose.face_direction).replace(/_/g, ' ') : 'unknown', null],
-    ['Expression', expressionList.length ? expressionList.join(', ') : (pose.expression_primary || 'unknown'), expressionScoresStr],
-    ['Body Orientation', pose.body_orientation ? String(pose.body_orientation).replace(/_/g, ' ') : 'unknown', null],
-    ['Pose Class', pose.pose_class ? String(pose.pose_class).replace(/_/g, ' ') : 'unknown', null],
-    ['Arm Position', pose.arm_position ? String(pose.arm_position).replace(/_/g, ' ') : 'unknown', null]
-  ];
-  fields.forEach(function (field) {
-    var itemRow = document.createElement('div');
-    itemRow.className = 'item-metadata-row';
-    var labelEl = document.createElement('strong');
-    labelEl.textContent = field[0];
-    var valueEl = document.createElement('span');
-    valueEl.textContent = field[1];
-    if (String(field[1] || '').toLowerCase() === 'unknown') {
-      valueEl.classList.add('item-metadata-value-error');
-    } else {
-      valueEl.classList.add('item-metadata-value-ok');
-    }
-    if (field[2]) {
-      valueEl.title = field[2];
-    }
-    itemRow.appendChild(labelEl);
-    itemRow.appendChild(valueEl);
-    listEl.appendChild(itemRow);
-  });
-}
-
 function buildSelectionPoseSummaryRows(rows, scopedFileNames, fieldDef) {
   var allowed = null;
   if (Array.isArray(scopedFileNames)) {

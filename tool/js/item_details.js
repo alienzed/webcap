@@ -261,26 +261,6 @@ function getResolutionForMedia(fileName) {
   return String(row.resolution);
 }
 
-function getDurationForMedia(fileName) {
-  var row = getMetadataForMedia(fileName);
-  if (!row || typeof row.duration === 'undefined' || row.duration === null || row.duration === '-') return '';
-  var raw = String(row.duration || '').trim();
-  if (!raw) return '';
-  if (/^\d+(?:\.\d+)?$/.test(raw)) {
-    var totalSeconds = Number(raw);
-    if (!isFinite(totalSeconds) || totalSeconds < 0) return '';
-    var seconds = Math.round(totalSeconds);
-    var hours = Math.floor(seconds / 3600);
-    var minutes = Math.floor((seconds % 3600) / 60);
-    var remainingSeconds = seconds % 60;
-    if (hours > 0) {
-      return hours + ':' + String(minutes).padStart(2, '0') + ':' + String(remainingSeconds).padStart(2, '0');
-    }
-    return minutes + ':' + String(remainingSeconds).padStart(2, '0');
-  }
-  return raw;
-}
-
 function normalizeRatingValue(value) {
   var n = Number(value);
   if (!isFinite(n)) return 0;
@@ -1055,47 +1035,6 @@ function updateTagOrderForMediaKey(mediaKey, nextTags) {
   return true;
 }
 
-function moveTagUpForMediaKey(mediaKey, tagText) {
-  var key = String(mediaKey || '').trim();
-  var target = normalizeItemTag(tagText).toLowerCase();
-  if (!key || !target) return false;
-  var current = getTagsForMediaKey(key);
-  if (current.length < 2) return false;
-  var idx = -1;
-  for (var i = 0; i < current.length; i++) {
-    if (normalizeItemTag(current[i]).toLowerCase() === target) {
-      idx = i;
-      break;
-    }
-  }
-  if (idx <= 0) return false;
-  var next = current.slice();
-  var temp = next[idx - 1];
-  next[idx - 1] = next[idx];
-  next[idx] = temp;
-  return updateTagOrderForMediaKey(key, next);
-}
-
-function moveTagDownForMediaKey(mediaKey, tagText) {
-  var key = String(mediaKey || '').trim();
-  var target = normalizeItemTag(tagText).toLowerCase();
-  if (!key || !target) return false;
-  var current = getTagsForMediaKey(key);
-  if (current.length < 2) return false;
-  var idx = -1;
-  for (var i = 0; i < current.length; i++) {
-    if (normalizeItemTag(current[i]).toLowerCase() === target) {
-      idx = i;
-      break;
-    }
-  }
-  if (idx < 0 || idx >= current.length - 1) return false;
-  var next = current.slice();
-  var temp = next[idx + 1];
-  next[idx + 1] = next[idx];
-  next[idx] = temp;
-  return updateTagOrderForMediaKey(key, next);
-}
 
 function swapTagOrderForMediaKey(mediaKey, firstTagText, secondTagText) {
   var key = String(mediaKey || '').trim();

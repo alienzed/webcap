@@ -235,9 +235,11 @@ function runTrainCommandPreviewForCurrentFolder() {
     .then(function (outputText) {
       var chainCmd = extractTrainingChainCommand(outputText);
       if (!chainCmd) {
+        setTrainingCommandHandoff('');
         setStatus('Training command preview finished.');
         return outputText;
       }
+      setTrainingCommandHandoff(chainCmd);
       return new Promise(function (resolve, reject) {
         copyTextToClipboard(
           chainCmd,

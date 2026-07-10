@@ -182,6 +182,250 @@
   min-height: calc(100vh - 320px);
 }
 
+.app.shell-revamp .training-navigator.hidden {
+  display: none !important;
+}
+
+.app.shell-revamp .training-navigator {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  overflow: auto;
+}
+
+.app.shell-revamp .training-navigator-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app.shell-revamp .training-navigator-title {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.app.shell-revamp .training-navigator-subtitle,
+.app.shell-revamp .training-command-status {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.app.shell-revamp .training-readiness,
+.app.shell-revamp .training-workspace-section,
+.app.shell-revamp .training-command-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+  padding: 12px;
+}
+
+.app.shell-revamp .training-readiness-state,
+.app.shell-revamp .training-readiness-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app.shell-revamp .training-readiness-state strong,
+.app.shell-revamp .training-workspace-section-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.app.shell-revamp .training-readiness-state span,
+.app.shell-revamp .training-readiness-metrics {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app.shell-revamp .training-readiness-metrics {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 10px;
+}
+
+.app.shell-revamp .training-workspace-actions,
+.app.shell-revamp .training-command-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app.shell-revamp .training-workspace-actions .training-btn {
+  flex: 1 1 120px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.app.shell-revamp .training-workspace-actions #training-workspace-prepare-btn {
+  border-left: 3px solid var(--accent);
+}
+
+.app.shell-revamp .training-workspace-actions #training-workspace-train-btn {
+  border-color: var(--accent-dark);
+  background: var(--accent);
+  color: #fff;
+}
+
+.app.shell-revamp .training-workspace-actions #training-workspace-train-btn:hover {
+  background: var(--accent-dark);
+}
+
+.app.shell-revamp .training-navigator .training-config-col {
+  border-color: var(--border);
+  background: var(--panel);
+}
+
+.app.shell-revamp .training-navigator .training-config-col-title {
+  color: var(--muted);
+}
+
+.app.shell-revamp .training-navigator .training-config-link {
+  color: var(--accent);
+}
+
+.app.shell-revamp .training-navigator .training-config-link.active {
+  color: var(--text);
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.app.shell-revamp .training-workspace-section,
+.app.shell-revamp .training-command-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app.shell-revamp .training-command-text {
+  max-height: 180px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 7px;
+  background: #0f172a;
+  color: #d1fae5;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.app.shell-revamp.workspace-surface-training .preview-shell {
+  display: none !important;
+}
+
+.app.shell-revamp.workspace-surface-training .groups-card,
+.app.shell-revamp.workspace-surface-training .workbench-side-stack {
+  display: none !important;
+}
+
+.app.shell-revamp.workspace-surface-training .workbench-top {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app.shell-revamp.workspace-surface-training .workbench-main-stack,
+.app.shell-revamp.workspace-surface-training .workbench-main-stack > .workbench-bottom {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.app.shell-revamp.workspace-surface-training .workbench-main-stack > .workbench-bottom {
+  display: flex;
+}
+
+.app.shell-revamp.workspace-surface-training .editor-surface {
+  min-height: calc(100vh - 180px);
+}
+
+.app.shell-revamp.workspace-surface-training textarea#editor {
+  min-height: calc(100vh - 320px);
+}
+
+.app.shell-revamp.workspace-surface-training #config-editor-back-btn,
+.app.shell-revamp.workspace-surface-training #config-editor-generate-btn,
+.app.shell-revamp.workspace-surface-training #config-editor-train-btn {
+  display: none;
+}
+
+.app.shell-revamp .training-editor-empty {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-training:not(.training-config-selected) .training-editor-empty {
+  min-height: calc(100vh - 240px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: rgba(15, 23, 42, 0.62);
+  text-align: center;
+}
+
+.app.shell-revamp.workspace-surface-training:not(.training-config-selected) .training-editor-empty strong {
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.app.shell-revamp.workspace-surface-training:not(.training-config-selected) .editor-wrapper,
+.app.shell-revamp.workspace-surface-training:not(.training-config-selected) #console-panel {
+  display: none !important;
+}
+
+html[data-theme="dark"] .focus-set-preset {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] .focus-set-preset:hover:not(:disabled),
+html[data-theme="dark"] .focus-set-preset.active {
+  border-color: rgba(45, 212, 191, 0.72);
+  background: rgba(20, 184, 166, 0.16);
+  color: #ccfbf1;
+}
+
+html[data-theme="dark"] .focus-set-controls-status,
+html[data-theme="dark"] .training-navigator-subtitle,
+html[data-theme="dark"] .training-command-status,
+html[data-theme="dark"] .training-readiness-state span,
+html[data-theme="dark"] .training-readiness-metrics {
+  color: rgba(226, 232, 240, 0.64);
+}
+
+html[data-theme="dark"] .training-navigator-title,
+html[data-theme="dark"] .training-readiness-state strong,
+html[data-theme="dark"] .training-workspace-section-title {
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-training:not(.training-config-selected) .training-editor-empty {
+  color: rgba(226, 232, 240, 0.64);
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-training:not(.training-config-selected) .training-editor-empty strong {
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .training-readiness,
+html[data-theme="dark"] .training-workspace-section,
+html[data-theme="dark"] .training-command-card {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.54);
+}
+
 .group-workbench {
   display: flex;
   flex-direction: column;

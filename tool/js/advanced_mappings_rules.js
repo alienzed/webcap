@@ -160,15 +160,6 @@ function setReviewRulesRows(rows, triggerAutosave) {
   }
 }
 
-function loadPrimerMappingsRows(rowsOrLegacy) {
-  if (Array.isArray(rowsOrLegacy)) {
-    setPrimerMappingsRows(rowsOrLegacy, false);
-    return;
-  }
-  var legacyRows = parseLegacyPrimerMappings(rowsOrLegacy);
-  setPrimerMappingsRows(legacyRows, false);
-}
-
 function loadReviewRulesRows(rowsOrLegacy) {
   if (Array.isArray(rowsOrLegacy)) {
     setReviewRulesRows(rowsOrLegacy, false);

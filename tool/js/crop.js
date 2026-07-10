@@ -111,27 +111,6 @@ function magnetSnapDimension(value, grid, threshold) {
   return Number(value);
 }
 
-function applyCropSoftMagnet() {
-  if (!cropperInstance || cropMagnetApplying) return;
-  var data = cropperInstance.getData(true);
-  var ratio = cropActiveRatio > 0 ? cropActiveRatio : 1;
-  var snappedW = magnetSnapDimension(data.width, CROP_MAGNET_GRID, CROP_MAGNET_THRESHOLD);
-  if (snappedW === data.width) {
-    setCropSizeReadout(data.width, data.height);
-    return;
-  }
-  var snappedH = Math.max(CROP_MAGNET_GRID, Math.round(snappedW / ratio));
-  cropMagnetApplying = true;
-  cropperInstance.setData({
-    x: data.x,
-    y: data.y,
-    width: snappedW,
-    height: snappedH
-  });
-  cropMagnetApplying = false;
-  setCropSizeReadout(snappedW, snappedH);
-}
-
 function finalizeCropData(data) {
   var ratio = cropActiveRatio > 0 ? cropActiveRatio : 1;
   var width = Math.max(CROP_MAGNET_GRID, magnetNearest(data.width, CROP_MAGNET_GRID));

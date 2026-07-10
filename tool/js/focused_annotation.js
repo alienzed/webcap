@@ -1077,21 +1077,6 @@ function advanceFocusedAnnotationStep() {
   setStatus('Focused annotation complete.');
 }
 
-function moveFocusedAnnotationBack() {
-  if (focusedAnnotationState.history.length) {
-    var previous = focusedAnnotationState.history.pop();
-    navigateFocusedAnnotation(previous.itemIndex, previous.groupIndex);
-    return;
-  }
-  var previousPending = getFocusedAnnotationPreviousPendingStep(
-    focusedAnnotationState.itemIndex,
-    focusedAnnotationState.groupIndex
-  );
-  if (previousPending) {
-    navigateFocusedAnnotation(previousPending.itemIndex, previousPending.groupIndex);
-  }
-}
-
 function markFocusedAnnotationGroupDone() {
   if (!state.currentItem || !state.currentItem.key) return;
   var requirementLabel = getFocusedAnnotationCurrentRequirement();

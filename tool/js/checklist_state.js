@@ -43,10 +43,6 @@ function getChecklistGroupTermsClipboard() {
   return Array.isArray(checklistGroupTermsClipboard) ? checklistGroupTermsClipboard.slice() : [];
 }
 
-function hasChecklistGroupTermsClipboard() {
-  return getChecklistGroupTermsClipboard().length > 0;
-}
-
 function normalizeChecklistTermAffixKey(termText) {
   return normalizeChecklistTerm(termText).toLowerCase();
 }

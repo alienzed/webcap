@@ -1,6 +1,13 @@
 var trainingWorkspaceState = {
   manifest: null,
-  configFiles: []
+  configFiles: [],
+  runnerJobs: [],
+  runnerActiveJobId: '',
+  runnerSelectedJobId: '',
+  runnerLogOffsets: {},
+  runnerPollTimer: 0,
+  runnerStatusPending: false,
+  runnerPreflight: null
 };
 
 function classifyTrainingConfigFile(fileName) {
@@ -25,8 +32,235 @@ function getTrainingWorkspaceEls() {
     configList: document.getElementById('training-workspace-config-list'),
     commandStatus: document.getElementById('training-command-status'),
     commandText: document.getElementById('training-command-text'),
-    copyCommandBtn: document.getElementById('training-copy-command-btn')
+    copyCommandBtn: document.getElementById('training-copy-command-btn'),
+    runnerSummary: document.getElementById('training-runner-summary'),
+    runnerActions: document.getElementById('training-runner-actions'),
+    runnerStopBtn: document.getElementById('training-runner-stop-btn'),
+    runnerCancelBtn: document.getElementById('training-runner-cancel-btn'),
+    runnerConsoleBtn: document.getElementById('training-runner-console-btn'),
+    runnerPreflight: document.getElementById('training-runner-preflight')
   };
+}
+
+function trainingRunnerRequest(path, options) {
+  var allowNotOk = !!(options && options.allowNotOk);
+  return fetch(path, options || {}).then(function (response) {
+    return response.json().catch(function () { return {}; }).then(function (payload) {
+      if ((!response.ok && !allowNotOk) || (!payload.ok && !allowNotOk)) {
+        throw new Error(payload.error || 'Training runner request failed.');
+      }
+      return payload;
+    });
+  });
+}
+
+function getTrainingRunnerSelectedJob() {
+  var jobs = trainingWorkspaceState.runnerJobs || [];
+  var selectedId = trainingWorkspaceState.runnerSelectedJobId;
+  for (var i = 0; i < jobs.length; i++) {
+    if (jobs[i].id === selectedId) return jobs[i];
+  }
+  for (var j = 0; j < jobs.length; j++) {
+    if (jobs[j].id === trainingWorkspaceState.runnerActiveJobId) return jobs[j];
+  }
+  for (var k = jobs.length - 1; k >= 0; k--) {
+    if (jobs[k].folder === state.folder) return jobs[k];
+  }
+  return jobs.length ? jobs[jobs.length - 1] : null;
+}
+
+function formatTrainingRunnerElapsed(job) {
+  var started = Number(job && job.startedAt || 0);
+  if (!started) return '';
+  var seconds = Math.max(0, Math.floor(Date.now() / 1000 - started));
+  var hours = Math.floor(seconds / 3600);
+  var minutes = Math.floor((seconds % 3600) / 60);
+  return hours ? hours + 'h ' + minutes + 'm' : minutes + 'm';
+}
+
+function renderTrainingRunnerPreflight(payload) {
+  var els = getTrainingWorkspaceEls();
+  if (!els.runnerPreflight) return;
+  trainingWorkspaceState.runnerPreflight = payload || null;
+  if (!payload) {
+    els.runnerPreflight.innerHTML = '';
+    els.runnerPreflight.classList.add('hidden');
+    return;
+  }
+  var summary = payload.summary || {};
+  var checks = Array.isArray(payload.checks) ? payload.checks : [];
+  var rows = checks.map(function (check) {
+    var ok = !!check.ok;
+    var detail = check.details ? '<div>' + escapeHtml(check.details) + '</div>' : '';
+    return '<div class="training-preflight-check ' + (ok ? 'ok' : 'failed') + '">' +
+      '<span>' + (ok ? '&#10003;' : '!') + '</span><span><strong>' + escapeHtml(check.message || check.id) + '</strong>' + detail + '</span></div>';
+  }).join('');
+  var script = payload.runnerScript
+    ? '<details><summary>Generated runner script</summary><pre class="training-runner-script">' + escapeHtml(payload.runnerScript) + '</pre></details>'
+    : '';
+  els.runnerPreflight.innerHTML = '<div class="training-preflight-summary">' +
+    (payload.ok ? 'Runner validation passed.' : 'Runner validation found ' + Number(summary.blockers || 0) + ' blocker(s).') +
+    '</div>' + rows + script;
+  els.runnerPreflight.classList.remove('hidden');
+}
+
+function renderTrainingRunner() {
+  var els = getTrainingWorkspaceEls();
+  if (!els.runnerSummary || !els.runnerActions) return;
+  var jobs = trainingWorkspaceState.runnerJobs || [];
+  var activeCount = jobs.filter(function (job) { return job.status === 'running' || job.status === 'stopping'; }).length;
+  var queuedCount = jobs.filter(function (job) { return job.status === 'queued'; }).length;
+  var job = getTrainingRunnerSelectedJob();
+  if (!job) {
+    els.runnerSummary.textContent = 'No managed training jobs.';
+    els.runnerActions.classList.add('hidden');
+    return;
+  }
+  trainingWorkspaceState.runnerSelectedJobId = job.id;
+  var elapsed = formatTrainingRunnerElapsed(job);
+  var status = String(job.status || 'unknown');
+  var stage = String(job.stage || '');
+  els.runnerSummary.innerHTML = '<strong>' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</strong>' +
+    (stage ? ' - ' + escapeHtml(stage.toUpperCase()) : '') +
+    (elapsed ? ' - ' + escapeHtml(elapsed) : '') +
+    '<br><span>' + escapeHtml(job.folder || '') + '</span>' +
+    (queuedCount ? '<br><span>' + queuedCount + ' queued job' + (queuedCount === 1 ? '' : 's') + '.</span>' : '') +
+    (job.error ? '<br><span>' + escapeHtml(job.error) + '</span>' : '');
+  els.runnerActions.classList.remove('hidden');
+  var running = status === 'running' || status === 'stopping';
+  var queued = status === 'queued';
+  if (els.runnerStopBtn) els.runnerStopBtn.classList.toggle('hidden', !running);
+  if (els.runnerCancelBtn) els.runnerCancelBtn.classList.toggle('hidden', !queued);
+  if (!activeCount && !queuedCount && status !== 'failed' && status !== 'completed' && status !== 'stopped') {
+    els.runnerActions.classList.add('hidden');
+  }
+}
+
+function appendTrainingRunnerValidationToConsole(payload) {
+  var checks = Array.isArray(payload.checks) ? payload.checks : [];
+  var lines = ['[training-runner] Validation results:'];
+  checks.forEach(function (check) {
+    lines.push((check.ok ? '[OK] ' : '[FAIL] ') + (check.message || check.id));
+    if (check.details) lines.push(String(check.details));
+  });
+  if (payload.runnerScript) lines.push('[training-runner] Generated runner script:\n' + payload.runnerScript);
+  appendToConsolePanel(lines.join('\n') + '\n');
+}
+
+function fetchTrainingRunnerLog(job) {
+  if (!job || !job.id) return;
+  var offset = Number(trainingWorkspaceState.runnerLogOffsets[job.id] || 0);
+  fetch('/fs/training_runner/log?jobId=' + encodeURIComponent(job.id) + '&offset=' + encodeURIComponent(offset))
+    .then(function (response) { return response.json(); })
+    .then(function (payload) {
+      if (!payload || !payload.ok) return;
+      trainingWorkspaceState.runnerLogOffsets[job.id] = Number(payload.nextOffset || offset);
+      if (payload.text) appendToConsolePanel(payload.text);
+      if (payload.job) {
+        var jobs = trainingWorkspaceState.runnerJobs;
+        for (var i = 0; i < jobs.length; i++) {
+          if (jobs[i].id === payload.job.id) jobs[i] = payload.job;
+        }
+        renderTrainingRunner();
+      }
+    })
+    .catch(function (err) {
+      if (window.console && console.error) console.error('[Training runner] Log refresh failed:', err);
+    });
+}
+
+function scheduleTrainingRunnerPoll() {
+  if (trainingWorkspaceState.runnerPollTimer) clearTimeout(trainingWorkspaceState.runnerPollTimer);
+  if (!isTrainingWorkspaceActive()) return;
+  trainingWorkspaceState.runnerPollTimer = setTimeout(function () {
+    refreshTrainingRunnerStatus();
+  }, 1500);
+}
+
+function refreshTrainingRunnerStatus() {
+  if (!isTrainingWorkspaceActive() || trainingWorkspaceState.runnerStatusPending) return;
+  trainingWorkspaceState.runnerStatusPending = true;
+  trainingRunnerRequest('/fs/training_runner/status')
+    .then(function (payload) {
+      trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
+      trainingWorkspaceState.runnerActiveJobId = String(payload.activeJobId || '');
+      renderTrainingRunner();
+      var selected = getTrainingRunnerSelectedJob();
+      if (selected && (selected.status === 'running' || selected.status === 'stopping')) fetchTrainingRunnerLog(selected);
+    })
+    .catch(function (err) {
+      if (window.console && console.error) console.error('[Training runner] Status refresh failed:', err);
+    })
+    .then(function () {
+      trainingWorkspaceState.runnerStatusPending = false;
+      scheduleTrainingRunnerPoll();
+    });
+}
+
+function validateTrainingRunner() {
+  if (!state.folder) return Promise.reject(new Error('No folder selected for training validation.'));
+  setStatus('Validating managed training runner...');
+  showConsolePanel();
+  return trainingRunnerRequest('/fs/training_runner/validate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder: state.folder }),
+    allowNotOk: true
+  }).then(function (payload) {
+    renderTrainingRunnerPreflight(payload);
+    appendTrainingRunnerValidationToConsole(payload);
+    setStatus(payload.ok ? 'Training runner validation passed.' : 'Training runner validation found blockers.');
+    return payload;
+  });
+}
+
+function startManagedTraining(queue) {
+  if (!state.folder) {
+    setStatus('No folder selected for managed training.');
+    return;
+  }
+  ensureGeneratedTrainingArtifactsForCurrentFolder()
+    .then(function () { return validateTrainingRunner(); })
+    .then(function (preflight) {
+      if (!preflight.ok) return null;
+      var verb = queue ? 'queue this HI to LO training job' : 'start this HI to LO training job';
+      if (!window.confirm('Runner validation passed. Continue and ' + verb + '?')) return null;
+      return trainingRunnerRequest('/fs/training_runner/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: state.folder, queue: !!queue })
+      });
+    })
+    .then(function (payload) {
+      if (!payload) return;
+      trainingWorkspaceState.runnerSelectedJobId = payload.job.id;
+      trainingWorkspaceState.runnerLogOffsets[payload.job.id] = 0;
+      trainingWorkspaceState.runnerPreflight = null;
+      renderTrainingRunnerPreflight(null);
+      showConsolePanel();
+      setStatus(payload.queued ? 'Training job queued.' : 'Managed training started.');
+      refreshTrainingRunnerStatus();
+    })
+    .catch(function (err) {
+      setStatus('Managed training did not start: ' + String(err && err.message ? err.message : err));
+    });
+}
+
+function stopManagedTraining(cancel) {
+  var job = getTrainingRunnerSelectedJob();
+  if (!job || !job.id) return;
+  var label = cancel ? 'Cancel this queued training job?' : 'Stop the running training job?';
+  if (!window.confirm(label)) return;
+  trainingRunnerRequest('/fs/training_runner/stop', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: job.id, cancel: !!cancel })
+  }).then(function () {
+    setStatus(cancel ? 'Queued training job cancelled.' : 'Stopping managed training...');
+    refreshTrainingRunnerStatus();
+  }).catch(function (err) {
+    setStatus('Could not change training job: ' + String(err && err.message ? err.message : err));
+  });
 }
 
 function fetchTrainingWorkspaceManifest(folder) {
@@ -188,12 +422,46 @@ function wireTrainingWorkspace() {
   var prepareBtn = document.getElementById('training-workspace-prepare-btn');
   var generateBtn = document.getElementById('training-workspace-generate-btn');
   var trainBtn = document.getElementById('training-workspace-train-btn');
+  var trainMenu = document.getElementById('training-run-menu-panel');
+  var previewCommandBtn = document.getElementById('training-preview-command-btn');
+  var validateRunnerBtn = document.getElementById('training-validate-runner-btn');
+  var runInAppBtn = document.getElementById('training-run-in-app-btn');
+  var queueJobBtn = document.getElementById('training-queue-job-btn');
   var copyCommandBtn = document.getElementById('training-copy-command-btn');
   var consoleBtn = document.getElementById('training-console-btn');
+  var runnerStopBtn = document.getElementById('training-runner-stop-btn');
+  var runnerCancelBtn = document.getElementById('training-runner-cancel-btn');
+  var runnerConsoleBtn = document.getElementById('training-runner-console-btn');
   backBtn.onclick = function () { exitWorkspaceSurface(); };
   prepareBtn.onclick = function () { runTrainingWorkspaceAction('prepare'); };
   generateBtn.onclick = function () { runTrainingWorkspaceAction('generate'); };
-  trainBtn.onclick = function () { runTrainingWorkspaceAction('train'); };
+  trainBtn.onclick = function () {
+    var open = trainMenu.classList.contains('hidden');
+    trainMenu.classList.toggle('hidden', !open);
+    trainBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  previewCommandBtn.onclick = function () {
+    trainMenu.classList.add('hidden');
+    trainBtn.setAttribute('aria-expanded', 'false');
+    runTrainingWorkspaceAction('train');
+  };
+  validateRunnerBtn.onclick = function () {
+    trainMenu.classList.add('hidden');
+    trainBtn.setAttribute('aria-expanded', 'false');
+    validateTrainingRunner().catch(function (err) {
+      setStatus('Training runner validation failed: ' + String(err && err.message ? err.message : err));
+    });
+  };
+  runInAppBtn.onclick = function () {
+    trainMenu.classList.add('hidden');
+    trainBtn.setAttribute('aria-expanded', 'false');
+    startManagedTraining(false);
+  };
+  queueJobBtn.onclick = function () {
+    trainMenu.classList.add('hidden');
+    trainBtn.setAttribute('aria-expanded', 'false');
+    startManagedTraining(true);
+  };
   copyCommandBtn.onclick = function () {
     var command = String(state.trainingCommand || '');
     if (!command) return;
@@ -207,6 +475,12 @@ function wireTrainingWorkspace() {
   consoleBtn.onclick = function () {
     toggleConsolePanel();
     syncTrainingConsoleUi();
+  };
+  runnerStopBtn.onclick = function () { stopManagedTraining(false); };
+  runnerCancelBtn.onclick = function () { stopManagedTraining(true); };
+  runnerConsoleBtn.onclick = function () {
+    showConsolePanel();
+    fetchTrainingRunnerLog(getTrainingRunnerSelectedJob());
   };
 }
 
@@ -222,6 +496,7 @@ function syncTrainingWorkspaceUi() {
   if (!isTrainingWorkspaceActive()) return;
   syncTrainingConsoleUi();
   refreshTrainingWorkspace();
+  refreshTrainingRunnerStatus();
 }
 
 wireTrainingWorkspace();

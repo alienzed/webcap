@@ -14,6 +14,7 @@ from .file_ops import duplicate_folder_response, duplicate_image_response, open_
 from .media import media_blur_background_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
+from .training_runner import log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .training_config_files import ensure_training_config_files
 from .permissions import normalize_path_permissions, run_with_directory_repair
@@ -343,6 +344,39 @@ def train_run_route():
     data = request.get_json(silent=True) or {}
     folder = (data.get("folder") or "").strip()
     return train_run_response(folder)
+
+
+@app.route("/fs/training_runner/validate", methods=["POST"])
+def training_runner_validate_route():
+    data = request.get_json(silent=True) or {}
+    payload, status = training_runner_validate_response((data.get("folder") or "").strip())
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_runner/start", methods=["POST"])
+def training_runner_start_route():
+    data = request.get_json(silent=True) or {}
+    payload, status = training_runner_start_response((data.get("folder") or "").strip(), queue=bool(data.get("queue")))
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_runner/status", methods=["GET"])
+def training_runner_status_route():
+    payload, status = training_runner_status_response()
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_runner/log", methods=["GET"])
+def training_runner_log_route():
+    payload, status = training_runner_log_response(request.args.get("jobId", ""), request.args.get("offset", "0"))
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_runner/stop", methods=["POST"])
+def training_runner_stop_route():
+    data = request.get_json(silent=True) or {}
+    payload, status = training_runner_stop_response(data.get("jobId", ""), cancel=bool(data.get("cancel")))
+    return jsonify(payload), status
     
 
 @app.route('/fs/duplicate_folder', methods=['POST'])

@@ -7,8 +7,11 @@ Purpose: preview copy/paste-ready two-stage diffusion-pipe commands (HI then LO)
 - The Train button posts to `/fs/train_run` with the current folder.
 - Backend converts selected folder config paths to WSL paths (with native-path fallback warning if conversion fails).
 - If required training/config dataset files are missing, backend auto-runs config generation steps first.
-- Backend returns command preview text only; it does not launch training.
-- Output is streamed to the console panel.
+- `Preview Command` retains the external handoff: backend returns command preview text and the app copies the chained command.
+- `Validate Runner` checks the configured WSL runtime, generated paths, toolchain, CUDA visibility, and generated Bash syntax without launching training.
+- `Run In App` requires a passing validation and explicit confirmation, then launches a managed HI-to-LO job.
+- `Queue Training` persists a global managed queue under `<filesystem.root>/.webcap_training/`.
+- Managed job output is retained in per-job logs and is available from the Training console after a failure or restart.
 
 ## Command Shape
 

@@ -307,6 +307,7 @@ function renderPreviewHeaderMeta() {
   var workflowActionsEl = ui.previewWorkflowActionsEl || document.getElementById('preview-workflow-actions');
   var ratingEl = ui.previewActionRatingEl || document.getElementById('preview-action-rating');
   var gridOpen = typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen();
+  var visibleMedia = typeof getFilteredMediaItems === 'function' ? getFilteredMediaItems(false) : [];
   var hasItem = !!(state.currentItem && state.currentItem.fileName);
   function clearPreviewTooltip() {
     [previewShellEl, previewStageEl, ui.previewEl].forEach(function (el) {

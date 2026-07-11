@@ -635,8 +635,26 @@
                         <div class="training-workspace-actions">
                             <button id="training-workspace-prepare-btn" type="button" class="training-btn training-prepare-btn">Prepare Dataset</button>
                             <button id="training-workspace-generate-btn" type="button" class="training-btn">Generate</button>
-                            <button id="training-workspace-train-btn" type="button" class="training-btn">Train</button>
+                            <div class="training-run-menu">
+                                <button id="training-workspace-train-btn" type="button" class="training-btn" aria-expanded="false">Train</button>
+                                <div id="training-run-menu-panel" class="training-run-menu-panel hidden">
+                                    <button id="training-preview-command-btn" type="button">Preview Command</button>
+                                    <button id="training-validate-runner-btn" type="button">Validate Runner</button>
+                                    <button id="training-run-in-app-btn" type="button">Run In App</button>
+                                    <button id="training-queue-job-btn" type="button">Queue Training</button>
+                                </div>
+                            </div>
                         </div>
+                        <section class="training-runner-card" aria-label="Managed training runner">
+                            <div class="training-workspace-section-title">Managed Runner</div>
+                            <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
+                            <div id="training-runner-actions" class="training-runner-actions hidden">
+                                <button id="training-runner-stop-btn" type="button" class="training-btn">Stop</button>
+                                <button id="training-runner-cancel-btn" type="button" class="review-captions-btn hidden">Cancel Queued</button>
+                                <button id="training-runner-console-btn" type="button" class="review-captions-btn">View Output</button>
+                            </div>
+                            <div id="training-runner-preflight" class="training-runner-preflight hidden"></div>
+                        </section>
                         <section class="training-workspace-section" aria-label="Training config files">
                             <div class="training-workspace-section-title">Config Files</div>
                             <div id="training-workspace-config-list" class="training-config-list">No config files.</div>

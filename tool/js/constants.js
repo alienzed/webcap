@@ -59,7 +59,6 @@ ui = {
   focusSetReturnBtn: document.getElementById('focus-set-return-btn'),
   sidebarCollapseToggleBtn: document.getElementById('sidebar-collapse-toggle-btn'),
   sidebarContentEl: document.getElementById('sidebar-content'),
-  sidebarGridBtnEl: document.getElementById('sidebar-open-grid-btn'),
   sidebarFocusBtnEl: document.getElementById('sidebar-open-focused-btn'),
   mediaListEl: document.getElementById('media-list'),
   filterEl: document.getElementById('media-filter'),

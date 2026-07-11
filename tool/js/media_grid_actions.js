@@ -1,48 +1,20 @@
 function mediaGridCreateEntryButton() {
-  if (ui && ui.sidebarGridBtnEl) {
-    ui.sidebarGridBtnEl.onclick = openMediaGridSurface;
-    if (ui.focusSetGridBtn) {
-      ui.focusSetGridBtn.onclick = openMediaGridSurface;
-    }
-    mediaGridUpdateEntryVisibility();
-    return;
-  }
-  var wrapper = document.getElementById('media-list-wrapper');
-  if (!wrapper) throw new Error('Media Grid entry target is missing.');
-  if (document.getElementById('media-grid-open-btn')) {
-    mediaGridUpdateEntryVisibility();
-    return;
-  }
-  var btn = document.createElement('button');
-  btn.id = 'media-grid-open-btn';
-  btn.type = 'button';
-  btn.className = 'refresh-btn-square floating-grid';
-  btn.title = 'Open Media Grid for the current visible items';
-  btn.setAttribute('aria-label', 'Open Media Grid');
-  btn.innerHTML =
-    '<span class="media-grid-open-icon" aria-hidden="true">' +
-      '<span></span><span></span><span></span><span></span>' +
-    '</span>';
+  var btn = document.getElementById('media-grid-open-btn');
+  if (!btn) throw new Error('Media Grid entry target is missing.');
   btn.onclick = openMediaGridSurface;
-  wrapper.insertBefore(btn, wrapper.firstChild);
+  if (ui.focusSetGridBtn) {
+    ui.focusSetGridBtn.onclick = openMediaGridSurface;
+  }
   mediaGridUpdateEntryVisibility();
 }
 
 function mediaGridUpdateEntryVisibility() {
   var btn = document.getElementById('media-grid-open-btn');
   var focusBtn = document.getElementById('focus-set-grid-btn');
-  var sidebarBtn = ui && ui.sidebarGridBtnEl ? ui.sidebarGridBtnEl : null;
   var hasVisibleMedia = mediaGridGetVisibleItems().length > 0;
   var hasFocusSet = !!(state && state.focusSet && state.focusSet.keys && state.focusSet.keys.length);
   if (btn) {
     btn.classList.toggle('hidden', !hasVisibleMedia || hasFocusSet);
-  }
-  if (sidebarBtn) {
-    sidebarBtn.disabled = false;
-    sidebarBtn.classList.toggle('hidden', !hasVisibleMedia);
-    sidebarBtn.title = hasFocusSet
-      ? 'Open Media Grid for the current focus set'
-      : 'Open Media Grid for the current visible items';
   }
   if (focusBtn) {
     focusBtn.classList.toggle('hidden', !(hasVisibleMedia && hasFocusSet));
@@ -225,6 +197,7 @@ function renderMediaGridSurfaceHeader() {
   els.status.classList.toggle('hidden', !mediaGridState.status);
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
+  mediaGridSyncSurfaceFilterControls();
 }
 
 
@@ -650,6 +623,7 @@ function mediaGridHandleKeydown(e) {
 function initMediaGrid() {
   mediaGridCreateEntryButton();
   mediaGridCreateSurface();
+  mediaGridBuildSurfaceFilterControls();
   mediaGridCreateModal();
   document.addEventListener('keydown', mediaGridHandleKeydown);
   window.addEventListener('webcap:context-menu-hidden', function () {

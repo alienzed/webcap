@@ -454,9 +454,11 @@ function renderSelectionPreview(report, reviewedFileNames) {
 }
 
 // Loads config file content into the main editor for editing
-function loadConfigFileToEditor(fileName) {
+function loadConfigFileToEditor(fileName, options) {
+  var opts = options || {};
+  var preserveTrainingWorkspace = !!opts.preserveTrainingWorkspace;
   setStatus('Loading config: ' + fileName);
-  hideConsolePanel();
+  if (!preserveTrainingWorkspace) hideConsolePanel();
   var folder = state.folder || '';
   state.currentItem = null;
   clearEditorAndPreview();
@@ -476,7 +478,7 @@ function loadConfigFileToEditor(fileName) {
         setWorkspaceSurface('configEditor');
       } else {
         syncWorkspaceConfigEditorUi();
-        refreshTrainingWorkspace();
+        syncTrainingWorkspaceConfigSelection();
       }
       setStatus('Editing config: ' + fileName);
     } else {

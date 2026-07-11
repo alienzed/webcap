@@ -86,7 +86,6 @@ function syncWorkspaceHeaderUi() {
   ui.appEl.classList.add('workflow-' + workflowMode);
 
   var viewButtons = {
-    grid: document.getElementById('sidebar-open-grid-btn'),
     focus: document.getElementById('sidebar-open-focused-btn')
   };
   Object.keys(viewButtons).forEach(function (key) {

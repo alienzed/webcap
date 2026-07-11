@@ -136,10 +136,6 @@
   padding-right: 0;
 }
 
-.app.shell-revamp .preview-header-actions .media-grid-open-icon {
-  margin-right: 2px;
-}
-
 .app.shell-revamp .preview-workflow-actions {
   position: static;
   display: inline-flex;
@@ -167,10 +163,6 @@
 
 .app.shell-revamp .preview-workflow-actions .preview-header-btn-label {
   display: none;
-}
-
-.app.shell-revamp .preview-workflow-actions .media-grid-open-icon {
-  margin-right: 0;
 }
 
 .app.shell-revamp .preview-actions {

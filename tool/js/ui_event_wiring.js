@@ -253,22 +253,6 @@ function wireMiscActionButtons() {
     };
   }
 
-  if (ui.sidebarGridBtnEl) {
-    ui.sidebarGridBtnEl.onclick = function () {
-      if (typeof openMediaGridSurface === 'function') {
-        openMediaGridSurface();
-      }
-    };
-  }
-
-  if (ui.focusSetGridBtn) {
-    ui.focusSetGridBtn.onclick = function () {
-      if (typeof openMediaGridSurface === 'function') {
-        openMediaGridSurface();
-      }
-    };
-  }
-
   if (ui.sidebarFocusBtnEl) {
     ui.sidebarFocusBtnEl.onclick = function () {
       if (typeof openFocusedAnnotationModal === 'function') {

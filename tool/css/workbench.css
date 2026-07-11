@@ -382,16 +382,24 @@
   display: none !important;
 }
 
-html[data-theme="dark"] .focus-set-preset {
-  border-color: rgba(148, 163, 184, 0.3);
+html[data-theme="dark"] .focus-set-select {
+  border-color: rgba(148, 163, 184, 0.42);
   background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .focus-set-select-label,
+html[data-theme="dark"] .focus-set-tabstrip-label {
+  color: rgba(226, 232, 240, 0.7);
+}
+
+html[data-theme="dark"] .focus-set-tab {
   color: #cbd5e1;
 }
 
-html[data-theme="dark"] .focus-set-preset:hover:not(:disabled),
-html[data-theme="dark"] .focus-set-preset.active {
-  border-color: rgba(45, 212, 191, 0.72);
-  background: rgba(20, 184, 166, 0.16);
+html[data-theme="dark"] .focus-set-tab:hover:not(:disabled),
+html[data-theme="dark"] .focus-set-tab.active {
+  border-bottom-color: rgba(45, 212, 191, 0.72);
   color: #ccfbf1;
 }
 

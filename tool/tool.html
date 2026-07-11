@@ -229,12 +229,34 @@
                             aria-label="Refresh directory"
                             class="refresh-btn-square floating-refresh"
                         >&#8635;</button>
+                        <button
+                            id="media-grid-open-btn"
+                            type="button"
+                            title="Open Media Grid for the current visible items"
+                            aria-label="Open Media Grid for the current visible items"
+                            class="refresh-btn-square floating-grid hidden"
+                        >
+                            <span class="media-grid-open-icon" aria-hidden="true">
+                                <span></span><span></span><span></span><span></span>
+                            </span>
+                        </button>
                         <div id="focus-set-banner" class="focus-set-banner hidden">
                             <div class="focus-set-banner-copy">
                                 <span class="focus-set-banner-title">Focus Set</span>
                                 <span id="focus-set-banner-meta" class="focus-set-banner-meta"></span>
                             </div>
                             <div class="focus-set-banner-actions">
+                                <button
+                                    id="focus-set-grid-btn"
+                                    type="button"
+                                    class="focus-set-banner-btn hidden"
+                                    title="Open Media Grid for the current focus set"
+                                    aria-label="Open Media Grid for the current focus set"
+                                >
+                                    <span class="media-grid-open-icon" aria-hidden="true">
+                                        <span></span><span></span><span></span><span></span>
+                                    </span>
+                                </button>
                                 <button
                                     id="focus-set-return-btn"
                                     type="button"
@@ -642,18 +664,6 @@
                                 >&lt;</button>
                                 <div id="preview-workflow-actions" class="preview-workflow-actions hidden" aria-label="Preview workflow actions">
                                     <button
-                                        id="sidebar-open-grid-btn"
-                                        type="button"
-                                        class="review-captions-btn"
-                                        title="Open Media Grid for the current visible items"
-                                        aria-label="Open Media Grid for the current visible items"
-                                    >
-                                        <span class="media-grid-open-icon" aria-hidden="true">
-                                            <span></span><span></span><span></span><span></span>
-                                        </span>
-                                        <span class="preview-header-btn-label">Open Grid</span>
-                                    </button>
-                                    <button
                                         id="sidebar-open-focused-btn"
                                         type="button"
                                         class="review-captions-btn"
@@ -682,7 +692,10 @@
                                 <button id="media-grid-surface-close-btn" type="button" class="media-grid-btn media-grid-surface-back-btn" aria-label="Return to item view" title="Return to item view">&lt;</button>
                                 <div id="media-grid-surface-meta" class="media-grid-surface-meta"></div>
                             </div>
-                            <div id="focus-set-grid-controls" class="focus-set-controls focus-set-controls--grid" aria-label="Selection focus sets"></div>
+                            <div class="media-grid-surface-center-controls">
+                                <div id="media-grid-surface-filters" class="media-grid-surface-filters" aria-label="Grid filters"></div>
+                                <div id="focus-set-grid-controls" class="focus-set-controls focus-set-controls--grid" aria-label="Selection focus sets"></div>
+                            </div>
                             <div class="media-grid-surface-actions">
                                 <div id="media-grid-surface-status" class="media-grid-surface-status"></div>
                                 <button id="media-grid-surface-select-all-btn" type="button" class="media-grid-btn">Select All</button>

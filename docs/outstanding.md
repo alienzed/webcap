@@ -3,6 +3,8 @@ Last reviewed: 2026-07-10.
 
 ## Active UX Work
 
+Now, with the new training panel, the right side of the screen is empty. More an opportunity than a problem, but maybe we can use that, throw a grid of the training items up, or something, mainly for aesthetics...
+
 ### Phase 1: Console Architecture
 - Establish one reliable console model across the app. It should be a resizable secondary activity pane, not a full-width bottom drawer and not the sole place important results appear.
 - Make console visibility and toggling consistent across media workspaces, Review, and Training.

@@ -379,6 +379,80 @@
   cursor: default;
 }
 
+.media-grid-surface-center-controls {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  white-space: nowrap;
+}
+
+.media-grid-surface-filters,
+.media-grid-surface-stars,
+.media-grid-surface-star-values {
+  display: inline-flex;
+  align-items: center;
+}
+
+.media-grid-surface-filters {
+  gap: 12px;
+}
+
+.media-grid-surface-stars {
+  gap: 6px;
+}
+
+.media-grid-surface-star-values {
+  gap: 3px;
+}
+
+.media-grid-surface-filter-label,
+.media-grid-surface-filter-toggle {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.media-grid-surface-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.media-grid-surface-filter-toggle input {
+  width: auto;
+  margin: 0;
+  accent-color: #0f766e;
+}
+
+.media-grid-surface-filter-toggle.active,
+.media-grid-surface-star-filter.active {
+  color: #0f766e;
+}
+
+.media-grid-surface-star-filter {
+  min-width: 19px;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.media-grid-surface-star-filter:hover,
+.media-grid-surface-star-filter.active {
+  border-bottom-color: #0f766e;
+  color: #0f766e;
+}
+
 .media-grid-rating-controls {
   display: inline-flex;
   align-items: center;
@@ -409,6 +483,19 @@ html[data-theme="dark"] .media-grid-surface-header {
 
 html[data-theme="dark"] .media-grid-surface-meta {
   color: #a7f3d0;
+}
+
+html[data-theme="dark"] .media-grid-surface-filter-label,
+html[data-theme="dark"] .media-grid-surface-filter-toggle,
+html[data-theme="dark"] .media-grid-surface-star-filter {
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] .media-grid-surface-filter-toggle.active,
+html[data-theme="dark"] .media-grid-surface-star-filter:hover,
+html[data-theme="dark"] .media-grid-surface-star-filter.active {
+  border-bottom-color: #5eead4;
+  color: #5eead4;
 }
 
 html[data-theme="dark"] .media-grid-surface-status {

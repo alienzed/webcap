@@ -180,19 +180,7 @@ function showContextMenu(clientX, clientY, actions) {
 
 
 function updateSidebarSurfaceTools() {
-  var hasVisibleMedia = false;
-  if (typeof getFilteredMediaItems === 'function') {
-    hasVisibleMedia = getFilteredMediaItems(false).length > 0;
-  }
   var hasCurrentItem = !!(state && state.currentItem && state.currentItem.fileName);
-  var hasFocusSet = !!(state && state.focusSet && state.focusSet.keys && state.focusSet.keys.length);
-  if (ui.sidebarGridBtnEl) {
-    ui.sidebarGridBtnEl.disabled = false;
-    ui.sidebarGridBtnEl.classList.toggle('hidden', !hasVisibleMedia);
-    ui.sidebarGridBtnEl.title = hasFocusSet
-      ? 'Open Media Grid for the current focus set'
-      : 'Open Media Grid for the current visible items';
-  }
   if (ui.sidebarFocusBtnEl) {
     ui.sidebarFocusBtnEl.disabled = false;
     ui.sidebarFocusBtnEl.classList.toggle('hidden', !hasCurrentItem);

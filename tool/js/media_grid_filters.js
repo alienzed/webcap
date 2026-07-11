@@ -45,15 +45,15 @@ function mediaGridBuildFilterControls() {
   });
 }
 
-function mediaGridBuildStarsFilter() {
-  var target = document.getElementById('media-grid-filter-stars');
+function mediaGridBuildStarsFilter(targetId, buttonClassName) {
+  var target = document.getElementById(targetId || 'media-grid-filter-stars');
   if (!target) return;
   target.innerHTML = '';
   var values = ['no_star', '1', '2', '3', '4', '5'];
   values.forEach(function (value) {
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'media-grid-filter-chip media-grid-filter-star';
+    btn.className = buttonClassName || 'media-grid-filter-chip media-grid-filter-star';
     btn.setAttribute('data-filter-value', value);
     btn.textContent = value === 'no_star' ? '-' : '\u2605' + value;
     btn.title = value === 'no_star' ? 'Show unrated items' : 'Show ' + value + ' star items';
@@ -61,6 +61,28 @@ function mediaGridBuildStarsFilter() {
       mediaGridToggleMirroredCheckbox(ui.advancedFilterStarsEl, value);
     };
     target.appendChild(btn);
+  });
+}
+
+function mediaGridBuildSurfaceFilterControls() {
+  var target = document.getElementById('media-grid-surface-filters');
+  if (!target) throw new Error('Media Grid surface filters target is missing.');
+  target.innerHTML =
+    '<label class="media-grid-surface-filter-toggle">' +
+      '<input id="media-grid-surface-filter-invalid-ar" type="checkbox">' +
+      '<span>Invalid AR</span>' +
+    '</label>' +
+    '<div class="media-grid-surface-stars" aria-label="Rating filters">' +
+      '<span class="media-grid-surface-filter-label">Stars</span>' +
+      '<div id="media-grid-surface-filter-stars" class="media-grid-surface-star-values"></div>' +
+    '</div>';
+  mediaGridBuildStarsFilter('media-grid-surface-filter-stars', 'media-grid-surface-star-filter');
+
+  var invalidArInput = document.getElementById('media-grid-surface-filter-invalid-ar');
+  if (!invalidArInput) throw new Error('Media Grid surface Invalid AR filter is missing.');
+  invalidArInput.addEventListener('change', function () {
+    ui.advancedFilterInvalidArEl.checked = this.checked;
+    mediaGridDispatchChange(ui.advancedFilterInvalidArEl);
   });
 }
 
@@ -132,6 +154,16 @@ function mediaGridSyncFilterControls() {
   if (otherFiltersHint) {
     otherFiltersHint.classList.toggle('hidden', !hiddenFiltersActive);
   }
+  mediaGridSyncSurfaceFilterControls();
+}
+
+function mediaGridSyncSurfaceFilterControls() {
+  var invalidArInput = document.getElementById('media-grid-surface-filter-invalid-ar');
+  if (!invalidArInput) return;
+  invalidArInput.checked = !!ui.advancedFilterInvalidArEl.checked;
+  var invalidArToggle = invalidArInput.closest('.media-grid-surface-filter-toggle');
+  if (invalidArToggle) invalidArToggle.classList.toggle('active', invalidArInput.checked);
+  mediaGridSyncFilterChipGroup('media-grid-surface-filter-stars', getAdvancedStarFilterValues());
 }
 
 function mediaGridSyncFilterToggle(inputId) {

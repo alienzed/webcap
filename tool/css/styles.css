@@ -1328,56 +1328,81 @@ iframe {
 .focus-set-controls {
   display: flex;
   align-items: center;
-  gap: 4px;
   min-width: 0;
 }
 
 .focus-set-controls--sidebar {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 
 .focus-set-controls--grid {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   justify-content: center;
   white-space: nowrap;
 }
 
-.focus-set-preset {
+.focus-set-select-label {
+  color: #475569;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.focus-set-select {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+}
+
+.focus-set-tabstrip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 27px;
-  padding: 4px 7px;
-  border: 1px solid #cbd5e1;
-  border-radius: 7px;
-  background: #f8fafc;
+  gap: 12px;
+}
+
+.focus-set-tabstrip-label {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.focus-set-tab {
+  padding: 3px 0 4px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
   color: #334155;
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
+  cursor: pointer;
 }
 
-.focus-set-preset span {
+.focus-set-tab span {
   color: #64748b;
   font-size: 10px;
 }
 
-.focus-set-preset:hover:not(:disabled),
-.focus-set-preset.active {
-  border-color: #0f766e;
-  background: #ecfdf5;
+.focus-set-tab:hover:not(:disabled),
+.focus-set-tab.active {
+  border-bottom-color: #0f766e;
   color: #115e59;
 }
 
-.focus-set-preset.active span {
+.focus-set-tab.active span {
   color: inherit;
 }
 
-.focus-set-preset:disabled {
+.focus-set-tab:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -1386,6 +1411,10 @@ iframe {
   color: #64748b;
   font-size: 11px;
   line-height: 1.35;
+}
+
+.focus-set-controls--sidebar .focus-set-controls-status {
+  grid-column: 1 / -1;
 }
 
 .focus-set-settings-btn,
@@ -1769,8 +1798,8 @@ iframe {
 
 .floating-grid {
   position: absolute;
-  top: 47px;
-  right: 22px;
+  top: 5px;
+  right: 72px;
   z-index: 20;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }

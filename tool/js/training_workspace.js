@@ -97,8 +97,23 @@ function renderTrainingWorkspaceConfigList(files) {
     '</div>';
   Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-config]'), function (button) {
     button.onclick = function () {
-      loadConfigFileToEditor(decodeURIComponent(button.getAttribute('data-training-config') || ''));
+      loadConfigFileToEditor(decodeURIComponent(button.getAttribute('data-training-config') || ''), {
+        preserveTrainingWorkspace: true
+      });
     };
+  });
+}
+
+function syncTrainingWorkspaceConfigSelection() {
+  if (!isTrainingWorkspaceActive()) return;
+  var els = getTrainingWorkspaceEls();
+  if (!els.configList) return;
+  var currentFile = state.currentConfigFile && state.currentConfigFile.folder === state.folder
+    ? state.currentConfigFile.file
+    : '';
+  Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-config]'), function (button) {
+    var fileName = decodeURIComponent(button.getAttribute('data-training-config') || '');
+    button.classList.toggle('active', fileName === currentFile);
   });
 }
 

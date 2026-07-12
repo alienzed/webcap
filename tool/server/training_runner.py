@@ -416,6 +416,13 @@ def validate_response(folder):
         payload = _preflight_payload(folder)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}
+        blockers = [item for item in payload["checks"] if item["severity"] == "blocker" and not item["ok"]]
+        if blockers:
+            warnings = [item for item in payload["checks"] if item["severity"] == "warning" and not item["ok"]]
+            payload["ok"] = False
+            payload["summary"] = {"blockers": len(blockers), "warnings": len(warnings)}
+            payload.pop("folderPath", None)
+            return payload, 200
         diagnostic_job = {"id": "diagnostic", "snapshot": {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])}}
         try:
             script, resolved = _build_runner_script(diagnostic_job, settings, artifacts, _runtime_root() / "diagnostic")

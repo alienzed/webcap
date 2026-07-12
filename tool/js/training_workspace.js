@@ -98,9 +98,12 @@ function renderTrainingRunnerPreflight(payload) {
   var script = payload.runnerScript
     ? '<details><summary>Generated runner script</summary><pre class="training-runner-script">' + escapeHtml(payload.runnerScript) + '</pre></details>'
     : '';
+  var scriptError = payload.scriptError
+    ? '<div class="training-preflight-check failed"><span>!</span><span><strong>Could not build the runner script.</strong><div>' + escapeHtml(payload.scriptError) + '</div></span></div>'
+    : '';
   els.runnerPreflight.innerHTML = '<div class="training-preflight-summary">' +
     (payload.ok ? 'Runner validation passed.' : 'Runner validation found ' + Number(summary.blockers || 0) + ' blocker(s).') +
-    '</div>' + rows + script;
+    '</div>' + rows + scriptError + script;
   els.runnerPreflight.classList.remove('hidden');
 }
 

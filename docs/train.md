@@ -25,7 +25,7 @@ pkill -f 'config\.hi\.toml'
 Add these fields in `tool/config.json` (example in `tool/config.example.json`):
 
 - `training.diffusion_pipe_wsl`: shown in preview as the expected working directory context.
-- `training.activate_script`: persisted in config/settings for future execution wiring; currently not used in train preview generation.
+- `training.activate_script`: optional WSL virtual-environment activation script used by managed runs and their validation checks. Set it when Python and DeepSpeed are installed in a virtual environment, for example `/home/user/diffusion-pipe/.venv/bin/activate`.
 - Training config filenames are fixed to `config.hi.toml` and `config.lo.toml` in each set folder.
 
 ## Notes

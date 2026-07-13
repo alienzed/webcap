@@ -119,7 +119,10 @@ def _run_wsl(command, timeout=20, distribution=""):
 
 
 def _to_wsl_path(path, distribution=""):
-    code, stdout, stderr = _run_wsl("wslpath -a " + shlex.quote(str(path)), timeout=10, distribution=distribution)
+    value = str(path)
+    if value.startswith("/"):
+        return value
+    code, stdout, stderr = _run_wsl("wslpath -a " + shlex.quote(value), timeout=10, distribution=distribution)
     value = (stdout or "").strip()
     if code != 0 or not value:
         raise RuntimeError((stderr or stdout or "wslpath failed").strip())

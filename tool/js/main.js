@@ -229,7 +229,7 @@ function runTrainCommandPreviewForCurrentFolder(options) {
   }
   return ensureGeneratedTrainingArtifactsForCurrentFolder()
     .then(function () {
-      setStatus('Printing training commands...');
+      setStatus('Printing manual training command...');
       return runTrainingActionRequest('/fs/train_run', {
         folder: state.folder,
         stages: options && options.stages ? options.stages : 'both',
@@ -238,22 +238,22 @@ function runTrainCommandPreviewForCurrentFolder(options) {
       }, { fetchText: true });
     })
     .then(function (outputText) {
-      var chainCmd = extractTrainingChainCommand(outputText);
-      if (!chainCmd) {
+      var command = extractTrainingPreviewCommand(outputText);
+      if (!command) {
         setTrainingCommandHandoff('');
-        setStatus('Training command preview finished.');
+        setStatus('Manual command preview finished.');
         return outputText;
       }
-      setTrainingCommandHandoff(chainCmd);
+      setTrainingCommandHandoff(command);
       return new Promise(function (resolve, reject) {
         copyTextToClipboard(
-          chainCmd,
+          command,
           function () {
-            setStatus('Training command preview finished. Chained HI;LO command copied to clipboard.');
+            setStatus('Manual training command copied to clipboard.');
             resolve(outputText);
           },
           function () {
-            setStatus('Training command preview finished. Auto-copy failed; copy command from console.');
+            setStatus('Manual command is ready. Auto-copy failed; use Copy Manual Command.');
             resolve(outputText);
           }
         );
@@ -261,7 +261,7 @@ function runTrainCommandPreviewForCurrentFolder(options) {
     })
     .catch(function (err) {
       var message = formatTrainingActionErrorMessage(err);
-      setStatus('Training command preview failed: ' + message);
+      setStatus('Manual command preview failed: ' + message);
       throw err;
     });
 }

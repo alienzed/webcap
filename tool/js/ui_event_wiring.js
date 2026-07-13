@@ -181,13 +181,12 @@ function wireConsoleToggleButton() {
   };
 }
 
-function extractTrainingChainCommand(outputText) {
+function extractTrainingPreviewCommand(outputText) {
   if (!outputText) return '';
   var lines = String(outputText).split(/\r?\n/);
   for (var i = 0; i < lines.length; i++) {
     var line = String(lines[i] || '').trim();
     if (!line) continue;
-    if (line.indexOf(' ; ') === -1) continue;
     if (line.indexOf('deepspeed --num_gpus=1 train.py --deepspeed --config') === -1) continue;
     return line;
   }

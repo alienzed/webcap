@@ -277,9 +277,6 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
             handoff_cmd = command_plan["loCommand"]
         else:
             handoff_cmd = command_plan["handoffCommand"]
-        hi_kill_pattern = re.escape(hi_name)
-        hi_kill_cmd = "pkill -f '" + hi_kill_pattern + "'"
-
         def generate():
             try:
                 yield f"[INFO] Running from: {diffusion_pipe_wsl}\n"
@@ -290,11 +287,9 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
                 yield f"[INFO] Config LO: {lo_wsl}\n"
                 for line in warnings:
                     yield line + "\n"
-                yield "[INFO] Training commands (copy/paste):\n"
+                yield "[INFO] Manual training command (copy/paste):\n"
                 yield handoff_cmd + "\n"
-                yield "[INFO] Optional early-stop HI (run from another terminal):\n"
-                yield hi_kill_cmd + "\n"
-                yield "[train] Command preview only; execution is currently disabled.\n"
+                yield "[train] Manual handoff only; run this command in WSL yourself.\n"
             except Exception as e:
                 yield f"[ERROR] {e}\n"
 

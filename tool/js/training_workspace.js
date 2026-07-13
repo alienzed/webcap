@@ -789,8 +789,8 @@ function renderTrainingCommandHandoff() {
   els.commandText.classList.toggle('hidden', !command);
   els.copyCommandBtn.classList.toggle('hidden', !command);
   els.commandStatus.textContent = command
-    ? 'Command generated and copied to the clipboard.'
-    : 'Run Train to generate and copy the command.';
+    ? 'Manual command generated and copied to the clipboard.'
+    : 'Print and copy a manual WSL command when you need one.';
 }
 
 function setTrainingCommandHandoff(command) {

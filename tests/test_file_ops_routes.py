@@ -653,7 +653,7 @@ def test_generate_dataset_config_can_write_snapshot_comments_when_enabled(tmp_pa
     assert "enable_ar_bucket = true" in lo_text
 
 
-def test_train_run_auto_generates_missing_configs(tmp_path, monkeypatch):
+def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_train"
     auto_dataset = set_dir / "auto_dataset"
@@ -708,13 +708,26 @@ def test_train_run_auto_generates_missing_configs(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "[INFO] Training commands (copy/paste):" in body
+    assert "[INFO] Manual training command (copy/paste):" in body
     assert " ; " in body
-    assert "pkill -f 'config\\.hi\\.toml'" in body
+    assert "pkill" not in body
+    assert "Manual handoff only" in body
     assert (set_dir / "config.hi.toml").exists()
     assert (set_dir / "config.lo.toml").exists()
     assert (set_dir / "dataset.hi.toml").exists()
     assert (set_dir / "dataset.lo.toml").exists()
+
+    hi_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "hi"})
+    assert hi_response.status_code == 200
+    hi_body = hi_response.get_data(as_text=True)
+    assert "config.hi.toml" in hi_body
+    assert " ; " not in hi_body
+
+    lo_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "lo"})
+    assert lo_response.status_code == 200
+    lo_body = lo_response.get_data(as_text=True)
+    assert "config.lo.toml" in lo_body
+    assert " ; " not in lo_body
 
 
 def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path, monkeypatch):

@@ -15,6 +15,17 @@ def test_training_launcher_probe_is_a_valid_help_probe_not_a_version_probe():
     assert build_training_launcher_probe() == "deepspeed --help >/dev/null"
 
 
+def test_training_command_plan_appends_a_quoted_resume_checkpoint_to_each_selected_stage_command():
+    plan = build_training_command_plan(
+        "/mnt/w/sets/one/config.hi.toml",
+        "/mnt/w/sets/one/config.lo.toml",
+        resume_from_checkpoint="/mnt/w/training/output/runs/20260710_23-57-51",
+    )
+
+    assert plan["hiCommand"].endswith(" --resume_from_checkpoint /mnt/w/training/output/runs/20260710_23-57-51")
+    assert plan["loCommand"].endswith(" --resume_from_checkpoint /mnt/w/training/output/runs/20260710_23-57-51")
+
+
 def test_conda_runtime_wraps_child_commands_without_shell_activation():
     settings = training_runtime_settings({
         "conda_executable": "/home/user/miniconda3/bin/conda",

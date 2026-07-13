@@ -54,3 +54,23 @@ def test_native_wsl_runner_uses_the_current_bash_shell(monkeypatch):
 
     assert training_runner._run_wsl("echo ok", distribution="Ubuntu_W") == (0, "ok", "")
     assert captured["args"] == ["bash", "-lc", "echo ok"]
+
+
+def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):
+    hi_path = tmp_path / "config.hi.toml"
+    lo_path = tmp_path / "config.lo.toml"
+    hi_path.write_text("hi", encoding="utf-8")
+    lo_path.write_text("lo", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + path.name)
+    settings = training_runtime_settings({"diffusion_pipe_wsl": "/home/user/diffusion-pipe"})
+
+    script, _ = training_runner._build_runner_script(
+        {"snapshot": {}, "stages": "lo", "resumeFromCheckpoint": "/mnt/w/output/run-1"},
+        settings,
+        {"hiConfig": hi_path, "loConfig": lo_path},
+        tmp_path / "job",
+    )
+
+    assert "[webcap] stage=hi" not in script
+    assert "[webcap] stage=lo" in script
+    assert "--resume_from_checkpoint /mnt/w/output/run-1" in script

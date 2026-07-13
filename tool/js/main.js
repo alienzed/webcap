@@ -223,14 +223,18 @@ function runPrepareDatasetForCurrentFolder() {
     });
 }
 
-function runTrainCommandPreviewForCurrentFolder() {
+function runTrainCommandPreviewForCurrentFolder(options) {
   if (!ensureFolderSelected('No folder selected for training.')) {
     return Promise.reject(new Error('No folder selected for training.'));
   }
   return ensureGeneratedTrainingArtifactsForCurrentFolder()
     .then(function () {
       setStatus('Printing training commands...');
-      return runTrainingActionRequest('/fs/train_run', { folder: state.folder }, { fetchText: true });
+      return runTrainingActionRequest('/fs/train_run', {
+        folder: state.folder,
+        stages: options && options.stages ? options.stages : 'both',
+        resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : ''
+      }, { fetchText: true });
     })
     .then(function (outputText) {
       var chainCmd = extractTrainingChainCommand(outputText);

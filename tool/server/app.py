@@ -343,20 +343,32 @@ def generate_dataset_config_route():
 def train_run_route():
     data = request.get_json(silent=True) or {}
     folder = (data.get("folder") or "").strip()
-    return train_run_response(folder)
+    stages = str(data.get("stages") or "both").strip().lower()
+    if stages not in ("hi", "lo", "both"):
+        return Response("[ERROR] Training stage must be hi, lo, or both.\n", status=400, mimetype="text/plain")
+    return train_run_response(folder, stages, str(data.get("resumeFromCheckpoint") or "").strip())
 
 
 @app.route("/fs/training_runner/validate", methods=["POST"])
 def training_runner_validate_route():
     data = request.get_json(silent=True) or {}
-    payload, status = training_runner_validate_response((data.get("folder") or "").strip())
+    payload, status = training_runner_validate_response(
+        (data.get("folder") or "").strip(),
+        data.get("stages") or "both",
+        data.get("resumeFromCheckpoint") or "",
+    )
     return jsonify(payload), status
 
 
 @app.route("/fs/training_runner/start", methods=["POST"])
 def training_runner_start_route():
     data = request.get_json(silent=True) or {}
-    payload, status = training_runner_start_response((data.get("folder") or "").strip(), queue=bool(data.get("queue")))
+    payload, status = training_runner_start_response(
+        (data.get("folder") or "").strip(),
+        queue=bool(data.get("queue")),
+        stages=data.get("stages") or "both",
+        resume_from_checkpoint=data.get("resumeFromCheckpoint") or "",
+    )
     return jsonify(payload), status
 
 

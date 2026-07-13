@@ -288,6 +288,13 @@ def _copy_snapshot(job_dir, artifacts):
     return snapshot
 
 
+def _normalize_training_stages(stages):
+    value = str(stages or "both").strip().lower()
+    if value not in ("hi", "lo", "both"):
+        raise ValueError("Training stage must be hi, lo, or both.")
+    return value
+
+
 def _build_runner_script(job, settings, artifacts, job_dir):
     use_snapshot = not (artifacts["hiConfig"].is_file() and artifacts["loConfig"].is_file())
     hi_path = Path(job["snapshot"]["hi"]) if use_snapshot else artifacts["hiConfig"]
@@ -295,7 +302,13 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     distribution = settings["wslDistribution"]
     hi_wsl = _to_wsl_path(hi_path, distribution)
     lo_wsl = _to_wsl_path(lo_path, distribution)
-    command_plan = build_training_command_plan(hi_wsl, lo_wsl, build_training_launcher(settings))
+    stages = _normalize_training_stages(job.get("stages"))
+    command_plan = build_training_command_plan(
+        hi_wsl,
+        lo_wsl,
+        build_training_launcher(settings),
+        job.get("resumeFromCheckpoint") or "",
+    )
     result_wsl = _to_wsl_path(job_dir / "result.json", distribution)
     pid_wsl = _to_wsl_path(job_dir / "pid", distribution)
     lines = [
@@ -310,18 +323,21 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     ]
     if settings["activate"] and not has_conda_runtime(settings):
         lines.append("source " + shlex.quote(settings["activate"]))
-    lines.extend([
-        "echo '[webcap] stage=hi'",
-        command_plan["hiCommand"],
-        "HI_CODE=$?",
-        "if [ \"$HI_CODE\" -ne 0 ]; then echo '[webcap] HI failed'; write_result failed \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
-        "echo '[webcap] stage=lo'",
-        command_plan["loCommand"],
-        "LO_CODE=$?",
-        "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
-        "echo '[webcap] completed'",
-        "write_result completed 0",
-    ])
+    if stages in ("hi", "both"):
+        lines.extend([
+            "echo '[webcap] stage=hi'",
+            command_plan["hiCommand"],
+            "HI_CODE=$?",
+            "if [ \"$HI_CODE\" -ne 0 ]; then echo '[webcap] HI failed'; write_result failed \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
+        ])
+    if stages in ("lo", "both"):
+        lines.extend([
+            "echo '[webcap] stage=lo'",
+            command_plan["loCommand"],
+            "LO_CODE=$?",
+            "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
+        ])
+    lines.extend(["echo '[webcap] completed'", "write_result completed 0"])
     script = "\n".join(lines) + "\n"
     return script, {"hi": hi_wsl, "lo": lo_wsl, "usedSnapshot": use_snapshot}
 
@@ -473,12 +489,13 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "exitCode", "resolvedConfigs", "preflight")
+    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "exitCode", "resolvedConfigs", "preflight")
     return {field: job.get(field) for field in fields if field in job}
 
 
-def validate_response(folder):
+def validate_response(folder, stages="both", resume_from_checkpoint=""):
     try:
+        stages = _normalize_training_stages(stages)
         payload = _preflight_payload(folder)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}
@@ -489,7 +506,12 @@ def validate_response(folder):
             payload["summary"] = {"blockers": len(blockers), "warnings": len(warnings)}
             payload.pop("folderPath", None)
             return payload, 200
-        diagnostic_job = {"id": "diagnostic", "snapshot": {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])}}
+        diagnostic_job = {
+            "id": "diagnostic",
+            "snapshot": {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])},
+            "stages": stages,
+            "resumeFromCheckpoint": str(resume_from_checkpoint or "").strip(),
+        }
         try:
             script, resolved = _build_runner_script(diagnostic_job, settings, artifacts, _runtime_root() / "diagnostic")
             payload["runnerScript"] = script
@@ -518,7 +540,7 @@ def validate_response(folder):
         return {"ok": False, "error": str(exc), "checks": [], "summary": {"blockers": 1, "warnings": 0}}, 400
 
 
-def _new_job(folder, preflight):
+def _new_job(folder, preflight, stages="both", resume_from_checkpoint=""):
     job_id = uuid.uuid4().hex[:12]
     job_dir = _job_dir(job_id)
     job_dir.mkdir(parents=True, exist_ok=False)
@@ -528,6 +550,8 @@ def _new_job(folder, preflight):
     return {
         "id": job_id,
         "folder": folder,
+        "stages": _normalize_training_stages(stages),
+        "resumeFromCheckpoint": str(resume_from_checkpoint or "").strip(),
         "status": "queued",
         "stage": "queued",
         "createdAt": time.time(),
@@ -538,8 +562,12 @@ def _new_job(folder, preflight):
     }
 
 
-def start_response(folder, queue=False):
-    preflight, status = validate_response(folder)
+def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""):
+    try:
+        stages = _normalize_training_stages(stages)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+    preflight, status = validate_response(folder, stages, resume_from_checkpoint)
     if status != 200 or not preflight.get("ok"):
         return {"ok": False, "error": "Preflight failed.", "preflight": preflight}, 400
     with _lock:
@@ -550,7 +578,7 @@ def start_response(folder, queue=False):
         if active and active.get("status") not in TERMINAL_STATUSES and not queue:
             _write_state(state)
             return {"ok": False, "error": "A managed training job is already active.", "activeJob": _public_job(active)}, 409
-        job = _new_job(str(folder).strip(), preflight)
+        job = _new_job(str(folder).strip(), preflight, stages, resume_from_checkpoint)
         state["jobs"].append(job)
         if not active or active.get("status") in TERMINAL_STATUSES:
             _start_next(state)

@@ -195,7 +195,7 @@ def _to_wsl_path(path_obj: Path, distribution=""):
     return out
 
 
-def train_run_response(folder: str):
+def train_run_response(folder: str, stages="both", resume_from_checkpoint=""):
     if not folder:
         return Response("[ERROR] Missing folder argument\n", status=400, mimetype="text/plain")
 
@@ -264,14 +264,27 @@ def train_run_response(folder: str):
             diffusion_pipe_wsl = "<set training.diffusion_pipe_wsl>"
             warnings.append("[WARN] Missing training.diffusion_pipe_wsl in config.json; using placeholder cwd.")
 
-        command_plan = build_training_command_plan(hi_wsl, lo_wsl, build_training_launcher(runtime_settings))
-        handoff_cmd = command_plan["handoffCommand"]
+        command_plan = build_training_command_plan(
+            hi_wsl,
+            lo_wsl,
+            build_training_launcher(runtime_settings),
+            resume_from_checkpoint,
+        )
+        if stages == "hi":
+            handoff_cmd = command_plan["hiCommand"]
+        elif stages == "lo":
+            handoff_cmd = command_plan["loCommand"]
+        else:
+            handoff_cmd = command_plan["handoffCommand"]
         hi_kill_pattern = re.escape(hi_name)
         hi_kill_cmd = "pkill -f '" + hi_kill_pattern + "'"
 
         def generate():
             try:
                 yield f"[INFO] Running from: {diffusion_pipe_wsl}\n"
+                yield f"[INFO] Training stages: {stages}\n"
+                if resume_from_checkpoint:
+                    yield f"[INFO] Resume checkpoint: {resume_from_checkpoint}\n"
                 yield f"[INFO] Config HI: {hi_wsl}\n"
                 yield f"[INFO] Config LO: {lo_wsl}\n"
                 for line in warnings:

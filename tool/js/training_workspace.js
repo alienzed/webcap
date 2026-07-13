@@ -206,14 +206,18 @@ function refreshTrainingRunnerStatus() {
     });
 }
 
-function validateTrainingRunner() {
+function validateTrainingRunner(options) {
   if (!state.folder) return Promise.reject(new Error('No folder selected for training validation.'));
   setStatus('Validating managed training runner...');
   showConsolePanel();
   return trainingRunnerRequest('/fs/training_runner/validate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folder: state.folder }),
+    body: JSON.stringify({
+      folder: state.folder,
+      stages: options && options.stages ? options.stages : 'both',
+      resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : ''
+    }),
     allowNotOk: true
   }).then(function (payload) {
     renderTrainingRunnerPreflight(payload);
@@ -223,21 +227,42 @@ function validateTrainingRunner() {
   });
 }
 
+function getManagedTrainingOptions() {
+  var stageEl = document.getElementById('training-run-stage-select');
+  var resumeEl = document.getElementById('training-run-resume-input');
+  var stages = stageEl ? String(stageEl.value || 'both') : 'both';
+  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both') stages = 'both';
+  return {
+    stages: stages,
+    resumeFromCheckpoint: resumeEl ? String(resumeEl.value || '').trim() : ''
+  };
+}
+
+function trainingStageLabel(stages) {
+  return stages === 'hi' ? 'HI' : stages === 'lo' ? 'LO' : 'HI to LO';
+}
+
 function startManagedTraining(queue) {
   if (!state.folder) {
     setStatus('No folder selected for managed training.');
     return;
   }
+  var options = getManagedTrainingOptions();
   ensureGeneratedTrainingArtifactsForCurrentFolder()
-    .then(function () { return validateTrainingRunner(); })
+    .then(function () { return validateTrainingRunner(options); })
     .then(function (preflight) {
       if (!preflight.ok) return null;
-      var verb = queue ? 'queue this HI to LO training job' : 'start this HI to LO training job';
+      var verb = queue ? 'queue this ' + trainingStageLabel(options.stages) + ' training job' : 'start this ' + trainingStageLabel(options.stages) + ' training job';
       if (!window.confirm('Runner validation passed. Continue and ' + verb + '?')) return null;
       return trainingRunnerRequest('/fs/training_runner/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: state.folder, queue: !!queue })
+        body: JSON.stringify({
+          folder: state.folder,
+          queue: !!queue,
+          stages: options.stages,
+          resumeFromCheckpoint: options.resumeFromCheckpoint
+        })
       });
     })
     .then(function (payload) {
@@ -511,13 +536,13 @@ function refreshTrainingWorkspace() {
     });
 }
 
-function runTrainingWorkspaceAction(action) {
+function runTrainingWorkspaceAction(action, options) {
   var runner = action === 'prepare'
     ? runPrepareDatasetForCurrentFolder
     : action === 'generate'
       ? runGenerateDatasetConfigsForCurrentFolder
       : runTrainCommandPreviewForCurrentFolder;
-  var request = runner();
+  var request = action === 'train' ? runner(options) : runner();
   syncWorkspaceConfigEditorUi();
   Promise.resolve(request)
     .then(function () {
@@ -555,12 +580,12 @@ function wireTrainingWorkspace() {
   previewCommandBtn.onclick = function () {
     trainMenu.classList.add('hidden');
     trainBtn.setAttribute('aria-expanded', 'false');
-    runTrainingWorkspaceAction('train');
+    runTrainingWorkspaceAction('train', getManagedTrainingOptions());
   };
   validateRunnerBtn.onclick = function () {
     trainMenu.classList.add('hidden');
     trainBtn.setAttribute('aria-expanded', 'false');
-    validateTrainingRunner().catch(function (err) {
+    validateTrainingRunner(getManagedTrainingOptions()).catch(function (err) {
       setStatus('Training runner validation failed: ' + String(err && err.message ? err.message : err));
     });
   };

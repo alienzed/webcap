@@ -641,6 +641,18 @@
                             <div class="training-run-menu">
                                 <button id="training-workspace-train-btn" type="button" class="training-btn" aria-expanded="false">Train</button>
                                 <div id="training-run-menu-panel" class="training-run-menu-panel hidden">
+                                    <label class="training-run-option">
+                                        <span>Stage</span>
+                                        <select id="training-run-stage-select">
+                                            <option value="both">HI then LO</option>
+                                            <option value="hi">HI only</option>
+                                            <option value="lo">LO only</option>
+                                        </select>
+                                    </label>
+                                    <label class="training-run-option">
+                                        <span>Resume checkpoint <em>(optional)</em></span>
+                                        <input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/runs/...">
+                                    </label>
                                     <button id="training-preview-command-btn" type="button">Preview Command</button>
                                     <button id="training-validate-runner-btn" type="button">Validate Runner</button>
                                     <button id="training-run-in-app-btn" type="button">Run In App</button>

@@ -692,20 +692,22 @@
                             </div>
                             <div id="training-runner-preflight" class="training-runner-preflight hidden"></div>
                         </section>
-                        <section class="training-history-card" aria-label="Training history">
-                            <div class="training-workspace-section-title">This Set</div>
-                            <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>
-                            <div id="training-history-list" class="training-history-list"></div>
-                        </section>
-                        <section class="training-tensorboard-card" aria-label="TensorBoard">
-                            <div class="training-workspace-section-title">TensorBoard</div>
-                            <div id="training-tensorboard-summary" class="training-tensorboard-summary">Checking TensorBoard...</div>
-                            <div id="training-tensorboard-actions" class="training-runner-actions">
-                                <button id="training-tensorboard-start-btn" type="button" class="training-btn">Start TensorBoard</button>
-                                <button id="training-tensorboard-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
-                                <a id="training-tensorboard-open-link" class="review-captions-btn hidden" target="_blank" rel="noopener">Open TensorBoard</a>
-                            </div>
-                        </section>
+                        <div class="training-operations-context">
+                            <section class="training-history-card" aria-label="Training history">
+                                <div class="training-workspace-section-title">Set History</div>
+                                <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>
+                                <div id="training-history-list" class="training-history-list"></div>
+                            </section>
+                            <section class="training-tensorboard-card" aria-label="TensorBoard">
+                                <div class="training-workspace-section-title">TensorBoard</div>
+                                <div id="training-tensorboard-summary" class="training-tensorboard-summary">Checking TensorBoard...</div>
+                                <div id="training-tensorboard-actions" class="training-runner-actions">
+                                    <button id="training-tensorboard-start-btn" type="button" class="training-btn">Start TensorBoard</button>
+                                    <button id="training-tensorboard-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
+                                    <a id="training-tensorboard-open-link" class="review-captions-btn hidden" target="_blank" rel="noopener">Open TensorBoard</a>
+                                </div>
+                            </section>
+                        </div>
                         <section class="training-workspace-section" aria-label="Training config files">
                             <div class="training-workspace-section-title">Config Files</div>
                             <div id="training-workspace-config-list" class="training-config-list">No config files.</div>

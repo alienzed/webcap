@@ -173,14 +173,15 @@ function renderTrainingRunner() {
   trainingWorkspaceState.runnerSelectedJobId = job.id;
   var elapsed = formatTrainingRunnerElapsed(job);
   var status = String(job.status || 'unknown');
-  var stage = String(job.stage || '');
-  els.runnerSummary.innerHTML = '<strong>' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</strong>' +
-    (stage ? ' - ' + escapeHtml(stage.toUpperCase()) : '') +
-    (elapsed ? ' - ' + escapeHtml(elapsed) : '') +
-    '<br><span>' + escapeHtml(job.folder || '') + '</span>' +
-    (queuedCount ? '<br><span>' + queuedCount + ' queued job' + (queuedCount === 1 ? '' : 's') + '.</span>' : '') +
-    (job.error ? '<br><span>' + escapeHtml(job.error) + '</span>' : '') +
-    (trainingWorkspaceState.runnerQueuePaused ? '<br><span>' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '</span>' : '');
+  var executionStage = String(job.stage || '');
+  var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+  els.runnerSummary.innerHTML = '<div class="training-runner-state">' +
+    '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span>' +
+    '<span>' + escapeHtml(trainingStageLabel(job.stages || 'both')) + (executionStage && executionStage !== status ? ' · ' + escapeHtml(executionStage.toUpperCase()) : '') + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span></div>' +
+    '<div class="training-runner-folder">' + escapeHtml(job.folder || '') + '</div>' +
+    (queuedCount ? '<div class="training-runner-detail">' + queuedCount + ' queued job' + (queuedCount === 1 ? '' : 's') + '.</div>' : '') +
+    (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
+    (trainingWorkspaceState.runnerQueuePaused ? '<div class="training-runner-detail">' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '</div>' : '');
   els.runnerActions.classList.remove('hidden');
   var running = status === 'running' || status === 'stopping';
   var queued = status === 'queued';
@@ -212,14 +213,16 @@ function renderTrainingHistory() {
       (latest.finishedAt || latest.startedAt ? ' · ' + escapeHtml(formatTrainingHistoryTime(latest.finishedAt || latest.startedAt)) : '')
     : 'No managed training runs yet.';
   els.historyList.innerHTML = jobs.slice().reverse().slice(0, 8).map(function (job) {
-    var output = Array.isArray(job.runDirectories) && job.runDirectories.length ? job.runDirectories[0].path : '';
+    var run = Array.isArray(job.runDirectories) && job.runDirectories.length ? job.runDirectories[0] : null;
+    var output = run ? run.path : '';
+    var resumable = !!(run && run.checkpointAvailable);
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div><strong>' + escapeHtml(String(job.status || 'unknown')) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</div>' +
       '<div>' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</div>' +
       (output ? '<div class="training-history-path">' + escapeHtml(output) + '</div>' : '') +
       '<div class="training-history-actions">' +
         '<button type="button" data-training-history-log="' + escapeHtml(job.id || '') + '">Output</button>' +
-        (output ? '<button type="button" data-training-history-resume="' + escapeHtml(output) + '">Use checkpoint</button>' : '') +
+        (resumable ? '<button type="button" data-training-history-resume="' + escapeHtml(output) + '">Use checkpoint</button>' : '') +
       '</div></div>';
   }).join('');
   els.checkpointSelect.innerHTML = '<option value="">Start a new run</option>' + runs.map(function (run) {

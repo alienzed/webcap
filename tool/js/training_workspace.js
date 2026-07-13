@@ -152,15 +152,18 @@ function appendTrainingRunnerValidationToConsole(payload) {
   appendToConsolePanel(lines.join('\n') + '\n');
 }
 
-function fetchTrainingRunnerLog(job) {
+function fetchTrainingRunnerLog(job, reset) {
   if (!job || !job.id) return;
-  var offset = Number(trainingWorkspaceState.runnerLogOffsets[job.id] || 0);
+  var offset = reset ? 0 : Number(trainingWorkspaceState.runnerLogOffsets[job.id] || 0);
   fetch('/fs/training_runner/log?jobId=' + encodeURIComponent(job.id) + '&offset=' + encodeURIComponent(offset))
     .then(function (response) { return response.json(); })
     .then(function (payload) {
-      if (!payload || !payload.ok) return;
+      if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'Could not load training output.');
       trainingWorkspaceState.runnerLogOffsets[job.id] = Number(payload.nextOffset || offset);
       if (payload.text) appendToConsolePanel(payload.text);
+      if (!payload.text && offset === 0 && payload.job && payload.job.error) {
+        appendToConsolePanel('[webcap] ' + payload.job.error + '\n');
+      }
       if (payload.job) {
         var jobs = trainingWorkspaceState.runnerJobs;
         for (var i = 0; i < jobs.length; i++) {
@@ -171,6 +174,7 @@ function fetchTrainingRunnerLog(job) {
     })
     .catch(function (err) {
       if (window.console && console.error) console.error('[Training runner] Log refresh failed:', err);
+      setStatus('Could not load training output: ' + String(err && err.message ? err.message : err));
     });
 }
 
@@ -588,7 +592,7 @@ function wireTrainingWorkspace() {
   runnerCancelBtn.onclick = function () { stopManagedTraining(true); };
   runnerConsoleBtn.onclick = function () {
     showConsolePanel();
-    fetchTrainingRunnerLog(getTrainingRunnerSelectedJob());
+    fetchTrainingRunnerLog(getTrainingRunnerSelectedJob(), true);
   };
 }
 

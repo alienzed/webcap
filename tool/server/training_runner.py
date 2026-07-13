@@ -95,15 +95,22 @@ def _wsl_executable():
     return shutil.which("wsl.exe") or shutil.which("wsl")
 
 
+def _uses_native_wsl_shell():
+    return os.name != "nt"
+
+
 def _run_wsl(command, timeout=20, distribution=""):
-    executable = _wsl_executable()
-    if not executable:
-        return 127, "", "wsl.exe was not found on PATH."
-    try:
+    if _uses_native_wsl_shell():
+        args = ["bash", "-lc", command]
+    else:
+        executable = _wsl_executable()
+        if not executable:
+            return 127, "", "wsl.exe was not found on PATH."
         args = [executable]
         if distribution:
             args.extend(["--distribution", distribution])
         args.extend(["--", "bash", "-lc", command])
+    try:
         completed = subprocess.run(
             args,
             capture_output=True,
@@ -193,8 +200,14 @@ def _build_preflight(folder):
     checks.append(_make_check("training_artifacts", "blocker", not missing,
                               "Training artifacts are available." if not missing else "Missing: " + ", ".join(missing),
                               ""))
-    checks.append(_make_check("wsl_available", "blocker", bool(_wsl_executable()),
-                              "WSL is available." if _wsl_executable() else "wsl.exe was not found on PATH."))
+    shell_available = bool(shutil.which("bash")) if _uses_native_wsl_shell() else bool(_wsl_executable())
+    checks.append(_make_check(
+        "wsl_available",
+        "blocker",
+        shell_available,
+        "Current WSL shell is available." if _uses_native_wsl_shell() and shell_available else
+        "WSL is available." if shell_available else "wsl.exe was not found on PATH.",
+    ))
     checks.append(_make_check("training_cwd", "blocker", bool(settings["cwd"]),
                               "Diffusion Pipe WSL path is configured." if settings["cwd"] else "Set training.diffusion_pipe_wsl in App Settings."))
     if not all(item["ok"] for item in checks if item["severity"] == "blocker"):
@@ -330,6 +343,7 @@ def _launch_job(job, folder_path):
     job["preflight"] = {"checks": checks, "blockers": len(blockers)}
     if blockers:
         job["status"] = "failed"
+        job["stage"] = "launch"
         job["error"] = "Preflight failed before launch."
         job["finishedAt"] = time.time()
         return False
@@ -343,7 +357,8 @@ def _launch_job(job, folder_path):
     pid = (stdout or "").strip().splitlines()[-1] if (stdout or "").strip() else ""
     if code != 0 or not pid.isdigit():
         job["status"] = "failed"
-        job["error"] = (stderr or stdout or "Could not launch WSL runner.").strip()
+        job["stage"] = "launch"
+        job["error"] = (stderr or stdout).strip() or "Could not launch the managed training runner (exit " + str(code) + ")."
         job["finishedAt"] = time.time()
         return False
     job.update({

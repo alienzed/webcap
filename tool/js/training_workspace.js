@@ -272,9 +272,9 @@ function renderTrainingRunner() {
             '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
             resume +
             '<div class="training-runner-queue-controls">' +
-              '<button type="button" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === 0 ? ' disabled' : '') + '>Up</button>' +
-              '<button type="button" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>Down</button>' +
-              '<button type="button" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Cancel</button>' +
+              '<button type="button" class="training-runner-queue-control" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + '>&#8593;</button>' +
+              '<button type="button" class="training-runner-queue-control" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move down" aria-label="Move down"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
+              '<button type="button" class="training-runner-queue-control training-runner-queue-cancel" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Remove from queue" aria-label="Remove from queue">&#215;</button>' +
             '</div>' +
             '</div>';
         }).join('');

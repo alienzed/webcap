@@ -125,6 +125,39 @@ def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
     assert state["activeJobId"] == ""
 
 
+def test_restart_hold_keeps_an_active_run_handing_off_to_its_queue(monkeypatch):
+    state = {
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "activeJobId": "active",
+        "jobs": [
+            {"id": "active", "status": "running", "folder": "set"},
+            {"id": "next", "status": "queued", "folder": "set"},
+        ],
+    }
+    monkeypatch.setattr(training_runner, "_startup_reconciled", False)
+
+    training_runner._apply_restart_hold(state)
+
+    assert state["queuePaused"] is False
+    assert state["queuePauseReason"] == ""
+
+
+def test_restart_hold_keeps_a_dormant_queue_from_starting_unattended(monkeypatch):
+    state = {
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "activeJobId": "",
+        "jobs": [{"id": "next", "status": "queued", "folder": "set"}],
+    }
+    monkeypatch.setattr(training_runner, "_startup_reconciled", False)
+
+    training_runner._apply_restart_hold(state)
+
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"] == "Queue held after WebCap restarted."
+
+
 def test_runner_progress_estimates_stage_and_overall_from_epoch_logs(tmp_path):
     hi_path = tmp_path / "config.hi.toml"
     lo_path = tmp_path / "config.lo.toml"
@@ -289,3 +322,30 @@ def test_folder_status_distinguishes_partial_and_complete_training(tmp_path, mon
 
     assert partial == {"status": "partial", "label": "Partially trained"}
     assert complete == {"status": "trained", "label": "Trained"}
+
+
+def test_attention_ignores_a_failed_attempt_after_the_same_stage_retries():
+    failed = {"id": "failed", "folder": "set", "stages": "lo", "status": "failed", "createdAt": 1}
+    retry = {"id": "retry", "folder": "set", "stages": "lo", "status": "running", "createdAt": 2}
+
+    assert training_runner._attention_payload({"queuePaused": True, "jobs": [failed, retry]}) is None
+
+
+def test_folder_status_requires_prepared_captions_before_ready(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    (folder / "auto_dataset" / "square_img").mkdir(parents=True)
+    for name in ("config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"):
+        (folder / name).write_text("ok", encoding="utf-8")
+    (folder / "auto_dataset" / "prep_manifest.json").write_text(
+        '{"images": [{"prepared_path": "square_img/one.png", "caption": true}], "videos": []}', encoding="utf-8"
+    )
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": []})
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], set()))
+
+    assert training_runner.folder_statuses_for_folders([folder])[folder] == {"status": "never", "label": ""}
+
+    (folder / "auto_dataset" / "square_img" / "one.txt").write_text("caption", encoding="utf-8")
+
+    assert training_runner.folder_statuses_for_folders([folder])[folder] == {"status": "ready", "label": "Ready to train"}

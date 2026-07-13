@@ -2052,10 +2052,24 @@ iframe {
   margin-top: 5px;
 }
 
-.workspace-surface-training .training-runner-queue-controls button,
 .workspace-surface-training .training-history-actions button {
   padding: 2px 5px;
   font-size: 11px;
+}
+
+.workspace-surface-training .training-runner-queue-control {
+  width: 23px;
+  min-width: 23px;
+  height: 23px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.workspace-surface-training .training-runner-queue-cancel {
+  color: #d36a6a;
 }
 
 .workspace-surface-training .training-history-card,

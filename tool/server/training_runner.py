@@ -115,7 +115,10 @@ def _apply_restart_hold(state):
     if _startup_reconciled:
         return
     _startup_reconciled = True
-    if state.get("jobs") and any(job.get("status") == "queued" for job in state.get("jobs", [])):
+    jobs = state.get("jobs", [])
+    has_queued_work = any(job.get("status") == "queued" for job in jobs)
+    has_active_work = any(job.get("status") in ("running", "stopping") for job in jobs)
+    if has_queued_work and not has_active_work:
         state["queuePaused"] = True
         state["queuePauseReason"] = "Queue held after WebCap restarted."
 
@@ -202,6 +205,39 @@ def _resolve_artifacts(folder, folder_path):
     }
     missing = [name for name, path in paths.items() if not path.exists() or not path.is_file()]
     return paths, missing
+
+
+def _prepared_dataset_is_ready(folder_path):
+    folder = Path(folder_path)
+    manifest_path = folder / "auto_dataset" / "prep_manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(manifest, dict):
+        return False
+    rows = []
+    for key in ("images", "videos"):
+        values = manifest.get(key)
+        if not isinstance(values, list):
+            return False
+        rows.extend(values)
+    if not rows:
+        return False
+    dataset_root = manifest_path.parent
+    for row in rows:
+        if not isinstance(row, dict):
+            return False
+        prepared_path = str(row.get("prepared_path") or "").strip()
+        if not prepared_path or not row.get("caption"):
+            return False
+        caption_path = (dataset_root / prepared_path).with_suffix(".txt")
+        try:
+            if not caption_path.is_file() or not caption_path.read_text(encoding="utf-8").strip():
+                return False
+        except OSError:
+            return False
+    return True
 
 
 def _activation_prefix(settings):
@@ -878,11 +914,19 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
 
 def _attention_payload(state):
     queued_count = sum(1 for job in state.get("jobs", []) if job.get("status") == "queued")
+    if any(job.get("status") in ("running", "stopping") for job in state.get("jobs", [])):
+        return None
     attention_job = None
     if state.get("queuePaused"):
         attention_job = next((
             job for job in reversed(state.get("jobs", []))
-            if job.get("status") in ("paused", "failed", "interrupted")
+            if job.get("status") in ("paused", "failed", "interrupted") and not any(
+                retry.get("status") in ("queued", "running", "stopping")
+                and retry.get("folder") == job.get("folder")
+                and retry.get("stages") == job.get("stages")
+                and float(retry.get("createdAt") or 0) > float(job.get("createdAt") or 0)
+                for retry in state.get("jobs", [])
+            )
         ), None)
     if attention_job:
         folder_path = app_config.safe_join_fs_root(attention_job["folder"])
@@ -951,7 +995,7 @@ def folder_statuses_for_folders(folder_paths):
                 result[path] = {"status": "trained", "label": "Trained"}
             elif completed:
                 result[path] = {"status": "partial", "label": "Partially trained"}
-            elif all((path / name).is_file() for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml")):
+            elif all((path / name).is_file() for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml")) and _prepared_dataset_is_ready(path):
                 result[path] = {"status": "ready", "label": "Ready to train"}
             else:
                 result[path] = {"status": "never", "label": ""}

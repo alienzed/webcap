@@ -44,6 +44,23 @@
                             </svg>
                         </button>
                         <div id="utility-path-flyout" class="utility-path-flyout"></div>
+                        <button
+                            id="utility-training-btn"
+                            type="button"
+                            class="utility-btn utility-path-btn"
+                            title="Open Training"
+                            aria-label="Open Training"
+                            aria-pressed="false"
+                        >
+                            <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M4 19V11"></path>
+                                <path d="M10 19V7"></path>
+                                <path d="M16 19V3"></path>
+                                <path d="M3 19h18"></path>
+                                <path d="M16 3h4v4"></path>
+                                <path d="M20 3l-7 7"></path>
+                            </svg>
+                        </button>
                         <div class="utility-spacer"></div>
                         <button
                             id="utility-settings-btn"
@@ -290,35 +307,18 @@
                         >Exit SuperSet Search</button>
                     </div>
                     <div class="stats-panel sidebar-drawer-zone">
-                        <details class="sidebar-drawer sidebar-set-actions-drawer" open>
+                        <details id="sidebar-set-actions-drawer" class="sidebar-drawer sidebar-set-actions-drawer" open>
                             <summary class="sidebar-drawer-summary">Set Actions</summary>
                             <div class="sidebar-drawer-body">
                                 <button id="create-set-from-results-btn" type="button" class="review-captions-btn sidebar-create-set-btn hidden" title="Create a new set with the current filter results">
                                     <span class="btn-glyph" aria-hidden="true">&#8627;</span>
                                     <span>Create Set</span>
                                 </button>
+                                <button id="sidebar-open-review-output-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Open caption review for this set" aria-pressed="false">Review</button>
+                                <button id="sidebar-open-training-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Open training for this set" aria-pressed="false">Train</button>
                             </div>
                         </details>
-                        <details class="sidebar-drawer" open>
-                            <summary class="sidebar-drawer-summary">Project Tools</summary>
-                            <div class="sidebar-drawer-body">
-                                <button
-                                    id="sidebar-open-review-output-btn"
-                                    type="button"
-                                    class="review-captions-btn sidebar-review-output-btn"
-                                    title="Open caption review tools"
-                                    aria-pressed="false"
-                                >Review</button>
-                                <button
-                                    id="sidebar-open-training-btn"
-                                    type="button"
-                                    class="review-captions-btn sidebar-review-output-btn"
-                                    title="Open the training workspace"
-                                    aria-pressed="false"
-                                >Training</button>
-                                <div id="sidebar-workspace" class="sidebar-workspace hidden" data-legacy-tabs-disabled="true" aria-hidden="true"></div>
-                            </div>
-                        </details>
+                        <div id="sidebar-workspace" class="sidebar-workspace hidden" data-legacy-tabs-disabled="true" aria-hidden="true"></div>
                     </div>
                     </div>
                 </div>
@@ -684,8 +684,7 @@
                                 </label>
                             </div>
                             <div class="training-run-setup-actions">
-                                <button id="training-run-in-app-btn" type="button" class="training-btn training-launch-btn" title="Start this training job now.">Start Training</button>
-                                <button id="training-queue-job-btn" type="button" class="review-captions-btn training-queue-btn" title="Add this training job behind any work already running or queued.">Add to Queue</button>
+                                <button id="training-queue-job-btn" type="button" class="training-btn training-launch-btn" title="Start this set when the runner is idle, or add it behind active work.">Train this set</button>
                             </div>
                             <details class="training-run-details">
                                 <summary>Manual command &amp; diagnostics</summary>

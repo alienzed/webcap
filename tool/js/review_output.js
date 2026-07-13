@@ -196,6 +196,13 @@ function updateSetFolderScopedUi() {
   var workspace = document.getElementById('sidebar-workspace');
   if (!workspace) return;
   workspace.classList.toggle('hidden', !inSetFolder);
+  var reviewBtn = document.getElementById('sidebar-open-review-output-btn');
+  var trainingBtn = document.getElementById('sidebar-open-training-btn');
+  var drawer = document.getElementById('sidebar-set-actions-drawer');
+  var createSetBtn = document.getElementById('create-set-from-results-btn');
+  if (reviewBtn) reviewBtn.classList.toggle('hidden', !inSetFolder);
+  if (trainingBtn) trainingBtn.classList.toggle('hidden', !inSetFolder);
+  if (drawer) drawer.classList.toggle('hidden', !inSetFolder && (!createSetBtn || createSetBtn.classList.contains('hidden')));
 }
 
 function getReviewAvailability() {

@@ -49,3 +49,25 @@ def test_discover_runs_uses_each_stage_current_config_output_dir(tmp_path, monke
 
     assert [run["name"] for run in training_history.discover_runs(set_folder, "hi")] == ["hi-run"]
     assert [run["name"] for run in training_history.discover_runs(set_folder, "lo")] == ["lo-run"]
+
+
+def test_completed_stages_requires_the_configured_final_epoch(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    for stage in ("hi", "lo"):
+        output = root / "output" / "runs" / ("set-" + stage)
+        (set_folder / ("config." + stage + ".toml")).write_text(
+            'output_dir = "' + str(output) + '"\nepochs = 40\n', encoding="utf-8"
+        )
+        run = output / (stage + "-run")
+        (run / "epoch39").mkdir(parents=True)
+
+    assert training_history.completed_stages(set_folder) == (["hi", "lo"], set())
+
+    for stage in ("hi", "lo"):
+        run = root / "output" / "runs" / ("set-" + stage) / (stage + "-run")
+        (run / "epoch40").mkdir()
+
+    assert training_history.completed_stages(set_folder) == (["hi", "lo"], {"hi", "lo"})

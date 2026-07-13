@@ -15,7 +15,7 @@ from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
 from .dataset_config import repeat_targets_for_mode
-from .training_history import discover_runs, output_root_for_folder, record_job
+from .training_history import completed_stages, discover_runs, output_root_for_folder, record_job
 from .training_runtime import (
     build_runtime_command,
     build_training_launcher,
@@ -451,9 +451,14 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     ]
     if settings["activate"] and not has_conda_runtime(settings):
         lines.append("source " + shlex.quote(settings["activate"]) + " || { echo '[webcap] training activation failed'; write_result failed 1; exit 1; }")
+    if resume_stage:
+        lines.append("printf '%s\\n' " + shlex.quote(
+            "[webcap] resume stage=" + resume_stage + " checkpoint=" + str(job.get("resumeFromCheckpoint") or "")
+        ))
     if stages in ("hi", "both"):
         lines.extend([
             "echo '[webcap] stage=hi'",
+            "printf '%s\\n' " + shlex.quote("[webcap] command hi: " + command_plan["hiCommand"]),
             command_plan["hiCommand"],
             "HI_CODE=$?",
             "if [ \"$HI_CODE\" -ne 0 ]; then echo '[webcap] HI failed'; write_result failed \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
@@ -461,6 +466,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     if stages in ("lo", "both"):
         lines.extend([
             "echo '[webcap] stage=lo'",
+            "printf '%s\\n' " + shlex.quote("[webcap] command lo: " + command_plan["loCommand"]),
             command_plan["loCommand"],
             "LO_CODE=$?",
             "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
@@ -745,7 +751,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
+    fields = ("id", "folder", "stages", "modelLabel", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -811,6 +817,7 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "id": job_id,
         "folder": folder,
         "stages": stages,
+        "modelLabel": "WAN 2.2",
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
         "status": "queued",
@@ -938,12 +945,16 @@ def folder_statuses_for_folders(folder_paths):
                 "status": "attention", "label": "Needs attention", "jobId": attention.get("id"),
                 "outcome": attention.get("status"), "stage": attention.get("stages"),
             }
-        elif discover_runs(path):
-            result[path] = {"status": "trained", "label": "Trained"}
-        elif all((path / name).is_file() for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml")):
-            result[path] = {"status": "ready", "label": "Ready to train"}
         else:
-            result[path] = {"status": "never", "label": ""}
+            required_stages, completed = completed_stages(path)
+            if required_stages and len(completed) == len(required_stages):
+                result[path] = {"status": "trained", "label": "Trained"}
+            elif completed:
+                result[path] = {"status": "partial", "label": "Partially trained"}
+            elif all((path / name).is_file() for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml")):
+                result[path] = {"status": "ready", "label": "Ready to train"}
+            else:
+                result[path] = {"status": "never", "label": ""}
     return result
 
 

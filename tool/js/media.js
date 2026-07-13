@@ -759,10 +759,10 @@ async function renderFileList() {
       colorDot = '<span class="flag-dot flag-dot--' + flagColor + '" style="margin-left:8px;"></span>';
     }
     var label = '🗀 ' + folderItem.name;
-    var trainingStatus = folderItem.trainingStatus && workspaceState.surface === 'training'
+    var trainingStatus = folderItem.trainingStatus
       ? String(folderItem.trainingStatus.status || 'never')
       : '';
-    var trainingLabel = folderItem.trainingStatus && workspaceState.surface === 'training'
+    var trainingLabel = folderItem.trainingStatus
       ? String(folderItem.trainingStatus.label || trainingStatus)
       : '';
     var trainingBadge = trainingStatus && trainingStatus !== 'never'

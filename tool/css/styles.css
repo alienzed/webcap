@@ -1201,6 +1201,11 @@ iframe {
   color: #111827;
 }
 
+.utility-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .utility-path-btn {
   min-width: 30px;
   width: 30px;
@@ -2007,8 +2012,7 @@ iframe {
 }
 
 .workspace-surface-training .training-gpu-status {
-  display: grid;
-  gap: 2px;
+  display: block;
   padding-top: 3px;
   color: var(--muted);
 }
@@ -2062,6 +2066,10 @@ iframe {
   padding: 9px;
   border: 1px solid var(--border);
   background: var(--panel-soft);
+}
+
+.workspace-surface-training .training-global-secondary {
+  width: 100%;
 }
 
 .workspace-surface-training .training-history-card > summary {
@@ -2118,7 +2126,7 @@ iframe {
   white-space: nowrap;
 }
 
-.workspace-surface-training .training-folder-status {
+.training-folder-status {
   display: inline-block;
   margin-left: 5px;
   padding: 1px 4px;
@@ -2130,24 +2138,38 @@ iframe {
   text-transform: capitalize;
 }
 
-.workspace-surface-training .training-folder-status--running,
-.workspace-surface-training .training-folder-status--training,
-.workspace-surface-training .training-folder-status--queued {
+.training-folder-status--running,
+.training-folder-status--training {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.workspace-surface-training .training-folder-status--completed,
-.workspace-surface-training .training-folder-status--trained,
-.workspace-surface-training .training-folder-status--ready {
-  border-color: #4f9d69;
-  color: #4f9d69;
+.training-folder-status--queued {
+  border-color: #cc7a3f;
+  color: #cc7a3f;
 }
 
-.workspace-surface-training .training-folder-status--failed,
-.workspace-surface-training .training-folder-status--stopped,
-.workspace-surface-training .training-folder-status--paused,
-.workspace-surface-training .training-folder-status--attention {
+.training-folder-status--ready {
+  border-color: #4d8cc7;
+  color: #4d8cc7;
+}
+
+.training-folder-status--completed,
+.training-folder-status--trained {
+  border-color: #4f9d69;
+  background: #4f9d69;
+  color: #ffffff;
+}
+
+.training-folder-status--partial {
+  border-color: #7d8fa6;
+  color: #7d8fa6;
+}
+
+.training-folder-status--failed,
+.training-folder-status--stopped,
+.training-folder-status--paused,
+.training-folder-status--attention {
   border-color: #cc7a3f;
   color: #cc7a3f;
 }

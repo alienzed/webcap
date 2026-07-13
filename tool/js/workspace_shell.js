@@ -197,6 +197,7 @@ function syncWorkspaceSurfaceUi() {
   var reviewOutputSurface = document.getElementById('review-output-surface');
   var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
   var trainingBtn = document.getElementById('sidebar-open-training-btn');
+  var utilityTrainingBtn = document.getElementById('utility-training-btn');
   var trainingNavigator = document.getElementById('training-navigator');
   var reviewOutputBackBtn = document.getElementById('review-output-back-btn');
   var workbenchTop = ui.appEl.querySelector('.workbench-top');
@@ -235,10 +236,18 @@ function syncWorkspaceSurfaceUi() {
     reviewOutputBtn.classList.toggle('active', reviewOutputActive);
     reviewOutputBtn.setAttribute('aria-pressed', reviewOutputActive ? 'true' : 'false');
   }
+  var hasSetContext = isSetFolderContext(state.folder, state.items);
+  if (reviewOutputBtn) reviewOutputBtn.classList.toggle('hidden', !hasSetContext);
   if (trainingBtn) {
     var trainingActive = surface === 'training';
     trainingBtn.classList.toggle('active', trainingActive);
     trainingBtn.setAttribute('aria-pressed', trainingActive ? 'true' : 'false');
+    trainingBtn.classList.toggle('hidden', !hasSetContext);
+  }
+  if (utilityTrainingBtn) {
+    var utilityTrainingActive = surface === 'training' && trainingWorkspaceState.entryMode === 'global';
+    utilityTrainingBtn.classList.toggle('active', utilityTrainingActive);
+    utilityTrainingBtn.setAttribute('aria-pressed', utilityTrainingActive ? 'true' : 'false');
   }
   if (reviewOutputBackBtn) {
     reviewOutputBackBtn.classList.toggle('hidden', surface !== 'reviewOutput');
@@ -368,6 +377,15 @@ function wireWorkspaceHeaderUi() {
   if (trainingBtn && !trainingBtn.__workspaceWired) {
     trainingBtn.__workspaceWired = true;
     trainingBtn.onclick = function () {
+      setTrainingWorkspaceEntryMode('set');
+      setWorkspaceSurface('training');
+    };
+  }
+  var utilityTrainingBtn = document.getElementById('utility-training-btn');
+  if (utilityTrainingBtn && !utilityTrainingBtn.__workspaceWired) {
+    utilityTrainingBtn.__workspaceWired = true;
+    utilityTrainingBtn.onclick = function () {
+      setTrainingWorkspaceEntryMode('global');
       setWorkspaceSurface('training');
     };
   }

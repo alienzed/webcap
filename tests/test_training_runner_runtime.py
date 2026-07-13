@@ -111,6 +111,8 @@ def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):
 
     assert "[webcap] stage=hi" not in script
     assert "[webcap] stage=lo" in script
+    assert "[webcap] resume stage=lo checkpoint=/mnt/w/output/run-1" in script
+    assert "[webcap] command lo:" in script
     assert "--resume_from_checkpoint /mnt/w/output/run-1" in script
 
 
@@ -270,3 +272,20 @@ def test_folder_status_prefers_queue_state_over_output_artifacts(tmp_path, monke
     status = training_runner.folder_statuses_for_folders([folder])[folder]
 
     assert status == {"status": "queued", "label": "Queued #1", "queuePosition": 1}
+
+
+def test_folder_status_distinguishes_partial_and_complete_training(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": []})
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], {"hi"}))
+
+    partial = training_runner.folder_statuses_for_folders([folder])[folder]
+
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], {"hi", "lo"}))
+    complete = training_runner.folder_statuses_for_folders([folder])[folder]
+
+    assert partial == {"status": "partial", "label": "Partially trained"}
+    assert complete == {"status": "trained", "label": "Trained"}

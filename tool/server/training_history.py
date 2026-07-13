@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -10,6 +11,9 @@ from .training_config_files import output_dir_from_config
 
 HISTORY_FILE_NAME = ".webcap_training.json"
 HISTORY_VERSION = 2
+_EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
+_STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
+_EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 
 
 def output_root_for_folder(folder_path, stage="hi"):
@@ -31,6 +35,33 @@ def output_roots_for_folder(folder_path):
 
 def _history_path(folder_path):
     return Path(folder_path) / HISTORY_FILE_NAME
+
+
+def _configured_epochs(folder_path, stage):
+    try:
+        text = (Path(folder_path) / ("config." + stage + ".toml")).read_text(encoding="utf-8")
+    except OSError:
+        return 0
+    match = _EPOCH_CONFIG_PATTERN.search(text)
+    return int(match.group(1)) if match else 0
+
+
+def _run_artifact_state(entry, expected_epochs):
+    highest_epoch = 0
+    highest_step = 0
+    try:
+        children = list(entry.iterdir())
+    except OSError:
+        return False, 0, 0
+    for child in children:
+        epoch = _EPOCH_PATTERN.match(child.name)
+        step = _STEP_PATTERN.match(child.name)
+        if epoch:
+            highest_epoch = max(highest_epoch, int(epoch.group(1)))
+        if step:
+            highest_step = max(highest_step, int(step.group(1)))
+    completed = bool(expected_epochs and highest_epoch >= expected_epochs)
+    return completed, highest_epoch, highest_step
 
 
 def _default_history(folder_path):
@@ -73,6 +104,8 @@ def discover_runs(folder_path, stage=""):
     runs = []
     seen = set()
     for root in roots:
+        root_stage = stage if stage in ("hi", "lo") else next((name for name in ("hi", "lo") if output_root_for_folder(folder_path, name) == root), "")
+        expected_epochs = _configured_epochs(folder_path, root_stage) if root_stage else 0
         if not root.exists() or not root.is_dir():
             continue
         for entry in root.iterdir():
@@ -84,11 +117,17 @@ def discover_runs(folder_path, stage=""):
             except OSError:
                 continue
             seen.add(entry)
+            completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
             runs.append({
                 "path": str(entry),
                 "name": entry.name,
+                "stage": root_stage,
                 "modifiedAt": modified,
                 "checkpointAvailable": bool(has_contents),
+                "completed": completed,
+                "epoch": highest_epoch or None,
+                "steps": highest_step or None,
+                "expectedEpochs": expected_epochs or None,
             })
     return sorted(runs, key=lambda run: run["modifiedAt"], reverse=True)
 
@@ -107,7 +146,7 @@ def record_job(folder_path, job):
     history = read_history(folder_path)
     runs = discover_runs(folder_path, str(job.get("stages") or ""))
     record_fields = (
-        "id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage",
+        "id", "folder", "stages", "modelLabel", "resumeFromCheckpoint", "resumeStage", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "parentJobId",
         "outputRoot", "progress",
     )
@@ -129,3 +168,22 @@ def history_payload(folder_path):
     history = read_history(folder_path)
     history["runs"] = discover_runs(folder_path)
     return history
+
+
+def completed_stages(folder_path):
+    folder = Path(folder_path)
+    stages = [stage for stage in ("hi", "lo") if (folder / ("config." + stage + ".toml")).is_file()]
+    history = read_history(folder)
+    completed = set()
+    for job in history.get("jobs") or []:
+        if job.get("status") != "completed":
+            continue
+        stage = str(job.get("stages") or "")
+        if stage == "both":
+            completed.update(stages)
+        elif stage in stages:
+            completed.add(stage)
+    for stage in stages:
+        if any(run.get("completed") for run in discover_runs(folder, stage)):
+            completed.add(stage)
+    return stages, completed

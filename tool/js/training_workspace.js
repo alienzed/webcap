@@ -13,6 +13,7 @@ var trainingWorkspaceState = {
   runnerQueuePaused: false,
   runnerQueuePauseReason: '',
   runnerAttention: null,
+  entryMode: 'global',
   gpu: null,
   gpuStatusPending: false,
   gpuForActiveJob: false,
@@ -22,6 +23,10 @@ var trainingWorkspaceState = {
 
 function isTrainingWorkspaceActive() {
   return normalizeWorkspaceSurface(workspaceState.surface) === 'training';
+}
+
+function setTrainingWorkspaceEntryMode(mode) {
+  trainingWorkspaceState.entryMode = mode === 'set' ? 'set' : 'global';
 }
 
 function getTrainingWorkspaceEls() {
@@ -136,10 +141,13 @@ function buildTrainingRunnerProgressHtml(job) {
   if (isFinite(etaSeconds) && etaSeconds >= 60 && etaSeconds < 30 * 24 * 3600) {
     positionLabel += ' · ~' + formatTrainingRunnerDuration(etaSeconds) + ' left';
   }
+  var plannedLabel = job.stages === 'both'
+    ? 'Planned: ' + Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall'
+    : 'Planned: ' + Math.round(stagePercent) + '% of ' + trainingStageLabel(progress.stage || job.stages || 'both');
   return '<div class="training-runner-progress" aria-label="Estimated training progress">' +
-    '<div class="training-runner-progress-copy"><span>' + escapeHtml(String(progress.stage || '').toUpperCase()) +
+    '<div class="training-runner-progress-copy"><span>' + escapeHtml(trainingStageLabel(progress.stage || job.stages || 'both')) +
       positionLabel + '</span>' +
-      '<span>Planned: ' + Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall</span></div>' +
+      '<span>' + escapeHtml(plannedLabel) + '</span></div>' +
     '<div class="training-runner-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(boundedOverall) + '">' +
       '<span style="width:' + boundedOverall.toFixed(1) + '%"></span></div>' +
     '</div>';
@@ -170,28 +178,14 @@ function buildTrainingGpuStatusHtml(job) {
   var utilization = Number(primary.utilization);
   var memoryUsed = formatTrainingGpuMemory(primary.memoryUsed);
   var memoryTotal = formatTrainingGpuMemory(primary.memoryTotal);
+  var details = [];
+  if (primary.temperature && primary.temperature !== '[N/A]') details.push(primary.temperature + '°C');
+  if (primary.powerDraw && primary.powerDraw !== '[N/A]') details.push(primary.powerDraw + ' W');
   var primarySummary = 'GPU' + (primary.index !== '' ? ' ' + primary.index : '') +
     (isFinite(utilization) ? ' ' + Math.round(utilization) + '%' : '') +
-    (memoryUsed && memoryTotal ? ' · VRAM ' + memoryUsed + ' / ' + memoryTotal : '');
-  var processes = Array.isArray(gpu.processes) ? gpu.processes : [];
-  var processSummary = processes.length
-    ? processes.length + ' CUDA process' + (processes.length === 1 ? '' : 'es')
-    : 'GPU idle · no CUDA process reported';
-  var gpuDetails = gpus.map(function (item) {
-    var details = [];
-    if (item.temperature) details.push(item.temperature + '°C');
-    if (item.powerDraw) details.push(item.powerDraw + ' W');
-    return '<div>GPU ' + escapeHtml(item.index || '?') + ': ' + escapeHtml(item.name || 'NVIDIA GPU') +
-      (details.length ? ' · ' + escapeHtml(details.join(' · ')) : '') + '</div>';
-  }).join('');
-  var processDetails = processes.length
-    ? processes.map(function (process) {
-      return '<div>PID ' + escapeHtml(process.pid || '?') + ' · ' + escapeHtml(process.name || 'compute process') +
-        (process.memoryUsed ? ' · ' + escapeHtml(process.memoryUsed) + ' MiB' : '') + '</div>';
-    }).join('')
-    : '<div>No CUDA process reported by nvidia-smi.</div>';
-  return '<div class="training-gpu-status"><strong>' + escapeHtml(primarySummary) + '</strong><span>' + escapeHtml(processSummary) + '</span>' +
-    '<details class="training-gpu-details"><summary>GPU details</summary><div>' + gpuDetails + processDetails + '</div></details></div>';
+    (memoryUsed && memoryTotal ? ' · VRAM ' + memoryUsed + ' / ' + memoryTotal : '') +
+    (details.length ? ' · ' + details.join(' · ') : '');
+  return '<div class="training-gpu-status"><strong>' + escapeHtml(primarySummary) + '</strong></div>';
 }
 
 function renderTrainingRunnerPreflight(payload) {
@@ -266,11 +260,11 @@ function renderTrainingRunner() {
     } else {
       els.runnerQueue.innerHTML = '<div class="training-runner-queue-title">Queue (' + queuedJobs.length + ')</div>' +
         queuedJobs.map(function (queuedJob, index) {
-          var stage = trainingStageLabel(queuedJob.stages || 'both');
+          var stage = trainingJobLabel(queuedJob);
           var plannedSteps = trainingPlannedStepCount(queuedJob);
           var workload = plannedSteps ? ' · ~' + Math.round(plannedSteps).toLocaleString() + ' planned steps' : '';
           var resume = queuedJob.resumeFromCheckpoint
-            ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(String(queuedJob.resumeStage || queuedJob.stages || '').toUpperCase()) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
+            ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(trainingStageLabel(queuedJob.resumeStage || queuedJob.stages || 'both')) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
             : '';
           var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
           return '<div class="training-runner-queue-item' + (selected ? ' active' : '') + '" data-training-queue-job="' + escapeHtml(queuedJob.id) + '">' +
@@ -302,7 +296,6 @@ function renderTrainingRunner() {
   trainingWorkspaceState.runnerSelectedJobId = job.id;
   var elapsed = formatTrainingRunnerElapsed(job);
   var status = String(job.status || 'unknown');
-  var executionStage = String(job.stage || '');
   var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
   var running = status === 'running' || status === 'stopping';
   var lastLogAt = Number(job.lastLogAt || 0);
@@ -312,7 +305,7 @@ function renderTrainingRunner() {
     : '';
   els.runnerSummary.innerHTML = '<div class="training-runner-state">' +
     '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span>' +
-    '<span>' + escapeHtml(trainingStageLabel(job.stages || 'both')) + (executionStage && executionStage !== status ? ' · ' + escapeHtml(executionStage.toUpperCase()) : '') + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span></div>' +
+    '<span>' + escapeHtml(trainingJobLabel(job)) + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span></div>' +
     '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
     (queuedCount ? '<div class="training-runner-detail">' + queuedCount + ' queued job' + (queuedCount === 1 ? '' : 's') + '.</div>' : '') +
     (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
@@ -372,9 +365,14 @@ function renderTrainingHistory() {
       '</div></div>';
   }).join('');
   els.checkpointSelect.innerHTML = '<option value="">Start a new run</option>' + runs.map(function (run) {
-    var unavailable = !run.checkpointAvailable;
+    var unavailable = !run.checkpointAvailable || !!run.completed;
+    var details = [];
+    if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
+    if (run.steps) details.push('step ' + Number(run.steps).toLocaleString());
+    if (run.completed) details.push('complete');
     return '<option value="' + escapeHtml(run.path || '') + '"' + (unavailable ? ' disabled' : '') + '>' +
-      escapeHtml(run.name || run.path || 'run') + (unavailable ? ' (no checkpoint found)' : '') + '</option>';
+      escapeHtml((run.stage ? trainingStageLabel(run.stage) + ' · ' : '') + (run.name || run.path || 'run') +
+        (details.length ? ' · ' + details.join(' · ') : '') + (unavailable && !run.completed ? ' (no checkpoint found)' : '')) + '</option>';
   }).join('');
 }
 
@@ -556,10 +554,14 @@ function syncManagedTrainingResumeUi() {
 }
 
 function trainingStageLabel(stages) {
-  return stages === 'hi' ? 'HI' : stages === 'lo' ? 'LO' : 'HI to LO';
+  return stages === 'hi' ? 'High Noise' : stages === 'lo' ? 'Low Noise' : 'High Noise to Low Noise';
 }
 
-function startManagedTraining(queue) {
+function trainingJobLabel(job) {
+  return String(job && job.modelLabel || 'WAN 2.2') + ' · ' + trainingStageLabel(String(job && job.stages || 'both'));
+}
+
+function startManagedTraining() {
   if (!state.folder) {
     setStatus('No folder selected for managed training.');
     return;
@@ -567,13 +569,13 @@ function startManagedTraining(queue) {
   var options = getManagedTrainingOptions();
   ensureGeneratedTrainingArtifactsForCurrentFolder()
     .then(function () {
-      setStatus(queue ? 'Queueing training job...' : 'Starting training job...');
+      setStatus('Adding training job...');
       return trainingRunnerRequest('/fs/training_runner/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folder: state.folder,
-          queue: !!queue,
+          queue: true,
           stages: options.stages,
           resumeFromCheckpoint: options.resumeFromCheckpoint,
           resumeStage: options.resumeStage,
@@ -634,6 +636,8 @@ function resumeManagedTrainingQueue() {
 
 function resumeManagedTrainingJob(jobId) {
   if (!jobId) return;
+  trainingWorkspaceState.runnerSelectedJobId = jobId;
+  showConsolePanel();
   trainingRunnerRequest('/fs/training_runner/resume_job', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: jobId })
   }).then(function () {
@@ -884,10 +888,11 @@ function refreshTrainingWorkspace() {
   if (!isTrainingWorkspaceActive()) return;
   var els = getTrainingWorkspaceEls();
   var folder = String(state.folder || '').trim();
-  if (els.folder) els.folder.textContent = folder || 'No folder selected';
-  if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !folder);
-  if (els.runSetup) els.runSetup.classList.toggle('hidden', !folder);
-  if (!folder) {
+  var isSetEntry = trainingWorkspaceState.entryMode === 'set' && !!folder;
+  if (els.folder) els.folder.textContent = isSetEntry ? folder : 'Global training status';
+  if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);
+  if (els.runSetup) els.runSetup.classList.toggle('hidden', !isSetEntry);
+  if (!isSetEntry) {
     trainingWorkspaceState.manifest = null;
     trainingWorkspaceState.configFiles = [];
     if (els.readiness) els.readiness.textContent = 'Select a set folder to prepare a dataset.';
@@ -1003,11 +1008,11 @@ function wireTrainingWorkspace() {
       setStatus('Training runner validation failed: ' + String(err && err.message ? err.message : err));
     });
   };
-  runInAppBtn.onclick = function () {
-    startManagedTraining(false);
+  if (runInAppBtn) runInAppBtn.onclick = function () {
+    startManagedTraining();
   };
   queueJobBtn.onclick = function () {
-    startManagedTraining(true);
+    startManagedTraining();
   };
   copyCommandBtn.onclick = function () {
     var command = String(state.trainingCommand || '');

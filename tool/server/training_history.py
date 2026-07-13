@@ -97,8 +97,8 @@ def record_job(folder_path, job):
     runs = discover_runs(folder_path)
     record_fields = (
         "id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage",
-        "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "exitCode", "parentJobId",
-        "outputRoot",
+        "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "parentJobId",
+        "outputRoot", "progress",
     )
     record = {field: job.get(field) for field in record_fields if field in job}
     record["runDirectories"] = runs

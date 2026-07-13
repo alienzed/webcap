@@ -36,6 +36,7 @@ _history_signatures = {}
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _LOG_EPOCH_PATTERN = re.compile(r"Started new epoch:\s*(\d+)", re.IGNORECASE)
 _LOG_STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
+_LOG_ITER_TIME_PATTERN = re.compile(r"\biter time \(s\):\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
 
 
 def _runtime_root():
@@ -301,6 +302,27 @@ def _build_preflight(folder):
     return folder_value, folder_path, artifacts, settings, checks
 
 
+def _build_launch_preflight(folder):
+    folder_value, folder_path = _resolve_folder(folder)
+    artifacts, missing = _resolve_artifacts(folder_value, folder_path)
+    settings = _training_settings()
+    shell_available = bool(shutil.which("bash")) if _uses_native_wsl_shell() else bool(_wsl_executable())
+    checks = [
+        _make_check("set_folder_exists", "blocker", True, "Set folder is available.", str(folder_path)),
+        _make_check("training_artifacts", "blocker", not missing,
+                    "Training artifacts are available." if not missing else "Missing: " + ", ".join(missing)),
+        _make_check("wsl_available", "blocker", shell_available,
+                    "Current WSL shell is available." if _uses_native_wsl_shell() and shell_available else
+                    "WSL is available." if shell_available else "wsl.exe was not found on PATH."),
+        _make_check("training_cwd", "blocker", bool(settings["cwd"]),
+                    "Diffusion Pipe WSL path is configured." if settings["cwd"] else "Set training.diffusion_pipe_wsl in App Settings."),
+    ]
+    if has_conda_runtime(settings) and not has_complete_conda_runtime(settings):
+        checks.append(_make_check("conda_runtime", "blocker", False,
+                                  "Conda runtime needs both the executable path and environment name."))
+    return folder_value, folder_path, artifacts, settings, checks
+
+
 def _preflight_payload(folder):
     folder_value, folder_path, artifacts, settings, checks = _build_preflight(folder)
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
@@ -390,10 +412,10 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         "echo $$ > \"$PID_FILE\"",
         "write_result() { printf '{\\\"status\\\":\\\"%s\\\",\\\"exitCode\\\":%s,\\\"finishedAt\\\":%s}\\n' \"$1\" \"$2\" \"$(date +%s)\" > \"$RESULT_FILE\"; }",
         "trap 'echo [webcap] stopped; write_result stopped 130; exit 130' INT TERM",
-        "cd " + shlex.quote(settings["cwd"]),
+        "cd " + shlex.quote(settings["cwd"]) + " || { echo '[webcap] training working directory is unavailable'; write_result failed 1; exit 1; }",
     ]
     if settings["activate"] and not has_conda_runtime(settings):
-        lines.append("source " + shlex.quote(settings["activate"]))
+        lines.append("source " + shlex.quote(settings["activate"]) + " || { echo '[webcap] training activation failed'; write_result failed 1; exit 1; }")
     if stages in ("hi", "both"):
         lines.extend([
             "echo '[webcap] stage=hi'",
@@ -425,7 +447,7 @@ def _write_runner_script(job, settings, artifacts):
 
 
 def _launch_job(job, folder_path):
-    _, _, artifacts, settings, checks = _build_preflight(job["folder"])
+    _, _, artifacts, settings, checks = _build_launch_preflight(job["folder"])
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     job["preflight"] = {"checks": checks, "blockers": len(blockers)}
     if blockers:
@@ -507,6 +529,7 @@ def _sync_job_progress(job, log_text):
     previous_epoch = previous.get("epoch") if previous.get("stage") == stage else None
     epoch_matches = _LOG_EPOCH_PATTERN.findall(log_text or "")
     step_matches = _LOG_STEP_PATTERN.findall(log_text or "")
+    iter_time_matches = _LOG_ITER_TIME_PATTERN.findall(log_text or "")
     epoch = int(epoch_matches[-1]) if epoch_matches else previous_epoch
     step = int(step_matches[-1]) if step_matches else previous.get("step")
     plan = job.get("progressPlan") if isinstance(job.get("progressPlan"), dict) else {}
@@ -543,12 +566,29 @@ def _sync_job_progress(job, log_text):
     if use_steps:
         progress["plannedSteps"] = planned_steps
         progress["source"] = "steps"
+        if iter_time_matches:
+            seconds_per_step = float(iter_time_matches[-1])
+            if seconds_per_step > 0:
+                progress["etaSeconds"] = round(max(0, planned_steps - step) * seconds_per_step)
     job["progress"] = progress
 
 
 def _job_wsl_distribution(job):
     runtime = job.get("runtime") if isinstance(job.get("runtime"), dict) else {}
     return str(runtime.get("wslDistribution") or _training_settings()["wslDistribution"] or "").strip()
+
+
+def _annotate_completed_job(job):
+    if job.get("status") != "completed":
+        return
+    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    step = int(progress.get("step") or 0)
+    planned_steps = int(progress.get("plannedSteps") or 0)
+    if planned_steps and step < planned_steps * 0.9:
+        job["completionNote"] = (
+            "Finished at step " + format(step, ",") + " of ~" + format(planned_steps, ",")
+            + " planned steps. Review output; the run ended below the planned estimate."
+        )
 
 
 def _pid_alive(pid, distribution=""):
@@ -569,6 +609,7 @@ def _refresh_job(job):
         job["exitCode"] = int(result.get("exitCode") or 0)
         job["finishedAt"] = float(result.get("finishedAt") or time.time())
         job["updatedAt"] = time.time()
+        _annotate_completed_job(job)
         return
     if not _pid_alive(job.get("pid"), _job_wsl_distribution(job)):
         job["status"] = "failed"
@@ -579,6 +620,7 @@ def _refresh_job(job):
     log_path = Path(job.get("logPath") or "")
     if log_path.exists():
         try:
+            job["lastLogAt"] = log_path.stat().st_mtime
             tail = _read_log_tail(log_path)
             if "[webcap] stage=lo" in tail:
                 job["stage"] = "lo"
@@ -609,6 +651,9 @@ def _start_next(state):
 
 
 def _refresh_state(state):
+    for job in state.get("jobs", []):
+        if job.get("status") == "queued" and not job.get("progressPlan"):
+            job["progressPlan"] = _default_progress_plan()
     active_id = str(state.get("activeJobId") or "")
     active = _find_job(state, active_id) if active_id else None
     if active:
@@ -642,7 +687,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress")
+    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -729,9 +774,14 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}, 400
-    preflight, status = validate_response(folder, stages, resume_from_checkpoint, resume_stage)
-    if status != 200 or not preflight.get("ok"):
-        return {"ok": False, "error": "Preflight failed.", "preflight": preflight}, 400
+    try:
+        _, _, _, _, checks = _build_launch_preflight(folder)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}, 400
+    blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
+    preflight = {"checks": checks, "summary": {"blockers": len(blockers), "warnings": 0}}
+    if blockers:
+        return {"ok": False, "error": "Launch checks failed.", "preflight": preflight}, 400
     with _lock:
         _ensure_monitor_started()
         state = _read_state()

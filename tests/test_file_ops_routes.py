@@ -396,6 +396,24 @@ def test_fs_describe_does_not_auto_create_config_files(tmp_path, monkeypatch):
     assert not (set_dir / "dataset.lo.toml").exists()
 
 
+def test_fs_describe_hides_internal_training_runner_directory(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_training"
+    set_dir.mkdir(parents=True)
+    (set_dir / ".webcap_training").mkdir()
+    (set_dir / "visible_folder").mkdir()
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    response = app_module.app.test_client().get("/fs/describe?path=set_training")
+
+    assert response.status_code == 200
+    names = [entry["name"] for entry in response.get_json()["folders"]]
+    assert ".webcap_training" not in names
+    assert "visible_folder" in names
+
+
 def test_fs_describe_repairs_current_directory_on_permission_error(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_e"

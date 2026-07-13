@@ -29,6 +29,7 @@ def test_runner_script_uses_conda_run_without_sourcing_an_activation_script(tmp_
 
     assert "source /home/user/project/.venv/bin/activate" not in script
     assert "/home/user/miniconda3/bin/conda run --no-capture-output --name dp-clean deepspeed" in script
+    assert "training working directory is unavailable" in script
 
 
 def test_wsl_path_conversion_keeps_existing_wsl_paths(monkeypatch):
@@ -132,7 +133,7 @@ def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_pa
         },
     }
 
-    training_runner._sync_job_progress(job, "[INFO] [Rank 0] step=9700, skipped=0\n")
+    training_runner._sync_job_progress(job, "[INFO] [Rank 0] step=9700, skipped=0, iter time (s): 3.0\n")
 
     assert job["progress"] == {
         "stage": "lo",
@@ -144,4 +145,17 @@ def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_pa
         "estimated": True,
         "plannedSteps": 20000,
         "source": "steps",
+        "etaSeconds": 30900,
     }
+
+
+def test_completed_job_flags_a_result_far_below_the_planned_steps():
+    job = {
+        "status": "completed",
+        "progress": {"step": 1650, "plannedSteps": 20000},
+    }
+
+    training_runner._annotate_completed_job(job)
+
+    assert "step 1,650" in job["completionNote"]
+    assert "~20,000 planned steps" in job["completionNote"]

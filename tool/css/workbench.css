@@ -225,6 +225,65 @@
   padding: 12px;
 }
 
+.app.shell-revamp .training-set-context,
+.app.shell-revamp .training-history-card,
+.app.shell-revamp .training-tensorboard-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.app.shell-revamp .training-context-heading,
+.app.shell-revamp .training-set-artifacts-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app.shell-revamp .training-context-subtitle {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.app.shell-revamp .training-set-context .training-readiness {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.app.shell-revamp .training-set-context .training-readiness-metrics {
+  margin-top: 0;
+  justify-content: flex-end;
+}
+
+.app.shell-revamp .training-set-context .training-workspace-actions .training-btn {
+  flex: 0 0 auto;
+}
+
+.app.shell-revamp .training-set-artifacts {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.app.shell-revamp .training-global-context {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 2px solid var(--border);
+}
+
 .app.shell-revamp .training-readiness-state,
 .app.shell-revamp .training-readiness-metrics {
   display: flex;
@@ -414,7 +473,7 @@
 
 .app.shell-revamp.workspace-surface-training .training-runner-queue {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
   margin-top: 0;
 }
@@ -460,7 +519,234 @@
   gap: 7px;
 }
 
+/* Training is a workflow first, then a shared operations surface. */
+.app.shell-revamp .training-navigator {
+  gap: 18px;
+  padding: 14px;
+}
+
+.app.shell-revamp .training-navigator-header {
+  align-items: center;
+}
+
+.app.shell-revamp .training-navigator-title {
+  white-space: nowrap;
+}
+
+.app.shell-revamp .training-back-btn {
+  flex: 0 0 auto;
+  width: auto !important;
+  min-height: 28px;
+  padding: 4px 8px;
+}
+
+.app.shell-revamp .training-set-only.hidden {
+  display: none !important;
+}
+
+.app.shell-revamp .training-set-workflow {
+  display: grid;
+  gap: 8px;
+}
+
+.app.shell-revamp .training-workflow-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.app.shell-revamp .training-workflow-step-number {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.app.shell-revamp .training-workflow-step-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.app.shell-revamp .training-workflow-step .training-readiness {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.app.shell-revamp .training-workflow-step .training-readiness-state {
+  display: block;
+}
+
+.app.shell-revamp .training-workflow-step .training-readiness-state strong {
+  display: none;
+}
+
+.app.shell-revamp .training-workflow-step .training-readiness-metrics {
+  justify-content: flex-start;
+  margin-top: 3px;
+}
+
+.app.shell-revamp .training-workflow-action {
+  min-width: 150px;
+  min-height: 34px;
+  border-color: var(--accent-dark);
+  background: var(--accent);
+  color: #1f2937;
+}
+
+.app.shell-revamp .training-workflow-action:hover,
+.app.shell-revamp .training-launch-btn:hover {
+  background: var(--accent-dark);
+  color: #fff;
+}
+
+.app.shell-revamp .training-config-list {
+  color: var(--muted);
+}
+
+.app.shell-revamp .training-config-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+}
+
+.app.shell-revamp .training-config-link {
+  width: auto;
+  padding: 0;
+  color: var(--accent);
+}
+
+.app.shell-revamp .training-run-setup {
+  gap: 12px;
+  margin-top: 0;
+  padding: 14px;
+  border-radius: 10px;
+}
+
+.app.shell-revamp .training-run-setup-actions {
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.app.shell-revamp .training-launch-btn {
+  min-width: 150px;
+  min-height: 34px;
+  border-color: var(--accent-dark);
+  background: var(--accent);
+  color: #1f2937;
+}
+
+.app.shell-revamp .training-queue-btn {
+  min-width: 120px;
+  min-height: 34px;
+}
+
+.app.shell-revamp .training-run-details {
+  border-top: 1px solid var(--border);
+  padding-top: 9px;
+}
+
+.app.shell-revamp .training-run-details summary {
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.app.shell-revamp .training-run-details-body {
+  display: grid;
+  gap: 8px;
+  padding-top: 9px;
+}
+
+.app.shell-revamp .training-command-actions {
+  align-items: center;
+}
+
+.app.shell-revamp .training-global-context {
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 2px solid var(--accent-dark);
+}
+
+.app.shell-revamp .training-global-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app.shell-revamp .training-global-secondary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.5fr);
+  gap: 10px;
+}
+
+.app.shell-revamp .training-global-secondary .training-history-card,
+.app.shell-revamp .training-global-secondary .training-tensorboard-card {
+  margin-top: 0;
+}
+
+.app.shell-revamp .training-runner-folder,
+.app.shell-revamp .training-runner-queue-folder,
+.app.shell-revamp .training-history-folder {
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.app.shell-revamp .training-runner-folder:hover,
+.app.shell-revamp .training-runner-queue-folder:hover,
+.app.shell-revamp .training-history-folder:hover {
+  color: var(--text);
+}
+
 @container (max-width: 720px) {
+  .app.shell-revamp .training-workflow-step {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .app.shell-revamp .training-workflow-action {
+    grid-column: 2;
+    width: 100%;
+  }
+
+  .app.shell-revamp .training-global-secondary {
+    grid-template-columns: 1fr;
+  }
+
+  .app.shell-revamp .training-set-context .training-readiness {
+    grid-template-columns: 1fr;
+  }
+
+  .app.shell-revamp .training-set-context .training-readiness-metrics {
+    justify-content: flex-start;
+  }
+
   .app.shell-revamp.workspace-surface-training .training-runner-actions {
     justify-content: flex-start;
   }

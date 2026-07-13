@@ -567,6 +567,8 @@ def _build_fs_describe_payload(dir_path):
 
     entries = []
     for entry in sorted(dir_path.iterdir(), key=lambda e: e.name.lower()):
+        if entry.is_dir() and entry.name == ".webcap_training":
+            continue
         if entry.is_file() and is_transient_media_name(entry.name):
             continue
         meta = {

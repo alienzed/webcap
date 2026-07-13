@@ -1981,6 +1981,10 @@ iframe {
   color: #c75a5a;
 }
 
+.workspace-surface-training .training-runner-detail.is-warning {
+  color: #cc7a3f;
+}
+
 .workspace-surface-training .training-runner-actions {
   display: flex;
   flex-wrap: wrap;

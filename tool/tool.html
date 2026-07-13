@@ -632,17 +632,29 @@
                                 <div class="training-navigator-title">Training</div>
                                 <div id="training-navigator-folder" class="training-navigator-subtitle">No folder selected</div>
                             </div>
-                            <button id="training-workspace-back-btn" type="button" class="review-captions-btn">Back</button>
+                            <button id="training-workspace-back-btn" type="button" class="review-captions-btn training-back-btn">Back</button>
                         </div>
-                        <div id="training-readiness" class="training-readiness">Loading training readiness...</div>
-                        <div class="training-workspace-actions">
-                            <button id="training-workspace-prepare-btn" type="button" class="training-btn training-prepare-btn">Prepare Dataset</button>
-                            <button id="training-workspace-generate-btn" type="button" class="training-btn">Generate</button>
-                        </div>
-                        <section class="training-run-setup" aria-label="Training run setup">
+                        <section id="training-set-workflow" class="training-set-workflow training-set-only" aria-label="Prepare this training set">
+                            <div class="training-workflow-step">
+                                <div class="training-workflow-step-number">1</div>
+                                <div class="training-workflow-step-copy">
+                                    <div class="training-workspace-section-title">Dataset</div>
+                                    <div id="training-readiness" class="training-readiness">Loading training readiness...</div>
+                                </div>
+                                <button id="training-workspace-prepare-btn" type="button" class="training-btn training-workflow-action">Prepare Dataset</button>
+                            </div>
+                            <div class="training-workflow-step">
+                                <div class="training-workflow-step-number">2</div>
+                                <div class="training-workflow-step-copy">
+                                    <div class="training-workspace-section-title">Configuration Files</div>
+                                    <div id="training-workspace-config-list" class="training-config-list">Generate configs to inspect and edit them here.</div>
+                                </div>
+                                <button id="training-workspace-generate-btn" type="button" class="training-btn training-workflow-action">Generate Configs</button>
+                            </div>
+                        </section>
+                        <section id="training-run-setup" class="training-run-setup training-set-only" aria-label="Training run setup">
                             <div class="training-run-setup-header">
-                                <div class="training-workspace-section-title">Run Setup</div>
-                                <div class="training-run-setup-subtitle">Choose the stage and optional checkpoint before running.</div>
+                                <div class="training-workspace-section-title">Run Training</div>
                             </div>
                             <div class="training-run-setup-fields">
                                 <div class="training-run-option">
@@ -672,53 +684,53 @@
                                 </label>
                             </div>
                             <div class="training-run-setup-actions">
-                                <button id="training-preview-command-btn" type="button" class="review-captions-btn">Preview</button>
-                                <button id="training-validate-runner-btn" type="button" class="review-captions-btn">Validate</button>
-                                <span class="training-run-setup-spacer"></span>
-                                <button id="training-run-in-app-btn" type="button" class="training-btn">Run</button>
-                                <button id="training-queue-job-btn" type="button" class="review-captions-btn">Queue</button>
+                                <button id="training-run-in-app-btn" type="button" class="training-btn training-launch-btn" title="Start this training job now.">Start Training</button>
+                                <button id="training-queue-job-btn" type="button" class="review-captions-btn training-queue-btn" title="Add this training job behind any work already running or queued.">Add to Queue</button>
                             </div>
-                        </section>
-                        <section class="training-runner-card" aria-label="Managed training runner">
-                            <div class="training-workspace-section-title">Managed Runner</div>
-                            <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
-                            <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued training jobs"></div>
-                            <div id="training-runner-actions" class="training-runner-actions hidden">
-                                <button id="training-runner-stop-btn" type="button" class="training-btn">Stop</button>
-                                <button id="training-runner-pause-btn" type="button" class="review-captions-btn">Pause</button>
-                                <button id="training-runner-resume-queue-btn" type="button" class="training-btn hidden">Resume Queue</button>
-                                <button id="training-runner-cancel-btn" type="button" class="review-captions-btn hidden">Cancel Queued</button>
-                                <button id="training-runner-console-btn" type="button" class="review-captions-btn">View Output</button>
-                            </div>
-                            <div id="training-runner-preflight" class="training-runner-preflight hidden"></div>
-                        </section>
-                        <div class="training-operations-context">
-                            <section class="training-history-card" aria-label="Training history">
-                                <div class="training-workspace-section-title">Set History</div>
-                                <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>
-                                <div id="training-history-list" class="training-history-list"></div>
-                            </section>
-                            <section class="training-tensorboard-card" aria-label="TensorBoard">
-                                <div class="training-workspace-section-title">TensorBoard</div>
-                                <div id="training-tensorboard-summary" class="training-tensorboard-summary">Checking TensorBoard...</div>
-                                <div id="training-tensorboard-actions" class="training-runner-actions">
-                                    <button id="training-tensorboard-start-btn" type="button" class="training-btn">Start TensorBoard</button>
-                                    <button id="training-tensorboard-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
-                                    <a id="training-tensorboard-open-link" class="review-captions-btn hidden" target="_blank" rel="noopener">Open TensorBoard</a>
+                            <details class="training-run-details">
+                                <summary>Command and diagnostics</summary>
+                                <div class="training-run-details-body">
+                                    <div id="training-command-status" class="training-command-status">Start or queue a job to generate the command.</div>
+                                    <pre id="training-command-text" class="training-command-text hidden"></pre>
+                                    <div class="training-command-actions">
+                                        <button id="training-preview-command-btn" type="button" class="review-captions-btn" title="Generate the command without starting or queuing training.">Review Command</button>
+                                        <button id="training-validate-runner-btn" type="button" class="review-captions-btn" title="Run the full environment diagnostic. This is not required for normal launches.">Run Diagnostics</button>
+                                        <button id="training-copy-command-btn" type="button" class="training-btn hidden">Copy Command</button>
+                                        <button id="training-console-btn" type="button" class="review-captions-btn" title="Show the selected training job's output.">View Output</button>
+                                    </div>
                                 </div>
-                            </section>
-                        </div>
-                        <section class="training-workspace-section" aria-label="Training config files">
-                            <div class="training-workspace-section-title">Config Files</div>
-                            <div id="training-workspace-config-list" class="training-config-list">No config files.</div>
+                            </details>
                         </section>
-                        <section class="training-command-card" aria-label="Training command">
-                            <div class="training-workspace-section-title">Training Command</div>
-                            <div id="training-command-status" class="training-command-status">Run Train to generate and copy the command.</div>
-                            <pre id="training-command-text" class="training-command-text hidden"></pre>
-                            <div class="training-command-actions">
-                                <button id="training-copy-command-btn" type="button" class="training-btn hidden">Copy Command</button>
-                                <button id="training-console-btn" type="button" class="review-captions-btn">Console</button>
+                        <section class="training-global-context" aria-label="Global training services">
+                            <div class="training-global-label">Shared across all sets</div>
+                            <section class="training-runner-card" aria-label="Training queue">
+                                <div class="training-workspace-section-title">Training Queue</div>
+                                <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
+                                <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued training jobs"></div>
+                                <div id="training-runner-actions" class="training-runner-actions hidden">
+                                    <button id="training-runner-stop-btn" type="button" class="training-btn">Stop</button>
+                                    <button id="training-runner-pause-btn" type="button" class="review-captions-btn">Pause</button>
+                                    <button id="training-runner-resume-queue-btn" type="button" class="training-btn hidden">Resume Queue</button>
+                                    <button id="training-runner-cancel-btn" type="button" class="review-captions-btn hidden">Cancel Queued</button>
+                                    <button id="training-runner-console-btn" type="button" class="review-captions-btn">View Output</button>
+                                </div>
+                                <div id="training-runner-preflight" class="training-runner-preflight hidden"></div>
+                            </section>
+                            <div class="training-global-secondary">
+                                <section class="training-history-card" aria-label="Recent training activity">
+                                    <div class="training-workspace-section-title">Recent Training Activity</div>
+                                    <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>
+                                    <div id="training-history-list" class="training-history-list"></div>
+                                </section>
+                                <section class="training-tensorboard-card" aria-label="TensorBoard">
+                                    <div class="training-workspace-section-title">TensorBoard</div>
+                                    <div id="training-tensorboard-summary" class="training-tensorboard-summary">Checking TensorBoard...</div>
+                                    <div id="training-tensorboard-actions" class="training-runner-actions">
+                                        <button id="training-tensorboard-start-btn" type="button" class="training-btn">Start TensorBoard</button>
+                                        <button id="training-tensorboard-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
+                                        <a id="training-tensorboard-open-link" class="review-captions-btn hidden" target="_blank" rel="noopener">Open TensorBoard</a>
+                                    </div>
+                                </section>
                             </div>
                         </section>
                     </section>

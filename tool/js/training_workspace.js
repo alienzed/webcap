@@ -16,16 +16,6 @@ var trainingWorkspaceState = {
   tensorboard: null
 };
 
-function classifyTrainingConfigFile(fileName) {
-  var lower = String(fileName || '').toLowerCase();
-  if (/(^|[._-])hi([._-]|$)/.test(lower)) return 'hi';
-  if (/(^|[._-])lo([._-]|$)/.test(lower)) return 'lo';
-  var hasHi = lower.indexOf('hi') !== -1;
-  var hasLo = lower.indexOf('lo') !== -1;
-  if (hasHi && !hasLo) return 'hi';
-  return 'lo';
-}
-
 function isTrainingWorkspaceActive() {
   return normalizeWorkspaceSurface(workspaceState.surface) === 'training';
 }
@@ -34,6 +24,8 @@ function getTrainingWorkspaceEls() {
   return {
     navigator: document.getElementById('training-navigator'),
     folder: document.getElementById('training-navigator-folder'),
+    setWorkflow: document.getElementById('training-set-workflow'),
+    runSetup: document.getElementById('training-run-setup'),
     readiness: document.getElementById('training-readiness'),
     configList: document.getElementById('training-workspace-config-list'),
     commandStatus: document.getElementById('training-command-status'),
@@ -91,9 +83,25 @@ function formatTrainingRunnerElapsed(job) {
   var started = Number(job && job.startedAt || 0);
   if (!started) return '';
   var seconds = Math.max(0, Math.floor(Date.now() / 1000 - started));
+  return formatTrainingRunnerDuration(seconds);
+}
+
+function formatTrainingRunnerDuration(seconds) {
+  seconds = Math.max(0, Math.floor(Number(seconds) || 0));
   var hours = Math.floor(seconds / 3600);
   var minutes = Math.floor((seconds % 3600) / 60);
   return hours ? hours + 'h ' + minutes + 'm' : minutes + 'm';
+}
+
+function trainingPlannedStepCount(job) {
+  var plan = job && job.progressPlan && typeof job.progressPlan === 'object' ? job.progressPlan : {};
+  var stages = String(job && job.stages || 'both');
+  var names = stages === 'both' ? ['hi', 'lo'] : [stages];
+  return names.reduce(function (total, name) {
+    var stage = plan[name] && typeof plan[name] === 'object' ? plan[name] : {};
+    var steps = Number(stage.estimatedSteps);
+    return total + (isFinite(steps) && steps > 0 ? steps : 0);
+  }, 0);
 }
 
 function buildTrainingRunnerProgressHtml(job) {
@@ -116,6 +124,10 @@ function buildTrainingRunnerProgressHtml(job) {
   var positionLabel = hasEpoch
     ? ' · epoch ' + Math.round(epoch) + ' / ' + Math.round(epochs) + stepLabel
     : stepLabel.trim();
+  var etaSeconds = Number(progress.etaSeconds);
+  if (isFinite(etaSeconds) && etaSeconds >= 60 && etaSeconds < 30 * 24 * 3600) {
+    positionLabel += ' · ~' + formatTrainingRunnerDuration(etaSeconds) + ' left';
+  }
   return '<div class="training-runner-progress" aria-label="Estimated training progress">' +
     '<div class="training-runner-progress-copy"><span>' + escapeHtml(String(progress.stage || '').toUpperCase()) +
       positionLabel + '</span>' +
@@ -170,13 +182,15 @@ function renderTrainingRunner() {
       els.runnerQueue.innerHTML = '<div class="training-runner-queue-title">Queue (' + queuedJobs.length + ')</div>' +
         queuedJobs.map(function (queuedJob, index) {
           var stage = trainingStageLabel(queuedJob.stages || 'both');
+          var plannedSteps = trainingPlannedStepCount(queuedJob);
+          var workload = plannedSteps ? ' · ~' + Math.round(plannedSteps).toLocaleString() + ' planned steps' : '';
           var resume = queuedJob.resumeFromCheckpoint
             ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(String(queuedJob.resumeStage || queuedJob.stages || '').toUpperCase()) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
             : '';
           var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
           return '<div class="training-runner-queue-item' + (selected ? ' active' : '') + '" data-training-queue-job="' + escapeHtml(queuedJob.id) + '">' +
-            '<div><strong>' + (index + 1) + '.</strong> ' + escapeHtml(stage) + '</div>' +
-            '<div class="training-runner-queue-folder">' + escapeHtml(queuedJob.folder || '') + '</div>' +
+            '<div><strong>' + (index + 1) + '.</strong> ' + escapeHtml(stage + workload) + '</div>' +
+            '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
             resume +
             '<div class="training-runner-queue-controls">' +
               '<button type="button" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === 0 ? ' disabled' : '') + '>Up</button>' +
@@ -204,16 +218,23 @@ function renderTrainingRunner() {
   var status = String(job.status || 'unknown');
   var executionStage = String(job.stage || '');
   var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+  var running = status === 'running' || status === 'stopping';
+  var lastLogAt = Number(job.lastLogAt || 0);
+  var quietSeconds = lastLogAt ? Math.max(0, Math.floor(Date.now() / 1000 - lastLogAt)) : 0;
+  var quietNote = running && quietSeconds >= 120
+    ? '<div class="training-runner-detail is-warning">Runner process is alive, but no output for ' + escapeHtml(formatTrainingRunnerDuration(quietSeconds)) + '. GPU activity may be idle; view output to investigate.</div>'
+    : '';
   els.runnerSummary.innerHTML = '<div class="training-runner-state">' +
     '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span>' +
     '<span>' + escapeHtml(trainingStageLabel(job.stages || 'both')) + (executionStage && executionStage !== status ? ' · ' + escapeHtml(executionStage.toUpperCase()) : '') + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span></div>' +
-    '<div class="training-runner-folder">' + escapeHtml(job.folder || '') + '</div>' +
+    '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
     (queuedCount ? '<div class="training-runner-detail">' + queuedCount + ' queued job' + (queuedCount === 1 ? '' : 's') + '.</div>' : '') +
     (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
+    (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
+    quietNote +
     (trainingWorkspaceState.runnerQueuePaused ? '<div class="training-runner-detail">' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '</div>' : '') +
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
-  var running = status === 'running' || status === 'stopping';
   var queued = status === 'queued';
   if (els.runnerStopBtn) els.runnerStopBtn.classList.toggle('hidden', !running);
   if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !running);
@@ -234,25 +255,33 @@ function renderTrainingHistory() {
   var els = getTrainingWorkspaceEls();
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
   var history = trainingWorkspaceState.history || {};
-  var jobs = Array.isArray(history.jobs) ? history.jobs : [];
+  var jobs = (trainingWorkspaceState.runnerJobs || []).filter(function (job) {
+    return job.status === 'completed' || job.status === 'failed' || job.status === 'stopped';
+  }).slice().sort(function (a, b) {
+    return Number(b.finishedAt || b.startedAt || b.createdAt || 0) - Number(a.finishedAt || a.startedAt || a.createdAt || 0);
+  });
   var runs = Array.isArray(history.runs) ? history.runs : [];
-  var latest = jobs.length ? jobs[jobs.length - 1] : null;
+  var latest = jobs.length ? jobs[0] : null;
   els.historySummary.innerHTML = latest
     ? '<strong>' + escapeHtml(String(latest.status || 'unknown').replace(/^./, function (c) { return c.toUpperCase(); })) + '</strong>' +
       ' · ' + escapeHtml(trainingStageLabel(latest.stages || 'both')) +
       (latest.finishedAt || latest.startedAt ? ' · ' + escapeHtml(formatTrainingHistoryTime(latest.finishedAt || latest.startedAt)) : '')
-    : 'No managed training runs yet.';
-  els.historyList.innerHTML = jobs.slice().reverse().slice(0, 8).map(function (job) {
-    var run = Array.isArray(job.runDirectories) && job.runDirectories.length ? job.runDirectories[0] : null;
-    var output = run ? run.path : '';
-    var resumable = !!(run && run.checkpointAvailable);
+    : 'No completed, stopped, or failed training runs yet.';
+  els.historyList.innerHTML = jobs.slice(0, 8).map(function (job) {
+    var progress = job.progress && typeof job.progress === 'object' ? job.progress : {};
+    var finalStep = Number(progress.step);
+    var elapsedSeconds = Number(job.finishedAt || 0) - Number(job.startedAt || 0);
+    var details = [];
+    if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
+    if (elapsedSeconds > 0) details.push(formatTrainingRunnerDuration(elapsedSeconds));
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div><strong>' + escapeHtml(String(job.status || 'unknown')) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</div>' +
       '<div>' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</div>' +
-      (output ? '<div class="training-history-path">' + escapeHtml(output) + '</div>' : '') +
+      '<button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
+      (details.length ? '<div>' + escapeHtml(details.join(' · ')) + '</div>' : '') +
+      (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
       '<div class="training-history-actions">' +
-        '<button type="button" data-training-history-log="' + escapeHtml(job.id || '') + '">Output</button>' +
-        (resumable ? '<button type="button" data-training-history-resume="' + escapeHtml(output) + '">Use checkpoint</button>' : '') +
+      '<button type="button" data-training-history-log="' + escapeHtml(job.id || '') + '">Output</button>' +
       '</div></div>';
   }).join('');
   els.checkpointSelect.innerHTML = '<option value="">Start a new run</option>' + runs.map(function (run) {
@@ -338,9 +367,10 @@ function refreshTrainingRunnerStatus() {
       trainingWorkspaceState.runnerQueuePaused = !!payload.queuePaused;
       trainingWorkspaceState.runnerQueuePauseReason = String(payload.queuePauseReason || '');
       renderTrainingRunner();
+      renderTrainingHistory();
       refreshTrainingHistory();
       var selected = getTrainingRunnerSelectedJob();
-      if (isConsolePanelVisible() && selected && (selected.status === 'running' || selected.status === 'stopping')) {
+      if (isConsolePanelVisible() && selected && selected.status !== 'queued') {
         fetchTrainingRunnerLog(selected);
       }
     })
@@ -421,11 +451,8 @@ function startManagedTraining(queue) {
   }
   var options = getManagedTrainingOptions();
   ensureGeneratedTrainingArtifactsForCurrentFolder()
-    .then(function () { return validateTrainingRunner(options); })
-    .then(function (preflight) {
-      if (!preflight.ok) return null;
-      var verb = queue ? 'queue this ' + trainingStageLabel(options.stages) + ' training job' : 'start this ' + trainingStageLabel(options.stages) + ' training job';
-      if (!window.confirm('Runner validation passed. Continue and ' + verb + '?')) return null;
+    .then(function () {
+      setStatus(queue ? 'Queueing training job...' : 'Starting training job...');
       return trainingRunnerRequest('/fs/training_runner/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -675,14 +702,6 @@ function renderTrainingItemOverview(manifest, errorMessage) {
   els.itemOverview.appendChild(grid);
 }
 
-function buildTrainingWorkspaceConfigColumn(title, files) {
-  var buttons = files.map(function (fileName) {
-    var active = !!(state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName);
-    return '<button type="button" class="training-config-link' + (active ? ' active' : '') + '" data-training-config="' + encodeURIComponent(fileName) + '">' + escapeHtml(fileName) + '</button>';
-  }).join('');
-  return '<div class="training-config-col"><div class="training-config-col-title">' + title + '</div>' + (buttons || '<div class="training-config-empty">No files</div>') + '</div>';
-}
-
 function renderTrainingWorkspaceConfigList(files) {
   var els = getTrainingWorkspaceEls();
   if (!els.configList) return;
@@ -690,16 +709,10 @@ function renderTrainingWorkspaceConfigList(files) {
     els.configList.textContent = 'Generate configs to inspect and edit them here.';
     return;
   }
-  var hiFiles = [];
-  var loFiles = [];
-  files.forEach(function (fileName) {
-    if (classifyTrainingConfigFile(fileName) === 'hi') hiFiles.push(fileName);
-    else loFiles.push(fileName);
-  });
-  els.configList.innerHTML = '<div class="training-config-grid">' +
-    buildTrainingWorkspaceConfigColumn('High Noise', hiFiles) +
-    buildTrainingWorkspaceConfigColumn('Low Noise', loFiles) +
-    '</div>';
+  els.configList.innerHTML = '<div class="training-config-links">' + files.map(function (fileName) {
+    var active = !!(state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName);
+    return '<button type="button" class="training-config-link' + (active ? ' active' : '') + '" data-training-config="' + encodeURIComponent(fileName) + '">' + escapeHtml(fileName) + '</button>';
+  }).join('') + '</div>';
   Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-config]'), function (button) {
     button.onclick = function () {
       loadConfigFileToEditor(decodeURIComponent(button.getAttribute('data-training-config') || ''), {
@@ -745,6 +758,8 @@ function refreshTrainingWorkspace() {
   var els = getTrainingWorkspaceEls();
   var folder = String(state.folder || '').trim();
   if (els.folder) els.folder.textContent = folder || 'No folder selected';
+  if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !folder);
+  if (els.runSetup) els.runSetup.classList.toggle('hidden', !folder);
   if (!folder) {
     trainingWorkspaceState.manifest = null;
     trainingWorkspaceState.configFiles = [];
@@ -754,6 +769,7 @@ function refreshTrainingWorkspace() {
     trainingWorkspaceState.history = null;
     renderTrainingHistory();
     renderTrainingCommandHandoff();
+    refreshTensorboardStatus();
     return;
   }
   if (els.readiness) els.readiness.textContent = 'Loading dataset readiness...';
@@ -791,6 +807,26 @@ function runTrainingWorkspaceAction(action, options) {
     .catch(function (err) {
       if (window.console && console.error) console.error('[Training workspace] ' + action + ' failed:', err);
     });
+}
+
+function openTrainingWorkspaceFolder(folder) {
+  var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
+  if (!targetFolder) throw new Error('Training job does not identify a set folder.');
+  if (!state.dirStack || !state.dirStack.length) {
+    setStatus('Select a library root before opening a training set.');
+    return;
+  }
+  if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+    clearFocusSet();
+  }
+  state.dirStack = [state.dirStack[0]].concat(targetFolder.split('/').filter(Boolean).map(function (name) {
+    return { name: name };
+  }));
+  state.folder = targetFolder;
+  state.currentItem = null;
+  clearEditorAndPreview();
+  clearCaptionFilterInputs();
+  refreshCurrentDirectory();
 }
 
 function wireTrainingWorkspace() {
@@ -870,6 +906,11 @@ function wireTrainingWorkspace() {
     fetchTrainingRunnerLog(getTrainingRunnerSelectedJob(), true);
   };
   runnerQueue.onclick = function (event) {
+    var folder = event.target.getAttribute('data-training-open-folder');
+    if (folder) {
+      openTrainingWorkspaceFolder(folder);
+      return;
+    }
     var action = event.target.getAttribute('data-training-queue-action');
     var jobId = event.target.getAttribute('data-training-job-id');
     if (action && jobId) {
@@ -889,6 +930,11 @@ function wireTrainingWorkspace() {
     }
   };
   historyList.onclick = function (event) {
+    var folder = event.target.getAttribute('data-training-open-folder');
+    if (folder) {
+      openTrainingWorkspaceFolder(folder);
+      return;
+    }
     var logId = event.target.getAttribute('data-training-history-log');
     if (logId) {
       trainingWorkspaceState.runnerSelectedJobId = logId;

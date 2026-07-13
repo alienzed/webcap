@@ -471,17 +471,100 @@
   min-height: calc(100vh - 240px);
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 20px;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.app.shell-revamp.workspace-surface-training .training-overview-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-overview-title {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.app.shell-revamp.workspace-surface-training .training-overview-summary {
+  color: rgba(15, 23, 42, 0.62);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-overview {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 10px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-tile {
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.1);
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-thumb img,
+.app.shell-revamp.workspace-surface-training .training-item-thumb video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 32px;
+  padding: 10px;
   color: rgba(15, 23, 42, 0.62);
+  font-size: 11px;
   text-align: center;
 }
 
-.app.shell-revamp.workspace-surface-training:not(.training-config-selected) .training-editor-empty strong {
-  color: #0f172a;
-  font-size: 16px;
+.app.shell-revamp.workspace-surface-training .training-item-badges {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: calc(100% - 10px);
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-badges span {
+  padding: 3px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .app.shell-revamp.workspace-surface-training:not(.training-config-selected) .editor-wrapper {
@@ -527,8 +610,22 @@ html[data-theme="dark"] .app.shell-revamp.workspace-surface-training:not(.traini
   color: rgba(226, 232, 240, 0.64);
 }
 
-html[data-theme="dark"] .app.shell-revamp.workspace-surface-training:not(.training-config-selected) .training-editor-empty strong {
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-training .training-overview-title {
   color: #f8fafc;
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-training .training-overview-summary,
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-training .training-item-fallback {
+  color: rgba(226, 232, 240, 0.64);
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-training .training-item-tile {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.54);
+}
+
+html[data-theme="dark"] .app.shell-revamp.workspace-surface-training .training-item-thumb {
+  background: rgba(2, 6, 23, 0.72);
 }
 
 html[data-theme="dark"] .training-readiness,

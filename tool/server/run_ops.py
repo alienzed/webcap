@@ -1,4 +1,3 @@
-import shlex
 import subprocess
 import traceback
 import queue
@@ -15,6 +14,7 @@ from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
 from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, ensure_training_config_files
+from .training_commands import build_training_command_plan
 
 
 class _QueueWriter:
@@ -259,15 +259,8 @@ def train_run_response(folder: str):
             diffusion_pipe_wsl = "<set training.diffusion_pipe_wsl>"
             warnings.append("[WARN] Missing training.diffusion_pipe_wsl in config.json; using placeholder cwd.")
 
-        cmd1 = (
-            'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" '
-            'deepspeed --num_gpus=1 train.py --deepspeed --config ' + shlex.quote(hi_wsl)
-        )
-        cmd2 = (
-            'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" '
-            'deepspeed --num_gpus=1 train.py --deepspeed --config ' + shlex.quote(lo_wsl)
-        )
-        handoff_cmd = cmd1 + " ; " + cmd2
+        command_plan = build_training_command_plan(hi_wsl, lo_wsl)
+        handoff_cmd = command_plan["handoffCommand"]
         hi_kill_pattern = re.escape(hi_name)
         hi_kill_cmd = "pkill -f '" + hi_kill_pattern + "'"
 

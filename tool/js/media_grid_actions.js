@@ -591,6 +591,11 @@ function mediaGridHandleKeydown(e) {
     return;
   }
   if (isEditableElement(document.activeElement)) return;
+  if (/^Arrow(?:Up|Down|Left|Right)$/.test(e.key) &&
+      document.activeElement && document.activeElement.classList.contains('media-grid-tile')) {
+    if (mediaGridMoveSingleSelectionByArrow(e.key)) e.preventDefault();
+    return;
+  }
   if (e.key === 'Escape') {
     e.preventDefault();
     mediaGridCloseActivePresentation();
@@ -633,4 +638,3 @@ function initMediaGrid() {
 }
 
 initMediaGrid();
-

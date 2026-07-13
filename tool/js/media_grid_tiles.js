@@ -229,6 +229,69 @@ function mediaGridHandleTileClick(itemKey, e) {
   mediaGridRenderSelectionState();
 }
 
+function mediaGridFindTileByKey(mediaKey) {
+  var canvas = mediaGridGetActiveCanvasEl();
+  if (!canvas) return null;
+  var tiles = canvas.querySelectorAll('.media-grid-tile[data-key]');
+  for (var i = 0; i < tiles.length; i++) {
+    if (tiles[i].getAttribute('data-key') === mediaKey) return tiles[i];
+  }
+  return null;
+}
+
+function mediaGridFindArrowTarget(currentTile, key) {
+  var canvas = mediaGridGetActiveCanvasEl();
+  if (!canvas || !currentTile) return null;
+  var current = currentTile.getBoundingClientRect();
+  var currentX = current.left + current.width / 2;
+  var currentY = current.top + current.height / 2;
+  var tiles = canvas.querySelectorAll('.media-grid-tile[data-key]');
+  var best = null;
+  var bestScore = Infinity;
+  for (var i = 0; i < tiles.length; i++) {
+    var tile = tiles[i];
+    if (tile === currentTile) continue;
+    var rect = tile.getBoundingClientRect();
+    var x = rect.left + rect.width / 2;
+    var y = rect.top + rect.height / 2;
+    var dx = x - currentX;
+    var dy = y - currentY;
+    var primary;
+    var secondary;
+    if (key === 'ArrowLeft' || key === 'ArrowRight') {
+      if ((key === 'ArrowLeft' && dx >= 0) || (key === 'ArrowRight' && dx <= 0)) continue;
+      if (Math.abs(dy) > current.height / 2) continue;
+      primary = Math.abs(dx);
+      secondary = Math.abs(dy);
+    } else {
+      if ((key === 'ArrowUp' && dy >= 0) || (key === 'ArrowDown' && dy <= 0)) continue;
+      primary = Math.abs(dy);
+      secondary = Math.abs(dx);
+    }
+    var score = primary * 10 + secondary;
+    if (score < bestScore) {
+      best = tile;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function mediaGridMoveSingleSelectionByArrow(key) {
+  if (mediaGridState.selectedKeys.size !== 1) return false;
+  var selectedKey = Array.from(mediaGridState.selectedKeys)[0];
+  var currentTile = mediaGridFindTileByKey(selectedKey);
+  var targetTile = mediaGridFindArrowTarget(currentTile, key);
+  if (!targetTile) return true;
+  var targetKey = targetTile.getAttribute('data-key');
+  mediaGridState.selectedKeys = new Set([targetKey]);
+  mediaGridState.lastSelectedKey = targetKey;
+  mediaGridClearContextTarget();
+  mediaGridRenderSelectionState();
+  targetTile.focus();
+  return true;
+}
+
 function mediaGridFindItemByKey(mediaKey) {
   var key = String(mediaKey || '').trim();
   if (!key) return null;

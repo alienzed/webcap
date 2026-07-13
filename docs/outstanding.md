@@ -38,6 +38,7 @@ Now, with the new training panel, the right side of the screen is empty. More an
 
 ## Backlog (Do Not Implement Yet)
 - Avoid treating the current focused-annotation wizard as the primary home for blind "apply to all" tagging; at most, a sticky/stamping mode would be a temporary bridge, not the final UX.
+- Add derived set workflow badges, separate from manual color flags: Prepared, Configured, Needs regenerate, and managed-run status (Queued, Training, Trained, Failed). Derive preparation/configuration from artifacts and managed-run status from persisted runner history; do not infer manually run training as completed.
 
 
 ## Nice to Haves (Out of Scope for Now)

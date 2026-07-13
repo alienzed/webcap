@@ -33,6 +33,8 @@ function getTrainingWorkspaceEls() {
     commandStatus: document.getElementById('training-command-status'),
     commandText: document.getElementById('training-command-text'),
     copyCommandBtn: document.getElementById('training-copy-command-btn'),
+    itemOverview: document.getElementById('training-item-overview'),
+    itemOverviewSummary: document.getElementById('training-item-overview-summary'),
     runnerSummary: document.getElementById('training-runner-summary'),
     runnerActions: document.getElementById('training-runner-actions'),
     runnerStopBtn: document.getElementById('training-runner-stop-btn'),
@@ -307,6 +309,106 @@ function buildTrainingReadinessHtml(manifest, configFiles) {
     '</div>';
 }
 
+function getTrainingManifestItems(manifest) {
+  if (!manifest || typeof manifest !== 'object') return [];
+  var items = [];
+  ['images', 'videos'].forEach(function (kind) {
+    var rows = Array.isArray(manifest[kind]) ? manifest[kind] : [];
+    rows.forEach(function (row) {
+      var fileName = String(row && row.file || '').trim();
+      if (!fileName) return;
+      items.push({
+        fileName: fileName,
+        kind: kind === 'videos' ? 'video' : 'image',
+        aspect: String(row.ar || '').trim()
+      });
+    });
+  });
+  return items;
+}
+
+function renderTrainingItemOverview(manifest, errorMessage) {
+  var els = getTrainingWorkspaceEls();
+  if (!els.itemOverview || !els.itemOverviewSummary) return;
+  els.itemOverview.replaceChildren();
+
+  if (errorMessage) {
+    els.itemOverviewSummary.textContent = errorMessage;
+    return;
+  }
+
+  var items = getTrainingManifestItems(manifest);
+  if (!manifest) {
+    els.itemOverviewSummary.textContent = 'Prepare the dataset to see its training items here.';
+    return;
+  }
+
+  var imageCount = 0;
+  var videoCount = 0;
+  items.forEach(function (item) {
+    if (item.kind === 'video') videoCount++;
+    else imageCount++;
+  });
+  els.itemOverviewSummary.textContent = items.length + ' prepared item' + (items.length === 1 ? '' : 's') +
+    ' · ' + imageCount + ' image' + (imageCount === 1 ? '' : 's') +
+    ' · ' + videoCount + ' video' + (videoCount === 1 ? '' : 's');
+
+  if (!items.length) {
+    els.itemOverviewSummary.textContent = 'The prepared dataset has no displayable media items.';
+    return;
+  }
+
+  var grid = document.createElement('div');
+  grid.className = 'training-item-grid';
+  items.forEach(function (item) {
+    var tile = document.createElement('div');
+    tile.className = 'training-item-tile';
+    tile.title = item.fileName;
+
+    var thumb = document.createElement('div');
+    thumb.className = 'training-item-thumb';
+    var fallback = document.createElement('span');
+    fallback.className = 'training-item-fallback';
+    fallback.textContent = 'Preview unavailable';
+    fallback.hidden = true;
+
+    var media;
+    if (item.kind === 'video') {
+      media = document.createElement('video');
+      media.muted = true;
+      media.playsInline = true;
+      media.preload = 'metadata';
+    } else {
+      media = document.createElement('img');
+      media.loading = 'lazy';
+      media.alt = '';
+    }
+    media.src = '/caption/media?folder=' + encodeURIComponent(state.folder || '') +
+      '&media=' + encodeURIComponent(item.fileName);
+    media.onerror = function () {
+      media.hidden = true;
+      fallback.hidden = false;
+    };
+    thumb.appendChild(media);
+    thumb.appendChild(fallback);
+
+    var badges = document.createElement('div');
+    badges.className = 'training-item-badges';
+    var typeBadge = document.createElement('span');
+    typeBadge.textContent = item.kind;
+    badges.appendChild(typeBadge);
+    if (item.aspect) {
+      var aspectBadge = document.createElement('span');
+      aspectBadge.textContent = item.aspect;
+      badges.appendChild(aspectBadge);
+    }
+    thumb.appendChild(badges);
+    tile.appendChild(thumb);
+    grid.appendChild(tile);
+  });
+  els.itemOverview.appendChild(grid);
+}
+
 function buildTrainingWorkspaceConfigColumn(title, files) {
   var buttons = files.map(function (fileName) {
     var active = !!(state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName);
@@ -381,6 +483,7 @@ function refreshTrainingWorkspace() {
     trainingWorkspaceState.manifest = null;
     trainingWorkspaceState.configFiles = [];
     if (els.readiness) els.readiness.textContent = 'Select a set folder to prepare a dataset.';
+    renderTrainingItemOverview(null);
     renderTrainingWorkspaceConfigList([]);
     renderTrainingCommandHandoff();
     return;
@@ -392,6 +495,7 @@ function refreshTrainingWorkspace() {
       trainingWorkspaceState.manifest = results[0];
       trainingWorkspaceState.configFiles = results[1];
       if (els.readiness) els.readiness.innerHTML = buildTrainingReadinessHtml(results[0], results[1]);
+      renderTrainingItemOverview(results[0]);
       renderTrainingWorkspaceConfigList(results[1]);
       renderTrainingCommandHandoff();
       syncWorkspaceConfigEditorUi();
@@ -399,6 +503,7 @@ function refreshTrainingWorkspace() {
     .catch(function (err) {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
       if (els.readiness) els.readiness.textContent = String(err && err.message ? err.message : err);
+      renderTrainingItemOverview(null, 'Could not load the prepared dataset overview.');
     });
 }
 

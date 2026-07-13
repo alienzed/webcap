@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
+from .training_commands import build_training_command_plan, build_training_launcher_probe
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
 
 
@@ -194,7 +195,13 @@ def _build_preflight(folder):
     else:
         checks.append(_make_check("activate_script", "warning", True, "No activation script configured; using the WSL shell environment."))
     checks.append(_wsl_check("python_available", "blocker", settings, "python --version", "Python is available."))
-    checks.append(_wsl_check("deepspeed_available", "blocker", settings, "deepspeed --version", "DeepSpeed is available."))
+    checks.append(_wsl_check(
+        "deepspeed_available",
+        "blocker",
+        settings,
+        build_training_launcher_probe(),
+        "DeepSpeed launcher is available.",
+    ))
     checks.append(_wsl_check("train_py_present", "blocker", settings, "test -f train.py", "train.py is available."))
     checks.append(_wsl_check(
         "torch_cuda_visible", "blocker", settings,
@@ -237,6 +244,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     lo_path = Path(job["snapshot"]["lo"]) if use_snapshot else artifacts["loConfig"]
     hi_wsl = _to_wsl_path(hi_path)
     lo_wsl = _to_wsl_path(lo_path)
+    command_plan = build_training_command_plan(hi_wsl, lo_wsl)
     result_wsl = _to_wsl_path(job_dir / "result.json")
     pid_wsl = _to_wsl_path(job_dir / "pid")
     lines = [
@@ -253,11 +261,11 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         lines.append("source " + shlex.quote(settings["activate"]))
     lines.extend([
         "echo '[webcap] stage=hi'",
-        "NCCL_P2P_DISABLE=1 NCCL_IB_DISABLE=1 deepspeed --num_gpus=1 train.py --deepspeed --config " + shlex.quote(hi_wsl),
+        command_plan["hiCommand"],
         "HI_CODE=$?",
         "if [ \"$HI_CODE\" -ne 0 ]; then echo '[webcap] HI failed'; write_result failed \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
         "echo '[webcap] stage=lo'",
-        "NCCL_P2P_DISABLE=1 NCCL_IB_DISABLE=1 deepspeed --num_gpus=1 train.py --deepspeed --config " + shlex.quote(lo_wsl),
+        command_plan["loCommand"],
         "LO_CODE=$?",
         "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
         "echo '[webcap] completed'",

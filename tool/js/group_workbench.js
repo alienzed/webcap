@@ -59,6 +59,11 @@ function resolveGroupWorkbenchOptions(options) {
 
 function renderGroupWorkbenchEmpty(targetEl, message) {
   targetEl.innerHTML = '';
+  if (targetEl._groupWorkbenchTermScaleFrame) {
+    window.cancelAnimationFrame(targetEl._groupWorkbenchTermScaleFrame);
+    targetEl._groupWorkbenchTermScaleFrame = 0;
+  }
+  targetEl.classList.remove('group-workbench-list--roomy-terms');
   targetEl._groupWorkbenchGroupCount = 0;
   targetEl._groupWorkbenchLayoutColumnCount = 1;
   targetEl.setAttribute('data-columns', '1');
@@ -66,6 +71,38 @@ function renderGroupWorkbenchEmpty(targetEl, message) {
   emptyEl.className = 'group-workbench-empty';
   emptyEl.textContent = message;
   targetEl.appendChild(emptyEl);
+}
+
+function groupWorkbenchCanUseRoomyTerms(targetEl, mode) {
+  return mode === 'item'
+    && targetEl && targetEl.id === 'group-workbench-list'
+    && (!workspaceState || workspaceState.surface === 'default');
+}
+
+function syncGroupWorkbenchTermScale(targetEl, mode) {
+  if (!targetEl) return;
+  if (targetEl._groupWorkbenchTermScaleFrame) {
+    window.cancelAnimationFrame(targetEl._groupWorkbenchTermScaleFrame);
+  }
+  targetEl._groupWorkbenchTermScaleMode = mode;
+  if (!groupWorkbenchCanUseRoomyTerms(targetEl, mode)) {
+    targetEl.classList.remove('group-workbench-list--roomy-terms');
+    return;
+  }
+
+  targetEl.classList.remove('group-workbench-list--roomy-terms');
+  targetEl._groupWorkbenchTermScaleFrame = window.requestAnimationFrame(function () {
+    targetEl._groupWorkbenchTermScaleFrame = 0;
+    if (!groupWorkbenchCanUseRoomyTerms(targetEl, targetEl._groupWorkbenchTermScaleMode)) return;
+    if (targetEl.scrollHeight > targetEl.clientHeight + 1) return;
+    targetEl.classList.add('group-workbench-list--roomy-terms');
+    targetEl._groupWorkbenchTermScaleFrame = window.requestAnimationFrame(function () {
+      targetEl._groupWorkbenchTermScaleFrame = 0;
+      if (targetEl.scrollHeight > targetEl.clientHeight + 1) {
+        targetEl.classList.remove('group-workbench-list--roomy-terms');
+      }
+    });
+  });
 }
 
 function appendGroupWorkbenchNotice(targetEl, message) {
@@ -641,6 +678,7 @@ function renderGroupWorkbench(options) {
   }
   applyGroupWorkbenchColumnLayout(targetEl, groupElements);
   targetEl.scrollTop = Math.max(0, previousScrollTop);
+  syncGroupWorkbenchTermScale(targetEl, opts.mode);
 }
 
 var groupWorkbenchResizeFrame = 0;
@@ -658,7 +696,10 @@ window.addEventListener('resize', function () {
       var nextWidth = Math.round(listEl.clientWidth || listEl.getBoundingClientRect().width || 0);
       var nextColumnCount = Math.max(1, Math.min(getGroupWorkbenchColumnCount(listEl), groupCount || 1));
       if (listEl._groupWorkbenchLayoutColumnCount === nextColumnCount
-          && listEl._groupWorkbenchLayoutWidth === nextWidth) continue;
+          && listEl._groupWorkbenchLayoutWidth === nextWidth) {
+        syncGroupWorkbenchTermScale(listEl, listEl._groupWorkbenchRenderOptions.mode);
+        continue;
+      }
       renderGroupWorkbench(listEl._groupWorkbenchRenderOptions);
     }
   });

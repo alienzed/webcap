@@ -588,6 +588,8 @@
 }
 
 .app.shell-revamp.workspace-surface-training .training-item-overview {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
@@ -595,12 +597,15 @@
 
 .app.shell-revamp.workspace-surface-training .training-item-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-auto-rows: minmax(160px, 1fr);
+  min-height: 100%;
   gap: 10px;
 }
 
 .app.shell-revamp.workspace-surface-training .training-item-tile {
   min-width: 0;
+  height: 100%;
   padding: 4px;
   border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 9px;
@@ -609,7 +614,10 @@
 
 .app.shell-revamp.workspace-surface-training .training-item-thumb {
   position: relative;
-  aspect-ratio: 1 / 1;
+  display: block;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
   overflow: hidden;
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.1);
@@ -640,6 +648,7 @@
   top: 5px;
   right: 5px;
   display: flex;
+  align-items: flex-start;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
@@ -647,6 +656,13 @@
 }
 
 .app.shell-revamp.workspace-surface-training .training-item-badges span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  align-self: flex-start;
+  width: auto;
+  height: auto;
+  min-height: 0;
   padding: 3px 5px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
@@ -981,6 +997,10 @@ html[data-theme="dark"] .training-runner-card {
   align-items: center;
   justify-content: flex-start;
   white-space: nowrap;
+}
+
+.app.shell-revamp.workspace-surface-default .group-workbench-list--roomy-terms .group-workbench-term-btn {
+  font-size: 15px;
 }
 
 .group-workbench-term-btn:hover {

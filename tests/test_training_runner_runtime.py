@@ -159,3 +159,77 @@ def test_completed_job_flags_a_result_far_below_the_planned_steps():
 
     assert "step 1,650" in job["completionNote"]
     assert "~20,000 planned steps" in job["completionNote"]
+
+
+def test_refresh_state_holds_queue_after_an_unexplained_exit(monkeypatch):
+    active = {"id": "active", "status": "running", "stage": "hi", "stages": "hi", "pid": 42}
+    state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}]}
+    monkeypatch.setattr(training_runner, "_read_result", lambda job: None)
+    monkeypatch.setattr(training_runner, "_pid_alive", lambda *args: False)
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("queue must be held")))
+
+    training_runner._refresh_state(state)
+
+    assert active["status"] == "interrupted"
+    assert state["queuePaused"] is True
+    assert state["jobs"][1]["status"] == "queued"
+
+
+def test_stop_outcome_advances_to_the_next_queued_job(monkeypatch):
+    active = {"id": "active", "status": "stopped", "stage": "stopped", "stages": "hi"}
+    next_job = {"id": "next", "status": "queued", "folder": "set"}
+    state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, next_job]}
+
+    def launch(job, folder):
+        job["status"] = "running"
+
+    monkeypatch.setattr(training_runner, "_launch_job", launch)
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    training_runner._refresh_state(state)
+
+    assert state["activeJobId"] == "next"
+    assert next_job["status"] == "running"
+
+
+def test_starting_both_creates_adjacent_hi_and_lo_jobs(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    (folder / "auto_dataset").mkdir(parents=True)
+    for name in ("config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"):
+        (folder / name).write_text("ok", encoding="utf-8")
+    (folder / "auto_dataset" / "prep_manifest.json").write_text("{}", encoding="utf-8")
+    artifacts = {
+        "hiConfig": folder / "config.hi.toml", "loConfig": folder / "config.lo.toml",
+        "hiDataset": folder / "dataset.hi.toml", "loDataset": folder / "dataset.lo.toml",
+        "manifest": folder / "auto_dataset" / "prep_manifest.json",
+    }
+    state = training_runner._default_state()
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value: ("set", folder, artifacts, {}, []))
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
+    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
+    monkeypatch.setattr(training_runner, "_launch_job", lambda job, path: job.update(status="running", stage=job["stages"]))
+
+    payload, status = training_runner.start_response("set", stages="both")
+
+    assert status == 200
+    assert [job["stages"] for job in payload["jobs"]] == ["hi", "lo"]
+    assert state["jobs"][0]["status"] == "running"
+    assert state["jobs"][1]["status"] == "queued"
+
+
+def test_folder_status_prefers_queue_state_over_output_artifacts(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    queued = {"id": "queued", "folder": "set", "status": "queued", "stages": "lo"}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": [queued]})
+    monkeypatch.setattr(training_runner, "discover_runs", lambda path: [{"path": "run"}])
+
+    status = training_runner.folder_statuses_for_folders([folder])[folder]
+
+    assert status == {"status": "queued", "label": "Queued #1", "queuePosition": 1}

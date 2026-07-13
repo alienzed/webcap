@@ -14,7 +14,7 @@ from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
 from .dataset_config import repeat_targets_for_mode
-from .training_history import output_root_for_folder, record_job
+from .training_history import discover_runs, output_root_for_folder, record_job
 from .training_runtime import (
     build_runtime_command,
     build_training_launcher,
@@ -27,7 +27,7 @@ from .training_runtime import (
 RUNNER_DIR_NAME = ".webcap_training"
 STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
-TERMINAL_STATUSES = {"completed", "failed", "stopped", "paused", "cancelled"}
+TERMINAL_STATUSES = {"completed", "failed", "stopped", "paused", "interrupted", "cancelled"}
 _lock = threading.Lock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
@@ -58,7 +58,7 @@ def _ensure_runtime_dirs():
 
 
 def _default_state():
-    return {"version": 2, "activeJobId": "", "jobs": [], "queuePaused": False, "queuePauseReason": ""}
+    return {"version": 3, "activeJobId": "", "jobs": [], "queuePaused": False, "queuePauseReason": ""}
 
 
 def _read_state():
@@ -70,9 +70,8 @@ def _read_state():
         parsed = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return _default_state()
-    if not isinstance(parsed, dict):
+    if not isinstance(parsed, dict) or parsed.get("version") != 3:
         return _default_state()
-    parsed.setdefault("version", 2)
     parsed.setdefault("activeJobId", "")
     parsed.setdefault("jobs", [])
     parsed.setdefault("queuePaused", False)
@@ -605,15 +604,31 @@ def _refresh_job(job):
         job["progressPlan"] = _default_progress_plan()
     result = _read_result(job)
     if result:
-        job["status"] = str(result.get("status") or "failed")
+        result_status = str(result.get("status") or "failed")
+        requested_action = str(job.get("actionRequested") or "")
+        if requested_action == "pause":
+            job["status"] = "paused"
+        elif requested_action == "stop":
+            job["status"] = "stopped"
+        elif result_status == "stopped":
+            job["status"] = "interrupted"
+            job["error"] = "Runner stopped without a WebCap stop or pause action."
+        else:
+            job["status"] = result_status
         job["exitCode"] = int(result.get("exitCode") or 0)
         job["finishedAt"] = float(result.get("finishedAt") or time.time())
         job["updatedAt"] = time.time()
         _annotate_completed_job(job)
         return
     if not _pid_alive(job.get("pid"), _job_wsl_distribution(job)):
-        job["status"] = "failed"
-        job["error"] = "Training runner exited without a result record."
+        requested_action = str(job.get("actionRequested") or "")
+        if requested_action == "pause":
+            job["status"] = "paused"
+        elif requested_action == "stop":
+            job["status"] = "stopped"
+        else:
+            job["status"] = "interrupted"
+            job["error"] = "Training runner exited without a result record."
         job["finishedAt"] = time.time()
         job["updatedAt"] = time.time()
         return
@@ -648,6 +663,10 @@ def _start_next(state):
         if job.get("status") == "running":
             state["activeJobId"] = job["id"]
             return
+        if job.get("status") in ("failed", "interrupted"):
+            state["queuePaused"] = True
+            state["queuePauseReason"] = "Queue held after " + str(job.get("stages") or "training") + " " + str(job.get("status")) + "."
+            return
 
 
 def _refresh_state(state):
@@ -660,6 +679,9 @@ def _refresh_state(state):
         _refresh_job(active)
         if active.get("status") in TERMINAL_STATUSES:
             state["activeJobId"] = ""
+            if active.get("status") in ("failed", "interrupted"):
+                state["queuePaused"] = True
+                state["queuePauseReason"] = "Queue held after " + str(active.get("stage") or "training") + " " + str(active.get("status")) + "."
     _start_next(state)
 
 
@@ -687,7 +709,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan")
+    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -763,7 +785,7 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "progressPlan": _read_training_plan(folder_path) or _default_progress_plan(),
         "runtime": {"wslDistribution": _training_settings()["wslDistribution"]},
         "preflight": {"checks": preflight.get("checks", []), "blockers": preflight.get("summary", {}).get("blockers", 0)},
-        "outputRoot": str(output_root_for_folder(folder_path)),
+        "outputRoot": str(output_root_for_folder(folder_path, stages)),
         "parentJobId": str(parent_job_id or ""),
     }
 
@@ -791,13 +813,102 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         if active and active.get("status") not in TERMINAL_STATUSES and not queue:
             _write_state(state)
             return {"ok": False, "error": "A managed training job is already active.", "activeJob": _public_job(active)}, 409
-        job = _new_job(str(folder).strip(), preflight, stages, resume_from_checkpoint, resume_stage, parent_job_id)
-        state["jobs"].append(job)
+        job_stages = ("hi", "lo") if stages == "both" else (stages,)
+        jobs = []
+        for job_stage in job_stages:
+            stage_resume = resume_from_checkpoint if resume_stage == job_stage else ""
+            jobs.append(_new_job(
+                str(folder).strip(), preflight, job_stage, stage_resume, job_stage if stage_resume else "", parent_job_id
+            ))
+        state["jobs"].extend(jobs)
         if not active or active.get("status") in TERMINAL_STATUSES:
             _start_next(state)
         _sync_histories(state)
         _write_state(state)
-        return {"ok": True, "job": _public_job(job), "queued": job.get("status") == "queued"}, 200
+        return {
+            "ok": True,
+            "job": _public_job(jobs[0]),
+            "jobs": [_public_job(job) for job in jobs],
+            "queued": jobs[0].get("status") == "queued",
+        }, 200
+
+
+def _attention_payload(state):
+    queued_count = sum(1 for job in state.get("jobs", []) if job.get("status") == "queued")
+    attention_job = None
+    if state.get("queuePaused"):
+        attention_job = next((
+            job for job in reversed(state.get("jobs", []))
+            if job.get("status") in ("paused", "failed", "interrupted")
+        ), None)
+    if attention_job:
+        folder_path = app_config.safe_join_fs_root(attention_job["folder"])
+        stage = str(attention_job.get("stages") or "")
+        runs = discover_runs(folder_path, stage)
+        resume_path = next((run["path"] for run in runs if run.get("checkpointAvailable")), "")
+        status = str(attention_job.get("status"))
+        if status == "paused":
+            message = "Paused " + stage.upper() + " for " + attention_job["folder"] + "."
+        elif status == "failed":
+            message = "Failed " + stage.upper() + " for " + attention_job["folder"] + "."
+        else:
+            message = "Interrupted " + stage.upper() + " for " + attention_job["folder"] + "."
+        return {
+            "kind": status,
+            "jobId": attention_job["id"],
+            "folder": attention_job["folder"],
+            "stage": stage,
+            "message": message,
+            "details": str(attention_job.get("error") or attention_job.get("completionNote") or ""),
+            "resumeFromCheckpoint": resume_path,
+            "queuedCount": queued_count,
+        }
+    if state.get("queuePaused"):
+        return {
+            "kind": "queue_held",
+            "message": str(state.get("queuePauseReason") or "Queue is held."),
+            "queuedCount": queued_count,
+        }
+    return None
+
+
+def folder_statuses_for_folders(folder_paths):
+    """Return the small training-status payload used by the folder backlog view."""
+    with _lock:
+        state = _read_state()
+        jobs = list(state.get("jobs", []))
+    queue_position = 0
+    queued_by_folder = {}
+    for job in jobs:
+        if job.get("status") == "queued":
+            queue_position += 1
+            queued_by_folder.setdefault(str(job.get("folder") or ""), queue_position)
+    result = {}
+    for folder_path in folder_paths:
+        path = Path(folder_path)
+        try:
+            folder = str(path.relative_to(app_config.FS_ROOT)).replace("\\", "/")
+        except ValueError:
+            continue
+        matching = [job for job in jobs if str(job.get("folder") or "") == folder]
+        active = next((job for job in matching if job.get("status") in ("running", "stopping")), None)
+        attention = next((job for job in reversed(matching) if job.get("status") in ("paused", "failed", "interrupted")), None)
+        if active:
+            result[path] = {"status": "training", "label": "Training", "jobId": active.get("id"), "stage": active.get("stages")}
+        elif folder in queued_by_folder:
+            result[path] = {"status": "queued", "label": "Queued #" + str(queued_by_folder[folder]), "queuePosition": queued_by_folder[folder]}
+        elif attention:
+            result[path] = {
+                "status": "attention", "label": "Needs attention", "jobId": attention.get("id"),
+                "outcome": attention.get("status"), "stage": attention.get("stages"),
+            }
+        elif discover_runs(path):
+            result[path] = {"status": "trained", "label": "Trained"}
+        elif all((path / name).is_file() for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml")):
+            result[path] = {"status": "ready", "label": "Ready to train"}
+        else:
+            result[path] = {"status": "never", "label": ""}
+    return result
 
 
 def status_response():
@@ -814,6 +925,7 @@ def status_response():
             "queuePaused": bool(state.get("queuePaused")),
             "queuePauseReason": str(state.get("queuePauseReason") or ""),
             "jobs": [_public_job(job) for job in state.get("jobs", [])],
+            "attention": _attention_payload(state),
         }, 200
 
 
@@ -860,6 +972,8 @@ def stop_response(job_id, cancel=False, pause=False):
         if job.get("status") not in ("running", "stopping"):
             return {"ok": False, "error": "Training job is not running."}, 400
         pid = int(job.get("pid") or 0)
+        job["actionRequested"] = "pause" if pause else "stop"
+        job["actionRequestedAt"] = time.time()
         job["status"] = "stopping"
         job["stage"] = "stopping"
         distribution = _job_wsl_distribution(job)
@@ -918,3 +1032,40 @@ def resume_queue_response():
         _sync_histories(state)
         _write_state(state)
         return {"ok": True, "activeJobId": state.get("activeJobId") or "", "jobs": [_public_job(job) for job in state["jobs"]]}, 200
+
+
+def resume_job_response(job_id):
+    with _lock:
+        state = _read_state()
+        _apply_restart_hold(state)
+        _refresh_state(state)
+        prior = _find_job(state, job_id)
+        if not prior:
+            return {"ok": False, "error": "Training job not found."}, 404
+        if prior.get("status") not in ("paused", "failed", "interrupted"):
+            return {"ok": False, "error": "Only paused, failed, or interrupted jobs can resume."}, 400
+        stage = str(prior.get("stages") or "")
+        if stage not in ("hi", "lo"):
+            return {"ok": False, "error": "Only an individual training stage can resume."}, 400
+        folder = str(prior.get("folder") or "")
+        folder_path = app_config.safe_join_fs_root(folder)
+        candidates = discover_runs(folder_path, stage)
+        checkpoint = next((run["path"] for run in candidates if run.get("checkpointAvailable")), "")
+        if not checkpoint:
+            return {"ok": False, "error": "No resumable run directory was found for this stage."}, 400
+        try:
+            _, _, _, _, checks = _build_launch_preflight(folder)
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}, 400
+        blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
+        if blockers:
+            return {"ok": False, "error": "Launch checks failed.", "preflight": {"checks": checks}}, 400
+        job = _new_job(folder, {"checks": checks, "summary": {"blockers": 0}}, stage, checkpoint, stage, prior.get("id"))
+        queued_index = next((index for index, item in enumerate(state["jobs"]) if item.get("status") == "queued"), len(state["jobs"]))
+        state["jobs"].insert(queued_index, job)
+        state["queuePaused"] = False
+        state["queuePauseReason"] = ""
+        _start_next(state)
+        _sync_histories(state)
+        _write_state(state)
+        return {"ok": True, "job": _public_job(job), "resumeFromCheckpoint": checkpoint}, 200

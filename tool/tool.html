@@ -703,6 +703,11 @@
                         </section>
                         <section class="training-global-context" aria-label="Global training services">
                             <div class="training-global-label">Shared across all sets</div>
+                            <section id="training-attention-card" class="training-attention-card hidden" aria-label="Training needs attention">
+                                <div id="training-attention-title" class="training-workspace-section-title">Training needs attention</div>
+                                <div id="training-attention-summary" class="training-attention-summary"></div>
+                                <div id="training-attention-actions" class="training-runner-actions"></div>
+                            </section>
                             <section class="training-runner-card" aria-label="Training queue">
                                 <div class="training-workspace-section-title">Training Queue</div>
                                 <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
@@ -717,12 +722,12 @@
                                 <div id="training-runner-preflight" class="training-runner-preflight hidden"></div>
                             </section>
                             <div class="training-global-secondary">
-                                <section class="training-history-card" aria-label="Recent training activity">
-                                    <div class="training-workspace-section-title">Recent Training Activity</div>
+                                <details class="training-history-card" aria-label="Past training runs">
+                                    <summary>Past Runs</summary>
                                     <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>
                                     <div id="training-history-list" class="training-history-list"></div>
-                                </section>
-                                <section class="training-tensorboard-card" aria-label="TensorBoard">
+                                </details>
+                                <section class="training-tensorboard-card hidden" aria-label="TensorBoard">
                                     <div class="training-workspace-section-title">TensorBoard</div>
                                     <div id="training-tensorboard-summary" class="training-tensorboard-summary">Checking TensorBoard...</div>
                                     <div id="training-tensorboard-actions" class="training-runner-actions">

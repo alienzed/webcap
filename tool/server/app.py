@@ -14,8 +14,8 @@ from .file_ops import duplicate_folder_response, duplicate_image_response, open_
 from .media import media_blur_background_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
-from .training_runner import log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response
-from .training_history import history_payload as training_history_payload, summarize_history as training_history_summary
+from .training_runner import log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, resume_job_response as training_runner_resume_job_response, folder_statuses_for_folders as training_runner_folder_statuses
+from .training_history import history_payload as training_history_payload
 from .training_tensorboard import start_response as tensorboard_start_response, status_response as tensorboard_status_response, stop_response as tensorboard_stop_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .training_config_files import ensure_training_config_files
@@ -413,6 +413,13 @@ def training_runner_resume_queue_route():
     return jsonify(payload), status
 
 
+@app.route("/fs/training_runner/resume_job", methods=["POST"])
+def training_runner_resume_job_route():
+    data = request.get_json(silent=True) or {}
+    payload, status = training_runner_resume_job_response(data.get("jobId", ""))
+    return jsonify(payload), status
+
+
 @app.route("/fs/training_history", methods=["GET"])
 def training_history_route():
     folder = request.args.get("folder", "").strip()
@@ -610,15 +617,14 @@ def _build_fs_describe_payload(dir_path):
     elif not isinstance(folder_state["reviewedKeys"], list):
         folder_state["error"] = "reviewedKeys is not a list in .webcap_state.json"
 
+    folder_paths = [dir_path / entry["name"] for entry in entries if entry["type"] == "dir"]
+    training_statuses = training_runner_folder_statuses(folder_paths)
     folders = []
     for entry in entries:
         if entry["type"] != "dir":
             continue
         folder_meta = dict(entry)
-        try:
-            folder_meta["trainingStatus"] = training_history_summary(dir_path / entry["name"])
-        except Exception:
-            folder_meta["trainingStatus"] = {"status": "never", "updatedAt": 0}
+        folder_meta["trainingStatus"] = training_statuses.get(dir_path / entry["name"], {"status": "never", "label": ""})
         folders.append(folder_meta)
 
     return {

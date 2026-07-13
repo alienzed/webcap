@@ -41,9 +41,9 @@ def test_default_training_epochs_follow_canonical_templates():
     assert training_config_files_module.default_training_config_epochs() == (50, 90)
 
 
-def test_training_templates_group_runs_under_their_set():
+def test_training_templates_use_a_flat_set_run_root():
     hi = training_config_files_module.read_training_config_template("config.hi.toml")
     lo = training_config_files_module.read_training_config_template("config.lo.toml")
 
-    assert 'output_dir = "{TRAINING_ROOT}/output/sets/{DATASET}/runs"' in hi
-    assert 'output_dir = "{TRAINING_ROOT}/output/sets/{DATASET}/runs"' in lo
+    assert 'output_dir = "{TRAINING_ROOT}/output/runs/{SET_NAME}"' in hi
+    assert 'output_dir = "{TRAINING_ROOT}/output/runs/{SET_NAME}"' in lo

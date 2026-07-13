@@ -1919,6 +1919,27 @@ iframe {
   background: var(--panel);
 }
 
+.workspace-surface-training .training-attention-card {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 8px;
+  padding: 10px 11px;
+  border: 1px solid #cc7a3f;
+  border-left: 3px solid #cc7a3f;
+  background: var(--panel-soft);
+}
+
+.workspace-surface-training .training-attention-summary,
+.workspace-surface-training .training-attention-detail {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workspace-surface-training .training-attention-detail {
+  margin-top: 4px;
+  color: #cc7a3f;
+}
+
 .workspace-surface-training #training-navigator {
   container-type: inline-size;
 }
@@ -2021,6 +2042,17 @@ iframe {
   background: var(--panel-soft);
 }
 
+.workspace-surface-training .training-history-card > summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspace-surface-training .training-history-card[open] > summary {
+  margin-bottom: 7px;
+}
+
 .workspace-surface-training .training-operations-context {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.65fr);
@@ -2076,19 +2108,24 @@ iframe {
   text-transform: capitalize;
 }
 
-.workspace-surface-training .training-folder-status--running {
+.workspace-surface-training .training-folder-status--running,
+.workspace-surface-training .training-folder-status--training,
+.workspace-surface-training .training-folder-status--queued {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.workspace-surface-training .training-folder-status--completed {
+.workspace-surface-training .training-folder-status--completed,
+.workspace-surface-training .training-folder-status--trained,
+.workspace-surface-training .training-folder-status--ready {
   border-color: #4f9d69;
   color: #4f9d69;
 }
 
 .workspace-surface-training .training-folder-status--failed,
 .workspace-surface-training .training-folder-status--stopped,
-.workspace-surface-training .training-folder-status--paused {
+.workspace-surface-training .training-folder-status--paused,
+.workspace-surface-training .training-folder-status--attention {
   border-color: #cc7a3f;
   color: #cc7a3f;
 }

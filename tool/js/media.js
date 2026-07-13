@@ -762,8 +762,11 @@ async function renderFileList() {
     var trainingStatus = folderItem.trainingStatus && workspaceState.surface === 'training'
       ? String(folderItem.trainingStatus.status || 'never')
       : '';
+    var trainingLabel = folderItem.trainingStatus && workspaceState.surface === 'training'
+      ? String(folderItem.trainingStatus.label || trainingStatus)
+      : '';
     var trainingBadge = trainingStatus && trainingStatus !== 'never'
-      ? '<span class="training-folder-status training-folder-status--' + escapeHtml(trainingStatus) + '">' + escapeHtml(trainingStatus) + '</span>'
+      ? '<span class="training-folder-status training-folder-status--' + escapeHtml(trainingStatus) + '">' + escapeHtml(trainingLabel) + '</span>'
       : '';
     var row = document.createElement('div');
     row.className = 'media-item folder-item';

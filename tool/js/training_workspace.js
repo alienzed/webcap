@@ -181,6 +181,10 @@ function fetchTrainingRunnerLog(job, reset) {
 function scheduleTrainingRunnerPoll() {
   if (trainingWorkspaceState.runnerPollTimer) clearTimeout(trainingWorkspaceState.runnerPollTimer);
   if (!isTrainingWorkspaceActive()) return;
+  var hasPendingJob = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
+    return job.status === 'running' || job.status === 'stopping' || job.status === 'queued';
+  });
+  if (!hasPendingJob) return;
   trainingWorkspaceState.runnerPollTimer = setTimeout(function () {
     refreshTrainingRunnerStatus();
   }, 1500);
@@ -195,7 +199,9 @@ function refreshTrainingRunnerStatus() {
       trainingWorkspaceState.runnerActiveJobId = String(payload.activeJobId || '');
       renderTrainingRunner();
       var selected = getTrainingRunnerSelectedJob();
-      if (selected && (selected.status === 'running' || selected.status === 'stopping')) fetchTrainingRunnerLog(selected);
+      if (isConsolePanelVisible() && selected && (selected.status === 'running' || selected.status === 'stopping')) {
+        fetchTrainingRunnerLog(selected);
+      }
     })
     .catch(function (err) {
       if (window.console && console.error) console.error('[Training runner] Status refresh failed:', err);
@@ -612,6 +618,7 @@ function wireTrainingWorkspace() {
   consoleBtn.onclick = function () {
     toggleConsolePanel();
     syncTrainingConsoleUi();
+    if (isConsolePanelVisible()) fetchTrainingRunnerLog(getTrainingRunnerSelectedJob());
   };
   runnerStopBtn.onclick = function () { stopManagedTraining(false); };
   runnerCancelBtn.onclick = function () { stopManagedTraining(true); };

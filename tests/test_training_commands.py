@@ -1,4 +1,5 @@
 from tool.server.training_commands import build_training_command_plan, build_training_launcher_probe
+from tool.server.training_runtime import build_runtime_command, build_training_launcher, training_runtime_settings
 
 
 def test_training_command_plan_uses_the_same_stage_commands_for_handoff():
@@ -12,3 +13,17 @@ def test_training_command_plan_uses_the_same_stage_commands_for_handoff():
 
 def test_training_launcher_probe_is_a_valid_help_probe_not_a_version_probe():
     assert build_training_launcher_probe() == "deepspeed --help >/dev/null"
+
+
+def test_conda_runtime_wraps_child_commands_without_shell_activation():
+    settings = training_runtime_settings({
+        "conda_executable": "/home/user/miniconda3/bin/conda",
+        "conda_environment": "dp-clean",
+    })
+
+    assert build_runtime_command(settings, "python --version") == (
+        "/home/user/miniconda3/bin/conda run --no-capture-output --name dp-clean python --version"
+    )
+    assert build_training_launcher(settings) == (
+        "/home/user/miniconda3/bin/conda run --no-capture-output --name dp-clean deepspeed"
+    )

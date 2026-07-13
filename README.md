@@ -43,7 +43,10 @@ Minimum practical shape:
   },
   "training": {
     "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
-    "activate_script": "dp-clean/bin/activate",
+    "wsl_distribution": "Ubuntu",
+    "conda_executable": "/home/user/miniconda3/bin/conda",
+    "conda_environment": "training-env",
+    "activate_script": "",
     "mode": "normal",
     "write_selection_snapshot_comments": false
   },

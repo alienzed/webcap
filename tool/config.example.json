@@ -5,7 +5,10 @@
   },
   "training": {
     "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
-    "activate_script": "dp-clean/bin/activate",
+    "wsl_distribution": "Ubuntu",
+    "conda_executable": "/home/you/miniconda3/bin/conda",
+    "conda_environment": "training-env",
+    "activate_script": "",
     "write_selection_snapshot_comments": false
   },
   "analysis": {

@@ -12,6 +12,13 @@ from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
+from .training_runtime import (
+    build_runtime_command,
+    build_training_launcher,
+    has_complete_conda_runtime,
+    has_conda_runtime,
+    training_runtime_settings,
+)
 
 
 RUNNER_DIR_NAME = ".webcap_training"
@@ -88,13 +95,17 @@ def _wsl_executable():
     return shutil.which("wsl.exe") or shutil.which("wsl")
 
 
-def _run_wsl(command, timeout=20):
+def _run_wsl(command, timeout=20, distribution=""):
     executable = _wsl_executable()
     if not executable:
         return 127, "", "wsl.exe was not found on PATH."
     try:
+        args = [executable]
+        if distribution:
+            args.extend(["--distribution", distribution])
+        args.extend(["--", "bash", "-lc", command])
         completed = subprocess.run(
-            [executable, "bash", "-lc", command],
+            args,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -107,8 +118,8 @@ def _run_wsl(command, timeout=20):
         return 1, "", str(exc)
 
 
-def _to_wsl_path(path):
-    code, stdout, stderr = _run_wsl("wslpath -a " + shlex.quote(str(path)), timeout=10)
+def _to_wsl_path(path, distribution=""):
+    code, stdout, stderr = _run_wsl("wslpath -a " + shlex.quote(str(path)), timeout=10, distribution=distribution)
     value = (stdout or "").strip()
     if code != 0 or not value:
         raise RuntimeError((stderr or stdout or "wslpath failed").strip())
@@ -118,10 +129,7 @@ def _to_wsl_path(path):
 def _training_settings():
     config = app_config.config if isinstance(app_config.config, dict) else {}
     training = config.get("training") if isinstance(config.get("training"), dict) else {}
-    return {
-        "cwd": str(training.get("diffusion_pipe_wsl") or "").strip(),
-        "activate": str(training.get("activate_script") or "").strip(),
-    }
+    return training_runtime_settings(training)
 
 
 def _resolve_folder(folder):
@@ -147,6 +155,8 @@ def _resolve_artifacts(folder, folder_path):
 
 
 def _activation_prefix(settings):
+    if has_conda_runtime(settings):
+        return ""
     activate = settings["activate"]
     if not activate:
         return ""
@@ -166,7 +176,7 @@ def _make_check(check_id, severity, ok, message, details=""):
 def _wsl_check(check_id, severity, settings, command, message):
     cwd = settings["cwd"]
     shell = "cd " + shlex.quote(cwd) + " && " + _activation_prefix(settings) + command
-    code, stdout, stderr = _run_wsl(shell)
+    code, stdout, stderr = _run_wsl(shell, distribution=settings["wslDistribution"])
     details = (stdout + stderr).strip()
     return _make_check(check_id, severity, code == 0, message if code == 0 else message + " (exit " + str(code) + ")", details)
 
@@ -188,24 +198,48 @@ def _build_preflight(folder):
         return folder_value, folder_path, artifacts, settings, checks
 
     checks.append(_wsl_check("cwd_exists", "blocker", settings, "test -d .", "Training working directory is available."))
-    if settings["activate"]:
+    if has_conda_runtime(settings) and not has_complete_conda_runtime(settings):
+        checks.append(_make_check(
+            "conda_runtime",
+            "blocker",
+            False,
+            "Conda runtime needs both the executable path and environment name.",
+        ))
+        return folder_value, folder_path, artifacts, settings, checks
+    if has_complete_conda_runtime(settings):
+        checks.append(_wsl_check(
+            "conda_executable",
+            "blocker",
+            settings,
+            "test -x " + shlex.quote(settings["condaExecutable"]),
+            "Conda executable is available.",
+        ))
+    elif settings["activate"]:
         checks.append(_wsl_check("activate_script", "blocker", settings,
                                  "test -f " + shlex.quote(settings["activate"]),
                                  "Activation script is available."))
     else:
         checks.append(_make_check("activate_script", "warning", True, "No activation script configured; using the WSL shell environment."))
-    checks.append(_wsl_check("python_available", "blocker", settings, "python --version", "Python is available."))
+    if has_complete_conda_runtime(settings) and not checks[-1]["ok"]:
+        return folder_value, folder_path, artifacts, settings, checks
+    checks.append(_wsl_check(
+        "python_available",
+        "blocker",
+        settings,
+        build_runtime_command(settings, "python --version"),
+        "Python is available.",
+    ))
     checks.append(_wsl_check(
         "deepspeed_available",
         "blocker",
         settings,
-        build_training_launcher_probe(),
+        build_training_launcher_probe(build_training_launcher(settings)),
         "DeepSpeed launcher is available.",
     ))
     checks.append(_wsl_check("train_py_present", "blocker", settings, "test -f train.py", "train.py is available."))
     checks.append(_wsl_check(
         "torch_cuda_visible", "blocker", settings,
-        "python -c " + shlex.quote("import torch; raise SystemExit(0 if torch.cuda.is_available() and torch.cuda.device_count() else 1)"),
+        build_runtime_command(settings, "python -c " + shlex.quote("import torch; raise SystemExit(0 if torch.cuda.is_available() and torch.cuda.device_count() else 1)")),
         "CUDA is visible to PyTorch.",
     ))
     checks.append(_wsl_check("nvidia_smi", "warning", settings, "nvidia-smi -L", "nvidia-smi is available."))
@@ -242,11 +276,12 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     use_snapshot = not (artifacts["hiConfig"].is_file() and artifacts["loConfig"].is_file())
     hi_path = Path(job["snapshot"]["hi"]) if use_snapshot else artifacts["hiConfig"]
     lo_path = Path(job["snapshot"]["lo"]) if use_snapshot else artifacts["loConfig"]
-    hi_wsl = _to_wsl_path(hi_path)
-    lo_wsl = _to_wsl_path(lo_path)
-    command_plan = build_training_command_plan(hi_wsl, lo_wsl)
-    result_wsl = _to_wsl_path(job_dir / "result.json")
-    pid_wsl = _to_wsl_path(job_dir / "pid")
+    distribution = settings["wslDistribution"]
+    hi_wsl = _to_wsl_path(hi_path, distribution)
+    lo_wsl = _to_wsl_path(lo_path, distribution)
+    command_plan = build_training_command_plan(hi_wsl, lo_wsl, build_training_launcher(settings))
+    result_wsl = _to_wsl_path(job_dir / "result.json", distribution)
+    pid_wsl = _to_wsl_path(job_dir / "pid", distribution)
     lines = [
         "#!/usr/bin/env bash",
         "set -uo pipefail",
@@ -257,7 +292,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         "trap 'echo [webcap] stopped; write_result stopped 130; exit 130' INT TERM",
         "cd " + shlex.quote(settings["cwd"]),
     ]
-    if settings["activate"]:
+    if settings["activate"] and not has_conda_runtime(settings):
         lines.append("source " + shlex.quote(settings["activate"]))
     lines.extend([
         "echo '[webcap] stage=hi'",
@@ -297,11 +332,11 @@ def _launch_job(job, folder_path):
         return False
     job_dir = _job_dir(job["id"])
     script_path = _write_runner_script(job, settings, artifacts)
-    script_wsl = _to_wsl_path(script_path)
+    script_wsl = _to_wsl_path(script_path, settings["wslDistribution"])
     log_path = job_dir / "run.log"
-    log_wsl = _to_wsl_path(log_path)
+    log_wsl = _to_wsl_path(log_path, settings["wslDistribution"])
     launch = "setsid bash " + shlex.quote(script_wsl) + " > " + shlex.quote(log_wsl) + " 2>&1 < /dev/null & echo $!"
-    code, stdout, stderr = _run_wsl(launch, timeout=15)
+    code, stdout, stderr = _run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])
     pid = (stdout or "").strip().splitlines()[-1] if (stdout or "").strip() else ""
     if code != 0 or not pid.isdigit():
         job["status"] = "failed"
@@ -331,10 +366,15 @@ def _read_result(job):
         return None
 
 
-def _pid_alive(pid):
+def _job_wsl_distribution(job):
+    runtime = job.get("runtime") if isinstance(job.get("runtime"), dict) else {}
+    return str(runtime.get("wslDistribution") or _training_settings()["wslDistribution"] or "").strip()
+
+
+def _pid_alive(pid, distribution=""):
     if not pid:
         return False
-    code, _, _ = _run_wsl("kill -0 " + str(int(pid)), timeout=8)
+    code, _, _ = _run_wsl("kill -0 " + str(int(pid)), timeout=8, distribution=distribution)
     return code == 0
 
 
@@ -348,7 +388,7 @@ def _refresh_job(job):
         job["finishedAt"] = float(result.get("finishedAt") or time.time())
         job["updatedAt"] = time.time()
         return
-    if not _pid_alive(job.get("pid")):
+    if not _pid_alive(job.get("pid"), _job_wsl_distribution(job)):
         job["status"] = "failed"
         job["error"] = "Training runner exited without a result record."
         job["finishedAt"] = time.time()
@@ -436,7 +476,11 @@ def validate_response(folder):
             script, resolved = _build_runner_script(diagnostic_job, settings, artifacts, _runtime_root() / "diagnostic")
             payload["runnerScript"] = script
             payload["resolvedConfigs"] = resolved
-            code, stdout, stderr = _run_wsl("bash -n -c " + shlex.quote(script), timeout=15)
+            code, stdout, stderr = _run_wsl(
+                "bash -n -c " + shlex.quote(script),
+                timeout=15,
+                distribution=settings["wslDistribution"],
+            )
             payload["checks"].append(_make_check(
                 "runner_syntax", "blocker", code == 0,
                 "Generated runner script has valid Bash syntax." if code == 0 else "Generated runner script has invalid Bash syntax.",
@@ -471,6 +515,7 @@ def _new_job(folder, preflight):
         "createdAt": time.time(),
         "updatedAt": time.time(),
         "snapshot": snapshot,
+        "runtime": {"wslDistribution": _training_settings()["wslDistribution"]},
         "preflight": {"checks": preflight.get("checks", []), "blockers": preflight.get("summary", {}).get("blockers", 0)},
     }
 
@@ -544,12 +589,13 @@ def stop_response(job_id, cancel=False):
         pid = int(job.get("pid") or 0)
         job["status"] = "stopping"
         job["stage"] = "stopping"
-        _run_wsl("kill -INT -- -" + str(pid), timeout=8)
+        distribution = _job_wsl_distribution(job)
+        _run_wsl("kill -INT -- -" + str(pid), timeout=8, distribution=distribution)
         deadline = time.time() + 5
-        while time.time() < deadline and _pid_alive(pid):
+        while time.time() < deadline and _pid_alive(pid, distribution):
             time.sleep(0.5)
-        if _pid_alive(pid):
-            _run_wsl("kill -KILL -- -" + str(pid), timeout=8)
+        if _pid_alive(pid, distribution):
+            _run_wsl("kill -KILL -- -" + str(pid), timeout=8, distribution=distribution)
         _refresh_job(job)
         if job.get("status") == "stopping":
             job["status"] = "stopped"

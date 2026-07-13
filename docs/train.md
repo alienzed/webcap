@@ -25,7 +25,9 @@ pkill -f 'config\.hi\.toml'
 Add these fields in `tool/config.json` (example in `tool/config.example.json`):
 
 - `training.diffusion_pipe_wsl`: shown in preview as the expected working directory context.
-- `training.activate_script`: optional WSL virtual-environment activation script used by managed runs and their validation checks. Set it when Python and DeepSpeed are installed in a virtual environment, for example `/home/user/diffusion-pipe/.venv/bin/activate`.
+- `training.wsl_distribution`: optional explicit WSL distribution; leave blank to use the Windows default.
+- `training.conda_executable` and `training.conda_environment`: optional pair for managed Conda runtime commands. WebCap uses `conda run` in its child processes and does not alter the user's WSL shell or environment.
+- `training.activate_script`: optional WSL virtual-environment activation script used only when no Conda runtime is configured, for example `/home/user/diffusion-pipe/.venv/bin/activate`.
 - Training config filenames are fixed to `config.hi.toml` and `config.lo.toml` in each set folder.
 
 ## Notes

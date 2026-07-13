@@ -16,6 +16,9 @@ function normalizeAppConfigShape(cfg) {
   if (!out.filesystem.root) out.filesystem.root = '';
   if (!out.filesystem.models) out.filesystem.models = '';
   if (!out.training.diffusion_pipe_wsl) out.training.diffusion_pipe_wsl = '';
+  if (!out.training.wsl_distribution) out.training.wsl_distribution = '';
+  if (!out.training.conda_executable) out.training.conda_executable = '';
+  if (!out.training.conda_environment) out.training.conda_environment = '';
   if (!out.training.activate_script) out.training.activate_script = '';
   if (!out.training.mode || ['poc', 'normal', 'quality'].indexOf(out.training.mode) === -1) out.training.mode = 'normal';
   if (typeof out.training.write_selection_snapshot_comments !== 'boolean') out.training.write_selection_snapshot_comments = false;
@@ -50,6 +53,9 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsRootEl) ui.appSettingsRootEl.value = c.filesystem.root || '';
   if (ui.appSettingsModelsEl) ui.appSettingsModelsEl.value = c.filesystem.models || '';
   if (ui.appSettingsTrainingDiffusionPipeWslEl) ui.appSettingsTrainingDiffusionPipeWslEl.value = c.training.diffusion_pipe_wsl || '';
+  if (ui.appSettingsTrainingWslDistributionEl) ui.appSettingsTrainingWslDistributionEl.value = c.training.wsl_distribution || '';
+  if (ui.appSettingsTrainingCondaExecutableEl) ui.appSettingsTrainingCondaExecutableEl.value = c.training.conda_executable || '';
+  if (ui.appSettingsTrainingCondaEnvironmentEl) ui.appSettingsTrainingCondaEnvironmentEl.value = c.training.conda_environment || '';
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
   if (ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl) ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked = !!c.training.write_selection_snapshot_comments;
   if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
@@ -72,6 +78,9 @@ function collectAppSettingsFormConfig() {
   base.filesystem.models = ui.appSettingsModelsEl ? ui.appSettingsModelsEl.value : '';
   base.debug = !!(ui.appSettingsDebugEl && ui.appSettingsDebugEl.checked);
   base.training.diffusion_pipe_wsl = ui.appSettingsTrainingDiffusionPipeWslEl ? ui.appSettingsTrainingDiffusionPipeWslEl.value : '';
+  base.training.wsl_distribution = ui.appSettingsTrainingWslDistributionEl ? ui.appSettingsTrainingWslDistributionEl.value : '';
+  base.training.conda_executable = ui.appSettingsTrainingCondaExecutableEl ? ui.appSettingsTrainingCondaExecutableEl.value : '';
+  base.training.conda_environment = ui.appSettingsTrainingCondaEnvironmentEl ? ui.appSettingsTrainingCondaEnvironmentEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
   base.training.write_selection_snapshot_comments = !!(ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl && ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked);
   base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';

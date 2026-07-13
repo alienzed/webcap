@@ -112,6 +112,9 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
             "debug": False,
             "training": {
                 "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
+                "wsl_distribution": "Ubuntu_W",
+                "conda_executable": "/home/user/miniconda3/bin/conda",
+                "conda_environment": "dp-clean",
                 "activate_script": "dp-clean/bin/activate",
                 "mode": "normal",
                 "write_selection_snapshot_comments": True,
@@ -125,9 +128,12 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["config"]["training"]["write_selection_snapshot_comments"] is True
+    assert payload["config"]["training"]["wsl_distribution"] == "Ubuntu_W"
+    assert payload["config"]["training"]["conda_environment"] == "dp-clean"
     assert payload["config"]["primer"]["template"] == "{subject}\n{view}\n{lighting}"
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     assert saved["training"]["write_selection_snapshot_comments"] is True
+    assert saved["training"]["conda_executable"] == "/home/user/miniconda3/bin/conda"
     assert saved["primer"]["template"] == "{subject}\n{view}\n{lighting}"
 
 

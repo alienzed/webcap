@@ -15,6 +15,7 @@ from .dataset_prep import prepare_dataset
 from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, ensure_training_config_files
 from .training_commands import build_training_command_plan
+from .training_runtime import build_training_launcher, training_runtime_settings
 
 
 class _QueueWriter:
@@ -180,8 +181,11 @@ def generate_dataset_config_response(folder: str):
         return Response(f"[ERROR] {e}\n", status=500, mimetype="text/plain")
 
 
-def _to_wsl_path(path_obj: Path):
-    cmd = ["wsl", "wslpath", "-a", str(path_obj)]
+def _to_wsl_path(path_obj: Path, distribution=""):
+    cmd = ["wsl"]
+    if distribution:
+        cmd.extend(["--distribution", distribution])
+    cmd.extend(["--", "wslpath", "-a", str(path_obj)])
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout or "wslpath failed").strip())
@@ -197,7 +201,8 @@ def train_run_response(folder: str):
 
     live_config = app_config.config
     training_cfg = live_config.get("training", {}) if isinstance(live_config, dict) else {}
-    diffusion_pipe_wsl = (training_cfg.get("diffusion_pipe_wsl") or "").strip()
+    runtime_settings = training_runtime_settings(training_cfg)
+    diffusion_pipe_wsl = runtime_settings["cwd"]
     hi_name = HI_CONFIG_NAME
     lo_name = LO_CONFIG_NAME
     mode = str(training_cfg.get("mode") or "normal").strip().lower()
@@ -245,12 +250,12 @@ def train_run_response(folder: str):
         warnings = []
 
         try:
-            hi_wsl = _to_wsl_path(hi_path)
+            hi_wsl = _to_wsl_path(hi_path, runtime_settings["wslDistribution"])
         except Exception:
             hi_wsl = hi_path.as_posix()
             warnings.append(f"[WARN] Could not resolve WSL path for {hi_name}; using native path.")
         try:
-            lo_wsl = _to_wsl_path(lo_path)
+            lo_wsl = _to_wsl_path(lo_path, runtime_settings["wslDistribution"])
         except Exception:
             lo_wsl = lo_path.as_posix()
             warnings.append(f"[WARN] Could not resolve WSL path for {lo_name}; using native path.")
@@ -259,7 +264,7 @@ def train_run_response(folder: str):
             diffusion_pipe_wsl = "<set training.diffusion_pipe_wsl>"
             warnings.append("[WARN] Missing training.diffusion_pipe_wsl in config.json; using placeholder cwd.")
 
-        command_plan = build_training_command_plan(hi_wsl, lo_wsl)
+        command_plan = build_training_command_plan(hi_wsl, lo_wsl, build_training_launcher(runtime_settings))
         handoff_cmd = command_plan["handoffCommand"]
         hi_kill_pattern = re.escape(hi_name)
         hi_kill_cmd = "pkill -f '" + hi_kill_pattern + "'"

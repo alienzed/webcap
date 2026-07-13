@@ -14,7 +14,9 @@ from .file_ops import duplicate_folder_response, duplicate_image_response, open_
 from .media import media_blur_background_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
-from .training_runner import log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response
+from .training_runner import log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response
+from .training_history import history_payload as training_history_payload, summarize_history as training_history_summary
+from .training_tensorboard import start_response as tensorboard_start_response, status_response as tensorboard_status_response, stop_response as tensorboard_stop_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .training_config_files import ensure_training_config_files
 from .permissions import normalize_path_permissions, run_with_directory_repair
@@ -346,7 +348,11 @@ def train_run_route():
     stages = str(data.get("stages") or "both").strip().lower()
     if stages not in ("hi", "lo", "both"):
         return Response("[ERROR] Training stage must be hi, lo, or both.\n", status=400, mimetype="text/plain")
-    return train_run_response(folder, stages, str(data.get("resumeFromCheckpoint") or "").strip())
+    resume_from_checkpoint = str(data.get("resumeFromCheckpoint") or "").strip()
+    resume_stage = str(data.get("resumeStage") or (stages if stages in ("hi", "lo") else "lo")).strip().lower()
+    if resume_from_checkpoint and resume_stage not in ("hi", "lo"):
+        return Response("[ERROR] Resume stage must be hi or lo.\n", status=400, mimetype="text/plain")
+    return train_run_response(folder, stages, resume_from_checkpoint, resume_stage)
 
 
 @app.route("/fs/training_runner/validate", methods=["POST"])
@@ -356,6 +362,7 @@ def training_runner_validate_route():
         (data.get("folder") or "").strip(),
         data.get("stages") or "both",
         data.get("resumeFromCheckpoint") or "",
+        data.get("resumeStage") or "",
     )
     return jsonify(payload), status
 
@@ -368,6 +375,8 @@ def training_runner_start_route():
         queue=bool(data.get("queue")),
         stages=data.get("stages") or "both",
         resume_from_checkpoint=data.get("resumeFromCheckpoint") or "",
+        resume_stage=data.get("resumeStage") or "",
+        parent_job_id=data.get("parentJobId") or "",
     )
     return jsonify(payload), status
 
@@ -387,7 +396,48 @@ def training_runner_log_route():
 @app.route("/fs/training_runner/stop", methods=["POST"])
 def training_runner_stop_route():
     data = request.get_json(silent=True) or {}
-    payload, status = training_runner_stop_response(data.get("jobId", ""), cancel=bool(data.get("cancel")))
+    payload, status = training_runner_stop_response(data.get("jobId", ""), cancel=bool(data.get("cancel")), pause=bool(data.get("pause")))
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_runner/reorder", methods=["POST"])
+def training_runner_reorder_route():
+    data = request.get_json(silent=True) or {}
+    payload, status = training_runner_reorder_response(data.get("jobId", ""), str(data.get("direction") or ""))
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_runner/resume_queue", methods=["POST"])
+def training_runner_resume_queue_route():
+    payload, status = training_runner_resume_queue_response()
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_history", methods=["GET"])
+def training_history_route():
+    folder = request.args.get("folder", "").strip()
+    try:
+        return jsonify({"ok": True, "history": training_history_payload(safe_join_fs_root(folder))})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/fs/tensorboard/status", methods=["GET"])
+def tensorboard_status_route():
+    payload, status = tensorboard_status_response(request.args.get("folder", "").strip())
+    return jsonify(payload), status
+
+
+@app.route("/fs/tensorboard/start", methods=["POST"])
+def tensorboard_start_route():
+    data = request.get_json(silent=True) or {}
+    payload, status = tensorboard_start_response((data.get("folder") or "").strip())
+    return jsonify(payload), status
+
+
+@app.route("/fs/tensorboard/stop", methods=["POST"])
+def tensorboard_stop_route():
+    payload, status = tensorboard_stop_response()
     return jsonify(payload), status
     
 
@@ -558,8 +608,19 @@ def _build_fs_describe_payload(dir_path):
     elif not isinstance(folder_state["reviewedKeys"], list):
         folder_state["error"] = "reviewedKeys is not a list in .webcap_state.json"
 
+    folders = []
+    for entry in entries:
+        if entry["type"] != "dir":
+            continue
+        folder_meta = dict(entry)
+        try:
+            folder_meta["trainingStatus"] = training_history_summary(dir_path / entry["name"])
+        except Exception:
+            folder_meta["trainingStatus"] = {"status": "never", "updatedAt": 0}
+        folders.append(folder_meta)
+
     return {
-        "folders": [e for e in entries if e["type"] == "dir"],
+        "folders": folders,
         "files": [e for e in entries if e["type"] == "file"],
         "captions": captions,
         "folder_state": folder_state

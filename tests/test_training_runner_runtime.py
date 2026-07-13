@@ -74,3 +74,12 @@ def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):
     assert "[webcap] stage=hi" not in script
     assert "[webcap] stage=lo" in script
     assert "--resume_from_checkpoint /mnt/w/output/run-1" in script
+
+
+def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
+    state = {"queuePaused": True, "activeJobId": "", "jobs": [{"id": "next", "status": "queued", "folder": "set"}]}
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("queue must remain held")))
+
+    training_runner._start_next(state)
+
+    assert state["activeJobId"] == ""

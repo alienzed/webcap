@@ -11,6 +11,10 @@ Purpose: preview copy/paste-ready two-stage diffusion-pipe commands (HI then LO)
 - `Validate Runner` checks the configured WSL runtime, generated paths, toolchain, CUDA visibility, and generated Bash syntax without launching training.
 - `Run In App` requires a passing validation and explicit confirmation, then launches a managed HI-to-LO job.
 - `Queue Training` persists a global managed queue under `<filesystem.root>/.webcap_training/`.
+- Generated configs write runs below `<filesystem.root>/output/sets/<set>/runs/`; each set keeps managed history in `.webcap_training.json` beside its data.
+- `Stop` interrupts the active job and advances the queue. `Pause` interrupts it, holds the queue, and leaves any discovered set-local checkpoint available for a later resume.
+- After a WebCap restart, a surviving active process is reconciled but queued work stays held until `Resume Queue` is clicked.
+- TensorBoard can be started from Training with the configured Conda runtime. It binds to `127.0.0.1` on `training.tensorboard_port` (default `6006`) and watches the set-grouped output root.
 - Managed job output is retained in per-job logs and is available from the Training console after a failure or restart.
 
 ## Command Shape
@@ -28,6 +32,7 @@ Add these fields in `tool/config.json` (example in `tool/config.example.json`):
 - `training.wsl_distribution`: optional explicit WSL distribution; leave blank to use the Windows default.
 - `training.conda_executable` and `training.conda_environment`: optional pair for managed Conda runtime commands. WebCap uses `conda run` in its child processes and does not alter the user's WSL shell or environment.
 - `training.activate_script`: optional WSL virtual-environment activation script used only when no Conda runtime is configured, for example `/home/user/diffusion-pipe/.venv/bin/activate`.
+- `training.tensorboard_port`: local port for the managed TensorBoard process, default `6006`.
 - Training config filenames are fixed to `config.hi.toml` and `config.lo.toml` in each set folder.
 
 ## Notes

@@ -239,6 +239,7 @@ function syncWorkspaceSurfaceUi() {
     updateSidebarCollapseUi(ui.appEl.classList.contains('left-rail-collapsed'));
   }
   syncConsolePanelHost();
+  renderFileList();
   syncWorkbenchRailUi();
   syncWorkspaceConfigEditorUi();
   syncTrainingWorkspaceUi();

@@ -20,6 +20,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.conda_executable) out.training.conda_executable = '';
   if (!out.training.conda_environment) out.training.conda_environment = '';
   if (!out.training.activate_script) out.training.activate_script = '';
+  if (!out.training.tensorboard_port) out.training.tensorboard_port = 6006;
   if (!out.training.mode || ['poc', 'normal', 'quality'].indexOf(out.training.mode) === -1) out.training.mode = 'normal';
   if (typeof out.training.write_selection_snapshot_comments !== 'boolean') out.training.write_selection_snapshot_comments = false;
   if (typeof out.primer.template !== 'string') out.primer.template = '';
@@ -57,6 +58,7 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingCondaExecutableEl) ui.appSettingsTrainingCondaExecutableEl.value = c.training.conda_executable || '';
   if (ui.appSettingsTrainingCondaEnvironmentEl) ui.appSettingsTrainingCondaEnvironmentEl.value = c.training.conda_environment || '';
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
+  if (ui.appSettingsTrainingTensorboardPortEl) ui.appSettingsTrainingTensorboardPortEl.value = c.training.tensorboard_port || 6006;
   if (ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl) ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked = !!c.training.write_selection_snapshot_comments;
   if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
   var mode = c.training.mode || 'normal';
@@ -82,6 +84,7 @@ function collectAppSettingsFormConfig() {
   base.training.conda_executable = ui.appSettingsTrainingCondaExecutableEl ? ui.appSettingsTrainingCondaExecutableEl.value : '';
   base.training.conda_environment = ui.appSettingsTrainingCondaEnvironmentEl ? ui.appSettingsTrainingCondaEnvironmentEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
+  base.training.tensorboard_port = ui.appSettingsTrainingTensorboardPortEl ? Number(ui.appSettingsTrainingTensorboardPortEl.value || 6006) : 6006;
   base.training.write_selection_snapshot_comments = !!(ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl && ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked);
   base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);

@@ -9,6 +9,7 @@
     "conda_executable": "/home/you/miniconda3/bin/conda",
     "conda_environment": "training-env",
     "activate_script": "",
+    "tensorboard_port": 6006,
     "write_selection_snapshot_comments": false
   },
   "analysis": {

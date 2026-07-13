@@ -759,11 +759,17 @@ async function renderFileList() {
       colorDot = '<span class="flag-dot flag-dot--' + flagColor + '" style="margin-left:8px;"></span>';
     }
     var label = '🗀 ' + folderItem.name;
+    var trainingStatus = folderItem.trainingStatus && workspaceState.surface === 'training'
+      ? String(folderItem.trainingStatus.status || 'never')
+      : '';
+    var trainingBadge = trainingStatus && trainingStatus !== 'never'
+      ? '<span class="training-folder-status training-folder-status--' + escapeHtml(trainingStatus) + '">' + escapeHtml(trainingStatus) + '</span>'
+      : '';
     var row = document.createElement('div');
     row.className = 'media-item folder-item';
     row.setAttribute('data-type', 'folder');
     row.setAttribute('data-key', folderItem.name);
-    row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%"><span>' + label + '</span>' + colorDot + '</div>';
+    row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%"><span>' + label + '</span><span>' + trainingBadge + colorDot + '</span></div>';
     ui.mediaListEl.appendChild(row);
     matchCount++;
   }

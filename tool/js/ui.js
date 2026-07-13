@@ -345,7 +345,9 @@ function refreshCurrentDirectory() {
           // resp.files: array of {name, extension, ...}
           // resp.captions: { [media]: {exists, empty} }
           // resp.folder_state: folder state object
-          state.childFolders = (resp.folders || []).map(function (f) { return { name: f.name }; });
+          state.childFolders = (resp.folders || []).map(function (f) {
+            return { name: f.name, trainingStatus: f.trainingStatus || null };
+          });
           state.files = (resp.files || []).map(function (f) { return f.name; });
           var captions = resp.captions || {};
           state.items = (resp.files || []).filter(function (f) {

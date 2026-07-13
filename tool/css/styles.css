@@ -1738,9 +1738,33 @@ iframe {
   box-shadow: none;
 }
 
-.training-run-menu-panel {
+.training-run-setup {
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+}
+
+.training-run-setup-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.training-run-setup-subtitle {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.training-run-setup-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 2fr) minmax(100px, auto);
+  gap: 8px;
+  align-items: end;
 }
 
 .training-run-option {
@@ -1759,6 +1783,195 @@ iframe {
   min-width: 0;
   padding: 5px 6px;
   font-size: 12px;
+}
+
+.training-run-stage-buttons {
+  display: flex;
+  min-width: 0;
+}
+
+.training-run-stage-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-right-width: 0;
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.training-run-stage-btn:first-child {
+  border-radius: 3px 0 0 3px;
+}
+
+.training-run-stage-btn:last-child {
+  border-right-width: 1px;
+  border-radius: 0 3px 3px 0;
+}
+
+.training-run-stage-btn.active {
+  position: relative;
+  z-index: 1;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #1f2937;
+}
+
+.training-run-setup-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.training-run-setup-spacer {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 760px) {
+  .training-run-setup-header {
+    display: grid;
+  }
+
+  .training-run-setup-subtitle {
+    text-align: left;
+  }
+
+  .training-run-setup-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+.training-runner-queue {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.training-runner-queue-title {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.training-runner-queue-item {
+  padding: 5px 6px;
+  border-left: 2px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.training-runner-queue-folder,
+.training-runner-queue-resume {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-surface-training .training-run-custom-checkpoint {
+  align-self: end;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workspace-surface-training .training-run-custom-checkpoint input {
+  width: 100%;
+  min-width: 0;
+  margin-top: 4px;
+  padding: 5px 6px;
+  font-size: 12px;
+}
+
+.workspace-surface-training .training-runner-queue-item.active {
+  border-left-color: var(--accent);
+}
+
+.workspace-surface-training .training-runner-queue-controls,
+.workspace-surface-training .training-history-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.workspace-surface-training .training-runner-queue-controls button,
+.workspace-surface-training .training-history-actions button {
+  padding: 2px 5px;
+  font-size: 11px;
+}
+
+.workspace-surface-training .training-history-card,
+.workspace-surface-training .training-tensorboard-card {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+}
+
+.workspace-surface-training .training-history-summary,
+.workspace-surface-training .training-tensorboard-summary {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workspace-surface-training .training-history-list {
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-surface-training .training-history-item {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-left: 2px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workspace-surface-training .training-history-item strong {
+  color: var(--text);
+}
+
+.workspace-surface-training .training-history-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-surface-training .training-folder-status {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.2;
+  text-transform: capitalize;
+}
+
+.workspace-surface-training .training-folder-status--running {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.workspace-surface-training .training-folder-status--completed {
+  border-color: #4f9d69;
+  color: #4f9d69;
+}
+
+.workspace-surface-training .training-folder-status--failed,
+.workspace-surface-training .training-folder-status--stopped,
+.workspace-surface-training .training-folder-status--paused {
+  border-color: #cc7a3f;
+  color: #cc7a3f;
 }
 
 .training-prepare-btn:hover {

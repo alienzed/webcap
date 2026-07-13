@@ -12,6 +12,7 @@ from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
+from .training_history import output_root_for_folder, record_job
 from .training_runtime import (
     build_runtime_command,
     build_training_launcher,
@@ -24,10 +25,12 @@ from .training_runtime import (
 RUNNER_DIR_NAME = ".webcap_training"
 STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
-TERMINAL_STATUSES = {"completed", "failed", "stopped", "cancelled"}
+TERMINAL_STATUSES = {"completed", "failed", "stopped", "paused", "cancelled"}
 _lock = threading.Lock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
+_startup_reconciled = False
+_history_signatures = {}
 
 
 def _runtime_root():
@@ -49,7 +52,7 @@ def _ensure_runtime_dirs():
 
 
 def _default_state():
-    return {"version": 1, "activeJobId": "", "jobs": []}
+    return {"version": 2, "activeJobId": "", "jobs": [], "queuePaused": False, "queuePauseReason": ""}
 
 
 def _read_state():
@@ -63,9 +66,11 @@ def _read_state():
         return _default_state()
     if not isinstance(parsed, dict):
         return _default_state()
-    parsed.setdefault("version", 1)
+    parsed.setdefault("version", 2)
     parsed.setdefault("activeJobId", "")
     parsed.setdefault("jobs", [])
+    parsed.setdefault("queuePaused", False)
+    parsed.setdefault("queuePauseReason", "")
     if not isinstance(parsed["jobs"], list):
         parsed["jobs"] = []
     return parsed
@@ -78,6 +83,35 @@ def _write_state(state):
     tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
     os.replace(tmp, path)
     normalize_path_permissions(path)
+
+
+def _sync_job_history(job):
+    folder = str(job.get("folder") or "").strip()
+    if not folder:
+        return
+    signature = json.dumps({
+        "status": job.get("status"), "stage": job.get("stage"), "updatedAt": job.get("updatedAt"),
+        "finishedAt": job.get("finishedAt"), "error": job.get("error"), "exitCode": job.get("exitCode"),
+    }, sort_keys=True)
+    if _history_signatures.get(job.get("id")) == signature:
+        return
+    record_job(app_config.safe_join_fs_root(folder), job)
+    _history_signatures[job.get("id")] = signature
+
+
+def _sync_histories(state):
+    for job in state.get("jobs", []):
+        _sync_job_history(job)
+
+
+def _apply_restart_hold(state):
+    global _startup_reconciled
+    if _startup_reconciled:
+        return
+    _startup_reconciled = True
+    if state.get("jobs") and any(job.get("status") == "queued" for job in state.get("jobs", [])):
+        state["queuePaused"] = True
+        state["queuePauseReason"] = "Queue held after WebCap restarted."
 
 
 def _job_dir(job_id):
@@ -295,6 +329,17 @@ def _normalize_training_stages(stages):
     return value
 
 
+def _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage):
+    if not str(resume_from_checkpoint or "").strip():
+        return ""
+    if stages in ("hi", "lo"):
+        return stages
+    value = str(resume_stage or "lo").strip().lower()
+    if value not in ("hi", "lo"):
+        raise ValueError("Resume stage must be hi or lo.")
+    return value
+
+
 def _build_runner_script(job, settings, artifacts, job_dir):
     use_snapshot = not (artifacts["hiConfig"].is_file() and artifacts["loConfig"].is_file())
     hi_path = Path(job["snapshot"]["hi"]) if use_snapshot else artifacts["hiConfig"]
@@ -303,11 +348,13 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     hi_wsl = _to_wsl_path(hi_path, distribution)
     lo_wsl = _to_wsl_path(lo_path, distribution)
     stages = _normalize_training_stages(job.get("stages"))
+    resume_stage = _normalize_resume_stage(stages, job.get("resumeFromCheckpoint"), job.get("resumeStage"))
     command_plan = build_training_command_plan(
         hi_wsl,
         lo_wsl,
         build_training_launcher(settings),
         job.get("resumeFromCheckpoint") or "",
+        resume_stage,
     )
     result_wsl = _to_wsl_path(job_dir / "result.json", distribution)
     pid_wsl = _to_wsl_path(job_dir / "pid", distribution)
@@ -442,6 +489,8 @@ def _refresh_job(job):
 
 
 def _start_next(state):
+    if state.get("queuePaused"):
+        return
     active_id = str(state.get("activeJobId") or "")
     active = _find_job(state, active_id) if active_id else None
     if active and active.get("status") not in TERMINAL_STATUSES:
@@ -472,7 +521,9 @@ def _monitor_loop():
         try:
             with _lock:
                 state = _read_state()
+                _apply_restart_hold(state)
                 _refresh_state(state)
+                _sync_histories(state)
                 _write_state(state)
         except Exception:
             pass
@@ -489,13 +540,14 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "exitCode", "resolvedConfigs", "preflight")
+    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId")
     return {field: job.get(field) for field in fields if field in job}
 
 
-def validate_response(folder, stages="both", resume_from_checkpoint=""):
+def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage=""):
     try:
         stages = _normalize_training_stages(stages)
+        resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
         payload = _preflight_payload(folder)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}
@@ -511,6 +563,7 @@ def validate_response(folder, stages="both", resume_from_checkpoint=""):
             "snapshot": {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])},
             "stages": stages,
             "resumeFromCheckpoint": str(resume_from_checkpoint or "").strip(),
+            "resumeStage": resume_stage,
         }
         try:
             script, resolved = _build_runner_script(diagnostic_job, settings, artifacts, _runtime_root() / "diagnostic")
@@ -540,18 +593,21 @@ def validate_response(folder, stages="both", resume_from_checkpoint=""):
         return {"ok": False, "error": str(exc), "checks": [], "summary": {"blockers": 1, "warnings": 0}}, 400
 
 
-def _new_job(folder, preflight, stages="both", resume_from_checkpoint=""):
+def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id=""):
     job_id = uuid.uuid4().hex[:12]
     job_dir = _job_dir(job_id)
     job_dir.mkdir(parents=True, exist_ok=False)
     _, folder_path = _resolve_folder(folder)
     artifacts, _ = _resolve_artifacts(folder, folder_path)
     snapshot = _copy_snapshot(job_dir, artifacts)
+    stages = _normalize_training_stages(stages)
+    resume_path = str(resume_from_checkpoint or "").strip()
     return {
         "id": job_id,
         "folder": folder,
-        "stages": _normalize_training_stages(stages),
-        "resumeFromCheckpoint": str(resume_from_checkpoint or "").strip(),
+        "stages": stages,
+        "resumeFromCheckpoint": resume_path,
+        "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
         "status": "queued",
         "stage": "queued",
         "createdAt": time.time(),
@@ -559,29 +615,34 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint=""):
         "snapshot": snapshot,
         "runtime": {"wslDistribution": _training_settings()["wslDistribution"]},
         "preflight": {"checks": preflight.get("checks", []), "blockers": preflight.get("summary", {}).get("blockers", 0)},
+        "outputRoot": str(output_root_for_folder(folder_path)),
+        "parentJobId": str(parent_job_id or ""),
     }
 
 
-def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""):
+def start_response(folder, queue=False, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id=""):
     try:
         stages = _normalize_training_stages(stages)
+        resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}, 400
-    preflight, status = validate_response(folder, stages, resume_from_checkpoint)
+    preflight, status = validate_response(folder, stages, resume_from_checkpoint, resume_stage)
     if status != 200 or not preflight.get("ok"):
         return {"ok": False, "error": "Preflight failed.", "preflight": preflight}, 400
     with _lock:
         _ensure_monitor_started()
         state = _read_state()
+        _apply_restart_hold(state)
         _refresh_state(state)
         active = _find_job(state, state.get("activeJobId")) if state.get("activeJobId") else None
         if active and active.get("status") not in TERMINAL_STATUSES and not queue:
             _write_state(state)
             return {"ok": False, "error": "A managed training job is already active.", "activeJob": _public_job(active)}, 409
-        job = _new_job(str(folder).strip(), preflight, stages, resume_from_checkpoint)
+        job = _new_job(str(folder).strip(), preflight, stages, resume_from_checkpoint, resume_stage, parent_job_id)
         state["jobs"].append(job)
         if not active or active.get("status") in TERMINAL_STATUSES:
             _start_next(state)
+        _sync_histories(state)
         _write_state(state)
         return {"ok": True, "job": _public_job(job), "queued": job.get("status") == "queued"}, 200
 
@@ -590,16 +651,26 @@ def status_response():
     with _lock:
         _ensure_monitor_started()
         state = _read_state()
+        _apply_restart_hold(state)
         _refresh_state(state)
+        _sync_histories(state)
         _write_state(state)
-        return {"ok": True, "activeJobId": state.get("activeJobId") or "", "jobs": [_public_job(job) for job in state.get("jobs", [])]}, 200
+        return {
+            "ok": True,
+            "activeJobId": state.get("activeJobId") or "",
+            "queuePaused": bool(state.get("queuePaused")),
+            "queuePauseReason": str(state.get("queuePauseReason") or ""),
+            "jobs": [_public_job(job) for job in state.get("jobs", [])],
+        }, 200
 
 
 def log_response(job_id, offset=0):
     with _lock:
         state = _read_state()
+        _apply_restart_hold(state)
         _refresh_state(state)
         job = _find_job(state, job_id)
+        _sync_histories(state)
         _write_state(state)
         if not job:
             return {"error": "Training job not found"}, 404
@@ -617,9 +688,10 @@ def log_response(job_id, offset=0):
         return {"ok": True, "job": _public_job(job), "offset": position, "nextOffset": next_offset, "text": raw.decode("utf-8", errors="replace")}, 200
 
 
-def stop_response(job_id, cancel=False):
+def stop_response(job_id, cancel=False, pause=False):
     with _lock:
         state = _read_state()
+        _apply_restart_hold(state)
         _refresh_state(state)
         job = _find_job(state, job_id)
         if not job:
@@ -628,6 +700,8 @@ def stop_response(job_id, cancel=False):
             job["status"] = "cancelled"
             job["stage"] = "cancelled"
             job["finishedAt"] = time.time()
+            job["updatedAt"] = time.time()
+            _sync_histories(state)
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if job.get("status") not in ("running", "stopping"):
@@ -643,11 +717,51 @@ def stop_response(job_id, cancel=False):
         if _pid_alive(pid, distribution):
             _run_wsl("kill -KILL -- -" + str(pid), timeout=8, distribution=distribution)
         _refresh_job(job)
-        if job.get("status") == "stopping":
-            job["status"] = "stopped"
-            job["finishedAt"] = time.time()
+        job["status"] = "paused" if pause else "stopped"
+        job["stage"] = "paused" if pause else "stopped"
+        job["finishedAt"] = time.time()
+        job["updatedAt"] = time.time()
+        if pause:
+            state["queuePaused"] = True
+            state["queuePauseReason"] = "Queue paused by the user."
         if state.get("activeJobId") == job.get("id"):
             state["activeJobId"] = ""
         _start_next(state)
+        _sync_histories(state)
         _write_state(state)
         return {"ok": True, "job": _public_job(job)}, 200
+
+
+def reorder_response(job_id, direction):
+    if direction not in ("up", "down"):
+        return {"ok": False, "error": "Queue direction must be up or down."}, 400
+    with _lock:
+        state = _read_state()
+        _apply_restart_hold(state)
+        queued_indexes = [index for index, job in enumerate(state.get("jobs", [])) if job.get("status") == "queued"]
+        current = next((index for index in queued_indexes if state["jobs"][index].get("id") == job_id), None)
+        if current is None:
+            return {"ok": False, "error": "Queued training job not found."}, 404
+        queue_position = queued_indexes.index(current)
+        target_position = queue_position - 1 if direction == "up" else queue_position + 1
+        if target_position < 0 or target_position >= len(queued_indexes):
+            return {"ok": False, "error": "Training job cannot move further in the queue."}, 400
+        target = queued_indexes[target_position]
+        state["jobs"][current], state["jobs"][target] = state["jobs"][target], state["jobs"][current]
+        state["jobs"][current]["updatedAt"] = time.time()
+        state["jobs"][target]["updatedAt"] = time.time()
+        _sync_histories(state)
+        _write_state(state)
+        return {"ok": True, "jobs": [_public_job(job) for job in state["jobs"]]}, 200
+
+
+def resume_queue_response():
+    with _lock:
+        state = _read_state()
+        _apply_restart_hold(state)
+        state["queuePaused"] = False
+        state["queuePauseReason"] = ""
+        _refresh_state(state)
+        _sync_histories(state)
+        _write_state(state)
+        return {"ok": True, "activeJobId": state.get("activeJobId") or "", "jobs": [_public_job(job) for job in state["jobs"]]}, 200

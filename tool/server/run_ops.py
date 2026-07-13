@@ -195,7 +195,7 @@ def _to_wsl_path(path_obj: Path, distribution=""):
     return out
 
 
-def train_run_response(folder: str, stages="both", resume_from_checkpoint=""):
+def train_run_response(folder: str, stages="both", resume_from_checkpoint="", resume_stage=""):
     if not folder:
         return Response("[ERROR] Missing folder argument\n", status=400, mimetype="text/plain")
 
@@ -269,6 +269,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint=""):
             lo_wsl,
             build_training_launcher(runtime_settings),
             resume_from_checkpoint,
+            resume_stage,
         )
         if stages == "hi":
             handoff_cmd = command_plan["hiCommand"]
@@ -284,7 +285,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint=""):
                 yield f"[INFO] Running from: {diffusion_pipe_wsl}\n"
                 yield f"[INFO] Training stages: {stages}\n"
                 if resume_from_checkpoint:
-                    yield f"[INFO] Resume checkpoint: {resume_from_checkpoint}\n"
+                    yield f"[INFO] Resume {resume_stage.upper()} checkpoint: {resume_from_checkpoint}\n"
                 yield f"[INFO] Config HI: {hi_wsl}\n"
                 yield f"[INFO] Config LO: {lo_wsl}\n"
                 for line in warnings:

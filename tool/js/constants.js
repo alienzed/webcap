@@ -113,6 +113,7 @@ ui = {
   appSettingsTrainingCondaExecutableEl: document.getElementById('app-settings-training-conda-executable'),
   appSettingsTrainingCondaEnvironmentEl: document.getElementById('app-settings-training-conda-environment'),
   appSettingsTrainingActivateScriptEl: document.getElementById('app-settings-training-activate-script'),
+  appSettingsTrainingTensorboardPortEl: document.getElementById('app-settings-training-tensorboard-port'),
   appSettingsTrainingWriteSelectionSnapshotCommentsEl: document.getElementById('app-settings-training-write-selection-snapshot-comments'),
   appSettingsTrainingModePocEl: document.getElementById('app-settings-training-mode-poc'),
   appSettingsTrainingModeNormalEl: document.getElementById('app-settings-training-mode-normal'),

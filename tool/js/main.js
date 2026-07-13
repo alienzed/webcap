@@ -233,7 +233,8 @@ function runTrainCommandPreviewForCurrentFolder(options) {
       return runTrainingActionRequest('/fs/train_run', {
         folder: state.folder,
         stages: options && options.stages ? options.stages : 'both',
-        resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : ''
+        resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
+        resumeStage: options && options.resumeStage ? options.resumeStage : ''
       }, { fetchText: true });
     })
     .then(function (outputText) {

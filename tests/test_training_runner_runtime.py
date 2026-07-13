@@ -38,6 +38,43 @@ def test_wsl_path_conversion_keeps_existing_wsl_paths(monkeypatch):
     assert training_runner._to_wsl_path("/mnt/w/training/config.hi.toml", "Ubuntu_W") == "/mnt/w/training/config.hi.toml"
 
 
+def test_gpu_snapshot_reports_compact_gpu_and_process_data(monkeypatch):
+    commands = []
+    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": "Ubuntu_W"})
+
+    def fake_run(command, **kwargs):
+        commands.append((command, kwargs))
+        if "--query-gpu" in command:
+            return 0, "0, NVIDIA RTX, 92, 18842, 24576, 67, 302.14\n", ""
+        return 0, "1234, python, 18600\n", ""
+
+    monkeypatch.setattr(training_runner, "_run_wsl", fake_run)
+
+    payload, status = training_runner.gpu_status_response()
+
+    assert status == 200
+    assert payload["gpu"]["available"] is True
+    assert payload["gpu"]["gpus"] == [{
+        "index": "0", "name": "NVIDIA RTX", "utilization": "92", "memoryUsed": "18842",
+        "memoryTotal": "24576", "temperature": "67", "powerDraw": "302.14",
+    }]
+    assert payload["gpu"]["processes"] == [{"pid": "1234", "name": "python", "memoryUsed": "18600"}]
+    assert len(commands) == 2
+    assert all(kwargs["distribution"] == "Ubuntu_W" for _, kwargs in commands)
+
+
+def test_gpu_snapshot_reports_unavailable_without_raising(monkeypatch):
+    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": "Ubuntu_W"})
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (127, "", "nvidia-smi not found"))
+
+    payload, status = training_runner.gpu_status_response()
+
+    assert status == 200
+    assert payload["gpu"]["available"] is False
+    assert payload["gpu"]["gpus"] == []
+    assert payload["gpu"]["error"] == "nvidia-smi not found"
+
+
 def test_native_wsl_runner_uses_the_current_bash_shell(monkeypatch):
     captured = {}
 

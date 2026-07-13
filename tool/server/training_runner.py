@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import csv
 import shlex
 import shutil
 import subprocess
@@ -230,6 +231,41 @@ def _wsl_check(check_id, severity, settings, command, message):
     return _make_check(check_id, severity, code == 0, message if code == 0 else message + " (exit " + str(code) + ")", details)
 
 
+def _parse_nvidia_smi_csv(text, fields):
+    rows = []
+    for values in csv.reader((text or "").splitlines()):
+        if len(values) != len(fields):
+            continue
+        rows.append({field: value.strip() for field, value in zip(fields, values)})
+    return rows
+
+
+def _gpu_snapshot():
+    settings = _training_settings()
+    distribution = settings.get("wslDistribution") or ""
+    gpu_fields = ("index", "name", "utilization", "memoryUsed", "memoryTotal", "temperature", "powerDraw")
+    gpu_command = "nvidia-smi --query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw --format=csv,noheader,nounits"
+    code, stdout, stderr = _run_wsl(gpu_command, timeout=5, distribution=distribution)
+    if code != 0:
+        return {
+            "available": False,
+            "gpus": [],
+            "processes": [],
+            "error": (stderr or stdout or "nvidia-smi failed (exit " + str(code) + ")").strip(),
+            "checkedAt": time.time(),
+        }
+    process_fields = ("pid", "name", "memoryUsed")
+    process_command = "nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits"
+    process_code, process_stdout, process_stderr = _run_wsl(process_command, timeout=5, distribution=distribution)
+    return {
+        "available": True,
+        "gpus": _parse_nvidia_smi_csv(stdout, gpu_fields),
+        "processes": _parse_nvidia_smi_csv(process_stdout, process_fields) if process_code == 0 else [],
+        "processError": (process_stderr or "").strip() if process_code != 0 else "",
+        "checkedAt": time.time(),
+    }
+
+
 def _build_preflight(folder):
     folder_value, folder_path = _resolve_folder(folder)
     artifacts, missing = _resolve_artifacts(folder_value, folder_path)
@@ -297,7 +333,7 @@ def _build_preflight(folder):
         build_runtime_command(settings, "python -c " + shlex.quote("import torch; raise SystemExit(0 if torch.cuda.is_available() and torch.cuda.device_count() else 1)")),
         "CUDA is visible to PyTorch.",
     ))
-    checks.append(_wsl_check("nvidia_smi", "warning", settings, "nvidia-smi -L", "nvidia-smi is available."))
+    checks.append(_wsl_check("nvidia_smi", "warning", settings, "nvidia-smi", "nvidia-smi is available."))
     return folder_value, folder_path, artifacts, settings, checks
 
 
@@ -927,6 +963,10 @@ def status_response():
             "jobs": [_public_job(job) for job in state.get("jobs", [])],
             "attention": _attention_payload(state),
         }, 200
+
+
+def gpu_status_response():
+    return {"ok": True, "gpu": _gpu_snapshot()}, 200
 
 
 def log_response(job_id, offset=0):

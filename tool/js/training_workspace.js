@@ -13,6 +13,9 @@ var trainingWorkspaceState = {
   runnerQueuePaused: false,
   runnerQueuePauseReason: '',
   runnerAttention: null,
+  gpu: null,
+  gpuStatusPending: false,
+  gpuForActiveJob: false,
   history: null,
   tensorboard: null
 };
@@ -142,6 +145,55 @@ function buildTrainingRunnerProgressHtml(job) {
     '</div>';
 }
 
+function formatTrainingGpuMemory(value) {
+  var mib = Number(value);
+  if (!isFinite(mib) || mib < 0) return '';
+  var gib = mib / 1024;
+  return (gib >= 10 ? gib.toFixed(0) : gib.toFixed(1)) + ' GB';
+}
+
+function buildTrainingGpuStatusHtml(job) {
+  if (job && job.status !== 'running' && job.status !== 'stopping') return '';
+  var gpu = trainingWorkspaceState.gpu;
+  if (!gpu) {
+    return trainingWorkspaceState.gpuStatusPending
+      ? '<div class="training-gpu-status">Checking GPU activity...</div>'
+      : '';
+  }
+  if (!gpu.available) {
+    return '<div class="training-runner-detail is-warning">GPU status unavailable' +
+      (gpu.error ? ': ' + escapeHtml(gpu.error) : '.') + '</div>';
+  }
+  var gpus = Array.isArray(gpu.gpus) ? gpu.gpus : [];
+  if (!gpus.length) return '<div class="training-runner-detail is-warning">No NVIDIA GPU was reported by nvidia-smi.</div>';
+  var primary = gpus[0];
+  var utilization = Number(primary.utilization);
+  var memoryUsed = formatTrainingGpuMemory(primary.memoryUsed);
+  var memoryTotal = formatTrainingGpuMemory(primary.memoryTotal);
+  var primarySummary = 'GPU' + (primary.index !== '' ? ' ' + primary.index : '') +
+    (isFinite(utilization) ? ' ' + Math.round(utilization) + '%' : '') +
+    (memoryUsed && memoryTotal ? ' · VRAM ' + memoryUsed + ' / ' + memoryTotal : '');
+  var processes = Array.isArray(gpu.processes) ? gpu.processes : [];
+  var processSummary = processes.length
+    ? processes.length + ' CUDA process' + (processes.length === 1 ? '' : 'es')
+    : 'GPU idle · no CUDA process reported';
+  var gpuDetails = gpus.map(function (item) {
+    var details = [];
+    if (item.temperature) details.push(item.temperature + '°C');
+    if (item.powerDraw) details.push(item.powerDraw + ' W');
+    return '<div>GPU ' + escapeHtml(item.index || '?') + ': ' + escapeHtml(item.name || 'NVIDIA GPU') +
+      (details.length ? ' · ' + escapeHtml(details.join(' · ')) : '') + '</div>';
+  }).join('');
+  var processDetails = processes.length
+    ? processes.map(function (process) {
+      return '<div>PID ' + escapeHtml(process.pid || '?') + ' · ' + escapeHtml(process.name || 'compute process') +
+        (process.memoryUsed ? ' · ' + escapeHtml(process.memoryUsed) + ' MiB' : '') + '</div>';
+    }).join('')
+    : '<div>No CUDA process reported by nvidia-smi.</div>';
+  return '<div class="training-gpu-status"><strong>' + escapeHtml(primarySummary) + '</strong><span>' + escapeHtml(processSummary) + '</span>' +
+    '<details class="training-gpu-details"><summary>GPU details</summary><div>' + gpuDetails + processDetails + '</div></details></div>';
+}
+
 function renderTrainingRunnerPreflight(payload) {
   var els = getTrainingWorkspaceEls();
   if (!els.runnerPreflight) return;
@@ -236,9 +288,10 @@ function renderTrainingRunner() {
     }
   }
   if (!job) {
-    els.runnerSummary.textContent = trainingWorkspaceState.runnerQueuePaused
+    var noJobMessage = trainingWorkspaceState.runnerQueuePaused
       ? (trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.')
       : 'No managed training jobs.';
+    els.runnerSummary.innerHTML = '<div>' + escapeHtml(noJobMessage) + '</div>' + buildTrainingGpuStatusHtml(null);
     els.runnerActions.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
     if (els.runnerStopBtn) els.runnerStopBtn.classList.add('hidden');
     if (els.runnerPauseBtn) els.runnerPauseBtn.classList.add('hidden');
@@ -266,6 +319,7 @@ function renderTrainingRunner() {
     (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
     quietNote +
     (trainingWorkspaceState.runnerQueuePaused ? '<div class="training-runner-detail">' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '</div>' : '') +
+    buildTrainingGpuStatusHtml(job) +
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
   var queued = status === 'queued';
@@ -404,6 +458,16 @@ function refreshTrainingRunnerStatus() {
       renderTrainingHistory();
       refreshTrainingHistory();
       var selected = getTrainingRunnerSelectedJob();
+      var hasActiveJob = trainingWorkspaceState.runnerJobs.some(function (job) {
+        return job.status === 'running' || job.status === 'stopping';
+      });
+      if (hasActiveJob) {
+        trainingWorkspaceState.gpuForActiveJob = true;
+        refreshTrainingGpuStatus();
+      } else if (trainingWorkspaceState.gpuForActiveJob || !trainingWorkspaceState.gpu) {
+        trainingWorkspaceState.gpuForActiveJob = false;
+        refreshTrainingGpuStatus();
+      }
       if (isConsolePanelVisible() && selected && selected.status !== 'queued') {
         fetchTrainingRunnerLog(selected);
       }
@@ -414,6 +478,23 @@ function refreshTrainingRunnerStatus() {
     .then(function () {
       trainingWorkspaceState.runnerStatusPending = false;
       scheduleTrainingRunnerPoll();
+    });
+}
+
+function refreshTrainingGpuStatus() {
+  if (!isTrainingWorkspaceActive() || trainingWorkspaceState.gpuStatusPending) return;
+  trainingWorkspaceState.gpuStatusPending = true;
+  renderTrainingRunner();
+  trainingRunnerRequest('/fs/training_runner/gpu')
+    .then(function (payload) {
+      trainingWorkspaceState.gpu = payload.gpu || null;
+    })
+    .catch(function (err) {
+      trainingWorkspaceState.gpu = { available: false, error: String(err && err.message ? err.message : err) };
+    })
+    .then(function () {
+      trainingWorkspaceState.gpuStatusPending = false;
+      renderTrainingRunner();
     });
 }
 

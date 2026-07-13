@@ -14,7 +14,7 @@ from .file_ops import duplicate_folder_response, duplicate_image_response, open_
 from .media import media_blur_background_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
-from .training_runner import log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, resume_job_response as training_runner_resume_job_response, folder_statuses_for_folders as training_runner_folder_statuses
+from .training_runner import log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, resume_job_response as training_runner_resume_job_response, folder_statuses_for_folders as training_runner_folder_statuses
 from .training_history import history_payload as training_history_payload
 from .training_tensorboard import start_response as tensorboard_start_response, status_response as tensorboard_status_response, stop_response as tensorboard_stop_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
@@ -384,6 +384,12 @@ def training_runner_start_route():
 @app.route("/fs/training_runner/status", methods=["GET"])
 def training_runner_status_route():
     payload, status = training_runner_status_response()
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_runner/gpu", methods=["GET"])
+def training_runner_gpu_route():
+    payload, status = training_runner_gpu_status_response()
     return jsonify(payload), status
 
 

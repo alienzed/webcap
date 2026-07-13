@@ -1891,6 +1891,86 @@ iframe {
   border-left-color: var(--accent);
 }
 
+.workspace-surface-training .training-runner-card {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
+  background: var(--panel);
+}
+
+.workspace-surface-training .training-runner-summary {
+  display: grid;
+  gap: 3px;
+  padding: 8px 9px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.workspace-surface-training .training-runner-state {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+}
+
+.workspace-surface-training .training-runner-status {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.workspace-surface-training .training-runner-status--running {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.workspace-surface-training .training-runner-status--queued,
+.workspace-surface-training .training-runner-status--paused {
+  border-color: #cc7a3f;
+  color: #cc7a3f;
+}
+
+.workspace-surface-training .training-runner-status--completed {
+  border-color: #4f9d69;
+  color: #4f9d69;
+}
+
+.workspace-surface-training .training-runner-status--failed,
+.workspace-surface-training .training-runner-status--stopped {
+  border-color: #c75a5a;
+  color: #c75a5a;
+}
+
+.workspace-surface-training .training-runner-folder {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.workspace-surface-training .training-runner-detail.is-error {
+  color: #c75a5a;
+}
+
+.workspace-surface-training .training-runner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.workspace-surface-training .training-runner-actions .review-captions-btn,
+.workspace-surface-training .training-runner-actions .training-btn {
+  width: auto;
+  min-height: 28px;
+}
+
 .workspace-surface-training .training-runner-queue-controls,
 .workspace-surface-training .training-history-actions {
   display: flex;
@@ -1912,6 +1992,18 @@ iframe {
   padding: 9px;
   border: 1px solid var(--border);
   background: var(--panel-soft);
+}
+
+.workspace-surface-training .training-operations-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.65fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.workspace-surface-training .training-operations-context .training-history-card,
+.workspace-surface-training .training-operations-context .training-tensorboard-card {
+  margin-top: 0;
 }
 
 .workspace-surface-training .training-history-summary,
@@ -1972,6 +2064,12 @@ iframe {
 .workspace-surface-training .training-folder-status--paused {
   border-color: #cc7a3f;
   color: #cc7a3f;
+}
+
+@media (max-width: 760px) {
+  .workspace-surface-training .training-operations-context {
+    grid-template-columns: 1fr;
+  }
 }
 
 .training-prepare-btn:hover {

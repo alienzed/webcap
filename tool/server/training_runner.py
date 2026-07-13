@@ -584,10 +584,6 @@ def _refresh_job(job):
                 job["stage"] = "lo"
             elif "[webcap] stage=hi" in tail:
                 job["stage"] = "hi"
-            if job.get("stage") in ("hi", "lo") and not job.get("progress") and not _LOG_EPOCH_PATTERN.search(tail):
-                # A restart can happen mid-epoch. Read a larger, bounded slice once
-                # to recover the latest epoch marker, then retain it in job progress.
-                tail = _read_log_tail(log_path, 8 * 1024 * 1024)
             _sync_job_progress(job, tail)
         except OSError:
             pass

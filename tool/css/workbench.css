@@ -362,10 +362,124 @@
   color: var(--text);
 }
 
+.app.shell-revamp.workspace-surface-training .training-runner-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-card > .training-workspace-section-title,
+.app.shell-revamp.workspace-surface-training .training-runner-queue {
+  grid-column: 1 / -1;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-folder,
+.app.shell-revamp.workspace-surface-training .training-runner-detail {
+  white-space: nowrap;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-actions {
+  justify-content: flex-end;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-progress {
+  display: grid;
+  flex: 1 0 100%;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-progress-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+  margin-top: 0;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-title {
+  grid-column: 1 / -1;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "stage controls"
+    "folder controls"
+    "resume controls";
+  align-items: center;
+  gap: 3px 8px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-item > div:first-child {
+  grid-area: stage;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-folder {
+  grid-area: folder;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-resume {
+  grid-area: resume;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-controls {
+  grid-area: controls;
+  align-self: center;
+  margin-top: 0;
+}
+
 .app.shell-revamp .training-runner-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+}
+
+@container (max-width: 720px) {
+  .app.shell-revamp.workspace-surface-training .training-runner-card {
+    display: flex;
+  }
+
+  .app.shell-revamp.workspace-surface-training .training-runner-actions {
+    justify-content: flex-start;
+  }
+
+  .app.shell-revamp.workspace-surface-training .training-runner-queue {
+    grid-template-columns: 1fr;
+  }
 }
 
 .app.shell-revamp .training-runner-actions .training-btn {

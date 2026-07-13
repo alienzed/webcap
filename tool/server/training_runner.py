@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -31,6 +32,9 @@ _monitor_lock = threading.Lock()
 _monitor_thread = None
 _startup_reconciled = False
 _history_signatures = {}
+_EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
+_LOG_EPOCH_PATTERN = re.compile(r"Started new epoch:\s*(\d+)", re.IGNORECASE)
+_LOG_STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
 
 
 def _runtime_root():
@@ -447,6 +451,57 @@ def _read_result(job):
         return None
 
 
+def _read_config_epochs(path):
+    try:
+        text = Path(str(path or "")).read_text(encoding="utf-8")
+    except OSError:
+        return 0
+    match = _EPOCH_CONFIG_PATTERN.search(text)
+    return int(match.group(1)) if match else 0
+
+
+def _sync_job_progress(job, log_text):
+    stage = str(job.get("stage") or "").lower()
+    if stage not in ("hi", "lo"):
+        job.pop("progress", None)
+        return
+
+    snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
+    current_epochs = _read_config_epochs(snapshot.get(stage, ""))
+    if not current_epochs:
+        job.pop("progress", None)
+        return
+
+    previous = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    previous_epoch = previous.get("epoch") if previous.get("stage") == stage else None
+    epoch_matches = _LOG_EPOCH_PATTERN.findall(log_text or "")
+    step_matches = _LOG_STEP_PATTERN.findall(log_text or "")
+    epoch = int(epoch_matches[-1]) if epoch_matches else previous_epoch
+    if epoch is None:
+        return
+    step = int(step_matches[-1]) if step_matches else previous.get("step")
+    stage_fraction = min(1.0, max(0.0, float(epoch) / float(current_epochs)))
+
+    stages = _normalize_training_stages(job.get("stages"))
+    hi_epochs = _read_config_epochs(snapshot.get("hi", ""))
+    lo_epochs = _read_config_epochs(snapshot.get("lo", ""))
+    if stages == "both" and hi_epochs and lo_epochs:
+        total_epochs = hi_epochs + lo_epochs
+        overall_fraction = (stage_fraction * hi_epochs / total_epochs) if stage == "hi" else ((hi_epochs + stage_fraction * lo_epochs) / total_epochs)
+    else:
+        overall_fraction = stage_fraction
+
+    job["progress"] = {
+        "stage": stage,
+        "epoch": int(epoch),
+        "epochs": int(current_epochs),
+        "step": int(step) if step is not None else None,
+        "stagePercent": round(stage_fraction * 100, 1),
+        "overallPercent": round(overall_fraction * 100, 1),
+        "estimated": True,
+    }
+
+
 def _job_wsl_distribution(job):
     runtime = job.get("runtime") if isinstance(job.get("runtime"), dict) else {}
     return str(runtime.get("wslDistribution") or _training_settings()["wslDistribution"] or "").strip()
@@ -483,6 +538,7 @@ def _refresh_job(job):
                 job["stage"] = "lo"
             elif "[webcap] stage=hi" in tail:
                 job["stage"] = "hi"
+            _sync_job_progress(job, tail)
         except OSError:
             pass
     job["updatedAt"] = time.time()
@@ -540,7 +596,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId")
+    fields = ("id", "folder", "stages", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress")
     return {field: job.get(field) for field in fields if field in job}
 
 

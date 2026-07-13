@@ -83,3 +83,35 @@ def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
     training_runner._start_next(state)
 
     assert state["activeJobId"] == ""
+
+
+def test_runner_progress_estimates_stage_and_overall_from_epoch_logs(tmp_path):
+    hi_path = tmp_path / "config.hi.toml"
+    lo_path = tmp_path / "config.lo.toml"
+    hi_path.write_text("epochs = 50\n", encoding="utf-8")
+    lo_path.write_text("epochs = 90\n", encoding="utf-8")
+    job = {
+        "stage": "hi",
+        "stages": "both",
+        "snapshot": {"hi": str(hi_path), "lo": str(lo_path)},
+    }
+
+    training_runner._sync_job_progress(
+        job,
+        "Started new epoch: 38\n[INFO] [Rank 0] step=4160, skipped=0\n",
+    )
+
+    assert job["progress"] == {
+        "stage": "hi",
+        "epoch": 38,
+        "epochs": 50,
+        "step": 4160,
+        "stagePercent": 76.0,
+        "overallPercent": 27.1,
+        "estimated": True,
+    }
+
+    training_runner._sync_job_progress(job, "[INFO] [Rank 0] step=4170, skipped=0\n")
+
+    assert job["progress"]["epoch"] == 38
+    assert job["progress"]["step"] == 4170

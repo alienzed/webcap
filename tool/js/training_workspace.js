@@ -96,6 +96,26 @@ function formatTrainingRunnerElapsed(job) {
   return hours ? hours + 'h ' + minutes + 'm' : minutes + 'm';
 }
 
+function buildTrainingRunnerProgressHtml(job) {
+  var progress = job && job.progress && typeof job.progress === 'object' ? job.progress : null;
+  if (!progress || (job.status !== 'running' && job.status !== 'stopping')) return '';
+  var stagePercent = Number(progress.stagePercent);
+  var overallPercent = Number(progress.overallPercent);
+  var epoch = Number(progress.epoch);
+  var epochs = Number(progress.epochs);
+  if (!isFinite(stagePercent) || !isFinite(overallPercent) || !isFinite(epoch) || !isFinite(epochs) || epochs < 1) return '';
+  var boundedOverall = Math.max(0, Math.min(100, overallPercent));
+  var step = Number(progress.step);
+  var stepLabel = isFinite(step) && step >= 0 ? ' · step ' + Math.round(step).toLocaleString() : '';
+  return '<div class="training-runner-progress" aria-label="Estimated training progress">' +
+    '<div class="training-runner-progress-copy"><span>' + escapeHtml(String(progress.stage || '').toUpperCase()) +
+      ' · epoch ' + Math.round(epoch) + ' / ' + Math.round(epochs) + stepLabel + '</span>' +
+      '<span>Estimated: ' + Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall</span></div>' +
+    '<div class="training-runner-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(boundedOverall) + '">' +
+      '<span style="width:' + boundedOverall.toFixed(1) + '%"></span></div>' +
+    '</div>';
+}
+
 function renderTrainingRunnerPreflight(payload) {
   var els = getTrainingWorkspaceEls();
   if (!els.runnerPreflight) return;
@@ -181,7 +201,8 @@ function renderTrainingRunner() {
     '<div class="training-runner-folder">' + escapeHtml(job.folder || '') + '</div>' +
     (queuedCount ? '<div class="training-runner-detail">' + queuedCount + ' queued job' + (queuedCount === 1 ? '' : 's') + '.</div>' : '') +
     (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
-    (trainingWorkspaceState.runnerQueuePaused ? '<div class="training-runner-detail">' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '</div>' : '');
+    (trainingWorkspaceState.runnerQueuePaused ? '<div class="training-runner-detail">' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '</div>' : '') +
+    buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
   var running = status === 'running' || status === 'stopping';
   var queued = status === 'queued';

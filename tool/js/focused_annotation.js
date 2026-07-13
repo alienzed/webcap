@@ -29,6 +29,9 @@ function getFocusedAnnotationEls() {
     copyTagsBtn: document.getElementById('focused-annotation-copy-tags-btn'),
     pasteTagsBtn: document.getElementById('focused-annotation-paste-tags-btn'),
     editTermsBtn: document.getElementById('focused-annotation-edit-terms-btn'),
+    groupMoveUpBtn: document.getElementById('focused-annotation-group-move-up-btn'),
+    groupMoveDownBtn: document.getElementById('focused-annotation-group-move-down-btn'),
+    groupDeleteBtn: document.getElementById('focused-annotation-group-delete-btn'),
     closeBtn: document.getElementById('focused-annotation-close-btn'),
     doneBtn: document.getElementById('focused-annotation-done-btn')
   };
@@ -974,6 +977,15 @@ function renderFocusedAnnotationModal() {
   if (els.editTermsBtn) {
     els.editTermsBtn.disabled = !requirementLabel;
   }
+  if (els.groupMoveUpBtn) {
+    els.groupMoveUpBtn.disabled = !requirementLabel || groupIndex <= 0;
+  }
+  if (els.groupMoveDownBtn) {
+    els.groupMoveDownBtn.disabled = !requirementLabel || groupIndex >= requirements.length - 1;
+  }
+  if (els.groupDeleteBtn) {
+    els.groupDeleteBtn.disabled = !requirementLabel;
+  }
   updateFocusedAnnotationGroupClipboardUi();
   if (els.doneBtn) {
     els.doneBtn.disabled = !requirementLabel;
@@ -1099,6 +1111,23 @@ function openFocusedAnnotationTermsEditor() {
   }
 }
 
+function moveFocusedAnnotationCurrentGroup(offset) {
+  var groupIndex = Math.max(0, Number(focusedAnnotationState.groupIndex) || 0);
+  var nextGroupIndex = groupIndex + Number(offset || 0);
+  if (!moveChecklistItemByOffset(groupIndex, offset)) return;
+  focusedAnnotationState.groupIndex = nextGroupIndex;
+  focusedAnnotationState.history = [];
+  renderFocusedAnnotationModal();
+}
+
+function deleteFocusedAnnotationCurrentGroup() {
+  var groupIndex = Math.max(0, Number(focusedAnnotationState.groupIndex) || 0);
+  if (!deleteChecklistGroupByIndex(groupIndex)) return;
+  focusedAnnotationState.groupIndex = Math.max(0, Math.min(checklistItems.length - 1, groupIndex));
+  focusedAnnotationState.history = [];
+  renderFocusedAnnotationModal();
+}
+
 function beginFocusedAnnotationRun(targetMediaKey) {
   var sequence = getFocusedAnnotationSequence();
   var items = Array.isArray(sequence.items) ? sequence.items.slice() : [];
@@ -1184,6 +1213,19 @@ function wireFocusedAnnotationModal() {
   }
   if (els.editTermsBtn) {
     els.editTermsBtn.addEventListener('click', openFocusedAnnotationTermsEditor);
+  }
+  if (els.groupMoveUpBtn) {
+    els.groupMoveUpBtn.addEventListener('click', function () {
+      moveFocusedAnnotationCurrentGroup(-1);
+    });
+  }
+  if (els.groupMoveDownBtn) {
+    els.groupMoveDownBtn.addEventListener('click', function () {
+      moveFocusedAnnotationCurrentGroup(1);
+    });
+  }
+  if (els.groupDeleteBtn) {
+    els.groupDeleteBtn.addEventListener('click', deleteFocusedAnnotationCurrentGroup);
   }
   if (els.copyTagsBtn) {
     els.copyTagsBtn.addEventListener('click', function () {

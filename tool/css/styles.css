@@ -581,8 +581,6 @@ button[disabled]:active {
 iframe {
   width: 100%;
   height: calc(100vh - 24px);
-  xborder: 1px solid var(--border);
-  xborder-radius: 6px;
   background: #fff;
   flex: 1;
 }

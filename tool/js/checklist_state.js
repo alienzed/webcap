@@ -425,8 +425,75 @@ function moveChecklistItemByOffset(index, offset) {
   next[idx] = next[nextIdx];
   next[nextIdx] = temp;
   checklistItems = next;
+  refreshChecklistGroupConfigurationUi();
+  return true;
+}
+
+function refreshChecklistGroupConfigurationUi() {
+  syncReviewedFromChecklistAll();
   saveChecklistToFolderState();
   renderChecklistPanel();
+  renderItemMetadataPanel();
+  renderAnnotateStrip();
+  renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  refreshCurrentPrimerDerivedUi();
+}
+
+function deleteChecklistGroupByIndex(index) {
+  var idx = Number(index);
+  if (!isFinite(idx) || !Array.isArray(checklistItems) || idx < 0 || idx >= checklistItems.length) return false;
+  var requirementLabel = checklistItems[idx];
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement) return false;
+
+  var reviewedByMedia = {};
+  Object.keys(checklistCheckedByMedia).forEach(function (mediaKey) {
+    var checked = checklistCheckedByMedia[mediaKey];
+    if (!checked || !Object.prototype.hasOwnProperty.call(checked, requirement)) return;
+    reviewedByMedia[mediaKey] = checked[requirement];
+  });
+  var hasLocalTerms = Object.prototype.hasOwnProperty.call(checklistKeywordsByItem, requirement);
+  recordUndoOperation({
+    type: 'checklist-group-delete',
+    index: idx,
+    requirementLabel: requirementLabel,
+    hasLocalTerms: hasLocalTerms,
+    localTerms: hasLocalTerms ? checklistKeywordsByItem[requirement] : '',
+    reviewedByMedia: reviewedByMedia
+  });
+
+  checklistItems.splice(idx, 1);
+  delete checklistKeywordsByItem[requirement];
+  delete checklistSessionHiddenTermsByRequirement[requirement];
+  delete checklistExpandedRequirements[requirement];
+  Object.keys(checklistCheckedByMedia).forEach(function (mediaKey) {
+    var checked = checklistCheckedByMedia[mediaKey];
+    if (!checked || !Object.prototype.hasOwnProperty.call(checked, requirement)) return;
+    delete checked[requirement];
+    if (!Object.keys(checked).length) delete checklistCheckedByMedia[mediaKey];
+  });
+  refreshChecklistGroupConfigurationUi();
+  setStatus('Removed group "' + requirementLabel + '". Press Ctrl+Z to undo.');
+  return true;
+}
+
+function restoreDeletedChecklistGroup(operation) {
+  var op = operation || {};
+  var requirementLabel = String(op.requirementLabel || '').trim();
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement || !Array.isArray(checklistItems) || checklistItems.indexOf(requirementLabel) !== -1) return false;
+  var index = Math.max(0, Math.min(checklistItems.length, Number(op.index) || 0));
+  checklistItems.splice(index, 0, requirementLabel);
+  if (op.hasLocalTerms) checklistKeywordsByItem[requirement] = String(op.localTerms || '');
+  else delete checklistKeywordsByItem[requirement];
+  var reviewedByMedia = (op.reviewedByMedia && typeof op.reviewedByMedia === 'object') ? op.reviewedByMedia : {};
+  Object.keys(reviewedByMedia).forEach(function (mediaKey) {
+    var checked = JSON.parse(JSON.stringify(getChecklistCheckedMapForMediaKey(mediaKey)));
+    checked[requirement] = reviewedByMedia[mediaKey];
+    checklistCheckedByMedia[mediaKey] = checked;
+  });
+  refreshChecklistGroupConfigurationUi();
+  setStatus('Restored group "' + requirementLabel + '".');
   return true;
 }
 
@@ -1033,4 +1100,3 @@ function saveChecklistGlobalWrapper(termText, prefix, suffix, onDone) {
     callback(true, saved);
   });
 }
-

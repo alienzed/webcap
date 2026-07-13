@@ -338,4 +338,3 @@ Use prompts that say:
 - Hide Grid-irrelevant panels through CSS.
 - Preserve existing feature semantics.
 - Do not introduce a second renderer or new surface system.
-

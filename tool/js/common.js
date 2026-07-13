@@ -175,6 +175,18 @@ function undoLastOperation() {
       }
       return true;
     }
+    if (op.type === 'checklist-group-delete') {
+      var restoredGroup = restoreDeletedChecklistGroup(op);
+      if (restoredGroup && focusedAnnotationState.open) {
+        focusedAnnotationState.groupIndex = Math.max(0, Math.min(
+          checklistItems.length - 1,
+          Number(op.index) || 0
+        ));
+        focusedAnnotationState.history = [];
+        renderFocusedAnnotationModal();
+      }
+      return restoredGroup;
+    }
     if (op.type === 'tag') {
       if (op.previousValue) {
         addTagToMediaKey(op.mediaKey, op.tagText);

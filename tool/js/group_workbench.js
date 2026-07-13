@@ -442,7 +442,6 @@ function renderGroupWorkbench(options) {
         return true;
       });
     terms.sort(checklistSort);
-    if (!terms.length) continue;
 
     var groupEl = document.createElement('div');
     groupEl.className = 'group-workbench-group';
@@ -480,6 +479,28 @@ function renderGroupWorkbench(options) {
     var actionsEl = document.createElement('div');
     actionsEl.className = 'group-workbench-group-actions';
 
+    var moveUpBtn = createGroupWorkbenchActionButton('group-workbench-move-up-btn', '\u2191', 'Move group up', 'Move ' + requirementLabel + ' up');
+    moveUpBtn.disabled = i === 0;
+    (function (index, label, afterMutation) {
+      bindGroupWorkbenchHeaderButton(moveUpBtn, function () {
+        if (!moveChecklistItemByOffset(index, -1)) return;
+        setStatus('Moved group up: ' + label);
+        if (afterMutation) afterMutation();
+      });
+    })(i, requirementLabel, opts.onAfterMutation);
+    actionsEl.appendChild(moveUpBtn);
+
+    var moveDownBtn = createGroupWorkbenchActionButton('group-workbench-move-down-btn', '\u2193', 'Move group down', 'Move ' + requirementLabel + ' down');
+    moveDownBtn.disabled = i === checklistItems.length - 1;
+    (function (index, label, afterMutation) {
+      bindGroupWorkbenchHeaderButton(moveDownBtn, function () {
+        if (!moveChecklistItemByOffset(index, 1)) return;
+        setStatus('Moved group down: ' + label);
+        if (afterMutation) afterMutation();
+      });
+    })(i, requirementLabel, opts.onAfterMutation);
+    actionsEl.appendChild(moveDownBtn);
+
     var editBtn = createGroupWorkbenchActionButton('group-workbench-edit-btn', '\u270e', 'Edit group terms', 'Edit terms for ' + requirementLabel);
     (function (label) {
       bindGroupWorkbenchHeaderButton(editBtn, function () {
@@ -487,6 +508,15 @@ function renderGroupWorkbench(options) {
       });
     })(requirementLabel);
     actionsEl.appendChild(editBtn);
+
+    var deleteBtn = createGroupWorkbenchActionButton('group-workbench-delete-btn', '\u00d7', 'Delete group', 'Delete ' + requirementLabel);
+    (function (index, afterMutation) {
+      bindGroupWorkbenchHeaderButton(deleteBtn, function () {
+        if (!deleteChecklistGroupByIndex(index)) return;
+        if (afterMutation) afterMutation();
+      });
+    })(i, opts.onAfterMutation);
+    actionsEl.appendChild(deleteBtn);
 
     var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', '\u2713', 'Toggle reviewed', 'Toggle reviewed for ' + requirementLabel);
     reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
@@ -528,6 +558,12 @@ function renderGroupWorkbench(options) {
     var groupHasMismatchTerm = false;
     var selectedTermCount = 0;
     var mixedTermCount = 0;
+    if (!terms.length) {
+      var emptyTermsEl = document.createElement('div');
+      emptyTermsEl.className = 'group-workbench-empty';
+      emptyTermsEl.textContent = 'No terms configured.';
+      termListEl.appendChild(emptyTermsEl);
+    }
     for (var t = 0; t < terms.length; t++) {
       var term = terms[t];
       var activeCount = 0;
@@ -627,4 +663,3 @@ window.addEventListener('resize', function () {
     }
   });
 });
-

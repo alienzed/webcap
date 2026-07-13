@@ -26,7 +26,7 @@ function renderChecklistPanel() {
         mediaKeys: []
       });
     }
-    setChecklistPanelVisible(false);
+    setChecklistPanelVisible(true);
     renderItemTagsPanel();
     renderItemMetadataPanel();
     renderAnnotateStrip();
@@ -201,5 +201,3 @@ function renderChecklistPanel() {
   renderItemMetadataPanel();
   renderAnnotateStrip();
 }
-
-

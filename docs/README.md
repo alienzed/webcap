@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Last reviewed against code: 2026-07-04
+Last reviewed against code: 2026-07-12
 
 This folder mixes three different kinds of documents:
 
@@ -40,9 +40,6 @@ These describe implemented features, but they are narrower than `README.md` / `d
 These are useful product notes, not authoritative implementation references:
 
 - `docs/ui_gold_master.md`
-- `docs/ui-revamp.md`
-- `docs/webcap_north_star.md`
-- `docs/workspace-consolidation-spec.md`
 - `docs/selection_report.md`
 - `docs/qa_panel.md`
 - `docs/train_execution_preflight.md`
@@ -57,6 +54,7 @@ These are useful product notes, not authoritative implementation references:
 
 These are intentionally retained for context:
 
+- `docs/archive/ui-revamp-2026-07/` - completed workspace-consolidation planning; use `README.md` and `docs/spec.md` for current behavior
 - `docs/archive/`
 - `docs/feature_spec.md`
 - `docs/caption-review.md`

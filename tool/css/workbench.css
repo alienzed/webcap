@@ -1118,15 +1118,6 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
     grid-template-columns: 1fr;
   }
 
-  .app.shell-revamp.workflow-annotate:not(.left-rail-collapsed) {
-    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
-    grid-template-areas:
-      "header header"
-      "sidebar preview"
-      "sidebar workbench";
-  }
-
-
   .app.shell-revamp .workbench-top,
   .app.shell-revamp.workflow-annotate .workbench-top,
   .app.shell-revamp .workbench-bottom,
@@ -1164,23 +1155,6 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 
 @media (max-width: 880px) {
-  .app.shell-revamp.workflow-annotate:not(.left-rail-collapsed) {
-    grid-template-columns: minmax(220px, 264px) minmax(0, 1fr);
-    grid-template-areas:
-      "header header"
-      "sidebar preview"
-      "sidebar workbench";
-  }
-
-  .app.shell-revamp.workflow-annotate.left-rail-collapsed {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "header"
-      "preview"
-      "workbench";
-  }
-
-
   .app.shell-revamp .workbench-top,
   .app.shell-revamp.workflow-annotate .workbench-top,
   .app.shell-revamp .workbench-bottom,

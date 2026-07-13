@@ -75,7 +75,7 @@ Phase 1 tasks:
 
 3. Implement a shared renderer, preferably in tool/js/checklist.js, because checklist.js already owns group state.
    Suggested public-ish function:
-   
+
    function renderGroupWorkbench(options) { ... }
 
    Suggested options:

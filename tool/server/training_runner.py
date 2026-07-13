@@ -13,6 +13,7 @@ from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
+from .dataset_config import repeat_targets_for_mode
 from .training_history import output_root_for_folder, record_job
 from .training_runtime import (
     build_runtime_command,
@@ -326,6 +327,25 @@ def _copy_snapshot(job_dir, artifacts):
     return snapshot
 
 
+def _read_training_plan(folder_path):
+    path = Path(folder_path) / "auto_dataset" / "training_plan.json"
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    stages = parsed.get("stages") if isinstance(parsed, dict) else None
+    return stages if isinstance(stages, dict) else {}
+
+
+def _default_progress_plan():
+    training = app_config.config.get("training") if isinstance(app_config.config, dict) else {}
+    hi_steps, lo_steps = repeat_targets_for_mode((training or {}).get("mode"))
+    return {
+        "hi": {"estimatedSteps": hi_steps},
+        "lo": {"estimatedSteps": lo_steps},
+    }
+
+
 def _normalize_training_stages(stages):
     value = str(stages or "both").strip().lower()
     if value not in ("hi", "lo", "both"):
@@ -460,6 +480,17 @@ def _read_config_epochs(path):
     return int(match.group(1)) if match else 0
 
 
+def _read_log_tail(path, byte_count=4096):
+    try:
+        with Path(path).open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - byte_count))
+            return handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
 def _sync_job_progress(job, log_text):
     stage = str(job.get("stage") or "").lower()
     if stage not in ("hi", "lo"):
@@ -477,29 +508,42 @@ def _sync_job_progress(job, log_text):
     epoch_matches = _LOG_EPOCH_PATTERN.findall(log_text or "")
     step_matches = _LOG_STEP_PATTERN.findall(log_text or "")
     epoch = int(epoch_matches[-1]) if epoch_matches else previous_epoch
-    if epoch is None:
-        return
     step = int(step_matches[-1]) if step_matches else previous.get("step")
-    stage_fraction = min(1.0, max(0.0, float(epoch) / float(current_epochs)))
+    plan = job.get("progressPlan") if isinstance(job.get("progressPlan"), dict) else {}
+    stage_plan = plan.get(stage) if isinstance(plan.get(stage), dict) else {}
+    planned_steps = int(stage_plan.get("estimatedSteps") or 0)
+    use_steps = step is not None and planned_steps > 0
+    if not use_steps and epoch is None:
+        return
+    stage_fraction = min(1.0, max(0.0, float(step) / float(planned_steps))) if use_steps else min(1.0, max(0.0, float(epoch) / float(current_epochs)))
 
     stages = _normalize_training_stages(job.get("stages"))
+    hi_planned_steps = int((plan.get("hi") or {}).get("estimatedSteps") or 0) if isinstance(plan.get("hi"), dict) else 0
+    lo_planned_steps = int((plan.get("lo") or {}).get("estimatedSteps") or 0) if isinstance(plan.get("lo"), dict) else 0
     hi_epochs = _read_config_epochs(snapshot.get("hi", ""))
     lo_epochs = _read_config_epochs(snapshot.get("lo", ""))
-    if stages == "both" and hi_epochs and lo_epochs:
+    if stages == "both" and use_steps and hi_planned_steps and lo_planned_steps:
+        total_steps = hi_planned_steps + lo_planned_steps
+        overall_fraction = (stage_fraction * hi_planned_steps / total_steps) if stage == "hi" else ((hi_planned_steps + stage_fraction * lo_planned_steps) / total_steps)
+    elif stages == "both" and hi_epochs and lo_epochs:
         total_epochs = hi_epochs + lo_epochs
         overall_fraction = (stage_fraction * hi_epochs / total_epochs) if stage == "hi" else ((hi_epochs + stage_fraction * lo_epochs) / total_epochs)
     else:
         overall_fraction = stage_fraction
 
-    job["progress"] = {
+    progress = {
         "stage": stage,
-        "epoch": int(epoch),
+        "epoch": int(epoch) if epoch is not None else None,
         "epochs": int(current_epochs),
         "step": int(step) if step is not None else None,
         "stagePercent": round(stage_fraction * 100, 1),
         "overallPercent": round(overall_fraction * 100, 1),
         "estimated": True,
     }
+    if use_steps:
+        progress["plannedSteps"] = planned_steps
+        progress["source"] = "steps"
+    job["progress"] = progress
 
 
 def _job_wsl_distribution(job):
@@ -517,6 +561,8 @@ def _pid_alive(pid, distribution=""):
 def _refresh_job(job):
     if str(job.get("status")) not in ("running", "stopping"):
         return
+    if not job.get("progressPlan"):
+        job["progressPlan"] = _default_progress_plan()
     result = _read_result(job)
     if result:
         job["status"] = str(result.get("status") or "failed")
@@ -533,11 +579,15 @@ def _refresh_job(job):
     log_path = Path(job.get("logPath") or "")
     if log_path.exists():
         try:
-            tail = log_path.read_text(encoding="utf-8", errors="replace")[-4096:]
+            tail = _read_log_tail(log_path)
             if "[webcap] stage=lo" in tail:
                 job["stage"] = "lo"
             elif "[webcap] stage=hi" in tail:
                 job["stage"] = "hi"
+            if job.get("stage") in ("hi", "lo") and not job.get("progress") and not _LOG_EPOCH_PATTERN.search(tail):
+                # A restart can happen mid-epoch. Read a larger, bounded slice once
+                # to recover the latest epoch marker, then retain it in job progress.
+                tail = _read_log_tail(log_path, 8 * 1024 * 1024)
             _sync_job_progress(job, tail)
         except OSError:
             pass
@@ -669,6 +719,7 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "createdAt": time.time(),
         "updatedAt": time.time(),
         "snapshot": snapshot,
+        "progressPlan": _read_training_plan(folder_path) or _default_progress_plan(),
         "runtime": {"wslDistribution": _training_settings()["wslDistribution"]},
         "preflight": {"checks": preflight.get("checks", []), "blockers": preflight.get("summary", {}).get("blockers", 0)},
         "outputRoot": str(output_root_for_folder(folder_path)),

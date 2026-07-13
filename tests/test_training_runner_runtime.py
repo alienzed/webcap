@@ -115,3 +115,33 @@ def test_runner_progress_estimates_stage_and_overall_from_epoch_logs(tmp_path):
 
     assert job["progress"]["epoch"] == 38
     assert job["progress"]["step"] == 4170
+
+
+def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_path):
+    hi_path = tmp_path / "config.hi.toml"
+    lo_path = tmp_path / "config.lo.toml"
+    hi_path.write_text("epochs = 50\n", encoding="utf-8")
+    lo_path.write_text("epochs = 90\n", encoding="utf-8")
+    job = {
+        "stage": "lo",
+        "stages": "both",
+        "snapshot": {"hi": str(hi_path), "lo": str(lo_path)},
+        "progressPlan": {
+            "hi": {"estimatedSteps": 5000},
+            "lo": {"estimatedSteps": 20000},
+        },
+    }
+
+    training_runner._sync_job_progress(job, "[INFO] [Rank 0] step=9700, skipped=0\n")
+
+    assert job["progress"] == {
+        "stage": "lo",
+        "epoch": None,
+        "epochs": 90,
+        "step": 9700,
+        "stagePercent": 48.5,
+        "overallPercent": 58.8,
+        "estimated": True,
+        "plannedSteps": 20000,
+        "source": "steps",
+    }

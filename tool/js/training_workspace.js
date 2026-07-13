@@ -103,14 +103,23 @@ function buildTrainingRunnerProgressHtml(job) {
   var overallPercent = Number(progress.overallPercent);
   var epoch = Number(progress.epoch);
   var epochs = Number(progress.epochs);
-  if (!isFinite(stagePercent) || !isFinite(overallPercent) || !isFinite(epoch) || !isFinite(epochs) || epochs < 1) return '';
+  var hasEpoch = isFinite(epoch) && isFinite(epochs) && epochs >= 1;
+  var plannedSteps = Number(progress.plannedSteps);
+  var hasPlannedSteps = isFinite(plannedSteps) && plannedSteps > 0;
+  if (!isFinite(stagePercent) || !isFinite(overallPercent) || !hasEpoch && !hasPlannedSteps) return '';
   var boundedOverall = Math.max(0, Math.min(100, overallPercent));
   var step = Number(progress.step);
   var stepLabel = isFinite(step) && step >= 0 ? ' · step ' + Math.round(step).toLocaleString() : '';
+  if (isFinite(step) && step >= 0 && hasPlannedSteps) {
+    stepLabel += ' / ~' + Math.round(plannedSteps).toLocaleString();
+  }
+  var positionLabel = hasEpoch
+    ? ' · epoch ' + Math.round(epoch) + ' / ' + Math.round(epochs) + stepLabel
+    : stepLabel.trim();
   return '<div class="training-runner-progress" aria-label="Estimated training progress">' +
     '<div class="training-runner-progress-copy"><span>' + escapeHtml(String(progress.stage || '').toUpperCase()) +
-      ' · epoch ' + Math.round(epoch) + ' / ' + Math.round(epochs) + stepLabel + '</span>' +
-      '<span>Estimated: ' + Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall</span></div>' +
+      positionLabel + '</span>' +
+      '<span>Planned: ' + Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall</span></div>' +
     '<div class="training-runner-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(boundedOverall) + '">' +
       '<span style="width:' + boundedOverall.toFixed(1) + '%"></span></div>' +
     '</div>';

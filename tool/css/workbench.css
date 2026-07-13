@@ -363,21 +363,13 @@
 }
 
 .app.shell-revamp.workspace-surface-training .training-runner-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-.app.shell-revamp.workspace-surface-training .training-runner-card > .training-workspace-section-title,
-.app.shell-revamp.workspace-surface-training .training-runner-queue {
-  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .app.shell-revamp.workspace-surface-training .training-runner-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px 10px;
+  display: grid;
 }
 
 .app.shell-revamp.workspace-surface-training .training-runner-folder,
@@ -386,12 +378,12 @@
 }
 
 .app.shell-revamp.workspace-surface-training .training-runner-actions {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .app.shell-revamp.workspace-surface-training .training-runner-progress {
   display: grid;
-  flex: 1 0 100%;
+  width: 100%;
   gap: 4px;
   min-width: 0;
   padding-top: 2px;
@@ -469,10 +461,6 @@
 }
 
 @container (max-width: 720px) {
-  .app.shell-revamp.workspace-surface-training .training-runner-card {
-    display: flex;
-  }
-
   .app.shell-revamp.workspace-surface-training .training-runner-actions {
     justify-content: flex-start;
   }

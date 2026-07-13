@@ -95,6 +95,7 @@ REPEAT_TARGET_STEPS = {
     "normal": {"hi": 5000, "lo": 20000},
     "quality": {"hi": 5000, "lo": 20000},
 }
+TRAINING_PLAN_FILE_NAME = "training_plan.json"
 VIDEO_DETAIL_REPEAT_WEIGHT = 0.25
 VIDEO_MOTION_REPEAT_WEIGHT = 1.0
 IMAGE_REPEAT_WEIGHT = 1.0
@@ -252,9 +253,21 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lo_repeats = build_repeats(lo_entries, lo_scalar)
     hi_est = estimate_steps(hi_entries, hi_repeats, hi_epochs)
     lo_est = estimate_steps(lo_entries, lo_repeats, lo_epochs)
+    training_plan = {
+        "version": 1,
+        "mode": generate_mode,
+        "stages": {
+            "hi": {"epochs": hi_epochs, "targetSteps": hi_target_steps, "estimatedSteps": hi_est},
+            "lo": {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est},
+        },
+    }
+    training_plan_path = dataset_root / TRAINING_PLAN_FILE_NAME
+    training_plan_path.write_text(json.dumps(training_plan, indent=2), encoding="utf-8")
+    normalize_path_permissions(training_plan_path)
 
     lines.append(f"[INFO] Repeat targeting HI: target={hi_target_steps}, epochs={hi_epochs}, base={hi_base:.2f}, scalar={hi_scalar}, est_steps={hi_est}")
     lines.append(f"[INFO] Repeat targeting LO: target={lo_target_steps}, epochs={lo_epochs}, base={lo_base:.2f}, scalar={lo_scalar}, est_steps={lo_est}")
+    lines.append(f"[INFO] Wrote training plan: {training_plan_path}")
     if image_only_set:
         lines.append("[INFO] Image-only set detected: repeats solved from target steps.")
 

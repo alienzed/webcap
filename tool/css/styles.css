@@ -1739,6 +1739,7 @@ iframe {
 }
 
 .training-run-setup {
+  container-type: inline-size;
   display: grid;
   gap: 8px;
   margin-top: 8px;
@@ -1843,6 +1844,24 @@ iframe {
   }
 }
 
+@container (max-width: 720px) {
+  .training-run-setup-header {
+    display: grid;
+  }
+
+  .training-run-setup-subtitle {
+    text-align: left;
+  }
+
+  .training-run-setup-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .training-run-setup-actions {
+    flex-wrap: wrap;
+  }
+}
+
 .training-runner-queue {
   display: grid;
   gap: 4px;
@@ -1898,6 +1917,10 @@ iframe {
   border: 1px solid var(--border);
   border-top: 2px solid var(--accent);
   background: var(--panel);
+}
+
+.workspace-surface-training #training-navigator {
+  container-type: inline-size;
 }
 
 .workspace-surface-training .training-runner-summary {
@@ -2067,6 +2090,12 @@ iframe {
 }
 
 @media (max-width: 760px) {
+  .workspace-surface-training .training-operations-context {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 650px) {
   .workspace-surface-training .training-operations-context {
     grid-template-columns: 1fr;
   }

@@ -146,11 +146,19 @@ function syncWorkspaceConfigEditorUi() {
   var hasConfigFile = !!(state && state.currentConfigFile && state.currentConfigFile.file);
   var hasTrainingConfigFile = hasConfigFile && state.currentConfigFile.folder === state.folder;
   var hasConfigForSurface = isTraining ? hasTrainingConfigFile : hasConfigFile;
+  var trainingOverview = document.getElementById('training-editor-empty');
+  var editorWrapper = ui.appEl.querySelector('.editor-wrapper');
   var consoleVisible = !!(ui && ui.consolePanelEl && ui.consolePanelEl.style.display && ui.consolePanelEl.style.display !== 'none');
   if (toolbar) {
     toolbar.classList.toggle('hidden', !isConfigWorkspace || !hasConfigForSurface);
   }
   ui.appEl.classList.toggle('training-config-selected', isTraining && hasConfigForSurface);
+  if (trainingOverview) {
+    trainingOverview.classList.toggle('hidden', !isTraining || hasConfigForSurface);
+  }
+  if (editorWrapper) {
+    editorWrapper.classList.toggle('hidden', isTraining && !hasConfigForSurface);
+  }
   if (fileLabel) {
     fileLabel.textContent = hasConfigFile
       ? state.currentConfigFile.file

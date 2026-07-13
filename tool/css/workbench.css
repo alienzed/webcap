@@ -453,6 +453,96 @@
   min-height: calc(100vh - 180px);
 }
 
+.app.shell-revamp.workspace-surface-training:not(.training-config-selected) .editor-surface {
+  padding: 12px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-editor-empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  gap: 12px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-overview-header {
+  display: grid;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.app.shell-revamp.workspace-surface-training .training-overview-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.app.shell-revamp.workspace-surface-training .training-overview-summary {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-overview {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-tile {
+  min-width: 0;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-thumb {
+  position: relative;
+  display: grid;
+  min-height: 112px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-thumb img,
+.app.shell-revamp.workspace-surface-training .training-item-thumb video {
+  width: 100%;
+  height: 100%;
+  min-height: 112px;
+  object-fit: cover;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-fallback {
+  align-self: center;
+  justify-self: center;
+  padding: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-badges {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  display: flex;
+  gap: 4px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-badges span {
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #f8fafc;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
 .app.shell-revamp.workspace-surface-training textarea#editor {
   min-height: calc(100vh - 320px);
 }

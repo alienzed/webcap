@@ -406,18 +406,26 @@ function wireThemeToggleUi() {
 }
 
 function updateSidebarCollapseUi(collapsed) {
-  if (!ui || !ui.sidebarCollapseToggleBtn) return;
+  var toggles = [
+    ui && ui.sidebarCollapseToggleBtn,
+    document.getElementById('training-sidebar-collapse-toggle-btn')
+  ].filter(Boolean);
+  if (!toggles.length) return;
   if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen()) {
-    ui.sidebarCollapseToggleBtn.textContent = '<';
-    ui.sidebarCollapseToggleBtn.title = 'Return to item view';
-    ui.sidebarCollapseToggleBtn.setAttribute('aria-label', 'Return to item view');
-    ui.sidebarCollapseToggleBtn.setAttribute('aria-pressed', 'false');
+    toggles.forEach(function (toggle) {
+      toggle.textContent = '<';
+      toggle.title = 'Return to item view';
+      toggle.setAttribute('aria-label', 'Return to item view');
+      toggle.setAttribute('aria-pressed', 'false');
+    });
     return;
   }
-  ui.sidebarCollapseToggleBtn.textContent = collapsed ? '>' : '<';
-  ui.sidebarCollapseToggleBtn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-  ui.sidebarCollapseToggleBtn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
-  ui.sidebarCollapseToggleBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+  toggles.forEach(function (toggle) {
+    toggle.textContent = collapsed ? '>' : '<';
+    toggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+    toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+  });
 }
 
 function setSidebarCollapsed(collapsed) {

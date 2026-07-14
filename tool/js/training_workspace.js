@@ -992,6 +992,7 @@ function openTrainingWorkspaceFolder(folder) {
 
 function wireTrainingWorkspace() {
   var backBtn = document.getElementById('training-workspace-back-btn');
+  var sidebarCollapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
   var prepareBtn = document.getElementById('training-workspace-prepare-btn');
   var generateBtn = document.getElementById('training-workspace-generate-btn');
   var stageButtons = document.querySelectorAll('[data-training-stage]');
@@ -1015,6 +1016,7 @@ function wireTrainingWorkspace() {
   var tensorboardStartBtn = document.getElementById('training-tensorboard-start-btn');
   var tensorboardStopBtn = document.getElementById('training-tensorboard-stop-btn');
   backBtn.onclick = function () { exitWorkspaceSurface(); };
+  sidebarCollapseBtn.onclick = function () { toggleSidebarCollapsed(); };
   prepareBtn.onclick = function () { runTrainingWorkspaceAction('prepare'); };
   generateBtn.onclick = function () { runTrainingWorkspaceAction('generate'); };
   stageButtons.forEach(function (button) {

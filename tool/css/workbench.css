@@ -526,6 +526,8 @@
 }
 
 .app.shell-revamp .training-navigator-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
 }
 
@@ -533,7 +535,23 @@
   white-space: nowrap;
 }
 
+.app.shell-revamp .training-navigator-heading {
+  min-width: 0;
+  text-align: center;
+}
+
+.app.shell-revamp .training-navigator-heading .training-navigator-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app.shell-revamp .training-sidebar-collapse-btn {
+  justify-self: start;
+}
+
 .app.shell-revamp .training-back-btn {
+  justify-self: end;
   flex: 0 0 auto;
   width: auto !important;
   min-height: 28px;

@@ -664,6 +664,17 @@ def _annotate_completed_job(job):
     if job.get("status") != "completed":
         return
     progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    epoch = int(progress.get("epoch") or 0)
+    epochs = int(progress.get("epochs") or 0)
+    if epochs:
+        if epoch < epochs * 0.9:
+            job["completionNote"] = (
+                "Finished at epoch " + format(epoch, ",") + " of " + format(epochs, ",")
+                + " planned epochs. Review output; the run ended below the planned estimate."
+            )
+        else:
+            job.pop("completionNote", None)
+        return
     step = int(progress.get("step") or 0)
     planned_steps = int(progress.get("plannedSteps") or 0)
     if planned_steps and step < planned_steps * 0.9:
@@ -671,6 +682,8 @@ def _annotate_completed_job(job):
             "Finished at step " + format(step, ",") + " of ~" + format(planned_steps, ",")
             + " planned steps. Review output; the run ended below the planned estimate."
         )
+    else:
+        job.pop("completionNote", None)
 
 
 def _annotate_finished_early_job(job):
@@ -777,6 +790,8 @@ def _refresh_state(state):
     for job in state.get("jobs", []):
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
+        elif job.get("status") == "completed":
+            _annotate_completed_job(job)
     active_id = str(state.get("activeJobId") or "")
     active = _find_job(state, active_id) if active_id else None
     if active:

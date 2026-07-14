@@ -249,7 +249,7 @@ def test_runner_progress_prefers_logged_epochs_over_the_generated_step_estimate(
     }
 
 
-def test_completed_job_flags_a_result_far_below_the_planned_steps():
+def test_completed_job_flags_a_result_far_below_the_step_estimate_without_epoch_progress():
     job = {
         "status": "completed",
         "progress": {"step": 1650, "plannedSteps": 20000},
@@ -259,6 +259,18 @@ def test_completed_job_flags_a_result_far_below_the_planned_steps():
 
     assert "step 1,650" in job["completionNote"]
     assert "~20,000 planned steps" in job["completionNote"]
+
+
+def test_completed_job_uses_logged_epochs_instead_of_a_stale_step_estimate():
+    job = {
+        "status": "completed",
+        "completionNote": "Finished at step 10,080 of ~20,000 planned steps.",
+        "progress": {"epoch": 90, "epochs": 90, "step": 10080, "plannedSteps": 20000, "source": "epochs"},
+    }
+
+    training_runner._annotate_completed_job(job)
+
+    assert "completionNote" not in job
 
 
 def test_finish_action_records_a_finished_early_outcome(monkeypatch):

@@ -51,6 +51,32 @@ def test_discover_runs_uses_each_stage_current_config_output_dir(tmp_path, monke
     assert [run["name"] for run in training_history.discover_runs(set_folder, "lo")] == ["lo-run"]
 
 
+def test_discover_runs_infers_the_stage_from_run_names_in_a_shared_output_dir(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = root / "output" / "runs" / "set"
+    (set_folder / "config.hi.toml").write_text(
+        'output_dir = "' + str(output) + '"\nepochs = 50\n', encoding="utf-8"
+    )
+    (set_folder / "config.lo.toml").write_text(
+        'output_dir = "' + str(output) + '"\nepochs = 90\n', encoding="utf-8"
+    )
+    (output / "20260713_05-54-48-erin-hi" / "epoch50").mkdir(parents=True)
+    (output / "20260713_06-05-04-sana-lo" / "epoch90").mkdir(parents=True)
+
+    runs = {run["name"]: run for run in training_history.discover_runs(set_folder)}
+
+    assert runs["20260713_05-54-48-erin-hi"]["stage"] == "hi"
+    assert runs["20260713_05-54-48-erin-hi"]["expectedEpochs"] == 50
+    assert runs["20260713_05-54-48-erin-hi"]["completed"] is True
+    assert runs["20260713_06-05-04-sana-lo"]["stage"] == "lo"
+    assert runs["20260713_06-05-04-sana-lo"]["expectedEpochs"] == 90
+    assert runs["20260713_06-05-04-sana-lo"]["completed"] is True
+    assert [run["name"] for run in training_history.discover_runs(set_folder, "lo")] == ["20260713_06-05-04-sana-lo"]
+
+
 def test_completed_stages_requires_the_configured_final_epoch(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"

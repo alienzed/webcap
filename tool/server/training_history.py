@@ -14,6 +14,7 @@ HISTORY_VERSION = 2
 _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
+_RUN_STAGE_PATTERN = re.compile(r"(?:^|[-_.])(hi|lo)(?:$|[-_.])", re.IGNORECASE)
 
 
 def output_root_for_folder(folder_path, stage="hi"):
@@ -44,6 +45,11 @@ def _configured_epochs(folder_path, stage):
         return 0
     match = _EPOCH_CONFIG_PATTERN.search(text)
     return int(match.group(1)) if match else 0
+
+
+def _stage_from_run_name(name):
+    matches = _RUN_STAGE_PATTERN.findall(str(name or ""))
+    return matches[-1].lower() if matches else ""
 
 
 def _run_artifact_state(entry, expected_epochs):
@@ -104,8 +110,8 @@ def discover_runs(folder_path, stage=""):
     runs = []
     seen = set()
     for root in roots:
-        root_stage = stage if stage in ("hi", "lo") else next((name for name in ("hi", "lo") if output_root_for_folder(folder_path, name) == root), "")
-        expected_epochs = _configured_epochs(folder_path, root_stage) if root_stage else 0
+        root_stages = [name for name in ("hi", "lo") if output_root_for_folder(folder_path, name) == root]
+        root_stage = root_stages[0] if len(root_stages) == 1 else ""
         if not root.exists() or not root.is_dir():
             continue
         for entry in root.iterdir():
@@ -117,11 +123,15 @@ def discover_runs(folder_path, stage=""):
             except OSError:
                 continue
             seen.add(entry)
+            entry_stage = root_stage or _stage_from_run_name(entry.name)
+            if stage in ("hi", "lo") and entry_stage != stage:
+                continue
+            expected_epochs = _configured_epochs(folder_path, entry_stage) if entry_stage else 0
             completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
             runs.append({
                 "path": str(entry),
                 "name": entry.name,
-                "stage": root_stage,
+                "stage": entry_stage,
                 "modifiedAt": modified,
                 "checkpointAvailable": bool(has_contents),
                 "completed": completed,

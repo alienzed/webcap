@@ -2388,6 +2388,12 @@ iframe {
 .m8y { margin: 8px 0; }
 .status-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .flex1 { flex: 1 1 auto; }
+.status-bar .flex1 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .console-toggle-btn {
   padding: 2px 5px;
   font-size: 13px;

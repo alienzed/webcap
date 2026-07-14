@@ -236,13 +236,14 @@ function syncWorkspaceSurfaceUi() {
     reviewOutputBtn.classList.toggle('active', reviewOutputActive);
     reviewOutputBtn.setAttribute('aria-pressed', reviewOutputActive ? 'true' : 'false');
   }
-  var hasSetContext = isSetFolderContext(state.folder, state.items);
-  if (reviewOutputBtn) reviewOutputBtn.classList.toggle('hidden', !hasSetContext);
+  var hasSetPath = isSetFolderPath(state.folder);
+  var hasReviewContext = isSetFolderContext(state.folder, state.items);
+  if (reviewOutputBtn) reviewOutputBtn.classList.toggle('hidden', !hasReviewContext);
   if (trainingBtn) {
     var trainingActive = surface === 'training';
     trainingBtn.classList.toggle('active', trainingActive);
     trainingBtn.setAttribute('aria-pressed', trainingActive ? 'true' : 'false');
-    trainingBtn.classList.toggle('hidden', !hasSetContext);
+    trainingBtn.classList.toggle('hidden', !hasSetPath);
   }
   if (utilityTrainingBtn) {
     var utilityTrainingActive = surface === 'training' && trainingWorkspaceState.entryMode === 'global';

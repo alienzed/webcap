@@ -1967,6 +1967,12 @@ iframe {
   container-type: inline-size;
 }
 
+.workspace-surface-training .training-global-context--after-set {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 2px solid var(--accent);
+}
+
 .workspace-surface-training .training-runner-summary {
   display: grid;
   gap: 3px;

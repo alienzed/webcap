@@ -181,7 +181,8 @@ def test_runner_progress_estimates_stage_and_overall_from_epoch_logs(tmp_path):
         "step": 4160,
         "stagePercent": 76.0,
         "overallPercent": 27.1,
-        "estimated": True,
+        "estimated": False,
+        "source": "epochs",
     }
 
     training_runner._sync_job_progress(job, "[INFO] [Rank 0] step=4170, skipped=0\n")
@@ -218,6 +219,33 @@ def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_pa
         "plannedSteps": 20000,
         "source": "steps",
         "etaSeconds": 30900,
+    }
+
+
+def test_runner_progress_prefers_logged_epochs_over_the_generated_step_estimate(tmp_path):
+    lo_path = tmp_path / "config.lo.toml"
+    lo_path.write_text("epochs = 90\n", encoding="utf-8")
+    job = {
+        "stage": "lo",
+        "stages": "lo",
+        "snapshot": {"lo": str(lo_path)},
+        "progressPlan": {"lo": {"estimatedSteps": 20000}},
+    }
+
+    training_runner._sync_job_progress(
+        job,
+        "Started new epoch: 85\n[INFO] [Rank 0] step=9410, skipped=0, iter time (s): 3.0\n",
+    )
+
+    assert job["progress"] == {
+        "stage": "lo",
+        "epoch": 85,
+        "epochs": 90,
+        "step": 9410,
+        "stagePercent": 94.4,
+        "overallPercent": 94.4,
+        "estimated": False,
+        "source": "epochs",
     }
 
 

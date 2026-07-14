@@ -34,6 +34,7 @@ function getTrainingWorkspaceEls() {
   return {
     navigator: document.getElementById('training-navigator'),
     folder: document.getElementById('training-navigator-folder'),
+    globalContext: document.getElementById('training-global-context'),
     setWorkflow: document.getElementById('training-set-workflow'),
     runSetup: document.getElementById('training-run-setup'),
     readiness: document.getElementById('training-readiness'),
@@ -144,13 +145,17 @@ function buildTrainingRunnerProgressHtml(job) {
   if (isFinite(etaSeconds) && etaSeconds >= 60 && etaSeconds < 30 * 24 * 3600) {
     positionLabel += ' · ~' + formatTrainingRunnerDuration(etaSeconds) + ' left';
   }
-  var plannedLabel = job.stages === 'both'
-    ? 'Planned: ' + Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall'
-    : 'Planned: ' + Math.round(stagePercent) + '% of ' + trainingStageLabel(progress.stage || job.stages || 'both');
+  var progressLabel = progress.source === 'steps'
+    ? (job.stages === 'both'
+      ? 'Step estimate: ' + Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall'
+      : 'Step estimate: ' + Math.round(stagePercent) + '% of ' + trainingStageLabel(progress.stage || job.stages || 'both'))
+    : (job.stages === 'both'
+      ? Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall'
+      : Math.round(stagePercent) + '% of ' + trainingStageLabel(progress.stage || job.stages || 'both'));
   return '<div class="training-runner-progress" aria-label="Estimated training progress">' +
     '<div class="training-runner-progress-copy"><span>' + escapeHtml(trainingStageLabel(progress.stage || job.stages || 'both')) +
       positionLabel + '</span>' +
-      '<span>' + escapeHtml(plannedLabel) + '</span></div>' +
+      '<span>' + escapeHtml(progressLabel) + '</span></div>' +
     '<div class="training-runner-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(boundedOverall) + '">' +
       '<span style="width:' + boundedOverall.toFixed(1) + '%"></span></div>' +
     '</div>';
@@ -905,8 +910,9 @@ function refreshTrainingWorkspace() {
   if (!isTrainingWorkspaceActive()) return;
   var els = getTrainingWorkspaceEls();
   var folder = String(state.folder || '').trim();
-  var isSetEntry = trainingWorkspaceState.entryMode === 'set' && !!folder;
+  var isSetEntry = !!folder;
   if (els.folder) els.folder.textContent = isSetEntry ? folder : 'Global training status';
+  if (els.globalContext) els.globalContext.classList.toggle('training-global-context--after-set', isSetEntry);
   if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);
   if (els.runSetup) els.runSetup.classList.toggle('hidden', !isSetEntry);
   if (!isSetEntry) {

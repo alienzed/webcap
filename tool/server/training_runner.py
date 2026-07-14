@@ -612,7 +612,10 @@ def _sync_job_progress(job, log_text):
     plan = job.get("progressPlan") if isinstance(job.get("progressPlan"), dict) else {}
     stage_plan = plan.get(stage) if isinstance(plan.get(stage), dict) else {}
     planned_steps = int(stage_plan.get("estimatedSteps") or 0)
-    use_steps = step is not None and planned_steps > 0
+    # Epochs come directly from diffusion-pipe's log and are authoritative when
+    # available. The generated step budget is only a fallback for logs without
+    # an epoch marker.
+    use_steps = epoch is None and step is not None and planned_steps > 0
     if not use_steps and epoch is None:
         return
     stage_fraction = min(1.0, max(0.0, float(step) / float(planned_steps))) if use_steps else min(1.0, max(0.0, float(epoch) / float(current_epochs)))
@@ -638,7 +641,7 @@ def _sync_job_progress(job, log_text):
         "step": int(step) if step is not None else None,
         "stagePercent": round(stage_fraction * 100, 1),
         "overallPercent": round(overall_fraction * 100, 1),
-        "estimated": True,
+        "estimated": use_steps,
     }
     if use_steps:
         progress["plannedSteps"] = planned_steps
@@ -647,6 +650,8 @@ def _sync_job_progress(job, log_text):
             seconds_per_step = float(iter_time_matches[-1])
             if seconds_per_step > 0:
                 progress["etaSeconds"] = round(max(0, planned_steps - step) * seconds_per_step)
+    else:
+        progress["source"] = "epochs"
     job["progress"] = progress
 
 

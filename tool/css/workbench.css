@@ -485,13 +485,27 @@
 .app.shell-revamp.workspace-surface-training .training-runner-queue-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "copy controls";
   align-items: center;
   gap: 3px 8px;
   min-width: 0;
   padding: 8px;
 }
 
+.app.shell-revamp.workspace-surface-training .training-runner-queue-item > div:first-child {
+  grid-area: copy;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-folder {
+  grid-area: auto;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-resume {
+  grid-area: auto;
+}
+
 .app.shell-revamp.workspace-surface-training .training-runner-queue-controls {
+  grid-area: controls;
   align-self: center;
   margin-top: 0;
 }

@@ -590,6 +590,12 @@
   font-weight: 800;
 }
 
+.app.shell-revamp .training-run-setup-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .app.shell-revamp .training-workflow-step-copy {
   display: grid;
   min-width: 0;
@@ -985,6 +991,17 @@
   color: #0f172a;
   font-size: 16px;
   font-weight: 800;
+}
+
+.app.shell-revamp.workspace-surface-training .training-overview-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app.shell-revamp.workspace-surface-training #training-item-overview-toggle-btn {
+  flex: 0 0 auto;
 }
 
 .app.shell-revamp.workspace-surface-training .training-overview-summary {

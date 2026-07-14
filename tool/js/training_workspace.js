@@ -19,6 +19,7 @@ var trainingWorkspaceState = {
   gpuForActiveJob: false,
   history: null,
   historyExpanded: false,
+  itemOverviewHidden: false,
   tensorboard: null
 };
 
@@ -44,6 +45,7 @@ function getTrainingWorkspaceEls() {
     copyCommandBtn: document.getElementById('training-copy-command-btn'),
     itemOverview: document.getElementById('training-item-overview'),
     itemOverviewSummary: document.getElementById('training-item-overview-summary'),
+    itemOverviewToggleBtn: document.getElementById('training-item-overview-toggle-btn'),
     runnerSummary: document.getElementById('training-runner-summary'),
     runnerQueue: document.getElementById('training-runner-queue'),
     runnerActions: document.getElementById('training-runner-actions'),
@@ -785,17 +787,27 @@ function getTrainingManifestItems(manifest) {
 
 function renderTrainingItemOverview(manifest, errorMessage) {
   var els = getTrainingWorkspaceEls();
-  if (!els.itemOverview || !els.itemOverviewSummary) return;
+  if (!els.itemOverview || !els.itemOverviewSummary || !els.itemOverviewToggleBtn) return;
   els.itemOverview.replaceChildren();
+
+  function syncVisibility(hasItems) {
+    var hidden = !!trainingWorkspaceState.itemOverviewHidden;
+    els.itemOverview.classList.toggle('hidden', hidden);
+    els.itemOverviewToggleBtn.classList.toggle('hidden', !hasItems);
+    els.itemOverviewToggleBtn.textContent = hidden ? 'Show items' : 'Hide items';
+    els.itemOverviewToggleBtn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+  }
 
   if (errorMessage) {
     els.itemOverviewSummary.textContent = errorMessage;
+    syncVisibility(false);
     return;
   }
 
   var items = getTrainingManifestItems(manifest);
   if (!manifest) {
     els.itemOverviewSummary.textContent = 'Prepare the dataset to see its training items here.';
+    syncVisibility(false);
     return;
   }
 
@@ -811,8 +823,12 @@ function renderTrainingItemOverview(manifest, errorMessage) {
 
   if (!items.length) {
     els.itemOverviewSummary.textContent = 'The prepared dataset has no displayable media items.';
+    syncVisibility(false);
     return;
   }
+
+  syncVisibility(true);
+  if (trainingWorkspaceState.itemOverviewHidden) return;
 
   var grid = document.createElement('div');
   grid.className = 'training-item-grid';
@@ -1002,6 +1018,7 @@ function wireTrainingWorkspace() {
   var stageButtons = document.querySelectorAll('[data-training-stage]');
   var resumeInput = document.getElementById('training-run-resume-input');
   var checkpointSelect = document.getElementById('training-run-checkpoint-select');
+  var itemOverviewToggleBtn = document.getElementById('training-item-overview-toggle-btn');
   var previewCommandBtn = document.getElementById('training-preview-command-btn');
   var validateRunnerBtn = document.getElementById('training-validate-runner-btn');
   var runInAppBtn = document.getElementById('training-run-in-app-btn');
@@ -1021,6 +1038,10 @@ function wireTrainingWorkspace() {
   var tensorboardStopBtn = document.getElementById('training-tensorboard-stop-btn');
   backBtn.onclick = function () { exitWorkspaceSurface(); };
   sidebarCollapseBtn.onclick = function () { toggleSidebarCollapsed(); };
+  itemOverviewToggleBtn.onclick = function () {
+    trainingWorkspaceState.itemOverviewHidden = !trainingWorkspaceState.itemOverviewHidden;
+    renderTrainingItemOverview(trainingWorkspaceState.manifest);
+  };
   prepareBtn.onclick = function () { runTrainingWorkspaceAction('prepare'); };
   generateBtn.onclick = function () { runTrainingWorkspaceAction('generate'); };
   stageButtons.forEach(function (button) {

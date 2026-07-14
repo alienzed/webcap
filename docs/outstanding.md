@@ -39,6 +39,7 @@ Now, with the new training panel, the right side of the screen is empty. More an
 ## Backlog (Do Not Implement Yet)
 - Avoid treating the current focused-annotation wizard as the primary home for blind "apply to all" tagging; at most, a sticky/stamping mode would be a temporary bridge, not the final UX.
 - Add derived set workflow badges, separate from manual color flags: Prepared, Configured, Needs regenerate, and managed-run status (Queued, Training, Trained, Failed). Derive preparation/configuration from artifacts and managed-run status from persisted runner history; do not infer manually run training as completed.
+- Explore Krea 2 Raw training. Before adding it, define a model-workflow contract so each supported model can declare its dataset requirements, configuration syntax and fields, launch/environment needs, stage support, checkpoint detection, and progress parsing. Keep shared set/run/history UI model-agnostic, and keep model-specific rules out of curation/annotation.
 
 
 ## Nice to Haves (Out of Scope for Now)

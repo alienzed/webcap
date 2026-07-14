@@ -980,6 +980,7 @@ function openTrainingWorkspaceFolder(folder) {
   if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
     clearFocusSet();
   }
+  setTrainingWorkspaceEntryMode('set');
   state.dirStack = [state.dirStack[0]].concat(targetFolder.split('/').filter(Boolean).map(function (name) {
     return { name: name };
   }));
@@ -1071,7 +1072,8 @@ function wireTrainingWorkspace() {
     fetchTrainingRunnerLog(getTrainingRunnerSelectedJob(), true);
   };
   runnerQueue.onclick = function (event) {
-    var folder = event.target.getAttribute('data-training-open-folder');
+    var folderButton = event.target.closest('[data-training-open-folder]');
+    var folder = folderButton && folderButton.getAttribute('data-training-open-folder');
     if (folder) {
       openTrainingWorkspaceFolder(folder);
       return;
@@ -1106,7 +1108,8 @@ function wireTrainingWorkspace() {
     }
   };
   historyList.onclick = function (event) {
-    var folder = event.target.getAttribute('data-training-open-folder');
+    var folderButton = event.target.closest('[data-training-open-folder]');
+    var folder = folderButton && folderButton.getAttribute('data-training-open-folder');
     if (folder) {
       openTrainingWorkspaceFolder(folder);
       return;

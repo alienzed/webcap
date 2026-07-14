@@ -240,15 +240,9 @@ function wireMiscActionButtons() {
     };
   }
 
-  if (ui.reviewBtn) {
-    ui.reviewBtn.onclick = function () {
+  if (ui.reviewSetBtn) {
+    ui.reviewSetBtn.onclick = function () {
       runReview();
-    };
-  }
-
-  if (ui.reviewSelectionsBtn) {
-    ui.reviewSelectionsBtn.onclick = function () {
-      runSelectionReview();
     };
   }
 
@@ -305,7 +299,7 @@ function wireReportLinks() {
           fileName: decodeURIComponent(f),
           focusFiles: files,
           focusSource: decodeURIComponent(source || ''),
-          reportType: 'captions'
+          reportType: 'review'
         }, '*');
       }
     });

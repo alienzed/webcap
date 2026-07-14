@@ -102,7 +102,7 @@ function renderFaceFocusReportPanel(doc, rows, scopedFileNames) {
           fileName: fileName,
           focusFiles: files,
           focusSource: 'Face Focus',
-          reportType: 'selection'
+          reportType: 'review'
         }, '*');
       }
     };

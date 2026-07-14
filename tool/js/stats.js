@@ -424,7 +424,7 @@ function openBalancePhrasesHelpInPreview() {
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">How To Use It</h4>' +
     '<ol style="margin:0 0 8px 18px;padding:0;">' +
     '<li style="margin:0 0 6px 0;">Add phrases you want to track (catalog suggestions are optional).</li>' +
-    '<li style="margin:0 0 6px 0;">Run Review Captions and check the Phrase Balance section.</li>' +
+    '<li style="margin:0 0 6px 0;">Run Review Set and check the Phrase Balance section.</li>' +
     '<li style="margin:0 0 6px 0;">If a phrase is missing or low, add/edit captions for those examples.</li>' +
     '<li style="margin:0 0 6px 0;">Repeat until coverage looks balanced for the set.</li>' +
     '</ol>' +

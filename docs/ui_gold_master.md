@@ -8,7 +8,9 @@ This audit combines:
 
 - Static review of `tool/tool.html`, `tool/css/styles.css`, and the main UI modules.
 - Live pass through the running local app at `http://127.0.0.1:5000/`.
-- Workflow review against `docs/north_star_workflow.md`, `docs/selection_report.md`, and `docs/qa_panel.md`.
+- Historical workflow review against `docs/north_star_workflow.md` and `docs/qa_panel.md`.
+
+> This snapshot predates the unified Review Set report; it is retained for its broader workspace observations, not as current review-surface guidance.
 
 The live pass used a real set folder with media, opened a media item, inspected helper tabs, opened the annotation strip, and ran both `Review Captions` and `Review Selections`.
 

@@ -35,7 +35,7 @@ Notes:
 ---
 
 ## 4. Review and Filter
-1. Use `Review Captions` to analyze only the currently visible (filtered) subset.
+1. Use `Review Set` to analyze only the currently visible (filtered) subset.
 2. Use report links to focus on failures, duplicates, and similarity clusters.
 3. Iterate on captions or media selection until review output is acceptable.
 

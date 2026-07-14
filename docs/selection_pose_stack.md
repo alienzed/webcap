@@ -1,7 +1,7 @@
 # Selection Pose Stack
 
 ## Purpose
-Define the smallest practical visual-analysis stack for `Review Selections` that can support:
+Define the smallest practical visual-analysis stack for `Review Set` analysis details that can support:
 
 - suggested training-candidate subsets
 - suggested coarse tags
@@ -248,7 +248,7 @@ The following assumptions still need confirmation before implementation goes far
 - what exact `facial expression` bucket set is useful enough to expose
 - what exact `coarse pose class` bucket set is useful enough to expose
 - whether `three-quarter rear` should be its own first-class bucket or derived from a broader rear-facing family
-- whether analysis should be cached in `media_metadata.json` or generated only for `Review Selections`
+- whether analysis should be cached in `media_metadata.json` or generated only for `Review Set` analysis details
 
 ## Current Recommendation
 Proceed with implementation planning around:
@@ -258,6 +258,6 @@ Proceed with implementation planning around:
 - strict offline vendoring
 - strict version pinning
 - normalized outputs
-- `Review Selections` as the first consumer
+- `Review Set` analysis details as the first consumer
 
 The actual execution location should remain open until we test performance.

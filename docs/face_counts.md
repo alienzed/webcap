@@ -11,8 +11,8 @@ This is not a captioning feature, tag feature, or Balance Phrases feature. It is
 - Store face analysis as metadata, not item tags.
 - Do not write detected focus labels into captions.
 - Do not connect this to Tag Mismatch, Balance Phrases, or primer mappings in v1.
-- Surface results in the item metadata panel and Review Captions report.
-- Name the Review Captions report panel `Face Focus`.
+- Surface results in the item metadata panel and Review Set's collapsed Analysis details.
+- Name the Review Set analysis panel `Face Focus`.
 
 ## Why Metadata, Not Tags
 Tags currently support caption workflows, search, mismatch checks, and mappings. Face focus is generated visual analysis, not a human semantic label. Keeping it in metadata avoids:
@@ -32,7 +32,7 @@ Current relevant code:
 - `tool/server/media.py`: `update_media_metadata()` and `probe_media_metadata()`
 - `tool/server/app.py`: existing `/fs/deface` route is mutating and should not be reused for this feature
 - `tool/js/item_details.js`: item metadata panel
-- `tool/js/preview_pane.js`: Review Captions report and media metadata panel
+- `tool/js/preview_pane.js`: Review Set report and media metadata panel
 
 ## Data Shape
 Store a nested block under each image's existing `media_metadata.json` entry:
@@ -80,7 +80,7 @@ Use the largest clear face for bucket assignment. Multiple detected faces do not
 Low-confidence, unclear, ambiguous, or non-central detections should be classified as `unknown`. The goal is not to count partial face fragments; the goal is to identify whether the image contains a clear dominant face signal.
 
 ## Review Report
-Add a `Face Focus` panel to Review Captions with counts and percentages for the currently reviewed/filtered image set:
+Add a `Face Focus` panel to Review Set's Analysis details with counts and percentages for the currently reviewed/filtered image set:
 
 | Bucket | Count | Percent |
 | --- | ---: | ---: |

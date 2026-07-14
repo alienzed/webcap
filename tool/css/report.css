@@ -24,6 +24,15 @@ body {
   margin-bottom: 8px;
 }
 
+.report-preview details.card > summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.report-preview details.card[open] > summary {
+  margin-bottom: 10px;
+}
+
 .report-preview .row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -51,6 +60,11 @@ body {
 .report-preview h3 {
   margin: 0 0 6px 0;
   font-size: 14px;
+}
+
+.report-preview h4 {
+  margin: 10px 0 4px;
+  font-size: 12px;
 }
 
 .report-preview table {

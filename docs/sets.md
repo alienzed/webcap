@@ -122,7 +122,7 @@ See: `docs/create_set_from_results.md`
 
 ### Probably Fine
 
-- Review Captions should be hidden or disabled by the empty-item non-set context; direct invocation should only report that no media is available.
+- Review Set should be hidden or disabled by the empty-item non-set context; direct invocation should only report that no media is available.
 - Train/Prepare/Generate controls should disappear with the set workspace; if directly invoked with empty items, they should no-op or fail without mutation.
 - Wheel navigation and media movement shortcuts already depend on `state.currentItem`; with no active item they should fail inertly.
 - Rating, flag, delete, rename, and F2 shortcuts should no-op because there is no active item or filename.

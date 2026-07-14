@@ -40,7 +40,6 @@ These describe implemented features, but they are narrower than `README.md` / `d
 These are useful product notes, not authoritative implementation references:
 
 - `docs/ui_gold_master.md`
-- `docs/selection_report.md`
 - `docs/qa_panel.md`
 - `docs/train_execution_preflight.md`
 - `docs/generate_config_mode.md`

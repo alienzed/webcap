@@ -31,8 +31,7 @@ function activateFocusSet(fileNames, source, reportType) {
 }
 
 function getFocusSetReportLabel(reportType) {
-  if (reportType === 'selection') return 'Selection Analysis';
-  if (reportType === 'captions') return 'Review Captions';
+  if (reportType === 'review') return 'Review Set';
   return '';
 }
 
@@ -117,11 +116,7 @@ function rerunFocusSetReport() {
   if (!reportType) return;
   clearFocusSet();
   setTimeout(function () {
-    if (reportType === 'selection') {
-      runSelectionReview();
-      return;
-    }
-    if (reportType === 'captions') {
+    if (reportType === 'review') {
       runReview();
     }
   }, 0);
@@ -178,15 +173,10 @@ function wireReviewActions() {
 
 function updateReviewButtonAvailability() {
   var availability = getReviewAvailability();
-  if (ui.reviewBtn) {
-    ui.reviewBtn.disabled = false;
-    ui.reviewBtn.classList.toggle('hidden', !availability.enabled);
-    ui.reviewBtn.title = availability.message;
-  }
-  if (ui.reviewSelectionsBtn) {
-    ui.reviewSelectionsBtn.disabled = false;
-    ui.reviewSelectionsBtn.classList.toggle('hidden', !availability.enabled);
-    ui.reviewSelectionsBtn.title = availability.message.replace('Review Captions', 'Selection Analysis').replace('Review captions', 'Selection analysis');
+  if (ui.reviewSetBtn) {
+    ui.reviewSetBtn.disabled = false;
+    ui.reviewSetBtn.classList.toggle('hidden', !availability.enabled);
+    ui.reviewSetBtn.title = availability.message;
   }
   refreshReviewOutputSummary();
 }
@@ -210,25 +200,25 @@ function getReviewAvailability() {
   if (!isSetFolderPath(state.folder)) {
     return {
       enabled: false,
-      message: 'Review Captions is only available inside a set folder'
+      message: 'Review Set is only available inside a set folder'
     };
   }
   if (!Array.isArray(state.items) || !state.items.length) {
     return {
       enabled: false,
-      message: 'Review Captions requires at least one media file in this set folder'
+      message: 'Review Set requires at least one media file in this set folder'
     };
   }
   var visibleCount = getVisibleReviewItems().length;
   if (!visibleCount) {
     return {
       enabled: false,
-      message: 'Review Captions requires at least one visible media item'
+      message: 'Review Set requires at least one visible media item'
     };
   }
   return {
     enabled: true,
-    message: 'Review captions in this set folder'
+    message: 'Review the current set'
   };
 }
 
@@ -254,7 +244,7 @@ function getVisibleReviewItems() {
   });
 }
 
-function buildSelectionReport(items) {
+function buildReviewScopeSummary(items) {
   var summary = {
     total: 0,
     images: 0,
@@ -326,48 +316,8 @@ function runReview() {
     state.suppressInput = true;
     ui.editorEl.value = buildCombinedCaptionsText(results);
     state.suppressInput = false;
-    renderReportPreview(report, results.map(function (row) { return row.fileName; }));
+    renderReviewSetPreview(report, results.map(function (row) { return row.fileName; }), buildReviewScopeSummary(results));
     setStatus('Review ready: ' + results.length + ' files');
-  } catch (err) {
-    setStatus(String(err && err.message ? err.message : err));
-  }
-}
-
-function runSelectionReview() {
-  if (typeof setWorkspaceWorkflowMode === 'function') {
-    setWorkspaceWorkflowMode('select');
-  }
-  if (typeof setWorkspaceSurface === 'function') {
-    setWorkspaceSurface('reviewOutput');
-  }
-  var availability = getReviewAvailability();
-  if (!availability.enabled) {
-    setStatus(availability.message.replace('Review Captions', 'Selection Analysis') + '.');
-    updateReviewButtonAvailability();
-    return;
-  }
-  if (!state.items.length) {
-    setStatus('No media files loaded');
-    return;
-  }
-  if (state.currentItem && state.currentItem.fileName) {
-    savePathCaption();
-  }
-  state.currentItem = null;
-  renderChecklistPanel();
-  ui.editorEl.setAttribute('readonly', 'readonly');
-  renderFileList(ui.filterEl.value);
-  setStatus('Building selection report...');
-  try {
-    var results = getVisibleReviewItems();
-    if (!results.length) {
-      setStatus('No visible media items to review.');
-      updateReviewButtonAvailability();
-      return;
-    }
-    var report = buildSelectionReport(results);
-    renderSelectionPreview(report, results.map(function (row) { return row.fileName; }));
-    setStatus('Selection review ready: ' + results.length + ' files');
   } catch (err) {
     setStatus(String(err && err.message ? err.message : err));
   }

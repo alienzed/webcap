@@ -3,8 +3,6 @@ Last reviewed: 2026-07-10.
 
 ## Active UX Work
 
-Now, with the new training panel, the right side of the screen is empty. More an opportunity than a problem, but maybe we can use that, throw a grid of the training items up, or something, mainly for aesthetics...
-
 ### Phase 1: Console Architecture
 - Establish one reliable console model across the app. It should be a resizable secondary activity pane, not a full-width bottom drawer and not the sole place important results appear.
 - Make console visibility and toggling consistent across media workspaces, Review, and Training.
@@ -13,15 +11,12 @@ Now, with the new training panel, the right side of the screen is empty. More an
 - Stabilize the right workbench rail width; it currently changes with workspace content and should use explicit sizing rules.
 - Add a collapsible right workbench rail with session-persisted state for single-item work, without hiding Training's navigator or other purpose-built workspace surfaces. Grid keeps its dedicated batch Groups workspace and has no inspector rail.
 
-### Phase 2: Selection And Filters
-- Restore and retain Selection Analysis as a legacy report until each useful panel has an explicit replacement. The all-file metadata view, especially Aspect Ratio groups, must remain available.
-- Audit stale status and flag filters before removing or demoting them. `Invalid AR` remains valuable; `Incomplete`, `Reviewed`, `Unreviewed`, and flags require workflow confirmation.
-- Reduce SuperSet Search vertical chrome by moving the include-subfolders explanation to its existing info affordance.
-- Revisit the promoted focus-set presentation if a clearer compact control emerges. Do not force full filter controls into Grid in this phase.
-
-### Phase 3: Review Captions
-- Keep the existing report intact as low-priority legacy analysis.
-- Later, surface actionable findings such as likely typos or repeated full phrases above raw token and list panels, while retaining the detailed views.
+## Bugs
+- Modal z-index checkup, to make sure things like group terms modals always appear on top (of focus, grid...)
+- Focus annotate, rating that removes from filtered list may break JS
+- Grid: updating a term list does not add term, need to reload modal.
+- Clipping videos appears broken... I set the playhead and 3 seconds and somehow I got a tiny loop at the very end of the video. not sure if I exceeded the duration of the clip or something, from src_videos a similar but shorter cut did seem to work
+- Rename video clip requires manual folder refresh to show new name
 
 ## Enhancements
 - Eventually I'd like for us to work on the post captioning UX... the Review / Output, maybe even like detect cache in the auto_dataset folder... maybe try to internalize training and set flags based on the outcome of training. The output folder actually does happen to be inside the training folder so there's probably a lot we can do with this. Alas, I think the app's UX needs to be at least technically split, between captioning and then running training. We kind of dumped all of the Review / Output into a single pane... forgot about the caption collation screen, broke the console visibility once there, etc... it's a bit of a mess.

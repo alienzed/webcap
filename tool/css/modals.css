@@ -14,7 +14,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 1000;
+  z-index: 3200;
   background: #fff;
   border: 1px solid #d6d8dc;
   border-radius: 8px;
@@ -24,7 +24,7 @@
 #checklist-keywords-modal,
 #checklist-group-terms-modal,
 #checklist-term-affixes-modal {
-  z-index: 3151;
+  z-index: 3201;
 }
 
 .modal.hidden {

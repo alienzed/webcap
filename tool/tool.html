@@ -708,7 +708,10 @@
                                 <div id="training-attention-actions" class="training-runner-actions"></div>
                             </section>
                             <section class="training-runner-card" aria-label="Training queue">
-                                <div class="training-workspace-section-title">Training Queue</div>
+                                <div class="training-runner-card-header">
+                                    <div class="training-workspace-section-title">Training Queue</div>
+                                    <div id="training-gpu-status" class="training-gpu-status" aria-label="GPU status"></div>
+                                </div>
                                 <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
                                 <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued training jobs"></div>
                                 <div id="training-runner-actions" class="training-runner-actions hidden">
@@ -721,11 +724,14 @@
                                 <div id="training-runner-preflight" class="training-runner-preflight hidden"></div>
                             </section>
                             <div class="training-global-secondary">
-                                <details class="training-history-card" aria-label="Past training runs">
-                                    <summary>Past Runs</summary>
+                                <section class="training-history-card" aria-label="Recent training runs">
+                                    <div class="training-history-heading">
+                                        <div class="training-workspace-section-title">Recent Runs</div>
+                                        <button id="training-history-show-all-btn" type="button" class="review-captions-btn hidden">Show all</button>
+                                    </div>
                                     <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>
                                     <div id="training-history-list" class="training-history-list"></div>
-                                </details>
+                                </section>
                                 <section class="training-tensorboard-card hidden" aria-label="TensorBoard">
                                     <div class="training-workspace-section-title">TensorBoard</div>
                                     <div id="training-tensorboard-summary" class="training-tensorboard-summary">Checking TensorBoard...</div>

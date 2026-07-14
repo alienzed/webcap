@@ -1882,11 +1882,21 @@ iframe {
 }
 
 .training-runner-queue-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
   padding: 5px 6px;
   border-left: 2px solid var(--border);
   background: var(--panel-soft);
   color: var(--text);
   font-size: 12px;
+}
+
+.training-runner-queue-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
 }
 
 .training-runner-queue-folder,
@@ -1924,6 +1934,14 @@ iframe {
   background: var(--panel);
 }
 
+.workspace-surface-training .training-runner-card-header,
+.workspace-surface-training .training-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .workspace-surface-training .training-attention-card {
   display: grid;
   gap: 7px;
@@ -1958,6 +1976,13 @@ iframe {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.workspace-surface-training .training-runner-active-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 9px;
 }
 
 .workspace-surface-training .training-runner-state {
@@ -2003,6 +2028,16 @@ iframe {
   font-weight: 600;
 }
 
+.workspace-surface-training .training-runner-queued-count,
+.workspace-surface-training .training-runner-queue-state {
+  color: var(--muted);
+}
+
+.workspace-surface-training .training-runner-queue-state {
+  color: #cc7a3f;
+  font-weight: 600;
+}
+
 .workspace-surface-training .training-runner-detail.is-error {
   color: #c75a5a;
 }
@@ -2012,13 +2047,19 @@ iframe {
 }
 
 .workspace-surface-training .training-gpu-status {
-  display: block;
-  padding-top: 3px;
+  min-height: 16px;
   color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .workspace-surface-training .training-gpu-status strong {
   color: var(--text);
+}
+
+.workspace-surface-training .training-gpu-status .is-warning {
+  color: #cc7a3f;
 }
 
 .workspace-surface-training .training-gpu-details {
@@ -2049,7 +2090,7 @@ iframe {
 .workspace-surface-training .training-history-actions {
   display: flex;
   gap: 4px;
-  margin-top: 5px;
+  margin-top: 0;
 }
 
 .workspace-surface-training .training-history-actions button {
@@ -2086,15 +2127,11 @@ iframe {
   width: 100%;
 }
 
-.workspace-surface-training .training-history-card > summary {
-  cursor: pointer;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.workspace-surface-training .training-history-card[open] > summary {
-  margin-bottom: 7px;
+.workspace-surface-training .training-history-heading .review-captions-btn {
+  width: auto;
+  min-height: 24px;
+  padding: 2px 6px;
+  font-size: 11px;
 }
 
 .workspace-surface-training .training-operations-context {

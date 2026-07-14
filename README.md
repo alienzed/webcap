@@ -3,6 +3,17 @@
 WebCap is a local-first media curation, captioning, and dataset-prep app for training-set workflows.
 It is built around explicit, reversible mutations, visible subset prep, and fast iteration on modest working sets.
 
+## What WebCap Does
+
+- Browse working folders, filter media by caption, review, requirements, tag mismatch, ratings, flags, and aspect ratio.
+- Edit captions alongside structured requirement groups, per-item tags, primer mappings, set notes, and review state.
+- Review a visible subset for caption coverage, required phrases, balance, validation rules, duplicates, near-duplicates, and caption outliers.
+- Build focused work queues from review output, filters, or recursive SuperSet searches, then materialize filtered results into new sets.
+- Make reversible media edits including crop, clip, rotation, flip, blur/remove background, deface, duplicate, prune, and reset from preserved originals.
+- Prepare visible media subsets into a dataset, generate HI/LO configuration files, and retain a selection snapshot beside the generated artifacts.
+- Run managed HI/LO training with a queue, progress, output logs, resume paths, diagnostics, history, GPU status, and optional TensorBoard; a manual WSL command remains available when preferred.
+- Keep app state and per-set artifacts on disk. WebCap uses Python and the browser only—no database or hosted service is required.
+
 ## Requirements
 
 - Python 3.10+
@@ -121,7 +132,7 @@ Open:
 6. Use `QA` and `Review Set` to tighten consistency and coverage.
 7. Run `Prepare Dataset` on the current visible subset.
 8. Run `Generate`.
-9. Run `Train` to print the resolved command preview, then execute externally.
+9. Open `Train`, confirm readiness, choose stages or a resume checkpoint, and queue the set; use the manual command only when you want an external handoff.
 
 Practical loop:
 - Use `Captionless`, `Incomplete`, ratings, and flags to focus work.
@@ -344,7 +355,9 @@ Train tab includes:
 - config file list for `config.hi.toml` and `config.lo.toml`
 - `Prepare Dataset`
 - `Generate`
-- `Train`
+- managed `Train this set` for HI → LO, HI-only, or LO-only runs
+- optional checkpoint resume, a manual command preview, and full diagnostics
+- training queue, GPU status, output console, recent-run history, and TensorBoard controls
 
 Behavior:
 - opening a config file loads it into the center editor
@@ -353,7 +366,13 @@ Behavior:
 - Prepare performs missing-caption preflight and reports missing, primer-fallback, and still-empty counts
 - `Generate` reads `prep_manifest.json` and writes dataset outputs
 - if the prep manifest is missing, Generate auto-runs Prepare once and retries
-- `Train` prints the resolved command preview to the console but does not run training jobs
+- the folder badge shows `Ready to train` only when prepared artifacts exist, prepared captions are present, and the set has no material tagged-but-uncaptioned backlog; otherwise it can show `Caption review needed`
+- `Train this set` starts immediately when idle or adds the set behind current work; HI → LO is queued as independent stages
+- active jobs expose progress, logs, pause/finish controls, explicit queue resume, and resume-from-checkpoint controls
+- `Print & Copy Manual Command` remains a non-launching WSL handoff, while `Run Diagnostics` runs the fuller environment check
+- TensorBoard can be started, stopped, and opened from the training workspace when available
+
+See [docs/train.md](docs/train.md) for the operational training reference.
 
 ### 14. App settings
 
@@ -440,6 +459,19 @@ Selection, review, and dataset flow:
 - `/fs/prepare_dataset`
 - `/fs/generate_dataset_config`
 - `/fs/train_run`
+- `/fs/training_runner/validate`
+- `/fs/training_runner/start`
+- `/fs/training_runner/status`
+- `/fs/training_runner/gpu`
+- `/fs/training_runner/log`
+- `/fs/training_runner/stop`
+- `/fs/training_runner/reorder`
+- `/fs/training_runner/resume_queue`
+- `/fs/training_runner/resume_job`
+- `/fs/training_history`
+- `/fs/tensorboard/status`
+- `/fs/tensorboard/start`
+- `/fs/tensorboard/stop`
 
 ## Tests
 
@@ -449,6 +481,7 @@ Current test files:
 - `tests/test_file_ops_routes.py`
 - `tests/test_filtered_selection_snapshot.py`
 - `tests/test_prune_restore.py`
+- `tests/test_training_runner_runtime.py`
 
 Example runs:
 

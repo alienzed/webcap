@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Last reviewed against code: 2026-07-12
+Last reviewed against code: 2026-07-14
 
 This folder mixes three different kinds of documents:
 
@@ -19,6 +19,7 @@ Start here when you need to know what the app does today:
 - `docs/dataset_workflow.md` - end-to-end working flow
 - `docs/config_file_system.md` - config-file discovery and edit flow
 - `docs/filtered_selection_set.md` - visible-subset Prepare behavior
+- `docs/train.md` - managed-training, readiness, queue, and manual-handoff behavior
 - `docs/src_videos_semantics.md` - current `src_videos` rules
 - `docs/phrase_copy.md` - helper panel, annotate strip, and tag copy/paste
 - `docs/primer_mappings_v2.md` - structured mappings/rules storage and UI contract

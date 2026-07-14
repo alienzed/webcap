@@ -1446,9 +1446,9 @@ html[data-theme="dark"] .training-runner-card {
 }
 
 .group-workbench-term-btn.matched:not(.active):not(.mixed):not(.mismatch) {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #166534;
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 
 .group-workbench-term-btn.mismatch {
@@ -1570,9 +1570,9 @@ html[data-theme="dark"] .group-workbench-term-btn.active {
 }
 
 html[data-theme="dark"] .group-workbench-term-btn.matched:not(.active):not(.mixed):not(.mismatch) {
-  background: rgba(20, 83, 45, 0.22);
-  border-color: rgba(74, 222, 128, 0.34);
-  color: #dcfce7;
+  background: #13233b;
+  border-color: #3b82f6;
+  color: #bfdbfe;
 }
 
 html[data-theme="dark"] .group-workbench-term-btn.mismatch {

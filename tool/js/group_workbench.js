@@ -630,6 +630,7 @@ function renderGroupWorkbench(options) {
       termBtn.textContent = term;
       termBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       termBtn.title = renderedTerm && renderedTerm !== term ? renderedTerm : term;
+      if (isMatched) termBtn.title += ' — found in caption, not selected';
       termBtn.classList.toggle('active', isActive);
       termBtn.classList.toggle('mixed', isMixed);
       termBtn.classList.toggle('matched', isMatched);

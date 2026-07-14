@@ -657,9 +657,43 @@
   border-radius: 10px;
 }
 
+.app.shell-revamp .training-run-layout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(150px, auto);
+  grid-template-areas:
+    "heading options launch"
+    ". checkpoint checkpoint";
+  align-items: stretch;
+  gap: 8px 14px;
+}
+
+.app.shell-revamp .training-run-layout .training-run-setup-header {
+  grid-area: heading;
+  align-self: start;
+  padding-top: 3px;
+}
+
+.app.shell-revamp .training-run-layout .training-run-setup-fields {
+  grid-area: options;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+}
+
 .app.shell-revamp .training-run-setup-actions {
+  grid-area: launch;
+  align-self: stretch;
   justify-content: flex-end;
-  padding-top: 2px;
+  padding-top: 0;
+}
+
+.app.shell-revamp .training-run-setup-actions .training-launch-btn {
+  width: 100%;
+  min-height: 64px;
+}
+
+.app.shell-revamp .training-run-layout .training-run-custom-checkpoint {
+  grid-area: checkpoint;
+  align-self: auto;
 }
 
 .app.shell-revamp .training-launch-btn {
@@ -703,11 +737,11 @@
 }
 
 .app.shell-revamp .training-global-label {
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--text);
+  font-size: 18px;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .app.shell-revamp .training-global-secondary {
@@ -754,6 +788,23 @@
   .app.shell-revamp .training-workflow-action {
     grid-column: 2;
     width: 100%;
+  }
+
+  .app.shell-revamp .training-run-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "heading"
+      "options"
+      "launch"
+      "checkpoint";
+  }
+
+  .app.shell-revamp .training-run-layout .training-run-setup-header {
+    padding-top: 0;
+  }
+
+  .app.shell-revamp .training-run-setup-actions .training-launch-btn {
+    min-height: 38px;
   }
 
   .app.shell-revamp .training-global-secondary {

@@ -381,11 +381,13 @@ function renderTrainingHistory() {
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
     if (elapsedSeconds > 0) details.push(formatTrainingRunnerDuration(elapsedSeconds));
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
-      '<div><strong>' + escapeHtml(trainingRunnerStatusLabel(job.status)) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</div>' +
-      '<div>' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</div>' +
-      '<button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
-      (details.length ? '<div>' + escapeHtml(details.join(' · ')) + '</div>' : '') +
-      (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
+      '<div class="training-history-primary"><strong>' + escapeHtml(trainingRunnerStatusLabel(job.status)) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) +
+        '<span class="training-history-time">' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</span></div>' +
+      '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div>' +
+      '<div class="training-history-details">' +
+        (details.length ? '<div>' + escapeHtml(details.join(' · ')) + '</div>' : '') +
+        (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
+      '</div>' +
       '<div class="training-history-actions">' +
       '<button type="button" data-training-history-log="' + escapeHtml(job.id || '') + '">Output</button>' +
       '</div></div>';

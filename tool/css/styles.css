@@ -175,6 +175,8 @@ body {
 }
 
 .focus-set-banner-btn {
+  display: inline-grid;
+  place-items: center;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -2165,21 +2167,53 @@ iframe {
 
 .workspace-surface-training .training-history-list {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .workspace-surface-training .training-history-item {
   display: grid;
-  gap: 2px;
-  padding: 6px;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(150px, 1fr) minmax(180px, 1.4fr) auto;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 9px 10px;
   border-left: 2px solid var(--border);
   background: var(--panel);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .workspace-surface-training .training-history-item strong {
   color: var(--text);
+  font-size: 13px;
+}
+
+.workspace-surface-training .training-history-primary,
+.workspace-surface-training .training-history-details {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workspace-surface-training .training-history-time {
+  color: var(--muted);
+}
+
+.workspace-surface-training .training-history-set {
+  min-width: 0;
+}
+
+.workspace-surface-training .training-history-actions {
+  justify-content: flex-end;
+}
+
+@container (max-width: 720px) {
+  .workspace-surface-training .training-history-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .workspace-surface-training .training-history-details {
+    grid-column: 1 / -1;
+  }
 }
 
 .workspace-surface-training .training-history-path {

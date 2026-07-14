@@ -2023,6 +2023,11 @@ iframe {
   color: #4f9d69;
 }
 
+.workspace-surface-training .training-runner-status--finished_early {
+  border-color: #4f9d69;
+  color: #4f9d69;
+}
+
 .workspace-surface-training .training-runner-status--failed,
 .workspace-surface-training .training-runner-status--stopped {
   border-color: #c75a5a;

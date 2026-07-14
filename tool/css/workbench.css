@@ -691,7 +691,7 @@
 
 .app.shell-revamp .training-global-secondary {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.5fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 

@@ -28,7 +28,7 @@ from .training_runtime import (
 RUNNER_DIR_NAME = ".webcap_training"
 STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
-TERMINAL_STATUSES = {"completed", "failed", "stopped", "paused", "interrupted", "cancelled"}
+TERMINAL_STATUSES = {"completed", "finished_early", "failed", "stopped", "paused", "interrupted", "cancelled"}
 _lock = threading.Lock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
@@ -673,6 +673,21 @@ def _annotate_completed_job(job):
         )
 
 
+def _annotate_finished_early_job(job):
+    if job.get("status") != "finished_early":
+        return
+    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    details = []
+    epoch = progress.get("epoch")
+    epochs = progress.get("epochs")
+    step = progress.get("step")
+    if isinstance(epoch, (int, float)) and isinstance(epochs, (int, float)) and epochs:
+        details.append("epoch " + str(int(epoch)) + " / " + str(int(epochs)))
+    if isinstance(step, (int, float)):
+        details.append("step " + format(int(step), ","))
+    job["completionNote"] = "Finished early by the user" + (" at " + " · ".join(details) if details else ".")
+
+
 def _pid_alive(pid, distribution=""):
     if not pid:
         return False
@@ -691,6 +706,8 @@ def _refresh_job(job):
         requested_action = str(job.get("actionRequested") or "")
         if requested_action == "pause":
             job["status"] = "paused"
+        elif requested_action == "finish":
+            job["status"] = "finished_early"
         elif requested_action == "stop":
             job["status"] = "stopped"
         elif result_status == "stopped":
@@ -702,11 +719,14 @@ def _refresh_job(job):
         job["finishedAt"] = float(result.get("finishedAt") or time.time())
         job["updatedAt"] = time.time()
         _annotate_completed_job(job)
+        _annotate_finished_early_job(job)
         return
     if not _pid_alive(job.get("pid"), _job_wsl_distribution(job)):
         requested_action = str(job.get("actionRequested") or "")
         if requested_action == "pause":
             job["status"] = "paused"
+        elif requested_action == "finish":
+            job["status"] = "finished_early"
         elif requested_action == "stop":
             job["status"] = "stopped"
         else:
@@ -714,6 +734,7 @@ def _refresh_job(job):
             job["error"] = "Training runner exited without a result record."
         job["finishedAt"] = time.time()
         job["updatedAt"] = time.time()
+        _annotate_finished_early_job(job)
         return
     log_path = Path(job.get("logPath") or "")
     if log_path.exists():
@@ -1053,7 +1074,7 @@ def log_response(job_id, offset=0):
         return {"ok": True, "job": _public_job(job), "offset": position, "nextOffset": next_offset, "text": raw.decode("utf-8", errors="replace")}, 200
 
 
-def stop_response(job_id, cancel=False, pause=False):
+def stop_response(job_id, cancel=False, pause=False, finish=False):
     with _lock:
         state = _read_state()
         _apply_restart_hold(state)
@@ -1072,7 +1093,7 @@ def stop_response(job_id, cancel=False, pause=False):
         if job.get("status") not in ("running", "stopping"):
             return {"ok": False, "error": "Training job is not running."}, 400
         pid = int(job.get("pid") or 0)
-        job["actionRequested"] = "pause" if pause else "stop"
+        job["actionRequested"] = "pause" if pause else "finish" if finish else "stop"
         job["actionRequestedAt"] = time.time()
         job["status"] = "stopping"
         job["stage"] = "stopping"
@@ -1084,13 +1105,17 @@ def stop_response(job_id, cancel=False, pause=False):
         if _pid_alive(pid, distribution):
             _run_wsl("kill -KILL -- -" + str(pid), timeout=8, distribution=distribution)
         _refresh_job(job)
-        job["status"] = "paused" if pause else "stopped"
-        job["stage"] = "paused" if pause else "stopped"
+        job["status"] = "paused" if pause else "finished_early" if finish else "stopped"
+        job["stage"] = "paused" if pause else "finished_early" if finish else "stopped"
         job["finishedAt"] = time.time()
         job["updatedAt"] = time.time()
+        _annotate_finished_early_job(job)
         if pause:
             state["queuePaused"] = True
             state["queuePauseReason"] = "Queue paused by the user."
+        elif finish:
+            state["queuePaused"] = False
+            state["queuePauseReason"] = ""
         if state.get("activeJobId") == job.get("id"):
             state["activeJobId"] = ""
         _start_next(state)

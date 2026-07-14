@@ -261,6 +261,53 @@ def test_completed_job_flags_a_result_far_below_the_planned_steps():
     assert "~20,000 planned steps" in job["completionNote"]
 
 
+def test_finish_action_records_a_finished_early_outcome(monkeypatch):
+    job = {
+        "id": "finished-early",
+        "status": "running",
+        "actionRequested": "finish",
+        "progress": {"epoch": 85, "epochs": 90, "step": 9410},
+    }
+    monkeypatch.setattr(
+        training_runner,
+        "_read_result",
+        lambda candidate: {"status": "stopped", "exitCode": 130, "finishedAt": 123.0},
+    )
+
+    training_runner._refresh_job(job)
+
+    assert job["status"] == "finished_early"
+    assert job["completionNote"] == "Finished early by the user at epoch 85 / 90 · step 9,410"
+
+
+def test_finish_clears_a_restart_hold_and_advances_the_queue(monkeypatch):
+    active = {"id": "active", "status": "running", "pid": 42, "progress": {"epoch": 85, "epochs": 90}}
+    state = {
+        "activeJobId": "active",
+        "queuePaused": True,
+        "queuePauseReason": "Queue held after WebCap restarted.",
+        "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}],
+    }
+    advanced = []
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
+    monkeypatch.setattr(training_runner, "_pid_alive", lambda *args, **kwargs: False)
+    monkeypatch.setattr(training_runner, "_refresh_job", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_start_next", lambda candidate: advanced.append(candidate["queuePaused"]))
+
+    payload, status = training_runner.stop_response("active", finish=True)
+
+    assert status == 200
+    assert payload["job"]["status"] == "finished_early"
+    assert state["queuePaused"] is False
+    assert state["queuePauseReason"] == ""
+    assert advanced == [False]
+
+
 def test_refresh_state_holds_queue_after_an_unexplained_exit(monkeypatch):
     active = {"id": "active", "status": "running", "stage": "hi", "stages": "hi", "pid": 42}
     state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}]}

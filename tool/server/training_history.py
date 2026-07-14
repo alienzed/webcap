@@ -176,7 +176,7 @@ def completed_stages(folder_path):
     history = read_history(folder)
     completed = set()
     for job in history.get("jobs") or []:
-        if job.get("status") != "completed":
+        if job.get("status") not in ("completed", "finished_early"):
             continue
         stage = str(job.get("stages") or "")
         if stage == "both":

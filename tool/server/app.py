@@ -402,7 +402,9 @@ def training_runner_log_route():
 @app.route("/fs/training_runner/stop", methods=["POST"])
 def training_runner_stop_route():
     data = request.get_json(silent=True) or {}
-    payload, status = training_runner_stop_response(data.get("jobId", ""), cancel=bool(data.get("cancel")), pause=bool(data.get("pause")))
+    payload, status = training_runner_stop_response(
+        data.get("jobId", ""), cancel=bool(data.get("cancel")), pause=bool(data.get("pause")), finish=bool(data.get("finish"))
+    )
     return jsonify(payload), status
 
 

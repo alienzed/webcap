@@ -47,7 +47,7 @@ function getTrainingWorkspaceEls() {
     runnerSummary: document.getElementById('training-runner-summary'),
     runnerQueue: document.getElementById('training-runner-queue'),
     runnerActions: document.getElementById('training-runner-actions'),
-    runnerStopBtn: document.getElementById('training-runner-stop-btn'),
+    runnerFinishBtn: document.getElementById('training-runner-finish-btn'),
     runnerPauseBtn: document.getElementById('training-runner-pause-btn'),
     runnerResumeQueueBtn: document.getElementById('training-runner-resume-queue-btn'),
     runnerCancelBtn: document.getElementById('training-runner-cancel-btn'),
@@ -108,6 +108,11 @@ function formatTrainingRunnerDuration(seconds) {
   var hours = Math.floor(seconds / 3600);
   var minutes = Math.floor((seconds % 3600) / 60);
   return hours ? hours + 'h ' + minutes + 'm' : minutes + 'm';
+}
+
+function trainingRunnerStatusLabel(status) {
+  var value = String(status || 'unknown').replace(/_/g, ' ');
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function trainingPlannedStepCount(job) {
@@ -302,7 +307,7 @@ function renderTrainingRunner() {
       : 'No managed training jobs.';
     els.runnerSummary.innerHTML = '<div>' + escapeHtml(noJobMessage) + '</div>';
     els.runnerActions.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
-    if (els.runnerStopBtn) els.runnerStopBtn.classList.add('hidden');
+    if (els.runnerFinishBtn) els.runnerFinishBtn.classList.add('hidden');
     if (els.runnerPauseBtn) els.runnerPauseBtn.classList.add('hidden');
     if (els.runnerCancelBtn) els.runnerCancelBtn.classList.add('hidden');
     if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
@@ -311,7 +316,7 @@ function renderTrainingRunner() {
   trainingWorkspaceState.runnerSelectedJobId = job.id;
   var elapsed = formatTrainingRunnerElapsed(job);
   var status = String(job.status || 'unknown');
-  var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+  var statusLabel = trainingRunnerStatusLabel(status);
   var running = status === 'running' || status === 'stopping';
   var lastLogAt = Number(job.lastLogAt || 0);
   var quietSeconds = lastLogAt ? Math.max(0, Math.floor(Date.now() / 1000 - lastLogAt)) : 0;
@@ -336,11 +341,11 @@ function renderTrainingRunner() {
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
   var queued = status === 'queued';
-  if (els.runnerStopBtn) els.runnerStopBtn.classList.toggle('hidden', !running);
+  if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !running);
   if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !running);
   if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
   if (els.runnerCancelBtn) els.runnerCancelBtn.classList.toggle('hidden', !queued);
-  if (!activeCount && !queuedCount && !trainingWorkspaceState.runnerQueuePaused && status !== 'failed' && status !== 'completed' && status !== 'stopped' && status !== 'paused') {
+  if (!activeCount && !queuedCount && !trainingWorkspaceState.runnerQueuePaused && status !== 'failed' && status !== 'completed' && status !== 'finished_early' && status !== 'stopped' && status !== 'paused') {
     els.runnerActions.classList.add('hidden');
   }
 }
@@ -356,7 +361,7 @@ function renderTrainingHistory() {
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
   var history = trainingWorkspaceState.history || {};
   var jobs = (trainingWorkspaceState.runnerJobs || []).filter(function (job) {
-    return job.status === 'completed' || job.status === 'failed' || job.status === 'stopped' || job.status === 'paused' || job.status === 'interrupted';
+    return job.status === 'completed' || job.status === 'finished_early' || job.status === 'failed' || job.status === 'stopped' || job.status === 'paused' || job.status === 'interrupted';
   }).slice().sort(function (a, b) {
     return Number(b.finishedAt || b.startedAt || b.createdAt || 0) - Number(a.finishedAt || a.startedAt || a.createdAt || 0);
   });
@@ -373,7 +378,7 @@ function renderTrainingHistory() {
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
     if (elapsedSeconds > 0) details.push(formatTrainingRunnerDuration(elapsedSeconds));
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
-      '<div><strong>' + escapeHtml(String(job.status || 'unknown')) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</div>' +
+      '<div><strong>' + escapeHtml(trainingRunnerStatusLabel(job.status)) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</div>' +
       '<div>' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</div>' +
       '<button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
       (details.length ? '<div>' + escapeHtml(details.join(' · ')) + '</div>' : '') +
@@ -620,17 +625,19 @@ function startManagedTraining() {
     });
 }
 
-function stopManagedTraining(cancel, pause) {
+function stopManagedTraining(cancel, pause, finish) {
   var job = getTrainingRunnerSelectedJob();
   if (!job || !job.id) return;
   var label = cancel ? 'Cancel this queued training job?' : pause
     ? 'Pause this job? It will interrupt training, hold the queue, and free the GPU.'
-    : 'Stop this job and continue to the next queued set?';
+    : finish
+      ? 'Finish this run early? Its current output will be kept, the run will be marked finished early, and the queue will continue.'
+      : 'Stop this job and continue to the next queued set?';
   if (!window.confirm(label)) return;
   trainingRunnerRequest('/fs/training_runner/stop', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobId: job.id, cancel: !!cancel, pause: !!pause })
+    body: JSON.stringify({ jobId: job.id, cancel: !!cancel, pause: !!pause, finish: !!finish })
   }).then(function () {
     setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Training paused; queue held.' : 'Stopping managed training...'));
     refreshTrainingRunnerStatus();
@@ -996,7 +1003,7 @@ function wireTrainingWorkspace() {
   var queueJobBtn = document.getElementById('training-queue-job-btn');
   var copyCommandBtn = document.getElementById('training-copy-command-btn');
   var consoleBtn = document.getElementById('training-console-btn');
-  var runnerStopBtn = document.getElementById('training-runner-stop-btn');
+  var runnerFinishBtn = document.getElementById('training-runner-finish-btn');
   var runnerPauseBtn = document.getElementById('training-runner-pause-btn');
   var runnerResumeQueueBtn = document.getElementById('training-runner-resume-queue-btn');
   var runnerCancelBtn = document.getElementById('training-runner-cancel-btn');
@@ -1053,7 +1060,7 @@ function wireTrainingWorkspace() {
     syncTrainingConsoleUi();
     if (isConsolePanelVisible()) fetchTrainingRunnerLog(getTrainingRunnerSelectedJob());
   };
-  runnerStopBtn.onclick = function () { stopManagedTraining(false, false); };
+  runnerFinishBtn.onclick = function () { stopManagedTraining(false, false, true); };
   runnerPauseBtn.onclick = function () { stopManagedTraining(false, true); };
   runnerResumeQueueBtn.onclick = resumeManagedTrainingQueue;
   runnerCancelBtn.onclick = function () { stopManagedTraining(true, false); };

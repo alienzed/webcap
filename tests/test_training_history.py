@@ -71,3 +71,17 @@ def test_completed_stages_requires_the_configured_final_epoch(tmp_path, monkeypa
         (run / "epoch40").mkdir()
 
     assert training_history.completed_stages(set_folder) == (["hi", "lo"], {"hi", "lo"})
+
+
+def test_completed_stages_accepts_an_explicit_finished_early_stage(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    for stage in ("hi", "lo"):
+        (set_folder / ("config." + stage + ".toml")).write_text("epochs = 90\n", encoding="utf-8")
+
+    training_history.record_job(set_folder, {"id": "hi", "status": "completed", "stages": "hi"})
+    training_history.record_job(set_folder, {"id": "lo", "status": "finished_early", "stages": "lo"})
+
+    assert training_history.completed_stages(set_folder) == (["hi", "lo"], {"hi", "lo"})

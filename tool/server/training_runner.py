@@ -11,6 +11,8 @@ import uuid
 from pathlib import Path
 
 from . import config as app_config
+from .caption_ops import _caption_name_for_media
+from .originals import MEDIA_ALL_EXTS, is_transient_media_name
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
@@ -38,6 +40,8 @@ _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MUL
 _LOG_EPOCH_PATTERN = re.compile(r"Started new epoch:\s*(\d+)", re.IGNORECASE)
 _LOG_STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
 _LOG_ITER_TIME_PATTERN = re.compile(r"\biter time \(s\):\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+PARTIAL_CAPTION_REVIEW_MIN_ITEMS = 3
+PARTIAL_CAPTION_REVIEW_MIN_RATIO = 0.15
 
 
 def _runtime_root():
@@ -238,6 +242,46 @@ def _prepared_dataset_is_ready(folder_path):
         except OSError:
             return False
     return True
+
+
+def _partial_annotation_caption_counts(folder_path):
+    folder = Path(folder_path)
+    try:
+        state = json.loads((folder / ".webcap_state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0, 0
+    tags_by_media = state.get("caption_tags_by_media") if isinstance(state, dict) else {}
+    if not isinstance(tags_by_media, dict):
+        return 0, 0
+
+    partial_count = 0
+    touched_count = 0
+    for media_path in folder.iterdir():
+        if (
+            not media_path.is_file()
+            or media_path.suffix.lower() not in MEDIA_ALL_EXTS
+            or is_transient_media_name(media_path.name)
+        ):
+            continue
+        tags = tags_by_media.get(media_path.name)
+        tags = [str(tag).strip() for tag in tags] if isinstance(tags, list) else []
+        tags = [tag for tag in tags if tag]
+        try:
+            caption = (folder / _caption_name_for_media(media_path.name)).read_text(encoding="utf-8").strip()
+        except OSError:
+            caption = ""
+        if tags or caption:
+            touched_count += 1
+        if tags and not caption:
+            partial_count += 1
+    return partial_count, touched_count
+
+
+def _needs_partial_annotation_caption_review(folder_path):
+    partial_count, touched_count = _partial_annotation_caption_counts(folder_path)
+    if not touched_count or partial_count < PARTIAL_CAPTION_REVIEW_MIN_ITEMS:
+        return False, partial_count, touched_count
+    return partial_count / touched_count >= PARTIAL_CAPTION_REVIEW_MIN_RATIO, partial_count, touched_count
 
 
 def _activation_prefix(settings):
@@ -1037,7 +1081,14 @@ def folder_statuses_for_folders(folder_paths):
             elif completed:
                 result[path] = {"status": "partial", "label": "Partially trained"}
             elif all((path / name).is_file() for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml")) and _prepared_dataset_is_ready(path):
-                result[path] = {"status": "ready", "label": "Ready to train"}
+                needs_review, partial_count, touched_count = _needs_partial_annotation_caption_review(path)
+                if needs_review:
+                    result[path] = {
+                        "status": "caption-review",
+                        "label": "Caption review needed (" + str(partial_count) + " of " + str(touched_count) + ")",
+                    }
+                else:
+                    result[path] = {"status": "ready", "label": "Ready to train"}
             else:
                 result[path] = {"status": "never", "label": ""}
     return result

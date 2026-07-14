@@ -436,3 +436,61 @@ def test_folder_status_requires_prepared_captions_before_ready(tmp_path, monkeyp
     (folder / "auto_dataset" / "square_img" / "one.txt").write_text("caption", encoding="utf-8")
 
     assert training_runner.folder_statuses_for_folders([folder])[folder] == {"status": "ready", "label": "Ready to train"}
+
+
+def test_folder_status_requires_caption_review_for_partial_annotations(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    (folder / "auto_dataset" / "square_img").mkdir(parents=True)
+    for name in ("config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"):
+        (folder / name).write_text("ok", encoding="utf-8")
+    (folder / "auto_dataset" / "prep_manifest.json").write_text(
+        '{"images": [{"prepared_path": "square_img/one.png", "caption": true}], "videos": []}', encoding="utf-8"
+    )
+    (folder / "auto_dataset" / "square_img" / "one.txt").write_text("caption", encoding="utf-8")
+    for index in range(20):
+        media_name = "item_" + str(index) + ".png"
+        (folder / media_name).write_bytes(b"")
+        if index >= 3:
+            (folder / ("item_" + str(index) + ".txt")).write_text("caption", encoding="utf-8")
+    (folder / ".webcap_state.json").write_text(
+        '{"caption_tags_by_media": {"item_0.png": ["tag"], "item_1.png": ["tag"], "item_2.png": ["tag"]}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": []})
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], set()))
+
+    assert training_runner.folder_statuses_for_folders([folder])[folder] == {
+        "status": "caption-review",
+        "label": "Caption review needed (3 of 20)",
+    }
+
+
+def test_folder_status_keeps_ready_for_low_rate_of_partial_annotations(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    (folder / "auto_dataset" / "square_img").mkdir(parents=True)
+    for name in ("config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"):
+        (folder / name).write_text("ok", encoding="utf-8")
+    (folder / "auto_dataset" / "prep_manifest.json").write_text(
+        '{"images": [{"prepared_path": "square_img/one.png", "caption": true}], "videos": []}', encoding="utf-8"
+    )
+    (folder / "auto_dataset" / "square_img" / "one.txt").write_text("caption", encoding="utf-8")
+    for index in range(40):
+        media_name = "item_" + str(index) + ".png"
+        (folder / media_name).write_bytes(b"")
+        if index >= 3:
+            (folder / ("item_" + str(index) + ".txt")).write_text("caption", encoding="utf-8")
+    (folder / ".webcap_state.json").write_text(
+        '{"caption_tags_by_media": {"item_0.png": ["tag"], "item_1.png": ["tag"], "item_2.png": ["tag"]}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": []})
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], set()))
+
+    assert training_runner.folder_statuses_for_folders([folder])[folder] == {
+        "status": "ready",
+        "label": "Ready to train",
+    }

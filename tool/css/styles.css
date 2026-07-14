@@ -2231,7 +2231,8 @@ iframe {
 .training-folder-status--failed,
 .training-folder-status--stopped,
 .training-folder-status--paused,
-.training-folder-status--attention {
+.training-folder-status--attention,
+.training-folder-status--caption-review {
   border-color: #cc7a3f;
   color: #cc7a3f;
 }

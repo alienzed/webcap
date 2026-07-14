@@ -93,6 +93,9 @@ function getTrainingRunnerSelectedJob() {
   for (var j = 0; j < jobs.length; j++) {
     if (jobs[j].id === trainingWorkspaceState.runnerActiveJobId) return jobs[j];
   }
+  for (var queuedIndex = 0; queuedIndex < jobs.length; queuedIndex++) {
+    if (jobs[queuedIndex].status === 'queued') return jobs[queuedIndex];
+  }
   for (var k = jobs.length - 1; k >= 0; k--) {
     if (jobs[k].folder === state.folder) return jobs[k];
   }
@@ -208,6 +211,24 @@ function trainingQueueHoldLabel() {
     : 'Queue paused';
 }
 
+function trainingFolderName(folder) {
+  var parts = String(folder || '').split(/[\\/]/).filter(function (part) { return !!part; });
+  return parts.length ? parts[parts.length - 1] : String(folder || 'this set');
+}
+
+function trainingQueueStartLabel(queuedJob) {
+  return queuedJob ? 'Start queue with ' + trainingFolderName(queuedJob.folder) : 'Resume queue';
+}
+
+function syncTrainingQueueResumeButton(els, queuedJobs) {
+  if (!els.runnerResumeQueueBtn) return;
+  var nextJob = queuedJobs[0];
+  els.runnerResumeQueueBtn.textContent = trainingQueueStartLabel(nextJob);
+  els.runnerResumeQueueBtn.title = nextJob
+    ? 'Start the queue with ' + trainingJobLabel(nextJob) + ' for ' + String(nextJob.folder || 'the next set') + '. Paused runs will remain paused.'
+    : 'Allow queued training jobs to run.';
+}
+
 function renderTrainingRunnerPreflight(payload) {
   var els = getTrainingWorkspaceEls();
   if (!els.runnerPreflight) return;
@@ -246,17 +267,32 @@ function renderTrainingAttention() {
     return;
   }
   var kind = String(attention.kind || 'queue_held');
-  var title = kind === 'queue_held' ? 'Queue is held' : 'Training needs attention';
-  var detail = attention.details ? '<div class="training-attention-detail">' + escapeHtml(attention.details) + '</div>' : '';
+  var queuedJobs = (trainingWorkspaceState.runnerJobs || []).filter(function (job) { return job.status === 'queued'; });
+  var nextJob = queuedJobs[0];
+  var pausedSet = trainingFolderName(attention.folder);
+  var title = kind === 'paused'
+    ? 'Paused: ' + pausedSet + ' · ' + trainingStageLabel(attention.stage || 'both')
+    : kind === 'queue_held' ? 'Queue is held' : 'Training needs attention';
+  var explanation = '';
+  if (kind === 'paused') {
+    explanation = pausedSet + ' will remain paused.' + (nextJob
+      ? ' Starting the queue runs ' + trainingFolderName(nextJob.folder) + ' next; it does not resume ' + pausedSet + '.'
+      : ' Review this set or resume its stage when a checkpoint is available.');
+  } else if (nextJob) {
+    explanation = 'Nothing will start until you start the queue. Next: ' + trainingFolderName(nextJob.folder) + '.';
+  }
+  var detail = (explanation || attention.details)
+    ? '<div class="training-attention-detail">' + escapeHtml(explanation) + (attention.details ? '<div>' + escapeHtml(attention.details) + '</div>' : '') + '</div>'
+    : '';
   var actions = '';
   if (attention.jobId && attention.resumeFromCheckpoint) {
-    actions += '<button type="button" class="training-btn" data-training-attention-action="resume" data-training-job-id="' + escapeHtml(attention.jobId) + '">Resume stage</button>';
+    actions += '<button type="button" class="training-btn" data-training-attention-action="resume" data-training-job-id="' + escapeHtml(attention.jobId) + '">Resume ' + escapeHtml(pausedSet) + ' stage</button>';
   }
-  if (Number(attention.queuedCount || 0) > 0) {
-    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="continue">Continue queue</button>';
+  if (nextJob) {
+    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="continue" title="Start ' + escapeHtml(trainingJobLabel(nextJob)) + ' for ' + escapeHtml(nextJob.folder || '') + '. ' + (kind === 'paused' ? 'The paused run will remain paused.' : '') + '">' + escapeHtml(trainingQueueStartLabel(nextJob)) + '</button>';
   }
   if (attention.folder) {
-    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="open" data-training-folder="' + escapeHtml(attention.folder) + '">Open set</button>';
+    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="open" data-training-folder="' + escapeHtml(attention.folder) + '">Review ' + escapeHtml(pausedSet) + '</button>';
   }
   els.attentionTitle.textContent = title;
   els.attentionSummary.innerHTML = escapeHtml(attention.message || 'Training requires a decision.') + detail;
@@ -270,16 +306,18 @@ function renderTrainingRunner() {
   var jobs = trainingWorkspaceState.runnerJobs || [];
   renderTrainingAttention();
   var activeCount = jobs.filter(function (job) { return job.status === 'running' || job.status === 'stopping'; }).length;
-  var queuedCount = jobs.filter(function (job) { return job.status === 'queued'; }).length;
+  var queuedJobs = jobs.filter(function (job) { return job.status === 'queued'; });
+  var queuedCount = queuedJobs.length;
   var job = getTrainingRunnerSelectedJob();
   if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
+  syncTrainingQueueResumeButton(els, queuedJobs);
   if (els.runnerQueue) {
-    var queuedJobs = jobs.filter(function (candidate) { return candidate.status === 'queued'; });
     if (!queuedJobs.length) {
       els.runnerQueue.innerHTML = '';
       els.runnerQueue.classList.add('hidden');
     } else {
-      els.runnerQueue.innerHTML = '<div class="training-runner-queue-title">Queue (' + queuedJobs.length + ')</div>' +
+      els.runnerQueue.innerHTML = '<div class="training-runner-queue-title">Waiting queue (' + queuedJobs.length + ')' + (trainingWorkspaceState.runnerQueuePaused ? ' · paused' : '') + '</div>' +
+        (trainingWorkspaceState.runnerQueuePaused ? '<div class="training-runner-queue-note">Nothing will start until you choose “' + escapeHtml(trainingQueueStartLabel(queuedJobs[0])) + '”.</div>' : '') +
         queuedJobs.map(function (queuedJob, index) {
           var stage = trainingJobLabel(queuedJob);
           var plannedSteps = trainingPlannedStepCount(queuedJob);
@@ -290,7 +328,7 @@ function renderTrainingRunner() {
           var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
           return '<div class="training-runner-queue-item' + (selected ? ' active' : '') + '" data-training-queue-job="' + escapeHtml(queuedJob.id) + '">' +
             '<div class="training-runner-queue-copy">' +
-              '<div><strong>' + (index + 1) + '.</strong> ' + escapeHtml(stage + workload) + '</div>' +
+              '<div><strong>' + (index === 0 ? 'Next:' : (index + 1) + '.') + '</strong> ' + escapeHtml(stage + workload) + '</div>' +
               '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
               resume +
             '</div>' +
@@ -321,13 +359,18 @@ function renderTrainingRunner() {
   var status = String(job.status || 'unknown');
   var statusLabel = trainingRunnerStatusLabel(status);
   var running = status === 'running' || status === 'stopping';
+  var queued = status === 'queued';
   var lastLogAt = Number(job.lastLogAt || 0);
   var quietSeconds = lastLogAt ? Math.max(0, Math.floor(Date.now() / 1000 - lastLogAt)) : 0;
   var quietNote = running && quietSeconds >= 120
     ? '<div class="training-runner-detail is-warning">Runner process is alive, but no output for ' + escapeHtml(formatTrainingRunnerDuration(quietSeconds)) + '. GPU activity may be idle; view output to investigate.</div>'
     : '';
   var queueState = trainingWorkspaceState.runnerQueuePaused
-    ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + '</span>'
+    ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + ' — no job will start automatically</span>'
+    : '';
+  var selectedQueuePosition = queued ? queuedJobs.indexOf(job) + 1 : 0;
+  var queuePosition = selectedQueuePosition
+    ? '<span class="training-runner-queued-count">' + (selectedQueuePosition === 1 ? 'Next to start' : 'Queue position ' + selectedQueuePosition + ' of ' + queuedCount) + '</span>'
     : '';
   els.runnerSummary.innerHTML = '<div class="training-runner-active-row">' +
     '<div class="training-runner-state">' +
@@ -335,7 +378,7 @@ function renderTrainingRunner() {
       '<span>' + escapeHtml(trainingJobLabel(job)) + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span>' +
     '</div>' +
     '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
-    (queuedCount ? '<span class="training-runner-queued-count">' + queuedCount + ' next</span>' : '') +
+    queuePosition +
     queueState +
     '</div>' +
     (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
@@ -343,7 +386,6 @@ function renderTrainingRunner() {
     quietNote +
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
-  var queued = status === 'queued';
   if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !running);
   if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !running);
   if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);

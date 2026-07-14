@@ -1883,6 +1883,12 @@ iframe {
   text-transform: uppercase;
 }
 
+.training-runner-queue-note {
+  margin-top: -2px;
+  color: #cc7a3f;
+  font-size: 12px;
+}
+
 .training-runner-queue-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

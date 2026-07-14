@@ -17,7 +17,7 @@ This is not caption generation, object detection, or auto-tagging. It is lightwe
 - surface the value in metadata views
 
 ### V2
-- use scene complexity as a light tie-breaker in `Review Selections` suggested candidates
+- use scene complexity as a light tie-breaker in `Review Set` analysis-details suggested candidates
 - lower-complexity scenes are preferred only when the rest of the candidate scoring is already similar
 
 ### Deferred

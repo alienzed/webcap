@@ -43,7 +43,10 @@ Minimum practical shape:
   },
   "training": {
     "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
-    "activate_script": "dp-clean/bin/activate",
+    "wsl_distribution": "Ubuntu",
+    "conda_executable": "/home/user/miniconda3/bin/conda",
+    "conda_environment": "training-env",
+    "activate_script": "",
     "mode": "normal",
     "write_selection_snapshot_comments": false
   },
@@ -73,7 +76,7 @@ Notes:
 - Training mode supports `poc`, `normal`, and `quality`.
 - `training.write_selection_snapshot_comments` controls whether Generate writes the prep snapshot header into `dataset.hi.toml` and `dataset.lo.toml`.
 - Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
-- `analysis.enableFaceAnalysis` enables Face Focus metadata used by `Review Selections`.
+- `analysis.enableFaceAnalysis` enables Face Focus metadata available in `Review Set` analysis details.
 - `analysis.enableMediaPipeAnalysis` enables selection-pose metadata and tag suggestions.
 - `set_destinations.presets` powers destination shortcuts in `Create Set`.
 - `vocabulary` is optional. Empty arrays are valid.
@@ -112,17 +115,17 @@ Open:
 
 1. Open a set folder.
 2. Filter the visible working subset.
-3. Use `Review Selections` to triage candidates, weak items, and focus sets.
-4. Curate files with rename, prune, reset, restore, duplicate, crop, rotate, flip, deface, and clip.
+3. Use `Review Set` and its optional analysis details to triage candidates, weak items, and focus sets.
+4. Curate files with rename, prune, reset, restore, duplicate, crop, blur background, remove background, rotate, flip, deface, and clip.
 5. Build captions with requirements, tags, primer mappings, and set notes.
-6. Use `QA` and `Review Captions` to tighten consistency and coverage.
+6. Use `QA` and `Review Set` to tighten consistency and coverage.
 7. Run `Prepare Dataset` on the current visible subset.
 8. Run `Generate`.
 9. Run `Train` to print the resolved command preview, then execute externally.
 
 Practical loop:
 - Use `Captionless`, `Incomplete`, ratings, and flags to focus work.
-- Use `Review Selections` for curation and `Review Captions` for text QA.
+- Use `Review Set` for text QA; optional analysis details retain the lower-level curation signals.
 - Keep Prepare scoped with filters when you want a partial batch.
 - Use `Create Set` when filtered or recursive search results should become a new working set.
 
@@ -289,49 +292,13 @@ Balance wheel overlay:
 - the current item's matching phrase slices are emphasized
 - phrase matching uses caption text and item tags
 
-Review Captions report:
+Review Set report:
 - runs on the current visible media subset
-- shows summary stats
-- missing required phrase
-- phrase balance counts
-- validation failures from structured review rules
-- duplicate captions
-- similar captions
-- caption length insights and outliers
-- top and rare token summaries
-- media metadata table
+- shows scope and caption coverage, required phrase misses, phrase balance, validation failures, duplicate and similar captions, and caption-length outliers
+- keeps Face Focus, Suggested Candidates, pose summaries, and full media metadata in collapsed `Analysis details`
+- report rows are clickable and open focus sets; returning reruns the same Review Set report
 
-### 10. Review Selections report
-
-`Review Selections` is the curation-oriented companion to `Review Captions`.
-It runs on the current visible subset and helps build inspection focus sets.
-
-Current panels:
-- filtered subset summary
-- Face Focus buckets when Face Focus analysis is enabled
-- suggested candidate groups
-- suggested candidates lightly prefer less cluttered scenes when scene complexity metadata is available
-- MediaPipe selection-pose summaries when MediaPipe analysis is enabled:
-  - face direction
-  - expression
-  - body orientation
-  - pose class
-  - arm position
-
-Planned direction:
-- evolve suggested candidates toward a friendlier coverage planner
-- split that planner into small focus-set-oriented sections such as keepers, prune-first, coverage hints, and alternates
-- prioritize "prune obvious redundancy" ahead of "missing coverage" warnings
-- treat ratings as soft intent signals when building inspection focus sets
-- keep warnings advisory, since missing sample types often simply do not exist in the current material
-- leave the lower QA panel unresolved for now instead of forcing coverage logic into cramped space
-
-Behavior:
-- panel rows are clickable and open focus sets
-- the report stays separate from caption QA
-- suggested candidate groups are conservative, metadata-based shortlist views, not auto-decisions
-
-### 11. Media and folder mutations
+### 10. Media and folder mutations
 
 Media row context menu supports:
 - flag assignment
@@ -342,6 +309,8 @@ Media row context menu supports:
 - reset
 - duplicate image
 - crop
+- blur background
+- remove background
 - rotate left 90 deg
 - rotate right 90 deg
 - flip vertical
@@ -454,6 +423,8 @@ Media mutation and restore:
 - `/media/reset`
 - `/media/restore`
 - `/media/crop`
+- `/media/blur_background`
+- `/media/remove_background`
 - `/media/image_transform`
 - `/media/flip_horizontal`
 - `/media/video_clip`
@@ -497,7 +468,7 @@ python -m pytest tests/test_prune_restore.py
 - Confirm the folder contains supported media extensions.
 - Check backend terminal output for path or permission failures.
 
-### Review Selections shows no analysis data
+### Review Set analysis details show no data
 
 - Enable the relevant analysis toggle in `Settings`.
 - For Face Focus, verify `deface` is installed and in `PATH`.

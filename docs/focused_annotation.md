@@ -1,12 +1,21 @@
 # Focused Annotation Wizard
 
-Last updated: 2026-06-17
+Status: Current behavior with a few forward-looking notes removed. Verified against `tool/js/focused_annotation.js` and `tool/tool.html`.
+
+Last updated: 2026-07-04
 
 ## Goal
 
 Keep the focused annotation wizard fast for repeated tagging work without turning it into a separate, reduced-capability UI.
 
 The wizard should preserve the strong parts of annotation guidance while making traversal and review faster.
+
+Current shipped shape:
+
+- Scope comes from the current filtered view or active focus set.
+- The wizard resumes on the first incomplete item/group step in traversal order.
+- Completion is currently `Reviewed` only.
+- Group-local `Copy Tags` / `Paste Tags` is available in the group header.
 
 ## Phase 1 Decisions
 
@@ -32,6 +41,7 @@ The wizard should preserve the strong parts of annotation guidance while making 
 
 - Top row: group axis controls with `Left` / `Right` buttons around the `Group X/Y` progress pill.
 - Second row: group title on the left, action buttons on the right.
+- Action buttons currently include `Edit Terms`, `Copy Tags`, and `Paste Tags` when clipboard data exists.
 - Main content:
   - Left: full group term list
   - Right: quieter `Quick Picks` rail
@@ -50,15 +60,13 @@ The wizard should preserve the strong parts of annotation guidance while making 
 
 1. `Enter`
    - Mark the current group reviewed for the current item, then advance in traversal order.
-2. `N`
-   - Mark current group `Not Applicable`, then advance.
-3. `S`
+2. `S`
    - Skip current step without changing reviewed state.
-4. `Up` / `Down`
+3. `Up` / `Down`
    - Move by item.
-5. `Left` / `Right`
+4. `Left` / `Right`
    - Move by group.
-6. The on-screen axis buttons should mirror those exact movements and advertise the matching keyboard shortcut in their tooltips.
+5. The on-screen axis buttons mirror those exact movements and advertise the matching keyboard shortcut in their tooltips.
 
 ## Wrapping Rules
 
@@ -89,5 +97,6 @@ The arrow keys move on a 2D item/group grid, but only the active traversal axis 
 ## Phase 1 Non-Goals
 
 - Dots or other extra-density indicators.
+- `Not Applicable` completion state in this modal.
 - Batch stamping / apply-to-all behavior inside the wizard.
 - New suggestion systems that are not already grounded in existing annotation or QA signals.

@@ -4,7 +4,7 @@
 
 Expose item-level balance context without adding judgment labels, targets, or heavy configuration.
 
-The Review Captions report already gives the balance story. The missing bridge is showing how the currently selected media item participates in that same story while the user reviews the item.
+The Review Set report already gives the balance story. The missing bridge is showing how the currently selected media item participates in that same story while the user reviews the item.
 
 ## Core Idea
 
@@ -28,7 +28,7 @@ Use existing Balance Phrases.
 - Balance Phrases are manually maintained by the user.
 - No preload requirement.
 - Usually only a few phrases are expected.
-- Use the same terminology shown in Review Captions.
+- Use the same terminology shown in Review Set.
 
 For the first implementation, phrase membership should mirror Review Report Balance Counts:
 

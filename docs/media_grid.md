@@ -4,7 +4,7 @@
 
 Turn Media Grid into the app's selection workspace.
 
-This is where selection analysis becomes actionable:
+This is where selection signals become actionable:
 
 - derive confident focus sets from existing metadata
 - inspect those sets as thumbnails
@@ -247,7 +247,7 @@ If a set is not precise enough, it should not ship.
 
 ## Implementation Notes
 
-- Focus sets should be derived from the same metadata payload already used by Selection Analysis.
+- Focus sets should be derived from the same metadata payload used by Review Set's Analysis details.
 - Existing `Suggested Candidates`, face focus buckets, pose buckets, and scene complexity buckets should be reused before inventing new analyzers.
 - Grid should prune/update from `getFilteredMediaItems(false)` after mirrored filter changes.
 - Grid can own temporary multi-selection state, but persisted mutations must reuse existing app operations.

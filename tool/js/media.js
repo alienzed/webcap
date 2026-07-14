@@ -91,28 +91,34 @@ function runPreviewActionByLabel(label) {
 }
 
 function updatePreviewActionControls() {
-  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewAnnotateActionEl || !ui.previewMoreActionsEl) return;
+  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
+  if (typeof renderPreviewHeaderMeta === 'function') {
+    renderPreviewHeaderMeta();
+  }
 
-  var hideAll = function () {
-    ui.previewActionsEl.classList.add('hidden');
+  var hasRating = function () {
+    return !!(ui.previewActionRatingEl && !ui.previewActionRatingEl.classList.contains('hidden') && ui.previewActionRatingEl.childNodes.length);
+  };
+  var hideActionButtons = function () {
     ui.previewMutationIndicatorEl.classList.add('hidden');
     ui.previewMutationIndicatorEl.removeAttribute('data-action-label');
     ui.previewPrimaryActionAEl.classList.add('hidden');
     ui.previewPrimaryActionBEl.classList.add('hidden');
-    ui.previewAnnotateActionEl.classList.add('hidden');
     ui.previewMoreActionsEl.classList.add('hidden');
     ui.previewPrimaryActionAEl.removeAttribute('data-action-label');
     ui.previewPrimaryActionBEl.removeAttribute('data-action-label');
   };
 
   if (!state || !state.currentItem || !state.currentItem.fileName) {
-    hideAll();
+    hideActionButtons();
+    ui.previewActionsEl.classList.add('hidden');
     return;
   }
 
   var actions = getPreviewContextActionsForCurrentItem();
   if (!hasNonSeparatorActions(actions)) {
-    hideAll();
+    hideActionButtons();
+    ui.previewActionsEl.classList.toggle('hidden', !hasRating());
     return;
   }
   // This element is a contextual "Reset" quick action (not a passive mutation badge).
@@ -154,9 +160,8 @@ function updatePreviewActionControls() {
   var secondaryActions = filterPreviewSecondaryActions(actions, used);
   var hasMore = hasNonSeparatorActions(secondaryActions);
   ui.previewMoreActionsEl.classList.toggle('hidden', !hasMore);
-  ui.previewAnnotateActionEl.classList.toggle('hidden', !(typeof openFocusedAnnotationModal === 'function'));
 
-  if (primaryA || primaryB || hasMore || showMutationReset || typeof openFocusedAnnotationModal === 'function') {
+  if (primaryA || primaryB || hasMore || showMutationReset || hasRating()) {
     ui.previewActionsEl.classList.remove('hidden');
   } else {
     ui.previewActionsEl.classList.add('hidden');
@@ -164,7 +169,7 @@ function updatePreviewActionControls() {
 }
 
 function wirePreviewActionControls() {
-  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewAnnotateActionEl || !ui.previewMoreActionsEl) return;
+  if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
   if (ui.previewActionsEl.__wired) return;
   ui.previewActionsEl.__wired = true;
 
@@ -181,13 +186,6 @@ function wirePreviewActionControls() {
   bindPrimaryButton(ui.previewPrimaryActionAEl);
   bindPrimaryButton(ui.previewPrimaryActionBEl);
   bindPrimaryButton(ui.previewMutationIndicatorEl);
-  ui.previewAnnotateActionEl.addEventListener('click', function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (typeof openFocusedAnnotationModal === 'function') {
-      openFocusedAnnotationModal();
-    }
-  });
 
   ui.previewMoreActionsEl.addEventListener('click', function (e) {
     e.preventDefault();
@@ -395,6 +393,9 @@ function syncSelectionWithVisibleMedia(mediaItems) {
     return item && item.key === currentKey;
   });
   if (isVisible) return;
+  if (typeof isFocusedAnnotationOpen === 'function' && isFocusedAnnotationOpen()) {
+    return;
+  }
 
   if (!Array.isArray(mediaItems) || !mediaItems.length) {
     if (typeof clearEditorAndPreview === 'function') clearEditorAndPreview();
@@ -519,6 +520,18 @@ function selectPathMedia(mediaItem) {
     }
     state.currentItem = mediaItem;
     state.currentConfigFile = null;
+    var keepSpecialWorkspaceSurface = typeof workspaceState !== 'undefined' &&
+      workspaceState &&
+      (workspaceState.surface === 'focus' || workspaceState.surface === 'grid');
+    if (typeof setWorkspaceViewMode === 'function' && !keepSpecialWorkspaceSurface) {
+      setWorkspaceViewMode('single');
+    }
+    if (
+      typeof setWorkspaceSurface === 'function' &&
+      !keepSpecialWorkspaceSurface
+    ) {
+      setWorkspaceSurface('default', { skipRemember: true });
+    }
     ui.editorEl.removeAttribute('readonly');
     ui.editorEl.value = nextEditorValue;
     renderPathPreview(state.folder, mediaItem.fileName);
@@ -553,9 +566,11 @@ function reselectCurrentMediaFromPreview() {
   if (activeEl && typeof isEditableElement === 'function' && isEditableElement(activeEl)) {
     try { activeEl.blur(); } catch (_err) {}
   }
+  if (ui.previewEl && document.activeElement === ui.previewEl) {
+    try { ui.previewEl.blur(); } catch (_previewBlurErr) {}
+  }
   if (!row.hasAttribute('tabindex')) row.setAttribute('tabindex', '-1');
   try { row.focus({ preventScroll: true }); } catch (_focusErr) { try { row.focus(); } catch (_focusErr2) {} }
-  try { row.click(); } catch (_clickErr) {}
   return true;
 }
 
@@ -595,17 +610,24 @@ function renderPathPreview(folder, mediaName) {
   // Add cache-busting timestamp
   var ts = Date.now();
   var mediaUrl = '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(mediaName) + '&t=' + ts;
-  renderPreviewHtml(!!IMAGE_EXTENSIONS[ext], mediaUrl);
+  var tooltipLines = [String(mediaName || '')];
+  var resolution = getResolutionForMedia(mediaName);
+  if (resolution) tooltipLines.push(resolution);
+  renderPreviewHtml(!!IMAGE_EXTENSIONS[ext], mediaUrl, tooltipLines.join('\n'));
 }
 
-function renderPreviewHtml(isImage, src) {
+function renderPreviewHtml(isImage, src, titleText) {
+  var titleAttr = '';
+  if (titleText) {
+    titleAttr = ' title="' + escapeHtml(String(titleText || '')).replace(/\r?\n/g, '&#10;') + '"';
+  }
   var tag = '';
   if (isImage) {
-    tag = '<img src="' + src + '" alt="preview" style="max-width:100%;max-height:100%;object-fit:contain;">';
+    tag = '<img src="' + src + '" alt="preview"' + titleAttr + ' style="max-width:100%;max-height:100%;object-fit:contain;">';
   } else {
     tag = '' +
-      '<div id="video-wrap" style="max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">' +
-      '  <video id="media-video" controls autoplay loop muted playsinline preload="metadata" style="max-width:100%;max-height:100%;">' +
+      '<div id="video-wrap"' + titleAttr + ' style="max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">' +
+      '  <video id="media-video" controls autoplay loop muted playsinline preload="metadata"' + titleAttr + ' style="max-width:100%;max-height:100%;">' +
       '    <source src="' + src + '">' +
       '  </video>' +
       '  <div id="video-error" style="display:none;color:#ddd;font:13px system-ui;text-align:center;max-width:420px;">' +
@@ -617,32 +639,9 @@ function renderPreviewHtml(isImage, src) {
   var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
   doc.open();
   doc.write(
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body' + titleAttr + ' style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
     tag +
     '<script>\n' +
-    'function sendPreviewReselect(){\n' +
-    '  try {\n' +
-    '    if(window.parent && window.parent.postMessage){\n' +
-    '      window.parent.postMessage({ type: "media-preview-reselect" }, "*");\n' +
-    '    }\n' +
-    '  } catch (_err) {}\n' +
-    '}\n' +
-    'document.addEventListener("click", sendPreviewReselect, true);\n' +
-    'function sendPreviewWheelNavigate(deltaY){\n' +
-    '  try {\n' +
-    '    if(window.parent && window.parent.postMessage){\n' +
-    '      window.parent.postMessage({ type: "media-preview-wheel-navigate", deltaY: Number(deltaY) || 0 }, "*");\n' +
-    '    }\n' +
-    '  } catch (_err) {}\n' +
-    '}\n' +
-    'document.addEventListener("wheel", function(evt){\n' +
-    '  if (!evt) return;\n' +
-    '  if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey) return;\n' +
-    '  var deltaY = (typeof evt.deltaY === "number") ? evt.deltaY : 0;\n' +
-    '  if (!deltaY) return;\n' +
-    '  try { evt.preventDefault(); } catch (_err) {}\n' +
-    '  sendPreviewWheelNavigate(deltaY);\n' +
-    '}, { passive: false, capture: true });\n' +
     'var video=document.getElementById("media-video");\n' +
     'if(video){\n' +
     '  var error=document.getElementById("video-error");\n' +
@@ -654,8 +653,8 @@ function renderPreviewHtml(isImage, src) {
     '<\/script></body></html>'
   );
   doc.close();
-  // Fallback binding from parent context so reselect still works
-  // even if iframe inline scripts are blocked or not executed.
+  // Bind preview interactions from the parent context so preview
+  // clicks/wheel gestures use a single navigation path.
   try {
     doc.addEventListener('click', function () {
       if (typeof reselectCurrentMediaFromPreview === 'function') {
@@ -663,6 +662,16 @@ function renderPreviewHtml(isImage, src) {
       }
     }, true);
   } catch (_bindErr) {}
+  try {
+    doc.addEventListener('dblclick', function () {
+      if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen()) {
+        return;
+      }
+      if (typeof openMediaGridSurface === 'function') {
+        openMediaGridSurface();
+      }
+    }, true);
+  } catch (_dblClickBindErr) {}
   try {
     doc.addEventListener('wheel', function (e) {
       if (!e) return;
@@ -698,6 +707,10 @@ async function renderFileList() {
   }
   if (typeof mediaGridRefreshFromCurrentFilters === 'function') {
     mediaGridRefreshFromCurrentFilters();
+  }
+  renderFocusSetControls();
+  if (typeof updateSidebarSurfaceTools === 'function') {
+    updateSidebarSurfaceTools();
   }
   // Show count of matching media items, or SuperSet results when that mode is active.
   var countValue = mediaItems.length;
@@ -746,11 +759,20 @@ async function renderFileList() {
       colorDot = '<span class="flag-dot flag-dot--' + flagColor + '" style="margin-left:8px;"></span>';
     }
     var label = '🗀 ' + folderItem.name;
+    var trainingStatus = folderItem.trainingStatus
+      ? String(folderItem.trainingStatus.status || 'never')
+      : '';
+    var trainingLabel = folderItem.trainingStatus
+      ? String(folderItem.trainingStatus.label || trainingStatus)
+      : '';
+    var trainingBadge = trainingStatus && trainingStatus !== 'never'
+      ? '<span class="training-folder-status training-folder-status--' + escapeHtml(trainingStatus) + '">' + escapeHtml(trainingLabel) + '</span>'
+      : '';
     var row = document.createElement('div');
     row.className = 'media-item folder-item';
     row.setAttribute('data-type', 'folder');
     row.setAttribute('data-key', folderItem.name);
-    row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%"><span>' + label + '</span>' + colorDot + '</div>';
+    row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%"><span>' + label + '</span><span>' + trainingBadge + colorDot + '</span></div>';
     ui.mediaListEl.appendChild(row);
     matchCount++;
   }
@@ -804,6 +826,9 @@ async function renderFileList() {
   updateBalanceDistributionWheel();
   if (typeof updateFocusSetUi === 'function') {
     updateFocusSetUi();
+  }
+  if (typeof refreshReviewOutputSummary === 'function') {
+    refreshReviewOutputSummary();
   }
   if (typeof updateSuperSetControls === 'function') {
     updateSuperSetControls();

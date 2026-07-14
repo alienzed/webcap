@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import json
+
 from PIL import Image
 
 import tool.server.app as app_module
@@ -107,6 +109,9 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert "[INFO] Repeat targeting HI: target=5000" in report
     assert "[INFO] Repeat targeting LO: target=20000" in report
     assert (auto_dataset / "webcap_dataset_metadata.json").exists()
+    training_plan = json.loads((auto_dataset / "training_plan.json").read_text(encoding="utf-8"))
+    assert training_plan["stages"]["hi"]["estimatedSteps"] > 0
+    assert training_plan["stages"]["lo"]["estimatedSteps"] > 0
 
 
 def test_generate_dataset_configs_fails_without_prep_manifest(tmp_path):
@@ -386,8 +391,10 @@ def test_validate_config_payload_persists_training_mode():
     normalized = validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},
         "training": {"mode": "poc"},
+        "primer": {"template": "{subject}\n{view}"},
     })
     assert normalized["training"]["mode"] == "poc"
+    assert normalized["primer"]["template"] == "{subject}\n{view}"
 
     normalized_quality = validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},

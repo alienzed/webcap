@@ -2,6 +2,15 @@ var checklistKeywordsModalTemp = null;
 var checklistGroupTermsModalState = null;
 var checklistTermAffixesModalState = null;
 
+function ensureChecklistWorkspaceOverlayNodes() {
+  ensureWorkspaceOverlayChildren([
+    'modal-overlay',
+    'checklist-keywords-modal',
+    'checklist-group-terms-modal',
+    'checklist-term-affixes-modal'
+  ]);
+}
+
 function closeChecklistGroupTermsModal() {
   var modal = document.getElementById('checklist-group-terms-modal');
   var overlay = document.getElementById('modal-overlay');
@@ -34,6 +43,24 @@ function renderChecklistTermAffixesPreview() {
   ) || term;
 }
 
+function updateChecklistTermAffixesWrapperUi() {
+  var wrapperPrefixEl = document.getElementById('checklist-term-wrapper-prefix');
+  var wrapperSuffixEl = document.getElementById('checklist-term-wrapper-suffix');
+  if (!checklistTermAffixesModalState) return;
+  var isPinned = !!checklistTermAffixesModalState.isPinnedGlobally;
+  var tooltip = isPinned
+    ? 'Saved here and synced to global config for this pinned term.'
+    : 'Saved in this folder. Pin the term globally to make wrapper text reusable across fresh sets.';
+  if (wrapperPrefixEl) {
+    wrapperPrefixEl.disabled = false;
+    wrapperPrefixEl.title = tooltip;
+  }
+  if (wrapperSuffixEl) {
+    wrapperSuffixEl.disabled = false;
+    wrapperSuffixEl.title = tooltip;
+  }
+}
+
 function closeChecklistTermAffixesModal() {
   var modal = document.getElementById('checklist-term-affixes-modal');
   var overlay = document.getElementById('modal-overlay');
@@ -51,61 +78,99 @@ function saveChecklistTermAffixesModal() {
   var term = checklistTermAffixesModalState.term;
   var mediaKey = checklistTermAffixesModalState.mediaKey;
   var hasTag = !!checklistTermAffixesModalState.hasTagOnCurrentItem;
-  var changed = false;
-  if (setChecklistTermWrapper(
-    term,
-    wrapperPrefixEl ? wrapperPrefixEl.value : '',
-    wrapperSuffixEl ? wrapperSuffixEl.value : ''
-  )) {
-    changed = true;
-  }
+  var isPinned = !!checklistTermAffixesModalState.isPinnedGlobally;
+  var wrapperPrefix = wrapperPrefixEl ? wrapperPrefixEl.value : '';
+  var wrapperSuffix = wrapperSuffixEl ? wrapperSuffixEl.value : '';
   var descriptorPrefix = descriptorPrefixEl ? descriptorPrefixEl.value : '';
   var descriptorSuffix = descriptorSuffixEl ? descriptorSuffixEl.value : '';
-  if (setChecklistTermDescriptorDefault(term, descriptorPrefix, descriptorSuffix)) {
-    changed = true;
+  function applyLocalWrapperChanges() {
+    if (isPinned) return false;
+    return setChecklistTermWrapper(term, wrapperPrefix, wrapperSuffix);
   }
-  if (hasTag && mediaKey) {
-    if (setChecklistTermDescriptorForMediaKey(mediaKey, term, descriptorPrefix, descriptorSuffix)) {
+  function applyLocalDescriptorChanges() {
+    var changed = false;
+    if (setChecklistTermDescriptorDefault(term, descriptorPrefix, descriptorSuffix)) {
       changed = true;
     }
-  }
-  if (changed) {
-    saveChecklistToFolderState();
-    refreshCurrentPrimerDerivedUi();
-    renderAnnotateStrip();
-    renderItemTagsPanel();
-    renderItemMetadataPanel();
-    if (typeof renderFocusedAnnotationModal === 'function') {
-      renderFocusedAnnotationModal();
+    if (hasTag && mediaKey) {
+      if (setChecklistTermDescriptorForMediaKey(mediaKey, term, descriptorPrefix, descriptorSuffix)) {
+        changed = true;
+      }
     }
+    return changed;
   }
-  closeChecklistTermAffixesModal();
+  function finalizeAfterSave(globalChanged) {
+    var localWrapperChanged = applyLocalWrapperChanges();
+    var localChanged = applyLocalDescriptorChanges();
+    if (localWrapperChanged || localChanged) {
+      saveChecklistToFolderState();
+    }
+    if (globalChanged || localWrapperChanged || localChanged) {
+      if (typeof refreshChecklistConfigDrivenUi === 'function') {
+        refreshChecklistConfigDrivenUi();
+      } else {
+        refreshCurrentPrimerDerivedUi();
+        renderAnnotateStrip();
+        renderChecklistPanel();
+        renderItemMetadataPanel();
+        renderItemTagsPanel();
+        if (typeof renderFocusedAnnotationModal === 'function') {
+          renderFocusedAnnotationModal();
+        }
+      }
+    }
+    closeChecklistTermAffixesModal();
+  }
+  var previousGlobalPrefix = (typeof getChecklistGlobalWrapperPrefix === 'function')
+    ? getChecklistGlobalWrapperPrefix(term)
+    : '';
+  var previousGlobalSuffix = (typeof getChecklistGlobalWrapperSuffix === 'function')
+    ? getChecklistGlobalWrapperSuffix(term)
+    : '';
+  var shouldSaveGlobalWrapper = isPinned && (
+    normalizeChecklistAffixValue(previousGlobalPrefix) !== normalizeChecklistAffixValue(wrapperPrefix) ||
+    normalizeChecklistAffixValue(previousGlobalSuffix) !== normalizeChecklistAffixValue(wrapperSuffix)
+  );
+  if (shouldSaveGlobalWrapper && typeof saveChecklistGlobalWrapper === 'function') {
+    saveChecklistGlobalWrapper(term, wrapperPrefix, wrapperSuffix, function (ok, result) {
+      if (!ok) {
+        setStatus(String(result || 'Failed to update global wrapper in config.'));
+        return;
+      }
+      finalizeAfterSave(true);
+    });
+    return;
+  }
+  finalizeAfterSave(false);
 }
 
 function clearChecklistTermAffixesModal() {
   if (!checklistTermAffixesModalState) return;
-  var fieldIds = [
-    'checklist-term-wrapper-prefix',
-    'checklist-term-wrapper-suffix',
-    'checklist-term-descriptor-prefix',
-    'checklist-term-descriptor-suffix'
-  ];
-  fieldIds.forEach(function (id) {
-    var el = document.getElementById(id);
-    if (el) el.value = '';
-  });
+  var wrapperPrefixEl = document.getElementById('checklist-term-wrapper-prefix');
+  var wrapperSuffixEl = document.getElementById('checklist-term-wrapper-suffix');
+  var descriptorPrefixEl = document.getElementById('checklist-term-descriptor-prefix');
+  var descriptorSuffixEl = document.getElementById('checklist-term-descriptor-suffix');
+  if (wrapperPrefixEl) wrapperPrefixEl.value = '';
+  if (wrapperSuffixEl) wrapperSuffixEl.value = '';
+  if (descriptorPrefixEl) descriptorPrefixEl.value = '';
+  if (descriptorSuffixEl) descriptorSuffixEl.value = '';
   renderChecklistTermAffixesPreview();
 }
 
 function openChecklistTermAffixesModal(termText) {
   var term = normalizeChecklistTerm(termText);
   if (!term) return;
+  ensureChecklistWorkspaceOverlayNodes();
   var mediaKey = resolveChecklistTermMediaKey();
   var hasTag = checklistMediaHasTag(mediaKey, term);
+  var isPinned = typeof isChecklistTermPinnedGloballyAnywhere === 'function'
+    ? isChecklistTermPinnedGloballyAnywhere(term)
+    : false;
   checklistTermAffixesModalState = {
     term: term,
     mediaKey: mediaKey,
-    hasTagOnCurrentItem: hasTag
+    hasTagOnCurrentItem: hasTag,
+    isPinnedGlobally: isPinned
   };
   var titleEl = document.getElementById('checklist-term-affixes-modal-title');
   var wrapperPrefixEl = document.getElementById('checklist-term-wrapper-prefix');
@@ -118,31 +183,27 @@ function openChecklistTermAffixesModal(termText) {
   var descriptor = hasTag
     ? getChecklistEffectiveTermDescriptor(term, mediaKey)
     : getChecklistTermDescriptorDefault(term);
+  var globalWrapper = (typeof getChecklistGlobalWrapper === 'function')
+    ? getChecklistGlobalWrapper(term)
+    : { prefix: '', suffix: '' };
   if (titleEl) titleEl.textContent = 'Edit Term Styling: ' + term;
-  if (wrapperPrefixEl) wrapperPrefixEl.value = wrapper.prefix;
-  if (wrapperSuffixEl) wrapperSuffixEl.value = wrapper.suffix;
+  if (wrapperPrefixEl) wrapperPrefixEl.value = globalWrapper.prefix || wrapper.prefix;
+  if (wrapperSuffixEl) wrapperSuffixEl.value = globalWrapper.suffix || wrapper.suffix;
   if (descriptorPrefixEl) descriptorPrefixEl.value = descriptor.prefix;
   if (descriptorSuffixEl) descriptorSuffixEl.value = descriptor.suffix;
+  updateChecklistTermAffixesWrapperUi();
   renderChecklistTermAffixesPreview();
   if (modal) modal.classList.remove('hidden');
   if (overlay) overlay.classList.remove('hidden');
+  focusFirstModalTextField(modal);
 }
 
 function applyChecklistGroupTermsModalChanges() {
   if (!checklistGroupTermsModalState || !checklistGroupTermsModalState.requirement) return;
-  setChecklistKeywordTermsForRequirement(
+  applyChecklistKeywordTermsForRequirement(
     checklistGroupTermsModalState.requirement,
     checklistGroupTermsModalState.terms
   );
-  saveChecklistToFolderState();
-  refreshCurrentPrimerDerivedUi();
-  renderChecklistPanel();
-  renderItemMetadataPanel();
-  renderAnnotateStrip();
-  renderItemTagsPanel();
-  if (typeof renderFocusedAnnotationModal === 'function') {
-    renderFocusedAnnotationModal();
-  }
 }
 
 function removeChecklistGroupModalTerm(rawTerm) {
@@ -346,6 +407,7 @@ function renderChecklistGroupTermsModal() {
 function openChecklistGroupTermsModal(requirementLabel) {
   var requirement = String(requirementLabel || '').trim();
   if (!requirement) return;
+  ensureChecklistWorkspaceOverlayNodes();
   checklistGroupTermsModalState = {
     requirement: requirement,
     terms: getChecklistKeywordTermsForRequirement(requirement)
@@ -355,16 +417,23 @@ function openChecklistGroupTermsModal(requirementLabel) {
   var overlay = document.getElementById('modal-overlay');
   if (modal) modal.classList.remove('hidden');
   if (overlay) overlay.classList.remove('hidden');
+  focusFirstModalTextField(modal);
 }
 
 function saveChecklistKeywordsModalAndClose() {
   checklistKeywordsByItem = JSON.parse(JSON.stringify(checklistKeywordsModalTemp || {}));
+  if (typeof syncReviewedFromChecklistAll === 'function') {
+    syncReviewedFromChecklistAll();
+  }
   saveChecklistToFolderState();
   refreshCurrentPrimerDerivedUi();
   renderChecklistPanel();
   renderItemMetadataPanel();
   renderAnnotateStrip();
   renderItemTagsPanel();
+  if (typeof renderFileList === 'function') {
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  }
   closeChecklistKeywordsModal();
   checklistKeywordsModalTemp = null;
 }
@@ -407,11 +476,13 @@ function renderChecklistKeywordsModal() {
 }
 
 function openChecklistKeywordsModal() {
+  ensureChecklistWorkspaceOverlayNodes();
   renderChecklistKeywordsModal();
   var modal = document.getElementById('checklist-keywords-modal');
   var overlay = document.getElementById('modal-overlay');
   if (modal) modal.classList.remove('hidden');
   if (overlay) overlay.classList.remove('hidden');
+  focusFirstModalTextField(modal);
 }
 
 function closeChecklistKeywordsModal() {

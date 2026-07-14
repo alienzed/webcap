@@ -67,7 +67,7 @@ def test_prepare_dataset_fails_loudly_on_missing_caption(tmp_path, monkeypatch):
         },
     )
 
-    with pytest.raises(RuntimeError, match="Missing caption file"):
+    with pytest.raises(RuntimeError, match="Prepare requires captions or primer fallbacks"):
         dataset_prep_module.prepare_dataset(
             set_folder,
             selected_media=["a.png"],

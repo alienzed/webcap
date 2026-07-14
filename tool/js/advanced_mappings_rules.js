@@ -160,15 +160,6 @@ function setReviewRulesRows(rows, triggerAutosave) {
   }
 }
 
-function loadPrimerMappingsRows(rowsOrLegacy) {
-  if (Array.isArray(rowsOrLegacy)) {
-    setPrimerMappingsRows(rowsOrLegacy, false);
-    return;
-  }
-  var legacyRows = parseLegacyPrimerMappings(rowsOrLegacy);
-  setPrimerMappingsRows(legacyRows, false);
-}
-
 function loadReviewRulesRows(rowsOrLegacy) {
   if (Array.isArray(rowsOrLegacy)) {
     setReviewRulesRows(rowsOrLegacy, false);
@@ -180,8 +171,13 @@ function loadReviewRulesRows(rowsOrLegacy) {
 
 function openAdvancedModal(modalEl) {
   if (!modalEl || !ui || !ui.advancedModalOverlayEl) return;
+  ensureWorkspaceOverlayChildren([
+    'advanced-modal-overlay',
+    modalEl.id
+  ]);
   ui.advancedModalOverlayEl.classList.remove('hidden');
   modalEl.classList.remove('hidden');
+  focusFirstModalTextField(modalEl);
 }
 
 function closeAdvancedModal(modalEl) {

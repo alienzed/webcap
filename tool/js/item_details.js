@@ -275,6 +275,134 @@ function getRatingForMediaKey(mediaKey) {
   return normalizeRatingValue(state.ratings[mediaKey]);
 }
 
+function buildPreviewHeaderStars(mediaKey, rating) {
+  var wrap = document.createElement('span');
+  wrap.className = 'preview-header-stars';
+  wrap.setAttribute('aria-label', rating > 0 ? (rating + ' out of 5 stars') : 'Unrated');
+  for (var i = 1; i <= 5; i++) {
+    var star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'preview-header-star' + (i <= rating ? ' active' : '');
+    star.setAttribute('aria-label', 'Set rating to ' + i + ' star' + (i === 1 ? '' : 's'));
+    star.title = 'Set rating to ' + i + ' star' + (i === 1 ? '' : 's');
+    star.textContent = i <= rating ? '\u2605' : '\u2606';
+    star.onclick = (function (value) {
+      return function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setRatingForMediaKey(mediaKey, value);
+      };
+    })(i);
+    wrap.appendChild(star);
+  }
+  return wrap;
+}
+
+function renderPreviewHeaderMeta() {
+  if (!ui || !ui.previewHeaderEl || !ui.previewHeaderPositionEl) return;
+  var previewShellEl = document.getElementById('preview-shell');
+  var positionEl = ui.previewHeaderPositionEl || document.getElementById('preview-header-position');
+  var previewStageEl = ui.previewStageEl || document.getElementById('preview-stage');
+  var overlayStatusEl = ui.previewStageStatusEl || document.getElementById('preview-stage-status');
+  var workflowActionsEl = ui.previewWorkflowActionsEl || document.getElementById('preview-workflow-actions');
+  var ratingEl = ui.previewActionRatingEl || document.getElementById('preview-action-rating');
+  var gridOpen = typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen();
+  var visibleMedia = typeof getFilteredMediaItems === 'function' ? getFilteredMediaItems(false) : [];
+  var hasItem = !!(state.currentItem && state.currentItem.fileName);
+  var sidebarCollapsed = !!(ui.appEl && ui.appEl.classList.contains('left-rail-collapsed'));
+  function clearPreviewTooltip() {
+    [previewShellEl, previewStageEl, ui.previewEl].forEach(function (el) {
+      if (el) el.removeAttribute('title');
+    });
+  }
+  function setPreviewTooltip(text) {
+    [previewShellEl, previewStageEl, ui.previewEl].forEach(function (el) {
+      if (el) el.title = text;
+    });
+  }
+  function clearPreviewHeaderUi() {
+    positionEl.textContent = '';
+    positionEl.classList.add('hidden');
+    clearPreviewTooltip();
+    if (overlayStatusEl) {
+      overlayStatusEl.innerHTML = '';
+      overlayStatusEl.classList.add('hidden');
+    }
+    if (ratingEl) {
+      ratingEl.innerHTML = '';
+      ratingEl.classList.add('hidden');
+    }
+  }
+  function updateWorkflowVisibility() {
+    if (!workflowActionsEl) return;
+    var showFocus = !!(ui.sidebarFocusBtnEl && !ui.sidebarFocusBtnEl.classList.contains('hidden'));
+    workflowActionsEl.classList.toggle('hidden', !showFocus);
+  }
+  function appendOverlayWarning(text) {
+    if (!overlayStatusEl || !text) return;
+    var pill = document.createElement('span');
+    pill.className = 'preview-stage-status-pill';
+    pill.textContent = text;
+    overlayStatusEl.appendChild(pill);
+    overlayStatusEl.classList.remove('hidden');
+  }
+  if (gridOpen) {
+    if (previewShellEl) previewShellEl.classList.remove('preview-header-active');
+    ui.previewHeaderEl.classList.add('hidden');
+    clearPreviewHeaderUi();
+    if (workflowActionsEl) workflowActionsEl.classList.add('hidden');
+    return;
+  }
+
+  if (ui.sidebarCollapseToggleBtn) {
+    ui.sidebarCollapseToggleBtn.classList.toggle('hidden', !hasItem && !sidebarCollapsed);
+  }
+  if (ui.sidebarFocusBtnEl) {
+    ui.sidebarFocusBtnEl.classList.toggle('hidden', !hasItem);
+    ui.sidebarFocusBtnEl.disabled = false;
+  }
+  updateWorkflowVisibility();
+
+  if (!hasItem) {
+    if (previewShellEl) previewShellEl.classList.remove('preview-header-active');
+    ui.previewHeaderEl.classList.toggle('hidden', !sidebarCollapsed);
+    clearPreviewHeaderUi();
+    return;
+  }
+
+  clearPreviewHeaderUi();
+  var currentItem = state.currentItem;
+  var currentMediaKey = currentItem.key || currentItem.fileName;
+  var rating = getRatingForMediaKey(currentMediaKey);
+  var resolution = getResolutionForMedia(currentItem.fileName);
+  var metadata = getMetadataForMedia(currentItem.fileName) || {};
+  var aspect = String(metadata.aspect || '').trim();
+  var currentIndex = -1;
+  for (var i = 0; i < visibleMedia.length; i += 1) {
+    var visibleItem = visibleMedia[i];
+    if ((visibleItem && (visibleItem.key || visibleItem.fileName)) === currentMediaKey) {
+      currentIndex = i;
+      break;
+    }
+  }
+  if (currentIndex >= 0 && visibleMedia.length > 0) {
+    positionEl.textContent = 'Item ' + (currentIndex + 1) + '/' + visibleMedia.length;
+    positionEl.classList.remove('hidden');
+  }
+  if (aspect && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(aspect)) {
+    appendOverlayWarning('Invalid AR');
+  }
+  if (ratingEl) {
+    ratingEl.appendChild(buildPreviewHeaderStars(currentMediaKey, rating));
+    ratingEl.classList.remove('hidden');
+  }
+  var tooltipLines = [currentItem.fileName];
+  if (resolution) tooltipLines.push(resolution);
+  setPreviewTooltip(tooltipLines.join('\n'));
+  if (previewShellEl) previewShellEl.classList.add('preview-header-active');
+  ui.previewHeaderEl.classList.remove('hidden');
+}
+
 function parseRequirementProgressTerms(raw) {
   var seen = {};
   return String(raw || '')
@@ -299,13 +427,6 @@ function computeRequirementProgressForMediaKey(mediaKey) {
     var terms = parseRequirementProgressTerms(getChecklistKeywordTermsForRequirement(requirementLabel).join(', '));
     if (!terms.length) continue;
     total += 1;
-    var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-      ? isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)
-      : false;
-    if (isNa) {
-      completed += 1;
-      continue;
-    }
     var hasMatch = terms.some(function (term) {
       return hasTagForMediaKey(mediaKey, term);
     });
@@ -330,10 +451,7 @@ function computeReviewedProgressForMediaKey(mediaKey) {
     var requirementLabel = String(requirements[requirementIdx] || '').trim();
     if (!requirementLabel) continue;
     total += 1;
-    var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-      ? isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)
-      : false;
-    if (checkedMap[requirementLabel] || isNa) {
+    if (checkedMap[requirementLabel]) {
       completed += 1;
     } else {
       missing.push(requirementLabel);
@@ -444,12 +562,14 @@ function setRatingForMediaKey(mediaKey, rating) {
     state.ratings[mediaKey] = next;
   }
   debouncedItemRatingSave(saveItemRatingsToFolderState);
+  renderPreviewHeaderMeta();
   renderItemMetadataPanel();
   renderFileList();
 }
 
 function renderItemMetadataPanel() {
   renderItemAnalysisPanel();
+  renderPreviewHeaderMeta();
   var listEl = document.getElementById('item-metadata-list');
   if (!listEl) return;
   listEl.innerHTML = '';
@@ -910,47 +1030,6 @@ function updateTagOrderForMediaKey(mediaKey, nextTags) {
   return true;
 }
 
-function moveTagUpForMediaKey(mediaKey, tagText) {
-  var key = String(mediaKey || '').trim();
-  var target = normalizeItemTag(tagText).toLowerCase();
-  if (!key || !target) return false;
-  var current = getTagsForMediaKey(key);
-  if (current.length < 2) return false;
-  var idx = -1;
-  for (var i = 0; i < current.length; i++) {
-    if (normalizeItemTag(current[i]).toLowerCase() === target) {
-      idx = i;
-      break;
-    }
-  }
-  if (idx <= 0) return false;
-  var next = current.slice();
-  var temp = next[idx - 1];
-  next[idx - 1] = next[idx];
-  next[idx] = temp;
-  return updateTagOrderForMediaKey(key, next);
-}
-
-function moveTagDownForMediaKey(mediaKey, tagText) {
-  var key = String(mediaKey || '').trim();
-  var target = normalizeItemTag(tagText).toLowerCase();
-  if (!key || !target) return false;
-  var current = getTagsForMediaKey(key);
-  if (current.length < 2) return false;
-  var idx = -1;
-  for (var i = 0; i < current.length; i++) {
-    if (normalizeItemTag(current[i]).toLowerCase() === target) {
-      idx = i;
-      break;
-    }
-  }
-  if (idx < 0 || idx >= current.length - 1) return false;
-  var next = current.slice();
-  var temp = next[idx + 1];
-  next[idx + 1] = next[idx];
-  next[idx] = temp;
-  return updateTagOrderForMediaKey(key, next);
-}
 
 function swapTagOrderForMediaKey(mediaKey, firstTagText, secondTagText) {
   var key = String(mediaKey || '').trim();

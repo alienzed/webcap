@@ -3,9 +3,11 @@ var focusedAnnotationState = {
   itemKeys: [],
   itemIndex: 0,
   groupIndex: 0,
-  traversalMode: 'group-first',
   history: [],
-  sourceLabel: ''
+  sourceLabel: '',
+  previousSurface: 'default',
+  actionRefreshTimerFast: 0,
+  actionRefreshTimerSlow: 0
 };
 
 function getFocusedAnnotationEls() {
@@ -15,8 +17,6 @@ function getFocusedAnnotationEls() {
     itemProgress: document.getElementById('focused-annotation-item-progress'),
     itemPrevBtn: document.getElementById('focused-annotation-item-prev-btn'),
     itemNextBtn: document.getElementById('focused-annotation-item-next-btn'),
-    modeGroupBtn: document.getElementById('focused-annotation-mode-group-btn'),
-    modeItemBtn: document.getElementById('focused-annotation-mode-item-btn'),
     groupProgress: document.getElementById('focused-annotation-group-progress'),
     groupPrevBtn: document.getElementById('focused-annotation-group-prev-btn'),
     groupNextBtn: document.getElementById('focused-annotation-group-next-btn'),
@@ -25,9 +25,14 @@ function getFocusedAnnotationEls() {
     termList: document.getElementById('focused-annotation-term-list'),
     quickPicks: document.getElementById('focused-annotation-quick-picks'),
     rating: document.getElementById('focused-annotation-rating'),
+    previewActions: document.getElementById('focused-annotation-preview-actions'),
+    copyTagsBtn: document.getElementById('focused-annotation-copy-tags-btn'),
+    pasteTagsBtn: document.getElementById('focused-annotation-paste-tags-btn'),
     editTermsBtn: document.getElementById('focused-annotation-edit-terms-btn'),
+    groupMoveUpBtn: document.getElementById('focused-annotation-group-move-up-btn'),
+    groupMoveDownBtn: document.getElementById('focused-annotation-group-move-down-btn'),
+    groupDeleteBtn: document.getElementById('focused-annotation-group-delete-btn'),
     closeBtn: document.getElementById('focused-annotation-close-btn'),
-    naBtn: document.getElementById('focused-annotation-na-btn'),
     doneBtn: document.getElementById('focused-annotation-done-btn')
   };
 }
@@ -50,19 +55,6 @@ function isFocusedAnnotationNestedModalOpen() {
     }
   }
   return false;
-}
-
-function getFocusedAnnotationTraversalMode() {
-  return focusedAnnotationState.traversalMode === 'item-first' ? 'item-first' : 'group-first';
-}
-
-function setFocusedAnnotationTraversalMode(mode, options) {
-  var nextMode = String(mode || '').trim().toLowerCase() === 'item-first' ? 'item-first' : 'group-first';
-  var opts = options || {};
-  focusedAnnotationState.traversalMode = nextMode;
-  if (!opts.skipRender) {
-    renderFocusedAnnotationModal();
-  }
 }
 
 function findFocusedAnnotationMediaItemByKey(mediaKey) {
@@ -130,10 +122,7 @@ function getFocusedAnnotationFirstIncompleteGroupIndex(mediaKey, startIndex) {
     var isChecked = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
       ? isChecklistRequirementCheckedForMediaKey(key, requirement)
       : false;
-    var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-      ? isChecklistRequirementNaForMediaKey(key, requirement)
-      : false;
-    if (!isChecked && !isNa) {
+    if (!isChecked) {
       return i;
     }
   }
@@ -154,24 +143,7 @@ function isFocusedAnnotationPendingStep(itemIndex, groupIndex) {
 
 function getFocusedAnnotationTraversalSteps() {
   var itemKeys = Array.isArray(focusedAnnotationState.itemKeys) ? focusedAnnotationState.itemKeys : [];
-  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
-  var steps = [];
-  if (!itemKeys.length || !requirements.length) return steps;
-  var mode = getFocusedAnnotationTraversalMode();
-  if (mode === 'item-first') {
-    for (var itemIndex = 0; itemIndex < itemKeys.length; itemIndex++) {
-      for (var groupIndex = 0; groupIndex < requirements.length; groupIndex++) {
-        steps.push({ itemIndex: itemIndex, groupIndex: groupIndex });
-      }
-    }
-    return steps;
-  }
-  for (var nextGroupIndex = 0; nextGroupIndex < requirements.length; nextGroupIndex++) {
-    for (var nextItemIndex = 0; nextItemIndex < itemKeys.length; nextItemIndex++) {
-      steps.push({ itemIndex: nextItemIndex, groupIndex: nextGroupIndex });
-    }
-  }
-  return steps;
+  return getFocusedAnnotationTraversalStepsForKeys(itemKeys);
 }
 
 function getFocusedAnnotationNextPendingStep(itemIndex, groupIndex) {
@@ -215,22 +187,11 @@ function getFocusedAnnotationCurrentRequirement() {
   return String(requirements[idx] || '');
 }
 
-function getFocusedAnnotationTraversalStepsForKeys(itemKeys, traversalMode) {
+function getFocusedAnnotationTraversalStepsForKeys(itemKeys) {
   var keys = Array.isArray(itemKeys) ? itemKeys : [];
   var requirements = Array.isArray(checklistItems) ? checklistItems : [];
   var steps = [];
   if (!keys.length || !requirements.length) return steps;
-  var mode = String(traversalMode || getFocusedAnnotationTraversalMode()).trim().toLowerCase() === 'item-first'
-    ? 'item-first'
-    : 'group-first';
-  if (mode === 'item-first') {
-    for (var itemIndex = 0; itemIndex < keys.length; itemIndex++) {
-      for (var groupIndex = 0; groupIndex < requirements.length; groupIndex++) {
-        steps.push({ itemIndex: itemIndex, groupIndex: groupIndex });
-      }
-    }
-    return steps;
-  }
   for (var nextGroupIndex = 0; nextGroupIndex < requirements.length; nextGroupIndex++) {
     for (var nextItemIndex = 0; nextItemIndex < keys.length; nextItemIndex++) {
       steps.push({ itemIndex: nextItemIndex, groupIndex: nextGroupIndex });
@@ -240,10 +201,8 @@ function getFocusedAnnotationTraversalStepsForKeys(itemKeys, traversalMode) {
 }
 
 function isFocusedAnnotationStepComplete(mediaKey, requirementLabel) {
-  return (typeof isChecklistRequirementCheckedForMediaKey === 'function' &&
-    isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel)) ||
-    (typeof isChecklistRequirementNaForMediaKey === 'function' &&
-    isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel));
+  return typeof isChecklistRequirementCheckedForMediaKey === 'function' &&
+    isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
 }
 
 function getFocusedAnnotationResumeStep(itemKeys, preferredMediaKey) {
@@ -251,7 +210,7 @@ function getFocusedAnnotationResumeStep(itemKeys, preferredMediaKey) {
   var requirements = Array.isArray(checklistItems) ? checklistItems : [];
   if (!keys.length || !requirements.length) return null;
 
-  var steps = getFocusedAnnotationTraversalStepsForKeys(keys, getFocusedAnnotationTraversalMode());
+  var steps = getFocusedAnnotationTraversalStepsForKeys(keys);
   if (!steps.length) return null;
 
   var lastCompletedIndex = -1;
@@ -410,19 +369,72 @@ function closeFocusedAnnotationModal() {
   var els = getFocusedAnnotationEls();
   if (els.modal) els.modal.classList.add('hidden');
   document.body.classList.remove('focused-annotation-open');
+  if (focusedAnnotationState.actionRefreshTimerFast) {
+    clearTimeout(focusedAnnotationState.actionRefreshTimerFast);
+    focusedAnnotationState.actionRefreshTimerFast = 0;
+  }
+  if (focusedAnnotationState.actionRefreshTimerSlow) {
+    clearTimeout(focusedAnnotationState.actionRefreshTimerSlow);
+    focusedAnnotationState.actionRefreshTimerSlow = 0;
+  }
   focusedAnnotationState.open = false;
   focusedAnnotationState.itemKeys = [];
   focusedAnnotationState.itemIndex = 0;
   focusedAnnotationState.groupIndex = 0;
   focusedAnnotationState.history = [];
   focusedAnnotationState.sourceLabel = '';
+  focusedAnnotationState.previousSurface = 'default';
+  if (typeof setWorkspaceViewMode === 'function') {
+    setWorkspaceViewMode('single');
+  }
+  if (typeof exitWorkspaceSurface === 'function') {
+    exitWorkspaceSurface();
+  }
+  if (typeof renderFileList === 'function') {
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  }
 }
 
 function showFocusedAnnotationModal() {
   var els = getFocusedAnnotationEls();
+  var overlayHost = document.getElementById('workspace-overlays');
+  if (overlayHost && els.modal && els.modal.parentNode !== overlayHost) {
+    overlayHost.appendChild(els.modal);
+  }
   if (els.modal) els.modal.classList.remove('hidden');
   document.body.classList.add('focused-annotation-open');
   focusedAnnotationState.open = true;
+  if (typeof setWorkspaceViewMode === 'function') {
+    setWorkspaceViewMode('focus');
+  }
+  if (typeof setWorkspaceSurface === 'function') {
+    setWorkspaceSurface('focus', { sidebarHidden: true });
+  }
+  if (typeof setWorkspaceWorkflowMode === 'function') {
+    setWorkspaceWorkflowMode('annotate');
+  }
+}
+
+function moveFocusedAnnotationToAvailableItem(direction) {
+  var itemKeys = Array.isArray(focusedAnnotationState.itemKeys) ? focusedAnnotationState.itemKeys : [];
+  if (!itemKeys.length) return false;
+  var startIndex = Math.max(0, Math.min(itemKeys.length - 1, Number(focusedAnnotationState.itemIndex) || 0));
+  var step = direction < 0 ? -1 : 1;
+  for (var offset = 1; offset <= itemKeys.length; offset += 1) {
+    var candidateIndex = startIndex + (offset * step);
+    if (candidateIndex < 0 || candidateIndex >= itemKeys.length) continue;
+    if (!findFocusedAnnotationMediaItemByKey(itemKeys[candidateIndex])) continue;
+    focusedAnnotationState.itemIndex = candidateIndex;
+    renderFocusedAnnotationModal();
+    return true;
+  }
+  for (var i = 0; i < itemKeys.length; i += 1) {
+    if (!findFocusedAnnotationMediaItemByKey(itemKeys[i])) continue;
+    focusedAnnotationState.itemIndex = i;
+    renderFocusedAnnotationModal();
+    return true;
+  }
+  return false;
 }
 
 function getFocusedAnnotationMediaUrl(mediaItem) {
@@ -441,10 +453,12 @@ function renderFocusedAnnotationPreview(mediaItem) {
     els.previewMedia.removeAttribute('data-media-key');
     els.previewMedia.textContent = 'No media selected.';
     renderFocusedAnnotationRating('');
+    renderFocusedAnnotationPreviewActions(null);
     return;
   }
   if (els.previewMedia.getAttribute('data-media-key') === mediaKey && els.previewMedia.firstChild) {
     renderFocusedAnnotationRating(mediaKey);
+    renderFocusedAnnotationPreviewActions(mediaItem);
     return;
   }
   els.previewMedia.innerHTML = '';
@@ -462,6 +476,7 @@ function renderFocusedAnnotationPreview(mediaItem) {
     video.className = 'focused-annotation-preview-video';
     els.previewMedia.appendChild(video);
     renderFocusedAnnotationRating(mediaKey);
+    renderFocusedAnnotationPreviewActions(mediaItem);
     return;
   }
   var img = document.createElement('img');
@@ -470,6 +485,7 @@ function renderFocusedAnnotationPreview(mediaItem) {
   img.className = 'focused-annotation-preview-image';
   els.previewMedia.appendChild(img);
   renderFocusedAnnotationRating(mediaKey);
+  renderFocusedAnnotationPreviewActions(mediaItem);
 }
 
 function renderFocusedAnnotationRating(mediaKey) {
@@ -497,6 +513,134 @@ function renderFocusedAnnotationRating(mediaKey) {
   }
 }
 
+function getFocusedAnnotationPreviewContextActions(mediaItem) {
+  if (!mediaItem || !mediaItem.fileName) return [];
+  var key = mediaItem.key || mediaItem.fileName;
+  var actions = buildMediaContextMenuActions(mediaItem, key);
+  return (Array.isArray(actions) ? actions : []).filter(function (action) {
+    return !action || action.separator || String(action.label || '') !== 'Focused Annotate...';
+  });
+}
+
+function scheduleFocusedAnnotationActionRefresh() {
+  if (!focusedAnnotationState.open) return;
+  if (focusedAnnotationState.actionRefreshTimerFast) {
+    clearTimeout(focusedAnnotationState.actionRefreshTimerFast);
+  }
+  if (focusedAnnotationState.actionRefreshTimerSlow) {
+    clearTimeout(focusedAnnotationState.actionRefreshTimerSlow);
+  }
+  focusedAnnotationState.actionRefreshTimerFast = setTimeout(function () {
+    focusedAnnotationState.actionRefreshTimerFast = 0;
+    if (!focusedAnnotationState.open) return;
+    renderFocusedAnnotationModal();
+  }, 80);
+  focusedAnnotationState.actionRefreshTimerSlow = setTimeout(function () {
+    focusedAnnotationState.actionRefreshTimerSlow = 0;
+    if (!focusedAnnotationState.open) return;
+    renderFocusedAnnotationModal();
+  }, 900);
+}
+
+function renderFocusedAnnotationPreviewActions(mediaItem) {
+  var els = getFocusedAnnotationEls();
+  if (!els.previewActions) return;
+  els.previewActions.innerHTML = '';
+  if (!mediaItem || !mediaItem.fileName) {
+    els.previewActions.classList.add('hidden');
+    return;
+  }
+  var actions = getFocusedAnnotationPreviewContextActions(mediaItem);
+  if (!hasNonSeparatorActions(actions)) {
+    els.previewActions.classList.add('hidden');
+    return;
+  }
+
+  var key = mediaItem.key || mediaItem.fileName;
+  var mutationResetAction = findPreviewActionByLabel(actions, 'Reset');
+  var showMutationReset = !!(isMediaMutated(key) && mutationResetAction);
+  var plan = getPreviewPrimaryActionPlan(mediaItem.fileName);
+  var primaryA = findPreviewActionByLabel(actions, plan[0].actionLabel);
+  var primaryB = findPreviewActionByLabel(actions, plan[1].actionLabel);
+  var used = {};
+  if (primaryA) used[plan[0].actionLabel] = true;
+  if (primaryB) used[plan[1].actionLabel] = true;
+  var secondaryActions = filterPreviewSecondaryActions(actions, used);
+  var hasMore = hasNonSeparatorActions(secondaryActions);
+
+  function appendActionButton(label, onClick, extraClass) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn focused-annotation-secondary-action-btn focused-annotation-preview-action-btn';
+    if (extraClass) btn.classList.add(extraClass);
+    btn.textContent = label;
+    btn.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick(e);
+    };
+    els.previewActions.appendChild(btn);
+  }
+
+  if (showMutationReset) {
+    appendActionButton('Reset', function () {
+      mutationResetAction.run();
+      scheduleFocusedAnnotationActionRefresh();
+    }, 'focused-annotation-preview-reset-btn');
+  }
+  if (primaryA) {
+    appendActionButton(plan[0].label, function () {
+      primaryA.run();
+      scheduleFocusedAnnotationActionRefresh();
+    });
+  }
+  if (primaryB) {
+    appendActionButton(plan[1].label, function () {
+      primaryB.run();
+      scheduleFocusedAnnotationActionRefresh();
+    });
+  }
+  if (hasMore) {
+    appendActionButton('More', function (event) {
+      var rect = event.currentTarget.getBoundingClientRect();
+      var menuActions = secondaryActions.map(function (action) {
+        if (!action || action.separator || typeof action.run !== 'function') return action;
+        return {
+          label: action.label,
+          render: action.render,
+          run: function () {
+            action.run();
+            scheduleFocusedAnnotationActionRefresh();
+          }
+        };
+      });
+      showContextMenu(rect.left, rect.bottom + 6, menuActions);
+    });
+  }
+
+  els.previewActions.classList.toggle('hidden', !els.previewActions.childNodes.length);
+}
+
+function updateFocusedAnnotationGroupClipboardUi() {
+  var els = getFocusedAnnotationEls();
+  if (!els.copyTagsBtn || !els.pasteTagsBtn) return;
+  var requirementLabel = getFocusedAnnotationCurrentRequirement();
+  var hasRequirement = !!requirementLabel;
+  var clipboard = (typeof getChecklistGroupTermsClipboard === 'function')
+    ? getChecklistGroupTermsClipboard()
+    : [];
+  var clipboardCount = Array.isArray(clipboard) ? clipboard.length : 0;
+  els.copyTagsBtn.disabled = !hasRequirement;
+  els.copyTagsBtn.title = hasRequirement
+    ? 'Copy the current group tags'
+    : 'Select a group to copy tags from';
+  els.pasteTagsBtn.classList.toggle('hidden', !hasRequirement || clipboardCount <= 0);
+  els.pasteTagsBtn.disabled = !hasRequirement || clipboardCount <= 0;
+  els.pasteTagsBtn.title = clipboardCount > 0
+    ? 'Paste ' + clipboardCount + ' copied tag' + (clipboardCount === 1 ? '' : 's') + ' into this group'
+    : 'Paste copied tags';
+}
+
 function buildFocusedAnnotationBadge(text, kind) {
   var badge = document.createElement('span');
   badge.className = 'focused-annotation-badge';
@@ -512,14 +656,8 @@ function renderFocusedAnnotationStatus(mediaKey, requirementLabel) {
   var isChecked = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
     ? isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel)
     : false;
-  var isNa = (typeof isChecklistRequirementNaForMediaKey === 'function')
-    ? isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)
-    : false;
   if (isChecked) {
     els.groupStatus.appendChild(buildFocusedAnnotationBadge('Reviewed', 'focused-annotation-badge-reviewed'));
-  }
-  if (isNa) {
-    els.groupStatus.appendChild(buildFocusedAnnotationBadge('N/A', 'focused-annotation-badge-na'));
   }
 }
 
@@ -664,10 +802,12 @@ function renderFocusedAnnotationQuickPicks(requirementLabel, entries) {
     if (entry.kinds.matched) btn.classList.add('matched');
     if (entry.kinds.suggested) btn.classList.add('suggested');
     btn.textContent = entry.term;
-    btn.title = (entry.kinds.active ? 'Remove "' : 'Add "') + entry.term + '" on the current item';
+    var buttonTitle = (entry.kinds.active ? 'Remove "' : 'Add "') + entry.term + '" on the current item';
+    btn.title = buttonTitle;
     btn.onclick = function () {
       toggleFocusedAnnotationTerm(requirementLabel, entry.term);
     };
+    bindFocusedAnnotationTermAffixContextMenu(btn, entry.term, buttonTitle);
     row.appendChild(btn);
     if (entry.reasons.length) {
       var meta = document.createElement('div');
@@ -709,6 +849,7 @@ function renderFocusedAnnotationCurrentTags(parentEl) {
     var chip = document.createElement('span');
     chip.className = 'focused-annotation-current-tag';
     chip.textContent = tag;
+    bindFocusedAnnotationTermAffixContextMenu(chip, tag, 'Current tag "' + tag + '"');
     list.appendChild(chip);
   });
   section.appendChild(list);
@@ -721,16 +862,24 @@ function toggleFocusedAnnotationTerm(requirementLabel, termText) {
   var term = normalizeChecklistTerm(termText);
   if (!term) return;
   if (!hasTagForMediaKey(mediaKey, term)) {
-    if (typeof isChecklistRequirementNaForMediaKey === 'function' &&
-        typeof setChecklistRequirementNaForMediaKey === 'function' &&
-        isChecklistRequirementNaForMediaKey(mediaKey, requirementLabel)) {
-      setChecklistRequirementNaForMediaKey(mediaKey, requirementLabel, false, { skipRender: true });
-    }
     addTagToCurrentMedia(term);
   } else {
     removeTagFromCurrentMedia(term);
   }
   renderFocusedAnnotationModal();
+}
+
+function bindFocusedAnnotationTermAffixContextMenu(targetEl, termText, titlePrefix) {
+  if (!targetEl || typeof openChecklistTermAffixesModal !== 'function') return;
+  var term = normalizeChecklistTerm(termText);
+  if (!term) return;
+  var baseTitle = String(titlePrefix || '').trim();
+  targetEl.title = (baseTitle ? (baseTitle + ' - ') : '') + 'Right-click to edit prefix/suffix';
+  targetEl.addEventListener('contextmenu', function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    openChecklistTermAffixesModal(term);
+  });
 }
 
 function renderFocusedAnnotationTerms(mediaKey, requirementLabel, quickPickEntries) {
@@ -765,12 +914,14 @@ function renderFocusedAnnotationTerms(mediaKey, requirementLabel, quickPickEntri
       btn.classList.add('suggested');
     }
     btn.textContent = term;
-    btn.title = hasTagForMediaKey(mediaKey, term)
+    var buttonTitle = hasTagForMediaKey(mediaKey, term)
       ? ('Remove "' + term + '" from the current item')
       : ('Add "' + term + '" to the current item');
+    btn.title = buttonTitle;
     btn.onclick = function () {
       toggleFocusedAnnotationTerm(requirementLabel, term);
     };
+    bindFocusedAnnotationTermAffixContextMenu(btn, term, buttonTitle);
     row.appendChild(btn);
     els.termList.appendChild(row);
   });
@@ -793,6 +944,10 @@ function renderFocusedAnnotationModal() {
   if (!state.currentItem || state.currentItem.key !== targetItemKey) {
     var targetItem = findFocusedAnnotationMediaItemByKey(targetItemKey);
     if (!targetItem || typeof selectPathMedia !== 'function') {
+      if (moveFocusedAnnotationToAvailableItem(1)) {
+        return;
+      }
+      setStatus('Focused annotation queue no longer has any available items.');
       closeFocusedAnnotationModal();
       return;
     }
@@ -811,16 +966,6 @@ function renderFocusedAnnotationModal() {
   if (els.itemProgress) {
     els.itemProgress.textContent = 'Item ' + (focusedAnnotationState.itemIndex + 1) + '/' + itemKeys.length;
   }
-  if (els.modeGroupBtn) {
-    var isGroupFirst = getFocusedAnnotationTraversalMode() === 'group-first';
-    els.modeGroupBtn.classList.toggle('active', isGroupFirst);
-    els.modeGroupBtn.setAttribute('aria-pressed', isGroupFirst ? 'true' : 'false');
-  }
-  if (els.modeItemBtn) {
-    var isItemFirst = getFocusedAnnotationTraversalMode() === 'item-first';
-    els.modeItemBtn.classList.toggle('active', isItemFirst);
-    els.modeItemBtn.setAttribute('aria-pressed', isItemFirst ? 'true' : 'false');
-  }
   if (els.groupProgress) {
     els.groupProgress.textContent = requirements.length
       ? ('Group ' + (groupIndex + 1) + '/' + requirements.length)
@@ -832,9 +977,16 @@ function renderFocusedAnnotationModal() {
   if (els.editTermsBtn) {
     els.editTermsBtn.disabled = !requirementLabel;
   }
-  if (els.naBtn) {
-    els.naBtn.disabled = !requirementLabel;
+  if (els.groupMoveUpBtn) {
+    els.groupMoveUpBtn.disabled = !requirementLabel || groupIndex <= 0;
   }
+  if (els.groupMoveDownBtn) {
+    els.groupMoveDownBtn.disabled = !requirementLabel || groupIndex >= requirements.length - 1;
+  }
+  if (els.groupDeleteBtn) {
+    els.groupDeleteBtn.disabled = !requirementLabel;
+  }
+  updateFocusedAnnotationGroupClipboardUi();
   if (els.doneBtn) {
     els.doneBtn.disabled = !requirementLabel;
   }
@@ -868,7 +1020,6 @@ function moveFocusedAnnotationByItem(delta) {
     navigateFocusedAnnotation(nextItemIndex, currentGroupIndex);
     return;
   }
-  if (getFocusedAnnotationTraversalMode() !== 'group-first') return;
   var nextGroupIndex = currentGroupIndex + (delta < 0 ? -1 : 1);
   if (nextGroupIndex < 0 || nextGroupIndex >= requirements.length) return;
   navigateFocusedAnnotation(delta < 0 ? itemKeys.length - 1 : 0, nextGroupIndex);
@@ -883,18 +1034,14 @@ function moveFocusedAnnotationByGroup(delta) {
   var nextGroupIndex = currentGroupIndex + (delta < 0 ? -1 : 1);
   if (nextGroupIndex >= 0 && nextGroupIndex < requirements.length) {
     navigateFocusedAnnotation(currentItemIndex, nextGroupIndex);
-    return;
   }
-  if (getFocusedAnnotationTraversalMode() !== 'item-first') return;
-  var nextItemIndex = currentItemIndex + (delta < 0 ? -1 : 1);
-  if (nextItemIndex < 0 || nextItemIndex >= itemKeys.length) return;
-  navigateFocusedAnnotation(nextItemIndex, delta < 0 ? requirements.length - 1 : 0);
 }
 
 function navigateFocusedAnnotation(itemIndex, groupIndex, options) {
   var opts = options || {};
   var itemKeys = Array.isArray(focusedAnnotationState.itemKeys) ? focusedAnnotationState.itemKeys : [];
   if (!itemKeys.length) return;
+  var previousItemIndex = Math.max(0, Number(focusedAnnotationState.itemIndex) || 0);
   var nextItemIndex = Math.max(0, Math.min(itemKeys.length - 1, Number(itemIndex) || 0));
   var requirements = Array.isArray(checklistItems) ? checklistItems : [];
   var maxGroupIndex = Math.max(0, requirements.length - 1);
@@ -909,6 +1056,10 @@ function navigateFocusedAnnotation(itemIndex, groupIndex, options) {
   focusedAnnotationState.groupIndex = nextGroupIndex;
   var targetItem = findFocusedAnnotationMediaItemByKey(itemKeys[nextItemIndex]);
   if (!targetItem || typeof selectPathMedia !== 'function') {
+    if (moveFocusedAnnotationToAvailableItem(nextItemIndex < previousItemIndex ? -1 : 1)) {
+      return;
+    }
+    setStatus('Focused annotation queue no longer has any available items.');
     closeFocusedAnnotationModal();
     return;
   }
@@ -938,42 +1089,12 @@ function advanceFocusedAnnotationStep() {
   setStatus('Focused annotation complete.');
 }
 
-function moveFocusedAnnotationBack() {
-  if (focusedAnnotationState.history.length) {
-    var previous = focusedAnnotationState.history.pop();
-    navigateFocusedAnnotation(previous.itemIndex, previous.groupIndex);
-    return;
-  }
-  var previousPending = getFocusedAnnotationPreviousPendingStep(
-    focusedAnnotationState.itemIndex,
-    focusedAnnotationState.groupIndex
-  );
-  if (previousPending) {
-    navigateFocusedAnnotation(previousPending.itemIndex, previousPending.groupIndex);
-  }
-}
-
 function markFocusedAnnotationGroupDone() {
   if (!state.currentItem || !state.currentItem.key) return;
   var requirementLabel = getFocusedAnnotationCurrentRequirement();
   if (!requirementLabel) return;
-  if (typeof isChecklistRequirementNaForMediaKey === 'function' &&
-      typeof setChecklistRequirementNaForMediaKey === 'function' &&
-      isChecklistRequirementNaForMediaKey(state.currentItem.key, requirementLabel)) {
-    setChecklistRequirementNaForMediaKey(state.currentItem.key, requirementLabel, false, { skipRender: true, skipSave: true });
-  }
   if (typeof setChecklistRequirementCheckedForMediaKey === 'function') {
     setChecklistRequirementCheckedForMediaKey(state.currentItem.key, requirementLabel, true);
-  }
-  advanceFocusedAnnotationStep();
-}
-
-function markFocusedAnnotationGroupNa() {
-  if (!state.currentItem || !state.currentItem.key) return;
-  var requirementLabel = getFocusedAnnotationCurrentRequirement();
-  if (!requirementLabel) return;
-  if (typeof setChecklistRequirementNaForMediaKey === 'function') {
-    setChecklistRequirementNaForMediaKey(state.currentItem.key, requirementLabel, true);
   }
   advanceFocusedAnnotationStep();
 }
@@ -988,6 +1109,23 @@ function openFocusedAnnotationTermsEditor() {
   if (typeof openChecklistGroupTermsModal === 'function') {
     openChecklistGroupTermsModal(requirementLabel);
   }
+}
+
+function moveFocusedAnnotationCurrentGroup(offset) {
+  var groupIndex = Math.max(0, Number(focusedAnnotationState.groupIndex) || 0);
+  var nextGroupIndex = groupIndex + Number(offset || 0);
+  if (!moveChecklistItemByOffset(groupIndex, offset)) return;
+  focusedAnnotationState.groupIndex = nextGroupIndex;
+  focusedAnnotationState.history = [];
+  renderFocusedAnnotationModal();
+}
+
+function deleteFocusedAnnotationCurrentGroup() {
+  var groupIndex = Math.max(0, Number(focusedAnnotationState.groupIndex) || 0);
+  if (!deleteChecklistGroupByIndex(groupIndex)) return;
+  focusedAnnotationState.groupIndex = Math.max(0, Math.min(checklistItems.length - 1, groupIndex));
+  focusedAnnotationState.history = [];
+  renderFocusedAnnotationModal();
 }
 
 function beginFocusedAnnotationRun(targetMediaKey) {
@@ -1010,6 +1148,9 @@ function beginFocusedAnnotationRun(targetMediaKey) {
   focusedAnnotationState.groupIndex = resumeStep.groupIndex;
   focusedAnnotationState.history = [];
   focusedAnnotationState.sourceLabel = String(sequence.sourceLabel || '');
+  focusedAnnotationState.previousSurface = (typeof workspaceState !== 'undefined' && workspaceState && workspaceState.surface)
+    ? String(workspaceState.surface)
+    : 'default';
   showFocusedAnnotationModal();
   renderFocusedAnnotationModal();
 }
@@ -1046,16 +1187,6 @@ function wireFocusedAnnotationModal() {
   if (els.closeBtn) {
     els.closeBtn.addEventListener('click', closeFocusedAnnotationModal);
   }
-  if (els.modeGroupBtn) {
-    els.modeGroupBtn.addEventListener('click', function () {
-      setFocusedAnnotationTraversalMode('group-first');
-    });
-  }
-  if (els.modeItemBtn) {
-    els.modeItemBtn.addEventListener('click', function () {
-      setFocusedAnnotationTraversalMode('item-first');
-    });
-  }
   if (els.itemPrevBtn) {
     els.itemPrevBtn.addEventListener('click', function () {
       flashFocusedAnnotationButton(els.itemPrevBtn);
@@ -1083,10 +1214,27 @@ function wireFocusedAnnotationModal() {
   if (els.editTermsBtn) {
     els.editTermsBtn.addEventListener('click', openFocusedAnnotationTermsEditor);
   }
-  if (els.naBtn) {
-    els.naBtn.addEventListener('click', function () {
-      flashFocusedAnnotationButton(els.naBtn);
-      markFocusedAnnotationGroupNa();
+  if (els.groupMoveUpBtn) {
+    els.groupMoveUpBtn.addEventListener('click', function () {
+      moveFocusedAnnotationCurrentGroup(-1);
+    });
+  }
+  if (els.groupMoveDownBtn) {
+    els.groupMoveDownBtn.addEventListener('click', function () {
+      moveFocusedAnnotationCurrentGroup(1);
+    });
+  }
+  if (els.groupDeleteBtn) {
+    els.groupDeleteBtn.addEventListener('click', deleteFocusedAnnotationCurrentGroup);
+  }
+  if (els.copyTagsBtn) {
+    els.copyTagsBtn.addEventListener('click', function () {
+      copyChecklistGroupTermsToClipboard(getFocusedAnnotationCurrentRequirement());
+    });
+  }
+  if (els.pasteTagsBtn) {
+    els.pasteTagsBtn.addEventListener('click', function () {
+      pasteChecklistGroupTermsToRequirement(getFocusedAnnotationCurrentRequirement());
     });
   }
   if (els.doneBtn) {
@@ -1112,12 +1260,6 @@ function wireFocusedAnnotationModal() {
       e.preventDefault();
       flashFocusedAnnotationButton(els.doneBtn);
       markFocusedAnnotationGroupDone();
-      return;
-    }
-    if (e.key === 'n' || e.key === 'N') {
-      e.preventDefault();
-      flashFocusedAnnotationButton(els.naBtn);
-      markFocusedAnnotationGroupNa();
       return;
     }
     if (e.key === 's' || e.key === 'S') {

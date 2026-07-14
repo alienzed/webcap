@@ -10,16 +10,37 @@ function normalizeAppConfigShape(cfg) {
   var out = (cfg && typeof cfg === 'object') ? JSON.parse(JSON.stringify(cfg)) : {};
   if (!out.filesystem || typeof out.filesystem !== 'object') out.filesystem = {};
   if (!out.training || typeof out.training !== 'object') out.training = {};
+  if (!out.primer || typeof out.primer !== 'object') out.primer = {};
+  if (!out.requirements || typeof out.requirements !== 'object') out.requirements = {};
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
   if (!out.filesystem.root) out.filesystem.root = '';
   if (!out.filesystem.models) out.filesystem.models = '';
   if (!out.training.diffusion_pipe_wsl) out.training.diffusion_pipe_wsl = '';
+  if (!out.training.wsl_distribution) out.training.wsl_distribution = '';
+  if (!out.training.conda_executable) out.training.conda_executable = '';
+  if (!out.training.conda_environment) out.training.conda_environment = '';
   if (!out.training.activate_script) out.training.activate_script = '';
+  if (!out.training.tensorboard_port) out.training.tensorboard_port = 6006;
   if (!out.training.mode || ['poc', 'normal', 'quality'].indexOf(out.training.mode) === -1) out.training.mode = 'normal';
   if (typeof out.training.write_selection_snapshot_comments !== 'boolean') out.training.write_selection_snapshot_comments = false;
+  if (typeof out.primer.template !== 'string') out.primer.template = '';
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
   if (typeof out.analysis.enableFaceAnalysis !== 'boolean') out.analysis.enableFaceAnalysis = false;
   if (typeof out.analysis.enableMediaPipeAnalysis !== 'boolean') out.analysis.enableMediaPipeAnalysis = false;
+  if (!out.requirements.termWrappersByTerm || typeof out.requirements.termWrappersByTerm !== 'object') {
+    out.requirements.termWrappersByTerm = {};
+  }
+  if (out.requirements.termWrapperPrefixesByTerm && typeof out.requirements.termWrapperPrefixesByTerm === 'object') {
+    Object.keys(out.requirements.termWrapperPrefixesByTerm).forEach(function (termKey) {
+      if (!Object.prototype.hasOwnProperty.call(out.requirements.termWrappersByTerm, termKey)) {
+        out.requirements.termWrappersByTerm[termKey] = {
+          prefix: String(out.requirements.termWrapperPrefixesByTerm[termKey] || '').trim(),
+          suffix: ''
+        };
+      }
+    });
+  }
+  delete out.requirements.termWrapperPrefixesByTerm;
   return out;
 }
 
@@ -33,8 +54,13 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsRootEl) ui.appSettingsRootEl.value = c.filesystem.root || '';
   if (ui.appSettingsModelsEl) ui.appSettingsModelsEl.value = c.filesystem.models || '';
   if (ui.appSettingsTrainingDiffusionPipeWslEl) ui.appSettingsTrainingDiffusionPipeWslEl.value = c.training.diffusion_pipe_wsl || '';
+  if (ui.appSettingsTrainingWslDistributionEl) ui.appSettingsTrainingWslDistributionEl.value = c.training.wsl_distribution || '';
+  if (ui.appSettingsTrainingCondaExecutableEl) ui.appSettingsTrainingCondaExecutableEl.value = c.training.conda_executable || '';
+  if (ui.appSettingsTrainingCondaEnvironmentEl) ui.appSettingsTrainingCondaEnvironmentEl.value = c.training.conda_environment || '';
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
+  if (ui.appSettingsTrainingTensorboardPortEl) ui.appSettingsTrainingTensorboardPortEl.value = c.training.tensorboard_port || 6006;
   if (ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl) ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked = !!c.training.write_selection_snapshot_comments;
+  if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
   var mode = c.training.mode || 'normal';
   if (mode === 'poc' && ui.appSettingsTrainingModePocEl) ui.appSettingsTrainingModePocEl.checked = true;
   else if (mode === 'quality' && ui.appSettingsTrainingModeQualityEl) ui.appSettingsTrainingModeQualityEl.checked = true;
@@ -54,8 +80,13 @@ function collectAppSettingsFormConfig() {
   base.filesystem.models = ui.appSettingsModelsEl ? ui.appSettingsModelsEl.value : '';
   base.debug = !!(ui.appSettingsDebugEl && ui.appSettingsDebugEl.checked);
   base.training.diffusion_pipe_wsl = ui.appSettingsTrainingDiffusionPipeWslEl ? ui.appSettingsTrainingDiffusionPipeWslEl.value : '';
+  base.training.wsl_distribution = ui.appSettingsTrainingWslDistributionEl ? ui.appSettingsTrainingWslDistributionEl.value : '';
+  base.training.conda_executable = ui.appSettingsTrainingCondaExecutableEl ? ui.appSettingsTrainingCondaExecutableEl.value : '';
+  base.training.conda_environment = ui.appSettingsTrainingCondaEnvironmentEl ? ui.appSettingsTrainingCondaEnvironmentEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
+  base.training.tensorboard_port = ui.appSettingsTrainingTensorboardPortEl ? Number(ui.appSettingsTrainingTensorboardPortEl.value || 6006) : 6006;
   base.training.write_selection_snapshot_comments = !!(ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl && ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked);
+  base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
   base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);
   base.training.mode = mode;
@@ -77,6 +108,7 @@ function openAppSettingsModal() {
   setAppSettingsStatus('Loading settings...', false);
   ui.appSettingsModalEl.classList.remove('hidden');
   ui.appSettingsModalEl.setAttribute('aria-hidden', 'false');
+  focusFirstModalTextField(ui.appSettingsModalEl);
   HttpModule.get('/app/config', function (status, responseText) {
     if (status !== 200) {
       setAppSettingsStatus('Failed to load settings.', true);
@@ -107,6 +139,12 @@ function setRootFolderLabelFromConfig(cfg) {
   ROOT_FOLDER_LABEL = String(rootPath).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || ROOT_FOLDER_LABEL;
 }
 
+function syncUnsavedPrimerTemplateFromAppConfig() {
+  if (typeof syncCurrentFolderPrimerTemplateFromAppDefault === 'function') {
+    syncCurrentFolderPrimerTemplateFromAppDefault();
+  }
+}
+
 function saveAppSettings(opts) {
   var saveAndReload = !!(opts && opts.reloadAfterSave);
   var closeOnSuccess = !opts || opts.closeOnSuccess !== false;
@@ -134,6 +172,7 @@ function saveAppSettings(opts) {
     setRuntimeAppConfig(saved);
     fillAppSettingsForm(saved);
     setRootFolderLabelFromConfig(saved);
+    syncUnsavedPrimerTemplateFromAppConfig();
     if (saveAndReload) {
       if (closeOnSuccess) closeAppSettingsModal();
       setStatus('Settings saved. Reloading runtime settings...');
@@ -170,6 +209,7 @@ function resetAppSettings() {
     setRuntimeAppConfig(saved);
     fillAppSettingsForm(saved);
     setRootFolderLabelFromConfig(saved);
+    syncUnsavedPrimerTemplateFromAppConfig();
     setAppSettingsStatus('App requirements reset to defaults.', false);
     setStatus('App requirements reset to defaults.');
     refreshCurrentDirectory();
@@ -196,6 +236,7 @@ function triggerRuntimeConfigReload(quietInModal) {
       setRuntimeAppConfig(cfg);
       fillAppSettingsForm(cfg);
       setRootFolderLabelFromConfig(cfg);
+      syncUnsavedPrimerTemplateFromAppConfig();
     }
     if (!quietInModal) setAppSettingsStatus('Runtime settings reloaded.', false);
     setStatus('Runtime settings reloaded from config.json.');
@@ -212,6 +253,10 @@ function updateUtilityPathLabel(pathText) {
     tooltipPath = tooltipPath ? (rootLabel + '/' + tooltipPath) : rootLabel;
   }
   ui.utilityCurrentPathBtn.title = tooltipPath ? ('Current folder: ' + tooltipPath) : 'Current folder';
+  var labelEl = document.getElementById('utility-path-label');
+  if (labelEl) {
+    labelEl.textContent = tooltipPath || 'Workspace';
+  }
   refreshUtilityPathFlyout();
 
 }
@@ -296,7 +341,11 @@ function wireAppSettingsUi() {
     ui.appSettingsModelsEl,
     ui.appSettingsTrainingDiffusionPipeWslEl,
     ui.appSettingsTrainingActivateScriptEl,
+    ui.appSettingsTrainingWslDistributionEl,
+    ui.appSettingsTrainingCondaExecutableEl,
+    ui.appSettingsTrainingCondaEnvironmentEl,
     ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl,
+    ui.appSettingsPrimerTemplateEl,
     ui.appSettingsEnableFaceAnalysisEl,
     ui.appSettingsEnableMediaPipeAnalysisEl,
     ui.appSettingsTrainingModePocEl,

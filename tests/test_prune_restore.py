@@ -8,6 +8,7 @@ import tool.server.app as app_module
 import tool.server.file_ops as file_ops_module
 import tool.server.face_focus as face_focus_module
 import tool.server.media as media_module
+import tool.server.rembg_ops as rembg_ops_module
 
 
 @pytest.fixture
@@ -514,6 +515,51 @@ def test_image_transform_rejects_invalid_operation(client, isolated_fs_root):
     )
     assert r.status_code == 400
     assert (set_folder / "photo.png").read_bytes() == before
+
+
+def test_blur_background_overwrites_media_and_preserves_caption(client, isolated_fs_root, monkeypatch):
+    set_folder_rel = "set_blur_background"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True, exist_ok=True)
+
+    src = Image.new("RGB", (64, 64), (40, 80, 220))
+    for x in range(32, 64):
+        for y in range(64):
+            src.putpixel((x, y), (250, 220, 40))
+    src.save(set_folder / "photo.png")
+    write_text(set_folder / "photo.txt", "caption stays")
+
+    def fake_run_rembg_cutout(work_image):
+        cutout = Image.new("RGBA", work_image.size, (0, 0, 0, 0))
+        for x in range(24, 40):
+            for y in range(16, 48):
+                cutout.putpixel((x, y), (220, 30, 30, 255))
+        return cutout
+
+    monkeypatch.setattr(rembg_ops_module, "_run_rembg_cutout", fake_run_rembg_cutout)
+    monkeypatch.setattr(media_module, "update_media_metadata", lambda folder_path: None)
+
+    r = client.post(
+        "/media/blur_background",
+        json={
+            "folder": set_folder_rel,
+            "fileName": "photo.png",
+        },
+    )
+    assert r.status_code == 200
+
+    payload = r.get_json()
+    assert payload["ok"] is True
+    assert payload["blur_radius"] >= rembg_ops_module.REMBG_BLUR_MIN_RADIUS
+
+    transformed = Image.open(set_folder / "photo.png").convert("RGB")
+    original_copy = Image.open(set_folder / "originals" / "photo.png").convert("RGB")
+
+    assert transformed.getpixel((32, 32)) == (220, 30, 30)
+    assert transformed.getpixel((22, 32)) != src.getpixel((22, 32))
+    assert original_copy.size == src.size
+    assert list(original_copy.getdata()) == list(src.getdata())
+    assert (set_folder / "photo.txt").read_text(encoding="utf-8") == "caption stays"
 
 
 def test_baseline_only_backup_immutable_canonicals(client, isolated_fs_root):

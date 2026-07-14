@@ -5,8 +5,16 @@ var DEFAULT_PRIMER_TEMPLATE = [
   '{position }{surface, }{setting, }{body, }',
   '{clothing, }{traits, }{expression, }',
   '{background, }',
-  '{lighting} lighting, {view } view.'
+  '{lighting} lighting, {view} view.'
 ].join('\n');
+
+function getConfiguredPrimerTemplate() {
+  var appTemplate = APP_CONFIG && APP_CONFIG.primer && typeof APP_CONFIG.primer.template === 'string'
+    ? APP_CONFIG.primer.template
+    : '';
+  var text = String(appTemplate || '');
+  return text.trim() ? text : DEFAULT_PRIMER_TEMPLATE;
+}
 
 function setRuntimeAppConfig(cfg) {
   var next = (cfg && typeof cfg === 'object') ? JSON.parse(JSON.stringify(cfg)) : {};
@@ -46,13 +54,65 @@ function debugLog() {
   }
 }
 
+function focusFirstModalTextField(modalEl) {
+  var modal = typeof modalEl === 'string' ? document.getElementById(modalEl) : modalEl;
+  if (!modal) return false;
+
+  setTimeout(function () {
+    if (!modal || modal.classList.contains('hidden')) return;
+
+    var fields = modal.querySelectorAll('input[type="text"], input[type="search"], textarea, [contenteditable="true"]');
+    var target = null;
+
+    for (var i = 0; i < fields.length; i += 1) {
+      var field = fields[i];
+      if (!field || field.disabled) continue;
+      if (field.closest && field.closest('[hidden]')) continue;
+      if (field.getClientRects && !field.getClientRects().length) continue;
+      target = field;
+      break;
+    }
+
+    if (!target) return;
+
+    try {
+      target.focus({ preventScroll: true });
+    } catch (focusErr) {
+      try {
+        target.focus();
+      } catch (_focusErr) {}
+    }
+  }, 0);
+
+  return true;
+}
+
+var workspaceWorkbenchRefreshFrame = 0;
+
+function requestWorkspaceWorkbenchRefresh() {
+  if (workspaceWorkbenchRefreshFrame) return;
+  var scheduleFrame = window.requestAnimationFrame || function (callback) {
+    return setTimeout(callback, 0);
+  };
+  workspaceWorkbenchRefreshFrame = scheduleFrame(function () {
+    workspaceWorkbenchRefreshFrame = 0;
+    if (typeof refreshWorkspaceWorkbenchSurface === 'function') {
+      refreshWorkspaceWorkbenchSurface();
+      return;
+    }
+    if (typeof renderChecklistPanel === 'function') {
+      renderChecklistPanel();
+    }
+  });
+}
+
 function setStatus(text) {
   ui.statusEl.textContent = text || '';
   appendToConsolePanel(text || '');
 }
 
 function getDefaultPrimerTemplate() {
-  return DEFAULT_PRIMER_TEMPLATE;
+  return getConfiguredPrimerTemplate();
 }
 
 function recordUndoOperation(op) {
@@ -115,16 +175,17 @@ function undoLastOperation() {
       }
       return true;
     }
-    if (op.type === 'checklist-na') {
-      setChecklistRequirementNaForMediaKey(op.mediaKey, op.requirementLabel, !!op.previousValue);
-      if (!op.previousValue && op.previousCheckedValue) {
-        setChecklistRequirementCheckedForMediaKey(op.mediaKey, op.requirementLabel, true);
+    if (op.type === 'checklist-group-delete') {
+      var restoredGroup = restoreDeletedChecklistGroup(op);
+      if (restoredGroup && focusedAnnotationState.open) {
+        focusedAnnotationState.groupIndex = Math.max(0, Math.min(
+          checklistItems.length - 1,
+          Number(op.index) || 0
+        ));
+        focusedAnnotationState.history = [];
+        renderFocusedAnnotationModal();
       }
-      var naStatus = op.previousValue ? 'Undid group n/a clear.' : 'Undid group n/a mark.';
-      if (!restoreUndoMediaSelection(op.mediaKey, naStatus)) {
-        setStatus(naStatus);
-      }
-      return true;
+      return restoredGroup;
     }
     if (op.type === 'tag') {
       if (op.previousValue) {
@@ -304,13 +365,13 @@ function getCurrentAppTheme() {
 }
 
 function updateThemeToggleUi(theme) {
-  if (!ui || !ui.utilityThemeBtn) return;
+  if (!ui || !ui.themeToggleBtn) return;
   var currentTheme = String(theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
   var nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  ui.utilityThemeBtn.textContent = nextTheme === 'dark' ? 'Dark' : 'Light';
-  ui.utilityThemeBtn.title = 'Switch to ' + nextTheme + ' theme';
-  ui.utilityThemeBtn.setAttribute('aria-pressed', currentTheme === 'dark' ? 'true' : 'false');
-  ui.utilityThemeBtn.setAttribute('aria-label', 'Switch to ' + nextTheme + ' theme');
+  ui.themeToggleBtn.textContent = nextTheme === 'dark' ? 'Dark' : 'Light';
+  ui.themeToggleBtn.title = 'Switch to ' + nextTheme + ' theme';
+  ui.themeToggleBtn.setAttribute('aria-pressed', currentTheme === 'dark' ? 'true' : 'false');
+  ui.themeToggleBtn.setAttribute('aria-label', 'Switch to ' + nextTheme + ' theme');
 }
 
 function applyAppTheme(theme, persist) {
@@ -335,22 +396,80 @@ function toggleAppTheme() {
 }
 
 function wireThemeToggleUi() {
-  if (ui && ui.utilityThemeBtn && !ui.utilityThemeBtn.__themeWired) {
-    ui.utilityThemeBtn.__themeWired = true;
-    ui.utilityThemeBtn.onclick = function () {
+  if (ui && ui.themeToggleBtn && !ui.themeToggleBtn.__themeWired) {
+    ui.themeToggleBtn.__themeWired = true;
+    ui.themeToggleBtn.onclick = function () {
       toggleAppTheme();
     };
   }
   applyAppTheme(getInitialAppTheme(), false);
 }
 
+function updateSidebarCollapseUi(collapsed) {
+  var toggles = [
+    ui && ui.sidebarCollapseToggleBtn,
+    document.getElementById('training-sidebar-collapse-toggle-btn')
+  ].filter(Boolean);
+  if (!toggles.length) return;
+  if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen()) {
+    toggles.forEach(function (toggle) {
+      toggle.textContent = '<';
+      toggle.title = 'Return to item view';
+      toggle.setAttribute('aria-label', 'Return to item view');
+      toggle.setAttribute('aria-pressed', 'false');
+    });
+    return;
+  }
+  toggles.forEach(function (toggle) {
+    toggle.textContent = collapsed ? '>' : '<';
+    toggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+    toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+  });
+}
+
+function setSidebarCollapsed(collapsed) {
+  var next = !!collapsed;
+  if (ui && ui.appEl) {
+    ui.appEl.classList.toggle('left-rail-collapsed', next);
+  }
+  updateSidebarCollapseUi(next);
+  if (typeof renderPreviewHeaderMeta === 'function') renderPreviewHeaderMeta();
+  requestWorkspaceWorkbenchRefresh();
+  return next;
+}
+
+function toggleSidebarCollapsed() {
+  var next = !(ui && ui.appEl && ui.appEl.classList.contains('left-rail-collapsed'));
+  return setSidebarCollapsed(next);
+}
+
+function wireSidebarCollapseUi() {
+  if (ui && ui.sidebarCollapseToggleBtn && !ui.sidebarCollapseToggleBtn.__sidebarCollapseWired) {
+    ui.sidebarCollapseToggleBtn.__sidebarCollapseWired = true;
+    ui.sidebarCollapseToggleBtn.onclick = function () {
+      if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen() && typeof closeMediaGridSurface === 'function') {
+        closeMediaGridSurface();
+        return;
+      }
+      toggleSidebarCollapsed();
+    };
+  }
+  setSidebarCollapsed(false);
+}
+
 window.applyAppTheme = applyAppTheme;
 window.toggleAppTheme = toggleAppTheme;
 window.wireThemeToggleUi = wireThemeToggleUi;
 window.getCurrentAppTheme = getCurrentAppTheme;
+window.setSidebarCollapsed = setSidebarCollapsed;
+window.toggleSidebarCollapsed = toggleSidebarCollapsed;
+window.wireSidebarCollapseUi = wireSidebarCollapseUi;
 window.refreshCurrentPrimerDerivedUi = refreshCurrentPrimerDerivedUi;
+window.requestWorkspaceWorkbenchRefresh = requestWorkspaceWorkbenchRefresh;
 
 wireThemeToggleUi();
+wireSidebarCollapseUi();
 
 
 // Network helper functions
@@ -400,14 +519,44 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
         var hasCaption = !!(text && text.trim().length);
         setStatus((hasCaption ? 'Saved: ' : 'Cleared: ') + (media || '').replace(/\.[^.]+$/, '.txt'));
         var updatedKey = null;
+        var previousHasCaption = false;
         // Update state
         for (var i = 0; i < state.items.length; i++) {
           if (state.items[i].fileName === media) {
+            previousHasCaption = !!state.items[i].hasCaption;
             state.items[i].caption = text;
-            state.items[i].hasCaption = hasCaption;
             updatedKey = state.items[i].key;
             break;
           }
+        }
+        updatedKey = updatedKey || mediaKey || '';
+        if (
+          hasCaption &&
+          updatedKey &&
+          typeof getTagsForMediaKey === 'function' &&
+          typeof commitChecklistDescriptorSnapshotsForMediaKey === 'function'
+        ) {
+          commitChecklistDescriptorSnapshotsForMediaKey(updatedKey, getTagsForMediaKey(updatedKey));
+        } else if (
+          !hasCaption &&
+          updatedKey &&
+          previousHasCaption &&
+          typeof clearChecklistDescriptorSnapshotsForMediaKey === 'function'
+        ) {
+          clearChecklistDescriptorSnapshotsForMediaKey(updatedKey);
+        }
+        for (var j = 0; j < state.items.length; j++) {
+          if (state.items[j].fileName === media) {
+            state.items[j].hasCaption = hasCaption;
+            break;
+          }
+        }
+        if (
+          updatedKey &&
+          (hasCaption || previousHasCaption) &&
+          typeof saveChecklistToFolderState === 'function'
+        ) {
+          saveChecklistToFolderState();
         }
         // Toggle class on row
         var row = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + (updatedKey || mediaKey) + '"]');

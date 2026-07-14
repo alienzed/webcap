@@ -1,83 +1,6 @@
-// Render config panel into the report iframe
-function renderConfigPanel(doc) {
-  var panel = doc.getElementById('config-panel');
-  if (!panel) return;
-  var configListEl = doc.getElementById('config-list');
-  function getCurrentFolder() {
-    // Defensive: parent.state.folder is the canonical folder
-    if (parent && parent.state && typeof parent.state.folder === 'string') {
-      return parent.state.folder;
-    }
-    return '';
-  }
-
-  function listConfigFiles() {
-    configListEl.textContent = 'Loading...';
-    var folder = encodeURIComponent(getCurrentFolder());
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/fs/list_config?folder=' + folder);
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState !== 4) return;
-      if (xhr.status === 200) {
-        try {
-          var resp = JSON.parse(xhr.responseText);
-          var files = resp.files || [];
-          renderConfigList(files);
-        } catch (e) {
-          configListEl.textContent = 'Failed to parse config list.';
-        }
-      } else {
-        configListEl.textContent = 'Failed to load config list (' + xhr.status + ')';
-      }
-    };
-    xhr.send();
-  }
-
-  function renderConfigList(files) {
-    if (!Array.isArray(files) || !files.length) {
-      configListEl.textContent = 'No config files found.';
-      return;
-    }
-    var html = '<ul style="padding-left:0;list-style:none;">' + files.map(function(f) {
-      return '<li><a href="#" class="config-file-link" data-file="' + encodeURIComponent(f) + '">' + f + '</a></li>';
-    }).join('') + '</ul>';
-    configListEl.innerHTML = html;
-    Array.prototype.forEach.call(configListEl.querySelectorAll('.config-file-link'), function(link) {
-      link.onclick = function(e) {
-        e.preventDefault();
-        selectConfigFile(decodeURIComponent(link.getAttribute('data-file')));
-      };
-    });
-  }
-
-  function selectConfigFile(filename) {
-    // Notify parent to load config file into main editor
-    if (parent && parent.postMessage) {
-      parent.postMessage({ type: 'config-file-select', fileName: filename }, '*');
-    }
-    // Unset any caption/media selection (strict separation)
-    if (parent && parent.clearSelection) parent.clearSelection();
-  }
-
-  function escapeHtml(str) {
-    return String(str).replace(/[&<>"']/g, function(s) {
-      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[s];
-    });
-  }
-
-  // Initial load
-  listConfigFiles();
-}
 // Utility: Stream fetch output to preview pane
 function streamPreviewFromFetch(url, body, ui, onDone, onError) {
-  if (typeof showConsolePanel === 'function') {
-    showConsolePanel();
-  } else {
-    ui.consolePanelEl.style.display = 'block';
-    if (typeof syncConsoleToggleButton === 'function') {
-      syncConsoleToggleButton();
-    }
-  }
+  showConsolePanel();
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -116,8 +39,6 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
         var chunk = decoder.decode(result.value, { stream: true });
         output += chunk;
         appendToConsolePanel(chunk.replace(/</g, '<').replace(/>/g, '>'));
-        // Auto-scroll
-        if (ui.consolePanelEl) ui.consolePanelEl.scrollTop = ui.consolePanelEl.scrollHeight;
         readChunk();
       });
     }
@@ -130,14 +51,6 @@ function streamPreviewFromFetch(url, body, ui, onDone, onError) {
 
 // Utility: Fetch full preview output as one payload (no chunk streaming)
 function fetchPreviewText(url, body, ui, onDone, onError) {
-  if (typeof showConsolePanel === 'function') {
-    showConsolePanel();
-  } else {
-    ui.consolePanelEl.style.display = 'block';
-    if (typeof syncConsoleToggleButton === 'function') {
-      syncConsoleToggleButton();
-    }
-  }
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -244,7 +157,7 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
                   fileName: fileName,
                   focusFiles: [fileName],
                   focusSource: 'Media Metadata',
-                  reportType: 'selection'
+                  reportType: 'review'
                 }, '*');
               }
             };
@@ -306,12 +219,13 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
   xhr.send();
 }
 
-function renderReportPreview(report, reviewedFileNames) {
+function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
   function encodeFocus(files) {
     var names = (files || []).map(function (name) { return String(name || ''); }).filter(Boolean);
     return encodeURIComponent(names.join('\n'));
   }
   var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';
+  var scope = scopeSummary || {};
 
   var requiredLabel = report.requiredPhrase ? report.requiredPhrase : '(not set)';
   var phraseRows = report.phraseSummary.length ? report.phraseSummary.map(function (row) {
@@ -326,8 +240,6 @@ function renderReportPreview(report, reviewedFileNames) {
 
   var validationFocus = (report.ruleFailures || []).map(function (row) { return row.fileName; });
   var requiredFocus = (report.requiredMissing || []).map(function (row) { return row.fileName; });
-  var shortestFocus = (report.shortestCaptions || []).map(function (row) { return row.fileName; });
-  var longestFocus = (report.longestCaptions || []).map(function (row) { return row.fileName; });
   var shortOutlierFocus = (report.shortOutliers || []).map(function (row) { return row.fileName; });
   var longOutlierFocus = (report.longOutliers || []).map(function (row) { return row.fileName; });
 
@@ -350,28 +262,6 @@ function renderReportPreview(report, reviewedFileNames) {
     }).join('');
   }
 
-  var topRows = report.topTokens.length ? report.topTokens.slice(0, 25).map(function (row) {
-    return '<li><button class="token-link" data-token="' + encodeURIComponent(row.token) + '">' + escapeHtml(row.token) +
-      '</button>: <strong>' + row.count + '</strong></li>';
-  }).join('') : '<li style="color:#777;">No tokens found.</li>';
-
-  var rareRows = report.rareTokens.length ? report.rareTokens.slice(0, 25).map(function (row) {
-    return '<li><button class="token-link" data-token="' + encodeURIComponent(row.token) + '">' + escapeHtml(row.token) +
-      '</button>: <strong>' + row.count + '</strong></li>';
-  }).join('') : '<li style="color:#777;">No rare tokens found.</li>';
-
-  var shortestRows = report.shortestCaptions && report.shortestCaptions.length ? report.shortestCaptions.map(function (row) {
-    return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '" data-focus="' +
-      encodeFocus(shortestFocus) + '" data-source="' + encodeURIComponent('Shortest Captions') + '">' +
-      escapeHtml(row.fileName) + '</button> - ' + row.tokenCount + ' tokens, ' + row.charCount + ' chars</li>';
-  }).join('') : '<li style="color:#777;">No caption length data.</li>';
-
-  var longestRows = report.longestCaptions && report.longestCaptions.length ? report.longestCaptions.map(function (row) {
-    return '<li><button class="fail-link" data-file="' + encodeURIComponent(row.fileName) + '" data-focus="' +
-      encodeFocus(longestFocus) + '" data-source="' + encodeURIComponent('Longest Captions') + '">' +
-      escapeHtml(row.fileName) + '</button> - ' + row.tokenCount + ' tokens, ' + row.charCount + ' chars</li>';
-  }).join('') : '<li style="color:#777;">No caption length data.</li>';
-
   var duplicateRows = report.duplicateCaptions && report.duplicateCaptions.length ? report.duplicateCaptions.map(function (group) {
     var groupFocus = encodeFocus(group.files || []);
     var shown = group.files.slice(0, 4).map(function (fileName) {
@@ -384,7 +274,6 @@ function renderReportPreview(report, reviewedFileNames) {
       '<div class="small">"' + escapeHtml(sample) + '"</div></li>';
   }).join('') : '<li style="color:#777;">No duplicate captions detected.</li>';
 
-  var similarCaption = (report.similarCaptions || []).map(function (row) { return row.fileName; });
   var similarRows = report.similarCaptions && report.similarCaptions.length ? report.similarCaptions.map(function (group) {
     var groupFocus = encodeFocus(group.files || []);
     var shown = group.files.slice(0, 4).map(function (fileName) {
@@ -415,13 +304,14 @@ function renderReportPreview(report, reviewedFileNames) {
     '</head><body>' +
     '<div class="report-preview">' +
     '<div class="row config-row">' +
-    '<div class="card"><h3>Summary</h3>' +
-    '<div class="summary-row"><span>Total files</span><strong>' + report.total + '</strong></div>' +
+    '<div class="card"><h3>Review Set</h3>' +
+    '<div class="summary-row"><span>Visible items</span><strong>' + report.total + '</strong></div>' +
+    '<div class="summary-row"><span>Images</span><strong>' + (scope.images || 0) + '</strong></div>' +
+    '<div class="summary-row"><span>Videos</span><strong>' + (scope.videos || 0) + '</strong></div>' +
     '<div class="summary-row"><span>With captions</span><strong>' + report.withCaption + '</strong></div>' +
     '<div class="summary-row"><span>Missing captions</span><strong>' + report.missingCaption + '</strong></div>' +
     '<div class="summary-row"><span>Required phrase</span><strong>' + escapeHtml(requiredLabel) + '</strong></div>' +
     '<div class="summary-row"><span>Required hits</span><strong>' + report.requiredHits + ' (' + report.requiredPercent + '%)</strong></div></div>' +
-    '<div class="config-panel" id="config-panel"><h3>Config Files</h3><div id="config-list">Loading...</div></div>' +
     '</div>' +
     '<div class="row">' +
     '<div class="card"><h3>Missing Required Phrase</h3><ul>' + requiredRows + '</ul></div>' +
@@ -433,17 +323,23 @@ function renderReportPreview(report, reviewedFileNames) {
     '<div class="card"><h3>Similar Captions (80%+)</h3><ul>' + similarRows + '</ul></div>' +
     '</div>' +
     '<div class="row">' +
-    '<div class="card"><h3>Shortest Captions</h3><ul>' + shortestRows + '</ul></div>' +
-    '<div class="card"><h3>Longest Captions</h3><ul>' + longestRows + '</ul></div>' +
+    '<div class="card"><h3>Caption Length Outliers</h3><h4>Shorter than usual</h4><ul>' + shortOutlierRows + '</ul><h4>Longer than usual</h4><ul>' + longOutlierRows + '</ul></div>' +
+    '</div>' +
+    '<details id="review-analysis-details" class="card">' +
+    '<summary><strong>Analysis details</strong> <span class="small">Optional curation signals and media metadata</span></summary>' +
+    '<div class="row"><div class="card"><h3>Suggested Candidates</h3><div id="selection-suggested-candidates-panel">Open Analysis details to load.</div></div></div>' +
+    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Open Analysis details to load.</div></div></div>' +
+    '<div class="row">' +
+    '<div class="card"><h3>Face Direction</h3><div id="selection-face-direction-panel">Open Analysis details to load.</div></div>' +
+    '<div class="card"><h3>Expression</h3><div id="selection-expression-panel">Open Analysis details to load.</div></div>' +
+    '<div class="card"><h3>Body Orientation</h3><div id="selection-body-orientation-panel">Open Analysis details to load.</div></div>' +
     '</div>' +
     '<div class="row">' +
-    '<div class="card"><h3>Length Outliers (Bottom 5%)</h3><ul>' + shortOutlierRows + '</ul></div>' +
-    '<div class="card"><h3>Length Outliers (Top 5%)</h3><ul>' + longOutlierRows + '</ul></div>' +
+    '<div class="card"><h3>Pose Class</h3><div id="selection-pose-class-panel">Open Analysis details to load.</div></div>' +
+    '<div class="card"><h3>Arm Placement</h3><div id="selection-arm-position-panel">Open Analysis details to load.</div></div>' +
     '</div>' +
-    '<div class="row">' +
-    '<div class="card"><h3>Top Tokens</h3><ul class="token-grid">' + topRows + '</ul></div>' +
-    '<div class="card"><h3>Rare Tokens (&lt;=2)</h3><ul class="token-grid">' + rareRows + '</ul></div>' +
-    '</div>' +
+    '<div class="row"><div class="card"><h3>Media Metadata</h3><div id="media-metadata-panel">Open Analysis details to load.</div></div></div>' +
+    '</details>' +
     '</body></html>';
 
   var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
@@ -468,17 +364,8 @@ function renderReportPreview(report, reviewedFileNames) {
             fileName: decodeURIComponent(f),
             focusFiles: files,
             focusSource: decodeURIComponent(source || ''),
-            reportType: 'captions'
+            reportType: 'review'
           }, '*');
-        }
-      });
-    });
-    // Token links
-    Array.prototype.forEach.call(doc.querySelectorAll('.token-link'), function(btn) {
-      btn.addEventListener('click', function() {
-        var t = btn.getAttribute('data-token') || '';
-        if (window.parent && window.parent.postMessage) {
-          window.parent.postMessage({ type: 'caption-review-token', token: decodeURIComponent(t) }, '*');
         }
       });
     });
@@ -490,94 +377,30 @@ function renderReportPreview(report, reviewedFileNames) {
         }
       });
     });
-    // Render config and media metadata panels after iframe is loaded
-    renderConfigPanel(doc);
+    var analysisDetails = doc.getElementById('review-analysis-details');
+    var analysisLoaded = false;
+    if (analysisDetails) {
+      analysisDetails.addEventListener('toggle', function () {
+        if (!analysisDetails.open || analysisLoaded) return;
+        analysisLoaded = true;
+        var faceFocusEnabled = !!(APP_CONFIG && APP_CONFIG.analysis && APP_CONFIG.analysis.enableFaceAnalysis);
+        var selectionPoseEnabled = !!(APP_CONFIG && APP_CONFIG.analysis && APP_CONFIG.analysis.enableMediaPipeAnalysis);
+        renderMediaMetadataPanel(state.folder, doc, reviewedFileNames, faceFocusEnabled, selectionPoseEnabled);
+      });
+    }
   }, 50);
 }
-
-function renderSelectionPreview(report, reviewedFileNames) {
-  var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';
-  var html = '' +
-    '<!DOCTYPE html><html data-theme="' + theme + '"><head><meta charset="UTF-8">' +
-    '<link rel="stylesheet" href="/static/css/report.css">' +
-    '</head><body>' +
-    '<div class="report-preview">' +
-    '<div class="row">' +
-    '<div class="card"><h3>Summary</h3>' +
-    '<div class="summary-row"><span>Visible items</span><strong>' + report.total + '</strong></div>' +
-    '<div class="summary-row"><span>Images</span><strong>' + report.images + '</strong></div>' +
-    '<div class="summary-row"><span>Videos</span><strong>' + report.videos + '</strong></div>' +
-    '<div class="summary-row"><span>With captions</span><strong>' + report.withCaption + '</strong></div>' +
-    '<div class="summary-row"><span>Missing captions</span><strong>' + report.missingCaption + '</strong></div>' +
-    '</div>' +
-    '<div class="card"><h3>Scope</h3>' +
-    '<p class="small" style="margin:0;line-height:1.45;">Selection Analysis runs only on the currently visible media items. Use filters first, then click a group to open a focus set for rating and inspection.</p>' +
-    '</div>' +
-    '</div>' +
-    '<div class="row"><div class="card"><h3>Suggested Candidates</h3><p class="small" style="margin:0 0 6px 0;color:#666;font-size:12px;" title="Items with high-confidence multimodal signals from face direction, expression, body orientation, and pose class.">Items with consistent pose and expression signals</p><div id="selection-suggested-candidates-panel">Loading...</div></div></div>' +
-    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Loading...</div></div></div>' +
-    '<div class="row">' +
-    '<div class="card"><h3>Face Direction</h3><div id="selection-face-direction-panel">Loading...</div></div>' +
-    '<div class="card"><h3>Expression</h3><div id="selection-expression-panel">Loading...</div></div>' +
-    '<div class="card"><h3>Body Orientation</h3><div id="selection-body-orientation-panel">Loading...</div></div>' +
-    '</div>' +
-    '<div class="row">' +
-    '<div class="card"><h3>Pose Class</h3><div id="selection-pose-class-panel">Loading...</div></div>' +
-    '<div class="card"><h3>Arm Placement</h3><div id="selection-arm-position-panel">Loading...</div></div>' +
-    '</div>' +
-    '<div class="row"><div class="card"><h3>Media Metadata</h3><div id="media-metadata-panel">Loading...</div></div></div>' +
-    '</div>' +
-    '</body></html>';
-
-  var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
-  doc.open();
-  doc.write(html);
-  doc.close();
-  hideBalanceDistributionWheel();
-
-  setTimeout(function () {
-    if (!parent || !parent.state || !parent.state.folder) return;
-    var faceFocusEnabled = !!(APP_CONFIG && APP_CONFIG.analysis && APP_CONFIG.analysis.enableFaceAnalysis);
-    var selectionPoseEnabled = !!(APP_CONFIG && APP_CONFIG.analysis && APP_CONFIG.analysis.enableMediaPipeAnalysis);
-    renderMediaMetadataPanel(parent.state.folder, doc, reviewedFileNames, faceFocusEnabled, selectionPoseEnabled);
-  }, 50);
-}
-
-// Handle config file selection from config panel (iframe)
-window.addEventListener('message', function(event) {
-  var msg = event.data;
-  if (!msg || typeof msg !== 'object') return;
-  if (msg.type === 'config-file-select' && typeof msg.fileName === 'string') {
-    loadConfigFileToEditor(msg.fileName);
-  }
-});
 
 // Loads config file content into the main editor for editing
-function loadConfigFileToEditor(fileName) {
+function loadConfigFileToEditor(fileName, options) {
+  var opts = options || {};
+  var preserveTrainingWorkspace = !!opts.preserveTrainingWorkspace;
   setStatus('Loading config: ' + fileName);
-  if (typeof hideConsolePanel === 'function') {
-    hideConsolePanel();
-  } else if (ui && ui.consolePanelEl) {
-    ui.consolePanelEl.style.display = 'none';
-  }
-  var consoleToggleBtn = document.getElementById('console-toggle-btn');
-  if (consoleToggleBtn && typeof syncConsoleToggleButton === 'function') {
-    syncConsoleToggleButton();
-  }
+  if (!preserveTrainingWorkspace) hideConsolePanel();
   var folder = state.folder || '';
-  var keepReviewPreview = false;
-  if (ui && ui.previewEl) {
-    var previewDoc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
-    keepReviewPreview = !!(previewDoc && previewDoc.getElementById && previewDoc.getElementById('config-panel'));
-  }
   state.currentItem = null;
-  if (!keepReviewPreview) {
-    clearEditorAndPreview();
-    renderChecklistPanel();
-  } else if (state.objectUrl) {
-    URL.revokeObjectURL(state.objectUrl);
-    state.objectUrl = '';
-  }
+  clearEditorAndPreview();
+  renderChecklistPanel();
   renderFileList(ui.filterEl.value);
   var xhr = new XMLHttpRequest();
   xhr.open('GET', '/fs/read_config?folder=' + encodeURIComponent(folder) + '&file=' + encodeURIComponent(fileName));
@@ -589,6 +412,12 @@ function loadConfigFileToEditor(fileName) {
       ui.editorEl.removeAttribute('readonly'); // Ensure editor is editable for config files
       state.currentConfigFile = { folder: folder, file: fileName };
       state.currentCaptionFile = null;
+      if (workspaceState.surface !== 'training') {
+        setWorkspaceSurface('configEditor');
+      } else {
+        syncWorkspaceConfigEditorUi();
+        syncTrainingWorkspaceConfigSelection();
+      }
       setStatus('Editing config: ' + fileName);
     } else {
       setStatus('Failed to load config (' + xhr.status + ')');
@@ -600,29 +429,11 @@ function loadConfigFileToEditor(fileName) {
 // Save logic for config files (overrides caption save if editing config)
 function saveCurrentEditorContent() {
   if (state.currentItem && state.currentItem.fileName) {
-    saveCurrentCaption();
-    return;
+    return saveCurrentCaption();
   }
   if (state.currentConfigFile) {
-    // Save config file
-    var folder = state.folder || '';
-    var file = state.currentConfigFile;
-    var text = ui.editorEl.value;
-    setStatus('Saving config...');
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/fs/save_config');
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState !== 4) return;
-      if (xhr.status === 200) {
-        setStatus('Config saved.');
-      } else {
-        setStatus('Config save failed (' + xhr.status + ')');
-      }
-    };
-    xhr.send(JSON.stringify({folder: folder, file: file.file, text: text}));
-    return;
+    return saveCurrentCaption();
   }
   // Otherwise, save caption as usual
-  saveCurrentCaption();
+  return saveCurrentCaption();
 }

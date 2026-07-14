@@ -112,9 +112,15 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
             "debug": False,
             "training": {
                 "diffusion_pipe_wsl": "/home/user/diffusion-pipe",
+                "wsl_distribution": "Ubuntu_W",
+                "conda_executable": "/home/user/miniconda3/bin/conda",
+                "conda_environment": "dp-clean",
                 "activate_script": "dp-clean/bin/activate",
                 "mode": "normal",
                 "write_selection_snapshot_comments": True,
+            },
+            "primer": {
+                "template": "{subject}\n{view}\n{lighting}"
             },
         },
     )
@@ -122,8 +128,13 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["config"]["training"]["write_selection_snapshot_comments"] is True
+    assert payload["config"]["training"]["wsl_distribution"] == "Ubuntu_W"
+    assert payload["config"]["training"]["conda_environment"] == "dp-clean"
+    assert payload["config"]["primer"]["template"] == "{subject}\n{view}\n{lighting}"
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     assert saved["training"]["write_selection_snapshot_comments"] is True
+    assert saved["training"]["conda_executable"] == "/home/user/miniconda3/bin/conda"
+    assert saved["primer"]["template"] == "{subject}\n{view}\n{lighting}"
 
 
 def test_validate_config_payload_strips_legacy_chmod_training_root_on_load():
@@ -385,6 +396,24 @@ def test_fs_describe_does_not_auto_create_config_files(tmp_path, monkeypatch):
     assert not (set_dir / "dataset.lo.toml").exists()
 
 
+def test_fs_describe_hides_internal_training_runner_directory(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_training"
+    set_dir.mkdir(parents=True)
+    (set_dir / ".webcap_training").mkdir()
+    (set_dir / "visible_folder").mkdir()
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    response = app_module.app.test_client().get("/fs/describe?path=set_training")
+
+    assert response.status_code == 200
+    names = [entry["name"] for entry in response.get_json()["folders"]]
+    assert ".webcap_training" not in names
+    assert "visible_folder" in names
+
+
 def test_fs_describe_repairs_current_directory_on_permission_error(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_e"
@@ -624,7 +653,7 @@ def test_generate_dataset_config_can_write_snapshot_comments_when_enabled(tmp_pa
     assert "enable_ar_bucket = true" in lo_text
 
 
-def test_train_run_auto_generates_missing_configs(tmp_path, monkeypatch):
+def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_train"
     auto_dataset = set_dir / "auto_dataset"
@@ -679,13 +708,26 @@ def test_train_run_auto_generates_missing_configs(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "[INFO] Training commands (copy/paste):" in body
+    assert "[INFO] Manual training command (copy/paste):" in body
     assert " ; " in body
-    assert "pkill -f 'config\\.hi\\.toml'" in body
+    assert "pkill" not in body
+    assert "Manual handoff only" in body
     assert (set_dir / "config.hi.toml").exists()
     assert (set_dir / "config.lo.toml").exists()
     assert (set_dir / "dataset.hi.toml").exists()
     assert (set_dir / "dataset.lo.toml").exists()
+
+    hi_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "hi"})
+    assert hi_response.status_code == 200
+    hi_body = hi_response.get_data(as_text=True)
+    assert "config.hi.toml" in hi_body
+    assert " ; " not in hi_body
+
+    lo_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "lo"})
+    assert lo_response.status_code == 200
+    lo_body = lo_response.get_data(as_text=True)
+    assert "config.lo.toml" in lo_body
+    assert " ; " not in lo_body
 
 
 def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path, monkeypatch):

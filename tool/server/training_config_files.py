@@ -12,6 +12,7 @@ LO_CONFIG_NAME = "config.lo.toml"
 TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME)
 
 _EPOCHS_TEXT_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
+_OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?$', re.MULTILINE)
 
 # Last-resort values only if a canonical template is missing or malformed.
 _FALLBACK_HI_EPOCHS = 50
@@ -56,7 +57,7 @@ def default_training_config_epochs():
 
 
 def render_training_config_template(name: str, folder_path: Path):
-    template_text = read_training_config_template(name)
+    template_text = read_training_config_template(name).replace("{SET_NAME}", Path(folder_path).name)
     try:
         dataset_rel = folder_path.relative_to(app_config.FS_ROOT).as_posix()
     except Exception:
@@ -65,6 +66,27 @@ def render_training_config_template(name: str, folder_path: Path):
         return app_config.fill_template_placeholders(template_text, dataset_rel)
     except Exception:
         return template_text
+
+
+def training_config_path(folder_path: Path, stage: str):
+    stage = str(stage or "").strip().lower()
+    if stage == "hi":
+        return Path(folder_path) / HI_CONFIG_NAME
+    if stage == "lo":
+        return Path(folder_path) / LO_CONFIG_NAME
+    raise ValueError("Training stage must be hi or lo.")
+
+
+def output_dir_from_config(folder_path: Path, stage: str):
+    config_path = training_config_path(folder_path, stage)
+    try:
+        config_text = config_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = _OUTPUT_DIR_TEXT_PATTERN.search(config_text)
+    if not match:
+        return None
+    return Path(match.group(1).strip())
 
 
 def ensure_training_config_files(folder_path: Path):

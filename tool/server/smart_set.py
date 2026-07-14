@@ -242,13 +242,7 @@ def _match_has_incomplete_requirements(match: dict, folder_state: dict) -> bool:
     keywords_by_item = folder_state.get("caption_requirement_keywords")
     if not isinstance(keywords_by_item, dict):
         keywords_by_item = {}
-    na_by_media = folder_state.get("caption_requirements_na_by_media")
-    if not isinstance(na_by_media, dict):
-        na_by_media = {}
     media_name = str(match.get("media_name") or "")
-    media_na = na_by_media.get(media_name)
-    if not isinstance(media_na, dict):
-        media_na = {}
     tags = [str(tag or "") for tag in (match.get("tags") if isinstance(match.get("tags"), list) else [])]
     total = 0
     completed = 0
@@ -260,9 +254,6 @@ def _match_has_incomplete_requirements(match: dict, folder_state: dict) -> bool:
         if not terms:
             continue
         total += 1
-        if bool(media_na.get(_requirement_key(label))):
-            completed += 1
-            continue
         found = False
         for term in terms:
             if any(str(tag or "").strip().lower() == term.strip().lower() for tag in tags):
@@ -795,7 +786,6 @@ def create_set_from_results_response(data: dict):
         caption_term_descriptor_defaults = None
         caption_term_descriptors_by_media = {}
         caption_requirements_checked = {}
-        caption_requirements_na_by_media = {}
         dest_media_metadata = {}
         source_folder_order = []
 
@@ -882,12 +872,6 @@ def create_set_from_results_response(data: dict):
                 if isinstance(media_checked_map, dict):
                     caption_requirements_checked[dest_media_name] = json.loads(json.dumps(media_checked_map))
 
-            src_requirements_na = src_state.get("caption_requirements_na_by_media")
-            if isinstance(src_requirements_na, dict):
-                media_na_map = src_requirements_na.get(media_name)
-                if isinstance(media_na_map, dict):
-                    caption_requirements_na_by_media[dest_media_name] = json.loads(json.dumps(media_na_map))
-
             src_descriptors_by_media = src_state.get("caption_term_descriptors_by_media")
             if isinstance(src_descriptors_by_media, dict):
                 media_descriptors = src_descriptors_by_media.get(media_name)
@@ -932,8 +916,6 @@ def create_set_from_results_response(data: dict):
             dest_state["caption_term_descriptors_by_media"] = caption_term_descriptors_by_media
         if caption_requirements_checked:
             dest_state["caption_requirements_checked"] = caption_requirements_checked
-        if caption_requirements_na_by_media:
-            dest_state["caption_requirements_na_by_media"] = caption_requirements_na_by_media
         dest_state_path = dest_dir / ".webcap_state.json"
         dest_state_path.write_text(json.dumps(dest_state, indent=2), encoding="utf-8")
         normalize_path_permissions(dest_state_path)

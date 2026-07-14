@@ -39,7 +39,7 @@ WebCap is a local-first media curation and captioning app for dataset preparatio
   - Paste requires explicit user confirmation and reports merged vs already-present counts.
   - The same actions are exposed from the Tags panel header and the media-item context menu.
 3. Review:
-- `Review Captions` runs on the current visible/filtered set.
+- `Review Set` runs on the current visible/filtered set.
 - Report links can focus file subsets in the UI.
 4. Reversible media mutation:
 - Prune/reset/restore/crop/transform/deface/clip workflows are exposed through context menus and routes.

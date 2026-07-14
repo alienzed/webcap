@@ -1,47 +1,3 @@
-// Hide checklist panel and clear current media selection
-function clearEditorAndPreview() {
-  if (ui && ui.editorEl) {
-    ui.editorEl.value = '';
-  }
-  if (state.objectUrl) {
-    URL.revokeObjectURL(state.objectUrl);
-    state.objectUrl = '';
-  }
-  if (ui && ui.previewEl) {
-    var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
-    if (doc) {
-      doc.open();
-      doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:1rem;color:#666;">No media to preview.</body></html>');
-      doc.close();
-    }
-  }
-  var checklistPanelEl = document.getElementById('caption-checklist-panel');
-  if (checklistPanelEl) checklistPanelEl.style.display = 'none';
-  state.currentItem = null;
-  if (typeof updatePrimerCaptionResetUi === 'function') {
-    updatePrimerCaptionResetUi();
-  }
-  renderItemTagsPanel();
-  renderItemMetadataPanel();
-  updatePreviewActionControls();
-  updateBalanceDistributionWheel();
-}
-
-function clearSelection() {
-  if (state.objectUrl) {
-    URL.revokeObjectURL(state.objectUrl);
-    state.objectUrl = '';
-  }
-  state.currentItem = null;
-  state.currentConfigFile = null;
-  if (typeof updatePrimerCaptionResetUi === 'function') {
-    updatePrimerCaptionResetUi();
-  }
-  renderItemTagsPanel();
-  renderItemMetadataPanel();
-  renderFileList(ui.filterEl.value);
-}
-
 function createFlagAction(itemKey) {
   function flagRowRenderer(color) {
     markFlag(itemKey, color);
@@ -257,7 +213,7 @@ function runPrepareDatasetForCurrentFolder() {
       } else {
         setStatus('Dataset preparation finished.');
       }
-      refreshTrainingConfigList();
+      refreshTrainingWorkspace();
       return outputText;
     })
     .catch(function (err) {
@@ -267,30 +223,37 @@ function runPrepareDatasetForCurrentFolder() {
     });
 }
 
-function runTrainCommandPreviewForCurrentFolder() {
+function runTrainCommandPreviewForCurrentFolder(options) {
   if (!ensureFolderSelected('No folder selected for training.')) {
     return Promise.reject(new Error('No folder selected for training.'));
   }
   return ensureGeneratedTrainingArtifactsForCurrentFolder()
     .then(function () {
-      setStatus('Printing training commands...');
-      return runTrainingActionRequest('/fs/train_run', { folder: state.folder }, { fetchText: true });
+      setStatus('Printing manual training command...');
+      return runTrainingActionRequest('/fs/train_run', {
+        folder: state.folder,
+        stages: options && options.stages ? options.stages : 'both',
+        resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
+        resumeStage: options && options.resumeStage ? options.resumeStage : ''
+      }, { fetchText: true });
     })
     .then(function (outputText) {
-      var chainCmd = extractTrainingChainCommand(outputText);
-      if (!chainCmd) {
-        setStatus('Training command preview finished.');
+      var command = extractTrainingPreviewCommand(outputText);
+      if (!command) {
+        setTrainingCommandHandoff('');
+        setStatus('Manual command preview finished.');
         return outputText;
       }
+      setTrainingCommandHandoff(command);
       return new Promise(function (resolve, reject) {
         copyTextToClipboard(
-          chainCmd,
+          command,
           function () {
-            setStatus('Training command preview finished. Chained HI;LO command copied to clipboard.');
+            setStatus('Manual training command copied to clipboard.');
             resolve(outputText);
           },
           function () {
-            setStatus('Training command preview finished. Auto-copy failed; copy command from console.');
+            setStatus('Manual command is ready. Auto-copy failed; use Copy Manual Command.');
             resolve(outputText);
           }
         );
@@ -298,7 +261,7 @@ function runTrainCommandPreviewForCurrentFolder() {
     })
     .catch(function (err) {
       var message = formatTrainingActionErrorMessage(err);
-      setStatus('Training command preview failed: ' + message);
+      setStatus('Manual command preview failed: ' + message);
       throw err;
     });
 }
@@ -357,11 +320,14 @@ function moveSelectedMediaByOffset(offset) {
   return true;
 }
 
-var sidebarActiveTab = 'config';
+var sidebarActiveTab = 'review';
 
 function setSidebarTab(tabName) {
+  var sidebarWorkspace = document.getElementById('sidebar-workspace');
+  if (sidebarWorkspace && sidebarWorkspace.getAttribute('data-legacy-tabs-disabled') === 'true') {
+    return;
+  }
   var tabs = {
-    config: { buttonId: 'sidebar-tab-config-btn', paneId: 'primer-details' },
     review: { buttonId: 'sidebar-tab-review-btn', paneId: 'cation-review' },
     train: { buttonId: 'sidebar-tab-train-btn', paneId: 'training-details' }
   };
@@ -386,6 +352,10 @@ function setSidebarTab(tabName) {
 }
 
 function wireSidebarTabs() {
+  var sidebarWorkspace = document.getElementById('sidebar-workspace');
+  if (sidebarWorkspace && sidebarWorkspace.getAttribute('data-legacy-tabs-disabled') === 'true') {
+    return;
+  }
   var buttons = document.querySelectorAll('[data-sidebar-tab]');
   if (!buttons.length) return;
   Array.prototype.forEach.call(buttons, function (btn) {
@@ -430,6 +400,14 @@ function wireAllUi() {
   wireSidebarTabs();
   if (typeof wireAppSettingsUi === 'function') {
     wireAppSettingsUi();
+  }
+  if (!window.__webcapMetadataRefreshListBound) {
+    window.__webcapMetadataRefreshListBound = true;
+    window.addEventListener('webcap:media-metadata-updated', function (event) {
+      var detail = event && event.detail ? event.detail : {};
+      if (!state || detail.folder !== state.folder) return;
+      renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+    });
   }
   var addInput = document.getElementById('checklist-add-input');
   var addBtn = document.getElementById('checklist-add-btn');
@@ -571,6 +549,8 @@ function wireAllUi() {
 
 addEventListener('DOMContentLoaded', function () {
   console.log('[webcap] initializing');
+  rebuildUnifiedWorkspaceShell();
+  wireWorkspaceHeaderUi();
   refreshCurrentDirectory();
   wireAllUi();
 });

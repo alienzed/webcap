@@ -5,12 +5,19 @@
   },
   "training": {
     "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
-    "activate_script": "dp-clean/bin/activate",
+    "wsl_distribution": "Ubuntu",
+    "conda_executable": "/home/you/miniconda3/bin/conda",
+    "conda_environment": "training-env",
+    "activate_script": "",
+    "tensorboard_port": 6006,
     "write_selection_snapshot_comments": false
   },
   "analysis": {
     "enableFaceAnalysis": false,
     "enableMediaPipeAnalysis": false
+  },
+  "primer": {
+    "template": "{position }{surface, }{setting, }{body, }\n{clothing, }{traits, }{expression, }\n{background, }\n{lighting} lighting, {view} view."
   },
   "set_destinations": {
     "presets": [
@@ -76,7 +83,8 @@
       "Hair": "braided hair, curly hair, hair covering face, long hair, pigtails, ponytail, short hair, styled hair, straight hair, updo, wavy hair",
       "Limbs": "arms crossed, arms spread, arms up, hand on head, hand on hip, knees drawn up, legs crossed, legs spread, one arm down, one arm up, one leg crossed over the other, one leg up",
       "Lighting": "bright, bright background, candle, dark, dim, natural, neon, shadows, studio, sunlight, window"
-    }
+    },
+    "termWrapperPrefixesByTerm": {}
   },
   "debug": true
 }

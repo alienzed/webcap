@@ -15,7 +15,7 @@ Notes:
 
 ## 2. Create Working Media
 1. Use `Clip...` on videos in `src_videos` to export clips into the parent set folder.
-2. Use image and video transforms from context menus as needed (crop, rotate, flips, deface).
+2. Use image and video transforms from context menus as needed (crop, blur background, remove background, rotate, flips, deface).
 3. Keep only intended training media in the set folder root.
 
 Notes:
@@ -35,7 +35,7 @@ Notes:
 ---
 
 ## 4. Review and Filter
-1. Use `Review Captions` to analyze only the currently visible (filtered) subset.
+1. Use `Review Set` to analyze only the currently visible (filtered) subset.
 2. Use report links to focus on failures, duplicates, and similarity clusters.
 3. Iterate on captions or media selection until review output is acceptable.
 

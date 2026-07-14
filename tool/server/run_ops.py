@@ -1,4 +1,3 @@
-import shlex
 import subprocess
 import traceback
 import queue
@@ -14,7 +13,9 @@ from . import config as app_config
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
 from .permissions import normalize_path_permissions
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, ensure_training_config_files
+from .training_commands import build_training_command_plan
+from .training_runtime import build_training_launcher, training_runtime_settings
 
 
 class _QueueWriter:
@@ -180,8 +181,11 @@ def generate_dataset_config_response(folder: str):
         return Response(f"[ERROR] {e}\n", status=500, mimetype="text/plain")
 
 
-def _to_wsl_path(path_obj: Path):
-    cmd = ["wsl", "wslpath", "-a", str(path_obj)]
+def _to_wsl_path(path_obj: Path, distribution=""):
+    cmd = ["wsl"]
+    if distribution:
+        cmd.extend(["--distribution", distribution])
+    cmd.extend(["--", "wslpath", "-a", str(path_obj)])
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout or "wslpath failed").strip())
@@ -191,13 +195,14 @@ def _to_wsl_path(path_obj: Path):
     return out
 
 
-def train_run_response(folder: str):
+def train_run_response(folder: str, stages="both", resume_from_checkpoint="", resume_stage=""):
     if not folder:
         return Response("[ERROR] Missing folder argument\n", status=400, mimetype="text/plain")
 
     live_config = app_config.config
     training_cfg = live_config.get("training", {}) if isinstance(live_config, dict) else {}
-    diffusion_pipe_wsl = (training_cfg.get("diffusion_pipe_wsl") or "").strip()
+    runtime_settings = training_runtime_settings(training_cfg)
+    diffusion_pipe_wsl = runtime_settings["cwd"]
     hi_name = HI_CONFIG_NAME
     lo_name = LO_CONFIG_NAME
     mode = str(training_cfg.get("mode") or "normal").strip().lower()
@@ -212,6 +217,20 @@ def train_run_response(folder: str):
         lo_path = folder_path / lo_name
         dataset_hi_path = folder_path / "dataset.hi.toml"
         dataset_lo_path = folder_path / "dataset.lo.toml"
+
+        if (
+            not hi_path.exists() or
+            not lo_path.exists() or
+            not dataset_hi_path.exists() or
+            not dataset_lo_path.exists()
+        ):
+            ensure_training_config_files(folder_path)
+            generate_dataset_configs(
+                folder_path,
+                mode=mode,
+                write_selection_snapshot_comments=write_snapshot_comments,
+            )
+
         missing_files = []
         if not hi_path.exists() or not hi_path.is_file():
             missing_files.append(hi_name)
@@ -231,12 +250,12 @@ def train_run_response(folder: str):
         warnings = []
 
         try:
-            hi_wsl = _to_wsl_path(hi_path)
+            hi_wsl = _to_wsl_path(hi_path, runtime_settings["wslDistribution"])
         except Exception:
             hi_wsl = hi_path.as_posix()
             warnings.append(f"[WARN] Could not resolve WSL path for {hi_name}; using native path.")
         try:
-            lo_wsl = _to_wsl_path(lo_path)
+            lo_wsl = _to_wsl_path(lo_path, runtime_settings["wslDistribution"])
         except Exception:
             lo_wsl = lo_path.as_posix()
             warnings.append(f"[WARN] Could not resolve WSL path for {lo_name}; using native path.")
@@ -245,30 +264,32 @@ def train_run_response(folder: str):
             diffusion_pipe_wsl = "<set training.diffusion_pipe_wsl>"
             warnings.append("[WARN] Missing training.diffusion_pipe_wsl in config.json; using placeholder cwd.")
 
-        cmd1 = (
-            'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" '
-            'deepspeed --num_gpus=1 train.py --deepspeed --config ' + shlex.quote(hi_wsl)
+        command_plan = build_training_command_plan(
+            hi_wsl,
+            lo_wsl,
+            build_training_launcher(runtime_settings),
+            resume_from_checkpoint,
+            resume_stage,
         )
-        cmd2 = (
-            'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" '
-            'deepspeed --num_gpus=1 train.py --deepspeed --config ' + shlex.quote(lo_wsl)
-        )
-        handoff_cmd = cmd1 + " ; " + cmd2
-        hi_kill_pattern = re.escape(hi_name)
-        hi_kill_cmd = "pkill -f '" + hi_kill_pattern + "'"
-
+        if stages == "hi":
+            handoff_cmd = command_plan["hiCommand"]
+        elif stages == "lo":
+            handoff_cmd = command_plan["loCommand"]
+        else:
+            handoff_cmd = command_plan["handoffCommand"]
         def generate():
             try:
                 yield f"[INFO] Running from: {diffusion_pipe_wsl}\n"
+                yield f"[INFO] Training stages: {stages}\n"
+                if resume_from_checkpoint:
+                    yield f"[INFO] Resume {resume_stage.upper()} checkpoint: {resume_from_checkpoint}\n"
                 yield f"[INFO] Config HI: {hi_wsl}\n"
                 yield f"[INFO] Config LO: {lo_wsl}\n"
                 for line in warnings:
                     yield line + "\n"
-                yield "[INFO] Training commands (copy/paste):\n"
+                yield "[INFO] Manual training command (copy/paste):\n"
                 yield handoff_cmd + "\n"
-                yield "[INFO] Optional early-stop HI (run from another terminal):\n"
-                yield hi_kill_cmd + "\n"
-                yield "[train] Command preview only; execution is currently disabled.\n"
+                yield "[train] Manual handoff only; run this command in WSL yourself.\n"
             except Exception as e:
                 yield f"[ERROR] {e}\n"
 

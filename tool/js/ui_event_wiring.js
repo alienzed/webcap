@@ -138,6 +138,9 @@ function handleMediaListClick(e) {
   if (type !== 'media') return;
   var mediaItem = state.items.find(function (item) { return item.key === key; });
   if (!mediaItem) return;
+  if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen() && typeof closeMediaGridSurface === 'function') {
+    closeMediaGridSurface();
+  }
   if (state.currentItem && state.currentItem.key === mediaItem.key) return;
   if (state.currentItem && state.currentItem.fileName) {
     savePathCaption().then(function () {
@@ -178,13 +181,12 @@ function wireConsoleToggleButton() {
   };
 }
 
-function extractTrainingChainCommand(outputText) {
+function extractTrainingPreviewCommand(outputText) {
   if (!outputText) return '';
   var lines = String(outputText).split(/\r?\n/);
   for (var i = 0; i < lines.length; i++) {
     var line = String(lines[i] || '').trim();
     if (!line) continue;
-    if (line.indexOf(' ; ') === -1) continue;
     if (line.indexOf('deepspeed --num_gpus=1 train.py --deepspeed --config') === -1) continue;
     return line;
   }
@@ -231,52 +233,6 @@ function copyTextToClipboard(text, onOk, onErr) {
   }
 }
 
-function wireTrainingButtons() {
-  var trainingGenerateBtn = document.getElementById('training-generate-btn');
-  if (trainingGenerateBtn) {
-    trainingGenerateBtn.onclick = function () {
-      runGenerateDatasetConfigsForCurrentFolder(
-        function () {
-          refreshTrainingConfigList();
-          if (state.currentConfigFile) {
-            ui.editorEl.value = '';
-            setStatus('Dataset configs generated. Please reload the config file to see changes.');
-            state.currentConfigFile = null;
-          } else {
-            setStatus('Dataset configs generated.');
-          }
-        }
-      ).catch(function (err) {
-        if (window.console && console.error) {
-          console.error('[Training] Generate failed:', err);
-        }
-      });
-    };
-  }
-
-  var trainingPrepareDatasetBtn = document.getElementById('training-prepare-dataset-btn');
-  if (trainingPrepareDatasetBtn) {
-    trainingPrepareDatasetBtn.onclick = function () {
-      runPrepareDatasetForCurrentFolder().catch(function (err) {
-        if (window.console && console.error) {
-          console.error('[Training] Prepare failed:', err);
-        }
-      });
-    };
-  }
-
-  var trainingTrainBtn = document.getElementById('training-train-btn');
-  if (trainingTrainBtn) {
-    trainingTrainBtn.onclick = function () {
-      runTrainCommandPreviewForCurrentFolder().catch(function (err) {
-        if (window.console && console.error) {
-          console.error('[Training] Train preview failed:', err);
-        }
-      });
-    };
-  }
-}
-
 function wireMiscActionButtons() {
   if (ui.refreshBtn) {
     ui.refreshBtn.onclick = function () {
@@ -284,15 +240,17 @@ function wireMiscActionButtons() {
     };
   }
 
-  if (ui.reviewBtn) {
-    ui.reviewBtn.onclick = function () {
+  if (ui.reviewSetBtn) {
+    ui.reviewSetBtn.onclick = function () {
       runReview();
     };
   }
 
-  if (ui.reviewSelectionsBtn) {
-    ui.reviewSelectionsBtn.onclick = function () {
-      runSelectionReview();
+  if (ui.sidebarFocusBtnEl) {
+    ui.sidebarFocusBtnEl.onclick = function () {
+      if (typeof openFocusedAnnotationModal === 'function') {
+        openFocusedAnnotationModal();
+      }
     };
   }
 
@@ -341,7 +299,7 @@ function wireReportLinks() {
           fileName: decodeURIComponent(f),
           focusFiles: files,
           focusSource: decodeURIComponent(source || ''),
-          reportType: 'captions'
+          reportType: 'review'
         }, '*');
       }
     });
@@ -367,7 +325,9 @@ function wireMainUiEvents() {
     ui.mediaListEl.oncontextmenu = handleMediaListContextMenu;
   }
   wireConsoleToggleButton();
-  wireTrainingButtons();
   wireMiscActionButtons();
   wireReportLinks();
+  if (typeof updateSidebarSurfaceTools === 'function') {
+    updateSidebarSurfaceTools();
+  }
 }

@@ -30,6 +30,14 @@ This returns `.toml` filenames in the selected folder only.
 - Save config file: frontend posts `/fs/save_config`.
 - Saving writes the selected TOML file in place.
 
+## App-Wide Caption Template Default
+
+- Global app settings now include `config.json -> primer.template`.
+- This value is a fallback default for the caption editor template.
+- Per-folder `.webcap_state.json -> primer.template` still wins when present.
+- If a folder has never saved its own template, the frontend fills `#primer-template` from the app-wide setting.
+- Leaving the app-wide setting blank falls back to the built-in shipped template in `tool/js/common.js`.
+
 ## Summary
 
 Config editing is intentionally separated from media browsing:

@@ -2110,6 +2110,10 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   min-height: calc(100vh - 180px);
 }
 
+.app.shell-revamp.workspace-surface-training .workbench-top {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 @media (max-width: 1180px) {
   .app.shell-revamp .workbench-top,
   .app.shell-revamp.workflow-annotate .workbench-top {

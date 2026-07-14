@@ -34,6 +34,7 @@ function setTrainingWorkspaceEntryMode(mode) {
 function getTrainingWorkspaceEls() {
   return {
     navigator: document.getElementById('training-navigator'),
+    navigatorTitle: document.getElementById('training-navigator-title'),
     folder: document.getElementById('training-navigator-folder'),
     globalContext: document.getElementById('training-global-context'),
     setWorkflow: document.getElementById('training-set-workflow'),
@@ -937,6 +938,7 @@ function refreshTrainingWorkspace() {
   var els = getTrainingWorkspaceEls();
   var folder = String(state.folder || '').trim();
   var isSetEntry = !!folder;
+  if (els.navigatorTitle) els.navigatorTitle.textContent = isSetEntry ? 'Train' : 'Training';
   if (els.folder) els.folder.textContent = isSetEntry ? folder : 'Global training status';
   if (els.globalContext) els.globalContext.classList.toggle('training-global-context--after-set', isSetEntry);
   if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);

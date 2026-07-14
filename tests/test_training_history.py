@@ -77,6 +77,26 @@ def test_discover_runs_infers_the_stage_from_run_names_in_a_shared_output_dir(tm
     assert [run["name"] for run in training_history.discover_runs(set_folder, "lo")] == ["20260713_06-05-04-sana-lo"]
 
 
+def test_discover_runs_uses_the_saved_config_to_label_the_training_set(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "char" / "lilly" / "hmPenny"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = root / "output" / "runs" / "hmPenny"
+    (set_folder / "config.lo.toml").write_text(
+        'output_dir = "' + str(output) + '"\nepochs = 90\n', encoding="utf-8"
+    )
+    run = output / "20260713_06-05-04-sana-lo"
+    run.mkdir(parents=True)
+    (run / "config.toml").write_text(
+        'dataset = "/mnt/training/char/lilly/hmPenny/dataset.lo.toml"\n', encoding="utf-8"
+    )
+
+    discovered = training_history.discover_runs(set_folder, "lo")
+
+    assert discovered[0]["setName"] == "hmPenny"
+
+
 def test_completed_stages_requires_the_configured_final_epoch(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"

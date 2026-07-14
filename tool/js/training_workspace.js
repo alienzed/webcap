@@ -391,16 +391,19 @@ function renderTrainingHistory() {
     els.historyShowAllBtn.classList.toggle('hidden', jobs.length <= 2);
     els.historyShowAllBtn.textContent = trainingWorkspaceState.historyExpanded ? 'Show less' : 'Show all (' + jobs.length + ')';
   }
+  var selectedCheckpoint = String(els.checkpointSelect.value || '');
   els.checkpointSelect.innerHTML = '<option value="">Start a new run</option>' + runs.map(function (run) {
-    var unavailable = !run.checkpointAvailable || !!run.completed;
+    var unavailable = !run.checkpointAvailable;
     var details = [];
     if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
     if (run.steps) details.push('step ' + Number(run.steps).toLocaleString());
     if (run.completed) details.push('complete');
+    var setName = String(run.setName || '').trim();
     return '<option value="' + escapeHtml(run.path || '') + '"' + (unavailable ? ' disabled' : '') + '>' +
-      escapeHtml((run.stage ? trainingStageLabel(run.stage) + ' · ' : '') + (run.name || run.path || 'run') +
+      escapeHtml((run.stage ? trainingStageLabel(run.stage) + ' · ' : '') + (setName ? setName + ' · ' : '') + (run.name || run.path || 'run') +
         (details.length ? ' · ' + details.join(' · ') : '') + (unavailable && !run.completed ? ' (no checkpoint found)' : '')) + '</option>';
   }).join('');
+  if (selectedCheckpoint) els.checkpointSelect.value = selectedCheckpoint;
 }
 
 function renderTensorboard() {

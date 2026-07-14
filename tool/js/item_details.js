@@ -309,6 +309,7 @@ function renderPreviewHeaderMeta() {
   var gridOpen = typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen();
   var visibleMedia = typeof getFilteredMediaItems === 'function' ? getFilteredMediaItems(false) : [];
   var hasItem = !!(state.currentItem && state.currentItem.fileName);
+  var sidebarCollapsed = !!(ui.appEl && ui.appEl.classList.contains('left-rail-collapsed'));
   function clearPreviewTooltip() {
     [previewShellEl, previewStageEl, ui.previewEl].forEach(function (el) {
       if (el) el.removeAttribute('title');
@@ -354,7 +355,7 @@ function renderPreviewHeaderMeta() {
   }
 
   if (ui.sidebarCollapseToggleBtn) {
-    ui.sidebarCollapseToggleBtn.classList.toggle('hidden', !hasItem);
+    ui.sidebarCollapseToggleBtn.classList.toggle('hidden', !hasItem && !sidebarCollapsed);
   }
   if (ui.sidebarFocusBtnEl) {
     ui.sidebarFocusBtnEl.classList.toggle('hidden', !hasItem);
@@ -364,7 +365,7 @@ function renderPreviewHeaderMeta() {
 
   if (!hasItem) {
     if (previewShellEl) previewShellEl.classList.remove('preview-header-active');
-    ui.previewHeaderEl.classList.add('hidden');
+    ui.previewHeaderEl.classList.toggle('hidden', !sidebarCollapsed);
     clearPreviewHeaderUi();
     return;
   }

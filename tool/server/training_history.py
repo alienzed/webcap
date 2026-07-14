@@ -15,6 +15,7 @@ _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _RUN_STAGE_PATTERN = re.compile(r"(?:^|[-_.])(hi|lo)(?:$|[-_.])", re.IGNORECASE)
+_DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(?:#.*)?$", re.MULTILINE)
 
 
 def output_root_for_folder(folder_path, stage="hi"):
@@ -50,6 +51,22 @@ def _configured_epochs(folder_path, stage):
 def _stage_from_run_name(name):
     matches = _RUN_STAGE_PATTERN.findall(str(name or ""))
     return matches[-1].lower() if matches else ""
+
+
+def _set_name_from_run_config(entry, fallback_name):
+    for config_path in sorted(Path(entry).glob("*.toml")):
+        try:
+            config_text = config_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        match = _DATASET_CONFIG_PATTERN.search(config_text)
+        if not match:
+            continue
+        dataset_path = match.group(1).strip().replace("\\", "/")
+        set_name = Path(dataset_path).parent.name
+        if set_name and set_name != ".":
+            return set_name
+    return str(fallback_name or "")
 
 
 def _run_artifact_state(entry, expected_epochs):
@@ -131,6 +148,7 @@ def discover_runs(folder_path, stage=""):
             runs.append({
                 "path": str(entry),
                 "name": entry.name,
+                "setName": _set_name_from_run_config(entry, Path(folder_path).name),
                 "stage": entry_stage,
                 "modifiedAt": modified,
                 "checkpointAvailable": bool(has_contents),

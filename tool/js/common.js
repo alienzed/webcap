@@ -434,6 +434,7 @@ function setSidebarCollapsed(collapsed) {
     ui.appEl.classList.toggle('left-rail-collapsed', next);
   }
   updateSidebarCollapseUi(next);
+  if (typeof renderPreviewHeaderMeta === 'function') renderPreviewHeaderMeta();
   requestWorkspaceWorkbenchRefresh();
   return next;
 }

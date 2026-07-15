@@ -323,10 +323,13 @@ function renderTrainingRunner() {
   syncTrainingQueueResumeButton(els, queuedJobs);
   if (els.runnerQueue) {
     if (!queuedJobs.length) {
-      els.runnerQueue.innerHTML = '';
+      if (els.runnerQueue.dataset.queueSignature !== 'empty') {
+        els.runnerQueue.innerHTML = '';
+        els.runnerQueue.dataset.queueSignature = 'empty';
+      }
       els.runnerQueue.classList.add('hidden');
     } else {
-      els.runnerQueue.innerHTML = '<div class="training-runner-queue-title">Queue (' + queuedJobs.length + ')' + (trainingWorkspaceState.runnerQueuePaused ? ' · paused' : '') + '</div>' +
+      var queueHtml = '<div class="training-runner-queue-title">Queue (' + queuedJobs.length + ')' + (trainingWorkspaceState.runnerQueuePaused ? ' · paused' : '') + '</div>' +
         queuedJobs.map(function (queuedJob, index) {
           var stage = trainingJobLabel(queuedJob);
           var plannedSteps = trainingPlannedStepCount(queuedJob);
@@ -355,6 +358,10 @@ function renderTrainingRunner() {
             '</div>' +
             '</div>';
         }).join('');
+      if (els.runnerQueue.dataset.queueSignature !== queueHtml) {
+        els.runnerQueue.innerHTML = queueHtml;
+        els.runnerQueue.dataset.queueSignature = queueHtml;
+      }
       els.runnerQueue.classList.remove('hidden');
     }
   }

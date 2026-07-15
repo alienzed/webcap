@@ -344,8 +344,17 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply, options) {
   if (!cropEscapeHandlerBound) {
     document.addEventListener('keydown', function (e) {
       var modal = getCropEl('crop-modal');
-      if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+      if (!modal || modal.classList.contains('hidden')) return;
+      if (e.key === 'Escape') {
         closeCropModal();
+        return;
+      }
+      if (e.key === 'Enter' && !e.repeat && !e.isComposing) {
+        var applyBtn = getCropEl('crop-apply-btn');
+        if (!cropBusy && applyBtn && !applyBtn.disabled) {
+          e.preventDefault();
+          applyBtn.click();
+        }
       }
     });
     cropEscapeHandlerBound = true;

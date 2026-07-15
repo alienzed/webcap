@@ -34,8 +34,8 @@ STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
 ACTIVE_STATUSES = {"starting", "running", "stopping", "unconfirmed"}
 QUEUE_STATUSES = {"queued", "paused", "interrupted"}
-HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "cancelled"}
-TERMINAL_STATUSES = HISTORY_STATUSES | {"paused", "interrupted"}
+HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped"}
+TERMINAL_STATUSES = HISTORY_STATUSES | {"paused", "interrupted", "cancelled"}
 _lock = threading.Lock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
@@ -1391,7 +1391,10 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
             job["stage"] = "cancelled"
             job["finishedAt"] = time.time()
             job["updatedAt"] = time.time()
-            _sync_histories(state)
+            job["historyHidden"] = True
+            folder = str(job.get("folder") or "").strip()
+            if folder:
+                clear_history_job(app_config.safe_join_fs_root(folder), job.get("id"))
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if job.get("status") not in ACTIVE_STATUSES:
@@ -1463,6 +1466,12 @@ def resume_queue_response():
         _refresh_state(state)
         _sync_histories(state)
         _write_state(state)
+        if state.get("queuePaused") and not state.get("activeJobId"):
+            return {
+                "ok": False,
+                "error": state.get("queuePauseReason") or "No queued training job was started.",
+                "jobs": [_public_job(job) for job in state["jobs"]],
+            }, 409
         return {"ok": True, "activeJobId": state.get("activeJobId") or "", "jobs": [_public_job(job) for job in state["jobs"]]}, 200
 
 

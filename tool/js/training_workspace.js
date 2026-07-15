@@ -19,6 +19,7 @@ var trainingWorkspaceState = {
   gpuStatusPending: false,
   gpuForActiveJob: false,
   history: null,
+  historySearchScopeFolder: '',
   historyExpanded: false,
   historyCollapsed: true,
   runnerQueueCollapsed: false,
@@ -503,6 +504,7 @@ function renderTrainingHistory() {
     els.historyCollapseBtn.textContent = 'Recent Runs' + (jobs.length ? ' · ' + jobs.length : '');
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');
   }
+  if (els.historyClearBtn) els.historyClearBtn.textContent = trainingHistoryScopeFolder() ? 'Clear set' : 'Clear all';
   els.historySummary.classList.toggle('hidden', !!latest);
   els.historySummary.textContent = latest ? '' : 'No completed or actionable training outcomes yet.';
   var visibleJobs = trainingWorkspaceState.historyExpanded ? jobs : jobs.slice(0, 2);
@@ -900,11 +902,27 @@ function clearTrainingHistoryJob(jobId) {
   }).catch(function (err) { setStatus('Could not clear training history entry: ' + String(err.message || err)); });
 }
 
+function trainingHistoryScopeFolder() {
+  return trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : '';
+}
+
+function syncTrainingHistorySearchScope() {
+  var searchEl = document.getElementById('training-history-search');
+  var folder = trainingHistoryScopeFolder();
+  var priorFolder = trainingWorkspaceState.historySearchScopeFolder;
+  if (searchEl && folder !== priorFolder) {
+    if (folder) searchEl.value = folder;
+    else if (searchEl.value === priorFolder) searchEl.value = '';
+  }
+  trainingWorkspaceState.historySearchScopeFolder = folder;
+  return folder;
+}
+
 function refreshTrainingHistory() {
   if (!isTrainingWorkspaceActive()) return Promise.resolve();
   var searchEl = document.getElementById('training-history-search');
-  var folder = trainingWorkspaceState.entryMode === 'set' ? (state.folder || '') : '';
-  return fetch('/fs/training_history/all?folder=' + encodeURIComponent(folder) + '&q=' + encodeURIComponent(searchEl ? searchEl.value : ''))
+  var folder = syncTrainingHistorySearchScope();
+  return fetch('/fs/training_history/all?q=' + encodeURIComponent(searchEl ? searchEl.value : ''))
     .then(function (response) { return response.json(); })
     .then(function (payload) {
       if (!payload.ok) throw new Error(payload.error || 'Could not load training history.');

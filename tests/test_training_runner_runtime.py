@@ -443,7 +443,7 @@ def test_stop_request_without_a_recorded_pid_does_not_signal_any_process(monkeyp
 
 
 def test_cancelling_a_paused_job_removes_it_from_the_queue(monkeypatch):
-    active = {"id": "active", "status": "paused", "progress": {"epoch": 85, "epochs": 90}}
+    active = {"id": "active", "folder": "set", "status": "paused", "progress": {"epoch": 85, "epochs": 90}}
     state = {
         "activeJobId": "active",
         "queuePaused": True,
@@ -454,7 +454,9 @@ def test_cancelling_a_paused_job_removes_it_from_the_queue(monkeypatch):
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    cleared = []
+    monkeypatch.setattr(training_runner, "clear_history_job", lambda folder, job_id: cleared.append((folder, job_id)) or True)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_start_next", lambda candidate: advanced.append(candidate["queuePaused"]))
 
@@ -462,6 +464,8 @@ def test_cancelling_a_paused_job_removes_it_from_the_queue(monkeypatch):
 
     assert status == 200
     assert payload["job"]["status"] == "cancelled"
+    assert active["historyHidden"] is True
+    assert cleared == [("set", "active")]
     assert state["queuePaused"] is True
     assert advanced == []
 
@@ -493,6 +497,20 @@ def test_resuming_a_paused_job_keeps_its_queue_position(monkeypatch):
     assert state["activeJobId"] == ""
     assert state["queuePaused"] is False
     assert advanced == [""]
+
+
+def test_resume_queue_reports_a_hold_instead_of_a_false_success(monkeypatch):
+    state = {"activeJobId": "", "queuePaused": True, "queuePauseReason": "Queue paused by the user.", "jobs": [{"id": "next", "status": "queued", "folder": "set"}]}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: candidate.update(queuePaused=True, queuePauseReason="Queued inputs changed. Confirm current inputs or cancel this item."))
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
+
+    payload, status = training_runner.resume_queue_response()
+
+    assert status == 409
+    assert payload["error"] == "Queued inputs changed. Confirm current inputs or cancel this item."
 
 
 def test_refresh_state_marks_a_missing_confirmation_without_ending_the_job(monkeypatch):

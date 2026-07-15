@@ -234,6 +234,8 @@ def all_history_payload(query="", folder=""):
         for job in history.get("jobs") or []:
             if not isinstance(job, dict):
                 continue
+            if job.get("status") == "cancelled":
+                continue
             if needle:
                 model = job.get("model") if isinstance(job.get("model"), dict) else {}
                 haystack = " ".join(str(value or "") for value in (

@@ -58,6 +58,19 @@ def test_global_history_is_compact_and_clear_does_not_touch_run_artifacts(tmp_pa
     assert run.exists()
 
 
+def test_global_history_hides_queue_items_removed_before_or_after_a_run(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    training_history.record_job(set_folder, {"id": "cancelled", "folder": "set", "status": "cancelled", "createdAt": 1})
+    training_history.record_job(set_folder, {"id": "completed", "folder": "set", "status": "completed", "createdAt": 2})
+
+    payload = training_history.all_history_payload()
+
+    assert [job["id"] for job in payload["jobs"]] == ["completed"]
+
+
 def test_discover_runs_uses_each_stage_current_config_output_dir(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"

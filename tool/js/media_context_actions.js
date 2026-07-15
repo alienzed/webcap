@@ -334,6 +334,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
     defaceAction = {
       label: 'Deface...',
       run: function () {
+        var wasCurrentItem = !!(state.currentItem && state.currentItem.key === mediaItem.key);
         clearEditorAndPreview();
         var defaultThresh = '0.4';
         var t = prompt('Deface: Enter threshold (-t, 0.0-1.0)', defaultThresh);
@@ -355,8 +356,8 @@ function buildMediaContextMenuActions(mediaItem, key) {
             bumpMediaCacheBustToken(mediaItem.key);
             saveFolderStateForCurrentRoot();
             refreshMediaResolutionCache();
-            if (state.currentItem && state.currentItem.fileName === mediaItem.fileName) {
-              selectPathMedia(state.currentItem).catch(function () {});
+            if (wasCurrentItem) {
+              selectPathMedia(mediaItem).catch(function () {});
             }
           }
         );

@@ -611,15 +611,17 @@ function showTrainingRunnerConsole(job) {
   var els = getTrainingWorkspaceEls();
   if (!els.runnerConsole || !els.runnerConsoleLog) return;
   var changedJob = trainingWorkspaceState.runnerConsoleJobId !== target.id;
+  var wasHidden = els.runnerConsole.classList.contains('hidden');
   trainingWorkspaceState.runnerConsoleJobId = target.id;
-  if (changedJob) {
+  var resetLog = changedJob || wasHidden;
+  if (resetLog) {
     els.runnerConsoleLog.textContent = '';
     trainingWorkspaceState.runnerLogOffsets[target.id] = 0;
   }
   els.runnerConsoleTitle.textContent = 'Training output · ' + trainingFolderName(target.folder);
   els.runnerConsole.classList.remove('hidden');
   syncTrainingConsoleUi();
-  fetchTrainingRunnerLog(target, changedJob);
+  fetchTrainingRunnerLog(target, resetLog);
 }
 
 function fetchTrainingRunnerLog(job, reset) {
@@ -629,7 +631,16 @@ function fetchTrainingRunnerLog(job, reset) {
     .then(function (response) { return response.json(); })
     .then(function (payload) {
       if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'Could not load training output.');
-      trainingWorkspaceState.runnerLogOffsets[job.id] = Number(payload.nextOffset || offset);
+      if (trainingWorkspaceState.runnerConsoleJobId !== job.id) return;
+      var nextOffset = Number(payload.nextOffset || 0);
+      if (!reset && nextOffset < offset) {
+        var els = getTrainingWorkspaceEls();
+        if (els.runnerConsoleLog) els.runnerConsoleLog.textContent = '';
+        trainingWorkspaceState.runnerLogOffsets[job.id] = 0;
+        fetchTrainingRunnerLog(job, true);
+        return;
+      }
+      trainingWorkspaceState.runnerLogOffsets[job.id] = nextOffset;
       if (payload.text) appendToTrainingRunnerConsole(payload.text);
       if (!payload.text && offset === 0 && payload.job && payload.job.error) {
         appendToTrainingRunnerConsole('[webcap] ' + payload.job.error + '\n');

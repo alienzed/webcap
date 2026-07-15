@@ -68,6 +68,7 @@ function mediaGridBuildSurfaceFilterControls() {
   var target = document.getElementById('media-grid-surface-filters');
   if (!target) throw new Error('Media Grid surface filters target is missing.');
   target.innerHTML =
+    '<input id="media-grid-surface-filter-search" class="media-grid-surface-filter-search" type="search" placeholder="filter…" aria-label="Filter media">' +
     '<label class="media-grid-surface-filter-toggle">' +
       '<input id="media-grid-surface-filter-invalid-ar" type="checkbox">' +
       '<span>Invalid AR</span>' +
@@ -78,8 +79,13 @@ function mediaGridBuildSurfaceFilterControls() {
     '</div>';
   mediaGridBuildStarsFilter('media-grid-surface-filter-stars', 'media-grid-surface-star-filter');
 
+  var searchInput = document.getElementById('media-grid-surface-filter-search');
   var invalidArInput = document.getElementById('media-grid-surface-filter-invalid-ar');
-  if (!invalidArInput) throw new Error('Media Grid surface Invalid AR filter is missing.');
+  if (!searchInput || !invalidArInput) throw new Error('Media Grid surface filter controls are missing.');
+  searchInput.addEventListener('input', function () {
+    ui.filterEl.value = this.value;
+    mediaGridDispatchInput(ui.filterEl);
+  });
   invalidArInput.addEventListener('change', function () {
     ui.advancedFilterInvalidArEl.checked = this.checked;
     mediaGridDispatchChange(ui.advancedFilterInvalidArEl);
@@ -158,8 +164,10 @@ function mediaGridSyncFilterControls() {
 }
 
 function mediaGridSyncSurfaceFilterControls() {
+  var searchInput = document.getElementById('media-grid-surface-filter-search');
   var invalidArInput = document.getElementById('media-grid-surface-filter-invalid-ar');
-  if (!invalidArInput) return;
+  if (!searchInput || !invalidArInput) return;
+  searchInput.value = String(ui.filterEl.value || '');
   invalidArInput.checked = !!ui.advancedFilterInvalidArEl.checked;
   var invalidArToggle = invalidArInput.closest('.media-grid-surface-filter-toggle');
   if (invalidArToggle) invalidArToggle.classList.toggle('active', invalidArInput.checked);

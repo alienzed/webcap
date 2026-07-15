@@ -94,7 +94,8 @@ function buildFocusSetGridTabsHtml(filesByPreset, activeKey) {
   html += '<button type="button" class="focus-set-tab' + (activeKey === 'all' ? ' active' : '') + '" data-focus-set="all">All <span>' + (filesByPreset.all || []).length + '</span></button>';
   FOCUS_SET_PRESETS.forEach(function (preset) {
     var count = (filesByPreset[preset.key] || []).length;
-    html += '<button type="button" class="focus-set-tab' + (activeKey === preset.key ? ' active' : '') + '" data-focus-set="' + preset.key + '"' + (count ? '' : ' disabled') + '>' + preset.label + ' <span>' + count + '</span></button>';
+    if (!count) return;
+    html += '<button type="button" class="focus-set-tab' + (activeKey === preset.key ? ' active' : '') + '" data-focus-set="' + preset.key + '">' + preset.label + ' <span>' + count + '</span></button>';
   });
   return html + '</div>';
 }

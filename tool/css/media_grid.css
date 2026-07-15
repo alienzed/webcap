@@ -401,6 +401,20 @@
   gap: 12px;
 }
 
+.media-grid-surface-filter-search {
+  width: 148px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.5);
+  color: #e2e8f0;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.media-grid-surface-filter-search::placeholder {
+  color: #64748b;
+}
+
 .media-grid-surface-stars {
   gap: 6px;
 }

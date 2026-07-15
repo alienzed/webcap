@@ -1370,8 +1370,10 @@ def log_response(job_id, offset=0):
         except (TypeError, ValueError):
             position = 0
         if not path.exists():
-            return {"ok": True, "job": _public_job(job), "offset": position, "nextOffset": position, "text": ""}, 200
+            return {"ok": True, "job": _public_job(job), "offset": 0, "nextOffset": 0, "text": ""}, 200
         with open(path, "rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            position = min(position, handle.tell())
             handle.seek(position)
             raw = handle.read(65536)
             next_offset = handle.tell()

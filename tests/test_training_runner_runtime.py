@@ -442,6 +442,25 @@ def test_stop_request_without_a_recorded_pid_does_not_signal_any_process(monkeyp
     assert "no recorded runner PID" in payload["error"]
 
 
+def test_log_response_restarts_from_zero_when_the_log_was_truncated(tmp_path, monkeypatch):
+    log_path = tmp_path / "run.log"
+    log_path.write_text("new\n", encoding="utf-8")
+    job = {"id": "active", "status": "running", "logPath": str(log_path)}
+    state = {"activeJobId": "active", "jobs": [job]}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
+
+    payload, status = training_runner.log_response("active", offset=999)
+
+    assert status == 200
+    assert payload["offset"] == log_path.stat().st_size
+    assert payload["nextOffset"] == log_path.stat().st_size
+    assert payload["text"] == ""
+
+
 def test_cancelling_a_paused_job_removes_it_from_the_queue(monkeypatch):
     active = {"id": "active", "folder": "set", "status": "paused", "progress": {"epoch": 85, "epochs": 90}}
     state = {

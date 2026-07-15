@@ -214,6 +214,17 @@ def history_payload(folder_path):
     return history
 
 
+def _resume_details(folder_path, job):
+    if job.get("status") != "finished_early":
+        return {}, ""
+    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    stage = str(progress.get("stage") or job.get("stages") or "").strip().lower()
+    if stage not in ("hi", "lo"):
+        return {}, ""
+    checkpoint = next((run for run in discover_runs(folder_path, stage) if run.get("checkpointAvailable")), {})
+    return checkpoint, stage
+
+
 def all_history_payload(query="", folder=""):
     """Aggregate the intentionally small, folder-local history indexes."""
     root = Path(app_config.FS_ROOT)
@@ -246,6 +257,10 @@ def all_history_payload(query="", folder=""):
                     continue
             item = dict(job)
             item["folder"] = relative
+            checkpoint, resume_stage = _resume_details(set_folder, item)
+            if checkpoint:
+                item["resumeCheckpoint"] = checkpoint["path"]
+                item["resumeStage"] = resume_stage
             recorded_input = item.get("input") if isinstance(item.get("input"), dict) else {}
             try:
                 from .training_runner import _input_evidence

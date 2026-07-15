@@ -71,6 +71,24 @@ def test_global_history_hides_queue_items_removed_before_or_after_a_run(tmp_path
     assert [job["id"] for job in payload["jobs"]] == ["completed"]
 
 
+def test_finished_early_history_exposes_only_a_real_checkpoint_for_resume(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = training_history.output_root_for_folder(set_folder, "lo") / "run-one-lo"
+    (output / "epoch42").mkdir(parents=True)
+    training_history.record_job(set_folder, {
+        "id": "early", "folder": "set", "status": "finished_early", "stages": "lo",
+        "progress": {"stage": "lo", "epoch": 42},
+    })
+
+    payload = training_history.all_history_payload()
+
+    assert payload["jobs"][0]["resumeStage"] == "lo"
+    assert payload["jobs"][0]["resumeCheckpoint"] == str(output)
+
+
 def test_discover_runs_uses_each_stage_current_config_output_dir(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"

@@ -518,6 +518,7 @@ function renderTrainingHistory() {
     var details = [];
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
     if (elapsedSeconds > 0) details.push(formatTrainingRunnerDuration(elapsedSeconds));
+    var canResume = job.status === 'finished_early' && job.resumeCheckpoint && (job.resumeStage === 'hi' || job.resumeStage === 'lo');
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><strong>' + escapeHtml(trainingRunnerStatusLabel(job.status)) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) +
         '<span class="training-history-time">' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</span></div>' +
@@ -530,6 +531,7 @@ function renderTrainingHistory() {
       (job.input && job.input.comparison === 'changed' ? '<div class="training-runner-detail is-warning">Dataset changed since this run.</div>' : '') +
       '<div class="training-history-actions">' +
        '<button type="button" data-training-history-log="' + escapeHtml(job.id || '') + '">Show log</button>' +
+       (canResume ? '<button type="button" data-training-history-resume="' + escapeHtml(job.id || '') + '">Resume</button>' : '') +
        '<button type="button" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove this entry from Recent Runs; logs and artifacts remain.">Clear</button>' +
        '</div></div>';
   }).join('');
@@ -900,6 +902,36 @@ function clearTrainingHistoryJob(jobId) {
     setStatus('Removed the run from Recent Runs. Logs and artifacts were kept.');
     refreshTrainingHistory();
   }).catch(function (err) { setStatus('Could not clear training history entry: ' + String(err.message || err)); });
+}
+
+function resumeTrainingHistoryJob(jobId) {
+  var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
+    ? trainingWorkspaceState.history.jobs : [];
+  var job = jobs.filter(function (item) { return item.id === jobId; })[0];
+  if (!job || !job.folder || !job.resumeCheckpoint || (job.resumeStage !== 'hi' && job.resumeStage !== 'lo')) {
+    throw new Error('This historical run no longer has a resumable checkpoint.');
+  }
+  if (job.input && job.input.comparison === 'changed' && !window.confirm('Dataset or config inputs changed since this run. Resume using the current inputs?')) return;
+  trainingRunnerRequest('/fs/training_runner/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder: job.folder,
+      queue: true,
+      stages: job.resumeStage,
+      resumeFromCheckpoint: job.resumeCheckpoint,
+      resumeStage: job.resumeStage,
+      parentJobId: job.id
+    })
+  }).then(function (payload) {
+    trainingWorkspaceState.runnerSelectedJobId = payload.job.id;
+    trainingWorkspaceState.runnerLogOffsets[payload.job.id] = 0;
+    setStatus(payload.queued ? 'Resume job queued.' : 'Resume job started.');
+    refreshTrainingRunnerStatus();
+    refreshTrainingHistory();
+  }).catch(function (err) {
+    setStatus('Could not queue resume: ' + String(err && err.message ? err.message : err));
+  });
 }
 
 function trainingHistoryScopeFolder() {
@@ -1403,12 +1435,9 @@ function wireTrainingWorkspace() {
       showTrainingRunnerConsole(getTrainingRunnerJobById(logId));
       return;
     }
-    var checkpoint = event.target.getAttribute('data-training-history-resume');
-    if (checkpoint && checkpointSelect) {
-      checkpointSelect.value = checkpoint;
-      trainingWorkspaceState.resumeParentJobId = event.target.parentNode.parentNode.getAttribute('data-training-history-job') || '';
-      syncManagedTrainingResumeUi();
-      setStatus('Checkpoint selected for the next training job.');
+    var resumeId = event.target.getAttribute('data-training-history-resume');
+    if (resumeId) {
+      resumeTrainingHistoryJob(resumeId);
     }
   };
   historyCollapseBtn.onclick = function () {

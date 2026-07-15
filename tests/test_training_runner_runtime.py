@@ -125,6 +125,38 @@ def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
     assert state["activeJobId"] == ""
 
 
+def test_start_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):
+    paused = {"id": "paused", "status": "paused", "folder": "penny", "stages": "lo"}
+    queued = {"id": "next", "status": "queued", "folder": "sue", "stages": "hi"}
+    state = {"queuePaused": False, "activeJobId": "", "jobs": [paused, queued]}
+    launched = []
+    monkeypatch.setattr(training_runner, "_prepare_paused_job_for_resume", lambda job: job.update(status="queued") or "")
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: launched.append(job["id"]) or job.update(status="starting"))
+
+    training_runner._start_next(state)
+
+    assert launched == ["paused"]
+    assert state["activeJobId"] == "paused"
+    assert queued["status"] == "queued"
+
+
+def test_user_paused_job_from_legacy_state_stays_at_the_front_of_the_queue(monkeypatch):
+    paused = {"id": "paused", "folder": "penny", "stages": "lo", "status": "paused", "createdAt": 1}
+    state = {
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "Queue paused by the user.",
+        "jobs": [paused, {"id": "next", "folder": "sue", "stages": "hi", "status": "queued", "createdAt": 2}],
+    }
+    monkeypatch.setattr(training_runner, "_startup_reconciled", False)
+
+    training_runner._apply_restart_hold(state)
+
+    assert state["activeJobId"] == ""
+    assert state["queuePauseReason"] == "Queue paused by the user."
+
+
 def test_restart_hold_keeps_an_active_run_handing_off_to_its_queue(monkeypatch):
     state = {
         "queuePaused": False,
@@ -318,6 +350,87 @@ def test_finish_clears_a_restart_hold_and_advances_the_queue(monkeypatch):
     assert state["queuePaused"] is False
     assert state["queuePauseReason"] == ""
     assert advanced == [False]
+
+
+def test_pausing_returns_the_current_job_to_the_queue_and_holds_it(monkeypatch):
+    active = {"id": "active", "status": "running", "pid": 42}
+    state = {
+        "activeJobId": "active",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}],
+    }
+    advanced = []
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
+    monkeypatch.setattr(training_runner, "_pid_alive", lambda *args, **kwargs: False)
+    monkeypatch.setattr(training_runner, "_refresh_job", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_start_next", lambda candidate: advanced.append(candidate["queuePaused"]))
+
+    payload, status = training_runner.stop_response("active", pause=True)
+
+    assert status == 200
+    assert payload["job"]["status"] == "paused"
+    assert state["activeJobId"] == ""
+    assert state["queuePaused"] is True
+    assert advanced == [True]
+
+
+def test_cancelling_a_paused_job_removes_it_from_the_queue(monkeypatch):
+    active = {"id": "active", "status": "paused", "progress": {"epoch": 85, "epochs": 90}}
+    state = {
+        "activeJobId": "active",
+        "queuePaused": True,
+        "queuePauseReason": "Queue paused by the user.",
+        "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}],
+    }
+    advanced = []
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_start_next", lambda candidate: advanced.append(candidate["queuePaused"]))
+
+    payload, status = training_runner.stop_response("active", cancel=True)
+
+    assert status == 200
+    assert payload["job"]["status"] == "cancelled"
+    assert state["queuePaused"] is True
+    assert advanced == []
+
+
+def test_resuming_a_paused_job_keeps_its_queue_position(monkeypatch):
+    paused = {"id": "paused", "folder": "penny", "stages": "lo", "status": "paused"}
+    queued = {"id": "next", "folder": "sue", "stages": "hi", "status": "queued"}
+    state = {
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "Queue paused by the user.",
+        "jobs": [paused, queued],
+    }
+    advanced = []
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_prepare_paused_job_for_resume", lambda job: job.update(status="queued") or "")
+    monkeypatch.setattr(training_runner, "_start_next", lambda candidate: advanced.append(candidate["activeJobId"]))
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
+
+    payload, status = training_runner.resume_job_response("paused")
+
+    assert status == 200
+    assert payload["job"]["id"] == "paused"
+    assert [job["id"] for job in state["jobs"]] == ["paused", "next"]
+    assert paused["status"] == "queued"
+    assert state["activeJobId"] == ""
+    assert state["queuePaused"] is False
+    assert advanced == [""]
 
 
 def test_refresh_state_holds_queue_after_an_unexplained_exit(monkeypatch):

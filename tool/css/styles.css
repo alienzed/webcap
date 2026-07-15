@@ -2015,13 +2015,15 @@ iframe {
   font-weight: 700;
 }
 
+.workspace-surface-training .training-runner-status--starting,
 .workspace-surface-training .training-runner-status--running {
   border-color: var(--accent);
   color: var(--accent);
 }
 
 .workspace-surface-training .training-runner-status--queued,
-.workspace-surface-training .training-runner-status--paused {
+.workspace-surface-training .training-runner-status--paused,
+.workspace-surface-training .training-runner-status--interrupted {
   border-color: #cc7a3f;
   color: #cc7a3f;
 }

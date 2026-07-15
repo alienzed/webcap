@@ -484,15 +484,19 @@
 
 .app.shell-revamp.workspace-surface-training .training-runner-queue-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "copy controls";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "spine copy controls";
   align-items: center;
   gap: 3px 8px;
   min-width: 0;
   padding: 8px;
 }
 
-.app.shell-revamp.workspace-surface-training .training-runner-queue-item > div:first-child {
+.app.shell-revamp.workspace-surface-training .training-runner-queue-spine {
+  grid-area: spine;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-copy {
   grid-area: copy;
 }
 

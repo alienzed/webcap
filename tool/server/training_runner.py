@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import re
 import csv
@@ -18,7 +19,7 @@ from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
 from .dataset_config import repeat_targets_for_mode
-from .training_history import completed_stages, discover_runs, output_root_for_folder, record_job
+from .training_history import completed_stages, discover_runs, output_root_for_folder, record_job, clear_history_job
 from .training_runtime import (
     build_runtime_command,
     build_training_launcher,
@@ -100,7 +101,7 @@ def _write_state(state):
 
 
 def _sync_job_history(job):
-    if job.get("status") not in HISTORY_STATUSES:
+    if job.get("historyHidden") or job.get("status") not in HISTORY_STATUSES:
         return
     folder = str(job.get("folder") or "").strip()
     if not folder:
@@ -523,7 +524,7 @@ def _training_profile(folder_path):
 
 def _model_identity(artifacts):
     source = ""
-    pattern = re.compile(r"^\s*(?:model|model_path|checkpoint|base_model)\s*=\s*[\"']?([^\"'\n#]+)", re.MULTILINE | re.IGNORECASE)
+    pattern = re.compile(r"^\s*(?:model|model_path|checkpoint|base_model|ckpt_path)\s*=\s*[\"']?([^\"'\n#]+)", re.MULTILINE | re.IGNORECASE)
     for key in ("hiConfig", "loConfig"):
         try:
             match = pattern.search(Path(artifacts[key]).read_text(encoding="utf-8"))
@@ -532,8 +533,36 @@ def _model_identity(artifacts):
         if match:
             source = match.group(1).strip()
             break
-    label = Path(source).stem if source else "Training model"
+    source_name = Path(source).stem if source else ""
+    label = "WAN 2.2" if "wan2.2" in source_name.lower() else (source_name or "Training model")
     return {"label": label, "source": source}
+
+
+def _read_config_positive_int(path, key, fallback=0):
+    try:
+        text = Path(str(path or "")).read_text(encoding="utf-8")
+    except OSError:
+        return int(fallback)
+    match = re.search(r"^\s*" + re.escape(key) + r"\s*=\s*(\d+)\s*(?:#.*)?$", text, re.MULTILINE)
+    return max(1, int(match.group(1))) if match else int(fallback)
+
+
+def _plan_run_steps(progress_plan, snapshot):
+    """Translate generated sample exposures into the trainer's visible batch steps."""
+    if not isinstance(progress_plan, dict):
+        return progress_plan
+    planned = {}
+    for stage_name, stage_plan in progress_plan.items():
+        stage = dict(stage_plan) if isinstance(stage_plan, dict) else {}
+        exposures = int(stage.get("estimatedSteps") or 0)
+        has_generated_shape = exposures > 0 and int(stage.get("epochs") or 0) > 0
+        if has_generated_shape and stage_name in ("hi", "lo"):
+            micro_batch = _read_config_positive_int(snapshot.get(stage_name), "micro_batch_size_per_gpu", 1)
+            stage["sampleExposures"] = exposures
+            stage["microBatchSize"] = micro_batch
+            stage["estimatedSteps"] = int(math.ceil(float(exposures) / float(micro_batch)))
+        planned[stage_name] = stage
+    return planned
 
 
 def _copy_snapshot(job_dir, artifacts, folder_path):
@@ -1088,6 +1117,7 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
     job_dir.mkdir(parents=True, exist_ok=False)
     normalize_path_permissions(job_dir)
     snapshot = _copy_snapshot(job_dir, artifacts, folder_path)
+    progress_plan = _plan_run_steps(_read_training_plan(folder_path) or _default_progress_plan(), snapshot)
     input_evidence = _input_evidence(folder_path)
     model = _model_identity(artifacts)
     resume_path = str(resume_from_checkpoint or "").strip()
@@ -1108,7 +1138,7 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "snapshot": snapshot,
         "artifactPath": str(job_dir),
         "artifactDir": str(job_dir.relative_to(_artifact_root(folder_path, stages).parent)),
-        "progressPlan": _read_training_plan(folder_path) or _default_progress_plan(),
+        "progressPlan": progress_plan,
         "runtime": {"wslDistribution": _training_settings()["wslDistribution"]},
         "preflight": {"checks": preflight.get("checks", []), "blockers": preflight.get("summary", {}).get("blockers", 0)},
         "outputRoot": str(output_root_for_folder(folder_path, stages)),
@@ -1271,6 +1301,23 @@ def status_response():
             "jobs": [_public_job(job) for job in state.get("jobs", [])],
             "attention": _attention_payload(state),
         }, 200
+
+
+def clear_history_response(folder, job_id):
+    folder_text = str(folder or "").strip()
+    job_id = str(job_id or "").strip()
+    if not folder_text or not job_id:
+        return {"ok": False, "error": "Folder and job ID are required."}, 400
+    with _lock:
+        folder_path = app_config.safe_join_fs_root(folder_text)
+        state = _read_state()
+        job = _find_job(state, job_id)
+        if job and str(job.get("folder") or "") == folder_text:
+            job["historyHidden"] = True
+            job["updatedAt"] = time.time()
+        cleared = clear_history_job(folder_path, job_id)
+        _write_state(state)
+        return {"ok": True, "cleared": cleared}, 200
 
 
 def gpu_status_response():

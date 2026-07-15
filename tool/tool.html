@@ -736,7 +736,7 @@
                                     <button id="training-runner-finish-btn" type="button" class="training-btn" title="End this run intentionally, keep its output, and continue the queue.">Finish</button>
                                     <button id="training-runner-pause-btn" type="button" class="review-captions-btn">Pause</button>
                                     <button id="training-runner-resume-queue-btn" type="button" class="training-btn hidden">Resume Queue</button>
-                                    <button id="training-runner-console-btn" type="button" class="review-captions-btn">View Output</button>
+                                    <button id="training-runner-console-btn" type="button" class="review-captions-btn">Show Output</button>
                                 </div>
                                 <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued training jobs"></div>
                                 <div id="training-runner-preflight" class="training-runner-preflight hidden"></div>
@@ -751,14 +751,18 @@
                             <div class="training-global-secondary">
                             <section class="training-history-card" aria-label="Recent training runs">
                                 <div class="training-history-heading">
-                                    <div class="training-workspace-section-title">Recent Runs</div>
+                                    <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Recent Runs</button>
+                                </div>
+                                <div id="training-history-content" class="training-history-content hidden">
+                                    <div class="training-history-tools">
                                     <input id="training-history-search" type="search" placeholder="Search training history">
-                                    <button id="training-history-clear-btn" type="button" class="review-captions-btn">Clear history</button>
-                                        <button id="training-history-show-all-btn" type="button" class="review-captions-btn hidden">Show all</button>
+                                    <button id="training-history-clear-btn" type="button" class="review-captions-btn">Clear all</button>
+                                    <button id="training-history-show-all-btn" type="button" class="review-captions-btn hidden">Show all</button>
                                     </div>
                                     <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>
                                     <div id="training-history-list" class="training-history-list"></div>
-                                </section>
+                                </div>
+                            </section>
                                 <section class="training-tensorboard-card hidden" aria-label="TensorBoard">
                                     <div class="training-workspace-section-title">TensorBoard</div>
                                     <div id="training-tensorboard-summary" class="training-tensorboard-summary">Checking TensorBoard...</div>

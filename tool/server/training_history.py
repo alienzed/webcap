@@ -274,6 +274,21 @@ def clear_history(folder_path=None):
     return cleared
 
 
+def clear_history_job(folder_path, job_id):
+    """Remove one history index entry without touching its logs or training artifacts."""
+    history = read_history(folder_path)
+    wanted_id = str(job_id or "").strip()
+    if not wanted_id:
+        return False
+    original = history.get("jobs") or []
+    retained = [job for job in original if str(job.get("id") or "") != wanted_id]
+    if len(retained) == len(original):
+        return False
+    history["jobs"] = retained
+    _write_history(folder_path, history)
+    return True
+
+
 def completed_stages(folder_path):
     folder = Path(folder_path)
     stages = [stage for stage in ("hi", "lo") if (folder / ("config." + stage + ".toml")).is_file()]

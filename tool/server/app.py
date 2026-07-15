@@ -14,7 +14,7 @@ from .file_ops import duplicate_folder_response, duplicate_image_response, open_
 from .media import media_blur_background_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
-from .training_runner import log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, resume_job_response as training_runner_resume_job_response, confirm_inputs_response as training_runner_confirm_inputs_response, folder_statuses_for_folders as training_runner_folder_statuses
+from .training_runner import log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, resume_job_response as training_runner_resume_job_response, confirm_inputs_response as training_runner_confirm_inputs_response, clear_history_response as training_runner_clear_history_response, folder_statuses_for_folders as training_runner_folder_statuses
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history
 from .training_tensorboard import start_response as tensorboard_start_response, status_response as tensorboard_status_response, stop_response as tensorboard_stop_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
@@ -461,6 +461,17 @@ def training_history_clear_route():
         return jsonify({"ok": True, "cleared": cleared})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/fs/training_history/job/clear", methods=["POST"])
+def training_history_job_clear_route():
+    data = request.get_json(silent=True) or {}
+    folder = str(data.get("folder") or "").strip()
+    job_id = str(data.get("jobId") or "").strip()
+    if not folder or not job_id:
+        return jsonify({"ok": False, "error": "Folder and job ID are required."}), 400
+    payload, status = training_runner_clear_history_response(folder, job_id)
+    return jsonify(payload), status
 
 
 @app.route("/fs/tensorboard/status", methods=["GET"])

@@ -875,6 +875,20 @@ def _pid_alive(pid, distribution=""):
     return code == 0
 
 
+def _job_runner_pid(job):
+    """Prefer the PID written by the WSL runner over the launch-shell PID."""
+    try:
+        recorded = (_job_dir(job) / "pid").read_text(encoding="utf-8").strip()
+        if recorded.isdigit():
+            return int(recorded)
+    except OSError:
+        pass
+    try:
+        return int(job.get("pid") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _refresh_job(job):
     if str(job.get("status")) not in ACTIVE_STATUSES:
         return
@@ -901,7 +915,10 @@ def _refresh_job(job):
         _annotate_completed_job(job)
         _annotate_finished_early_job(job)
         return
-    if not _pid_alive(job.get("pid"), _job_wsl_distribution(job)):
+    runner_pid = _job_runner_pid(job)
+    if runner_pid:
+        job["pid"] = runner_pid
+    if not _pid_alive(runner_pid, _job_wsl_distribution(job)):
         requested_action = str(job.get("actionRequested") or "")
         if requested_action == "pause":
             job["status"] = "paused"
@@ -1013,6 +1030,22 @@ def _refresh_state(state):
             _annotate_completed_job(job)
     active_id = str(state.get("activeJobId") or "")
     active = _find_job(state, active_id) if active_id else None
+    if not active:
+        for job in state.get("jobs", []):
+            if job.get("status") != "interrupted":
+                continue
+            runner_pid = _job_runner_pid(job)
+            if not runner_pid or not _pid_alive(runner_pid, _job_wsl_distribution(job)):
+                continue
+            job["pid"] = runner_pid
+            job["status"] = "running"
+            job["error"] = ""
+            job["updatedAt"] = time.time()
+            state["activeJobId"] = job.get("id") or ""
+            state["queuePaused"] = False
+            state["queuePauseReason"] = ""
+            active = job
+            break
     if active:
         _refresh_job(active)
         if active.get("status") == "paused":

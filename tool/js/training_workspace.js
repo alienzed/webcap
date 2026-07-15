@@ -71,6 +71,7 @@ function getTrainingWorkspaceEls() {
     historyList: document.getElementById('training-history-list'),
     historyContent: document.getElementById('training-history-content'),
     historyCollapseBtn: document.getElementById('training-history-collapse-btn'),
+    historyTools: document.getElementById('training-history-tools'),
     historyShowAllBtn: document.getElementById('training-history-show-all-btn'),
     historySearch: document.getElementById('training-history-search'),
     historyClearBtn: document.getElementById('training-history-clear-btn'),
@@ -497,6 +498,7 @@ function renderTrainingHistory() {
   var runs = Array.isArray(history.runs) ? history.runs : [];
   var latest = jobs.length ? jobs[0] : null;
   if (els.historyContent) els.historyContent.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
+  if (els.historyTools) els.historyTools.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
   if (els.historyCollapseBtn) {
     els.historyCollapseBtn.textContent = 'Recent Runs' + (jobs.length ? ' · ' + jobs.length : '');
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');

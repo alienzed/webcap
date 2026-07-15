@@ -327,6 +327,7 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply, options) {
     rotateInput.onkeydown = function (event) {
       if (event.key === 'Enter') {
         event.preventDefault();
+        event.stopPropagation();
         setCropAngle(rotateInput.value);
       }
     };
@@ -346,17 +347,21 @@ function setupCropModal(imageSrc, aspectRatio, onReady, onApply, options) {
       var modal = getCropEl('crop-modal');
       if (!modal || modal.classList.contains('hidden')) return;
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         closeCropModal();
         return;
       }
       if (e.key === 'Enter' && !e.repeat && !e.isComposing) {
+        if (e.target && e.target.id === 'crop-rotate-input') return;
         var applyBtn = getCropEl('crop-apply-btn');
         if (!cropBusy && applyBtn && !applyBtn.disabled) {
           e.preventDefault();
+          e.stopImmediatePropagation();
           applyBtn.click();
         }
       }
-    });
+    }, true);
     cropEscapeHandlerBound = true;
   }
   imageEl.src = imageSrc;

@@ -416,11 +416,13 @@
 }
 
 .media-grid-surface-stars {
-  gap: 6px;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .media-grid-surface-star-values {
-  gap: 3px;
+  gap: 5px;
 }
 
 .media-grid-surface-filter-label,
@@ -449,16 +451,22 @@
 }
 
 .media-grid-surface-star-filter {
-  min-width: 19px;
-  padding: 2px 0;
+  min-width: 25px;
+  padding: 3px 0 4px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: #64748b;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
+}
+
+.media-grid-surface-center-controls .focus-set-controls--grid {
+  margin-left: 2px;
+  padding-left: 14px;
+  border-left: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .media-grid-surface-star-filter:hover,

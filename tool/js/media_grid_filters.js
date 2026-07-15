@@ -74,7 +74,6 @@ function mediaGridBuildSurfaceFilterControls() {
       '<span>Invalid AR</span>' +
     '</label>' +
     '<div class="media-grid-surface-stars" aria-label="Rating filters">' +
-      '<span class="media-grid-surface-filter-label">Stars</span>' +
       '<div id="media-grid-surface-filter-stars" class="media-grid-surface-star-values"></div>' +
     '</div>';
   mediaGridBuildStarsFilter('media-grid-surface-filter-stars', 'media-grid-surface-star-filter');

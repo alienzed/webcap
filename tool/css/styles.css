@@ -2803,6 +2803,18 @@ html[data-theme="dark"] .checklist-close-btn:hover {
   color: #ffffff;
 }
 
+html[data-theme="dark"] #utility-training-btn.active {
+  background: #202a38;
+  border-color: #8f7137;
+  color: #d6a64d;
+}
+
+html[data-theme="dark"] #utility-training-btn.training-running.active {
+  background: #202a38;
+  border-color: #a57a28;
+  color: #d9a84e;
+}
+
 html[data-theme="dark"] .primer-template-placeholder-label {
   color: #94a3b8;
 }

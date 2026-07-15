@@ -899,6 +899,7 @@ function renderFocusedAnnotationTerms(mediaKey, requirementLabel, quickPickEntri
     els.termList.appendChild(empty);
     return;
   }
+  var termEntries = [];
   terms.forEach(function (term) {
     var row = document.createElement('div');
     row.className = 'focused-annotation-term-row';
@@ -923,7 +924,25 @@ function renderFocusedAnnotationTerms(mediaKey, requirementLabel, quickPickEntri
     };
     bindFocusedAnnotationTermAffixContextMenu(btn, term, buttonTitle);
     row.appendChild(btn);
-    els.termList.appendChild(row);
+    termEntries.push({
+      term: term,
+      row: row,
+      isActive: hasTagForMediaKey(mediaKey, term),
+      isMatched: btn.classList.contains('matched'),
+      isSuggested: btn.classList.contains('suggested')
+    });
+  });
+  renderTermFamilyEntries(els.termList, termEntries, {
+    getText: function (entry) { return entry.term; },
+    isBreakout: function (entry) { return entry.isActive; },
+    getHint: function (entry) {
+      if (entry.isSuggested) return { className: 'suggested', text: 'suggested' };
+      if (entry.isMatched) return { className: 'matched', text: 'caption matches' };
+      return null;
+    },
+    triggerClass: 'focused-annotation-term-btn',
+    popoverClass: 'term-family-popover--focus',
+    renderItem: function (entry) { return entry.row; }
   });
 }
 

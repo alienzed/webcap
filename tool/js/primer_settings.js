@@ -255,7 +255,7 @@ function wirePrimerCaptionResetUi() {
 
   if (applyPrimerBtn && !applyPrimerBtn.__primerApplyBound) {
     applyPrimerBtn.__primerApplyBound = true;
-    applyPrimerBtn.addEventListener('click', function () {
+    applyPrimerBtn.addEventListener('click', function (event) {
       var mediaItem = getPrimerResetCurrentMediaItem();
       if (!mediaItem) {
         setStatus('Select a media item first.');
@@ -272,6 +272,10 @@ function wirePrimerCaptionResetUi() {
         .then(function () {
           primerResetUndoState = null;
           updatePrimerCaptionResetUi();
+          if (!event.shiftKey) return;
+          return selectNextCaptionlessMediaItem().catch(function (err) {
+            setStatus(String(err && err.message ? err.message : err));
+          });
         })
         .catch(function (err) {
           setStatus(String(err && err.message ? err.message : err));

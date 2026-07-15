@@ -549,6 +549,31 @@ function selectPathMedia(mediaItem) {
   });
 }
 
+// Move through the folder's natural item order, independent of the currently visible filters.
+// This is intentionally an explicit captioning action rather than a side effect of saving.
+function selectNextCaptionlessMediaItem() {
+  var items = Array.isArray(state.items) ? state.items : [];
+  var currentKey = state.currentItem && state.currentItem.key;
+  var currentIndex = items.findIndex(function (item) {
+    return item && item.key === currentKey;
+  });
+  if (currentIndex === -1 || items.length < 2) {
+    setStatus('No captionless items remain.');
+    return Promise.resolve(false);
+  }
+
+  for (var offset = 1; offset < items.length; offset += 1) {
+    var candidate = items[(currentIndex + offset) % items.length];
+    if (!candidate || candidate.hasCaption) continue;
+    return selectPathMedia(candidate).then(function () {
+      return true;
+    });
+  }
+
+  setStatus('No captionless items remain.');
+  return Promise.resolve(false);
+}
+
 function reselectCurrentMediaFromPreview() {
   if (!state || !state.currentItem || !ui || !ui.mediaListEl) {
     return false;

@@ -572,8 +572,23 @@ function renderMediaGridSidebar() {
       emptyTerms.textContent = 'No tags in this group.';
       list.appendChild(emptyTerms);
     } else {
-      terms.forEach(function (term) {
-        list.appendChild(mediaGridBuildTagChip(term));
+      var termEntries = terms.map(function (term) {
+        return {
+          term: term,
+          stateName: mediaGridGetTagSelectionState(term),
+          usageState: mediaGridGetTagUsageState(term)
+        };
+      });
+      renderTermFamilyEntries(list, termEntries, {
+        getText: function (entry) { return entry.term; },
+        isBreakout: function (entry) { return entry.stateName === 'all' || entry.stateName === 'mixed'; },
+        getHint: function (entry) {
+          if (entry.usageState === 'most') return { className: 'usage', text: 'frequently used' };
+          return null;
+        },
+        triggerClass: 'media-grid-tag-chip',
+        popoverClass: 'term-family-popover--grid',
+        renderItem: function (entry) { return mediaGridBuildTagChip(entry.term); }
       });
     }
     group.appendChild(list);

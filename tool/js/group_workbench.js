@@ -590,6 +590,7 @@ function renderGroupWorkbench(options) {
       emptyTermsEl.textContent = 'No terms configured.';
       termListEl.appendChild(emptyTermsEl);
     }
+    var termEntries = [];
     for (var t = 0; t < terms.length; t++) {
       var term = terms[t];
       var activeCount = 0;
@@ -651,8 +652,28 @@ function renderGroupWorkbench(options) {
           }
         };
       })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys, opts.getContextMediaKeys);
-      termListEl.appendChild(termBtn);
+      termEntries.push({
+        term: term,
+        button: termBtn,
+        isActive: isActive,
+        isMixed: isMixed,
+        isMatched: isMatched,
+        usageState: usageState
+      });
     }
+
+    renderTermFamilyEntries(termListEl, termEntries, {
+      getText: function (entry) { return entry.term; },
+      isBreakout: function (entry) { return entry.isActive || entry.isMixed; },
+      getHint: function (entry) {
+        if (entry.isMatched) return { className: 'matched', text: 'caption matches' };
+        if (entry.usageState === 'most') return { className: 'usage', text: 'frequently used' };
+        return null;
+      },
+      triggerClass: 'group-workbench-term-btn',
+      popoverClass: 'term-family-popover--workbench',
+      renderItem: function (entry) { return entry.button; }
+    });
 
     groupEl.classList.toggle('has-active-term', groupHasActiveTerm);
     groupEl.classList.toggle('has-mixed-term', groupHasMixedTerm);

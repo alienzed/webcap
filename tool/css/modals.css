@@ -703,6 +703,11 @@ html[data-theme="dark"] .app-settings-radio-label {
   margin: 0 0 10px;
 }
 
+.focused-annotation-term-list > .term-family-trigger {
+  break-inside: avoid;
+  margin: 0 0 10px;
+}
+
 .focused-annotation-term-btn {
   appearance: none;
   border: 1px solid rgba(148, 163, 184, 0.14);

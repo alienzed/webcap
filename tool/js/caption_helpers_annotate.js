@@ -404,6 +404,7 @@ function renderAnnotateStrip() {
       titleMainEl.appendChild(statusEl);
     }
     var hasActiveTerm = false;
+    var termEntries = [];
     group.terms.forEach(function (term) {
       if (hasTagForMediaKey(mediaKey, term)) {
         hasActiveTerm = true;
@@ -501,7 +502,27 @@ function renderAnnotateStrip() {
         e.preventDefault();
         openChecklistTermAffixesModal(term);
       };
-      chipWrap.appendChild(chip);
+      termEntries.push({
+        term: term,
+        chip: chip,
+        isActive: isActiveTerm,
+        isGapHint: isGapHint,
+        isNovel: !isActiveTerm && usageStats.contextCount > 0 && usageCount <= 0,
+        heatLevel: heatLevel
+      });
+    });
+    renderTermFamilyEntries(chipWrap, termEntries, {
+      getText: function (entry) { return entry.term; },
+      isBreakout: function (entry) { return entry.isActive; },
+      getHint: function (entry) {
+        if (entry.isGapHint) return { className: 'gap', text: 'common nearby' };
+        if (entry.isNovel) return { className: 'novel', text: 'not used nearby' };
+        if (entry.heatLevel >= 3) return { className: 'usage', text: 'frequently used nearby' };
+        return null;
+      },
+      triggerClass: 'annotate-strip-chip',
+      popoverClass: 'term-family-popover--annotate',
+      renderItem: function (entry) { return entry.chip; }
     });
     if (!reviewedState) {
       titleEl.classList.add(isComplete ? 'annotate-strip-group-title-complete' : 'annotate-strip-group-title-incomplete');

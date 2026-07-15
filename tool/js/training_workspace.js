@@ -115,7 +115,7 @@ function getTrainingRunnerActiveJob() {
     if (jobs[i].id === trainingWorkspaceState.runnerActiveJobId) return jobs[i];
   }
   for (var j = 0; j < jobs.length; j++) {
-    if (jobs[j].status === 'starting' || jobs[j].status === 'running' || jobs[j].status === 'stopping') return jobs[j];
+    if (jobs[j].status === 'starting' || jobs[j].status === 'running' || jobs[j].status === 'stopping' || jobs[j].status === 'unconfirmed') return jobs[j];
   }
   return null;
 }
@@ -124,7 +124,7 @@ function syncUtilityTrainingActivity() {
   var utilityTrainingBtn = document.getElementById('utility-training-btn');
   if (!utilityTrainingBtn) return;
   var running = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
-    return job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
+    return job.status === 'running';
   });
   utilityTrainingBtn.classList.toggle('training-running', running);
   utilityTrainingBtn.title = running ? 'Open Training (training in progress)' : 'Open Training';
@@ -154,6 +154,7 @@ function formatTrainingRunnerDuration(seconds) {
 }
 
 function trainingRunnerStatusLabel(status) {
+  if (status === 'unconfirmed') return 'Confirmation unavailable';
   var value = String(status || 'unknown').replace(/_/g, ' ');
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -383,7 +384,7 @@ function renderTrainingRunner() {
   if (!els.runnerSummary || !els.runnerActions) return;
   var jobs = trainingWorkspaceState.runnerJobs || [];
   renderTrainingAttention();
-  var activeCount = jobs.filter(function (job) { return job.status === 'starting' || job.status === 'running' || job.status === 'stopping'; }).length;
+  var activeCount = jobs.filter(function (job) { return job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'unconfirmed'; }).length;
   var queuedJobs = jobs.filter(function (job) { return job.status === 'queued' || job.status === 'paused' || job.status === 'interrupted'; });
   var queuedCount = queuedJobs.length;
   var job = getTrainingRunnerActiveJob();
@@ -451,11 +452,6 @@ function renderTrainingRunner() {
   var statusLabel = trainingRunnerStatusLabel(status);
   var running = status === 'starting' || status === 'running' || status === 'stopping';
   var queued = status === 'queued' || status === 'paused' || status === 'interrupted';
-  var lastLogAt = Number(job.lastLogAt || 0);
-  var quietSeconds = lastLogAt ? Math.max(0, Math.floor(Date.now() / 1000 - lastLogAt)) : 0;
-  var quietNote = running && quietSeconds >= 120
-    ? '<div class="training-runner-detail is-warning">Runner process is alive, but no output for ' + escapeHtml(formatTrainingRunnerDuration(quietSeconds)) + '. GPU activity may be idle; view output to investigate.</div>'
-    : '';
   var queueState = trainingWorkspaceState.runnerQueuePaused
     ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + ' — no job will start automatically</span>'
     : '';
@@ -473,8 +469,8 @@ function renderTrainingRunner() {
     queueState +
     '</div>' +
     (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
+    (job.confirmationNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.confirmationNote) + '</div>' : '') +
     (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
-    quietNote +
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
   if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !running);
@@ -648,9 +644,10 @@ function fetchTrainingRunnerLog(job, reset) {
 
 function scheduleTrainingRunnerPoll() {
   if (trainingWorkspaceState.runnerPollTimer) clearTimeout(trainingWorkspaceState.runnerPollTimer);
+  if (!isTrainingWorkspaceActive()) return;
   var activeStatus = (trainingWorkspaceState.runnerJobs || []).map(function (job) { return job.status; });
   var hasActiveJob = activeStatus.some(function (status) {
-    return status === 'starting' || status === 'running' || status === 'stopping';
+    return status === 'starting' || status === 'running' || status === 'stopping' || status === 'unconfirmed';
   });
   if (!hasActiveJob) return;
   var transitioning = activeStatus.some(function (status) { return status === 'starting' || status === 'stopping'; });
@@ -661,7 +658,7 @@ function scheduleTrainingRunnerPoll() {
 }
 
 function refreshTrainingRunnerStatus() {
-  if (trainingWorkspaceState.runnerStatusPending) return;
+  if (!isTrainingWorkspaceActive() || trainingWorkspaceState.runnerStatusPending) return;
   trainingWorkspaceState.runnerStatusPending = true;
   trainingRunnerRequest('/fs/training_runner/status')
     .then(function (payload) {
@@ -845,7 +842,7 @@ function stopManagedTraining(cancel, pause, finish) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jobId: job.id, cancel: !!cancel, pause: !!pause, finish: !!finish })
   }).then(function () {
-    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Training paused; queue held.' : 'Stopping managed training...'));
+    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Pause requested; waiting for the runner result.' : finish ? 'Finish requested; waiting for the runner result.' : 'Stop requested; waiting for the runner result.'));
     refreshTrainingRunnerStatus();
     refreshTrainingHistory();
   }).catch(function (err) {
@@ -1177,8 +1174,7 @@ function refreshTrainingWorkspace() {
     if (els.readiness) els.readiness.textContent = 'Select a set folder to prepare a dataset.';
     renderTrainingItemOverview(null);
     renderTrainingWorkspaceConfigList([]);
-    trainingWorkspaceState.history = null;
-    renderTrainingHistory();
+    refreshTrainingHistory();
     renderTrainingCommandHandoff();
     return;
   }
@@ -1429,4 +1425,3 @@ function syncTrainingWorkspaceUi() {
 }
 
 wireTrainingWorkspace();
-refreshTrainingRunnerStatus();

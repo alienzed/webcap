@@ -32,7 +32,7 @@ from .training_runtime import (
 RUNNER_DIR_NAME = ".webcap_training"
 STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
-ACTIVE_STATUSES = {"starting", "running", "stopping"}
+ACTIVE_STATUSES = {"starting", "running", "stopping", "unconfirmed"}
 QUEUE_STATUSES = {"queued", "paused", "interrupted"}
 HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "cancelled"}
 TERMINAL_STATUSES = HISTORY_STATUSES | {"paused", "interrupted"}
@@ -876,7 +876,7 @@ def _pid_alive(pid, distribution=""):
 
 
 def _job_runner_pid(job):
-    """Prefer the PID written by the WSL runner over the launch-shell PID."""
+    """Use the PID recorded by the runner when it is available."""
     try:
         recorded = (_job_dir(job) / "pid").read_text(encoding="utf-8").strip()
         if recorded.isdigit():
@@ -898,15 +898,18 @@ def _refresh_job(job):
     if result:
         result_status = str(result.get("status") or "failed")
         requested_action = str(job.get("actionRequested") or "")
-        if requested_action == "pause":
-            job["status"] = "paused"
-        elif requested_action == "finish":
-            job["status"] = "finished_early"
-        elif requested_action == "stop":
-            job["status"] = "stopped"
-        elif result_status == "stopped":
-            job["status"] = "interrupted"
-            job["error"] = "Runner stopped without a WebCap stop or pause action."
+        job.pop("confirmationNote", None)
+        job.pop("error", None)
+        if result_status == "stopped":
+            if requested_action == "pause":
+                job["status"] = "paused"
+            elif requested_action == "finish":
+                job["status"] = "finished_early"
+            elif requested_action == "stop":
+                job["status"] = "stopped"
+            else:
+                job["status"] = "interrupted"
+                job["error"] = "Runner stopped without a WebCap stop or pause action."
         else:
             job["status"] = result_status
         job["exitCode"] = int(result.get("exitCode") or 0)
@@ -915,31 +918,18 @@ def _refresh_job(job):
         _annotate_completed_job(job)
         _annotate_finished_early_job(job)
         return
-    runner_pid = _job_runner_pid(job)
-    if runner_pid:
-        job["pid"] = runner_pid
-    if not _pid_alive(runner_pid, _job_wsl_distribution(job)):
-        requested_action = str(job.get("actionRequested") or "")
-        if requested_action == "pause":
-            job["status"] = "paused"
-        elif requested_action == "finish":
-            job["status"] = "finished_early"
-        elif requested_action == "stop":
-            job["status"] = "stopped"
-        else:
-            job["status"] = "interrupted"
-            job["error"] = "Training runner exited without a result record."
-        job["finishedAt"] = time.time()
-        job["updatedAt"] = time.time()
-        _annotate_finished_early_job(job)
-        return
+    now = time.time()
+    log_advanced = False
+    log_has_progress = False
     log_path = Path(job.get("logPath") or "")
     if log_path.exists():
         try:
-            job["lastLogAt"] = log_path.stat().st_mtime
+            log_mtime = log_path.stat().st_mtime
+            prior_log_mtime = float(job.get("lastLogAt") or 0)
+            job["lastLogAt"] = log_mtime
             tail = _read_log_tail(log_path)
-            if job.get("status") == "starting" and (_LOG_EPOCH_PATTERN.search(tail) or _LOG_STEP_PATTERN.search(tail)):
-                job["status"] = "running"
+            log_advanced = bool(prior_log_mtime and log_mtime > prior_log_mtime)
+            log_has_progress = bool(_LOG_EPOCH_PATTERN.search(tail) or _LOG_STEP_PATTERN.search(tail))
             if "[webcap] stage=lo" in tail:
                 job["stage"] = "lo"
             elif "[webcap] stage=hi" in tail:
@@ -947,7 +937,30 @@ def _refresh_job(job):
             _sync_job_progress(job, tail)
         except OSError:
             pass
+    runner_pid = _job_runner_pid(job)
+    if runner_pid:
+        job["pid"] = runner_pid
+    if _pid_alive(runner_pid, _job_wsl_distribution(job)):
+        if job.get("status") == "unconfirmed":
+            job["status"] = "running" if log_has_progress else "starting"
+        elif job.get("status") == "starting" and log_has_progress:
+            job["status"] = "running"
+        job.pop("confirmationNote", None)
+        job["updatedAt"] = now
+        return
+    if log_advanced:
+        job["status"] = "running"
+        job.pop("confirmationNote", None)
+        job["updatedAt"] = now
+        return
+    if job.get("status") != "stopping":
+        job["status"] = "unconfirmed"
+        job["confirmationNote"] = "WebCap cannot currently confirm the runner. Waiting for its result record."
+    else:
+        action = str(job.get("actionRequested") or "stop")
+        job["confirmationNote"] = action.capitalize() + " requested. Waiting for the runner result."
     job["updatedAt"] = time.time()
+    return
 
 
 def _prepare_paused_job_for_resume(job):
@@ -1030,22 +1043,6 @@ def _refresh_state(state):
             _annotate_completed_job(job)
     active_id = str(state.get("activeJobId") or "")
     active = _find_job(state, active_id) if active_id else None
-    if not active:
-        for job in state.get("jobs", []):
-            if job.get("status") != "interrupted":
-                continue
-            runner_pid = _job_runner_pid(job)
-            if not runner_pid or not _pid_alive(runner_pid, _job_wsl_distribution(job)):
-                continue
-            job["pid"] = runner_pid
-            job["status"] = "running"
-            job["error"] = ""
-            job["updatedAt"] = time.time()
-            state["activeJobId"] = job.get("id") or ""
-            state["queuePaused"] = False
-            state["queuePauseReason"] = ""
-            active = job
-            break
     if active:
         _refresh_job(active)
         if active.get("status") == "paused":
@@ -1088,7 +1085,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "modelLabel", "model", "profile", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "inputConfirmationRequired")
+    fields = ("id", "folder", "stages", "modelLabel", "model", "profile", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "inputConfirmationRequired")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -1400,33 +1397,23 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
         if job.get("status") not in ACTIVE_STATUSES:
             return {"ok": False, "error": "Training job is not running."}, 400
         pid = int(job.get("pid") or 0)
-        job["actionRequested"] = "pause" if pause else "finish" if finish else "stop"
+        action = "pause" if pause else "finish" if finish else "stop"
+        if pid <= 0:
+            return {"ok": False, "error": "WebCap has no recorded runner PID, so it cannot send the " + action + " request safely."}, 409
+        distribution = _job_wsl_distribution(job)
+        code, stdout, stderr = _run_wsl("kill -INT -- -" + str(pid), timeout=8, distribution=distribution)
+        if code != 0:
+            message = (stderr or stdout or "Could not send the " + action + " request.").strip()
+            job["error"] = message
+            job["updatedAt"] = time.time()
+            _write_state(state)
+            return {"ok": False, "error": message, "job": _public_job(job)}, 502
+        job["actionRequested"] = action
         job["actionRequestedAt"] = time.time()
         job["status"] = "stopping"
         job["stage"] = "stopping"
-        distribution = _job_wsl_distribution(job)
-        _run_wsl("kill -INT -- -" + str(pid), timeout=8, distribution=distribution)
-        deadline = time.time() + 5
-        while time.time() < deadline and _pid_alive(pid, distribution):
-            time.sleep(0.5)
-        if _pid_alive(pid, distribution):
-            _run_wsl("kill -KILL -- -" + str(pid), timeout=8, distribution=distribution)
-        _refresh_job(job)
-        job["status"] = "paused" if pause else "finished_early" if finish else "stopped"
-        job["stage"] = "paused" if pause else "finished_early" if finish else "stopped"
-        job["finishedAt"] = time.time()
+        job["confirmationNote"] = action.capitalize() + " requested. Waiting for the runner result."
         job["updatedAt"] = time.time()
-        _annotate_finished_early_job(job)
-        if pause:
-            state["queuePaused"] = True
-            state["queuePauseReason"] = "Queue paused by the user."
-        elif finish:
-            state["queuePaused"] = False
-            state["queuePauseReason"] = ""
-        if state.get("activeJobId") == job.get("id"):
-            state["activeJobId"] = ""
-        _start_next(state)
-        _sync_histories(state)
         _write_state(state)
         return {"ok": True, "job": _public_job(job)}, 200
 

@@ -744,6 +744,10 @@
   text-align: center;
 }
 
+.app.shell-revamp .training-global-context--global .training-global-label {
+  display: none;
+}
+
 .app.shell-revamp .training-global-secondary {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

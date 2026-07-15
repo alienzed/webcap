@@ -1019,6 +1019,7 @@ function refreshTrainingWorkspace() {
   if (els.navigatorTitle) els.navigatorTitle.textContent = isSetEntry ? 'Train' : 'Training';
   if (els.folder) els.folder.textContent = isSetEntry ? folder : 'Global training status';
   if (els.globalContext) els.globalContext.classList.toggle('training-global-context--after-set', isSetEntry);
+  if (els.globalContext) els.globalContext.classList.toggle('training-global-context--global', !isSetEntry);
   if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);
   if (els.runSetup) els.runSetup.classList.toggle('hidden', !isSetEntry);
   if (!isSetEntry) {

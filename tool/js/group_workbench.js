@@ -527,17 +527,6 @@ function renderGroupWorkbench(options) {
     })(i, requirementLabel, opts.onAfterMutation);
     actionsEl.appendChild(moveUpBtn);
 
-    var moveDownBtn = createGroupWorkbenchActionButton('group-workbench-move-down-btn', '\u2193', 'Move group down', 'Move ' + requirementLabel + ' down');
-    moveDownBtn.disabled = i === checklistItems.length - 1;
-    (function (index, label, afterMutation) {
-      bindGroupWorkbenchHeaderButton(moveDownBtn, function () {
-        if (!moveChecklistItemByOffset(index, 1)) return;
-        setStatus('Moved group down: ' + label);
-        if (afterMutation) afterMutation();
-      });
-    })(i, requirementLabel, opts.onAfterMutation);
-    actionsEl.appendChild(moveDownBtn);
-
     var editBtn = createGroupWorkbenchActionButton('group-workbench-edit-btn', '\u270e', 'Edit group terms', 'Edit terms for ' + requirementLabel);
     (function (label) {
       bindGroupWorkbenchHeaderButton(editBtn, function () {

@@ -571,11 +571,13 @@ function fetchTrainingRunnerLog(job, reset) {
 function scheduleTrainingRunnerPoll() {
   if (trainingWorkspaceState.runnerPollTimer) clearTimeout(trainingWorkspaceState.runnerPollTimer);
   if (!isTrainingWorkspaceActive()) return;
-  var hasPendingJob = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
-    return job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'queued' || job.status === 'paused' || job.status === 'interrupted';
+  var activeStatus = (trainingWorkspaceState.runnerJobs || []).map(function (job) { return job.status; });
+  var hasActiveJob = activeStatus.some(function (status) {
+    return status === 'starting' || status === 'running' || status === 'stopping';
   });
-  if (!hasPendingJob) return;
-  var delay = isTrainingRunnerConsoleVisible() ? 1500 : 5000;
+  if (!hasActiveJob) return;
+  var transitioning = activeStatus.some(function (status) { return status === 'starting' || status === 'stopping'; });
+  var delay = transitioning ? 5000 : (isTrainingRunnerConsoleVisible() ? 10000 : 20000);
   trainingWorkspaceState.runnerPollTimer = setTimeout(function () {
     refreshTrainingRunnerStatus();
   }, delay);
@@ -586,21 +588,27 @@ function refreshTrainingRunnerStatus() {
   trainingWorkspaceState.runnerStatusPending = true;
   trainingRunnerRequest('/fs/training_runner/status')
     .then(function (payload) {
+      var priorJobsById = {};
+      (trainingWorkspaceState.runnerJobs || []).forEach(function (job) { priorJobsById[job.id] = job.status; });
       trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
       trainingWorkspaceState.runnerActiveJobId = String(payload.activeJobId || '');
       trainingWorkspaceState.runnerQueuePaused = !!payload.queuePaused;
       trainingWorkspaceState.runnerQueuePauseReason = String(payload.queuePauseReason || '');
       trainingWorkspaceState.runnerAttention = payload.attention || null;
       renderTrainingRunner();
-      renderTrainingHistory();
-      refreshTrainingHistory();
+      var terminalOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
+        return (job.status === 'completed' || job.status === 'finished_early' || job.status === 'failed' || job.status === 'stopped' || job.status === 'cancelled') &&
+          priorJobsById[job.id] !== job.status;
+      });
+      if (terminalOutcome) refreshTrainingHistory();
       var selected = getTrainingRunnerSelectedJob();
       var hasActiveJob = trainingWorkspaceState.runnerJobs.some(function (job) {
         return job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
       });
+      var now = Date.now();
       if (hasActiveJob) {
         trainingWorkspaceState.gpuForActiveJob = true;
-        refreshTrainingGpuStatus();
+        if (!trainingWorkspaceState.gpuLastFetchedAt || now - trainingWorkspaceState.gpuLastFetchedAt >= 20000) refreshTrainingGpuStatus();
       } else if (trainingWorkspaceState.gpuForActiveJob || !trainingWorkspaceState.gpu) {
         trainingWorkspaceState.gpuForActiveJob = false;
         refreshTrainingGpuStatus();
@@ -630,6 +638,7 @@ function refreshTrainingGpuStatus() {
       trainingWorkspaceState.gpu = { available: false, error: String(err && err.message ? err.message : err) };
     })
     .then(function () {
+      trainingWorkspaceState.gpuLastFetchedAt = Date.now();
       trainingWorkspaceState.gpuStatusPending = false;
       renderTrainingRunner();
     });

@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from tool.server import training_runner
+from tool.server import config as config_module
 from tool.server.training_runtime import training_runtime_settings
 
 
@@ -123,6 +126,30 @@ def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
     training_runner._start_next(state)
 
     assert state["activeJobId"] == ""
+
+
+def test_new_job_keeps_large_snapshots_under_the_output_sidecar(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    dataset = folder / "auto_dataset"
+    dataset.mkdir(parents=True)
+    for name in ("config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"):
+        (folder / name).write_text("model_path = 'models/example.safetensors'\n", encoding="utf-8")
+    (dataset / "training_plan.json").write_text('{"mode": "poc", "stages": {}}', encoding="utf-8")
+    (dataset / "prep_manifest.json").write_text('{"images": [], "videos": []}', encoding="utf-8")
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
+
+    job = training_runner._new_job("set", {"checks": [], "summary": {"blockers": 0}}, "hi")
+
+    artifact = Path(job["artifactPath"])
+    assert artifact.is_dir()
+    assert ".webcap" in artifact.parts
+    assert (artifact / "config.hi.toml").is_file()
+    assert (artifact / "dataset.hi.toml").is_file()
+    assert job["profile"] == "poc"
+    assert job["model"]["source"] == "models/example.safetensors"
 
 
 def test_start_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):

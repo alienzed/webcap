@@ -166,7 +166,8 @@ function runGenerateDatasetConfigsForCurrentFolder(onSuccess) {
     .then(function () {
       resetSelectionForFolderAction();
       setStatus('Generating dataset configs...');
-      return runTrainingActionRequest('/fs/generate_dataset_config', { folder: state.folder });
+       var profileEl = document.getElementById('training-workspace-profile-select');
+       return runTrainingActionRequest('/fs/generate_dataset_config', { folder: state.folder, mode: profileEl ? profileEl.value : '' });
     })
     .then(function (outputText) {
       if (typeof onSuccess === 'function') {

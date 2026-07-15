@@ -413,8 +413,8 @@
 
 .app.shell-revamp .training-runner-summary {
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .app.shell-revamp .training-runner-summary strong {
@@ -443,9 +443,9 @@
 .app.shell-revamp.workspace-surface-training .training-runner-progress {
   display: grid;
   width: 100%;
-  gap: 4px;
+  gap: 7px;
   min-width: 0;
-  padding-top: 2px;
+  padding-top: 4px;
 }
 
 .app.shell-revamp.workspace-surface-training .training-runner-progress-copy {
@@ -453,11 +453,11 @@
   justify-content: space-between;
   gap: 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .app.shell-revamp.workspace-surface-training .training-runner-progress-track {
-  height: 5px;
+  height: 7px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.28);

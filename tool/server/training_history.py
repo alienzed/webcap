@@ -10,7 +10,7 @@ from .training_config_files import output_dir_from_config
 
 
 HISTORY_FILE_NAME = ".webcap_training.json"
-HISTORY_VERSION = 2
+HISTORY_VERSION = 3
 _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
@@ -20,7 +20,7 @@ _DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(
 
 def output_root_for_folder(folder_path, stage="hi"):
     folder = Path(folder_path)
-    configured = output_dir_from_config(folder, stage)
+    configured = output_dir_from_config(folder, stage) if stage in ("hi", "lo") else None
     if configured:
         return configured
     return Path(app_config.FS_ROOT) / "output" / "runs" / folder.name
@@ -104,8 +104,9 @@ def read_history(folder_path):
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return _default_history(folder_path)
-    if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
+    if not isinstance(data, dict) or data.get("version") not in (2, HISTORY_VERSION):
         return _default_history(folder_path)
+    data["version"] = HISTORY_VERSION
     data["outputRoot"] = str(output_root_for_folder(folder_path))
     if not isinstance(data.get("jobs"), list):
         data["jobs"] = []
@@ -176,10 +177,23 @@ def record_job(folder_path, job):
     record_fields = (
         "id", "folder", "stages", "modelLabel", "resumeFromCheckpoint", "resumeStage", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "parentJobId",
-        "outputRoot", "progress",
+        "outputRoot", "progress", "profile", "model", "input", "artifactDir", "artifactSummary",
     )
     record = {field: job.get(field) for field in record_fields if field in job}
-    record["runDirectories"] = runs
+    for field in ("error", "completionNote"):
+        if isinstance(record.get(field), str):
+            record[field] = record[field][:1000]
+    if isinstance(record.get("model"), dict):
+        record["model"] = {
+            "label": str(record["model"].get("label") or "")[:160],
+            "source": str(record["model"].get("source") or "")[:512],
+        }
+    latest_run = runs[0] if runs else {}
+    record["artifactSummary"] = {
+        "runCount": len(runs), "latestName": latest_run.get("name", ""),
+        "checkpointAvailable": bool(latest_run.get("checkpointAvailable")),
+        "epoch": latest_run.get("epoch"), "steps": latest_run.get("steps"),
+    }
     existing = history["jobs"]
     for index, item in enumerate(existing):
         if str(item.get("id") or "") == str(record.get("id") or ""):
@@ -187,8 +201,10 @@ def record_job(folder_path, job):
             break
     else:
         existing.append(record)
-    history["runs"] = runs
+    # Discovery data can be large. It is response-only, never persisted in the index.
+    history["runs"] = []
     _write_history(folder_path, history)
+    history["runs"] = runs
     return history
 
 
@@ -196,6 +212,66 @@ def history_payload(folder_path):
     history = read_history(folder_path)
     history["runs"] = discover_runs(folder_path)
     return history
+
+
+def all_history_payload(query="", folder=""):
+    """Aggregate the intentionally small, folder-local history indexes."""
+    root = Path(app_config.FS_ROOT)
+    wanted_folder = str(folder or "").replace("\\", "/").strip("/")
+    needle = str(query or "").strip().lower()
+    jobs = []
+    for path in root.rglob(HISTORY_FILE_NAME):
+        if ".webcap_training" in path.parts or "auto_dataset" in path.parts:
+            continue
+        set_folder = path.parent
+        try:
+            relative = str(set_folder.relative_to(root)).replace("\\", "/")
+        except ValueError:
+            continue
+        if wanted_folder and relative != wanted_folder:
+            continue
+        history = read_history(set_folder)
+        for job in history.get("jobs") or []:
+            if not isinstance(job, dict):
+                continue
+            if needle:
+                model = job.get("model") if isinstance(job.get("model"), dict) else {}
+                haystack = " ".join(str(value or "") for value in (
+                    relative, job.get("folder"), job.get("profile"), job.get("stages"), job.get("status"),
+                    job.get("modelLabel"), model.get("label"), model.get("source"),
+                )).lower()
+                if needle not in haystack:
+                    continue
+            item = dict(job)
+            item["folder"] = relative
+            recorded_input = item.get("input") if isinstance(item.get("input"), dict) else {}
+            try:
+                from .training_runner import _input_evidence
+                current_input = _input_evidence(set_folder)
+                item["input"] = dict(recorded_input)
+                item["input"]["comparison"] = "matches" if recorded_input.get("fingerprint") == current_input.get("fingerprint") and recorded_input.get("configFingerprint") == current_input.get("configFingerprint") else "changed"
+            except Exception:
+                if recorded_input:
+                    item["input"] = dict(recorded_input)
+                    item["input"]["comparison"] = "unavailable"
+            jobs.append(item)
+    jobs.sort(key=lambda job: float(job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0), reverse=True)
+    return {"version": HISTORY_VERSION, "jobs": jobs, "query": query, "folder": wanted_folder}
+
+
+def clear_history(folder_path=None):
+    """Clear indexes only; job bundles and trainer artifacts are deliberately untouched."""
+    root = Path(app_config.FS_ROOT)
+    paths = [_history_path(folder_path)] if folder_path else list(root.rglob(HISTORY_FILE_NAME))
+    cleared = 0
+    for path in paths:
+        try:
+            if path.exists():
+                path.unlink()
+                cleared += 1
+        except OSError:
+            continue
+    return cleared
 
 
 def completed_stages(folder_path):

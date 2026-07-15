@@ -655,6 +655,13 @@
                                 <div class="training-workflow-step-copy">
                                     <div class="training-workspace-section-title">Configuration Files</div>
                                     <div id="training-workspace-config-list" class="training-config-list">Generate configs to inspect and edit them here.</div>
+                                    <label class="training-profile-control">Profile
+                                        <select id="training-workspace-profile-select">
+                                            <option value="poc">POC</option>
+                                            <option value="normal" selected>Normal</option>
+                                            <option value="quality">Quality</option>
+                                        </select>
+                                    </label>
                                 </div>
                                 <button id="training-workspace-generate-btn" type="button" class="training-btn training-workflow-action">Generate Configs</button>
                             </div>
@@ -742,9 +749,11 @@
                                 </section>
                             </section>
                             <div class="training-global-secondary">
-                                <section class="training-history-card" aria-label="Recent training runs">
-                                    <div class="training-history-heading">
-                                        <div class="training-workspace-section-title">Recent Runs</div>
+                            <section class="training-history-card" aria-label="Recent training runs">
+                                <div class="training-history-heading">
+                                    <div class="training-workspace-section-title">Recent Runs</div>
+                                    <input id="training-history-search" type="search" placeholder="Search training history">
+                                    <button id="training-history-clear-btn" type="button" class="review-captions-btn">Clear history</button>
                                         <button id="training-history-show-all-btn" type="button" class="review-captions-btn hidden">Show all</button>
                                     </div>
                                     <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>

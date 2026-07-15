@@ -142,7 +142,7 @@ def prepare_dataset_response(folder: str, selected_media=None, selection_criteri
         return jsonify({"error": str(e)}), 400
 
 
-def generate_dataset_config_response(folder: str):
+def generate_dataset_config_response(folder: str, mode: str = ""):
     if not folder:
         return Response("[ERROR] Missing folder argument\n", status=400, mimetype="text/plain")
     try:
@@ -150,7 +150,7 @@ def generate_dataset_config_response(folder: str):
         if not folder_path.exists() or not folder_path.is_dir():
             return Response(f"[ERROR] Folder does not exist: {folder}\n", status=404, mimetype="text/plain")
         training = app_config.config.get("training") or {}
-        mode = str(training.get("mode") or "normal").strip().lower()
+        mode = str(mode or training.get("mode") or "normal").strip().lower()
         write_snapshot_comments = bool(training.get("write_selection_snapshot_comments"))
         prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
         if not prep_manifest_path.exists():

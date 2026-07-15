@@ -2,6 +2,7 @@ import json
 import os
 import re
 import csv
+import hashlib
 import shlex
 import shutil
 import subprocess
@@ -134,8 +135,17 @@ def _apply_restart_hold(state):
         state["queuePauseReason"] = "Queue held after WebCap restarted."
 
 
-def _job_dir(job_id):
+def _job_dir(job):
+    """Job-owned artifacts live beside trainer output, not in the queue state area."""
+    if isinstance(job, dict) and job.get("artifactPath"):
+        return Path(job["artifactPath"])
+    job_id = job.get("id") if isinstance(job, dict) else job
     return _jobs_root() / str(job_id)
+
+
+def _artifact_root(folder_path, stage):
+    root = output_root_for_folder(folder_path, stage if stage in ("hi", "lo") else "hi")
+    return root / ".webcap" / "jobs"
 
 
 def _find_job(state, job_id):
@@ -460,7 +470,73 @@ def _preflight_payload(folder):
     }
 
 
-def _copy_snapshot(job_dir, artifacts):
+def _file_digest(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _input_evidence(folder_path):
+    folder = Path(folder_path)
+    manifest_path = folder / "auto_dataset" / "prep_manifest.json"
+    digest = hashlib.sha256()
+    count = 0
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        manifest = {}
+    rows = (manifest.get("images") or []) + (manifest.get("videos") or []) if isinstance(manifest, dict) else []
+    for row in sorted((item for item in rows if isinstance(item, dict)), key=lambda item: str(item.get("prepared_path") or item.get("file") or "")):
+        prepared = str(row.get("prepared_path") or "")
+        name = str(row.get("file") or prepared)
+        if not prepared:
+            continue
+        count += 1
+        digest.update(name.encode("utf-8"))
+        caption = folder / "auto_dataset" / prepared
+        caption = caption.with_suffix(".txt")
+        try:
+            digest.update(caption.read_bytes())
+        except OSError:
+            digest.update(b"<missing-caption>")
+    config_paths = [folder / name for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json")]
+    config_digest = hashlib.sha256()
+    for path in config_paths:
+        config_digest.update(path.name.encode("utf-8"))
+        try:
+            config_digest.update(path.read_bytes())
+        except OSError:
+            config_digest.update(b"<missing>")
+    return {"count": count, "fingerprint": "sha256:" + digest.hexdigest(), "configFingerprint": "sha256:" + config_digest.hexdigest()}
+
+
+def _training_profile(folder_path):
+    try:
+        plan = json.loads((Path(folder_path) / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        plan = {}
+    mode = str(plan.get("mode") or "").lower() if isinstance(plan, dict) else ""
+    return mode if mode in ("poc", "normal", "quality") else "unknown"
+
+
+def _model_identity(artifacts):
+    source = ""
+    pattern = re.compile(r"^\s*(?:model|model_path|checkpoint|base_model)\s*=\s*[\"']?([^\"'\n#]+)", re.MULTILINE | re.IGNORECASE)
+    for key in ("hiConfig", "loConfig"):
+        try:
+            match = pattern.search(Path(artifacts[key]).read_text(encoding="utf-8"))
+        except OSError:
+            match = None
+        if match:
+            source = match.group(1).strip()
+            break
+    label = Path(source).stem if source else "Training model"
+    return {"label": label, "source": source}
+
+
+def _copy_snapshot(job_dir, artifacts, folder_path):
     snapshot = {}
     for key, filename in (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME)):
         source = artifacts[key + "Config"]
@@ -468,6 +544,14 @@ def _copy_snapshot(job_dir, artifacts):
         shutil.copy2(source, target)
         normalize_path_permissions(target)
         snapshot[key] = str(target)
+    for filename in ("dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"):
+        source = Path(folder_path) / filename
+        if not source.is_file():
+            continue
+        target = job_dir / Path(filename).name
+        shutil.copy2(source, target)
+        normalize_path_permissions(target)
+        snapshot[Path(filename).stem.replace(".", "_")] = str(target)
     return snapshot
 
 
@@ -564,7 +648,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
 
 
 def _write_runner_script(job, settings, artifacts):
-    job_dir = _job_dir(job["id"])
+    job_dir = _job_dir(job)
     script, resolved = _build_runner_script(job, settings, artifacts, job_dir)
     path = job_dir / "runner.sh"
     path.write_text(script, encoding="utf-8", newline="\n")
@@ -584,7 +668,7 @@ def _launch_job(job, folder_path):
         job["error"] = "Preflight failed before launch."
         job["finishedAt"] = time.time()
         return False
-    job_dir = _job_dir(job["id"])
+    job_dir = _job_dir(job)
     result_path = job_dir / "result.json"
     if result_path.exists():
         result_path.unlink()
@@ -614,7 +698,7 @@ def _launch_job(job, folder_path):
 
 
 def _read_result(job):
-    path = _job_dir(job["id"]) / "result.json"
+    path = _job_dir(job) / "result.json"
     if not path.exists():
         return None
     try:
@@ -838,6 +922,26 @@ def _prepare_paused_job_for_resume(job):
     return ""
 
 
+def _inputs_changed(job, folder_path):
+    recorded = job.get("input") if isinstance(job.get("input"), dict) else {}
+    current = _input_evidence(folder_path)
+    return bool(recorded) and (
+        recorded.get("fingerprint") != current.get("fingerprint") or
+        recorded.get("configFingerprint") != current.get("configFingerprint")
+    )
+
+
+def _refresh_input_snapshot(job, folder_path):
+    artifacts, _ = _resolve_artifacts(job["folder"], folder_path)
+    job["snapshot"] = _copy_snapshot(_job_dir(job), artifacts, folder_path)
+    job["input"] = _input_evidence(folder_path)
+    job["profile"] = _training_profile(folder_path)
+    job["model"] = _model_identity(artifacts)
+    job["modelLabel"] = job["model"]["label"]
+    job.pop("inputConfirmationRequired", None)
+    job["updatedAt"] = time.time()
+
+
 def _start_next(state):
     if state.get("queuePaused"):
         return
@@ -857,6 +961,11 @@ def _start_next(state):
                 state["queuePauseReason"] = "Queue held: " + resume_error
                 return
         folder_path = app_config.safe_join_fs_root(job["folder"])
+        if _inputs_changed(job, folder_path):
+            job["inputConfirmationRequired"] = True
+            state["queuePaused"] = True
+            state["queuePauseReason"] = "Queued inputs changed. Confirm current inputs or cancel this item."
+            return
         _launch_job(job, folder_path)
         if job.get("status") in ACTIVE_STATUSES:
             state["activeJobId"] = job["id"]
@@ -917,7 +1026,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "modelLabel", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
+    fields = ("id", "folder", "stages", "modelLabel", "model", "profile", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "inputConfirmationRequired")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -972,18 +1081,24 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
 
 def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id=""):
     job_id = uuid.uuid4().hex[:12]
-    job_dir = _job_dir(job_id)
-    job_dir.mkdir(parents=True, exist_ok=False)
     _, folder_path = _resolve_folder(folder)
     artifacts, _ = _resolve_artifacts(folder, folder_path)
-    snapshot = _copy_snapshot(job_dir, artifacts)
     stages = _normalize_training_stages(stages)
+    job_dir = _artifact_root(folder_path, stages) / job_id
+    job_dir.mkdir(parents=True, exist_ok=False)
+    normalize_path_permissions(job_dir)
+    snapshot = _copy_snapshot(job_dir, artifacts, folder_path)
+    input_evidence = _input_evidence(folder_path)
+    model = _model_identity(artifacts)
     resume_path = str(resume_from_checkpoint or "").strip()
     return {
         "id": job_id,
         "folder": folder,
         "stages": stages,
-        "modelLabel": "WAN 2.2",
+        "modelLabel": model["label"],
+        "model": model,
+        "profile": _training_profile(folder_path),
+        "input": input_evidence,
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
         "status": "queued",
@@ -991,6 +1106,8 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "createdAt": time.time(),
         "updatedAt": time.time(),
         "snapshot": snapshot,
+        "artifactPath": str(job_dir),
+        "artifactDir": str(job_dir.relative_to(_artifact_root(folder_path, stages).parent)),
         "progressPlan": _read_training_plan(folder_path) or _default_progress_plan(),
         "runtime": {"wslDistribution": _training_settings()["wslDistribution"]},
         "preflight": {"checks": preflight.get("checks", []), "blockers": preflight.get("summary", {}).get("blockers", 0)},
@@ -1112,9 +1229,7 @@ def folder_statuses_for_folders(folder_paths):
             result[path] = {"status": "training", "label": "Training", "jobId": active.get("id"), "stage": active.get("stages")}
         elif folder in queued_by_folder:
             queued = queued_by_folder[folder]
-            queue_status = str(queued["status"] or "queued")
-            label = "Queued" if queue_status == "queued" else queue_status.title()
-            result[path] = {"status": queue_status, "label": label + " #" + str(queued["position"]), "queuePosition": queued["position"]}
+            result[path] = {"status": "queued", "label": "Queued #" + str(queued["position"]), "queuePosition": queued["position"]}
         elif attention:
             result[path] = {
                 "status": "attention", "label": "Needs attention", "jobId": attention.get("id"),
@@ -1172,7 +1287,7 @@ def log_response(job_id, offset=0):
         _write_state(state)
         if not job:
             return {"error": "Training job not found"}, 404
-        path = Path(job.get("logPath") or (_job_dir(job_id) / "run.log"))
+        path = Path(job.get("logPath") or (_job_dir(job) / "run.log"))
         try:
             position = max(0, int(offset or 0))
         except (TypeError, ValueError):
@@ -1282,6 +1397,28 @@ def resume_queue_response():
         _sync_histories(state)
         _write_state(state)
         return {"ok": True, "activeJobId": state.get("activeJobId") or "", "jobs": [_public_job(job) for job in state["jobs"]]}, 200
+
+
+def confirm_inputs_response(job_id, use_current=False):
+    with _lock:
+        state = _read_state()
+        job = _find_job(state, job_id)
+        if not job or job.get("status") not in QUEUE_STATUSES:
+            return {"ok": False, "error": "Queued training job not found."}, 404
+        if not job.get("inputConfirmationRequired"):
+            return {"ok": False, "error": "This queued job does not need input confirmation."}, 409
+        if not use_current:
+            job["status"] = "cancelled"
+            job["stage"] = "cancelled"
+            job["finishedAt"] = time.time()
+        else:
+            _refresh_input_snapshot(job, app_config.safe_join_fs_root(job["folder"]))
+            state["queuePaused"] = False
+            state["queuePauseReason"] = ""
+            _start_next(state)
+        _sync_histories(state)
+        _write_state(state)
+        return {"ok": True, "job": _public_job(job), "jobs": [_public_job(item) for item in state["jobs"]]}, 200
 
 
 def resume_job_response(job_id):

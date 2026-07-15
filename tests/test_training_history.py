@@ -35,6 +35,29 @@ def test_training_history_summary_uses_the_latest_managed_job(tmp_path, monkeypa
     assert training_history.summarize_history(set_folder)["status"] == "completed"
 
 
+def test_global_history_is_compact_and_clear_does_not_touch_run_artifacts(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "char" / "lilly"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = training_history.output_root_for_folder(set_folder)
+    run = output / "run-one"
+    run.mkdir(parents=True)
+    (run / "checkpoint.pt").write_text("checkpoint", encoding="utf-8")
+
+    training_history.record_job(set_folder, {
+        "id": "job-1", "folder": "char/lilly", "status": "completed", "stages": "hi",
+        "profile": "poc", "model": {"label": "Example", "source": "example.safetensors"},
+        "input": {"count": 2, "fingerprint": "sha256:test", "configFingerprint": "sha256:config"},
+    })
+
+    payload = training_history.all_history_payload("example")
+    assert len(payload["jobs"]) == 1
+    assert "runDirectories" not in payload["jobs"][0]
+    assert training_history.clear_history(set_folder) == 1
+    assert run.exists()
+
+
 def test_discover_runs_uses_each_stage_current_config_output_dir(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"

@@ -1983,35 +1983,37 @@ iframe {
 
 .workspace-surface-training .training-runner-summary {
   display: grid;
-  gap: 3px;
-  padding: 8px 9px;
+  gap: 7px;
+  padding: 13px 14px 14px;
   border-left: 3px solid var(--accent);
   background: var(--panel-soft);
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .workspace-surface-training .training-runner-active-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 9px;
+  gap: 7px 12px;
 }
 
 .workspace-surface-training .training-runner-state {
   display: flex;
   align-items: center;
-  gap: 7px;
-  color: var(--muted);
+  gap: 9px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .workspace-surface-training .training-runner-status {
-  padding: 2px 6px;
+  padding: 3px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -2047,6 +2049,7 @@ iframe {
 .workspace-surface-training .training-runner-folder {
   color: var(--text);
   font-weight: 600;
+  font-size: 13px;
 }
 
 .workspace-surface-training .training-runner-queued-count,
@@ -2216,7 +2219,7 @@ iframe {
 
 .workspace-surface-training .training-history-item {
   display: grid;
-  grid-template-columns: minmax(150px, 0.9fr) minmax(150px, 1fr) minmax(180px, 1.4fr) auto;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(130px, 0.8fr) minmax(150px, 1fr) minmax(180px, 1.4fr) auto;
   align-items: center;
   gap: 6px 16px;
   padding: 9px 10px;
@@ -2236,6 +2239,27 @@ iframe {
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+
+.workspace-surface-training .training-history-model {
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-surface-training .training-history-heading input {
+  min-width: 180px;
+  margin-left: auto;
+}
+
+.workspace-surface-training .training-profile-control {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+  color: var(--muted);
 }
 
 .workspace-surface-training .training-history-time {

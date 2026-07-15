@@ -68,6 +68,8 @@ function getTrainingWorkspaceEls() {
     historySummary: document.getElementById('training-history-summary'),
     historyList: document.getElementById('training-history-list'),
     historyShowAllBtn: document.getElementById('training-history-show-all-btn'),
+    historySearch: document.getElementById('training-history-search'),
+    historyClearBtn: document.getElementById('training-history-clear-btn'),
     checkpointSelect: document.getElementById('training-run-checkpoint-select'),
     tensorboardSummary: document.getElementById('training-tensorboard-summary'),
     tensorboardStartBtn: document.getElementById('training-tensorboard-start-btn'),
@@ -334,12 +336,16 @@ function renderTrainingRunner() {
           var resume = queuedJob.resumeFromCheckpoint
             ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(trainingStageLabel(queuedJob.resumeStage || queuedJob.stages || 'both')) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
             : '';
+          var confirmation = queuedJob.inputConfirmationRequired
+            ? '<div class="training-runner-queue-resume is-warning">Inputs changed. <button type="button" data-training-confirm-inputs="current" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Use current inputs</button> <button type="button" data-training-confirm-inputs="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Cancel</button></div>'
+            : '';
           var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
           return '<div class="training-runner-queue-item' + (selected ? ' active' : '') + '" data-training-queue-job="' + escapeHtml(queuedJob.id) + '">' +
             '<div class="training-runner-queue-copy">' +
               '<div><span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span> <strong>' + (index + 1) + '.</strong> ' + escapeHtml(stage + workload) + '</div>' +
               '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
               resume +
+              confirmation +
               error +
             '</div>' +
             '<div class="training-runner-queue-controls">' +
@@ -413,9 +419,7 @@ function renderTrainingHistory() {
   var els = getTrainingWorkspaceEls();
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
   var history = trainingWorkspaceState.history || {};
-  var jobs = (trainingWorkspaceState.runnerJobs || []).filter(function (job) {
-    return job.status === 'completed' || job.status === 'finished_early' || job.status === 'failed' || job.status === 'stopped' || job.status === 'cancelled';
-  }).slice().sort(function (a, b) {
+  var jobs = (history.jobs || []).slice().sort(function (a, b) {
     return Number(b.finishedAt || b.startedAt || b.createdAt || 0) - Number(a.finishedAt || a.startedAt || a.createdAt || 0);
   });
   var runs = Array.isArray(history.runs) ? history.runs : [];
@@ -433,11 +437,13 @@ function renderTrainingHistory() {
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><strong>' + escapeHtml(trainingRunnerStatusLabel(job.status)) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) +
         '<span class="training-history-time">' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</span></div>' +
+      '<div class="training-history-model">' + escapeHtml((job.model && job.model.label) || job.modelLabel || 'Training model') + ' · ' + escapeHtml(job.profile || 'unknown') + '</div>' +
       '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div>' +
       '<div class="training-history-details">' +
         (details.length ? '<div>' + escapeHtml(details.join(' · ')) + '</div>' : '') +
         (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
       '</div>' +
+      (job.input && job.input.comparison === 'changed' ? '<div class="training-runner-detail is-warning">Dataset changed since this run.</div>' : '') +
       '<div class="training-history-actions">' +
       '<button type="button" data-training-history-log="' + escapeHtml(job.id || '') + '">Output</button>' +
       '</div></div>';
@@ -761,14 +767,41 @@ function resumeManagedTrainingQueue() {
     .catch(function (err) { setStatus('Could not resume training queue: ' + String(err.message || err)); });
 }
 
+function confirmManagedTrainingInputs(jobId, useCurrent) {
+  trainingRunnerRequest('/fs/training_runner/confirm_inputs', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: jobId, useCurrent: !!useCurrent })
+  }).then(function () {
+    refreshTrainingRunnerStatus();
+    refreshTrainingHistory();
+  }).catch(function (err) { setStatus('Could not confirm queued inputs: ' + String(err.message || err)); });
+}
+
+function clearTrainingHistory() {
+  var folder = trainingWorkspaceState.entryMode === 'set' ? (state.folder || '') : '';
+  if (!window.confirm('Clear ' + (folder ? 'history for ' + folder : 'all training history') + '? Output files and checkpoints will remain.')) return;
+  trainingRunnerRequest('/fs/training_history/clear', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: folder })
+  }).then(function () { refreshTrainingHistory(); }).catch(function (err) { setStatus('Could not clear training history: ' + String(err.message || err)); });
+}
+
 function refreshTrainingHistory() {
-  if (!state.folder || !isTrainingWorkspaceActive()) return Promise.resolve();
-  return fetch('/fs/training_history?folder=' + encodeURIComponent(state.folder))
+  if (!isTrainingWorkspaceActive()) return Promise.resolve();
+  var searchEl = document.getElementById('training-history-search');
+  var folder = trainingWorkspaceState.entryMode === 'set' ? (state.folder || '') : '';
+  return fetch('/fs/training_history/all?folder=' + encodeURIComponent(folder) + '&q=' + encodeURIComponent(searchEl ? searchEl.value : ''))
     .then(function (response) { return response.json(); })
     .then(function (payload) {
       if (!payload.ok) throw new Error(payload.error || 'Could not load training history.');
       trainingWorkspaceState.history = payload.history || {};
-      renderTrainingHistory();
+      if (!folder) {
+        renderTrainingHistory();
+        return null;
+      }
+      return fetch('/fs/training_history?folder=' + encodeURIComponent(folder)).then(function (response) { return response.json(); }).then(function (setPayload) {
+        if (setPayload.ok && trainingWorkspaceState.history) trainingWorkspaceState.history.runs = (setPayload.history || {}).runs || [];
+        renderTrainingHistory();
+      });
     })
     .catch(function (err) { setStatus('Could not load training history: ' + String(err.message || err)); });
 }
@@ -1115,6 +1148,8 @@ function wireTrainingWorkspace() {
   var attentionActions = document.getElementById('training-attention-actions');
   var historyList = document.getElementById('training-history-list');
   var historyShowAllBtn = document.getElementById('training-history-show-all-btn');
+  var historySearch = document.getElementById('training-history-search');
+  var historyClearBtn = document.getElementById('training-history-clear-btn');
   var tensorboardStartBtn = document.getElementById('training-tensorboard-start-btn');
   var tensorboardStopBtn = document.getElementById('training-tensorboard-stop-btn');
   backBtn.onclick = function () { exitWorkspaceSurface(); };
@@ -1182,6 +1217,11 @@ function wireTrainingWorkspace() {
     }
     var action = event.target.getAttribute('data-training-queue-action');
     var jobId = event.target.getAttribute('data-training-job-id');
+    var confirmation = event.target.getAttribute('data-training-confirm-inputs');
+    if (confirmation && jobId) {
+      confirmManagedTrainingInputs(jobId, confirmation === 'current');
+      return;
+    }
     if (action && jobId) {
       event.stopPropagation();
       if (action === 'cancel') {
@@ -1231,6 +1271,8 @@ function wireTrainingWorkspace() {
     trainingWorkspaceState.historyExpanded = !trainingWorkspaceState.historyExpanded;
     renderTrainingHistory();
   };
+  if (historySearch) historySearch.oninput = function () { refreshTrainingHistory(); };
+  if (historyClearBtn) historyClearBtn.onclick = clearTrainingHistory;
   tensorboardStartBtn.onclick = startTensorboard;
   tensorboardStopBtn.onclick = stopTensorboard;
 }

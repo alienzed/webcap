@@ -5,6 +5,7 @@ var trainingWorkspaceState = {
   runnerActiveJobId: '',
   runnerSelectedJobId: '',
   runnerLogOffsets: {},
+  runnerConsoleJobId: '',
   runnerPollTimer: 0,
   runnerStatusPending: false,
   runnerPreflight: null,
@@ -54,6 +55,10 @@ function getTrainingWorkspaceEls() {
     runnerPauseBtn: document.getElementById('training-runner-pause-btn'),
     runnerResumeQueueBtn: document.getElementById('training-runner-resume-queue-btn'),
     runnerConsoleBtn: document.getElementById('training-runner-console-btn'),
+    runnerConsole: document.getElementById('training-runner-console'),
+    runnerConsoleTitle: document.getElementById('training-runner-console-title'),
+    runnerConsoleLog: document.getElementById('training-runner-console-log'),
+    runnerConsoleCloseBtn: document.getElementById('training-runner-console-close-btn'),
     runnerPreflight: document.getElementById('training-runner-preflight'),
     gpuStatus: document.getElementById('training-gpu-status'),
     attentionCard: document.getElementById('training-attention-card'),
@@ -85,20 +90,36 @@ function trainingRunnerRequest(path, options) {
 
 function getTrainingRunnerSelectedJob() {
   var jobs = trainingWorkspaceState.runnerJobs || [];
+  for (var activeIndex = 0; activeIndex < jobs.length; activeIndex++) {
+    if (jobs[activeIndex].id === trainingWorkspaceState.runnerActiveJobId) return jobs[activeIndex];
+  }
   var selectedId = trainingWorkspaceState.runnerSelectedJobId;
   for (var i = 0; i < jobs.length; i++) {
-    if (jobs[i].id === selectedId) return jobs[i];
-  }
-  for (var j = 0; j < jobs.length; j++) {
-    if (jobs[j].id === trainingWorkspaceState.runnerActiveJobId) return jobs[j];
+    if (jobs[i].id === selectedId && (jobs[i].status === 'queued' || jobs[i].status === 'paused' || jobs[i].status === 'interrupted')) return jobs[i];
   }
   for (var queuedIndex = 0; queuedIndex < jobs.length; queuedIndex++) {
     if (jobs[queuedIndex].status === 'queued' || jobs[queuedIndex].status === 'paused' || jobs[queuedIndex].status === 'interrupted') return jobs[queuedIndex];
   }
-  for (var k = jobs.length - 1; k >= 0; k--) {
-    if (jobs[k].folder === state.folder) return jobs[k];
+  return null;
+}
+
+function getTrainingRunnerActiveJob() {
+  var jobs = trainingWorkspaceState.runnerJobs || [];
+  for (var i = 0; i < jobs.length; i++) {
+    if (jobs[i].id === trainingWorkspaceState.runnerActiveJobId) return jobs[i];
   }
-  return jobs.length ? jobs[jobs.length - 1] : null;
+  for (var j = 0; j < jobs.length; j++) {
+    if (jobs[j].status === 'starting' || jobs[j].status === 'running' || jobs[j].status === 'stopping') return jobs[j];
+  }
+  return null;
+}
+
+function getTrainingRunnerJobById(jobId) {
+  var jobs = trainingWorkspaceState.runnerJobs || [];
+  for (var i = 0; i < jobs.length; i++) {
+    if (jobs[i].id === jobId) return jobs[i];
+  }
+  return null;
 }
 
 function formatTrainingRunnerElapsed(job) {
@@ -215,14 +236,14 @@ function trainingFolderName(folder) {
   return parts.length ? parts[parts.length - 1] : String(folder || 'this set');
 }
 
-function trainingQueueStartLabel(queuedJob) {
+function trainingQueueStartLabel() {
   return 'Resume Queue';
 }
 
 function syncTrainingQueueResumeButton(els, queuedJobs) {
   if (!els.runnerResumeQueueBtn) return;
   var nextJob = queuedJobs[0];
-  els.runnerResumeQueueBtn.textContent = trainingQueueStartLabel(nextJob);
+  els.runnerResumeQueueBtn.textContent = trainingQueueStartLabel();
   els.runnerResumeQueueBtn.title = nextJob
     ? 'Resume the queue from its first item.'
     : 'Allow queued training jobs to run.';
@@ -266,36 +287,20 @@ function renderTrainingAttention() {
     return;
   }
   var kind = String(attention.kind || 'queue_held');
-  var queuedJobs = (trainingWorkspaceState.runnerJobs || []).filter(function (job) { return job.status === 'queued'; });
+  var queuedJobs = (trainingWorkspaceState.runnerJobs || []).filter(function (job) {
+    return job.status === 'queued' || job.status === 'paused' || job.status === 'interrupted';
+  });
   var nextJob = queuedJobs[0];
-  var pausedSet = trainingFolderName(attention.folder);
-  var title = kind === 'paused'
-    ? 'Paused: ' + pausedSet + ' · ' + trainingStageLabel(attention.stage || 'both')
-    : kind === 'queue_held' ? 'Queue is held' : 'Training needs attention';
-  var explanation = '';
-  if (kind === 'paused') {
-    explanation = nextJob
-      ? pausedSet + ' is still the active run. Resume it to continue where it stopped; ' + trainingFolderName(nextJob.folder) + ' waits until ' + pausedSet + ' is finished.'
-      : pausedSet + ' is still the active run. Resume it to continue where it stopped.';
-    if (!attention.resumeFromCheckpoint) explanation += ' No resumable checkpoint is available yet.';
-  } else if (nextJob) {
-    explanation = 'Nothing will start until you start the queue. Next: ' + trainingFolderName(nextJob.folder) + '.';
-  }
-  var detail = (explanation || attention.details)
-    ? '<div class="training-attention-detail">' + escapeHtml(explanation) + (attention.details ? '<div>' + escapeHtml(attention.details) + '</div>' : '') + '</div>'
+  var title = kind === 'queue_held' ? 'Queue is held' : 'Training needs attention';
+  var detail = attention.details
+    ? '<div class="training-attention-detail">' + escapeHtml(attention.details) + '</div>'
     : '';
   var actions = '';
-  if ((kind === 'paused' || kind === 'interrupted') && attention.jobId && attention.resumeFromCheckpoint) {
-    actions += '<button type="button" class="training-btn" data-training-attention-action="resume" data-training-job-id="' + escapeHtml(attention.jobId) + '">Resume ' + escapeHtml(pausedSet) + ' stage</button>';
-  }
-  if (kind !== 'paused' && nextJob) {
-    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="continue" title="Start ' + escapeHtml(trainingJobLabel(nextJob)) + ' for ' + escapeHtml(nextJob.folder || '') + '. ' + (kind === 'paused' ? 'The paused run will remain paused.' : '') + '">' + escapeHtml(trainingQueueStartLabel(nextJob)) + '</button>';
-  }
-  if (kind === 'paused' && attention.jobId) {
-    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="finish" data-training-job-id="' + escapeHtml(attention.jobId) + '" title="End ' + escapeHtml(pausedSet) + ' and start the next queued job.">Finish ' + escapeHtml(pausedSet) + '</button>';
+  if (nextJob) {
+    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="continue">' + escapeHtml(trainingQueueStartLabel()) + '</button>';
   }
   if (attention.folder) {
-    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="open" data-training-folder="' + escapeHtml(attention.folder) + '">Review ' + escapeHtml(pausedSet) + '</button>';
+    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="open" data-training-folder="' + escapeHtml(attention.folder) + '">Open set</button>';
   }
   els.attentionTitle.textContent = title;
   els.attentionSummary.innerHTML = escapeHtml(attention.message || 'Training requires a decision.') + detail;
@@ -311,7 +316,7 @@ function renderTrainingRunner() {
   var activeCount = jobs.filter(function (job) { return job.status === 'starting' || job.status === 'running' || job.status === 'stopping'; }).length;
   var queuedJobs = jobs.filter(function (job) { return job.status === 'queued' || job.status === 'paused' || job.status === 'interrupted'; });
   var queuedCount = queuedJobs.length;
-  var job = getTrainingRunnerSelectedJob();
+  var job = getTrainingRunnerActiveJob();
   if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
   syncTrainingQueueResumeButton(els, queuedJobs);
   if (els.runnerQueue) {
@@ -350,7 +355,7 @@ function renderTrainingRunner() {
   if (!job) {
     var noJobMessage = trainingWorkspaceState.runnerQueuePaused
       ? trainingQueueHoldLabel()
-      : 'No managed training jobs.';
+      : queuedCount ? 'No active training job.' : 'No managed training jobs.';
     els.runnerSummary.innerHTML = '<div>' + escapeHtml(noJobMessage) + '</div>';
     els.runnerActions.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
     if (els.runnerFinishBtn) els.runnerFinishBtn.classList.add('hidden');
@@ -472,7 +477,7 @@ function renderTensorboard() {
   }
 }
 
-function appendTrainingRunnerValidationToConsole(payload) {
+function appendTrainingRunnerValidationToAppConsole(payload) {
   var checks = Array.isArray(payload.checks) ? payload.checks : [];
   var lines = ['[training-runner] Validation results:'];
   checks.forEach(function (check) {
@@ -483,6 +488,47 @@ function appendTrainingRunnerValidationToConsole(payload) {
   appendToConsolePanel(lines.join('\n') + '\n');
 }
 
+function isTrainingRunnerConsoleVisible() {
+  var els = getTrainingWorkspaceEls();
+  return !!(els.runnerConsole && !els.runnerConsole.classList.contains('hidden'));
+}
+
+function appendToTrainingRunnerConsole(text) {
+  var els = getTrainingWorkspaceEls();
+  if (!els.runnerConsoleLog) return;
+  els.runnerConsoleLog.textContent += String(text || '');
+  if (els.runnerConsoleLog.textContent.length > 200000) {
+    els.runnerConsoleLog.textContent = els.runnerConsoleLog.textContent.slice(-160000);
+  }
+  els.runnerConsoleLog.scrollTop = els.runnerConsoleLog.scrollHeight;
+}
+
+function hideTrainingRunnerConsole() {
+  var els = getTrainingWorkspaceEls();
+  if (els.runnerConsole) els.runnerConsole.classList.add('hidden');
+  syncTrainingConsoleUi();
+}
+
+function showTrainingRunnerConsole(job) {
+  var target = job || getTrainingRunnerSelectedJob();
+  if (!target || !target.id) {
+    setStatus('Select a training job to view its output.');
+    return;
+  }
+  var els = getTrainingWorkspaceEls();
+  if (!els.runnerConsole || !els.runnerConsoleLog) return;
+  var changedJob = trainingWorkspaceState.runnerConsoleJobId !== target.id;
+  trainingWorkspaceState.runnerConsoleJobId = target.id;
+  if (changedJob) {
+    els.runnerConsoleLog.textContent = '';
+    trainingWorkspaceState.runnerLogOffsets[target.id] = 0;
+  }
+  els.runnerConsoleTitle.textContent = 'Training output · ' + trainingFolderName(target.folder);
+  els.runnerConsole.classList.remove('hidden');
+  syncTrainingConsoleUi();
+  fetchTrainingRunnerLog(target, changedJob);
+}
+
 function fetchTrainingRunnerLog(job, reset) {
   if (!job || !job.id) return;
   var offset = reset ? 0 : Number(trainingWorkspaceState.runnerLogOffsets[job.id] || 0);
@@ -491,9 +537,9 @@ function fetchTrainingRunnerLog(job, reset) {
     .then(function (payload) {
       if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'Could not load training output.');
       trainingWorkspaceState.runnerLogOffsets[job.id] = Number(payload.nextOffset || offset);
-      if (payload.text) appendToConsolePanel(payload.text);
+      if (payload.text) appendToTrainingRunnerConsole(payload.text);
       if (!payload.text && offset === 0 && payload.job && payload.job.error) {
-        appendToConsolePanel('[webcap] ' + payload.job.error + '\n');
+        appendToTrainingRunnerConsole('[webcap] ' + payload.job.error + '\n');
       }
       if (payload.job) {
         var jobs = trainingWorkspaceState.runnerJobs;
@@ -516,7 +562,7 @@ function scheduleTrainingRunnerPoll() {
     return job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'queued' || job.status === 'paused' || job.status === 'interrupted';
   });
   if (!hasPendingJob) return;
-  var delay = isConsolePanelVisible() ? 1500 : 5000;
+  var delay = isTrainingRunnerConsoleVisible() ? 1500 : 5000;
   trainingWorkspaceState.runnerPollTimer = setTimeout(function () {
     refreshTrainingRunnerStatus();
   }, delay);
@@ -546,7 +592,7 @@ function refreshTrainingRunnerStatus() {
         trainingWorkspaceState.gpuForActiveJob = false;
         refreshTrainingGpuStatus();
       }
-      if (isConsolePanelVisible() && selected && selected.status !== 'queued') {
+      if (isTrainingRunnerConsoleVisible() && selected && selected.id === trainingWorkspaceState.runnerConsoleJobId) {
         fetchTrainingRunnerLog(selected);
       }
     })
@@ -592,7 +638,7 @@ function validateTrainingRunner(options) {
     allowNotOk: true
   }).then(function (payload) {
     renderTrainingRunnerPreflight(payload);
-    appendTrainingRunnerValidationToConsole(payload);
+    appendTrainingRunnerValidationToAppConsole(payload);
     setStatus(payload.ok ? 'Training runner validation passed.' : 'Training runner validation found blockers.');
     return payload;
   });
@@ -669,7 +715,6 @@ function startManagedTraining() {
       trainingWorkspaceState.runnerLogOffsets[payload.job.id] = 0;
       trainingWorkspaceState.runnerPreflight = null;
       renderTrainingRunnerPreflight(null);
-      showConsolePanel();
       setStatus(payload.queued ? 'Training job queued.' : 'Managed training started.');
       refreshTrainingRunnerStatus();
     })
@@ -714,20 +759,6 @@ function resumeManagedTrainingQueue() {
   trainingRunnerRequest('/fs/training_runner/resume_queue', { method: 'POST' })
     .then(function () { setStatus('Training queue resumed.'); refreshTrainingRunnerStatus(); })
     .catch(function (err) { setStatus('Could not resume training queue: ' + String(err.message || err)); });
-}
-
-function resumeManagedTrainingJob(jobId) {
-  if (!jobId) return;
-  trainingWorkspaceState.runnerSelectedJobId = jobId;
-  showConsolePanel();
-  trainingRunnerRequest('/fs/training_runner/resume_job', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: jobId })
-  }).then(function () {
-    setStatus('Training stage resumed from its latest run directory.');
-    refreshTrainingRunnerStatus();
-  }).catch(function (err) {
-    setStatus('Could not resume training stage: ' + String(err.message || err));
-  });
 }
 
 function refreshTrainingHistory() {
@@ -1078,6 +1109,7 @@ function wireTrainingWorkspace() {
   var runnerPauseBtn = document.getElementById('training-runner-pause-btn');
   var runnerResumeQueueBtn = document.getElementById('training-runner-resume-queue-btn');
   var runnerConsoleBtn = document.getElementById('training-runner-console-btn');
+  var runnerConsoleCloseBtn = document.getElementById('training-runner-console-close-btn');
   var runnerQueue = document.getElementById('training-runner-queue');
   var attentionActions = document.getElementById('training-attention-actions');
   var historyList = document.getElementById('training-history-list');
@@ -1131,17 +1163,15 @@ function wireTrainingWorkspace() {
     });
   };
   consoleBtn.onclick = function () {
-    toggleConsolePanel();
-    syncTrainingConsoleUi();
-    if (isConsolePanelVisible()) fetchTrainingRunnerLog(getTrainingRunnerSelectedJob());
+    showTrainingRunnerConsole();
   };
   runnerFinishBtn.onclick = function () { stopManagedTraining(false, false, true); };
   runnerPauseBtn.onclick = function () { stopManagedTraining(false, true); };
   runnerResumeQueueBtn.onclick = resumeManagedTrainingQueue;
   runnerConsoleBtn.onclick = function () {
-    showConsolePanel();
-    fetchTrainingRunnerLog(getTrainingRunnerSelectedJob(), true);
+    showTrainingRunnerConsole();
   };
+  runnerConsoleCloseBtn.onclick = hideTrainingRunnerConsole;
   runnerQueue.onclick = function (event) {
     var folderButton = event.target.closest('[data-training-open-folder]');
     var folder = folderButton && folderButton.getAttribute('data-training-open-folder');
@@ -1170,12 +1200,7 @@ function wireTrainingWorkspace() {
   attentionActions.onclick = function (event) {
     var action = event.target.getAttribute('data-training-attention-action');
     if (!action) return;
-    if (action === 'resume') {
-      resumeManagedTrainingJob(event.target.getAttribute('data-training-job-id'));
-    } else if (action === 'finish') {
-      trainingWorkspaceState.runnerSelectedJobId = event.target.getAttribute('data-training-job-id');
-      stopManagedTraining(false, false, true);
-    } else if (action === 'continue') {
+    if (action === 'continue') {
       resumeManagedTrainingQueue();
     } else if (action === 'open') {
       openTrainingWorkspaceFolder(event.target.getAttribute('data-training-folder'));
@@ -1190,9 +1215,7 @@ function wireTrainingWorkspace() {
     }
     var logId = event.target.getAttribute('data-training-history-log');
     if (logId) {
-      trainingWorkspaceState.runnerSelectedJobId = logId;
-      showConsolePanel();
-      fetchTrainingRunnerLog(getTrainingRunnerSelectedJob(), true);
+      showTrainingRunnerConsole(getTrainingRunnerJobById(logId));
       return;
     }
     var checkpoint = event.target.getAttribute('data-training-history-resume');
@@ -1213,10 +1236,13 @@ function wireTrainingWorkspace() {
 
 function syncTrainingConsoleUi() {
   var consoleBtn = document.getElementById('training-console-btn');
-  if (!consoleBtn) return;
-  var visible = isConsolePanelVisible();
-  consoleBtn.classList.toggle('active', visible);
-  consoleBtn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+  var runnerConsoleBtn = document.getElementById('training-runner-console-btn');
+  var visible = isTrainingRunnerConsoleVisible();
+  [consoleBtn, runnerConsoleBtn].forEach(function (button) {
+    if (!button) return;
+    button.classList.toggle('active', visible);
+    button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+  });
 }
 
 function syncTrainingWorkspaceUi() {

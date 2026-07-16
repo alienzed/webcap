@@ -2051,27 +2051,6 @@ iframe {
   gap: 10px;
 }
 
-.workspace-surface-training .training-attention-card {
-  display: grid;
-  gap: 7px;
-  margin-bottom: 8px;
-  padding: 10px 11px;
-  border: 1px solid #cc7a3f;
-  border-left: 3px solid #cc7a3f;
-  background: var(--panel-soft);
-}
-
-.workspace-surface-training .training-attention-summary,
-.workspace-surface-training .training-attention-detail {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.workspace-surface-training .training-attention-detail {
-  margin-top: 4px;
-  color: #cc7a3f;
-}
-
 .workspace-surface-training #training-navigator {
   container-type: inline-size;
 }
@@ -2561,7 +2540,6 @@ iframe {
 .training-folder-status--failed,
 .training-folder-status--stopped,
 .training-folder-status--paused,
-.training-folder-status--attention,
 .training-folder-status--caption-review {
   border-color: #cc7a3f;
   color: #cc7a3f;

@@ -1319,51 +1319,6 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         }, 200
 
 
-def _attention_payload(state):
-    queued_count = sum(1 for job in state.get("jobs", []) if job.get("status") == "queued")
-    if any(job.get("status") in ACTIVE_STATUSES for job in state.get("jobs", [])):
-        return None
-    attention_job = None
-    if state.get("queuePaused"):
-        attention_job = next((
-            job for job in reversed(state.get("jobs", []))
-            if job.get("status") == "failed" and not any(
-                retry.get("status") in QUEUE_STATUSES | ACTIVE_STATUSES
-                and retry.get("folder") == job.get("folder")
-                and retry.get("stages") == job.get("stages")
-                and float(retry.get("createdAt") or 0) > float(job.get("createdAt") or 0)
-                for retry in state.get("jobs", [])
-            )
-        ), None)
-    if attention_job:
-        folder_path = app_config.safe_join_fs_root(attention_job["folder"])
-        stage = str(attention_job.get("stages") or "")
-        runs = discover_runs(folder_path, stage)
-        resume_path = next((run["path"] for run in runs if run.get("checkpointAvailable")), "")
-        status = str(attention_job.get("status"))
-        if status == "failed":
-            message = "Failed " + stage.upper() + " for " + attention_job["folder"] + "."
-        else:
-            message = "Interrupted " + stage.upper() + " for " + attention_job["folder"] + "."
-        return {
-            "kind": status,
-            "jobId": attention_job["id"],
-            "folder": attention_job["folder"],
-            "stage": stage,
-            "message": message,
-            "details": str(attention_job.get("error") or attention_job.get("completionNote") or ""),
-            "resumeFromCheckpoint": resume_path,
-            "queuedCount": queued_count,
-        }
-    if state.get("queuePaused"):
-        return {
-            "kind": "queue_held",
-            "message": str(state.get("queuePauseReason") or "Queue is held."),
-            "queuedCount": queued_count,
-        }
-    return None
-
-
 def folder_statuses_for_folders(folder_paths):
     """Return the small training-status payload used by the folder backlog view."""
     with _lock:
@@ -1384,17 +1339,11 @@ def folder_statuses_for_folders(folder_paths):
             continue
         matching = [job for job in jobs if str(job.get("folder") or "") == folder]
         active = next((job for job in matching if job.get("status") in ACTIVE_STATUSES), None)
-        attention = next((job for job in reversed(matching) if job.get("status") == "failed"), None)
         if active:
             result[path] = {"status": "training", "label": "Training", "jobId": active.get("id"), "stage": active.get("stages")}
         elif folder in queued_by_folder:
             queued = queued_by_folder[folder]
             result[path] = {"status": "queued", "label": "Queued #" + str(queued["position"]), "queuePosition": queued["position"]}
-        elif attention:
-            result[path] = {
-                "status": "attention", "label": "Needs attention", "jobId": attention.get("id"),
-                "outcome": attention.get("status"), "stage": attention.get("stages"),
-            }
         else:
             required_stages, completed = completed_stages(path)
             if required_stages and len(completed) == len(required_stages):
@@ -1429,7 +1378,6 @@ def status_response():
             "queuePaused": bool(state.get("queuePaused")),
             "queuePauseReason": str(state.get("queuePauseReason") or ""),
             "jobs": [_public_job(job) for job in state.get("jobs", [])],
-            "attention": _attention_payload(state),
         }, 200
 
 

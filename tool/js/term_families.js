@@ -215,4 +215,8 @@ document.addEventListener('keydown', function (event) {
   if (event.key === 'Escape' && termFamilyPopoverState.trigger) closeTermFamilyPopover();
 });
 window.addEventListener('resize', closeTermFamilyPopover);
-window.addEventListener('scroll', closeTermFamilyPopover, true);
+window.addEventListener('scroll', function (event) {
+  var popover = termFamilyPopoverState.el;
+  if (popover && event.target && popover.contains(event.target)) return;
+  closeTermFamilyPopover();
+}, true);

@@ -13,7 +13,6 @@ var trainingWorkspaceState = {
   resumeParentJobId: '',
   runnerQueuePaused: false,
   runnerQueuePauseReason: '',
-  runnerAttention: null,
   entryMode: 'global',
   gpu: null,
   gpuStatusPending: false,
@@ -74,10 +73,6 @@ function getTrainingWorkspaceEls() {
     runnerConsoleCloseBtn: document.getElementById('training-runner-console-close-btn'),
     runnerPreflight: document.getElementById('training-runner-preflight'),
     gpuStatus: document.getElementById('training-gpu-status'),
-    attentionCard: document.getElementById('training-attention-card'),
-    attentionTitle: document.getElementById('training-attention-title'),
-    attentionSummary: document.getElementById('training-attention-summary'),
-    attentionActions: document.getElementById('training-attention-actions'),
     historySummary: document.getElementById('training-history-summary'),
     historyList: document.getElementById('training-history-list'),
     historyContent: document.getElementById('training-history-content'),
@@ -374,42 +369,11 @@ function renderTrainingRunnerPreflight(payload) {
   els.runnerPreflight.classList.remove('hidden');
 }
 
-function renderTrainingAttention() {
-  var els = getTrainingWorkspaceEls();
-  var attention = trainingWorkspaceState.runnerAttention;
-  if (!els.attentionCard || !els.attentionSummary || !els.attentionActions) return;
-  if (!attention) {
-    els.attentionCard.classList.add('hidden');
-    return;
-  }
-  var kind = String(attention.kind || 'queue_held');
-  var queuedJobs = (trainingWorkspaceState.runnerJobs || []).filter(function (job) {
-    return job.status === 'queued' || job.status === 'paused' || job.status === 'interrupted';
-  });
-  var nextJob = queuedJobs[0];
-  var title = kind === 'queue_held' ? 'Queue is held' : 'Training needs attention';
-  var detail = attention.details
-    ? '<div class="training-attention-detail">' + escapeHtml(attention.details) + '</div>'
-    : '';
-  var actions = '';
-  if (nextJob) {
-    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="continue">' + escapeHtml(trainingQueueStartLabel()) + '</button>';
-  }
-  if (attention.folder) {
-    actions += '<button type="button" class="review-captions-btn" data-training-attention-action="open" data-training-folder="' + escapeHtml(attention.folder) + '">Open set</button>';
-  }
-  els.attentionTitle.textContent = title;
-  els.attentionSummary.innerHTML = escapeHtml(attention.message || 'Training requires a decision.') + detail;
-  els.attentionActions.innerHTML = actions;
-  els.attentionCard.classList.remove('hidden');
-}
-
 function renderTrainingRunner() {
   var els = getTrainingWorkspaceEls();
   syncUtilityTrainingActivity();
   if (!els.runnerSummary || !els.runnerActions) return;
   var jobs = trainingWorkspaceState.runnerJobs || [];
-  renderTrainingAttention();
   var activeCount = jobs.filter(function (job) { return job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'unconfirmed'; }).length;
   var queuedJobs = jobs.filter(function (job) { return job.status === 'queued' || job.status === 'paused' || job.status === 'interrupted'; });
   var queuedCount = queuedJobs.length;
@@ -738,7 +702,6 @@ function refreshTrainingRunnerStatus() {
       trainingWorkspaceState.runnerActiveJobId = String(payload.activeJobId || '');
       trainingWorkspaceState.runnerQueuePaused = !!payload.queuePaused;
       trainingWorkspaceState.runnerQueuePauseReason = String(payload.queuePauseReason || '');
-      trainingWorkspaceState.runnerAttention = payload.attention || null;
       renderTrainingRunner();
       var terminalOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
         return (job.status === 'completed' || job.status === 'finished_early' || job.status === 'failed' || job.status === 'stopped' || job.status === 'cancelled') &&
@@ -1457,7 +1420,6 @@ function wireTrainingWorkspace() {
   var runnerConsoleBtn = document.getElementById('training-runner-console-btn');
   var runnerConsoleCloseBtn = document.getElementById('training-runner-console-close-btn');
   var runnerQueue = document.getElementById('training-runner-queue');
-  var attentionActions = document.getElementById('training-attention-actions');
   var historyList = document.getElementById('training-history-list');
   var historyCollapseBtn = document.getElementById('training-history-collapse-btn');
   var historyShowAllBtn = document.getElementById('training-history-show-all-btn');
@@ -1563,15 +1525,6 @@ function wireTrainingWorkspace() {
     if (row) {
       trainingWorkspaceState.runnerSelectedJobId = row.getAttribute('data-training-queue-job');
       renderTrainingRunner();
-    }
-  };
-  attentionActions.onclick = function (event) {
-    var action = event.target.getAttribute('data-training-attention-action');
-    if (!action) return;
-    if (action === 'continue') {
-      resumeManagedTrainingQueue();
-    } else if (action === 'open') {
-      openTrainingWorkspaceFolder(event.target.getAttribute('data-training-folder'));
     }
   };
   historyList.onclick = function (event) {

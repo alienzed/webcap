@@ -16,8 +16,7 @@ Last reviewed: 2026-07-10.
 
 ## Enhancements
 - Badge says Needs attention, you go into the set... nothing apparent... you go into training also nothing apparent... What needs attention exactly? How do I act on... what? I'd have expect that badge to be coupled with some kind of suggested action I can take, right now this is quite obscure.
-- Ability to open the output folder in Explorer directly from History (if said folder still exists...)
-- Output folder names in Tensorboard are alphabetical, this is a problem. I can sort by date in Explorer, but in Tensorboard, but I do need that sorting. What's the shortest string we can use to have items sort in a sane order for a reasonable amount of time (i've even considered using a sequence if timestamps are problematic)
+
 - The ability to manually mark a set as Trained... especially for legacy purposes, or when a Finished Early or some other badge got assigned by accident. I mean, I can archive sets, but until I do badges should be accurate, and I know better than the app in some cases.
 
 ## Documentation Sync Notes

@@ -786,6 +786,19 @@ def test_folder_status_prefers_queue_state_over_output_artifacts(tmp_path, monke
     assert status == {"status": "queued", "label": "Queued #1", "queuePosition": 1}
 
 
+def test_folder_status_does_not_surface_failed_history_as_attention(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_read_state", lambda: {
+        "jobs": [{"id": "failed", "folder": "set", "status": "failed", "stages": "lo"}]
+    })
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path: ([], set()))
+
+    assert training_runner.folder_statuses_for_folders([folder])[folder] == {"status": "never", "label": ""}
+
+
 def test_folder_status_distinguishes_partial_and_complete_training(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "set"
@@ -801,13 +814,6 @@ def test_folder_status_distinguishes_partial_and_complete_training(tmp_path, mon
 
     assert partial == {"status": "partial", "label": "Partially trained"}
     assert complete == {"status": "trained", "label": "Trained"}
-
-
-def test_attention_ignores_a_failed_attempt_after_the_same_stage_retries():
-    failed = {"id": "failed", "folder": "set", "stages": "lo", "status": "failed", "createdAt": 1}
-    retry = {"id": "retry", "folder": "set", "stages": "lo", "status": "running", "createdAt": 2}
-
-    assert training_runner._attention_payload({"queuePaused": True, "jobs": [failed, retry]}) is None
 
 
 def test_folder_status_requires_prepared_captions_before_ready(tmp_path, monkeypatch):

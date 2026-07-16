@@ -74,7 +74,7 @@ def test_global_history_hides_queue_items_removed_before_or_after_a_run(tmp_path
     assert [job["id"] for job in payload["jobs"]] == ["completed"]
 
 
-def test_history_distinguishes_dataset_changes_from_config_changes(tmp_path, monkeypatch):
+def test_global_history_returns_persisted_rows_without_rechecking_current_inputs(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"
     set_folder.mkdir(parents=True)
@@ -84,14 +84,14 @@ def test_history_distinguishes_dataset_changes_from_config_changes(tmp_path, mon
         "input": {"fingerprint": "dataset-a", "configFingerprint": "config-a"},
     })
 
-    monkeypatch.setattr(training_runner, "_input_evidence", lambda folder: {"fingerprint": "dataset-a", "configFingerprint": "config-b"})
-    assert training_history.all_history_payload()["jobs"][0]["input"]["comparison"] == "config_changed"
+    monkeypatch.setattr(training_runner, "_input_evidence", lambda folder: (_ for _ in ()).throw(AssertionError("history loading must not inspect current inputs")))
 
-    monkeypatch.setattr(training_runner, "_input_evidence", lambda folder: {"fingerprint": "dataset-b", "configFingerprint": "config-b"})
-    assert training_history.all_history_payload()["jobs"][0]["input"]["comparison"] == "dataset_changed"
+    assert training_history.all_history_payload()["jobs"][0]["input"] == {
+        "fingerprint": "dataset-a", "configFingerprint": "config-a"
+    }
 
 
-def test_finished_early_history_exposes_a_run_with_a_deepspeed_latest_marker_for_resume(tmp_path, monkeypatch):
+def test_finished_early_history_uses_the_persisted_run_binding_for_resume(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"
     set_folder.mkdir(parents=True)
@@ -101,13 +101,12 @@ def test_finished_early_history_exposes_a_run_with_a_deepspeed_latest_marker_for
     (output / "latest").write_text("global_step42", encoding="utf-8")
     training_history.record_job(set_folder, {
         "id": "early", "folder": "set", "status": "finished_early", "stages": "lo",
-        "progress": {"stage": "lo", "epoch": 42},
+        "progress": {"stage": "lo", "epoch": 42}, "outputRunPath": str(output),
     })
 
     payload = training_history.all_history_payload()
 
-    assert payload["jobs"][0]["resumeStage"] == "lo"
-    assert payload["jobs"][0]["resumeCheckpoint"] == str(output)
+    assert payload["jobs"][0]["outputRunPath"] == str(output)
 
 
 def test_discover_runs_uses_a_latest_marker_but_returns_its_run_directory(tmp_path, monkeypatch):

@@ -19,6 +19,8 @@ var trainingWorkspaceState = {
   gpuStatusPending: false,
   gpuForActiveJob: false,
   history: null,
+  historyLoaded: false,
+  historyLoadPromise: null,
   historySearchScopeFolder: '',
   resumeSelectionTouched: false,
   historyExpanded: false,
@@ -268,7 +270,7 @@ function buildTrainingRunnerProgressHtml(job) {
     : stepLabel.trim();
   var etaSeconds = Number(progress.etaSeconds);
   if (isFinite(etaSeconds) && etaSeconds >= 60 && etaSeconds < 30 * 24 * 3600) {
-    positionLabel += ' · ~' + formatTrainingRunnerDuration(etaSeconds) + ' left';
+    positionLabel += ' · ~' + formatTrainingRunnerDuration(etaSeconds) + (progress.etaScope === 'completion' ? ' to completion' : ' left in this stage');
   }
   var progressLabel = progress.source === 'steps'
     ? (job.stages === 'both'
@@ -501,7 +503,15 @@ function renderTrainingHistory() {
   var els = getTrainingWorkspaceEls();
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
   var history = trainingWorkspaceState.history || {};
-  var jobs = (history.jobs || []).slice().sort(function (a, b) {
+  var searchText = String((els.historySearch && els.historySearch.value) || '').trim().toLowerCase();
+  var jobs = (history.jobs || []).filter(function (job) {
+    if (!searchText) return true;
+    var model = job.model && typeof job.model === 'object' ? job.model : {};
+    var haystack = [
+      job.folder, job.profile, job.stages, job.status, job.modelLabel, model.label, model.source
+    ].join(' ').toLowerCase();
+    return haystack.indexOf(searchText) !== -1;
+  }).sort(function (a, b) {
     return Number(b.finishedAt || b.startedAt || b.createdAt || 0) - Number(a.finishedAt || a.startedAt || a.createdAt || 0);
   });
   var runs = Array.isArray(history.runs) ? history.runs : [];
@@ -512,7 +522,7 @@ function renderTrainingHistory() {
     els.historyCollapseBtn.textContent = 'Recent Runs' + (jobs.length ? ' · ' + jobs.length : '');
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');
   }
-  if (els.historyClearBtn) els.historyClearBtn.textContent = trainingHistoryScopeFolder() ? 'Clear set' : 'Clear all';
+  if (els.historyClearBtn) els.historyClearBtn.textContent = 'Clear history';
   els.historySummary.classList.toggle('hidden', !!latest);
   els.historySummary.textContent = latest ? '' : 'No completed or actionable training outcomes yet.';
   var visibleJobs = trainingWorkspaceState.historyExpanded ? jobs : jobs.slice(0, 2);
@@ -528,7 +538,9 @@ function renderTrainingHistory() {
     var timestamp = job.finishedAt || job.startedAt || job.createdAt;
     var timestampKind = trainingHistoryTimestampKind(job);
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
-    var canResume = (job.status === 'finished_early' || job.status === 'interrupted') && job.resumeCheckpoint && (job.resumeStage === 'hi' || job.resumeStage === 'lo');
+    var resumePath = String(job.outputRunPath || job.resumeCheckpoint || '');
+    var resumeStage = String(job.resumeStage || job.stages || '');
+    var canResume = (job.status === 'finished_early' || job.status === 'interrupted') && resumePath && (resumeStage === 'hi' || resumeStage === 'lo');
     var status = String(job.status || 'unknown');
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</span></div>' +
@@ -734,7 +746,7 @@ function refreshTrainingRunnerStatus() {
       });
       if (terminalOutcome) {
         trainingWorkspaceState.historyCollapsed = false;
-        refreshTrainingHistory();
+        refreshTrainingHistory(true);
       }
       var selected = getTrainingRunnerSelectedJob();
       var hasActiveJob = trainingWorkspaceState.runnerJobs.some(function (job) {
@@ -902,7 +914,7 @@ function stopManagedTraining(cancel, pause, finish) {
   }).then(function () {
     setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Pause requested; waiting for the runner result.' : finish ? 'Finish requested; waiting for the runner result.' : 'Stop requested; waiting for the runner result.'));
     refreshTrainingRunnerStatus();
-    refreshTrainingHistory();
+    refreshTrainingHistory(true);
   }).catch(function (err) {
     setStatus('Could not change training job: ' + String(err && err.message ? err.message : err));
   });
@@ -935,16 +947,15 @@ function confirmManagedTrainingInputs(jobId, useCurrent) {
     body: JSON.stringify({ jobId: jobId, useCurrent: !!useCurrent })
   }).then(function () {
     refreshTrainingRunnerStatus();
-    refreshTrainingHistory();
+    refreshTrainingHistory(true);
   }).catch(function (err) { setStatus('Could not confirm queued inputs: ' + String(err.message || err)); });
 }
 
 function clearTrainingHistory() {
-  var folder = trainingWorkspaceState.entryMode === 'set' ? (state.folder || '') : '';
-  if (!window.confirm('Clear ' + (folder ? 'history for ' + folder : 'all training history') + '? Output files and checkpoints will remain.')) return;
+  if (!window.confirm('Clear all Recent Runs history? Output files, logs, and checkpoints will remain.')) return;
   trainingRunnerRequest('/fs/training_history/clear', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: folder })
-  }).then(function () { refreshTrainingHistory(); }).catch(function (err) { setStatus('Could not clear training history: ' + String(err.message || err)); });
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+  }).then(function () { refreshTrainingHistory(true); }).catch(function (err) { setStatus('Could not clear training history: ' + String(err.message || err)); });
 }
 
 function clearTrainingHistoryJob(jobId) {
@@ -957,7 +968,7 @@ function clearTrainingHistoryJob(jobId) {
   }).then(function (payload) {
     if (!payload.cleared) throw new Error('Training history entry was not found.');
     setStatus('Removed the run from Recent Runs. Logs and artifacts were kept.');
-    refreshTrainingHistory();
+    refreshTrainingHistory(true);
   }).catch(function (err) { setStatus('Could not clear training history entry: ' + String(err.message || err)); });
 }
 
@@ -965,7 +976,9 @@ function resumeTrainingHistoryJob(jobId) {
   var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
     ? trainingWorkspaceState.history.jobs : [];
   var job = jobs.filter(function (item) { return item.id === jobId; })[0];
-  if (!job || !job.folder || !job.resumeCheckpoint || (job.resumeStage !== 'hi' && job.resumeStage !== 'lo')) {
+  var resumePath = String(job && (job.outputRunPath || job.resumeCheckpoint) || '');
+  var resumeStage = String(job && (job.resumeStage || job.stages) || '');
+  if (!job || !job.folder || !resumePath || (resumeStage !== 'hi' && resumeStage !== 'lo')) {
     throw new Error('This historical run no longer has a resumable checkpoint.');
   }
   var comparison = String(job.input && job.input.comparison || '');
@@ -979,9 +992,9 @@ function resumeTrainingHistoryJob(jobId) {
     body: JSON.stringify({
       folder: job.folder,
       queue: true,
-      stages: job.resumeStage,
-      resumeFromCheckpoint: job.resumeCheckpoint,
-      resumeStage: job.resumeStage,
+      stages: resumeStage,
+      resumeFromCheckpoint: resumePath,
+      resumeStage: resumeStage,
       parentJobId: job.id
     })
   }).then(function (payload) {
@@ -1021,29 +1034,54 @@ function syncTrainingHistorySearchScope() {
     else if (searchEl.value === priorFolder) searchEl.value = '';
   }
   trainingWorkspaceState.historySearchScopeFolder = folder;
-  if (folder !== priorFolder) trainingWorkspaceState.resumeSelectionTouched = false;
+  if (folder !== priorFolder) {
+    trainingWorkspaceState.resumeSelectionTouched = false;
+    if (trainingWorkspaceState.history) {
+      trainingWorkspaceState.history.runs = [];
+      trainingWorkspaceState.history.resumeDefaults = {};
+    }
+  }
   return folder;
 }
 
-function refreshTrainingHistory() {
-  if (!isTrainingWorkspaceActive()) return Promise.resolve();
-  var searchEl = document.getElementById('training-history-search');
-  var folder = syncTrainingHistorySearchScope();
-  return fetch('/fs/training_history/all?q=' + encodeURIComponent(searchEl ? searchEl.value : ''))
+function loadTrainingHistoryIndex(force) {
+  if (!force && trainingWorkspaceState.historyLoaded) return Promise.resolve(trainingWorkspaceState.history || {});
+  if (!force && trainingWorkspaceState.historyLoadPromise) return trainingWorkspaceState.historyLoadPromise;
+  var request = fetch('/fs/training_history/all')
     .then(function (response) { return response.json(); })
     .then(function (payload) {
       if (!payload.ok) throw new Error(payload.error || 'Could not load training history.');
+      var previous = trainingWorkspaceState.history || {};
       trainingWorkspaceState.history = payload.history || {};
-      if (!folder) {
-        renderTrainingHistory();
-        return null;
-      }
+      trainingWorkspaceState.history.runs = previous.runs || [];
+      trainingWorkspaceState.history.resumeDefaults = previous.resumeDefaults || {};
+      trainingWorkspaceState.historyLoaded = true;
+      return trainingWorkspaceState.history;
+    });
+  trainingWorkspaceState.historyLoadPromise = request;
+  return request.then(function (history) {
+    trainingWorkspaceState.historyLoadPromise = null;
+    return history;
+  }, function (err) {
+    trainingWorkspaceState.historyLoadPromise = null;
+    throw err;
+  });
+}
+
+function refreshTrainingHistory(force) {
+  if (!isTrainingWorkspaceActive()) return Promise.resolve();
+  var folder = syncTrainingHistorySearchScope();
+  return loadTrainingHistoryIndex(!!force)
+    .then(function () {
+      renderTrainingHistory();
+      if (!folder) return null;
       return fetch('/fs/training_history?folder=' + encodeURIComponent(folder)).then(function (response) { return response.json(); }).then(function (setPayload) {
-        if (setPayload.ok && trainingWorkspaceState.history) {
+        if (!setPayload.ok) throw new Error(setPayload.error || 'Could not load resumable runs.');
+        if (trainingWorkspaceState.history && trainingHistoryScopeFolder() === folder) {
           trainingWorkspaceState.history.runs = (setPayload.history || {}).runs || [];
           trainingWorkspaceState.history.resumeDefaults = (setPayload.history || {}).resumeDefaults || {};
+          renderTrainingHistory();
         }
-        renderTrainingHistory();
       });
     })
     .catch(function (err) { setStatus('Could not load training history: ' + String(err.message || err)); });
@@ -1571,7 +1609,7 @@ function wireTrainingWorkspace() {
     trainingWorkspaceState.historyExpanded = !trainingWorkspaceState.historyExpanded;
     renderTrainingHistory();
   };
-  if (historySearch) historySearch.oninput = function () { refreshTrainingHistory(); };
+  if (historySearch) historySearch.oninput = renderTrainingHistory;
   if (historyClearBtn) historyClearBtn.onclick = clearTrainingHistory;
   tensorboardStartBtn.onclick = startTensorboard;
   tensorboardStopBtn.onclick = stopTensorboard;

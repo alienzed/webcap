@@ -45,6 +45,8 @@ _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MUL
 _LOG_EPOCH_PATTERN = re.compile(r"Started new epoch:\s*(\d+)", re.IGNORECASE)
 _LOG_STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
 _LOG_ITER_TIME_PATTERN = re.compile(r"\biter time \(s\):\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+ETA_MIN_SAMPLES = 3
+ETA_SAMPLE_WINDOW = 8
 PARTIAL_CAPTION_REVIEW_MIN_ITEMS = 3
 PARTIAL_CAPTION_REVIEW_MIN_RATIO = 0.15
 
@@ -784,6 +786,19 @@ def _read_log_tail(path, byte_count=4096):
         return ""
 
 
+def _recent_seconds_per_step(log_text, stage):
+    marker = "[webcap] stage=" + str(stage or "").lower()
+    stage_log = str(log_text or "")
+    marker_index = stage_log.lower().rfind(marker)
+    if marker_index >= 0:
+        stage_log = stage_log[marker_index:]
+    samples = [float(value) for value in _LOG_ITER_TIME_PATTERN.findall(stage_log)[-ETA_SAMPLE_WINDOW:]]
+    samples = [value for value in samples if value > 0]
+    if len(samples) < ETA_MIN_SAMPLES:
+        return None
+    return sum(samples) / len(samples)
+
+
 def _sync_job_progress(job, log_text):
     stage = str(job.get("stage") or "").lower()
     if stage not in ("hi", "lo"):
@@ -800,7 +815,6 @@ def _sync_job_progress(job, log_text):
     previous_epoch = previous.get("epoch") if previous.get("stage") == stage else None
     epoch_matches = _LOG_EPOCH_PATTERN.findall(log_text or "")
     step_matches = _LOG_STEP_PATTERN.findall(log_text or "")
-    iter_time_matches = _LOG_ITER_TIME_PATTERN.findall(log_text or "")
     epoch = int(epoch_matches[-1]) if epoch_matches else previous_epoch
     step = int(step_matches[-1]) if step_matches else previous.get("step")
     plan = job.get("progressPlan") if isinstance(job.get("progressPlan"), dict) else {}
@@ -840,12 +854,20 @@ def _sync_job_progress(job, log_text):
     if use_steps:
         progress["plannedSteps"] = planned_steps
         progress["source"] = "steps"
-        if iter_time_matches:
-            seconds_per_step = float(iter_time_matches[-1])
-            if seconds_per_step > 0:
-                progress["etaSeconds"] = round(max(0, planned_steps - step) * seconds_per_step)
     else:
         progress["source"] = "epochs"
+    seconds_per_step = _recent_seconds_per_step(log_text, stage)
+    if step is not None and planned_steps > 0 and seconds_per_step is not None:
+        remaining_steps = max(0, planned_steps - step)
+        eta_scope = "completion"
+        if stages == "both" and stage == "hi":
+            next_stage_steps = lo_planned_steps
+            if next_stage_steps > 0:
+                remaining_steps += next_stage_steps
+            else:
+                eta_scope = "stage"
+        progress["etaSeconds"] = round(remaining_steps * seconds_per_step)
+        progress["etaScope"] = eta_scope
     job["progress"] = progress
 
 

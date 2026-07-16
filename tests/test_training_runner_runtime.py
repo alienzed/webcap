@@ -354,7 +354,11 @@ def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_pa
         },
     }
 
-    training_runner._sync_job_progress(job, "[INFO] [Rank 0] step=9700, skipped=0, iter time (s): 3.0\n")
+    training_runner._sync_job_progress(job, "\n".join([
+        "[INFO] [Rank 0] step=9698, skipped=0, iter time (s): 2.0",
+        "[INFO] [Rank 0] step=9699, skipped=0, iter time (s): 3.0",
+        "[INFO] [Rank 0] step=9700, skipped=0, iter time (s): 4.0",
+    ]))
 
     assert job["progress"] == {
         "stage": "lo",
@@ -367,10 +371,11 @@ def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_pa
         "plannedSteps": 20000,
         "source": "steps",
         "etaSeconds": 30900,
+        "etaScope": "completion",
     }
 
 
-def test_runner_progress_prefers_logged_epochs_over_the_generated_step_estimate(tmp_path):
+def test_runner_progress_uses_epoch_progress_and_a_rolling_step_eta(tmp_path):
     lo_path = tmp_path / "config.lo.toml"
     lo_path.write_text("epochs = 90\n", encoding="utf-8")
     job = {
@@ -382,7 +387,12 @@ def test_runner_progress_prefers_logged_epochs_over_the_generated_step_estimate(
 
     training_runner._sync_job_progress(
         job,
-        "Started new epoch: 85\n[INFO] [Rank 0] step=9410, skipped=0, iter time (s): 3.0\n",
+        "\n".join([
+            "Started new epoch: 85",
+            "[INFO] [Rank 0] step=9408, skipped=0, iter time (s): 2.0",
+            "[INFO] [Rank 0] step=9409, skipped=0, iter time (s): 3.0",
+            "[INFO] [Rank 0] step=9410, skipped=0, iter time (s): 4.0",
+        ]),
     )
 
     assert job["progress"] == {
@@ -394,6 +404,8 @@ def test_runner_progress_prefers_logged_epochs_over_the_generated_step_estimate(
         "overallPercent": 94.4,
         "estimated": False,
         "source": "epochs",
+        "etaSeconds": 31770,
+        "etaScope": "completion",
     }
 
 

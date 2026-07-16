@@ -13,6 +13,26 @@ function getFocusSetAnalysisConfig() {
   };
 }
 
+function getFocusSetMetadataCacheKey(folder, config, fileNames) {
+  return [
+    String(folder || ''),
+    config && config.face ? 'face' : '',
+    config && config.pose ? 'pose' : '',
+    (fileNames || []).join('\n')
+  ].join('\u0001');
+}
+
+function getFocusSetMetadataCache() {
+  if (!state.focusSetMetadataCache || typeof state.focusSetMetadataCache !== 'object') {
+    state.focusSetMetadataCache = {};
+  }
+  return state.focusSetMetadataCache;
+}
+
+function getFocusSetCurrentFileNames() {
+  return (state.items || []).map(function (item) { return item.fileName; }).filter(Boolean);
+}
+
 function getFocusSetMetadataByFile() {
   var byFile = {};
   (state.focusSetMetadata || []).forEach(function (row) {
@@ -136,7 +156,7 @@ function wireFocusSetControls(container) {
     button.onclick = openAppSettingsModal;
   });
   Array.prototype.forEach.call(container.querySelectorAll('.focus-set-retry-btn'), function (button) {
-    button.onclick = ensureFocusSetMetadataForCurrentFolder;
+    button.onclick = function () { ensureFocusSetMetadataForCurrentFolder(true); };
   });
 }
 
@@ -155,7 +175,7 @@ function renderFocusSetControls() {
   });
 }
 
-function ensureFocusSetMetadataForCurrentFolder() {
+function ensureFocusSetMetadataForCurrentFolder(force) {
   var folder = String(state.folder || '').trim();
   var config = getFocusSetAnalysisConfig();
   if (!folder || !config.face || !config.pose) {
@@ -165,9 +185,18 @@ function ensureFocusSetMetadataForCurrentFolder() {
     renderFocusSetControls();
     return;
   }
-  var fileNames = (state.items || []).map(function (item) { return item.fileName; }).filter(Boolean);
+  var fileNames = getFocusSetCurrentFileNames();
   if (!fileNames.length) {
     state.focusSetMetadata = [];
+    state.focusSetMetadataFolder = folder;
+    state.focusSetMetadataStatus = 'ready';
+    renderFocusSetControls();
+    return;
+  }
+  var cacheKey = getFocusSetMetadataCacheKey(folder, config, fileNames);
+  var cache = getFocusSetMetadataCache();
+  if (!force && Array.isArray(cache[cacheKey])) {
+    state.focusSetMetadata = cache[cacheKey];
     state.focusSetMetadataFolder = folder;
     state.focusSetMetadataStatus = 'ready';
     renderFocusSetControls();
@@ -184,8 +213,9 @@ function ensureFocusSetMetadataForCurrentFolder() {
       return response.json();
     })
     .then(function (rows) {
-      if (state.folder !== folder) return;
+      if (state.folder !== folder || getFocusSetMetadataCacheKey(folder, getFocusSetAnalysisConfig(), getFocusSetCurrentFileNames()) !== cacheKey) return;
       if (!Array.isArray(rows)) throw new Error('Malformed selection metadata');
+      cache[cacheKey] = rows;
       state.focusSetMetadata = rows;
       state.focusSetMetadataStatus = 'ready';
       renderFocusSetControls();

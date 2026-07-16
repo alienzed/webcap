@@ -392,22 +392,9 @@ def history_payload(folder_path):
     return history
 
 
-def _resume_details(folder_path, job):
-    if job.get("status") not in ("finished_early", "interrupted"):
-        return {}, ""
-    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
-    stage = str(progress.get("stage") or job.get("stages") or "").strip().lower()
-    if stage not in ("hi", "lo"):
-        return {}, ""
-    checkpoint = next((run for run in discover_runs(folder_path, stage) if run.get("checkpointAvailable")), {})
-    return checkpoint, stage
-
-
 def all_history_payload(query="", folder=""):
-    """Aggregate the intentionally small, folder-local history indexes."""
+    """Return persisted history rows; presentation filtering happens in the browser."""
     root = Path(app_config.FS_ROOT)
-    wanted_folder = str(folder or "").replace("\\", "/").strip("/")
-    needle = str(query or "").strip().lower()
     jobs = []
     for path in root.rglob(HISTORY_FILE_NAME):
         if ".webcap_training" in path.parts or "auto_dataset" in path.parts:
@@ -417,48 +404,17 @@ def all_history_payload(query="", folder=""):
             relative = str(set_folder.relative_to(root)).replace("\\", "/")
         except ValueError:
             continue
-        if wanted_folder and relative != wanted_folder:
-            continue
         history = read_history(set_folder)
         for job in history.get("jobs") or []:
             if not isinstance(job, dict):
                 continue
             if job.get("status") == "cancelled":
                 continue
-            if needle:
-                model = job.get("model") if isinstance(job.get("model"), dict) else {}
-                haystack = " ".join(str(value or "") for value in (
-                    relative, job.get("folder"), job.get("profile"), job.get("stages"), job.get("status"),
-                    job.get("modelLabel"), model.get("label"), model.get("source"),
-                )).lower()
-                if needle not in haystack:
-                    continue
             item = dict(job)
             item["folder"] = relative
-            checkpoint, resume_stage = _resume_details(set_folder, item)
-            if checkpoint:
-                item["resumeCheckpoint"] = checkpoint["path"]
-                item["resumeStage"] = resume_stage
-            recorded_input = item.get("input") if isinstance(item.get("input"), dict) else {}
-            try:
-                from .training_runner import _input_evidence
-                current_input = _input_evidence(set_folder)
-                item["input"] = dict(recorded_input)
-                if not recorded_input.get("fingerprint") or not recorded_input.get("configFingerprint"):
-                    item["input"]["comparison"] = "unavailable"
-                elif recorded_input.get("fingerprint") != current_input.get("fingerprint"):
-                    item["input"]["comparison"] = "dataset_changed"
-                elif recorded_input.get("configFingerprint") != current_input.get("configFingerprint"):
-                    item["input"]["comparison"] = "config_changed"
-                else:
-                    item["input"]["comparison"] = "matches"
-            except Exception:
-                if recorded_input:
-                    item["input"] = dict(recorded_input)
-                    item["input"]["comparison"] = "unavailable"
             jobs.append(item)
     jobs.sort(key=lambda job: float(job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0), reverse=True)
-    return {"version": HISTORY_VERSION, "jobs": jobs, "query": query, "folder": wanted_folder}
+    return {"version": HISTORY_VERSION, "jobs": jobs}
 
 
 def clear_history(folder_path=None):

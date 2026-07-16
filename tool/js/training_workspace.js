@@ -26,6 +26,8 @@ var trainingWorkspaceState = {
   itemOverviewHidden: false,
   tensorboard: null
 };
+var utilityTrainingTurtleTimer = 0;
+var utilityTrainingTurtleAtLeft = true;
 
 function isTrainingWorkspaceActive() {
   return normalizeWorkspaceSurface(workspaceState.surface) === 'training';
@@ -137,6 +139,18 @@ function syncUtilityTrainingActivity() {
   utilityTrainingBtn.title = running ? 'Open Training (training in progress)' : 'Open Training';
   utilityTrainingBtn.setAttribute('aria-label', running ? 'Open Training (training in progress)' : 'Open Training');
   utilityTrainingProgress.hidden = !running;
+  if (running && !utilityTrainingTurtleTimer) {
+    utilityTrainingTurtleAtLeft = true;
+    utilityTrainingProgress.style.transform = 'translateX(-3px)';
+    utilityTrainingTurtleTimer = window.setInterval(function () {
+      utilityTrainingTurtleAtLeft = !utilityTrainingTurtleAtLeft;
+      utilityTrainingProgress.style.transform = utilityTrainingTurtleAtLeft ? 'translateX(-3px)' : 'translateX(3px)';
+    }, 600);
+  } else if (!running && utilityTrainingTurtleTimer) {
+    window.clearInterval(utilityTrainingTurtleTimer);
+    utilityTrainingTurtleTimer = 0;
+    utilityTrainingProgress.style.transform = '';
+  }
 }
 
 function getTrainingRunnerJobById(jobId) {
@@ -531,7 +545,6 @@ function renderTrainingHistory() {
     var finalStep = Number(progress.step);
     var elapsedSeconds = Number(job.finishedAt || 0) - Number(job.startedAt || 0);
     var details = [];
-    if (run.checkpointName) details.push('checkpoint ' + run.checkpointName);
     var timestamp = job.finishedAt || job.startedAt || job.createdAt;
     var timestampKind = trainingHistoryTimestampKind(job);
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());

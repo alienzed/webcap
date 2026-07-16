@@ -1236,12 +1236,9 @@ iframe {
 .utility-training-progress {
   display: inline-block;
   width: 18px;
-  overflow: visible;
   font-size: 14px;
   line-height: 30px;
   text-align: center;
-  transform: translateX(-1px);
-  animation: utility-training-turtle 600ms steps(1, end) infinite alternate;
 }
 
 .utility-training-progress[hidden] {
@@ -1251,11 +1248,6 @@ iframe {
 @keyframes utility-training-pulse {
   0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 1px rgba(15, 23, 42, 0.08); }
   50% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 3px rgba(210, 138, 22, 0.18); }
-}
-
-@keyframes utility-training-turtle {
-  from { transform: translateX(-1px); }
-  to { transform: translateX(2px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

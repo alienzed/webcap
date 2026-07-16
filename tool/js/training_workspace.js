@@ -545,10 +545,10 @@ function renderTrainingHistory() {
     var finalStep = Number(progress.step);
     var elapsedSeconds = Number(job.finishedAt || 0) - Number(job.startedAt || 0);
     var details = [];
+    var duration = elapsedSeconds > 0 ? formatTrainingRunnerDuration(elapsedSeconds) : '';
     var timestamp = job.finishedAt || job.startedAt || job.createdAt;
     var timestampKind = trainingHistoryTimestampKind(job);
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
-    if (elapsedSeconds > 0) details.push(formatTrainingRunnerDuration(elapsedSeconds));
     var canResume = (job.status === 'finished_early' || job.status === 'interrupted') && job.resumeCheckpoint && (job.resumeStage === 'hi' || job.resumeStage === 'lo');
     var status = String(job.status || 'unknown');
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
@@ -557,14 +557,18 @@ function renderTrainingHistory() {
       '<div class="training-history-context"><div class="training-history-model">' + escapeHtml((job.model && job.model.label) || job.modelLabel || 'Training model') + ' · ' + escapeHtml(job.profile || 'unknown') + '</div>' +
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
-        (details.length ? '<div>' + escapeHtml(details.join(' · ')) + '</div>' : '') +
+        (details.length || duration ? '<div>' +
+          (details.length ? escapeHtml(details.join(' · ')) : '') +
+          (details.length && duration ? ' · ' : '') +
+          (duration ? '<span title="Run duration">' + escapeHtml(duration) + '</span>' : '') +
+          '</div>' : '') +
         (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
       '</div>' +
       '<div class="training-history-actions">' +
-       (job.folder ? '<button type="button" data-training-history-output="' + escapeHtml(job.folder) + '" data-training-history-output-stage="' + escapeHtml(job.stages || '') + '">Open output</button>' : '') +
-       '<button type="button" data-training-history-log="' + escapeHtml(job.id || '') + '">Show log</button>' +
+       (job.folder ? '<button type="button" class="training-history-action" data-training-history-output="' + escapeHtml(job.folder) + '" data-training-history-output-stage="' + escapeHtml(job.stages || '') + '" title="Open output folder" aria-label="Open output folder">&#128193;</button>' : '') +
+       '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show log" aria-label="Show log">&#9998;</button>' +
        (canResume ? '<button type="button" data-training-history-resume="' + escapeHtml(job.id || '') + '">Resume</button>' : '') +
-       '<button type="button" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove this entry from Recent Runs; logs and artifacts remain.">Clear</button>' +
+       '<button type="button" class="training-history-action training-history-action--clear" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove this entry from Recent Runs; logs and artifacts remain." aria-label="Remove from Recent Runs">&#215;</button>' +
        '</div></div>';
   }).join('');
   if (els.historyShowAllBtn) {

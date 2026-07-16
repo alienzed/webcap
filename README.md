@@ -282,7 +282,7 @@ Metadata:
 - Primer application flow:
   - `Reapply` writes the current primer output into the selected item caption
   - `Undo Reapply` restores the previous caption
-  - floating `Apply Primer` appears for captionless items when primer text is active
+  - floating `Apply` writes the current editor text into the selected item caption; Shift+click continues to the next captionless item
   - captionless items live-update from primer edits only while the editor still matches primer-derived text
 
 ### 9. Review tab and reports

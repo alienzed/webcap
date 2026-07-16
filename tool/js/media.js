@@ -551,9 +551,9 @@ function selectPathMedia(mediaItem) {
 
 // Move through the folder's natural item order, independent of the currently visible filters.
 // This is intentionally an explicit captioning action rather than a side effect of saving.
-function selectNextCaptionlessMediaItem() {
+function selectNextCaptionlessMediaItem(afterMediaKey) {
   var items = Array.isArray(state.items) ? state.items : [];
-  var currentKey = state.currentItem && state.currentItem.key;
+  var currentKey = afterMediaKey || (state.currentItem && state.currentItem.key);
   var currentIndex = items.findIndex(function (item) {
     return item && item.key === currentKey;
   });

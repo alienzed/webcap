@@ -139,19 +139,10 @@ function getPrimerResetCurrentMediaItem() {
   return state.currentItem;
 }
 
-function isPrimerInEffectForCurrentItem(mediaItem) {
-  if (!mediaItem || !state || !state.currentItem || mediaItem.key !== state.currentItem.key) return false;
-  if (mediaItem.hasCaption || !ui || !ui.editorEl || ui.editorEl.readOnly) return false;
-  var primerText = String(buildAutoPrimer(mediaItem.fileName, mediaItem.key) || '');
-  if (!primerText.trim()) return false;
-  var editorText = String(ui.editorEl.value || '');
-  return editorText.trim() === primerText.trim();
-}
-
 function updatePrimerCaptionResetUi() {
   var resetBtn = document.getElementById('primer-reset-caption-btn');
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
-  var applyPrimerBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
+  var applyCaptionBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
   if (!resetBtn || !undoBtn) return;
 
   var mediaItem = getPrimerResetCurrentMediaItem();
@@ -159,7 +150,7 @@ function updatePrimerCaptionResetUi() {
   if (!hasSelectedMedia) {
     resetBtn.classList.add('hidden');
     undoBtn.classList.add('hidden');
-    if (applyPrimerBtn) applyPrimerBtn.classList.add('hidden');
+    if (applyCaptionBtn) applyCaptionBtn.classList.add('hidden');
     return;
   }
 
@@ -170,8 +161,8 @@ function updatePrimerCaptionResetUi() {
 
   var canUndo = !!(primerResetUndoState && primerResetUndoState.mediaKey === mediaItem.key);
   undoBtn.classList.toggle('hidden', !canUndo);
-  if (applyPrimerBtn) {
-    applyPrimerBtn.classList.toggle('hidden', !isPrimerInEffectForCurrentItem(mediaItem));
+  if (applyCaptionBtn) {
+    applyCaptionBtn.classList.remove('hidden');
   }
 }
 
@@ -198,7 +189,7 @@ function syncCurrentFolderPrimerTemplateFromAppDefault() {
 function wirePrimerCaptionResetUi() {
   var resetBtn = document.getElementById('primer-reset-caption-btn');
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
-  var applyPrimerBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
+  var applyCaptionBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
   if (!resetBtn || !undoBtn) return;
 
   if (!resetBtn.__primerResetBound) {
@@ -253,27 +244,23 @@ function wirePrimerCaptionResetUi() {
     });
   }
 
-  if (applyPrimerBtn && !applyPrimerBtn.__primerApplyBound) {
-    applyPrimerBtn.__primerApplyBound = true;
-    applyPrimerBtn.addEventListener('click', function (event) {
+  if (applyCaptionBtn && !applyCaptionBtn.__captionApplyBound) {
+    applyCaptionBtn.__captionApplyBound = true;
+    applyCaptionBtn.addEventListener('click', function (event) {
       var mediaItem = getPrimerResetCurrentMediaItem();
       if (!mediaItem) {
         setStatus('Select a media item first.');
         updatePrimerCaptionResetUi();
         return;
       }
-      if (!isPrimerInEffectForCurrentItem(mediaItem)) {
-        setStatus('Apply is only available while primer text is currently in effect.');
-        updatePrimerCaptionResetUi();
-        return;
-      }
       var textToSave = String((ui && ui.editorEl && ui.editorEl.value) || '');
+      var mediaKey = mediaItem.key;
       saveCaptionDirect(state.folder, mediaItem.fileName, textToSave, mediaItem.key)
         .then(function () {
           primerResetUndoState = null;
           updatePrimerCaptionResetUi();
           if (!event.shiftKey) return;
-          return selectNextCaptionlessMediaItem().catch(function (err) {
+          return selectNextCaptionlessMediaItem(mediaKey).catch(function (err) {
             setStatus(String(err && err.message ? err.message : err));
           });
         })

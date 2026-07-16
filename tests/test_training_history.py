@@ -1,5 +1,6 @@
 from tool.server import config as config_module
 from tool.server import training_history
+from tool.server import training_runner
 
 
 def test_training_history_discovers_only_set_local_runs(tmp_path, monkeypatch):
@@ -10,7 +11,7 @@ def test_training_history_discovers_only_set_local_runs(tmp_path, monkeypatch):
 
     run = training_history.output_root_for_folder(set_folder) / "20260713_01-00-00"
     run.mkdir(parents=True)
-    (run / "checkpoint.pt").write_text("checkpoint", encoding="utf-8")
+    (run / "latest").write_text("checkpoint", encoding="utf-8")
     (root / "output" / "runs" / "legacy").mkdir(parents=True)
 
     history = training_history.record_job(set_folder, {
@@ -43,7 +44,7 @@ def test_global_history_is_compact_and_clear_does_not_touch_run_artifacts(tmp_pa
     output = training_history.output_root_for_folder(set_folder)
     run = output / "run-one"
     run.mkdir(parents=True)
-    (run / "checkpoint.pt").write_text("checkpoint", encoding="utf-8")
+    (run / "latest").write_text("checkpoint", encoding="utf-8")
 
     training_history.record_job(set_folder, {
         "id": "job-1", "folder": "char/lilly", "status": "completed", "stages": "hi",
@@ -71,13 +72,30 @@ def test_global_history_hides_queue_items_removed_before_or_after_a_run(tmp_path
     assert [job["id"] for job in payload["jobs"]] == ["completed"]
 
 
+def test_history_distinguishes_dataset_changes_from_config_changes(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    training_history.record_job(set_folder, {
+        "id": "job", "folder": "set", "status": "finished_early",
+        "input": {"fingerprint": "dataset-a", "configFingerprint": "config-a"},
+    })
+
+    monkeypatch.setattr(training_runner, "_input_evidence", lambda folder: {"fingerprint": "dataset-a", "configFingerprint": "config-b"})
+    assert training_history.all_history_payload()["jobs"][0]["input"]["comparison"] == "config_changed"
+
+    monkeypatch.setattr(training_runner, "_input_evidence", lambda folder: {"fingerprint": "dataset-b", "configFingerprint": "config-b"})
+    assert training_history.all_history_payload()["jobs"][0]["input"]["comparison"] == "dataset_changed"
+
+
 def test_finished_early_history_exposes_only_a_real_checkpoint_for_resume(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"
     set_folder.mkdir(parents=True)
     monkeypatch.setattr(config_module, "FS_ROOT", root)
     output = training_history.output_root_for_folder(set_folder, "lo") / "run-one-lo"
-    (output / "epoch42").mkdir(parents=True)
+    (output / "global_step42").mkdir(parents=True)
     training_history.record_job(set_folder, {
         "id": "early", "folder": "set", "status": "finished_early", "stages": "lo",
         "progress": {"stage": "lo", "epoch": 42},
@@ -86,7 +104,48 @@ def test_finished_early_history_exposes_only_a_real_checkpoint_for_resume(tmp_pa
     payload = training_history.all_history_payload()
 
     assert payload["jobs"][0]["resumeStage"] == "lo"
-    assert payload["jobs"][0]["resumeCheckpoint"] == str(output)
+    assert payload["jobs"][0]["resumeCheckpoint"] == str(output / "global_step42")
+
+
+def test_discover_runs_uses_latest_or_global_step_not_arbitrary_run_contents(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = root / "output" / "runs" / "set-lo"
+    (set_folder / "config.lo.toml").write_text('output_dir = "' + str(output) + '"\n', encoding="utf-8")
+    resumable = output / "run-resumable"
+    (resumable / "latest").mkdir(parents=True)
+    (resumable / "global_step42").mkdir()
+    not_resumable = output / "run-with-log-only"
+    not_resumable.mkdir(parents=True)
+    (not_resumable / "training.log").write_text("still running", encoding="utf-8")
+
+    runs = {run["name"]: run for run in training_history.discover_runs(set_folder, "lo")}
+
+    assert runs["run-resumable"]["checkpointAvailable"] is True
+    assert runs["run-resumable"]["path"] == str(resumable / "latest")
+    assert runs["run-resumable"]["checkpointName"] == "latest"
+    assert runs["run-with-log-only"]["checkpointAvailable"] is False
+    assert runs["run-with-log-only"]["path"] == str(not_resumable)
+
+
+def test_discover_runs_accepts_a_global_step_directly_in_configured_output_dir(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = root / "output" / "runs" / "set-lo"
+    (set_folder / "config.lo.toml").write_text('output_dir = "' + str(output) + '"\n', encoding="utf-8")
+    checkpoint = output / "global_step17"
+    checkpoint.mkdir(parents=True)
+
+    runs = training_history.discover_runs(set_folder, "lo")
+
+    assert len(runs) == 1
+    assert runs[0]["runPath"] == str(output)
+    assert runs[0]["path"] == str(checkpoint)
+    assert runs[0]["checkpointName"] == "global_step17"
 
 
 def test_discover_runs_uses_each_stage_current_config_output_dir(tmp_path, monkeypatch):
@@ -179,7 +238,7 @@ def test_discover_runs_ignores_webcap_job_sidecars(tmp_path, monkeypatch):
     (output / ".webcap" / "jobs" / "job-1").mkdir(parents=True)
     real_run = output / "real-run"
     real_run.mkdir(parents=True)
-    (real_run / "checkpoint.pt").write_text("checkpoint", encoding="utf-8")
+    (real_run / "latest").write_text("checkpoint", encoding="utf-8")
 
     assert [run["name"] for run in training_history.discover_runs(set_folder)] == ["real-run"]
 

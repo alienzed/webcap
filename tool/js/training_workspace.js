@@ -128,6 +128,7 @@ function getTrainingRunnerActiveJob() {
 
 function syncUtilityTrainingActivity() {
   var utilityTrainingBtn = document.getElementById('utility-training-btn');
+  var utilityTrainingProgress = document.getElementById('utility-training-progress');
   if (!utilityTrainingBtn) return;
   var running = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
     return job.status === 'running';
@@ -135,6 +136,7 @@ function syncUtilityTrainingActivity() {
   utilityTrainingBtn.classList.toggle('training-running', running);
   utilityTrainingBtn.title = running ? 'Open Training (training in progress)' : 'Open Training';
   utilityTrainingBtn.setAttribute('aria-label', running ? 'Open Training (training in progress)' : 'Open Training');
+  utilityTrainingProgress.hidden = !running;
 }
 
 function getTrainingRunnerJobById(jobId) {
@@ -490,7 +492,16 @@ function renderTrainingRunner() {
 function formatTrainingHistoryTime(value) {
   var seconds = Number(value || 0);
   if (!seconds) return '';
-  return new Date(seconds * 1000).toLocaleString();
+  return new Date(seconds * 1000).toLocaleString([], {
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit'
+  });
+}
+
+
+function trainingHistoryTimestampKind(job) {
+  if (Number(job && job.finishedAt || 0)) return 'Finished';
+  if (Number(job && job.startedAt || 0)) return 'Started';
+  return 'Queued';
 }
 
 function renderTrainingHistory() {
@@ -520,20 +531,22 @@ function renderTrainingHistory() {
     var finalStep = Number(progress.step);
     var elapsedSeconds = Number(job.finishedAt || 0) - Number(job.startedAt || 0);
     var details = [];
+    if (run.checkpointName) details.push('checkpoint ' + run.checkpointName);
+    var timestamp = job.finishedAt || job.startedAt || job.createdAt;
+    var timestampKind = trainingHistoryTimestampKind(job);
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
     if (elapsedSeconds > 0) details.push(formatTrainingRunnerDuration(elapsedSeconds));
     var canResume = (job.status === 'finished_early' || job.status === 'interrupted') && job.resumeCheckpoint && (job.resumeStage === 'hi' || job.resumeStage === 'lo');
     var status = String(job.status || 'unknown');
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</span></div>' +
-        '<span class="training-history-time">' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</span></div>' +
+        '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
       '<div class="training-history-context"><div class="training-history-model">' + escapeHtml((job.model && job.model.label) || job.modelLabel || 'Training model') + ' · ' + escapeHtml(job.profile || 'unknown') + '</div>' +
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
         (details.length ? '<div>' + escapeHtml(details.join(' · ')) + '</div>' : '') +
         (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
       '</div>' +
-      (job.input && job.input.comparison === 'changed' ? '<div class="training-runner-detail is-warning">Dataset changed since this run.</div>' : '') +
       '<div class="training-history-actions">' +
        (job.folder ? '<button type="button" data-training-history-output="' + escapeHtml(job.folder) + '" data-training-history-output-stage="' + escapeHtml(job.stages || '') + '">Open output</button>' : '') +
        '<button type="button" data-training-history-log="' + escapeHtml(job.id || '') + '">Show log</button>' +
@@ -896,7 +909,12 @@ function reorderManagedTraining(jobId, direction) {
 
 function resumeManagedTrainingQueue() {
   trainingRunnerRequest('/fs/training_runner/resume_queue', { method: 'POST' })
-    .then(function () { setStatus('Training queue resumed.'); refreshTrainingRunnerStatus(); })
+    .then(function (payload) {
+      var activeId = String(payload.activeJobId || '');
+      var active = (payload.jobs || []).filter(function (job) { return String(job.id || '') === activeId; })[0];
+      setStatus(active && !active.resumeFromCheckpoint ? 'No saved checkpoint found; starting a new run.' : 'Training queue resumed.');
+      refreshTrainingRunnerStatus();
+    })
     .catch(function (err) { setStatus('Could not resume training queue: ' + String(err.message || err)); });
 }
 
@@ -939,7 +957,11 @@ function resumeTrainingHistoryJob(jobId) {
   if (!job || !job.folder || !job.resumeCheckpoint || (job.resumeStage !== 'hi' && job.resumeStage !== 'lo')) {
     throw new Error('This historical run no longer has a resumable checkpoint.');
   }
-  if (job.input && job.input.comparison === 'changed' && !window.confirm('Dataset or config inputs changed since this run. Resume using the current inputs?')) return;
+  var comparison = String(job.input && job.input.comparison || '');
+  if (comparison && comparison !== 'matches' && comparison !== 'unavailable') {
+    var changedLabel = comparison === 'dataset_changed' ? 'Dataset' : comparison === 'config_changed' ? 'Training configuration' : 'Dataset or configuration';
+    if (!window.confirm(changedLabel + ' changed since this run. Resume using the current inputs?')) return;
+  }
   trainingRunnerRequest('/fs/training_runner/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -954,7 +976,7 @@ function resumeTrainingHistoryJob(jobId) {
   }).then(function (payload) {
     trainingWorkspaceState.runnerSelectedJobId = payload.job.id;
     trainingWorkspaceState.runnerLogOffsets[payload.job.id] = 0;
-    setStatus(payload.queued ? 'Resume job queued.' : 'Resume job started.');
+    setStatus(payload.queued ? 'Resume job queued.' : (payload.resumeFromCheckpoint ? 'Resume job started.' : 'No saved checkpoint found; starting a new run.'));
     refreshTrainingRunnerStatus();
     refreshTrainingHistory();
   }).catch(function (err) {

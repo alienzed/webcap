@@ -195,6 +195,21 @@ def test_paused_job_resumes_the_latest_checkpoint_from_its_stage_artifacts(monke
     assert "actionRequested" not in job
 
 
+def test_paused_job_without_checkpoint_starts_a_fresh_run(monkeypatch):
+    job = {
+        "folder": "set", "stages": "lo", "status": "paused",
+        "actionRequested": "pause", "resumeFromCheckpoint": "stale-path", "resumeStage": "lo",
+    }
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    monkeypatch.setattr(training_runner, "discover_runs", lambda folder, stage: [])
+
+    assert training_runner._prepare_paused_job_for_resume(job) == ""
+    assert job["status"] == "queued"
+    assert job["resumeFromCheckpoint"] == ""
+    assert job["resumeStage"] == ""
+    assert "actionRequested" not in job
+
+
 def test_user_paused_job_from_legacy_state_stays_at_the_front_of_the_queue(monkeypatch):
     paused = {"id": "paused", "folder": "penny", "stages": "lo", "status": "paused", "createdAt": 1}
     state = {

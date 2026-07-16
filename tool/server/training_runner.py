@@ -1003,10 +1003,8 @@ def _prepare_paused_job_for_resume(job):
         run["path"] for run in discover_runs(folder_path, stage)
         if run.get("checkpointAvailable")
     ), "")
-    if not checkpoint:
-        return "No resumable checkpoint was found for this " + stage.upper() + " job."
     job["resumeFromCheckpoint"] = checkpoint
-    job["resumeStage"] = stage
+    job["resumeStage"] = stage if checkpoint else ""
     job.pop("actionRequested", None)
     job.pop("actionRequestedAt", None)
     job["status"] = "queued"

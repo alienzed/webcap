@@ -125,6 +125,24 @@ def _run_artifact_state(entry, expected_epochs):
     return completed, highest_epoch, highest_step
 
 
+def _resume_artifacts(entry):
+    """Return only trainer artifacts that can be passed to --resume_from_checkpoint."""
+    directory = Path(entry)
+    latest = directory / "latest"
+    artifacts = [latest] if latest.exists() else []
+    try:
+        steps = [child for child in directory.iterdir() if _STEP_PATTERN.match(child.name)]
+    except OSError:
+        steps = []
+    steps.sort(key=lambda child: int(_STEP_PATTERN.match(child.name).group(1)), reverse=True)
+    artifacts.extend(steps)
+    return artifacts
+
+
+def _is_checkpoint_artifact(entry):
+    return Path(entry).name.lower() == "latest" or bool(_STEP_PATTERN.match(Path(entry).name))
+
+
 def _default_history(folder_path):
     return {
         "version": HISTORY_VERSION,
@@ -170,14 +188,18 @@ def discover_runs(folder_path, stage=""):
         root_stage = root_stages[0] if len(root_stages) == 1 else ""
         if not root.exists() or not root.is_dir():
             continue
-        for entry in root.iterdir():
+        candidates = [root] if _resume_artifacts(root) else []
+        try:
+            candidates.extend(root.iterdir())
+        except OSError:
+            continue
+        for entry in candidates:
             # WebCap stores job snapshots under <output>/.webcap.  Those are not
             # trainer runs and must never become resume candidates.
-            if not entry.is_dir() or entry.name.startswith(".") or entry in seen:
+            if not entry.is_dir() or entry.name.startswith(".") or _is_checkpoint_artifact(entry) or entry in seen:
                 continue
             try:
                 modified = entry.stat().st_mtime
-                has_contents = any(entry.iterdir())
             except OSError:
                 continue
             seen.add(entry)
@@ -188,13 +210,17 @@ def discover_runs(folder_path, stage=""):
                 continue
             expected_epochs = _configured_epochs(folder_path, entry_stage) if entry_stage else 0
             completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
+            resume_artifacts = _resume_artifacts(entry)
+            checkpoint = resume_artifacts[0] if resume_artifacts else None
             runs.append({
-                "path": str(entry),
+                "path": str(checkpoint or entry),
+                "runPath": str(entry),
                 "name": entry.name,
                 "setName": _set_name_from_run_config(entry, Path(folder_path).name),
                 "stage": entry_stage,
                 "modifiedAt": modified,
-                "checkpointAvailable": bool(has_contents),
+                "checkpointAvailable": bool(checkpoint),
+                "checkpointName": checkpoint.name if checkpoint else "",
                 "completed": completed,
                 "epoch": highest_epoch or None,
                 "steps": highest_step or None,
@@ -308,7 +334,14 @@ def all_history_payload(query="", folder=""):
                 from .training_runner import _input_evidence
                 current_input = _input_evidence(set_folder)
                 item["input"] = dict(recorded_input)
-                item["input"]["comparison"] = "matches" if recorded_input.get("fingerprint") == current_input.get("fingerprint") and recorded_input.get("configFingerprint") == current_input.get("configFingerprint") else "changed"
+                if not recorded_input.get("fingerprint") or not recorded_input.get("configFingerprint"):
+                    item["input"]["comparison"] = "unavailable"
+                elif recorded_input.get("fingerprint") != current_input.get("fingerprint"):
+                    item["input"]["comparison"] = "dataset_changed"
+                elif recorded_input.get("configFingerprint") != current_input.get("configFingerprint"):
+                    item["input"]["comparison"] = "config_changed"
+                else:
+                    item["input"]["comparison"] = "matches"
             except Exception:
                 if recorded_input:
                     item["input"] = dict(recorded_input)

@@ -658,6 +658,34 @@ def test_starting_both_creates_adjacent_hi_and_lo_jobs(tmp_path, monkeypatch):
     assert state["jobs"][1]["status"] == "queued"
 
 
+def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypatch):
+    state = {
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "Queue held after LO failed.",
+        "jobs": [{"id": "old", "status": "failed", "folder": "old-set"}],
+    }
+    job = {"id": "new", "folder": "set", "stages": "lo", "status": "queued"}
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda value: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda value: None)
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value: ("set", "folder", {}, {}, []))
+    monkeypatch.setattr(training_runner, "_new_job", lambda *args: job)
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    monkeypatch.setattr(training_runner, "_launch_job", lambda candidate, folder: candidate.update(status="starting"))
+
+    payload, status = training_runner.start_response("set", queue=True, stages="lo")
+
+    assert status == 200
+    assert payload["queued"] is False
+    assert state["activeJobId"] == "new"
+    assert state["queuePaused"] is False
+    assert state["queuePauseReason"] == ""
+
+
 def test_folder_status_prefers_queue_state_over_output_artifacts(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "set"

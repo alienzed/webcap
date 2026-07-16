@@ -1229,9 +1229,16 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         _apply_restart_hold(state)
         _refresh_state(state)
         active = _find_job(state, state.get("activeJobId")) if state.get("activeJobId") else None
+        has_pending_queue = any(job.get("status") in QUEUE_STATUSES for job in state.get("jobs", []))
         if active and active.get("status") not in TERMINAL_STATUSES and not queue:
             _write_state(state)
             return {"ok": False, "error": "A managed training job is already active.", "activeJob": _public_job(active)}, 409
+        # An explicit Train request is permission to start a fresh queue. A
+        # stale hold from a previous terminal job must not leave the new job
+        # queued forever when there is no active or pending work to protect.
+        if not active and not has_pending_queue:
+            state["queuePaused"] = False
+            state["queuePauseReason"] = ""
         job_stages = ("hi", "lo") if stages == "both" else (stages,)
         jobs = []
         for job_stage in job_stages:

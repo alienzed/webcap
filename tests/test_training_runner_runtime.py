@@ -154,6 +154,18 @@ def test_new_job_keeps_large_snapshots_under_the_output_sidecar(tmp_path, monkey
     assert job["model"]["source"] == "models/example.safetensors"
 
 
+def test_model_identity_keeps_the_specific_wan_checkpoint_name(tmp_path):
+    config = tmp_path / "config.hi.toml"
+    config.write_text('ckpt_path = "/models/Wan2.2-T2V-A14B"\n', encoding="utf-8")
+
+    model = training_runner._model_identity({"hiConfig": config, "loConfig": config})
+
+    assert model == {
+        "label": "Wan2.2-T2V-A14B",
+        "source": "/models/Wan2.2-T2V-A14B",
+    }
+
+
 def test_start_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):
     paused = {"id": "paused", "status": "paused", "folder": "penny", "stages": "lo"}
     queued = {"id": "next", "status": "queued", "folder": "sue", "stages": "hi"}

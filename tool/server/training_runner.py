@@ -537,8 +537,10 @@ def _model_identity(artifacts):
         if match:
             source = match.group(1).strip()
             break
-    source_name = Path(source).stem if source else ""
-    label = "WAN 2.2" if "wan2.2" in source_name.lower() else (source_name or "Training model")
+    source_name = Path(source).name if source else ""
+    if source_name.lower().endswith((".safetensors", ".ckpt", ".pt")):
+        source_name = Path(source_name).stem
+    label = "Wan2.2-T2V-A14B" if "wan2.2-t2v-a14b" in source_name.lower() else (source_name or "Training model")
     return {"label": label, "source": source}
 
 

@@ -12,17 +12,13 @@ Last reviewed: 2026-07-10.
 - Add a collapsible right workbench rail with session-persisted state for single-item work, without hiding Training's navigator or other purpose-built workspace surfaces. Grid keeps its dedicated batch Groups workspace and has no inspector rail.
 
 ## Bugs
-- Modal z-index checkup, to make sure things like group terms modals always appear on top (of focus, grid...)
-- Focus annotate, rating that removes from filtered list may break JS
-- Grid: updating a term list does not add term, need to reload modal.
-- Clipping videos appears broken... I set the playhead and 3 seconds and somehow I got a tiny loop at the very end of the video. not sure if I exceeded the duration of the clip or something, from src_videos a similar but shorter cut did seem to work
 - Rename video clip requires manual folder refresh to show new name
 
 ## Enhancements
 - Have the Train Icon, or something more... slowly change color to represent progress in the current run, so not only do we see it moving, but the color implies the percentage complete (current run only, entire queue would devalue this). I really love the idea of the app being a tiny bit more alive... it doesn't need to refresh every 10 seconds, this could be a once per minute or even more thing, but like, to come back into the app and see it adjust to it's own state... cool stuff.
 - Badge says Needs attention, you go into the set... nothing apparent... you go into training also nothing apparent... What needs attention exactly? How do I act on... what? I'd have expect that badge to be coupled with some kind of suggested action I can take, right now this is quite obscure.
 - Ability to open the output folder in Explorer directly from History (if said folder still exists...)
-- Start naming models better, we may need a mapping or fuzzy matching, but we need to start putting WAN2.2 in our labels, soon we'll use other models, they need to be named.
+
 - Training Quality isn't modifying quite as much as I remembered it was supposed to. I thought LR was supposed to change. The only thing that should remain stable is epochs and repeats (right?). less repeats just means more epochs so lowering those doesn't make training faster in a comparable way.
 - Output folder names in Tensorboard are alphabetical, this is a problem. I can sort by date in Explorer, but in Tensorboard, but I do need that sorting. What's the shortest string we can use to have items sort in a sane order for a reasonable amount of time (i've even considered using a sequence if timestamps are problematic)
 - I think this app should do a better job at suggesting the next run. High was trained? Give me ONE button to train Low. The last run was cancelled/finished early/interupted. ONE button to throw that back on the queue (resume where appropriate).

@@ -523,11 +523,12 @@ function renderTrainingHistory() {
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
     if (elapsedSeconds > 0) details.push(formatTrainingRunnerDuration(elapsedSeconds));
     var canResume = (job.status === 'finished_early' || job.status === 'interrupted') && job.resumeCheckpoint && (job.resumeStage === 'hi' || job.resumeStage === 'lo');
+    var status = String(job.status || 'unknown');
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
-      '<div class="training-history-primary"><strong>' + escapeHtml(trainingRunnerStatusLabel(job.status)) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) +
+      '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</span></div>' +
         '<span class="training-history-time">' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</span></div>' +
-      '<div class="training-history-model">' + escapeHtml((job.model && job.model.label) || job.modelLabel || 'Training model') + ' · ' + escapeHtml(job.profile || 'unknown') + '</div>' +
-      '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div>' +
+      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml((job.model && job.model.label) || job.modelLabel || 'Training model') + ' · ' + escapeHtml(job.profile || 'unknown') + '</div>' +
+        '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
         (details.length ? '<div>' + escapeHtml(details.join(' · ')) + '</div>' : '') +
         (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
@@ -818,7 +819,7 @@ function trainingStageLabel(stages) {
 function trainingModelLabel(job) {
   var model = job && job.model && typeof job.model === 'object' ? job.model : {};
   var label = String(job && (job.modelLabel || model.label) || '').trim();
-  return !label || label === 'Training model' ? 'WAN 2.2' : label;
+  return !label || label === 'Training model' || /^wan\s*2(?:\.2)?$/i.test(label) ? 'Wan2.2-T2V-A14B' : label;
 }
 
 function trainingJobLabel(job) {

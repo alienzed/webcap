@@ -145,7 +145,7 @@ function syncUtilityTrainingActivity() {
     utilityTrainingTurtleTimer = window.setInterval(function () {
       utilityTrainingTurtleAtLeft = !utilityTrainingTurtleAtLeft;
       utilityTrainingProgress.style.transform = utilityTrainingTurtleAtLeft ? 'translateX(-3px)' : 'translateX(3px)';
-    }, 600);
+    }, 1000);
   } else if (!running && utilityTrainingTurtleTimer) {
     window.clearInterval(utilityTrainingTurtleTimer);
     utilityTrainingTurtleTimer = 0;

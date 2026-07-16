@@ -295,6 +295,24 @@ function clearMediaFiltersForGeneratedDataset(path) {
   clearCaptionFilterInputs();
 }
 
+function navigateIntoFolder(name) {
+  var folderName = String(name || '').trim();
+  if (!folderName || folderName === '.' || folderName === '..' || /[\\/]/.test(folderName)) {
+    throw new Error('Invalid folder name.');
+  }
+  if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+    clearFocusSet();
+  }
+  state.folder = (state.folder ? state.folder + '/' : '') + folderName;
+  if (state.dirStack.length) {
+    state.dirStack.push({ name: folderName });
+  }
+  state.currentItem = null;
+  clearEditorAndPreview();
+  clearCaptionFilterInputs();
+  refreshCurrentDirectory();
+}
+
 // Directory listing now uses backend /fs/list
 function refreshCurrentDirectory() {
   var path = state.folder || '';

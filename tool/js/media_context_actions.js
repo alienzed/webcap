@@ -134,6 +134,24 @@ function buildCurrentFolderContextActions() {
   var focusActionLabel = (state && state.focusSet && state.focusSet.keys && state.focusSet.keys.length)
     ? 'Resume Focus Annotation...'
     : 'Focused Annotate...';
+  var browseOriginalsAction = state.folder && isSetFolderPath(state.folder)
+    ? {
+        label: 'Browse Originals',
+        run: function () {
+          fetchPathExistsForCurrentFolder('originals')
+            .then(function (exists) {
+              if (!exists) {
+                setStatus('This folder has no originals.');
+                return;
+              }
+              navigateIntoFolder('originals');
+            })
+            .catch(function (err) {
+              setStatus('Could not open originals: ' + String(err && err.message ? err.message : err));
+            });
+        }
+      }
+    : null;
   return [
     {
       label: 'Open in Explorer',
@@ -147,6 +165,7 @@ function buildCurrentFolderContextActions() {
         openFolderInVsCode(state.folder || '');
       }
     },
+    browseOriginalsAction,
     {
       label: focusActionLabel,
       run: function () {

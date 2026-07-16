@@ -23,7 +23,7 @@ function resetSelectionForFolderAction() {
   renderFileList(ui.filterEl.value);
 }
 
-function runTrainingActionRequest(url, body, options) {
+function runTrainingActionRequest(url, body) {
   function getOutputErrorMessage(outputText) {
     var lines = String(outputText || '').split(/\r?\n/);
     for (var i = 0; i < lines.length; i += 1) {
@@ -35,24 +35,21 @@ function runTrainingActionRequest(url, body, options) {
     return '';
   }
 
-  return new Promise(function (resolve, reject) {
-    var runner = options && options.fetchText ? fetchPreviewText : streamPreviewFromFetch;
-    runner(
-      url,
-      body,
-      ui,
-      function (outputText) {
-        var errorMessage = getOutputErrorMessage(outputText);
-        if (errorMessage) {
-          reject(new Error(errorMessage));
-          return;
-        }
-        resolve(String(outputText || ''));
-      },
-      function (err) {
-        reject(err instanceof Error ? err : new Error(String(err || 'Request failed')));
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function (response) {
+    return response.text().then(function (outputText) {
+      if (!response.ok) {
+        throw new Error(outputText || response.statusText || 'Request failed');
       }
-    );
+      var errorMessage = getOutputErrorMessage(outputText);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      return String(outputText || '');
+    });
   });
 }
 
@@ -230,13 +227,13 @@ function runTrainCommandPreviewForCurrentFolder(options) {
   }
   return ensureGeneratedTrainingArtifactsForCurrentFolder()
     .then(function () {
-      setStatus('Printing manual training command...');
+      setStatus('Generating manual training command...');
       return runTrainingActionRequest('/fs/train_run', {
         folder: state.folder,
         stages: options && options.stages ? options.stages : 'both',
         resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
         resumeStage: options && options.resumeStage ? options.resumeStage : ''
-      }, { fetchText: true });
+      });
     })
     .then(function (outputText) {
       var command = extractTrainingPreviewCommand(outputText);

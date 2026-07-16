@@ -585,17 +585,6 @@ function renderTensorboard() {
   }
 }
 
-function appendTrainingRunnerValidationToAppConsole(payload) {
-  var checks = Array.isArray(payload.checks) ? payload.checks : [];
-  var lines = ['[training-runner] Validation results:'];
-  checks.forEach(function (check) {
-    lines.push((check.ok ? '[OK] ' : '[FAIL] ') + (check.message || check.id));
-    if (check.details) lines.push(String(check.details));
-  });
-  if (payload.runnerScript) lines.push('[training-runner] Generated runner script:\n' + payload.runnerScript);
-  appendToConsolePanel(lines.join('\n') + '\n');
-}
-
 function isTrainingRunnerConsoleVisible() {
   var els = getTrainingWorkspaceEls();
   return !!(els.runnerConsole && !els.runnerConsole.classList.contains('hidden'));
@@ -767,7 +756,6 @@ function refreshTrainingGpuStatus() {
 function validateTrainingRunner(options) {
   if (!state.folder) return Promise.reject(new Error('No folder selected for training validation.'));
   setStatus('Validating managed training runner...');
-  showConsolePanel();
   return trainingRunnerRequest('/fs/training_runner/validate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -780,7 +768,6 @@ function validateTrainingRunner(options) {
     allowNotOk: true
   }).then(function (payload) {
     renderTrainingRunnerPreflight(payload);
-    appendTrainingRunnerValidationToAppConsole(payload);
     setStatus(payload.ok ? 'Training runner validation passed.' : 'Training runner validation found blockers.');
     return payload;
   });

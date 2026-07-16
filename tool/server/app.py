@@ -689,7 +689,7 @@ def _build_fs_describe_payload(dir_path):
     training_statuses = training_runner_folder_statuses(folder_paths)
     folders = []
     for entry in entries:
-        if entry["type"] != "dir" or entry["name"] == "originals":
+        if entry["type"] != "dir" or entry["name"].lower() in ("originals", "auto_dataset"):
             continue
         folder_meta = dict(entry)
         folder_meta["trainingStatus"] = training_statuses.get(dir_path / entry["name"], {"status": "never", "label": ""})

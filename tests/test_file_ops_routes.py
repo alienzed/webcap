@@ -402,6 +402,7 @@ def test_fs_describe_hides_internal_and_originals_directories(tmp_path, monkeypa
     set_dir.mkdir(parents=True)
     (set_dir / ".webcap_training").mkdir()
     (set_dir / "originals").mkdir()
+    (set_dir / "auto_dataset").mkdir()
     (set_dir / "visible_folder").mkdir()
 
     monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
@@ -413,6 +414,7 @@ def test_fs_describe_hides_internal_and_originals_directories(tmp_path, monkeypa
     names = [entry["name"] for entry in response.get_json()["folders"]]
     assert ".webcap_training" not in names
     assert "originals" not in names
+    assert "auto_dataset" not in names
     assert "visible_folder" in names
 
 

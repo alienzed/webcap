@@ -450,8 +450,6 @@ function wireWorkspaceHeaderUi() {
       }
       Promise.resolve(saveCurrentEditorContent())
         .then(function () {
-          showConsolePanel();
-          syncWorkspaceConfigEditorUi();
           return runTrainCommandPreviewForCurrentFolder();
         })
         .catch(function (err) {

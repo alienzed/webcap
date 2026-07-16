@@ -20,6 +20,7 @@ var trainingWorkspaceState = {
   gpuForActiveJob: false,
   history: null,
   historySearchScopeFolder: '',
+  resumeSelectionTouched: false,
   historyExpanded: false,
   historyCollapsed: true,
   runnerQueueCollapsed: false,
@@ -554,6 +555,21 @@ function renderTrainingHistory() {
     els.historyShowAllBtn.textContent = trainingWorkspaceState.historyExpanded ? 'Show less' : 'Show all (' + jobs.length + ')';
   }
   var selectedCheckpoint = String(els.checkpointSelect.value || '');
+  var resumeStage = trainingWorkspaceState.runStages === 'both'
+    ? String((document.getElementById('training-run-resume-stage-select') || {}).value || 'lo')
+    : String(trainingWorkspaceState.runStages || '');
+  if (!selectedCheckpoint && !trainingWorkspaceState.resumeSelectionTouched) {
+    var currentFolder = String(state.folder || '');
+    var associatedJob = (trainingWorkspaceState.runnerJobs || []).concat(jobs).filter(function (job) {
+      return String(job.folder || '') === currentFolder && String(job.stages || '') === resumeStage && job.outputRunPath;
+    })[0];
+    var preferredRun = associatedJob && runs.filter(function (run) {
+      return String(run.path || '') === String(associatedJob.outputRunPath || '');
+    })[0];
+    var fallbackPath = String((trainingWorkspaceState.history.resumeDefaults || {})[resumeStage] || '');
+    var fallbackRun = runs.filter(function (run) { return String(run.path || '') === fallbackPath; })[0];
+    selectedCheckpoint = String((preferredRun || fallbackRun || runs.filter(function (run) { return run.checkpointAvailable; })[0] || {}).path || '');
+  }
   els.checkpointSelect.innerHTML = '<option value="">Start a new run</option>' + runs.map(function (run) {
     var unavailable = !run.checkpointAvailable;
     var details = [];
@@ -1005,6 +1021,7 @@ function syncTrainingHistorySearchScope() {
     else if (searchEl.value === priorFolder) searchEl.value = '';
   }
   trainingWorkspaceState.historySearchScopeFolder = folder;
+  if (folder !== priorFolder) trainingWorkspaceState.resumeSelectionTouched = false;
   return folder;
 }
 
@@ -1022,7 +1039,10 @@ function refreshTrainingHistory() {
         return null;
       }
       return fetch('/fs/training_history?folder=' + encodeURIComponent(folder)).then(function (response) { return response.json(); }).then(function (setPayload) {
-        if (setPayload.ok && trainingWorkspaceState.history) trainingWorkspaceState.history.runs = (setPayload.history || {}).runs || [];
+        if (setPayload.ok && trainingWorkspaceState.history) {
+          trainingWorkspaceState.history.runs = (setPayload.history || {}).runs || [];
+          trainingWorkspaceState.history.resumeDefaults = (setPayload.history || {}).resumeDefaults || {};
+        }
         renderTrainingHistory();
       });
     })
@@ -1426,6 +1446,7 @@ function wireTrainingWorkspace() {
     syncManagedTrainingResumeUi();
   };
   if (checkpointSelect) checkpointSelect.onchange = function () {
+    trainingWorkspaceState.resumeSelectionTouched = true;
     trainingWorkspaceState.resumeParentJobId = '';
     var selectedRun = (trainingWorkspaceState.history && trainingWorkspaceState.history.runs || []).filter(function (run) {
       return String(run.path || '') === String(checkpointSelect.value || '');

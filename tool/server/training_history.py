@@ -1,8 +1,12 @@
 import json
 import os
 import re
+import shlex
+import shutil
+import subprocess
 import time
-from pathlib import Path
+from datetime import datetime
+from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
@@ -20,11 +24,55 @@ _NOISE_MODEL_PATTERN = re.compile(r"\b(high|low)[_ -]?noise(?:[_ -]?model)?\b", 
 
 
 def output_root_for_folder(folder_path, stage="hi"):
+    return _host_path_for_training_path(output_root_path_for_folder(folder_path, stage))
+
+
+def output_root_path_for_folder(folder_path, stage="hi"):
     folder = Path(folder_path)
     configured = output_dir_from_config(folder, stage) if stage in ("hi", "lo") else None
     if configured:
-        return configured
-    return Path(app_config.FS_ROOT) / "output" / "runs" / folder.name
+        return str(configured)
+    return str(Path(app_config.FS_ROOT) / "output" / "runs" / folder.name)
+
+
+def _wsl_distribution():
+    training = app_config.config.get("training") if isinstance(app_config.config, dict) else {}
+    return str(training.get("wsl_distribution") or "").strip() if isinstance(training, dict) else ""
+
+
+def _host_path_for_training_path(path):
+    value = str(path or "").strip()
+    if not value or os.name != "nt" or not value.startswith("/"):
+        return Path(value)
+    executable = shutil.which("wsl.exe") or shutil.which("wsl")
+    if not executable:
+        raise RuntimeError("wsl.exe was not found while resolving the configured training output path.")
+    args = [executable]
+    distribution = _wsl_distribution()
+    if distribution:
+        args.extend(["--distribution", distribution])
+    args.extend(["--", "bash", "-lc", "wslpath -w " + shlex.quote(value)])
+    try:
+        completed = subprocess.run(args, capture_output=True, text=True, timeout=10, check=False)
+    except Exception as exc:
+        raise RuntimeError("Could not resolve the configured training output path: " + str(exc)) from exc
+    converted = (completed.stdout or "").strip()
+    if completed.returncode != 0 or not converted:
+        raise RuntimeError((completed.stderr or completed.stdout or "Could not resolve the configured training output path.").strip())
+    return Path(converted)
+
+
+def _training_path_for_entry(entry, host_root, training_root):
+    path = Path(entry)
+    root = Path(host_root)
+    raw_root = str(training_root or "")
+    try:
+        relative = path.relative_to(root).as_posix()
+    except ValueError:
+        return str(path)
+    if raw_root.startswith("/"):
+        return str(PurePosixPath(raw_root) / PurePosixPath(relative))
+    return str(path)
 
 
 def output_roots_for_folder(folder_path):
@@ -126,14 +174,23 @@ def _run_artifact_state(entry, expected_epochs):
 
 
 def _resume_artifacts(entry):
-    """Return the DeepSpeed latest marker when its parent run can resume."""
+    """Return the DeepSpeed latest marker only when it names a real checkpoint."""
     directory = Path(entry)
     latest = directory / "latest"
-    return [latest] if latest.is_file() else []
+    if not latest.is_file():
+        return []
+    try:
+        tag = latest.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+    except (OSError, IndexError):
+        return []
+    if not _STEP_PATTERN.match(tag) or not (directory / tag).is_dir():
+        return []
+    return [latest]
 
 
 def _is_checkpoint_artifact(entry):
-    return Path(entry).name.lower() == "latest" or bool(_STEP_PATTERN.match(Path(entry).name))
+    name = Path(entry).name
+    return name.lower() == "latest" or bool(_STEP_PATTERN.match(name)) or bool(_EPOCH_PATTERN.match(name))
 
 
 def _default_history(folder_path):
@@ -173,12 +230,18 @@ def _write_history(folder_path, data):
 
 
 def discover_runs(folder_path, stage=""):
-    roots = [output_root_for_folder(folder_path, stage)] if stage in ("hi", "lo") else output_roots_for_folder(folder_path)
+    root_stages = (stage,) if stage in ("hi", "lo") else ("hi", "lo")
+    roots = []
+    for root_stage in root_stages:
+        training_root = output_root_path_for_folder(folder_path, root_stage)
+        host_root = output_root_for_folder(folder_path, root_stage)
+        if not any(item[0] == host_root for item in roots):
+            roots.append((host_root, training_root))
     runs = []
     seen = set()
-    for root in roots:
-        root_stages = [name for name in ("hi", "lo") if output_root_for_folder(folder_path, name) == root]
-        root_stage = root_stages[0] if len(root_stages) == 1 else ""
+    for root, training_root in roots:
+        matching_stages = [name for name in ("hi", "lo") if output_root_for_folder(folder_path, name) == root]
+        root_stage = matching_stages[0] if len(matching_stages) == 1 else ""
         if not root.exists() or not root.is_dir():
             continue
         candidates = [root] if _resume_artifacts(root) else []
@@ -205,11 +268,12 @@ def discover_runs(folder_path, stage=""):
             completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
             resume_artifacts = _resume_artifacts(entry)
             checkpoint = resume_artifacts[0] if resume_artifacts else None
+            training_path = _training_path_for_entry(entry, root, training_root)
             runs.append({
                 # DeepSpeed expects the run directory, then resolves its own
                 # latest marker or checkpoint tag inside that directory.
-                "path": str(entry),
-                "runPath": str(entry),
+                "path": training_path,
+                "runPath": training_path,
                 "name": entry.name,
                 "setName": _set_name_from_run_config(entry, Path(folder_path).name),
                 "stage": entry_stage,
@@ -222,6 +286,49 @@ def discover_runs(folder_path, stage=""):
                 "expectedEpochs": expected_epochs or None,
             })
     return sorted(runs, key=lambda run: run["modifiedAt"], reverse=True)
+
+
+def resumable_run_for_path(folder_path, stage, run_path):
+    wanted = str(run_path or "").strip()
+    if not wanted:
+        return {}
+    return next((
+        run for run in discover_runs(folder_path, stage)
+        if run.get("checkpointAvailable") and str(run.get("path") or "") == wanted
+    ), {})
+
+
+def ranked_resumable_runs(folder_path, stage, job=None):
+    runs = [run for run in discover_runs(folder_path, stage) if run.get("checkpointAvailable")]
+    job = job if isinstance(job, dict) else {}
+    preferred_path = str(job.get("outputRunPath") or "").strip()
+    started_at = float(job.get("startedAt") or job.get("createdAt") or 0)
+    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    expected_step = float(progress.get("step") or 0)
+    expected_epoch = float(progress.get("epoch") or 0)
+
+    def timestamp_distance(run):
+        if not started_at:
+            return float("inf")
+        try:
+            stamp = datetime.strptime(str(run.get("name") or ""), "%Y%m%d_%H-%M-%S").timestamp()
+        except ValueError:
+            return float("inf")
+        return abs(stamp - started_at)
+
+    def progress_distance(run):
+        if expected_step and run.get("steps"):
+            return abs(float(run["steps"]) - expected_step)
+        if expected_epoch and run.get("epoch"):
+            return abs(float(run["epoch"]) - expected_epoch)
+        return float("inf")
+
+    return sorted(runs, key=lambda run: (
+        0 if str(run.get("path") or "") == preferred_path else 1,
+        progress_distance(run),
+        timestamp_distance(run),
+        -float(run.get("modifiedAt") or 0),
+    ))
 
 
 def summarize_history(folder_path):
@@ -238,7 +345,7 @@ def record_job(folder_path, job):
     history = read_history(folder_path)
     runs = discover_runs(folder_path, str(job.get("stages") or ""))
     record_fields = (
-        "id", "folder", "stages", "modelLabel", "resumeFromCheckpoint", "resumeStage", "status", "stage",
+        "id", "folder", "stages", "modelLabel", "resumeFromCheckpoint", "resumeStage", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "parentJobId",
         "outputRoot", "progress", "profile", "model", "input", "artifactDir", "artifactSummary",
     )
@@ -274,6 +381,14 @@ def record_job(folder_path, job):
 def history_payload(folder_path):
     history = read_history(folder_path)
     history["runs"] = discover_runs(folder_path)
+    defaults = {}
+    for stage in ("hi", "lo"):
+        stage_jobs = [job for job in history.get("jobs") or [] if str(job.get("stages") or "") == stage]
+        job = max(stage_jobs, key=lambda item: float(item.get("startedAt") or item.get("createdAt") or 0), default={})
+        run = next(iter(ranked_resumable_runs(folder_path, stage, job)), {})
+        if run:
+            defaults[stage] = run["path"]
+    history["resumeDefaults"] = defaults
     return history
 
 

@@ -19,7 +19,7 @@ from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
 from .dataset_config import repeat_targets_for_mode
-from .training_history import completed_stages, discover_runs, output_root_for_folder, record_job, clear_history_job
+from .training_history import completed_stages, discover_runs, ranked_resumable_runs, resumable_run_for_path, output_root_for_folder, record_job, clear_history_job
 from .training_runtime import (
     build_runtime_command,
     build_training_launcher,
@@ -636,11 +636,14 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     lo_wsl = _to_wsl_path(lo_path, distribution)
     stages = _normalize_training_stages(job.get("stages"))
     resume_stage = _normalize_resume_stage(stages, job.get("resumeFromCheckpoint"), job.get("resumeStage"))
+    resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
+    if resume_path and not resume_path.startswith("/"):
+        resume_path = _to_wsl_path(resume_path, distribution)
     command_plan = build_training_command_plan(
         hi_wsl,
         lo_wsl,
         build_training_launcher(settings),
-        job.get("resumeFromCheckpoint") or "",
+        resume_path,
         resume_stage,
     )
     result_wsl = _to_wsl_path(job_dir / "result.json", distribution)
@@ -708,6 +711,14 @@ def _launch_job(job, folder_path):
         job["status"] = "failed"
         job["stage"] = "launch"
         job["error"] = "Preflight failed before launch."
+        job["finishedAt"] = time.time()
+        return False
+    try:
+        job["outputRunPathsAtLaunch"] = [run["path"] for run in discover_runs(folder_path, job.get("stages") or "")]
+    except Exception as exc:
+        job["status"] = "failed"
+        job["stage"] = "launch"
+        job["error"] = "Could not inspect the configured training output: " + str(exc)
         job["finishedAt"] = time.time()
         return False
     job_dir = _job_dir(job)
@@ -905,11 +916,32 @@ def _job_runner_pid(job):
         return 0
 
 
+def _bind_job_run_path(job):
+    """Persist the trainer-created run directory as soon as it is observable."""
+    stage = str(job.get("stages") or "")
+    if stage not in ("hi", "lo") or job.get("outputRunPath"):
+        return
+    folder = str(job.get("folder") or "")
+    if not folder:
+        return
+    try:
+        folder_path = app_config.safe_join_fs_root(folder)
+        known_paths = set(str(path) for path in job.get("outputRunPathsAtLaunch") or [])
+        candidates = [run for run in discover_runs(folder_path, stage) if str(run.get("path") or "") not in known_paths]
+    except Exception:
+        return
+    if not candidates:
+        return
+    job["outputRunPath"] = str(candidates[0]["path"])
+    job["updatedAt"] = time.time()
+
+
 def _refresh_job(job):
     if str(job.get("status")) not in ACTIVE_STATUSES:
         return
     if not job.get("progressPlan"):
         job["progressPlan"] = _default_progress_plan()
+    _bind_job_run_path(job)
     result = _read_result(job)
     if result:
         result_status = str(result.get("status") or "failed")
@@ -996,13 +1028,16 @@ def _prepare_paused_job_for_resume(job):
         return "Only an individual training stage can resume."
     folder = str(job.get("folder") or "")
     folder_path = app_config.safe_join_fs_root(folder)
-    # The trainer output is authoritative. Discovery filters it to this set
-    # and noise stage and orders it by the checkpoint directory's modification
-    # time, so a pause resumes the run the trainer most recently updated.
-    checkpoint = next((
-        run["path"] for run in discover_runs(folder_path, stage)
-        if run.get("checkpointAvailable")
-    ), "")
+    bound_path = str(job.get("outputRunPath") or "").strip()
+    if bound_path:
+        run = resumable_run_for_path(folder_path, stage, bound_path)
+        if not run:
+            return "The saved run directory does not contain a valid DeepSpeed checkpoint."
+    else:
+        run = next(iter(ranked_resumable_runs(folder_path, stage, job)), {})
+        if run:
+            job["outputRunPath"] = run["path"]
+    checkpoint = str(run.get("path") or "")
     job["resumeFromCheckpoint"] = checkpoint
     job["resumeStage"] = stage if checkpoint else ""
     job.pop("actionRequested", None)
@@ -1118,7 +1153,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "modelLabel", "model", "profile", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "inputConfirmationRequired")
+    fields = ("id", "folder", "stages", "modelLabel", "model", "profile", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "inputConfirmationRequired")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -1194,6 +1229,7 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "input": input_evidence,
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
+        "outputRunPath": resume_path,
         "status": "queued",
         "stage": "queued",
         "createdAt": time.time(),
@@ -1216,13 +1252,15 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}, 400
     try:
-        _, _, _, _, checks = _build_launch_preflight(folder)
+        _, folder_path, _, _, checks = _build_launch_preflight(folder)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}, 400
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     preflight = {"checks": checks, "summary": {"blockers": len(blockers), "warnings": 0}}
     if blockers:
         return {"ok": False, "error": "Launch checks failed.", "preflight": preflight}, 400
+    if resume_from_checkpoint and not resumable_run_for_path(folder_path, resume_stage, resume_from_checkpoint):
+        return {"ok": False, "error": "The selected run directory does not contain a valid DeepSpeed checkpoint."}, 400
     with _lock:
         _ensure_monitor_started()
         state = _read_state()

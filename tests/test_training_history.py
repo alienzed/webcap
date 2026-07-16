@@ -11,7 +11,8 @@ def test_training_history_discovers_only_set_local_runs(tmp_path, monkeypatch):
 
     run = training_history.output_root_for_folder(set_folder) / "20260713_01-00-00"
     run.mkdir(parents=True)
-    (run / "latest").write_text("checkpoint", encoding="utf-8")
+    (run / "global_step1").mkdir()
+    (run / "latest").write_text("global_step1", encoding="utf-8")
     (root / "output" / "runs" / "legacy").mkdir(parents=True)
 
     history = training_history.record_job(set_folder, {
@@ -44,7 +45,8 @@ def test_global_history_is_compact_and_clear_does_not_touch_run_artifacts(tmp_pa
     output = training_history.output_root_for_folder(set_folder)
     run = output / "run-one"
     run.mkdir(parents=True)
-    (run / "latest").write_text("checkpoint", encoding="utf-8")
+    (run / "global_step1").mkdir()
+    (run / "latest").write_text("global_step1", encoding="utf-8")
 
     training_history.record_job(set_folder, {
         "id": "job-1", "folder": "char/lilly", "status": "completed", "stages": "hi",
@@ -144,6 +146,22 @@ def test_discover_runs_rejects_a_global_step_without_a_deepspeed_latest_marker(t
     assert training_history.discover_runs(set_folder, "lo") == []
 
 
+def test_discover_runs_rejects_a_latest_marker_that_names_no_checkpoint(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = root / "output" / "runs" / "set-lo"
+    (set_folder / "config.lo.toml").write_text('output_dir = "' + str(output) + '"\n', encoding="utf-8")
+    run = output / "run-one"
+    run.mkdir(parents=True)
+    (run / "latest").write_text("global_step999", encoding="utf-8")
+
+    runs = training_history.discover_runs(set_folder, "lo")
+
+    assert runs[0]["checkpointAvailable"] is False
+
+
 def test_discover_runs_uses_each_stage_current_config_output_dir(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"
@@ -234,7 +252,8 @@ def test_discover_runs_ignores_webcap_job_sidecars(tmp_path, monkeypatch):
     (output / ".webcap" / "jobs" / "job-1").mkdir(parents=True)
     real_run = output / "real-run"
     real_run.mkdir(parents=True)
-    (real_run / "latest").write_text("checkpoint", encoding="utf-8")
+    (real_run / "global_step1").mkdir()
+    (real_run / "latest").write_text("global_step1", encoding="utf-8")
 
     assert [run["name"] for run in training_history.discover_runs(set_folder)] == ["real-run"]
 

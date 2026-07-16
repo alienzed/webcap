@@ -129,15 +129,43 @@ def test_discovered_resume_path_is_the_run_directory_not_its_latest_marker(tmp_p
     folder.mkdir()
     run.mkdir(parents=True)
     (run / "config.lo.toml").write_text("lo", encoding="utf-8")
+    (run / "global_step10800").mkdir()
     (run / "latest").write_text("global_step10800", encoding="utf-8")
     monkeypatch.setattr(training_history, "output_root_for_folder", lambda *args: output_root)
+    monkeypatch.setattr(training_history, "output_root_path_for_folder", lambda *args: "/mnt/w/output")
 
     runs = training_history.discover_runs(folder, "lo")
 
     assert len(runs) == 1
-    assert runs[0]["path"] == str(run)
+    assert runs[0]["path"] == "/mnt/w/output/20260716_08-31-48"
     assert runs[0]["checkpointAvailable"] is True
     assert runs[0]["checkpointName"] == "latest"
+
+
+def test_new_runner_binds_the_first_new_matching_run_directory(monkeypatch):
+    job = {
+        "folder": "set", "stages": "lo", "status": "running",
+        "outputRunPathsAtLaunch": ["/mnt/w/output/older-run"],
+    }
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    monkeypatch.setattr(training_runner, "discover_runs", lambda folder, stage: [
+        {"path": "/mnt/w/output/older-run"},
+        {"path": "/mnt/w/output/20260716_08-31-48"},
+    ])
+
+    training_runner._bind_job_run_path(job)
+
+    assert job["outputRunPath"] == "/mnt/w/output/20260716_08-31-48"
+
+
+def test_paused_job_uses_its_bound_run_path_before_legacy_discovery(monkeypatch):
+    job = {"folder": "set", "stages": "lo", "status": "paused", "outputRunPath": "/mnt/w/output/run"}
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    monkeypatch.setattr(training_runner, "resumable_run_for_path", lambda folder, stage, path: {"path": path})
+    monkeypatch.setattr(training_runner, "ranked_resumable_runs", lambda *args: (_ for _ in ()).throw(AssertionError("bound path should win")))
+
+    assert training_runner._prepare_paused_job_for_resume(job) == ""
+    assert job["resumeFromCheckpoint"] == "/mnt/w/output/run"
 
 
 def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
@@ -204,7 +232,7 @@ def test_start_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):
 def test_paused_job_resumes_the_latest_checkpoint_from_its_stage_artifacts(monkeypatch):
     job = {"folder": "set", "stages": "lo", "status": "paused", "actionRequested": "pause"}
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
-    monkeypatch.setattr(training_runner, "discover_runs", lambda folder, stage: [
+    monkeypatch.setattr(training_runner, "ranked_resumable_runs", lambda folder, stage, job: [
         {"path": "this-job-run", "checkpointAvailable": True, "modifiedAt": 110},
         {"path": "older-run", "checkpointAvailable": True, "modifiedAt": 90},
     ])
@@ -220,7 +248,7 @@ def test_paused_job_without_checkpoint_starts_a_fresh_run(monkeypatch):
         "actionRequested": "pause", "resumeFromCheckpoint": "stale-path", "resumeStage": "lo",
     }
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
-    monkeypatch.setattr(training_runner, "discover_runs", lambda folder, stage: [])
+    monkeypatch.setattr(training_runner, "ranked_resumable_runs", lambda folder, stage, job: [])
 
     assert training_runner._prepare_paused_job_for_resume(job) == ""
     assert job["status"] == "queued"

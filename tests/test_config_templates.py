@@ -41,9 +41,56 @@ def test_default_training_epochs_follow_canonical_templates():
     assert training_config_files_module.default_training_config_epochs() == (50, 90)
 
 
-def test_training_templates_use_a_flat_set_run_root():
+def test_training_templates_use_the_tensorboard_output_root():
     hi = training_config_files_module.read_training_config_template("config.hi.toml")
     lo = training_config_files_module.read_training_config_template("config.lo.toml")
 
-    assert 'output_dir = "{TRAINING_ROOT}/output/runs/{SET_NAME}"' in hi
-    assert 'output_dir = "{TRAINING_ROOT}/output/runs/{SET_NAME}"' in lo
+    assert 'output_dir = "{TRAINING_ROOT}/output/sets/{SET_NAME}"' in hi
+    assert 'output_dir = "{TRAINING_ROOT}/output/sets/{SET_NAME}"' in lo
+
+
+def test_new_training_configs_reserve_a_shared_base36_output_dir(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "lilly"
+    folder.mkdir(parents=True)
+    (folder / "clip.mp4").write_bytes(b"media")
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+
+    training_config_files_module.ensure_training_config_files(folder)
+
+    expected = root / "output" / "sets" / "01-lilly"
+    assert training_config_files_module.output_dir_from_config(folder, "hi") == expected
+    assert training_config_files_module.output_dir_from_config(folder, "lo") == expected
+    assert expected.is_dir()
+
+
+def test_new_training_config_sequence_advances_in_base36(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "lilly"
+    folder.mkdir(parents=True)
+    (folder / "clip.mp4").write_bytes(b"media")
+    output_root = root / "output" / "sets"
+    (output_root / "09-sana").mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+
+    training_config_files_module.ensure_training_config_files(folder)
+
+    assert training_config_files_module.output_dir_from_config(folder, "hi") == output_root / "0A-lilly"
+
+
+def test_regenerating_training_configs_preserves_the_configured_output_dir(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "lilly"
+    folder.mkdir(parents=True)
+    (folder / "clip.mp4").write_bytes(b"media")
+    original = root / "output" / "runs" / "legacy-lilly"
+    for stage in ("hi", "lo"):
+        (folder / ("config." + stage + ".toml")).write_text(
+            'output_dir = "' + original.as_posix() + '"\nepochs = 1\n', encoding="utf-8"
+        )
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+
+    training_config_files_module.ensure_training_config_files(folder)
+
+    assert training_config_files_module.output_dir_from_config(folder, "hi") == original
+    assert training_config_files_module.output_dir_from_config(folder, "lo") == original

@@ -13,6 +13,9 @@ TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME)
 
 _EPOCHS_TEXT_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?$', re.MULTILINE)
+_OUTPUT_DIR_LINE_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\'][^"\']+["\']\s*(?:#.*)?$', re.MULTILINE)
+_OUTPUT_PREFIX_PATTERN = re.compile(r"^([0-9A-Z]{2})-")
+_BASE36_DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 # Last-resort values only if a canonical template is missing or malformed.
 _FALLBACK_HI_EPOCHS = 50
@@ -89,6 +92,42 @@ def output_dir_from_config(folder_path: Path, stage: str):
     return Path(match.group(1).strip())
 
 
+def _base36_prefix(value):
+    if value < 1 or value >= len(_BASE36_DIGITS) ** 2:
+        raise RuntimeError("Training output sequence is exhausted at ZZ.")
+    return _BASE36_DIGITS[value // len(_BASE36_DIGITS)] + _BASE36_DIGITS[value % len(_BASE36_DIGITS)]
+
+
+def _next_output_dir(folder_path: Path):
+    root = Path(app_config.FS_ROOT) / "output" / "sets"
+    root.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(root)
+    highest = 0
+    try:
+        entries = list(root.iterdir())
+    except OSError as exc:
+        raise RuntimeError("Could not inspect training output folders: " + str(exc)) from exc
+    for entry in entries:
+        if not entry.is_dir():
+            continue
+        match = _OUTPUT_PREFIX_PATTERN.match(entry.name)
+        if match:
+            highest = max(highest, int(match.group(1), 36))
+    prefix = _base36_prefix(highest + 1)
+    output_dir = root / (prefix + "-" + Path(folder_path).name)
+    output_dir.mkdir(exist_ok=False)
+    normalize_path_permissions(output_dir)
+    return output_dir
+
+
+def _with_output_dir(config_text: str, output_dir: Path):
+    replacement = 'output_dir = "' + output_dir.as_posix() + '"'
+    updated, count = _OUTPUT_DIR_LINE_PATTERN.subn(replacement, config_text, count=1)
+    if count != 1:
+        raise ValueError("Training config template is missing output_dir.")
+    return updated
+
+
 def ensure_training_config_files(folder_path: Path):
     folder = Path(folder_path)
     if folder.name in ("originals", "auto_dataset"):
@@ -97,10 +136,18 @@ def ensure_training_config_files(folder_path: Path):
     if not media_files:
         return []
 
+    existing_roots = {
+        name: output_dir_from_config(folder, "hi" if name == HI_CONFIG_NAME else "lo")
+        for name in TRAINING_CONFIG_TEMPLATE_NAMES
+    }
+    assigned_root = next((root for root in existing_roots.values() if root), None)
+    if not assigned_root:
+        assigned_root = _next_output_dir(folder)
     written = []
     for name in TRAINING_CONFIG_TEMPLATE_NAMES:
         dest = folder / name
         rendered = render_training_config_template(name, folder)
+        rendered = _with_output_dir(rendered, existing_roots[name] or assigned_root)
         dest.write_text(rendered, encoding="utf-8")
         normalize_path_permissions(dest)
         written.append(dest)

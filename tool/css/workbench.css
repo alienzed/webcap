@@ -591,6 +591,12 @@
   font-weight: 800;
 }
 
+.app.shell-revamp .training-workflow-step-number.is-waiting {
+  background: var(--border);
+  color: var(--muted);
+  opacity: 0.55;
+}
+
 .app.shell-revamp .training-run-setup-heading {
   display: flex;
   align-items: center;

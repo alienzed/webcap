@@ -45,6 +45,10 @@ function getTrainingWorkspaceEls() {
     runSetup: document.getElementById('training-run-setup'),
     readiness: document.getElementById('training-readiness'),
     configList: document.getElementById('training-workspace-config-list'),
+    configStepNumber: document.getElementById('training-workspace-config-step-number'),
+    runStepNumber: document.getElementById('training-run-step-number'),
+    generateBtn: document.getElementById('training-workspace-generate-btn'),
+    queueJobBtn: document.getElementById('training-queue-job-btn'),
     commandStatus: document.getElementById('training-command-status'),
     commandText: document.getElementById('training-command-text'),
     copyCommandBtn: document.getElementById('training-copy-command-btn'),
@@ -518,7 +522,7 @@ function renderTrainingHistory() {
     var details = [];
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
     if (elapsedSeconds > 0) details.push(formatTrainingRunnerDuration(elapsedSeconds));
-    var canResume = job.status === 'finished_early' && job.resumeCheckpoint && (job.resumeStage === 'hi' || job.resumeStage === 'lo');
+    var canResume = (job.status === 'finished_early' || job.status === 'interrupted') && job.resumeCheckpoint && (job.resumeStage === 'hi' || job.resumeStage === 'lo');
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><strong>' + escapeHtml(trainingRunnerStatusLabel(job.status)) + '</strong> · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) +
         '<span class="training-history-time">' + escapeHtml(formatTrainingHistoryTime(job.finishedAt || job.startedAt || job.createdAt)) + '</span></div>' +
@@ -1055,6 +1059,35 @@ function buildTrainingReadinessHtml(manifest, configFiles) {
     '</div>';
 }
 
+function trainingConfigFilesAreReady(configFiles) {
+  var files = Array.isArray(configFiles) ? configFiles : [];
+  var available = {};
+  files.forEach(function (fileName) { available[String(fileName || '').toLowerCase()] = true; });
+  return ['config.hi.toml', 'config.lo.toml', 'dataset.hi.toml', 'dataset.lo.toml'].every(function (fileName) {
+    return !!available[fileName];
+  });
+}
+
+function syncTrainingWorkflowReadiness(manifest, configFiles) {
+  var els = getTrainingWorkspaceEls();
+  var datasetReady = !!manifest;
+  var configsReady = trainingConfigFilesAreReady(configFiles);
+  if (els.configStepNumber) els.configStepNumber.classList.toggle('is-waiting', !datasetReady);
+  if (els.runStepNumber) els.runStepNumber.classList.toggle('is-waiting', !datasetReady || !configsReady);
+  if (els.generateBtn) {
+    els.generateBtn.title = datasetReady
+      ? 'Generate configs for the prepared dataset.'
+      : 'Generate configs. The current dataset will be prepared first.';
+  }
+  if (els.queueJobBtn) {
+    els.queueJobBtn.title = configsReady
+      ? 'Start this set when the runner is idle, or add it behind active work.'
+      : (datasetReady
+        ? 'Start this set. Configs will be generated first.'
+        : 'Start this set. The dataset will be prepared and configs generated first.');
+  }
+}
+
 function getTrainingManifestItems(manifest) {
   if (!manifest || typeof manifest !== 'object') return [];
   var items = [];
@@ -1247,6 +1280,7 @@ function refreshTrainingWorkspace() {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
       trainingWorkspaceState.manifest = results[0];
       trainingWorkspaceState.configFiles = results[1];
+      syncTrainingWorkflowReadiness(results[0], results[1]);
       if (els.readiness) els.readiness.innerHTML = buildTrainingReadinessHtml(results[0], results[1]);
       renderTrainingItemOverview(results[0]);
       renderTrainingWorkspaceConfigList(results[1]);

@@ -215,7 +215,7 @@ def history_payload(folder_path):
 
 
 def _resume_details(folder_path, job):
-    if job.get("status") != "finished_early":
+    if job.get("status") not in ("finished_early", "interrupted"):
         return {}, ""
     progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
     stage = str(progress.get("stage") or job.get("stages") or "").strip().lower()

@@ -34,7 +34,7 @@ STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
 ACTIVE_STATUSES = {"starting", "running", "stopping", "unconfirmed"}
 QUEUE_STATUSES = {"queued", "paused", "interrupted"}
-HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped"}
+HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "interrupted"}
 TERMINAL_STATUSES = HISTORY_STATUSES | {"paused", "interrupted", "cancelled"}
 _lock = threading.Lock()
 _monitor_lock = threading.Lock()
@@ -661,6 +661,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "printf '%s\\n' " + shlex.quote("[webcap] command hi: " + command_plan["hiCommand"]),
             command_plan["hiCommand"],
             "HI_CODE=$?",
+            "if [ \"$HI_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
             "if [ \"$HI_CODE\" -ne 0 ]; then echo '[webcap] HI failed'; write_result failed \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
         ])
     if stages in ("lo", "both"):
@@ -669,6 +670,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "printf '%s\\n' " + shlex.quote("[webcap] command lo: " + command_plan["loCommand"]),
             command_plan["loCommand"],
             "LO_CODE=$?",
+            "if [ \"$LO_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
             "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
         ])
     lines.extend(["echo '[webcap] completed'", "write_result completed 0"])
@@ -898,21 +900,32 @@ def _refresh_job(job):
     if result:
         result_status = str(result.get("status") or "failed")
         requested_action = str(job.get("actionRequested") or "")
+        log_path = Path(job.get("logPath") or "")
+        if log_path.exists():
+            try:
+                tail = _read_log_tail(log_path)
+                if "[webcap] stage=lo" in tail:
+                    job["stage"] = "lo"
+                elif "[webcap] stage=hi" in tail:
+                    job["stage"] = "hi"
+                _sync_job_progress(job, tail)
+            except OSError:
+                pass
         job.pop("confirmationNote", None)
         job.pop("error", None)
-        if result_status == "stopped":
-            if requested_action == "pause":
-                job["status"] = "paused"
-            elif requested_action == "finish":
-                job["status"] = "finished_early"
-            elif requested_action == "stop":
-                job["status"] = "stopped"
-            else:
-                job["status"] = "interrupted"
-                job["error"] = "Runner stopped without a WebCap stop or pause action."
+        exit_code = int(result.get("exitCode") or 0)
+        if requested_action == "pause":
+            job["status"] = "paused"
+        elif requested_action == "finish":
+            job["status"] = "finished_early"
+        elif requested_action == "stop":
+            job["status"] = "stopped"
+        elif result_status == "stopped":
+            job["status"] = "interrupted"
+            job["error"] = "Runner stopped without a WebCap stop or pause action."
         else:
             job["status"] = result_status
-        job["exitCode"] = int(result.get("exitCode") or 0)
+        job["exitCode"] = exit_code
         job["finishedAt"] = float(result.get("finishedAt") or time.time())
         job["updatedAt"] = time.time()
         _annotate_completed_job(job)

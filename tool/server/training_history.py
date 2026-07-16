@@ -16,6 +16,7 @@ _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _RUN_STAGE_PATTERN = re.compile(r"(?:^|[-_.])(hi|lo)(?:$|[-_.])", re.IGNORECASE)
 _DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(?:#.*)?$", re.MULTILINE)
+_NOISE_MODEL_PATTERN = re.compile(r"\b(high|low)[_ -]?noise(?:[_ -]?model)?\b", re.IGNORECASE)
 
 
 def output_root_for_folder(folder_path, stage="hi"):
@@ -53,6 +54,25 @@ def _stage_from_run_name(name):
     return matches[-1].lower() if matches else ""
 
 
+def _stage_from_run_config(entry):
+    """Identify a run's noise stage from the config copied beside its checkpoints."""
+    for config_path in sorted(Path(entry).glob("*.toml")):
+        named_stage = _stage_from_run_name(config_path.name)
+        if named_stage:
+            return named_stage
+        try:
+            config_text = config_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        dataset_stage = _stage_from_run_name(config_text)
+        if dataset_stage:
+            return dataset_stage
+        noise_model = _NOISE_MODEL_PATTERN.search(config_text)
+        if noise_model:
+            return "hi" if noise_model.group(1).lower() == "high" else "lo"
+    return ""
+
+
 def _set_name_from_run_config(entry, fallback_name):
     for config_path in sorted(Path(entry).glob("*.toml")):
         try:
@@ -67,6 +87,24 @@ def _set_name_from_run_config(entry, fallback_name):
         if set_name and set_name != ".":
             return set_name
     return str(fallback_name or "")
+
+
+def _run_belongs_to_set(entry, set_name):
+    """Reject a run when its saved dataset config names another set."""
+    for config_path in sorted(Path(entry).glob("*.toml")):
+        try:
+            config_text = config_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        match = _DATASET_CONFIG_PATTERN.search(config_text)
+        if not match:
+            continue
+        dataset_path = match.group(1).strip().replace("\\", "/")
+        saved_set_name = Path(dataset_path).parent.name
+        if saved_set_name and saved_set_name != ".":
+            return saved_set_name == str(set_name or "")
+    # Older/manual runs without their saved config remain discoverable.
+    return True
 
 
 def _run_artifact_state(entry, expected_epochs):
@@ -133,7 +171,9 @@ def discover_runs(folder_path, stage=""):
         if not root.exists() or not root.is_dir():
             continue
         for entry in root.iterdir():
-            if not entry.is_dir() or entry in seen:
+            # WebCap stores job snapshots under <output>/.webcap.  Those are not
+            # trainer runs and must never become resume candidates.
+            if not entry.is_dir() or entry.name.startswith(".") or entry in seen:
                 continue
             try:
                 modified = entry.stat().st_mtime
@@ -141,7 +181,9 @@ def discover_runs(folder_path, stage=""):
             except OSError:
                 continue
             seen.add(entry)
-            entry_stage = root_stage or _stage_from_run_name(entry.name)
+            if not _run_belongs_to_set(entry, Path(folder_path).name):
+                continue
+            entry_stage = root_stage or _stage_from_run_name(entry.name) or _stage_from_run_config(entry)
             if stage in ("hi", "lo") and entry_stage != stage:
                 continue
             expected_epochs = _configured_epochs(folder_path, entry_stage) if entry_stage else 0

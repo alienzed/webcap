@@ -19,7 +19,7 @@ Last reviewed: 2026-07-10.
 - Rename video clip requires manual folder refresh to show new name
 
 ## Enhancements
-- Have the Train Icon, or something more... slowly change color to represent progress in the current run, so not only do we see it moving, but the color implies the percentage complete (current run only, entire queue would devalue this).
+- Have the Train Icon, or something more... slowly change color to represent progress in the current run, so not only do we see it moving, but the color implies the percentage complete (current run only, entire queue would devalue this). I really love the idea of the app being a tiny bit more alive... it doesn't need to refresh every 10 seconds, this could be a once per minute or even more thing, but like, to come back into the app and see it adjust to it's own state... cool stuff.
 - Badge says Needs attention, you go into the set... nothing apparent... you go into training also nothing apparent... What needs attention exactly? How do I act on... what? I'd have expect that badge to be coupled with some kind of suggested action I can take, right now this is quite obscure.
 - Ability to open the output folder in Explorer directly from History (if said folder still exists...)
 - Start naming models better, we may need a mapping or fuzzy matching, but we need to start putting WAN2.2 in our labels, soon we'll use other models, they need to be named.
@@ -29,10 +29,8 @@ Last reviewed: 2026-07-10.
 - It's not clear to me that resumable detection is working as intended.
 - Training Items: clicking on an item should probably highlight it in the media-list and preview it back in captioning mode.. it's odd to show these but have them inert. Also, the Hide Items button is full width... this should probably just be a chevron, let's try to be consistent across the app.
 - Queue has one too many vertical lines on the left.
-
-
-## Requires Discussion
-- The missing captions filter is great for identifying which captions are still missing, there's a UX issue though... as soon as I edit a caption, it immediately udpates and then disappears from the list. Normally this is desirable but in this specific use case it's like too fast, I'm wondering if we there's a sane way to delay update of the list under these specific circumstances, to let me finish editing the caption without it disapearing... The issue is that as I caption a set, it's nice to see the list get smaller and yes, auto advance, but most actions are supposed to update immediately to reflect the change, in this case, I wish it wouldn't, not so quickly anyway. Thoughts?
+- The ability to manually mark a set as Trained... especially for legacy purposes, or when a Finished Early or some other badge got assigned by accident. I mean, I can archive sets, but until I do badges should be accurate, and I know better than the app in some cases.
+- I am wondering if the Originals folder should be in the media list, I know we use it for Restoring, but then maybe going there can be a context menu on the set folder. In regular workflows, originals just sits at the top and I click on it by accident 10x more than on purpose.
 
 
 ## Documentation Sync Notes
@@ -41,8 +39,6 @@ Last reviewed: 2026-07-10.
 - `spec.md` refreshed to match current route and workflow behavior.
 
 ## Backlog (Do Not Implement Yet)
-- Avoid treating the current focused-annotation wizard as the primary home for blind "apply to all" tagging; at most, a sticky/stamping mode would be a temporary bridge, not the final UX.
-- Add derived set workflow badges, separate from manual color flags: Prepared, Configured, Needs regenerate, and managed-run status (Queued, Training, Trained, Failed). Derive preparation/configuration from artifacts and managed-run status from persisted runner history; do not infer manually run training as completed.
 - Explore Krea 2 Raw training. Before adding it, define a model-workflow contract so each supported model can declare its dataset requirements, configuration syntax and fields, launch/environment needs, stage support, checkpoint detection, and progress parsing. Keep shared set/run/history UI model-agnostic, and keep model-specific rules out of curation/annotation.
 
 
@@ -50,7 +46,6 @@ Last reviewed: 2026-07-10.
 - Review longest duplicate phrase detection inside a single caption.
 - Chaos / clutter scoring for scene complexity.
 - Lighting tone / color cast detection for warm, cool, or tinted scenes.
-- Review the latest huge list of terms in Body: I've been adding items for plural, and am finding a lot of redundancy as well, wondering if there's a better way to manage slight differences so I can spot the desired term more easily. not against having to manually curate a bit more (versus having 200 terms!)
 - Explore better integration in Focus Annotate... we're really not THAT far from Focus Annotate mostly being a difference in terms of how we show the groups of terms.
 
 ## Cleanup Candidates

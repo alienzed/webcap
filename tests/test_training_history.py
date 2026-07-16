@@ -151,6 +151,56 @@ def test_discover_runs_uses_the_saved_config_to_label_the_training_set(tmp_path,
     assert discovered[0]["setName"] == "hmPenny"
 
 
+def test_discover_runs_detects_the_noise_model_from_the_saved_run_config(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = root / "output" / "runs" / "set"
+    for stage, model in (("hi", "high_noise_model"), ("lo", "low_noise_model")):
+        run = output / ("run-" + stage)
+        run.mkdir(parents=True)
+        (run / "config.toml").write_text(
+            'transformer_path = "/models/' + model + '"\n', encoding="utf-8"
+        )
+
+    runs = {run["name"]: run for run in training_history.discover_runs(set_folder)}
+
+    assert runs["run-hi"]["stage"] == "hi"
+    assert runs["run-lo"]["stage"] == "lo"
+
+
+def test_discover_runs_ignores_webcap_job_sidecars(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = training_history.output_root_for_folder(set_folder)
+    (output / ".webcap" / "jobs" / "job-1").mkdir(parents=True)
+    real_run = output / "real-run"
+    real_run.mkdir(parents=True)
+    (real_run / "checkpoint.pt").write_text("checkpoint", encoding="utf-8")
+
+    assert [run["name"] for run in training_history.discover_runs(set_folder)] == ["real-run"]
+
+
+def test_discover_runs_ignores_another_sets_saved_run_config(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = training_history.output_root_for_folder(set_folder)
+    own_run = output / "own-run"
+    other_run = output / "other-run"
+    for run, set_name in ((own_run, "set"), (other_run, "other")):
+        run.mkdir(parents=True)
+        (run / "config.toml").write_text(
+            'dataset = "/training/' + set_name + '/dataset.lo.toml"\n', encoding="utf-8"
+        )
+
+    assert [run["name"] for run in training_history.discover_runs(set_folder)] == ["own-run"]
+
+
 def test_completed_stages_requires_the_configured_final_epoch(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"

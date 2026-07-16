@@ -144,6 +144,10 @@ def _job_dir(job):
     return _jobs_root() / str(job_id)
 
 
+def _job_action_path(job):
+    return _job_dir(job) / "action"
+
+
 def _artifact_root(folder_path, stage):
     root = output_root_for_folder(folder_path, stage if stage in ("hi", "lo") else "hi")
     return root / ".webcap" / "jobs"
@@ -639,13 +643,16 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     )
     result_wsl = _to_wsl_path(job_dir / "result.json", distribution)
     pid_wsl = _to_wsl_path(job_dir / "pid", distribution)
+    action_wsl = _to_wsl_path(_job_action_path(job), distribution)
     lines = [
         "#!/usr/bin/env bash",
         "set -uo pipefail",
         "PID_FILE=" + shlex.quote(pid_wsl),
         "RESULT_FILE=" + shlex.quote(result_wsl),
+        "ACTION_FILE=" + shlex.quote(action_wsl),
         "echo $$ > \"$PID_FILE\"",
         "write_result() { printf '{\\\"status\\\":\\\"%s\\\",\\\"exitCode\\\":%s,\\\"finishedAt\\\":%s}\\n' \"$1\" \"$2\" \"$(date +%s)\" > \"$RESULT_FILE\"; }",
+        "finish_requested_stop() { case \"$(cat \"$ACTION_FILE\" 2>/dev/null || true)\" in pause|finish|stop) echo '[webcap] requested stop'; write_result stopped 130; exit 130 ;; esac; }",
         "trap 'echo [webcap] stopped; write_result stopped 130; exit 130' INT TERM",
         "cd " + shlex.quote(settings["cwd"]) + " || { echo '[webcap] training working directory is unavailable'; write_result failed 1; exit 1; }",
     ]
@@ -661,6 +668,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "printf '%s\\n' " + shlex.quote("[webcap] command hi: " + command_plan["hiCommand"]),
             command_plan["hiCommand"],
             "HI_CODE=$?",
+            "finish_requested_stop",
             "if [ \"$HI_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
             "if [ \"$HI_CODE\" -ne 0 ]; then echo '[webcap] HI failed'; write_result failed \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
         ])
@@ -670,6 +678,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "printf '%s\\n' " + shlex.quote("[webcap] command lo: " + command_plan["loCommand"]),
             command_plan["loCommand"],
             "LO_CODE=$?",
+            "finish_requested_stop",
             "if [ \"$LO_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
             "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
         ])
@@ -703,6 +712,9 @@ def _launch_job(job, folder_path):
     result_path = job_dir / "result.json"
     if result_path.exists():
         result_path.unlink()
+    action_path = _job_action_path(job)
+    if action_path.exists():
+        action_path.unlink()
     script_path = _write_runner_script(job, settings, artifacts)
     script_wsl = _to_wsl_path(script_path, settings["wslDistribution"])
     log_path = job_dir / "run.log"
@@ -901,7 +913,7 @@ def _refresh_job(job):
         result_status = str(result.get("status") or "failed")
         requested_action = str(job.get("actionRequested") or "")
         log_path = Path(job.get("logPath") or "")
-        if log_path.exists():
+        if log_path.is_file():
             try:
                 tail = _read_log_tail(log_path)
                 if "[webcap] stage=lo" in tail:
@@ -916,7 +928,7 @@ def _refresh_job(job):
         exit_code = int(result.get("exitCode") or 0)
         if requested_action == "pause":
             job["status"] = "paused"
-        elif requested_action == "finish":
+        elif requested_action == "finish" and result_status != "completed":
             job["status"] = "finished_early"
         elif requested_action == "stop":
             job["status"] = "stopped"
@@ -982,11 +994,19 @@ def _prepare_paused_job_for_resume(job):
         return "Only an individual training stage can resume."
     folder = str(job.get("folder") or "")
     folder_path = app_config.safe_join_fs_root(folder)
-    checkpoint = next((run["path"] for run in discover_runs(folder_path, stage) if run.get("checkpointAvailable")), "")
+    # The trainer output is authoritative. Discovery filters it to this set
+    # and noise stage and orders it by the checkpoint directory's modification
+    # time, so a pause resumes the run the trainer most recently updated.
+    checkpoint = next((
+        run["path"] for run in discover_runs(folder_path, stage)
+        if run.get("checkpointAvailable")
+    ), "")
     if not checkpoint:
-        return "No resumable checkpoint was found for " + stage.upper() + "."
+        return "No resumable checkpoint was found for this " + stage.upper() + " job."
     job["resumeFromCheckpoint"] = checkpoint
     job["resumeStage"] = stage
+    job.pop("actionRequested", None)
+    job.pop("actionRequestedAt", None)
     job["status"] = "queued"
     job["stage"] = "queued"
     job["error"] = ""
@@ -1419,8 +1439,15 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
         if pid <= 0:
             return {"ok": False, "error": "WebCap has no recorded runner PID, so it cannot send the " + action + " request safely."}, 409
         distribution = _job_wsl_distribution(job)
+        action_path = _job_action_path(job)
+        action_path.write_text(action, encoding="utf-8")
+        normalize_path_permissions(action_path)
         code, stdout, stderr = _run_wsl("kill -INT -- -" + str(pid), timeout=8, distribution=distribution)
         if code != 0:
+            try:
+                action_path.unlink()
+            except OSError:
+                pass
             message = (stderr or stdout or "Could not send the " + action + " request.").strip()
             job["error"] = message
             job["updatedAt"] = time.time()

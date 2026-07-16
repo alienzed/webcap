@@ -551,8 +551,9 @@ function renderTrainingHistory() {
     if (run.steps) details.push('step ' + Number(run.steps).toLocaleString());
     if (run.completed) details.push('complete');
     var setName = String(run.setName || '').trim();
+    var noiseModel = run.stage === 'hi' || run.stage === 'lo' ? trainingStageLabel(run.stage) + ' model' : '';
     return '<option value="' + escapeHtml(run.path || '') + '"' + (unavailable ? ' disabled' : '') + '>' +
-      escapeHtml((run.stage ? trainingStageLabel(run.stage) + ' · ' : '') + (setName ? setName + ' · ' : '') + (run.name || run.path || 'run') +
+      escapeHtml((noiseModel ? noiseModel + ' · ' : '') + (setName ? setName + ' · ' : '') + (run.name || run.path || 'run') +
         (details.length ? ' · ' + details.join(' · ') : '') + (unavailable && !run.completed ? ' (no checkpoint found)' : '')) + '</option>';
   }).join('');
   if (selectedCheckpoint) els.checkpointSelect.value = selectedCheckpoint;
@@ -1341,6 +1342,7 @@ function wireTrainingWorkspace() {
   var stageButtons = document.querySelectorAll('[data-training-stage]');
   var resumeInput = document.getElementById('training-run-resume-input');
   var checkpointSelect = document.getElementById('training-run-checkpoint-select');
+  var resumeStageSelect = document.getElementById('training-run-resume-stage-select');
   var itemOverviewToggleBtn = document.getElementById('training-item-overview-toggle-btn');
   var previewCommandBtn = document.getElementById('training-preview-command-btn');
   var validateRunnerBtn = document.getElementById('training-validate-runner-btn');
@@ -1382,6 +1384,12 @@ function wireTrainingWorkspace() {
   };
   if (checkpointSelect) checkpointSelect.onchange = function () {
     trainingWorkspaceState.resumeParentJobId = '';
+    var selectedRun = (trainingWorkspaceState.history && trainingWorkspaceState.history.runs || []).filter(function (run) {
+      return String(run.path || '') === String(checkpointSelect.value || '');
+    })[0];
+    if (selectedRun && (selectedRun.stage === 'hi' || selectedRun.stage === 'lo') && resumeStageSelect) {
+      resumeStageSelect.value = selectedRun.stage;
+    }
     syncManagedTrainingResumeUi();
   };
   previewCommandBtn.onclick = function () {

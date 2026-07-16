@@ -383,6 +383,18 @@ textarea:focus, input:focus {
   background: rgba(13, 148, 136, 0.96);
 }
 
+.editor-floating-action-btn.is-captionless-apply {
+  background: rgba(245, 158, 11, 0.96);
+  color: #1f2937;
+  border-color: rgba(251, 191, 36, 0.92);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.16);
+}
+
+.editor-floating-action-btn.is-captionless-apply:hover {
+  background: rgba(217, 119, 6, 0.96);
+  color: #111827;
+}
+
 textarea#editor {
   min-height: calc(50vh - 40px);
   width: 100%;

@@ -297,6 +297,30 @@ function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
       escapeHtml(row.fileName) + '</button> - ' + row.tokenCount + ' tokens</li>';
   }).join('') : '<li style="color:#777;">No long outliers.</li>';
 
+  var requirementsCards = '';
+  if (report.requiredPhrase && report.requiredMissing && report.requiredMissing.length) {
+    requirementsCards += '<div class="card"><h3>Missing Required Phrase</h3><ul>' + requiredRows + '</ul></div>';
+  }
+  if (report.phraseSummary && report.phraseSummary.length) {
+    requirementsCards += '<div class="card"><h3>Balance Counts</h3><table><thead><tr><th>Phrase</th><th>Caption</th><th>Tag</th></tr></thead><tbody>' + phraseRows + '</tbody></table></div>';
+  }
+
+  var findingsCards = '';
+  if (report.ruleFailures && report.ruleFailures.length) {
+    findingsCards += '<div class="card"><h3>Validation Failures</h3><ul>' + failRows + '</ul></div>';
+  }
+  if (report.duplicateCaptions && report.duplicateCaptions.length) {
+    findingsCards += '<div class="card"><h3>Duplicate Captions</h3><ul>' + duplicateRows + '</ul></div>';
+  }
+  if (report.similarCaptions && report.similarCaptions.length) {
+    findingsCards += '<div class="card"><h3>Similar Captions (80%+)</h3><ul>' + similarRows + '</ul></div>';
+  }
+
+  var outlierCard = '';
+  if ((report.shortOutliers && report.shortOutliers.length) || (report.longOutliers && report.longOutliers.length)) {
+    outlierCard = '<div class="row"><div class="card"><h3>Caption Length Outliers</h3><h4>Shorter than usual</h4><ul>' + shortOutlierRows + '</ul><h4>Longer than usual</h4><ul>' + longOutlierRows + '</ul></div></div>';
+  }
+
 
   var html = '' +
     '<!DOCTYPE html><html data-theme="' + theme + '"><head><meta charset="UTF-8">' +
@@ -313,18 +337,9 @@ function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
     '<div class="summary-row"><span>Required phrase</span><strong>' + escapeHtml(requiredLabel) + '</strong></div>' +
     '<div class="summary-row"><span>Required hits</span><strong>' + report.requiredHits + ' (' + report.requiredPercent + '%)</strong></div></div>' +
     '</div>' +
-    '<div class="row">' +
-    '<div class="card"><h3>Missing Required Phrase</h3><ul>' + requiredRows + '</ul></div>' +
-    '<div class="card"><h3>Balance Counts</h3><table><thead><tr><th>Phrase</th><th>Caption</th><th>Tag</th></tr></thead><tbody>' + phraseRows + '</tbody></table></div>' +
-    '</div>' +
-    '<div class="row">' +
-    '<div class="card"><h3>Validation Failures</h3><ul>' + failRows + '</ul></div>' +
-    '<div class="card"><h3>Duplicate Captions</h3><ul>' + duplicateRows + '</ul></div>' +
-    '<div class="card"><h3>Similar Captions (80%+)</h3><ul>' + similarRows + '</ul></div>' +
-    '</div>' +
-    '<div class="row">' +
-    '<div class="card"><h3>Caption Length Outliers</h3><h4>Shorter than usual</h4><ul>' + shortOutlierRows + '</ul><h4>Longer than usual</h4><ul>' + longOutlierRows + '</ul></div>' +
-    '</div>' +
+    (requirementsCards ? '<div class="row">' + requirementsCards + '</div>' : '') +
+    (findingsCards ? '<div class="row">' + findingsCards + '</div>' : '') +
+    outlierCard +
     '<details id="review-analysis-details" class="card">' +
     '<summary><strong>Analysis details</strong> <span class="small">Optional curation signals and media metadata</span></summary>' +
     '<div class="row"><div class="card"><h3>Suggested Candidates</h3><div id="selection-suggested-candidates-panel">Open Analysis details to load.</div></div></div>' +

@@ -163,6 +163,7 @@ function updatePrimerCaptionResetUi() {
   undoBtn.classList.toggle('hidden', !canUndo);
   if (applyCaptionBtn) {
     applyCaptionBtn.classList.remove('hidden');
+    applyCaptionBtn.classList.toggle('is-captionless-apply', !mediaItem.hasCaption);
   }
 }
 

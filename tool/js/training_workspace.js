@@ -534,6 +534,7 @@ function renderTrainingHistory() {
       '</div>' +
       (job.input && job.input.comparison === 'changed' ? '<div class="training-runner-detail is-warning">Dataset changed since this run.</div>' : '') +
       '<div class="training-history-actions">' +
+       (job.folder ? '<button type="button" data-training-history-output="' + escapeHtml(job.folder) + '" data-training-history-output-stage="' + escapeHtml(job.stages || '') + '">Open output</button>' : '') +
        '<button type="button" data-training-history-log="' + escapeHtml(job.id || '') + '">Show log</button>' +
        (canResume ? '<button type="button" data-training-history-resume="' + escapeHtml(job.id || '') + '">Resume</button>' : '') +
        '<button type="button" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove this entry from Recent Runs; logs and artifacts remain.">Clear</button>' +
@@ -606,6 +607,16 @@ function hideTrainingRunnerConsole() {
   if (els.runnerConsole) els.runnerConsole.classList.add('hidden');
   syncTrainingConsoleUi();
 }
+
+
+function toggleTrainingRunnerConsole() {
+  if (isTrainingRunnerConsoleVisible()) {
+    hideTrainingRunnerConsole();
+    return;
+  }
+  showTrainingRunnerConsole();
+}
+
 
 function showTrainingRunnerConsole(job) {
   var target = job || getTrainingRunnerSelectedJob();
@@ -949,6 +960,19 @@ function resumeTrainingHistoryJob(jobId) {
     setStatus('Could not queue resume: ' + String(err && err.message ? err.message : err));
   });
 }
+
+function openTrainingHistoryOutput(folder, stage) {
+  trainingRunnerRequest('/fs/training_history/open_output', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder: String(folder || ''), stage: String(stage || '') })
+  }).then(function () {
+    setStatus('Opened training output folder.');
+  }).catch(function (err) {
+    setStatus('Could not open training output folder: ' + String(err && err.message ? err.message : err));
+  });
+}
+
 
 function trainingHistoryScopeFolder() {
   return trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : '';
@@ -1417,13 +1441,13 @@ function wireTrainingWorkspace() {
     });
   };
   consoleBtn.onclick = function () {
-    showTrainingRunnerConsole();
+    toggleTrainingRunnerConsole();
   };
   runnerFinishBtn.onclick = function () { stopManagedTraining(false, false, true); };
   runnerPauseBtn.onclick = function () { stopManagedTraining(false, true); };
   runnerResumeQueueBtn.onclick = resumeManagedTrainingQueue;
   runnerConsoleBtn.onclick = function () {
-    showTrainingRunnerConsole();
+    toggleTrainingRunnerConsole();
   };
   runnerConsoleCloseBtn.onclick = hideTrainingRunnerConsole;
   runnerQueue.onclick = function (event) {
@@ -1479,7 +1503,12 @@ function wireTrainingWorkspace() {
       return;
     }
     var logId = event.target.getAttribute('data-training-history-log');
+    var outputFolder = event.target.getAttribute('data-training-history-output');
     var clearId = event.target.getAttribute('data-training-history-clear');
+    if (outputFolder) {
+      openTrainingHistoryOutput(outputFolder, event.target.getAttribute('data-training-history-output-stage'));
+      return;
+    }
     if (clearId) {
       clearTrainingHistoryJob(clearId);
       return;

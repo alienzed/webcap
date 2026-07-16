@@ -260,14 +260,9 @@ def _launch_windows_explorer(abs_path: Path):
     os.startfile(win_path)
 
 
-def open_in_explorer_response(rel_path):
-    rel_path = (rel_path or "").strip()
-    app_config.debug_print("[open_in_explorer] Request received.")
-    if not rel_path:
-        app_config.debug_print("[open_in_explorer] ERROR: Missing path")
-        return jsonify({"error": "Missing path"}), 400
+def open_path_in_explorer_response(abs_path):
     try:
-        abs_path = app_config.safe_join_fs_root(rel_path)
+        abs_path = Path(abs_path)
         if not abs_path.exists():
             app_config.debug_print("[open_in_explorer] ERROR: Path does not exist:", abs_path)
             return jsonify({"error": "Path does not exist"}), 404
@@ -286,6 +281,15 @@ def open_in_explorer_response(rel_path):
         app_config.debug_print("[open_in_explorer] ERROR:", e)
         app_config.debug_traceback()
         return jsonify({"error": str(e)}), 500
+
+
+def open_in_explorer_response(rel_path):
+    rel_path = (rel_path or "").strip()
+    app_config.debug_print("[open_in_explorer] Request received.")
+    if not rel_path:
+        app_config.debug_print("[open_in_explorer] ERROR: Missing path")
+        return jsonify({"error": "Missing path"}), 400
+    return open_path_in_explorer_response(app_config.safe_join_fs_root(rel_path))
 
 
 def open_in_vscode_response(rel_path):

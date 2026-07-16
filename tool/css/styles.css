@@ -2259,14 +2259,27 @@ iframe {
   min-width: 23px;
   height: 23px;
   padding: 0;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
   display: inline-grid;
   place-items: center;
   font-size: 15px;
   line-height: 1;
 }
 
+.workspace-surface-training .training-history-actions .training-history-action:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--panel) 88%, var(--accent));
+}
+
 .workspace-surface-training .training-history-actions .training-history-action--clear {
   color: #d36a6a;
+}
+
+.workspace-surface-training .training-history-actions .training-history-action--clear:hover {
+  border-color: #d36a6a;
+  background: color-mix(in srgb, var(--panel) 88%, #d36a6a);
 }
 
 .workspace-surface-training .training-runner-queue-control {

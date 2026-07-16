@@ -126,17 +126,10 @@ def _run_artifact_state(entry, expected_epochs):
 
 
 def _resume_artifacts(entry):
-    """Return only trainer artifacts that can be passed to --resume_from_checkpoint."""
+    """Return the DeepSpeed latest marker when its parent run can resume."""
     directory = Path(entry)
     latest = directory / "latest"
-    artifacts = [latest] if latest.exists() else []
-    try:
-        steps = [child for child in directory.iterdir() if _STEP_PATTERN.match(child.name)]
-    except OSError:
-        steps = []
-    steps.sort(key=lambda child: int(_STEP_PATTERN.match(child.name).group(1)), reverse=True)
-    artifacts.extend(steps)
-    return artifacts
+    return [latest] if latest.is_file() else []
 
 
 def _is_checkpoint_artifact(entry):
@@ -213,7 +206,9 @@ def discover_runs(folder_path, stage=""):
             resume_artifacts = _resume_artifacts(entry)
             checkpoint = resume_artifacts[0] if resume_artifacts else None
             runs.append({
-                "path": str(checkpoint or entry),
+                # DeepSpeed expects the run directory, then resolves its own
+                # latest marker or checkpoint tag inside that directory.
+                "path": str(entry),
                 "runPath": str(entry),
                 "name": entry.name,
                 "setName": _set_name_from_run_config(entry, Path(folder_path).name),

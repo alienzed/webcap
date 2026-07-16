@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from tool.server import training_runner
+from tool.server import training_history
 from tool.server import config as config_module
 from tool.server.training_runtime import training_runtime_settings
 
@@ -119,6 +120,24 @@ def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):
     assert "[webcap] resume stage=lo checkpoint=/mnt/w/output/run-1" in script
     assert "[webcap] command lo:" in script
     assert "--resume_from_checkpoint /mnt/w/output/run-1" in script
+
+
+def test_discovered_resume_path_is_the_run_directory_not_its_latest_marker(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    output_root = tmp_path / "output"
+    run = output_root / "20260716_08-31-48"
+    folder.mkdir()
+    run.mkdir(parents=True)
+    (run / "config.lo.toml").write_text("lo", encoding="utf-8")
+    (run / "latest").write_text("global_step10800", encoding="utf-8")
+    monkeypatch.setattr(training_history, "output_root_for_folder", lambda *args: output_root)
+
+    runs = training_history.discover_runs(folder, "lo")
+
+    assert len(runs) == 1
+    assert runs[0]["path"] == str(run)
+    assert runs[0]["checkpointAvailable"] is True
+    assert runs[0]["checkpointName"] == "latest"
 
 
 def test_paused_queue_does_not_launch_the_next_job(monkeypatch):

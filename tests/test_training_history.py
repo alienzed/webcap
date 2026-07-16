@@ -89,13 +89,14 @@ def test_history_distinguishes_dataset_changes_from_config_changes(tmp_path, mon
     assert training_history.all_history_payload()["jobs"][0]["input"]["comparison"] == "dataset_changed"
 
 
-def test_finished_early_history_exposes_only_a_real_checkpoint_for_resume(tmp_path, monkeypatch):
+def test_finished_early_history_exposes_a_run_with_a_deepspeed_latest_marker_for_resume(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"
     set_folder.mkdir(parents=True)
     monkeypatch.setattr(config_module, "FS_ROOT", root)
     output = training_history.output_root_for_folder(set_folder, "lo") / "run-one-lo"
     (output / "global_step42").mkdir(parents=True)
+    (output / "latest").write_text("global_step42", encoding="utf-8")
     training_history.record_job(set_folder, {
         "id": "early", "folder": "set", "status": "finished_early", "stages": "lo",
         "progress": {"stage": "lo", "epoch": 42},
@@ -104,10 +105,10 @@ def test_finished_early_history_exposes_only_a_real_checkpoint_for_resume(tmp_pa
     payload = training_history.all_history_payload()
 
     assert payload["jobs"][0]["resumeStage"] == "lo"
-    assert payload["jobs"][0]["resumeCheckpoint"] == str(output / "global_step42")
+    assert payload["jobs"][0]["resumeCheckpoint"] == str(output)
 
 
-def test_discover_runs_uses_latest_or_global_step_not_arbitrary_run_contents(tmp_path, monkeypatch):
+def test_discover_runs_uses_a_latest_marker_but_returns_its_run_directory(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"
     set_folder.mkdir(parents=True)
@@ -115,7 +116,7 @@ def test_discover_runs_uses_latest_or_global_step_not_arbitrary_run_contents(tmp
     output = root / "output" / "runs" / "set-lo"
     (set_folder / "config.lo.toml").write_text('output_dir = "' + str(output) + '"\n', encoding="utf-8")
     resumable = output / "run-resumable"
-    (resumable / "latest").mkdir(parents=True)
+    (resumable / "latest").write_text("global_step42", encoding="utf-8")
     (resumable / "global_step42").mkdir()
     not_resumable = output / "run-with-log-only"
     not_resumable.mkdir(parents=True)
@@ -124,13 +125,13 @@ def test_discover_runs_uses_latest_or_global_step_not_arbitrary_run_contents(tmp
     runs = {run["name"]: run for run in training_history.discover_runs(set_folder, "lo")}
 
     assert runs["run-resumable"]["checkpointAvailable"] is True
-    assert runs["run-resumable"]["path"] == str(resumable / "latest")
+    assert runs["run-resumable"]["path"] == str(resumable)
     assert runs["run-resumable"]["checkpointName"] == "latest"
     assert runs["run-with-log-only"]["checkpointAvailable"] is False
     assert runs["run-with-log-only"]["path"] == str(not_resumable)
 
 
-def test_discover_runs_accepts_a_global_step_directly_in_configured_output_dir(tmp_path, monkeypatch):
+def test_discover_runs_rejects_a_global_step_without_a_deepspeed_latest_marker(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"
     set_folder.mkdir(parents=True)
@@ -140,12 +141,7 @@ def test_discover_runs_accepts_a_global_step_directly_in_configured_output_dir(t
     checkpoint = output / "global_step17"
     checkpoint.mkdir(parents=True)
 
-    runs = training_history.discover_runs(set_folder, "lo")
-
-    assert len(runs) == 1
-    assert runs[0]["runPath"] == str(output)
-    assert runs[0]["path"] == str(checkpoint)
-    assert runs[0]["checkpointName"] == "global_step17"
+    assert training_history.discover_runs(set_folder, "lo") == []
 
 
 def test_discover_runs_uses_each_stage_current_config_output_dir(tmp_path, monkeypatch):

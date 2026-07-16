@@ -1934,9 +1934,6 @@ iframe {
 .training-runner-queue-body {
   display: grid;
   gap: 5px;
-  margin-left: 7px;
-  padding-left: 8px;
-  border-left: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 
 .training-runner-queue-note {

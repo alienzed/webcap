@@ -19,7 +19,16 @@ Last reviewed: 2026-07-10.
 - Rename video clip requires manual folder refresh to show new name
 
 ## Enhancements
-- Eventually I'd like for us to work on the post captioning UX... the Review / Output, maybe even like detect cache in the auto_dataset folder... maybe try to internalize training and set flags based on the outcome of training. The output folder actually does happen to be inside the training folder so there's probably a lot we can do with this. Alas, I think the app's UX needs to be at least technically split, between captioning and then running training. We kind of dumped all of the Review / Output into a single pane... forgot about the caption collation screen, broke the console visibility once there, etc... it's a bit of a mess.
+- Have the Train Icon, or something more... slowly change color to represent progress in the current run, so not only do we see it moving, but the color implies the percentage complete (current run only, entire queue would devalue this).
+- Badge says Needs attention, you go into the set... nothing apparent... you go into training also nothing apparent... What needs attention exactly? How do I act on... what? I'd have expect that badge to be coupled with some kind of suggested action I can take, right now this is quite obscure.
+- Ability to open the output folder in Explorer directly from History (if said folder still exists...)
+- Start naming models better, we may need a mapping or fuzzy matching, but we need to start putting WAN2.2 in our labels, soon we'll use other models, they need to be named.
+- Training Quality isn't modifying quite as much as I remembered it was supposed to. I thought LR was supposed to change. The only thing that should remain stable is epochs and repeats (right?). less repeats just means more epochs so lowering those doesn't make training faster in a comparable way.
+- Output folder names in Tensorboard are alphabetical, this is a problem. I can sort by date in Explorer, but in Tensorboard, but I do need that sorting. What's the shortest string we can use to have items sort in a sane order for a reasonable amount of time (i've even considered using a sequence if timestamps are problematic)
+- I think this app should do a better job at suggesting the next run. High was trained? Give me ONE button to train Low. The last run was cancelled/finished early/interupted. ONE button to throw that back on the queue (resume where appropriate).
+- It's not clear to me that resumable detection is working as intended.
+- Training Items: clicking on an item should probably highlight it in the media-list and preview it back in captioning mode.. it's odd to show these but have them inert. Also, the Hide Items button is full width... this should probably just be a chevron, let's try to be consistent across the app.
+- Queue has one too many vertical lines on the left.
 
 
 ## Requires Discussion

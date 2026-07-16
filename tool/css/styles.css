@@ -1259,8 +1259,7 @@ iframe {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .utility-btn.training-running,
-  .utility-training-progress {
+  .utility-btn.training-running {
     animation: none;
   }
 }

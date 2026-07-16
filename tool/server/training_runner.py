@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 import os
 import re
@@ -41,6 +42,9 @@ _monitor_lock = threading.Lock()
 _monitor_thread = None
 _startup_reconciled = False
 _history_signatures = {}
+_state_file_seen = None
+_persisted_managed_job_ids = set()
+_logger = logging.getLogger(__name__)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _LOG_EPOCH_PATTERN = re.compile(r"Started new epoch:\s*(\d+)", re.IGNORECASE)
 _LOG_STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
@@ -73,33 +77,90 @@ def _default_state():
     return {"version": 3, "activeJobId": "", "jobs": [], "queuePaused": False, "queuePauseReason": ""}
 
 
+class TrainingStateError(RuntimeError):
+    pass
+
+
+def _state_job_ids(state, path):
+    jobs = state.get("jobs") if isinstance(state, dict) else None
+    if not isinstance(jobs, list):
+        raise TrainingStateError("Existing training queue jobs are invalid; the state was left unchanged: " + str(path))
+    job_ids = []
+    for job in jobs:
+        job_id = str(job.get("id") or "") if isinstance(job, dict) else ""
+        if not job_id:
+            raise TrainingStateError("Existing training queue contains a job without an ID; the state was left unchanged: " + str(path))
+        job_ids.append(job_id)
+    if len(job_ids) != len(set(job_ids)):
+        raise TrainingStateError("Existing training queue contains duplicate job IDs; the state was left unchanged: " + str(path))
+    return set(job_ids)
+
+
+def _managed_job_ids(state):
+    return {
+        str(job["id"])
+        for job in state.get("jobs", [])
+        if str(job.get("status") or "") in ACTIVE_STATUSES | QUEUE_STATUSES
+    }
+
+
 def _read_state():
+    global _state_file_seen, _persisted_managed_job_ids
     _ensure_runtime_dirs()
     path = _state_path()
     if not path.exists():
+        if _state_file_seen == path:
+            raise TrainingStateError("Training queue state disappeared while WebCap was running: " + str(path))
         return _default_state()
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return _default_state()
-    if not isinstance(parsed, dict) or parsed.get("version") != 3:
-        return _default_state()
+    except (OSError, json.JSONDecodeError) as exc:
+        raise TrainingStateError("Could not read the existing training queue state; it was left unchanged: " + str(path)) from exc
+    if not isinstance(parsed, dict):
+        raise TrainingStateError("Existing training queue state is not a JSON object; it was left unchanged: " + str(path))
+    if parsed.get("version") != 3:
+        raise TrainingStateError("Unsupported training queue state version; it was left unchanged: " + str(path))
     parsed.setdefault("activeJobId", "")
     parsed.setdefault("jobs", [])
     parsed.setdefault("queuePaused", False)
     parsed.setdefault("queuePauseReason", "")
-    if not isinstance(parsed["jobs"], list):
-        parsed["jobs"] = []
+    job_ids = _state_job_ids(parsed, path)
+    missing_job_ids = _persisted_managed_job_ids - job_ids if _state_file_seen == path else set()
+    if missing_job_ids:
+        raise TrainingStateError(
+            "Existing training queue state dropped managed jobs; it was left unchanged: "
+            + ", ".join(sorted(missing_job_ids))
+        )
+    _persisted_managed_job_ids = _managed_job_ids(parsed)
+    _state_file_seen = path
     return parsed
 
 
 def _write_state(state):
+    global _state_file_seen, _persisted_managed_job_ids
     _ensure_runtime_dirs()
     path = _state_path()
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    job_ids = _state_job_ids(state, path)
+    missing_job_ids = _persisted_managed_job_ids - job_ids if _state_file_seen == path else set()
+    if missing_job_ids:
+        raise TrainingStateError(
+            "Refusing to remove managed training jobs from queue state: " + ", ".join(sorted(missing_job_ids))
+        )
+    tmp = path.with_name("." + path.name + "." + str(os.getpid()) + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        with tmp.open("x", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
     normalize_path_permissions(path)
+    _state_file_seen = path
+    _persisted_managed_job_ids = _managed_job_ids(state)
 
 
 def _sync_job_history(job):
@@ -1161,7 +1222,7 @@ def _monitor_loop():
                 _sync_histories(state)
                 _write_state(state)
         except Exception:
-            pass
+            _logger.exception("Training queue monitor failed; the existing queue state was not replaced.")
         time.sleep(2)
 
 

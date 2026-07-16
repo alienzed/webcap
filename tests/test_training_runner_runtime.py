@@ -1,9 +1,93 @@
+import json
 from pathlib import Path
+
+import pytest
 
 from tool.server import training_runner
 from tool.server import training_history
 from tool.server import config as config_module
 from tool.server.training_runtime import training_runtime_settings
+
+
+def test_invalid_existing_queue_state_is_preserved(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    state_path = root / ".webcap_training" / "queue.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+
+    with pytest.raises(training_runner.TrainingStateError, match="left unchanged"):
+        training_runner._read_state()
+
+    assert state_path.read_text(encoding="utf-8") == "{not json"
+
+
+def test_invalid_jobs_cannot_be_silently_replaced_with_an_empty_queue(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    state_path = root / ".webcap_training" / "queue.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text('{"version": 3, "activeJobId": "live", "jobs": {}}', encoding="utf-8")
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+
+    with pytest.raises(training_runner.TrainingStateError, match="jobs are invalid"):
+        training_runner._read_state()
+
+    assert '"activeJobId": "live"' in state_path.read_text(encoding="utf-8")
+
+
+def test_queue_state_cannot_disappear_after_webcap_has_seen_it(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+    training_runner._write_state({
+        "version": 3, "activeJobId": "live", "jobs": [{"id": "live", "status": "running"}],
+        "queuePaused": False, "queuePauseReason": "",
+    })
+    (root / ".webcap_training" / "queue.json").unlink()
+
+    with pytest.raises(training_runner.TrainingStateError, match="disappeared"):
+        training_runner._read_state()
+
+
+@pytest.mark.parametrize("status", ["running", "queued", "paused"])
+def test_state_writer_refuses_to_drop_a_managed_job(tmp_path, monkeypatch, status):
+    root = tmp_path / "training"
+    state_path = root / ".webcap_training" / "queue.json"
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+    live_state = {
+        "version": 3, "activeJobId": "live" if status == "running" else "",
+        "jobs": [{"id": "live", "status": status}],
+        "queuePaused": False, "queuePauseReason": "",
+    }
+    training_runner._write_state(live_state)
+
+    with pytest.raises(training_runner.TrainingStateError, match="Refusing to remove managed training jobs"):
+        training_runner._write_state(training_runner._default_state())
+
+    assert json.loads(state_path.read_text(encoding="utf-8"))["jobs"][0]["status"] == status
+
+
+def test_state_reader_refuses_a_valid_file_that_drops_a_managed_job(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    state_path = root / ".webcap_training" / "queue.json"
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+    training_runner._write_state({
+        "version": 3, "activeJobId": "live", "jobs": [{"id": "live", "status": "running"}],
+        "queuePaused": False, "queuePauseReason": "",
+    })
+    state_path.write_text(json.dumps(training_runner._default_state()), encoding="utf-8")
+
+    with pytest.raises(training_runner.TrainingStateError, match="dropped managed jobs"):
+        training_runner._read_state()
 
 
 def test_runner_script_uses_conda_run_without_sourcing_an_activation_script(tmp_path, monkeypatch):

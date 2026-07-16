@@ -8,6 +8,7 @@ var trainingWorkspaceState = {
   runnerConsoleJobId: '',
   runnerPollTimer: 0,
   runnerStatusPending: false,
+  runnerStatusError: '',
   runnerPreflight: null,
   runStages: 'both',
   resumeParentJobId: '',
@@ -373,6 +374,13 @@ function renderTrainingRunner() {
   var els = getTrainingWorkspaceEls();
   syncUtilityTrainingActivity();
   if (!els.runnerSummary || !els.runnerActions) return;
+  if (trainingWorkspaceState.runnerStatusError) {
+    els.runnerSummary.innerHTML = '<div class="training-runner-detail is-error">' + escapeHtml(trainingWorkspaceState.runnerStatusError) + '</div>';
+    els.runnerActions.classList.add('hidden');
+    if (els.runnerQueue) els.runnerQueue.classList.add('hidden');
+    if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
+    return;
+  }
   var jobs = trainingWorkspaceState.runnerJobs || [];
   var activeCount = jobs.filter(function (job) { return job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'unconfirmed'; }).length;
   var queuedJobs = jobs.filter(function (job) { return job.status === 'queued' || job.status === 'paused' || job.status === 'interrupted'; });
@@ -696,6 +704,7 @@ function refreshTrainingRunnerStatus() {
   trainingWorkspaceState.runnerStatusPending = true;
   trainingRunnerRequest('/fs/training_runner/status')
     .then(function (payload) {
+      trainingWorkspaceState.runnerStatusError = '';
       var priorJobsById = {};
       (trainingWorkspaceState.runnerJobs || []).forEach(function (job) { priorJobsById[job.id] = job.status; });
       trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
@@ -716,11 +725,9 @@ function refreshTrainingRunnerStatus() {
         return job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
       });
       var now = Date.now();
-      if (hasActiveJob) {
-        trainingWorkspaceState.gpuForActiveJob = true;
-        if (!trainingWorkspaceState.gpuLastFetchedAt || now - trainingWorkspaceState.gpuLastFetchedAt >= 20000) refreshTrainingGpuStatus();
-      } else if (trainingWorkspaceState.gpuForActiveJob || !trainingWorkspaceState.gpu) {
-        trainingWorkspaceState.gpuForActiveJob = false;
+      var activeStateChanged = trainingWorkspaceState.gpuForActiveJob !== hasActiveJob;
+      trainingWorkspaceState.gpuForActiveJob = hasActiveJob;
+      if (activeStateChanged || !trainingWorkspaceState.gpuLastFetchedAt || now - trainingWorkspaceState.gpuLastFetchedAt >= 20000) {
         refreshTrainingGpuStatus();
       }
       if (isTrainingRunnerConsoleVisible() && selected && selected.id === trainingWorkspaceState.runnerConsoleJobId) {
@@ -728,6 +735,9 @@ function refreshTrainingRunnerStatus() {
       }
     })
     .catch(function (err) {
+      trainingWorkspaceState.runnerStatusError = 'Training queue status unavailable: ' + String(err && err.message ? err.message : err);
+      renderTrainingRunner();
+      setStatus(trainingWorkspaceState.runnerStatusError);
       if (window.console && console.error) console.error('[Training runner] Status refresh failed:', err);
     })
     .then(function () {

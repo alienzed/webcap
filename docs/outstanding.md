@@ -27,13 +27,10 @@ Last reviewed: 2026-07-10.
 - Training Quality isn't modifying quite as much as I remembered it was supposed to. I thought LR was supposed to change. The only thing that should remain stable is epochs and repeats (right?). less repeats just means more epochs so lowering those doesn't make training faster in a comparable way.
 - I think this app should do a better job at suggesting the next run. High was trained? Give me ONE button to train Low. The last run was cancelled/finished early/interupted. ONE button to throw that back on the queue (resume where appropriate).
 - Explore Krea 2 Raw training. Before adding it, define a model-workflow contract so each supported model can declare its dataset requirements, configuration syntax and fields, launch/environment needs, stage support, checkpoint detection, and progress parsing. Keep shared set/run/history UI model-agnostic, and keep model-specific rules out of curation/annotation.
-
-
-## Nice to Haves (Out of Scope for Now)
 - Review longest duplicate phrase detection inside a single caption.
 - Chaos / clutter scoring for scene complexity.
 - Lighting tone / color cast detection for warm, cool, or tinted scenes.
-- Explore better integration in Focus Annotate... we're really not THAT far from Focus Annotate mostly being a difference in terms of how we show the groups of terms.
+
 
 ## Cleanup Candidates
 - Consolidate set-context gating around shared helper usage and remove stale checks.

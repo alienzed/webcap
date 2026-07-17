@@ -946,6 +946,23 @@
   color: #334155;
 }
 
+#item-tags-list .item-tags-frequent-list {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#item-tags-list .item-tags-frequent-meta {
+  flex: 0 0 auto;
+  min-width: 28px;
+  color: #94a3b8;
+  font-size: 11px;
+  text-align: right;
+}
+
 #item-tag-add-input {
   min-height: 26px;
   font-size: 13px;

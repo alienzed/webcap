@@ -36,6 +36,36 @@ function normalizeAnnotateUsageKey(text) {
   return normalizeCatalogTerm(text).toLowerCase();
 }
 
+function buildSetTagUsageEntries(terms, limit) {
+  var termsByKey = {};
+  var countsByKey = {};
+  (Array.isArray(terms) ? terms : []).forEach(function (term) {
+    var key = normalizeAnnotateUsageKey(term);
+    if (!key || termsByKey[key]) return;
+    termsByKey[key] = normalizeCatalogTerm(term);
+    countsByKey[key] = 0;
+  });
+  (state.items || []).forEach(function (item) {
+    if (!item || !item.key) return;
+    var seenOnItem = {};
+    getTagsForMediaKey(item.key).forEach(function (tag) {
+      var key = normalizeAnnotateUsageKey(tag);
+      if (!termsByKey[key] || seenOnItem[key]) return;
+      seenOnItem[key] = true;
+      countsByKey[key] += 1;
+    });
+  });
+  return Object.keys(countsByKey)
+    .filter(function (key) { return countsByKey[key] > 0; })
+    .sort(function (a, b) {
+      return countsByKey[b] - countsByKey[a] || termsByKey[a].localeCompare(termsByKey[b]);
+    })
+    .slice(0, Math.max(1, Number(limit) || 6))
+    .map(function (key) {
+      return { term: termsByKey[key], count: countsByKey[key] };
+    });
+}
+
 var ANNOTATE_STRIP_CONTEXT_PERCENT = 0.08;
 var ANNOTATE_STRIP_CONTEXT_FLOOR = 12;
 var ANNOTATE_STRIP_CONTEXT_CEILING = 40;

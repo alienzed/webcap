@@ -1188,6 +1188,24 @@ function renderItemTagsPanel() {
   var suggestedTags = (typeof getSelectionPoseSuggestedTags === 'function')
     ? getSelectionPoseSuggestedTags(row, tags)
     : [];
+  var selectedTagKeys = {};
+  tags.forEach(function (tag) {
+    var selectedKey = normalizeItemTag(tag).toLowerCase();
+    if (selectedKey) selectedTagKeys[selectedKey] = true;
+  });
+  var suggestedTagKeys = {};
+  suggestedTags.forEach(function (tag) {
+    var suggestedKey = normalizeItemTag(tag).toLowerCase();
+    if (suggestedKey) suggestedTagKeys[suggestedKey] = true;
+  });
+  var groupTerms = [];
+  getAnnotateStripGroups().forEach(function (group) {
+    groupTerms = groupTerms.concat(group.terms || []);
+  });
+  var frequentTags = buildSetTagUsageEntries(groupTerms, 20).filter(function (entry) {
+    var frequentKey = normalizeItemTag(entry.term).toLowerCase();
+    return !selectedTagKeys[frequentKey] && !suggestedTagKeys[frequentKey];
+  }).slice(0, 10);
 
   if (tags.length) {
     tags.sort(function (a, b) {
@@ -1234,7 +1252,7 @@ function renderItemTagsPanel() {
     listEl.appendChild(emptyEl);
   }
 
-  if (suggestedTags.length) {
+  if (suggestedTags.length || frequentTags.length) {
     var suggestedHeader = document.createElement('div');
     suggestedHeader.className = 'item-tags-suggested-header';
     suggestedHeader.textContent = 'Suggested';
@@ -1261,6 +1279,35 @@ function renderItemTagsPanel() {
       suggestionRow.appendChild(suggestionBtn);
       listEl.appendChild(suggestionRow);
     });
+
+    if (frequentTags.length) {
+      var frequentList = document.createElement('div');
+      frequentList.className = 'item-tags-frequent-list';
+      frequentTags.forEach(function (entry) {
+        var frequentRow = document.createElement('div');
+        frequentRow.className = 'row-inline';
+        var frequentBtn = document.createElement('button');
+        frequentBtn.type = 'button';
+        frequentBtn.className = 'phrase-copy-item-btn item-tag-pill-suggested';
+        frequentBtn.textContent = '+ ' + entry.term;
+        frequentBtn.title = 'Add frequently used tag';
+        frequentBtn.onclick = function () {
+          if (addTagToMediaKey(key, entry.term)) {
+            setStatus('Frequently used tag added: ' + entry.term);
+            renderItemTagsPanel();
+          } else {
+            setStatus('Tag already assigned.');
+          }
+        };
+        var frequentMeta = document.createElement('span');
+        frequentMeta.className = 'item-tags-frequent-meta';
+        frequentMeta.textContent = entry.count + '×';
+        frequentRow.appendChild(frequentBtn);
+        frequentRow.appendChild(frequentMeta);
+        frequentList.appendChild(frequentRow);
+      });
+      listEl.appendChild(frequentList);
+    }
   }
 }
 

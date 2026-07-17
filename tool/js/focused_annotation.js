@@ -886,33 +886,7 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
 }
 
 function buildFocusedAnnotationSetUsageEntries(requirementLabel) {
-  var termsByKey = {};
-  var countsByKey = {};
-  getFocusedAnnotationTermsForRequirement(requirementLabel).forEach(function (term) {
-    var key = normalizeChecklistTerm(term).toLowerCase();
-    if (!key || termsByKey[key]) return;
-    termsByKey[key] = term;
-    countsByKey[key] = 0;
-  });
-  (state.items || []).forEach(function (item) {
-    if (!item || !item.key) return;
-    var seenOnItem = {};
-    getTagsForMediaKey(item.key).forEach(function (tag) {
-      var key = normalizeChecklistTerm(tag).toLowerCase();
-      if (!termsByKey[key] || seenOnItem[key]) return;
-      seenOnItem[key] = true;
-      countsByKey[key] += 1;
-    });
-  });
-  return Object.keys(countsByKey)
-    .filter(function (key) { return countsByKey[key] > 0; })
-    .sort(function (a, b) {
-      return countsByKey[b] - countsByKey[a] || termsByKey[a].localeCompare(termsByKey[b]);
-    })
-    .slice(0, 6)
-    .map(function (key) {
-      return { term: termsByKey[key], count: countsByKey[key] };
-    });
+  return buildSetTagUsageEntries(getFocusedAnnotationTermsForRequirement(requirementLabel), 6);
 }
 
 function appendFocusedAnnotationQuickPickRow(list, requirementLabel, term, metaText, classes) {

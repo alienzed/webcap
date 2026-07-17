@@ -505,12 +505,61 @@ function renderFocusedAnnotationRating(mediaKey) {
       btn.onclick = function (e) {
         e.preventDefault();
         e.stopPropagation();
+        var previousKeys = focusedAnnotationState.itemKeys.slice();
+        var previousIndex = focusedAnnotationState.itemIndex;
         setRatingForMediaKey(mediaKey, value);
-        renderFocusedAnnotationRating(mediaKey);
+        refreshFocusedAnnotationSequenceAfterRating(mediaKey, previousKeys, previousIndex);
       };
       els.rating.appendChild(btn);
     })(s);
   }
+}
+
+function refreshFocusedAnnotationSequenceAfterRating(mediaKey, previousKeys, previousIndex) {
+  var priorKeys = Array.isArray(previousKeys) ? previousKeys : [];
+  var filteredItems = getFilteredMediaItems(false);
+  var nextKeys = (Array.isArray(filteredItems) ? filteredItems : [])
+    .filter(function (item) { return !!(item && item.key); })
+    .map(function (item) { return item.key; });
+
+  focusedAnnotationState.history = (focusedAnnotationState.history || []).map(function (entry) {
+    var historyKey = priorKeys[Number(entry && entry.itemIndex) || 0];
+    var nextIndex = nextKeys.indexOf(historyKey);
+    if (nextIndex < 0) return null;
+    return {
+      itemIndex: nextIndex,
+      groupIndex: Number(entry && entry.groupIndex) || 0
+    };
+  }).filter(Boolean);
+  focusedAnnotationState.itemKeys = nextKeys;
+
+  if (!nextKeys.length) {
+    closeFocusedAnnotationModal();
+    setStatus('No items remain in the focused annotation filter.');
+    return;
+  }
+
+  var retainedIndex = nextKeys.indexOf(mediaKey);
+  if (retainedIndex >= 0) {
+    focusedAnnotationState.itemIndex = retainedIndex;
+    renderFocusedAnnotationModal();
+    return;
+  }
+
+  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  var currentGroupIndex = Math.max(0, Math.min(requirements.length - 1, Number(focusedAnnotationState.groupIndex) || 0));
+  var startItemIndex = Math.max(0, Number(previousIndex) || 0);
+  for (var groupIndex = currentGroupIndex; groupIndex < requirements.length; groupIndex++) {
+    var itemStart = groupIndex === currentGroupIndex ? startItemIndex : 0;
+    for (var itemIndex = itemStart; itemIndex < nextKeys.length; itemIndex++) {
+      if (!isFocusedAnnotationPendingStep(itemIndex, groupIndex)) continue;
+      navigateFocusedAnnotation(itemIndex, groupIndex);
+      return;
+    }
+  }
+
+  closeFocusedAnnotationModal();
+  setStatus('Focused annotation complete.');
 }
 
 function getFocusedAnnotationPreviewContextActions(mediaItem) {

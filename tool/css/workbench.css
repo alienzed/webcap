@@ -1457,6 +1457,7 @@ html[data-theme="dark"] .training-runner-card {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
+  justify-content: space-around;
   gap: 2px;
   min-width: 0;
   overflow: visible;

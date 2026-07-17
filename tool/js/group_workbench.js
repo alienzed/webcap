@@ -232,7 +232,6 @@ function toggleGroupWorkbenchTermForItem(mediaKey, requirementLabel, term) {
     if (typeof addTagToCurrentMedia === 'function') addTagToCurrentMedia(term);
     else if (typeof addTagToMediaKey === 'function') addTagToMediaKey(mediaKey, term);
   }
-  refreshGroupWorkbenchForCurrentItem();
 }
 
 function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term, options) {
@@ -380,30 +379,42 @@ function measureGroupWorkbenchHeights(targetEl, groupElements, columnWidth) {
 }
 
 function applyGroupWorkbenchColumnLayout(targetEl, groupElements) {
-  if (!targetEl) return;
+  if (!targetEl) return false;
   var elements = Array.isArray(groupElements) ? groupElements : [];
   var totalGroups = elements.length;
   var requestedColumnCount = getGroupWorkbenchColumnCount(targetEl);
   var effectiveColumnCount = Math.max(1, Math.min(requestedColumnCount, totalGroups || 1));
   var columnGap = 12;
+  var targetWidth = Math.max(0, targetEl.clientWidth || targetEl.getBoundingClientRect().width || 0);
+  var layoutWidth = Math.round(targetWidth);
+  var canReuseLayout = targetEl._groupWorkbenchGroupCount === totalGroups
+    && targetEl._groupWorkbenchLayoutColumnCount === effectiveColumnCount
+    && targetEl._groupWorkbenchLayoutWidth === layoutWidth
+    && Array.isArray(targetEl._groupWorkbenchLayoutPartitions);
   targetEl._groupWorkbenchGroupCount = totalGroups;
   targetEl._groupWorkbenchLayoutColumnCount = effectiveColumnCount;
-  targetEl._groupWorkbenchLayoutWidth = Math.round(targetEl.clientWidth || targetEl.getBoundingClientRect().width || 0);
+  targetEl._groupWorkbenchLayoutWidth = layoutWidth;
   targetEl.setAttribute('data-columns', String(effectiveColumnCount));
-  if (!totalGroups) return;
+  if (!totalGroups) {
+    targetEl._groupWorkbenchLayoutPartitions = [];
+    return !canReuseLayout;
+  }
 
   targetEl.style.setProperty('--group-workbench-columns', String(effectiveColumnCount));
   if (effectiveColumnCount <= 1) {
+    targetEl._groupWorkbenchLayoutPartitions = [[0, totalGroups - 1]];
     for (var groupIndex = 0; groupIndex < totalGroups; groupIndex++) {
       targetEl.appendChild(elements[groupIndex]);
     }
-    return;
+    return !canReuseLayout;
   }
-
-  var targetWidth = Math.max(0, targetEl.clientWidth || targetEl.getBoundingClientRect().width || 0);
   var columnWidth = Math.max(0, (targetWidth - (columnGap * (effectiveColumnCount - 1))) / effectiveColumnCount);
-  var groupHeights = measureGroupWorkbenchHeights(targetEl, elements, columnWidth);
-  var partitions = partitionGroupWorkbenchColumns(groupHeights, effectiveColumnCount, columnGap);
+  var partitions = targetEl._groupWorkbenchLayoutPartitions;
+  if (!canReuseLayout) {
+    var groupHeights = measureGroupWorkbenchHeights(targetEl, elements, columnWidth);
+    partitions = partitionGroupWorkbenchColumns(groupHeights, effectiveColumnCount, columnGap);
+    targetEl._groupWorkbenchLayoutPartitions = partitions;
+  }
 
   for (var columnIdx = 0; columnIdx < partitions.length; columnIdx++) {
     var partition = partitions[columnIdx];
@@ -415,6 +426,7 @@ function applyGroupWorkbenchColumnLayout(targetEl, groupElements) {
     }
     targetEl.appendChild(columnEl);
   }
+  return !canReuseLayout;
 }
 
 function renderGroupWorkbench(options) {
@@ -687,9 +699,9 @@ function renderGroupWorkbench(options) {
     targetEl.scrollTop = Math.max(0, previousScrollTop);
     return;
   }
-  applyGroupWorkbenchColumnLayout(targetEl, groupElements);
+  var layoutChanged = applyGroupWorkbenchColumnLayout(targetEl, groupElements);
   targetEl.scrollTop = Math.max(0, previousScrollTop);
-  syncGroupWorkbenchTermScale(targetEl, opts.mode);
+  if (layoutChanged) syncGroupWorkbenchTermScale(targetEl, opts.mode);
 }
 
 var groupWorkbenchResizeFrame = 0;
@@ -708,7 +720,6 @@ window.addEventListener('resize', function () {
       var nextColumnCount = Math.max(1, Math.min(getGroupWorkbenchColumnCount(listEl), groupCount || 1));
       if (listEl._groupWorkbenchLayoutColumnCount === nextColumnCount
           && listEl._groupWorkbenchLayoutWidth === nextWidth) {
-        syncGroupWorkbenchTermScale(listEl, listEl._groupWorkbenchRenderOptions.mode);
         continue;
       }
       renderGroupWorkbench(listEl._groupWorkbenchRenderOptions);

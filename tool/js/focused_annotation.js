@@ -1012,7 +1012,7 @@ function toggleFocusedAnnotationTerm(requirementLabel, termText) {
   var term = normalizeChecklistTerm(termText);
   if (!term) return;
   if (!hasTagForMediaKey(mediaKey, term)) {
-    addTagToCurrentMedia(term);
+    addTagToCurrentMedia(term, { reviewRequirementLabel: requirementLabel });
   } else {
     removeTagFromCurrentMedia(term);
   }

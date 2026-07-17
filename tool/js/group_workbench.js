@@ -224,13 +224,13 @@ function setChecklistRequirementCheckedForMediaKeys(mediaKeys, requirementLabel,
 function toggleGroupWorkbenchTermForItem(mediaKey, requirementLabel, term) {
   if (!mediaKey || !term) return;
   if (typeof toggleAnnotateTag === 'function') {
-    toggleAnnotateTag(term);
+    toggleAnnotateTag(term, { reviewRequirementLabel: requirementLabel });
   } else if (typeof hasTagForMediaKey === 'function' && hasTagForMediaKey(mediaKey, term)) {
     if (typeof removeTagFromCurrentMedia === 'function') removeTagFromCurrentMedia(term);
     else if (typeof removeTagFromMediaKey === 'function') removeTagFromMediaKey(mediaKey, term);
   } else {
-    if (typeof addTagToCurrentMedia === 'function') addTagToCurrentMedia(term);
-    else if (typeof addTagToMediaKey === 'function') addTagToMediaKey(mediaKey, term);
+    if (typeof addTagToCurrentMedia === 'function') addTagToCurrentMedia(term, { reviewRequirementLabel: requirementLabel });
+    else if (typeof addTagToMediaKey === 'function') addTagToMediaKey(mediaKey, term, { reviewRequirementLabel: requirementLabel });
   }
 }
 
@@ -250,7 +250,7 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
     if (allHaveTerm) {
       if (typeof removeTagFromMediaKey === 'function') ok = removeTagFromMediaKey(key, term);
     } else {
-      if (typeof addTagToMediaKey === 'function') ok = addTagToMediaKey(key, term);
+      if (typeof addTagToMediaKey === 'function') ok = addTagToMediaKey(key, term, { reviewRequirementLabel: requirementLabel });
     }
     if (ok) changed += 1;
   });

@@ -1053,7 +1053,8 @@ function swapTagOrderForMediaKey(mediaKey, firstTagText, secondTagText) {
   return updateTagOrderForMediaKey(key, next);
 }
 
-function addTagToMediaKey(mediaKey, tagText) {
+function addTagToMediaKey(mediaKey, tagText, options) {
+  var opts = options || {};
   var key = String(mediaKey || '').trim();
   var tag = normalizeItemTag(tagText);
   if (!key || !tag) return false;
@@ -1076,7 +1077,11 @@ function addTagToMediaKey(mediaKey, tagText) {
   if (typeof commitChecklistDescriptorSnapshotForMediaKey === 'function') {
     commitChecklistDescriptorSnapshotForMediaKey(key, tag);
   }
-  invalidateChecklistReviewedRequirementsForTagChange(key, tag, { skipRender: true });
+  if (opts.reviewRequirementLabel) {
+    clearChecklistReviewedRequirementsForMediaKey(key, [opts.reviewRequirementLabel], { skipRender: true });
+  } else {
+    invalidateChecklistReviewedRequirementsForTagChange(key, tag, { skipRender: true });
+  }
   ensureCaptionHelperPhraseInCatalog(tag, true);
   debouncedItemTagsSave(saveItemTagsToFolderState);
   refreshTagDrivenPanelsForMediaKey(key);
@@ -1086,12 +1091,12 @@ function addTagToMediaKey(mediaKey, tagText) {
   return true;
 }
 
-function addTagToCurrentMedia(tagText) {
+function addTagToCurrentMedia(tagText, options) {
   if (!state.currentItem || !state.currentItem.key) {
     setStatus('Select a media item to add tags.');
     return false;
   }
-  var added = addTagToMediaKey(state.currentItem.key, tagText);
+  var added = addTagToMediaKey(state.currentItem.key, tagText, options);
   if (!added) {
     setStatus('Tag already assigned.');
     return false;
@@ -1123,7 +1128,7 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   });
   if (next.length) captionItemTagsByMedia[key] = next;
   else delete captionItemTagsByMedia[key];
-  invalidateChecklistReviewedRequirementsForTagChange(key, removedTag, { skipRender: true });  
+  // Removing an assigned term is a correction and does not invalidate an existing group review.
   saveItemTagsToFolderState();
   refreshTagDrivenPanelsForMediaKey(key);
   if (shouldSyncTemplate) {

@@ -293,7 +293,7 @@ function setAnnotateStripVisible(nextVisible, persistNow) {
   }
 }
 
-function toggleAnnotateTag(term) {
+function toggleAnnotateTag(term, options) {
   var text = normalizeCatalogTerm(term);
   if (!text) return;
   if (!state.currentItem || !state.currentItem.key) {
@@ -308,7 +308,7 @@ function toggleAnnotateTag(term) {
     renderAnnotateStrip();
     return;
   }
-  addTagToCurrentMedia(text);
+  addTagToCurrentMedia(text, options);
   renderAnnotateStrip();
 }
 

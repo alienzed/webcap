@@ -59,10 +59,6 @@ function getTermFamilyPopover() {
     clearTermFamilyPopoverCloseTimer();
   });
   popover.addEventListener('mouseleave', scheduleTermFamilyPopoverClose);
-  popover.addEventListener('click', function (event) {
-    var target = event.target && event.target.closest ? event.target.closest('button') : null;
-    if (target) closeTermFamilyPopover();
-  });
   popover.addEventListener('contextmenu', function () {
     window.setTimeout(closeTermFamilyPopover, 0);
   });

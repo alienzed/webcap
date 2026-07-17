@@ -9,6 +9,8 @@ var focusedAnnotationState = {
   actionRefreshTimerFast: 0,
   actionRefreshTimerSlow: 0
 };
+var focusedAnnotationTagClipboard = [];
+var focusedAnnotationTagClipboardSource = '';
 
 function getFocusedAnnotationEls() {
   return {
@@ -29,8 +31,6 @@ function getFocusedAnnotationEls() {
     copyTagsBtn: document.getElementById('focused-annotation-copy-tags-btn'),
     pasteTagsBtn: document.getElementById('focused-annotation-paste-tags-btn'),
     editTermsBtn: document.getElementById('focused-annotation-edit-terms-btn'),
-    groupMoveUpBtn: document.getElementById('focused-annotation-group-move-up-btn'),
-    groupMoveDownBtn: document.getElementById('focused-annotation-group-move-down-btn'),
     groupDeleteBtn: document.getElementById('focused-annotation-group-delete-btn'),
     closeBtn: document.getElementById('focused-annotation-close-btn'),
     doneBtn: document.getElementById('focused-annotation-done-btn')
@@ -674,20 +674,89 @@ function updateFocusedAnnotationGroupClipboardUi() {
   var els = getFocusedAnnotationEls();
   if (!els.copyTagsBtn || !els.pasteTagsBtn) return;
   var requirementLabel = getFocusedAnnotationCurrentRequirement();
-  var hasRequirement = !!requirementLabel;
-  var clipboard = (typeof getChecklistGroupTermsClipboard === 'function')
-    ? getChecklistGroupTermsClipboard()
-    : [];
-  var clipboardCount = Array.isArray(clipboard) ? clipboard.length : 0;
-  els.copyTagsBtn.disabled = !hasRequirement;
-  els.copyTagsBtn.title = hasRequirement
-    ? 'Copy the current group tags'
-    : 'Select a group to copy tags from';
-  els.pasteTagsBtn.classList.toggle('hidden', !hasRequirement || clipboardCount <= 0);
-  els.pasteTagsBtn.disabled = !hasRequirement || clipboardCount <= 0;
-  els.pasteTagsBtn.title = clipboardCount > 0
-    ? 'Paste ' + clipboardCount + ' copied tag' + (clipboardCount === 1 ? '' : 's') + ' into this group'
-    : 'Paste copied tags';
+  var hasCurrentItem = !!(state.currentItem && state.currentItem.key);
+  var clipboardCount = focusedAnnotationTagClipboard.length;
+  var canPaste = hasCurrentItem && !!requirementLabel && clipboardCount > 0 && focusedAnnotationTagClipboardSource === requirementLabel;
+  els.copyTagsBtn.disabled = !hasCurrentItem || !requirementLabel;
+  els.copyTagsBtn.textContent = clipboardCount > 0 && focusedAnnotationTagClipboardSource === requirementLabel
+    ? 'Tags Copied (' + clipboardCount + ')'
+    : 'Copy Tags';
+  els.copyTagsBtn.title = hasCurrentItem && requirementLabel
+    ? 'Copy selected tags from this group'
+    : 'Select a media item and group to copy tags from';
+  els.pasteTagsBtn.textContent = clipboardCount > 0
+    ? 'Paste Tags (' + clipboardCount + ')'
+    : 'Paste Tags';
+  els.pasteTagsBtn.disabled = !canPaste;
+  if (!clipboardCount) {
+    els.pasteTagsBtn.title = 'Copy selected tags from this group first';
+  } else if (!hasCurrentItem || !requirementLabel) {
+    els.pasteTagsBtn.title = 'Select a group to paste tags into';
+  } else if (!canPaste) {
+    els.pasteTagsBtn.title = 'These tags were copied from "' + focusedAnnotationTagClipboardSource + '". Return to that group to paste them.';
+  } else {
+    els.pasteTagsBtn.title = 'Select ' + clipboardCount + ' copied tag' + (clipboardCount === 1 ? '' : 's') + ' on this media item';
+  }
+}
+
+function getFocusedAnnotationSelectedGroupTags(mediaKey, requirementLabel) {
+  var groupTermsByKey = {};
+  getFocusedAnnotationTermsForRequirement(requirementLabel).forEach(function (term) {
+    var key = normalizeChecklistTerm(term).toLowerCase();
+    if (key) groupTermsByKey[key] = term;
+  });
+  return getTagsForMediaKey(mediaKey).map(function (tag) {
+    return groupTermsByKey[normalizeChecklistTerm(tag).toLowerCase()] || '';
+  }).filter(Boolean);
+}
+
+function copyFocusedAnnotationSelectedGroupTags() {
+  var requirementLabel = getFocusedAnnotationCurrentRequirement();
+  var mediaKey = state.currentItem && state.currentItem.key;
+  if (!requirementLabel || !mediaKey) return false;
+  focusedAnnotationTagClipboard = normalizeChecklistTermsList(getFocusedAnnotationSelectedGroupTags(mediaKey, requirementLabel));
+  focusedAnnotationTagClipboardSource = requirementLabel;
+  updateFocusedAnnotationGroupClipboardUi();
+  if (!focusedAnnotationTagClipboard.length) {
+    showFocusedAnnotationGroupClipboardNotice('No selected tags in this group to copy.', 'focused-annotation-badge-reviewed');
+    setStatus('No selected tags in this group to copy.');
+    return false;
+  }
+  showFocusedAnnotationGroupClipboardNotice(
+    'Copied ' + focusedAnnotationTagClipboard.length + ' selected tag' + (focusedAnnotationTagClipboard.length === 1 ? '' : 's') + '.',
+    'focused-annotation-badge-reviewed'
+  );
+  setStatus('Copied ' + focusedAnnotationTagClipboard.length + ' selected tag' + (focusedAnnotationTagClipboard.length === 1 ? '' : 's') + '.');
+  return true;
+}
+
+function pasteFocusedAnnotationSelectedGroupTags() {
+  var requirementLabel = getFocusedAnnotationCurrentRequirement();
+  var mediaKey = state.currentItem && state.currentItem.key;
+  if (!requirementLabel || !mediaKey || focusedAnnotationTagClipboardSource !== requirementLabel || !focusedAnnotationTagClipboard.length) return false;
+  var result = mergeTagsIntoMediaKey(mediaKey, focusedAnnotationTagClipboard);
+  renderFocusedAnnotationModal();
+  if (!result.added) {
+    showFocusedAnnotationGroupClipboardNotice('All copied tags are already selected.', 'focused-annotation-badge-reviewed');
+    setStatus('All copied tags are already selected.');
+    return false;
+  }
+  showFocusedAnnotationGroupClipboardNotice(
+    'Selected ' + result.added + ' copied tag' + (result.added === 1 ? '' : 's') + '.',
+    'focused-annotation-badge-reviewed'
+  );
+  setStatus('Selected ' + result.added + ' copied tag' + (result.added === 1 ? '' : 's') + '.');
+  return true;
+}
+
+function showFocusedAnnotationGroupClipboardNotice(text, kind) {
+  var els = getFocusedAnnotationEls();
+  if (!els.groupStatus) return;
+  var existing = els.groupStatus.querySelector('.focused-annotation-group-clipboard-notice');
+  if (existing) existing.remove();
+  var notice = buildFocusedAnnotationBadge(text, kind || 'focused-annotation-badge-reviewed');
+  notice.classList.add('focused-annotation-group-clipboard-notice');
+  els.groupStatus.appendChild(notice);
 }
 
 function buildFocusedAnnotationBadge(text, kind) {
@@ -1045,12 +1114,6 @@ function renderFocusedAnnotationModal() {
   if (els.editTermsBtn) {
     els.editTermsBtn.disabled = !requirementLabel;
   }
-  if (els.groupMoveUpBtn) {
-    els.groupMoveUpBtn.disabled = !requirementLabel || groupIndex <= 0;
-  }
-  if (els.groupMoveDownBtn) {
-    els.groupMoveDownBtn.disabled = !requirementLabel || groupIndex >= requirements.length - 1;
-  }
   if (els.groupDeleteBtn) {
     els.groupDeleteBtn.disabled = !requirementLabel;
   }
@@ -1179,15 +1242,6 @@ function openFocusedAnnotationTermsEditor() {
   }
 }
 
-function moveFocusedAnnotationCurrentGroup(offset) {
-  var groupIndex = Math.max(0, Number(focusedAnnotationState.groupIndex) || 0);
-  var nextGroupIndex = groupIndex + Number(offset || 0);
-  if (!moveChecklistItemByOffset(groupIndex, offset)) return;
-  focusedAnnotationState.groupIndex = nextGroupIndex;
-  focusedAnnotationState.history = [];
-  renderFocusedAnnotationModal();
-}
-
 function deleteFocusedAnnotationCurrentGroup() {
   var groupIndex = Math.max(0, Number(focusedAnnotationState.groupIndex) || 0);
   if (!deleteChecklistGroupByIndex(groupIndex)) return;
@@ -1282,27 +1336,19 @@ function wireFocusedAnnotationModal() {
   if (els.editTermsBtn) {
     els.editTermsBtn.addEventListener('click', openFocusedAnnotationTermsEditor);
   }
-  if (els.groupMoveUpBtn) {
-    els.groupMoveUpBtn.addEventListener('click', function () {
-      moveFocusedAnnotationCurrentGroup(-1);
-    });
-  }
-  if (els.groupMoveDownBtn) {
-    els.groupMoveDownBtn.addEventListener('click', function () {
-      moveFocusedAnnotationCurrentGroup(1);
-    });
-  }
   if (els.groupDeleteBtn) {
     els.groupDeleteBtn.addEventListener('click', deleteFocusedAnnotationCurrentGroup);
   }
   if (els.copyTagsBtn) {
     els.copyTagsBtn.addEventListener('click', function () {
-      copyChecklistGroupTermsToClipboard(getFocusedAnnotationCurrentRequirement());
+      flashFocusedAnnotationButton(els.copyTagsBtn);
+      copyFocusedAnnotationSelectedGroupTags();
     });
   }
   if (els.pasteTagsBtn) {
     els.pasteTagsBtn.addEventListener('click', function () {
-      pasteChecklistGroupTermsToRequirement(getFocusedAnnotationCurrentRequirement());
+      flashFocusedAnnotationButton(els.pasteTagsBtn);
+      pasteFocusedAnnotationSelectedGroupTags();
     });
   }
   if (els.doneBtn) {

@@ -5,7 +5,6 @@ var checklistItems = getDefaultRequirementItems().slice(); // Current folder's r
 var checklistCheckedByMedia = {}; // { mediaKey: { item: true/false, ... } }
 var debouncedChecklistSave = debounceCreate(400); // Debounce saves for checkbox changes
 var checklistKeywordsByItem = {}; // { requirement: "keyword1, keyword2, ..." }
-var checklistGroupTermsClipboard = [];
 var checklistSessionHiddenTermsByRequirement = {}; // { requirement: { termLower: true } } session-only
 var checklistTermWrappersByKey = {}; // { termLower: { prefix: "", suffix: "" } }
 var checklistTermDescriptorDefaultsByKey = {}; // { termLower: { prefix: "", suffix: "" } }
@@ -37,10 +36,6 @@ function normalizeChecklistTermsList(terms) {
 
 function parseChecklistKeywordTerms(raw) {
   return normalizeChecklistTermsList(String(raw || '').split(','));
-}
-
-function getChecklistGroupTermsClipboard() {
-  return Array.isArray(checklistGroupTermsClipboard) ? checklistGroupTermsClipboard.slice() : [];
 }
 
 function normalizeChecklistTermAffixKey(termText) {
@@ -781,65 +776,6 @@ function applyChecklistKeywordTermsForRequirement(requirementLabel, terms) {
   if (typeof renderFocusedAnnotationModal === 'function') {
     renderFocusedAnnotationModal();
   }
-  return true;
-}
-
-function copyChecklistGroupTermsToClipboard(requirementLabel) {
-  var requirement = normalizeChecklistRequirementKey(requirementLabel);
-  if (!requirement) {
-    setStatus('Select a group to copy tags from.');
-    return false;
-  }
-  var terms = getChecklistKeywordTermsForRequirement(requirement);
-  if (!terms.length) {
-    setStatus('No group tags to copy.');
-    return false;
-  }
-  checklistGroupTermsClipboard = normalizeChecklistTermsList(terms);
-  if (typeof updateFocusedAnnotationGroupClipboardUi === 'function') {
-    updateFocusedAnnotationGroupClipboardUi();
-  }
-  setStatus('Copied ' + checklistGroupTermsClipboard.length + ' group tag' + (checklistGroupTermsClipboard.length === 1 ? '' : 's') + '.');
-  return true;
-}
-
-function pasteChecklistGroupTermsToRequirement(requirementLabel) {
-  var requirement = normalizeChecklistRequirementKey(requirementLabel);
-  if (!requirement) {
-    setStatus('Select a group to paste tags into.');
-    return false;
-  }
-  var clipboard = getChecklistGroupTermsClipboard();
-  if (!clipboard.length) {
-    setStatus('No copied group tags to paste.');
-    return false;
-  }
-  var current = getChecklistKeywordTermsForRequirement(requirement);
-  var merged = normalizeChecklistTermsList(current.concat(clipboard));
-  if (String(current.join(', ')) === String(merged.join(', '))) {
-    setStatus('No new tags to paste.');
-    return false;
-  }
-  checklistKeywordsByItem[requirement] = merged.join(', ');
-  if (typeof syncReviewedFromChecklistAll === 'function') {
-    syncReviewedFromChecklistAll();
-  }
-  saveChecklistToFolderState();
-  refreshCurrentPrimerDerivedUi();
-  renderChecklistPanel();
-  renderItemMetadataPanel();
-  renderAnnotateStrip();
-  renderItemTagsPanel();
-  if (typeof renderFileList === 'function') {
-    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
-  }
-  if (typeof renderFocusedAnnotationModal === 'function') {
-    renderFocusedAnnotationModal();
-  }
-  if (typeof updateFocusedAnnotationGroupClipboardUi === 'function') {
-    updateFocusedAnnotationGroupClipboardUi();
-  }
-  setStatus('Pasted ' + clipboard.length + ' group tag' + (clipboard.length === 1 ? '' : 's') + '.');
   return true;
 }
 

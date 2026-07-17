@@ -363,24 +363,26 @@ def _collect_matches(root: Path, term: str) -> list[dict]:
     return matches
 
 
-def _iter_search_dirs(root: Path, source_folder: str):
+def _iter_search_dirs(source_folder: str):
     source_rel = str(source_folder or "").strip().replace("\\", "/").strip("/")
     source_dir = app_config.safe_join_fs_root(source_rel)
     if not source_dir.exists() or not source_dir.is_dir():
         raise ValueError("Source folder does not exist.")
+    source_prefix = Path(source_rel) if source_rel else Path()
     dirs = [source_dir]
     dirs.extend([p for p in sorted(source_dir.rglob("*")) if p.is_dir()])
     for dir_path in dirs:
         try:
-            rel_dir = dir_path.relative_to(root)
-        except Exception:
-            continue
+            descendant = dir_path.relative_to(source_dir)
+        except ValueError as exc:
+            raise RuntimeError("SuperSet could not resolve a searched folder relative to its source.") from exc
+        rel_dir = source_prefix / descendant
         if _is_blacklisted_rel_path(rel_dir):
             continue
         yield dir_path, rel_dir
 
 
-def _collect_superset_matches(root: Path, criteria: dict) -> list[dict]:
+def _collect_superset_matches(criteria: dict) -> list[dict]:
     query = _parse_filter_query(criteria.get("filter_text") or "")
     text_match_mode = str(criteria.get("text_match_mode") or "all").strip().lower()
     if text_match_mode not in ("all", "any"):
@@ -395,7 +397,7 @@ def _collect_superset_matches(root: Path, criteria: dict) -> list[dict]:
     flag_filter = _parse_csv_values(criteria.get("flag_filter") or "")
 
     matches = []
-    for dir_path, rel_dir in _iter_search_dirs(root, criteria.get("source_folder") or ""):
+    for dir_path, rel_dir in _iter_search_dirs(criteria.get("source_folder") or ""):
         media_files = sorted(
             [p for p in dir_path.iterdir() if p.is_file() and p.suffix.lower() in MEDIA_ALL_EXTS],
             key=lambda p: p.name.lower(),
@@ -702,9 +704,8 @@ def smart_set_materialize_response(data: dict):
 def superset_search_response(data: dict):
     payload = data or {}
     try:
-        root = Path(app_config.FS_ROOT).resolve()
         criteria = payload.get("criteria") if isinstance(payload.get("criteria"), dict) else payload
-        matches = _collect_superset_matches(root, criteria)
+        matches = _collect_superset_matches(criteria)
         return jsonify(
             {
                 "ok": True,

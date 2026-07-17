@@ -942,6 +942,38 @@ def test_superset_search_matches_current_folder_and_subfolders_with_filters(tmp_
     ]
 
 
+def test_superset_search_preserves_alias_for_source_resolved_outside_root(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    external_set = tmp_path / "external" / "hair-set"
+    child_dir = external_set / "child"
+    fs_root.mkdir()
+    child_dir.mkdir(parents=True)
+    write_image(external_set / "one.png")
+    write_text(external_set / "one.txt", "long hair")
+    write_image(child_dir / "two.png")
+    write_text(child_dir / "two.txt", "short hair")
+
+    def resolve_alias(rel_path):
+        if str(rel_path or "").replace("\\", "/").strip("/") == "aliases/hair":
+            return external_set.resolve()
+        return (fs_root / str(rel_path or "")).resolve()
+
+    monkeypatch.setattr(smart_set_module.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(smart_set_module.app_config, "safe_join_fs_root", resolve_alias)
+
+    response = app_module.app.test_client().post(
+        "/fs/superset_search",
+        json={"criteria": {"source_folder": "aliases/hair", "filter_text": "hair"}},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert [row["source_media_rel"] for row in payload["results"]] == [
+        "aliases/hair/one.png",
+        "aliases/hair/child/two.png",
+    ]
+
+
 def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     source_dir = fs_root / "sets" / "a"

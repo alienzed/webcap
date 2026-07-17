@@ -411,6 +411,7 @@ function loadConfigFileToEditor(fileName, options) {
   var opts = options || {};
   var preserveTrainingWorkspace = !!opts.preserveTrainingWorkspace;
   setStatus('Loading config: ' + fileName);
+  if (preserveTrainingWorkspace && isTrainingRunnerConsoleVisible()) hideTrainingRunnerConsole();
   if (!preserveTrainingWorkspace) hideConsolePanel();
   var folder = state.folder || '';
   state.currentItem = null;

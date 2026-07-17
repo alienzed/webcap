@@ -117,7 +117,7 @@ def start_response(folder=""):
     if folder:
         folder_path = app_config.safe_join_fs_root(folder)
         output_root_for_folder(folder_path).mkdir(parents=True, exist_ok=True)
-    log_root = Path(app_config.FS_ROOT) / "output" / "sets"
+    log_root = Path(app_config.FS_ROOT) / "output" / "runs"
     log_root.mkdir(parents=True, exist_ok=True)
     root_wsl = training_runner._to_wsl_path(log_root, settings["wslDistribution"])
     log_path = _runtime_root() / LOG_FILE_NAME

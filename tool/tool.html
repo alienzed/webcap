@@ -371,6 +371,15 @@
                                     </div>
                                     <div id="training-item-overview" class="training-item-overview" aria-label="Prepared training items"></div>
                                 </div>
+                                <div id="training-runner-output-view" class="training-runner-output-view hidden">
+                                    <section id="training-runner-console" class="training-runner-console hidden" aria-label="Training output">
+                                        <div class="training-runner-console-heading">
+                                            <strong id="training-runner-console-title">Training output</strong>
+                                            <button id="training-runner-console-close-btn" type="button" class="training-runner-console-close-btn" aria-label="Return to Training Items" title="Return to Training Items">Back to Training Items</button>
+                                        </div>
+                                        <pre id="training-runner-console-log" class="training-runner-console-log"></pre>
+                                    </section>
+                                </div>
                                  <div class="editor-wrapper">
                                     <div id="editor-floating-actions" class="editor-floating-actions">
                                         <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Write the current caption to disk. Shift+click to apply it and go to the next captionless item.">Apply</button>
@@ -703,7 +712,7 @@
                                 </div>
                                 <details class="training-run-custom-checkpoint">
                                     <summary>Custom checkpoint path</summary>
-                                    <input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/sets/.../runs/...">
+                                    <input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/runs/{setname}">
                                 </details>
                             </div>
                             <details class="training-run-details">
@@ -715,7 +724,7 @@
                                         <button id="training-preview-command-btn" type="button" class="review-captions-btn" title="Generate the manual WSL command, show it here, and copy it to the clipboard.">Generate &amp; Copy Manual Command</button>
                                         <button id="training-validate-runner-btn" type="button" class="review-captions-btn" title="Run the full environment diagnostic. This is not required for normal launches.">Run Diagnostics</button>
                                         <button id="training-copy-command-btn" type="button" class="training-btn hidden">Copy Manual Command</button>
-                                        <button id="training-console-btn" type="button" class="review-captions-btn" title="Show the selected training job's output.">View Output</button>
+                                        <button id="training-console-btn" type="button" class="review-captions-btn" title="Show output from the active training run.">View Output</button>
                                     </div>
                                 </div>
                             </details>
@@ -730,20 +739,13 @@
                                 <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
                                 <div id="training-runner-actions" class="training-runner-actions hidden">
                                     <button id="training-runner-finish-btn" type="button" class="training-btn" title="End this run intentionally, keep its output, and continue the queue.">Finish</button>
-                                    <button id="training-runner-pause-btn" type="button" class="review-captions-btn">Pause</button>
+                                    <button id="training-runner-pause-btn" type="button" class="review-captions-btn" title="Pause the active run and keep it available to resume.">Pause</button>
                                     <button id="training-runner-cancel-btn" type="button" class="review-captions-btn hidden" title="Remove this paused or queued job from the queue.">Cancel</button>
                                     <button id="training-runner-resume-queue-btn" type="button" class="training-btn hidden">Resume Queue</button>
                                     <button id="training-runner-console-btn" type="button" class="review-captions-btn">Show Output</button>
                                 </div>
                                 <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued training jobs"></div>
                                 <div id="training-runner-preflight" class="training-runner-preflight hidden"></div>
-                                <section id="training-runner-console" class="training-runner-console hidden" aria-label="Training output">
-                                    <div class="training-runner-console-heading">
-                                        <strong id="training-runner-console-title">Training output</strong>
-                                        <button id="training-runner-console-close-btn" type="button" class="training-runner-console-close-btn" aria-label="Hide training output">Hide</button>
-                                    </div>
-                                    <pre id="training-runner-console-log" class="training-runner-console-log"></pre>
-                                </section>
                             </section>
                             <div class="training-global-secondary">
                             <section class="training-history-card" aria-label="Recent training runs">

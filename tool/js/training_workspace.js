@@ -287,10 +287,24 @@ function buildTrainingRunnerProgressHtml(job) {
     : (job.stages === 'both'
       ? Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall'
       : Math.round(stagePercent) + '% of ' + trainingStageLabel(progress.stage || job.stages || 'both'));
+  var checkpointEpoch = Number(progress.nextCheckpointEpoch);
+  var checkpointEvery = Number(progress.checkpointEveryNEpochs);
+  var checkpointEta = Number(progress.checkpointEtaSeconds);
+  var checkpointLabel = '';
+  if (isFinite(checkpointEpoch) && checkpointEpoch > 0 && isFinite(checkpointEvery) && checkpointEvery > 0) {
+    checkpointLabel = 'Next checkpoint: epoch ' + Math.round(checkpointEpoch);
+    if (isFinite(checkpointEta) && checkpointEta >= 60 && checkpointEta < 30 * 24 * 3600) {
+      checkpointLabel += ' · ~' + formatTrainingRunnerDuration(checkpointEta);
+    }
+  }
+  var progressTitle = 'Current training stage, epoch, and progress. Estimates use recent iteration time.';
+  if (checkpointLabel) progressTitle += ' Checkpoints are configured every ' + Math.round(checkpointEvery) + ' epochs.';
   return '<div class="training-runner-progress" aria-label="Estimated training progress">' +
     '<div class="training-runner-progress-copy"><span>' + escapeHtml(trainingStageLabel(progress.stage || job.stages || 'both')) +
       positionLabel + '</span>' +
-      '<span>' + escapeHtml(progressLabel) + '</span></div>' +
+      '<span title="' + escapeHtml(progressTitle) + '">' + escapeHtml(progressLabel) + '</span>' +
+      (checkpointLabel ? '<span class="training-runner-checkpoint" title="Checkpoint saves are configured every ' + Math.round(checkpointEvery) + ' epochs. This estimate uses recent iteration time.">' + escapeHtml(checkpointLabel) + '</span>' : '') +
+      '</div>' +
     '<div class="training-runner-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(boundedOverall) + '">' +
       '<span style="width:' + boundedOverall.toFixed(1) + '%"></span></div>' +
     '</div>';
@@ -326,7 +340,7 @@ function buildTrainingGpuStatusHtml() {
     (isFinite(utilization) ? ' ' + Math.round(utilization) + '%' : '') +
     (memoryUsed && memoryTotal ? ' · VRAM ' + memoryUsed + ' / ' + memoryTotal : '') +
     (details.length ? ' · ' + details.join(' · ') : '');
-  return '<strong>' + escapeHtml(primarySummary) + '</strong>';
+  return '<strong title="Live GPU utilization, VRAM use, temperature, and power draw.">' + escapeHtml(primarySummary) + '</strong>';
 }
 
 function trainingQueueHoldLabel() {
@@ -441,6 +455,13 @@ function renderTrainingRunner() {
   var elapsed = formatTrainingRunnerElapsed(job);
   var status = String(job.status || 'unknown');
   var statusLabel = trainingRunnerStatusLabel(status);
+  var statusTitle = status === 'running'
+    ? 'Training is actively running.'
+    : status === 'starting'
+      ? 'The runner is launching training.'
+      : status === 'stopping'
+        ? 'The runner is stopping after the requested action.'
+        : 'Training runner status: ' + statusLabel + '.';
   var running = status === 'starting' || status === 'running' || status === 'stopping';
   var queued = status === 'queued' || status === 'paused' || status === 'interrupted';
   var queueState = trainingWorkspaceState.runnerQueuePaused && status !== 'paused'
@@ -451,8 +472,8 @@ function renderTrainingRunner() {
     ? '<span class="training-runner-queued-count">' + (selectedQueuePosition === 1 ? 'Next to start' : 'Queue position ' + selectedQueuePosition + ' of ' + queuedCount) + '</span>'
     : '';
   els.runnerSummary.innerHTML = '<div class="training-runner-active-row">' +
-    '<div class="training-runner-state">' +
-      '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span>' +
+    '<div class="training-runner-state" title="Active model, noise stage, and elapsed run time.">' +
+      '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '" title="' + escapeHtml(statusTitle) + '">' + escapeHtml(statusLabel) + '</span>' +
       '<span>' + escapeHtml(trainingJobLabel(job)) + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span>' +
     '</div>' +
     '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
@@ -635,10 +656,28 @@ function toggleTrainingRunnerConsole() {
 
 
 function showTrainingRunnerConsole(job, options) {
-  var followsActiveJob = !job || !!(options && options.followActiveJob);
+  var opts = options || {};
+  var followsActiveJob = !job || !!opts.followActiveJob;
   var target = job || getTrainingRunnerConsoleTargetJob();
   if (!target || !target.id) {
     setStatus('No training run is active to show output for.');
+    return;
+  }
+  var configFile = state.currentConfigFile;
+  if (!opts.configClosed && isTrainingWorkspaceActive() && configFile && configFile.folder === state.folder && configFile.file) {
+    cancelEditorAutosaveForConfig(configFile.folder, configFile.file);
+    Promise.resolve(saveCurrentEditorContent())
+      .then(function () {
+        if (state.currentConfigFile && state.currentConfigFile.folder === configFile.folder && state.currentConfigFile.file === configFile.file) {
+          clearEditorAndPreview();
+          syncTrainingWorkspaceConfigSelection();
+        }
+        syncWorkspaceConfigEditorUi();
+        showTrainingRunnerConsole(target, { followActiveJob: followsActiveJob, configClosed: true });
+      })
+      .catch(function (err) {
+        setStatus('Could not save config before opening output: ' + String(err && err.message ? err.message : err));
+      });
     return;
   }
   var els = getTrainingWorkspaceEls();
@@ -764,6 +803,12 @@ function refreshTrainingRunnerStatus() {
         var activeJob = getTrainingRunnerActiveJob();
         if (trainingWorkspaceState.runnerConsoleFollowsActiveJob && activeJob && activeJob.id !== trainingWorkspaceState.runnerConsoleJobId) {
           showTrainingRunnerConsole(activeJob, { followActiveJob: true });
+        } else if (trainingWorkspaceState.runnerConsoleFollowsActiveJob && !activeJob && trainingWorkspaceState.runnerConsoleJobId) {
+          var consoleEls = getTrainingWorkspaceEls();
+          trainingWorkspaceState.runnerConsoleRequestVersion++;
+          trainingWorkspaceState.runnerConsoleJobId = '';
+          if (consoleEls.runnerConsoleLog) consoleEls.runnerConsoleLog.textContent = '';
+          if (consoleEls.runnerConsoleTitle) consoleEls.runnerConsoleTitle.textContent = 'Training output · waiting for the next run';
         } else {
           var consoleJob = getTrainingRunnerJobById(trainingWorkspaceState.runnerConsoleJobId);
           if (consoleJob) fetchTrainingRunnerLog(consoleJob);
@@ -1680,7 +1725,9 @@ function syncTrainingConsoleUi() {
     button.classList.toggle('active', visible);
     button.setAttribute('aria-pressed', visible ? 'true' : 'false');
     button.textContent = visible ? 'Hide Output' : 'Show Output';
+    button.title = visible ? 'Hide output from the active training run.' : 'Show output from the active training run.';
   });
+  syncWorkspaceConfigEditorUi();
 }
 
 function syncTrainingWorkspaceUi() {

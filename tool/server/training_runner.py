@@ -46,6 +46,7 @@ _state_file_seen = None
 _persisted_managed_job_ids = set()
 _logger = logging.getLogger(__name__)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
+_CHECKPOINT_EPOCH_CONFIG_PATTERN = re.compile(r"^\s*checkpoint_every_n_epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _LOG_EPOCH_PATTERN = re.compile(r"Started new epoch:\s*(\d+)", re.IGNORECASE)
 _LOG_STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
 _LOG_ITER_TIME_PATTERN = re.compile(r"\biter time \(s\):\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
@@ -895,6 +896,15 @@ def _read_config_epochs(path):
     return int(match.group(1)) if match else 0
 
 
+def _read_config_checkpoint_interval(path):
+    try:
+        text = Path(str(path or "")).read_text(encoding="utf-8")
+    except OSError:
+        return 0
+    match = _CHECKPOINT_EPOCH_CONFIG_PATTERN.search(text)
+    return int(match.group(1)) if match else 0
+
+
 def _read_log_tail(path, byte_count=4096):
     try:
         with Path(path).open("rb") as handle:
@@ -927,6 +937,7 @@ def _sync_job_progress(job, log_text):
 
     snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
     current_epochs = _read_config_epochs(snapshot.get(stage, ""))
+    checkpoint_every_epochs = _read_config_checkpoint_interval(snapshot.get(stage, ""))
     if not current_epochs:
         job.pop("progress", None)
         return
@@ -988,6 +999,14 @@ def _sync_job_progress(job, log_text):
                 eta_scope = "stage"
         progress["etaSeconds"] = round(remaining_steps * seconds_per_step)
         progress["etaScope"] = eta_scope
+    if epoch is not None and checkpoint_every_epochs:
+        next_checkpoint_epoch = ((int(epoch) // checkpoint_every_epochs) + 1) * checkpoint_every_epochs
+        if next_checkpoint_epoch <= current_epochs:
+            progress["checkpointEveryNEpochs"] = checkpoint_every_epochs
+            progress["nextCheckpointEpoch"] = next_checkpoint_epoch
+            if planned_steps > 0 and seconds_per_step is not None:
+                checkpoint_steps = max(0.0, (next_checkpoint_epoch - float(epoch)) * planned_steps / float(current_epochs))
+                progress["checkpointEtaSeconds"] = round(checkpoint_steps * seconds_per_step)
     job["progress"] = progress
 
 

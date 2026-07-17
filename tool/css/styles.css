@@ -2165,6 +2165,11 @@ iframe {
   color: #cc7a3f;
 }
 
+.workspace-surface-training .training-runner-checkpoint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .workspace-surface-training .training-gpu-status {
   min-height: 16px;
   color: var(--muted);
@@ -2213,6 +2218,18 @@ iframe {
   padding: 8px;
   border: 1px solid var(--border);
   background: #111827;
+}
+
+.workspace-surface-training .training-runner-output-view {
+  min-height: 0;
+  height: 100%;
+}
+
+.workspace-surface-training .training-runner-output-view .training-runner-console {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .workspace-surface-training .training-runner-console-heading {

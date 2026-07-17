@@ -104,7 +104,7 @@ def _base36_prefix(value):
 
 
 def _next_output_dir(folder_path: Path):
-    root = Path(app_config.FS_ROOT) / "output" / "sets"
+    root = Path(app_config.FS_ROOT) / "output" / "runs"
     root.mkdir(parents=True, exist_ok=True)
     normalize_path_permissions(root)
     highest = 0

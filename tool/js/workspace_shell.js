@@ -148,10 +148,12 @@ function syncWorkspaceConfigEditorUi() {
   var hasTrainingConfigFile = hasConfigFile && state.currentConfigFile.folder === state.folder;
   var hasConfigForSurface = isTraining ? hasTrainingConfigFile : hasConfigFile;
   var trainingOverview = document.getElementById('training-editor-empty');
+  var trainingOutputView = document.getElementById('training-runner-output-view');
   var editorWrapper = ui.appEl.querySelector('.editor-wrapper');
   var consoleVisible = !!(ui && ui.consolePanelEl && ui.consolePanelEl.style.display && ui.consolePanelEl.style.display !== 'none');
+  var trainingOutputVisible = isTraining && isTrainingRunnerConsoleVisible();
   if (toolbar) {
-    toolbar.classList.toggle('hidden', !isConfigWorkspace || !hasConfigForSurface);
+    toolbar.classList.toggle('hidden', !isConfigWorkspace || !hasConfigForSurface || trainingOutputVisible);
   }
   if (backBtn) {
     backBtn.textContent = isTraining && hasConfigForSurface ? 'Close' : 'Back';
@@ -159,12 +161,15 @@ function syncWorkspaceConfigEditorUi() {
       ? 'Save this config and return to Training Items.'
       : 'Return to the previous workspace.';
   }
-  ui.appEl.classList.toggle('training-config-selected', isTraining && hasConfigForSurface);
+  ui.appEl.classList.toggle('training-config-selected', isTraining && hasConfigForSurface && !trainingOutputVisible);
   if (trainingOverview) {
-    trainingOverview.classList.toggle('hidden', !isTraining || hasConfigForSurface);
+    trainingOverview.classList.toggle('hidden', !isTraining || hasConfigForSurface || trainingOutputVisible);
+  }
+  if (trainingOutputView) {
+    trainingOutputView.classList.toggle('hidden', !trainingOutputVisible);
   }
   if (editorWrapper) {
-    editorWrapper.classList.toggle('hidden', isTraining && !hasConfigForSurface);
+    editorWrapper.classList.toggle('hidden', isTraining && (!hasConfigForSurface || trainingOutputVisible));
   }
   if (fileLabel) {
     fileLabel.textContent = hasConfigFile

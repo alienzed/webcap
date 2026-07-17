@@ -490,13 +490,11 @@ if (ui.advancedFilterSupersetEl) {
   ui.advancedFilterSupersetEl.addEventListener('change', function () {
     if (!ui.advancedFilterSupersetEl.checked && state && state.supersetActive) {
       exitSuperSetSearch({ uncheck: false });
-      saveFolderStateForCurrentRoot();
       return;
     }
     state.supersetArmed = !!ui.advancedFilterSupersetEl.checked;
     if (state.supersetArmed) state.supersetSearchDirty = true;
     updateSuperSetControls();
-    saveFolderStateForCurrentRoot();
   });
 }
 if (ui.supersetSearchBtn) {

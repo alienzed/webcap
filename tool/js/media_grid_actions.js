@@ -181,6 +181,7 @@ function renderMediaGridHeader() {
   var selectedCount = mediaGridState.selectedKeys.size;
   var totalCount = mediaGridState.items.length;
   els.meta.textContent = mediaGridBuildMetaText();
+  els.meta.title = String(state.folder || 'Root');
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
   els.status.textContent = mediaGridState.status;
@@ -193,6 +194,7 @@ function renderMediaGridSurfaceHeader() {
   var totalCount = mediaGridState.items.length;
   if (!els.meta || !els.status || !els.selectAllBtn || !els.clearBtn) return;
   els.meta.textContent = mediaGridBuildSurfaceMetaText();
+  els.meta.title = String(state.folder || 'Root');
   els.status.textContent = mediaGridState.status;
   els.status.classList.toggle('hidden', !mediaGridState.status);
   els.clearBtn.disabled = selectedCount <= 0;

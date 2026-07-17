@@ -117,7 +117,6 @@ function sanitizeFolderState(data) {
       tag_mismatch_only: !!mediaFilters.tag_mismatch_only,
       incomplete_only: !!mediaFilters.incomplete_only,
       invalid_ar_only: !!mediaFilters.invalid_ar_only,
-      superset_only: !!mediaFilters.superset_only,
       stars: mediaFilterStars,
       flags: mediaFilterFlags
     },
@@ -208,7 +207,6 @@ function snapshotFolderStateFromDom() {
     tag_mismatch_only: !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked),
     incomplete_only: !!(ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked),
     invalid_ar_only: !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked),
-    superset_only: !!(ui.advancedFilterSupersetEl && ui.advancedFilterSupersetEl.checked),
     stars: (typeof getAdvancedStarFilterValues === 'function') ? getAdvancedStarFilterValues() : [],
     flags: (typeof getAdvancedFlagFilterValues === 'function') ? getAdvancedFlagFilterValues() : []
   };
@@ -311,11 +309,9 @@ function applyFolderStateToDom(folderState) {
     ui.advancedFilterInvalidArEl.checked = !!(clean.media_filters && clean.media_filters.invalid_ar_only);
   }
   if (ui.advancedFilterSupersetEl) {
-    ui.advancedFilterSupersetEl.checked = !!(clean.media_filters && clean.media_filters.superset_only);
-    state.supersetArmed = !!ui.advancedFilterSupersetEl.checked;
-  } else {
-    state.supersetArmed = false;
+    ui.advancedFilterSupersetEl.checked = false;
   }
+  state.supersetArmed = false;
   if (ui.advancedFilterStarsEl) {
     var starSelections = new Set(Array.isArray(clean.media_filters && clean.media_filters.stars) ? clean.media_filters.stars : []);
     Array.prototype.forEach.call(ui.advancedFilterStarsEl.querySelectorAll('input[type="checkbox"]'), function (input) {

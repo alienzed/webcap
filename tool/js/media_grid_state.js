@@ -160,7 +160,11 @@ function mediaGridBuildMetaText() {
   var activeSet = mediaGridGetActiveFocusSet();
   var selectedCount = mediaGridState.selectedKeys.size;
   var totalCount = mediaGridState.items.length;
-  var bits = [mediaGridGetSourceLabel()];
+  var sourceLabel = mediaGridGetSourceLabel();
+  var bits = [mediaGridGetFolderName()];
+  if (sourceLabel !== 'Current Folder') {
+    bits.push(sourceLabel);
+  }
   if (activeSet && activeSet.key !== 'all') {
     bits.push(activeSet.label);
   }
@@ -173,7 +177,11 @@ function mediaGridBuildSurfaceMetaText() {
   var activeSet = mediaGridGetActiveFocusSet();
   var selectedCount = mediaGridState.selectedKeys.size;
   var totalCount = mediaGridState.items.length;
-  var bits = [];
+  var sourceLabel = mediaGridGetSourceLabel();
+  var bits = [mediaGridGetFolderName()];
+  if (sourceLabel !== 'Current Folder') {
+    bits.push(sourceLabel);
+  }
   if (activeSet && activeSet.key !== 'all') {
     bits.push(activeSet.label);
   }
@@ -306,6 +314,12 @@ function mediaGridGetSourceLabel() {
   }
   if (hasAnyActiveMediaFilter()) return 'Filtered View';
   return 'Current Folder';
+}
+
+function mediaGridGetFolderName() {
+  var folder = String(state.folder || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!folder) return 'Root';
+  return folder.split('/').pop();
 }
 
 function mediaGridGetSelectedItems() {

@@ -305,6 +305,7 @@ function wirePrimerCaptionResetUi() {
       }
       var textToSave = String((ui && ui.editorEl && ui.editorEl.value) || '');
       var mediaKey = mediaItem.key;
+      cancelEditorAutosaveForCaption(state.folder, mediaItem.fileName);
       if (textToSave === String(mediaItem.caption || '')) {
         setCaptionApplyConfirmation(mediaKey, textToSave, 'unchanged');
         setStatus('Caption already saved.');
@@ -314,7 +315,9 @@ function wirePrimerCaptionResetUi() {
         });
       }
       setCaptionApplyConfirmation(mediaKey, textToSave, 'saving');
-      saveCaptionDirect(state.folder, mediaItem.fileName, textToSave, mediaItem.key)
+      saveCaptionDirect(state.folder, mediaItem.fileName, textToSave, mediaItem.key, {
+        skipRenderFileList: !!event.shiftKey
+      })
         .then(function () {
           primerResetUndoState = null;
           if (state.currentItem && state.currentItem.key === mediaKey && String(ui.editorEl.value || '') === textToSave) {
@@ -322,9 +325,14 @@ function wirePrimerCaptionResetUi() {
           }
           updatePrimerCaptionResetUi();
           if (!event.shiftKey) return;
-          return selectNextCaptionlessMediaItem(mediaKey).catch(function (err) {
-            setStatus(String(err && err.message ? err.message : err));
-          });
+          return selectNextCaptionlessMediaItem(mediaKey)
+            .then(function (moved) {
+              if (!moved) renderFileList();
+              return moved;
+            })
+            .catch(function (err) {
+              setStatus(String(err && err.message ? err.message : err));
+            });
         })
         .catch(function (err) {
           clearCaptionApplyConfirmation();

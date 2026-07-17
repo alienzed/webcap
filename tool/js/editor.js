@@ -2,6 +2,13 @@
 var autosaveTimers = {};
 var editorLiveUiTimer = 0;
 
+function cancelEditorAutosaveForCaption(folder, media) {
+    var key = 'caption:' + (folder || '') + '/' + (media || '');
+    if (!autosaveTimers[key]) return;
+    clearTimeout(autosaveTimers[key]);
+    delete autosaveTimers[key];
+}
+
 function scheduleEditorLiveUiRefresh() {
     var mediaKey = state && state.currentItem && state.currentItem.key;
     if (editorLiveUiTimer) {
@@ -123,5 +130,5 @@ function handleEditorInputAutosave(e) {
         
         // Optionally: cleanup
         delete autosaveTimers[target.key];
-    }, 1000); // 1000ms debounce; adjust as needed
+    }, 2000); // 1000ms debounce; adjust as needed
 }

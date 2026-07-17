@@ -508,7 +508,8 @@ var HttpModule = {
 };
 
 // Save caption text for a given folder/media/text (atomic, stateless)
-function saveCaptionDirect(folder, media, text, mediaKey) {
+function saveCaptionDirect(folder, media, text, mediaKey, options) {
+  var opts = options || {};
   return new Promise(function (resolve, reject) {
     HttpModule.postJson('/caption/save', {
       folder: folder,
@@ -562,7 +563,7 @@ function saveCaptionDirect(folder, media, text, mediaKey) {
         var row = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + (updatedKey || mediaKey) + '"]');
         if (row) row.classList.toggle('empty-caption', !hasCaption);
         updatePrimerCaptionResetUi();
-        if (typeof renderFileList === 'function') {
+        if (!opts.skipRenderFileList && typeof renderFileList === 'function') {
           renderFileList();
         }
         resolve();

@@ -338,6 +338,13 @@ function getFilteredMediaItems(ignoreFocusSet) {
   return mediaItems;
 }
 
+function isMediaItemInCurrentFilteredList(mediaItem) {
+  if (!mediaItem || !mediaItem.key) return false;
+  return getFilteredMediaItems(false).some(function (item) {
+    return item && item.key === mediaItem.key;
+  });
+}
+
 function hasAnyActiveMediaFilter() {
   var q = (ui.filterEl && ui.filterEl.value) ? String(ui.filterEl.value).trim() : '';
   if (q) return true;
@@ -486,6 +493,10 @@ function getAdvancedFlagFilterValues() {
 }
 
 function selectPathMedia(mediaItem) {
+  if (!isMediaItemInCurrentFilteredList(mediaItem)) {
+    var label = mediaItem && (mediaItem.label || mediaItem.fileName || mediaItem.key);
+    return Promise.reject(new Error('Cannot select an item outside the current filtered list: ' + String(label || 'unknown item')));
+  }
   return new Promise(function (resolve, reject) {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', '/caption/load?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaItem.fileName), false);
@@ -549,10 +560,15 @@ function selectPathMedia(mediaItem) {
   });
 }
 
-// Move through the folder's natural item order, independent of the currently visible filters.
+// Move through captionless items in the current filtered list, preserving folder order.
 // This is intentionally an explicit captioning action rather than a side effect of saving.
 function selectNextCaptionlessMediaItem(afterMediaKey) {
   var items = Array.isArray(state.items) ? state.items : [];
+  var visibleItems = getFilteredMediaItems(false);
+  var visibleKeys = {};
+  visibleItems.forEach(function (item) {
+    if (item && item.key) visibleKeys[item.key] = true;
+  });
   var currentKey = afterMediaKey || (state.currentItem && state.currentItem.key);
   var currentIndex = items.findIndex(function (item) {
     return item && item.key === currentKey;
@@ -564,13 +580,13 @@ function selectNextCaptionlessMediaItem(afterMediaKey) {
 
   for (var offset = 1; offset < items.length; offset += 1) {
     var candidate = items[(currentIndex + offset) % items.length];
-    if (!candidate || candidate.hasCaption) continue;
+    if (!candidate || candidate.hasCaption || !visibleKeys[candidate.key]) continue;
     return selectPathMedia(candidate).then(function () {
       return true;
     });
   }
 
-  setStatus('No captionless items remain.');
+  setStatus('No captionless items remain in the current filtered list.');
   return Promise.resolve(false);
 }
 

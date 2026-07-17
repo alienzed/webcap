@@ -58,7 +58,7 @@ def test_new_training_configs_reserve_a_shared_base36_output_dir(tmp_path, monke
 
     training_config_files_module.ensure_training_config_files(folder)
 
-    expected = root / "output" / "sets" / "01-lilly"
+    expected = root / "output" / "sets" / "001-lilly"
     assert training_config_files_module.output_dir_from_config(folder, "hi") == expected
     assert training_config_files_module.output_dir_from_config(folder, "lo") == expected
     assert expected.is_dir()
@@ -70,12 +70,26 @@ def test_new_training_config_sequence_advances_in_base36(tmp_path, monkeypatch):
     folder.mkdir(parents=True)
     (folder / "clip.mp4").write_bytes(b"media")
     output_root = root / "output" / "sets"
-    (output_root / "09-sana").mkdir(parents=True)
+    (output_root / "009-sana").mkdir(parents=True)
     monkeypatch.setattr(config_module, "FS_ROOT", root)
 
     training_config_files_module.ensure_training_config_files(folder)
 
-    assert training_config_files_module.output_dir_from_config(folder, "hi") == output_root / "0A-lilly"
+    assert training_config_files_module.output_dir_from_config(folder, "hi") == output_root / "00A-lilly"
+
+
+def test_new_training_config_sequence_recognizes_legacy_two_character_prefixes(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "lilly"
+    folder.mkdir(parents=True)
+    (folder / "clip.mp4").write_bytes(b"media")
+    output_root = root / "output" / "sets"
+    (output_root / "0A-sana").mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+
+    training_config_files_module.ensure_training_config_files(folder)
+
+    assert training_config_files_module.output_dir_from_config(folder, "hi") == output_root / "00B-lilly"
 
 
 def test_regenerating_training_configs_preserves_the_configured_output_dir(tmp_path, monkeypatch):

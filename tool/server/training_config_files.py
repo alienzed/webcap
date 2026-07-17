@@ -14,7 +14,7 @@ TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME)
 _EPOCHS_TEXT_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?$', re.MULTILINE)
 _OUTPUT_DIR_LINE_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\'][^"\']+["\']\s*(?:#.*)?$', re.MULTILINE)
-_OUTPUT_PREFIX_PATTERN = re.compile(r"^([0-9A-Z]{2})-")
+_OUTPUT_PREFIX_PATTERN = re.compile(r"^([0-9A-Z]{2,3})-")
 _BASE36_DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 # Last-resort values only if a canonical template is missing or malformed.
@@ -93,9 +93,14 @@ def output_dir_from_config(folder_path: Path, stage: str):
 
 
 def _base36_prefix(value):
-    if value < 1 or value >= len(_BASE36_DIGITS) ** 2:
-        raise RuntimeError("Training output sequence is exhausted at ZZ.")
-    return _BASE36_DIGITS[value // len(_BASE36_DIGITS)] + _BASE36_DIGITS[value % len(_BASE36_DIGITS)]
+    base = len(_BASE36_DIGITS)
+    if value < 1 or value >= base ** 3:
+        raise RuntimeError("Training output sequence is exhausted at ZZZ.")
+    return (
+        _BASE36_DIGITS[(value // (base ** 2)) % base]
+        + _BASE36_DIGITS[(value // base) % base]
+        + _BASE36_DIGITS[value % base]
+    )
 
 
 def _next_output_dir(folder_path: Path):

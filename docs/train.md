@@ -19,7 +19,7 @@ It also checks for incomplete annotation work: an item with assigned tags but no
 - `Pause` holds the current stage and queue for an explicit resume. `Finish` intentionally ends the stage while preserving its output and continuing the queue.
 - Queued jobs can be moved, removed, or resumed after a hold. After an app restart, WebCap holds queued work rather than launching it automatically.
 - `Run Diagnostics` performs the fuller WSL, runtime, launcher, and CUDA check. Normal managed launches use lighter prerequisites.
-- New generated configs use `<filesystem.root>/output/sets/<base36-sequence>-<set-name>/`. The active stage config's `output_dir` remains authoritative for run discovery and resume.
+- New generated configs use `<filesystem.root>/output/sets/<three-character-base36-sequence>-<set-name>/`. The active stage config's `output_dir` remains authoritative for run discovery and resume.
 - TensorBoard can be started, stopped, and opened from the training workspace when it is available in the configured runtime.
 
 ## Manual command handoff

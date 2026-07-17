@@ -530,7 +530,7 @@ function renderTrainingHistory() {
       '<div class="training-history-actions">' +
        (job.folder ? '<button type="button" class="training-history-action" data-training-history-output="' + escapeHtml(job.folder) + '" data-training-history-output-stage="' + escapeHtml(job.stages || '') + '" title="Open output folder" aria-label="Open output folder">&#128193;</button>' : '') +
        '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show log" aria-label="Show log">&#9998;</button>' +
-       (canResume ? '<button type="button" data-training-history-resume="' + escapeHtml(job.id || '') + '">Resume</button>' : '') +
+       (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Resume this run" aria-label="Resume this run">&#9654;</button>' : '') +
        '<button type="button" class="training-history-action training-history-action--clear" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove this entry from Recent Runs; logs and artifacts remain." aria-label="Remove from Recent Runs">&#215;</button>' +
        '</div></div>';
   }).join('');

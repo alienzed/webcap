@@ -1,11 +1,16 @@
 var trainingWorkspaceState = {
   manifest: null,
+  trainingPlan: null,
+  trainingPlanFolder: '',
   configFiles: [],
   runnerJobs: [],
   runnerActiveJobId: '',
   runnerSelectedJobId: '',
   runnerLogOffsets: {},
   runnerConsoleJobId: '',
+  runnerConsoleRequestVersion: 0,
+  runnerConsoleLogRequestVersion: 0,
+  runnerConsoleFollowsActiveJob: false,
   runnerPollTimer: 0,
   runnerStatusPending: false,
   runnerStatusError: '',
@@ -51,6 +56,7 @@ function getTrainingWorkspaceEls() {
     runSetup: document.getElementById('training-run-setup'),
     readiness: document.getElementById('training-readiness'),
     configList: document.getElementById('training-workspace-config-list'),
+    profileSelect: document.getElementById('training-workspace-profile-select'),
     configStepNumber: document.getElementById('training-workspace-config-step-number'),
     runStepNumber: document.getElementById('training-run-step-number'),
     generateBtn: document.getElementById('training-workspace-generate-btn'),
@@ -118,10 +124,15 @@ function getTrainingRunnerSelectedJob() {
   return null;
 }
 
+function getTrainingRunnerConsoleTargetJob() {
+  return getTrainingRunnerActiveJob();
+}
+
 function getTrainingRunnerActiveJob() {
   var jobs = trainingWorkspaceState.runnerJobs || [];
   for (var i = 0; i < jobs.length; i++) {
-    if (jobs[i].id === trainingWorkspaceState.runnerActiveJobId) return jobs[i];
+    if (jobs[i].id === trainingWorkspaceState.runnerActiveJobId &&
+        (jobs[i].status === 'starting' || jobs[i].status === 'running' || jobs[i].status === 'stopping' || jobs[i].status === 'unconfirmed')) return jobs[i];
   }
   for (var j = 0; j < jobs.length; j++) {
     if (jobs[j].status === 'starting' || jobs[j].status === 'running' || jobs[j].status === 'stopping' || jobs[j].status === 'unconfirmed') return jobs[j];
@@ -424,7 +435,9 @@ function renderTrainingRunner() {
     if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
     return;
   }
-  trainingWorkspaceState.runnerSelectedJobId = job.id;
+  if (!getTrainingRunnerJobById(trainingWorkspaceState.runnerSelectedJobId)) {
+    trainingWorkspaceState.runnerSelectedJobId = job.id;
+  }
   var elapsed = formatTrainingRunnerElapsed(job);
   var status = String(job.status || 'unknown');
   var statusLabel = trainingRunnerStatusLabel(status);
@@ -606,6 +619,7 @@ function appendToTrainingRunnerConsole(text) {
 
 function hideTrainingRunnerConsole() {
   var els = getTrainingWorkspaceEls();
+  trainingWorkspaceState.runnerConsoleRequestVersion++;
   if (els.runnerConsole) els.runnerConsole.classList.add('hidden');
   syncTrainingConsoleUi();
 }
@@ -620,10 +634,11 @@ function toggleTrainingRunnerConsole() {
 }
 
 
-function showTrainingRunnerConsole(job) {
-  var target = job || getTrainingRunnerSelectedJob();
+function showTrainingRunnerConsole(job, options) {
+  var followsActiveJob = !job || !!(options && options.followActiveJob);
+  var target = job || getTrainingRunnerConsoleTargetJob();
   if (!target || !target.id) {
-    setStatus('Select a training job to view its output.');
+    setStatus('No training run is active to show output for.');
     return;
   }
   var els = getTrainingWorkspaceEls();
@@ -631,8 +646,10 @@ function showTrainingRunnerConsole(job) {
   var changedJob = trainingWorkspaceState.runnerConsoleJobId !== target.id;
   var wasHidden = els.runnerConsole.classList.contains('hidden');
   trainingWorkspaceState.runnerConsoleJobId = target.id;
+  trainingWorkspaceState.runnerConsoleFollowsActiveJob = followsActiveJob;
   var resetLog = changedJob || wasHidden;
   if (resetLog) {
+    trainingWorkspaceState.runnerConsoleRequestVersion++;
     els.runnerConsoleLog.textContent = '';
     trainingWorkspaceState.runnerLogOffsets[target.id] = 0;
   }
@@ -645,16 +662,22 @@ function showTrainingRunnerConsole(job) {
 function fetchTrainingRunnerLog(job, reset) {
   if (!job || !job.id) return;
   var offset = reset ? 0 : Number(trainingWorkspaceState.runnerLogOffsets[job.id] || 0);
+  var requestVersion = trainingWorkspaceState.runnerConsoleRequestVersion;
+  if (trainingWorkspaceState.runnerConsoleLogRequestVersion === requestVersion) return;
+  trainingWorkspaceState.runnerConsoleLogRequestVersion = requestVersion;
   fetch('/fs/training_runner/log?jobId=' + encodeURIComponent(job.id) + '&offset=' + encodeURIComponent(offset))
     .then(function (response) { return response.json(); })
     .then(function (payload) {
       if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'Could not load training output.');
-      if (trainingWorkspaceState.runnerConsoleJobId !== job.id) return;
+      if (trainingWorkspaceState.runnerConsoleJobId !== job.id ||
+          requestVersion !== trainingWorkspaceState.runnerConsoleRequestVersion ||
+          !isTrainingRunnerConsoleVisible()) return;
       var nextOffset = Number(payload.nextOffset || 0);
       if (!reset && nextOffset < offset) {
         var els = getTrainingWorkspaceEls();
         if (els.runnerConsoleLog) els.runnerConsoleLog.textContent = '';
         trainingWorkspaceState.runnerLogOffsets[job.id] = 0;
+        trainingWorkspaceState.runnerConsoleRequestVersion++;
         fetchTrainingRunnerLog(job, true);
         return;
       }
@@ -672,8 +695,15 @@ function fetchTrainingRunnerLog(job, reset) {
       }
     })
     .catch(function (err) {
+      if (trainingWorkspaceState.runnerConsoleJobId !== job.id ||
+          requestVersion !== trainingWorkspaceState.runnerConsoleRequestVersion) return;
       if (window.console && console.error) console.error('[Training runner] Log refresh failed:', err);
       setStatus('Could not load training output: ' + String(err && err.message ? err.message : err));
+    })
+    .then(function () {
+      if (trainingWorkspaceState.runnerConsoleLogRequestVersion === requestVersion) {
+        trainingWorkspaceState.runnerConsoleLogRequestVersion = 0;
+      }
     });
 }
 
@@ -721,7 +751,6 @@ function refreshTrainingRunnerStatus() {
         trainingWorkspaceState.historyCollapsed = false;
         refreshTrainingHistory(true);
       }
-      var selected = getTrainingRunnerSelectedJob();
       var hasActiveJob = trainingWorkspaceState.runnerJobs.some(function (job) {
         return job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
       });
@@ -731,8 +760,14 @@ function refreshTrainingRunnerStatus() {
       if (activeStateChanged || !trainingWorkspaceState.gpuLastFetchedAt || now - trainingWorkspaceState.gpuLastFetchedAt >= 20000) {
         refreshTrainingGpuStatus();
       }
-      if (isTrainingRunnerConsoleVisible() && selected && selected.id === trainingWorkspaceState.runnerConsoleJobId) {
-        fetchTrainingRunnerLog(selected);
+      if (isTrainingRunnerConsoleVisible()) {
+        var activeJob = getTrainingRunnerActiveJob();
+        if (trainingWorkspaceState.runnerConsoleFollowsActiveJob && activeJob && activeJob.id !== trainingWorkspaceState.runnerConsoleJobId) {
+          showTrainingRunnerConsole(activeJob, { followActiveJob: true });
+        } else {
+          var consoleJob = getTrainingRunnerJobById(trainingWorkspaceState.runnerConsoleJobId);
+          if (consoleJob) fetchTrainingRunnerLog(consoleJob);
+        }
       }
     })
     .catch(function (err) {
@@ -1121,6 +1156,35 @@ function fetchTrainingWorkspaceManifest(folder) {
   });
 }
 
+function fetchTrainingWorkspacePlan(folder) {
+  var path = String(folder || '').replace(/[\\/]+$/, '') + '/auto_dataset/training_plan.json';
+  return fetch('/fs/read?path=' + encodeURIComponent(path)).then(function (response) {
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error('Could not read the training plan.');
+    return response.text().then(function (text) {
+      return JSON.parse(text);
+    });
+  });
+}
+
+function trainingWorkspaceProfileForPlan(plan) {
+  var profile = String(plan && plan.mode || '').trim().toLowerCase();
+  return ['poc', 'normal', 'quality'].indexOf(profile) !== -1 ? profile : 'normal';
+}
+
+function syncTrainingWorkspaceProfile(plan) {
+  var els = getTrainingWorkspaceEls();
+  if (els.profileSelect) els.profileSelect.value = trainingWorkspaceProfileForPlan(plan);
+}
+
+function getTrainingWorkspaceSelectedProfile(folder) {
+  if (!isTrainingWorkspaceActive() || trainingWorkspaceState.trainingPlanFolder !== String(folder || '')) {
+    return 'normal';
+  }
+  var els = getTrainingWorkspaceEls();
+  return trainingWorkspaceProfileForPlan({ mode: els.profileSelect ? els.profileSelect.value : '' });
+}
+
 function fetchTrainingWorkspaceConfigFiles(folder) {
   return fetch('/fs/list_config?folder=' + encodeURIComponent(folder)).then(function (response) {
     if (!response.ok) throw new Error('Could not list training config files.');
@@ -1358,7 +1422,10 @@ function refreshTrainingWorkspace() {
   if (els.runSetup) els.runSetup.classList.toggle('hidden', !isSetEntry);
   if (!isSetEntry) {
     trainingWorkspaceState.manifest = null;
+    trainingWorkspaceState.trainingPlan = null;
+    trainingWorkspaceState.trainingPlanFolder = '';
     trainingWorkspaceState.configFiles = [];
+    syncTrainingWorkspaceProfile(null);
     if (els.readiness) els.readiness.textContent = 'Select a set folder to prepare a dataset.';
     renderTrainingItemOverview(null);
     renderTrainingWorkspaceConfigList([]);
@@ -1367,11 +1434,16 @@ function refreshTrainingWorkspace() {
     return;
   }
   if (els.readiness) els.readiness.textContent = 'Loading dataset readiness...';
-  Promise.all([fetchTrainingWorkspaceManifest(folder), fetchTrainingWorkspaceConfigFiles(folder), refreshTrainingHistory()])
+  trainingWorkspaceState.trainingPlanFolder = '';
+  syncTrainingWorkspaceProfile(null);
+  Promise.all([fetchTrainingWorkspaceManifest(folder), fetchTrainingWorkspaceConfigFiles(folder), fetchTrainingWorkspacePlan(folder), refreshTrainingHistory()])
     .then(function (results) {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
       trainingWorkspaceState.manifest = results[0];
       trainingWorkspaceState.configFiles = results[1];
+      trainingWorkspaceState.trainingPlan = results[2];
+      trainingWorkspaceState.trainingPlanFolder = folder;
+      syncTrainingWorkspaceProfile(results[2]);
       syncTrainingWorkflowReadiness(results[0], results[1]);
       if (els.readiness) els.readiness.innerHTML = buildTrainingReadinessHtml(results[0], results[1]);
       renderTrainingItemOverview(results[0]);

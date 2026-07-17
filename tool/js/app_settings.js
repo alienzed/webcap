@@ -21,7 +21,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.conda_environment) out.training.conda_environment = '';
   if (!out.training.activate_script) out.training.activate_script = '';
   if (!out.training.tensorboard_port) out.training.tensorboard_port = 6006;
-  if (!out.training.mode || ['poc', 'normal', 'quality'].indexOf(out.training.mode) === -1) out.training.mode = 'normal';
+  delete out.training.mode;
   if (typeof out.training.write_selection_snapshot_comments !== 'boolean') out.training.write_selection_snapshot_comments = false;
   if (typeof out.primer.template !== 'string') out.primer.template = '';
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
@@ -61,10 +61,6 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingTensorboardPortEl) ui.appSettingsTrainingTensorboardPortEl.value = c.training.tensorboard_port || 6006;
   if (ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl) ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked = !!c.training.write_selection_snapshot_comments;
   if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
-  var mode = c.training.mode || 'normal';
-  if (mode === 'poc' && ui.appSettingsTrainingModePocEl) ui.appSettingsTrainingModePocEl.checked = true;
-  else if (mode === 'quality' && ui.appSettingsTrainingModeQualityEl) ui.appSettingsTrainingModeQualityEl.checked = true;
-  else if (ui.appSettingsTrainingModeNormalEl) ui.appSettingsTrainingModeNormalEl.checked = true;
   if (ui.appSettingsDebugEl) ui.appSettingsDebugEl.checked = !!c.debug;
   if (ui.appSettingsEnableFaceAnalysisEl) ui.appSettingsEnableFaceAnalysisEl.checked = !!c.analysis.enableFaceAnalysis;
   if (ui.appSettingsEnableMediaPipeAnalysisEl) ui.appSettingsEnableMediaPipeAnalysisEl.checked = !!c.analysis.enableMediaPipeAnalysis;
@@ -73,9 +69,6 @@ function fillAppSettingsForm(cfg) {
 
 function collectAppSettingsFormConfig() {
   var base = normalizeAppConfigShape(appSettingsLoadedConfig || {});
-  var mode = 'normal';
-  if (ui.appSettingsTrainingModePocEl && ui.appSettingsTrainingModePocEl.checked) mode = 'poc';
-  if (ui.appSettingsTrainingModeQualityEl && ui.appSettingsTrainingModeQualityEl.checked) mode = 'quality';
   base.filesystem.root = ui.appSettingsRootEl ? ui.appSettingsRootEl.value : '';
   base.filesystem.models = ui.appSettingsModelsEl ? ui.appSettingsModelsEl.value : '';
   base.debug = !!(ui.appSettingsDebugEl && ui.appSettingsDebugEl.checked);
@@ -89,7 +82,6 @@ function collectAppSettingsFormConfig() {
   base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
   base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);
-  base.training.mode = mode;
   return normalizeAppConfigShape(base);
 }
 

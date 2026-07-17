@@ -150,7 +150,7 @@ def generate_dataset_config_response(folder: str, mode: str = ""):
         if not folder_path.exists() or not folder_path.is_dir():
             return Response(f"[ERROR] Folder does not exist: {folder}\n", status=404, mimetype="text/plain")
         training = app_config.config.get("training") or {}
-        mode = str(mode or training.get("mode") or "normal").strip().lower()
+        mode = str(mode or "normal").strip().lower()
         write_snapshot_comments = bool(training.get("write_selection_snapshot_comments"))
         prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
         if not prep_manifest_path.exists():
@@ -205,7 +205,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
     diffusion_pipe_wsl = runtime_settings["cwd"]
     hi_name = HI_CONFIG_NAME
     lo_name = LO_CONFIG_NAME
-    mode = str(training_cfg.get("mode") or "normal").strip().lower()
+    mode = "normal"
     write_snapshot_comments = bool(training_cfg.get("write_selection_snapshot_comments"))
 
     try:

@@ -134,6 +134,7 @@ function normalizeWorkspaceSurface(surface) {
 
 function syncWorkspaceConfigEditorUi() {
   var toolbar = document.getElementById('config-editor-toolbar');
+  var backBtn = document.getElementById('config-editor-back-btn');
   var fileLabel = document.getElementById('config-editor-current-file');
   var saveBtn = document.getElementById('config-editor-save-btn');
   var generateBtn = document.getElementById('config-editor-generate-btn');
@@ -151,6 +152,12 @@ function syncWorkspaceConfigEditorUi() {
   var consoleVisible = !!(ui && ui.consolePanelEl && ui.consolePanelEl.style.display && ui.consolePanelEl.style.display !== 'none');
   if (toolbar) {
     toolbar.classList.toggle('hidden', !isConfigWorkspace || !hasConfigForSurface);
+  }
+  if (backBtn) {
+    backBtn.textContent = isTraining && hasConfigForSurface ? 'Close' : 'Back';
+    backBtn.title = isTraining && hasConfigForSurface
+      ? 'Save this config and return to Training Items.'
+      : 'Return to the previous workspace.';
   }
   ui.appEl.classList.toggle('training-config-selected', isTraining && hasConfigForSurface);
   if (trainingOverview) {
@@ -306,6 +313,27 @@ function exitWorkspaceSurface(surfaceOverride) {
   setWorkspaceSurface(targetSurface || 'default', { skipRemember: true });
 }
 
+function closeTrainingWorkspaceConfigEditor() {
+  var configFile = state && state.currentConfigFile;
+  var isTrainingConfig = isTrainingWorkspaceActive() && configFile && configFile.folder === state.folder && configFile.file;
+  if (!isTrainingConfig) {
+    exitWorkspaceSurface();
+    return;
+  }
+  cancelEditorAutosaveForConfig(configFile.folder, configFile.file);
+  Promise.resolve(saveCurrentEditorContent())
+    .then(function () {
+      if (!state.currentConfigFile || state.currentConfigFile.folder !== configFile.folder || state.currentConfigFile.file !== configFile.file) return;
+      clearEditorAndPreview();
+      syncWorkspaceConfigEditorUi();
+      syncTrainingWorkspaceConfigSelection();
+      setStatus('Config saved. Back to Training Items.');
+    })
+    .catch(function (err) {
+      setStatus('Could not save config: ' + String(err && err.message ? err.message : err));
+    });
+}
+
 function ensureWorkspaceOverlayHost() {
   if (!ui || !ui.appEl) {
     throw new Error('Workspace overlay host requested before app UI initialized.');
@@ -394,7 +422,7 @@ function wireWorkspaceHeaderUi() {
   if (configEditorBackBtn && !configEditorBackBtn.__workspaceWired) {
     configEditorBackBtn.__workspaceWired = true;
     configEditorBackBtn.onclick = function () {
-      exitWorkspaceSurface();
+      closeTrainingWorkspaceConfigEditor();
     };
   }
   var configEditorSaveBtn = document.getElementById('config-editor-save-btn');

@@ -9,6 +9,13 @@ function cancelEditorAutosaveForCaption(folder, media) {
     delete autosaveTimers[key];
 }
 
+function cancelEditorAutosaveForConfig(folder, file) {
+    var key = 'config:' + (folder || '') + '/' + (file || '');
+    if (!autosaveTimers[key]) return;
+    clearTimeout(autosaveTimers[key]);
+    delete autosaveTimers[key];
+}
+
 function scheduleEditorLiveUiRefresh() {
     var mediaKey = state && state.currentItem && state.currentItem.key;
     if (editorLiveUiTimer) {

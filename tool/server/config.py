@@ -107,11 +107,6 @@ def validate_config_payload(payload):
     for key in ("diffusion_pipe_wsl", "activate_script", "wsl_distribution", "conda_executable", "conda_environment"):
         if key in training:
             normalized_training[key] = str(training.get(key) or "").strip()
-    if "mode" in training:
-        mode = str(training.get("mode") or "").strip().lower()
-        if mode not in ("poc", "normal", "quality"):
-            mode = "normal"
-        normalized_training["mode"] = mode
     if "write_selection_snapshot_comments" in training:
         normalized_training["write_selection_snapshot_comments"] = bool(training.get("write_selection_snapshot_comments"))
     if normalized_training:

@@ -710,8 +710,7 @@ def _read_training_plan(folder_path):
 
 
 def _default_progress_plan():
-    training = app_config.config.get("training") if isinstance(app_config.config, dict) else {}
-    hi_steps, lo_steps = repeat_targets_for_mode((training or {}).get("mode"))
+    hi_steps, lo_steps = repeat_targets_for_mode("normal")
     return {
         "hi": {"estimatedSteps": hi_steps},
         "lo": {"estimatedSteps": lo_steps},

@@ -832,6 +832,26 @@ html[data-theme="dark"] .app-settings-radio-label {
   padding-left: 2px;
 }
 
+.focused-annotation-set-usage {
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.focused-annotation-set-usage-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.focused-annotation-set-usage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .focused-annotation-current-tags {
   margin-top: auto;
   padding-top: 12px;

@@ -163,6 +163,33 @@ def _write_state(state):
     _persisted_managed_job_ids = _managed_job_ids(state)
 
 
+def recover_state_response():
+    """Archive an unreadable queue state and start a fresh, empty queue."""
+    global _state_file_seen, _persisted_managed_job_ids
+    with _lock:
+        _ensure_runtime_dirs()
+        path = _state_path()
+        archived_path = None
+        if path.exists():
+            archived_path = path.with_name(
+                "queue.recovery." + time.strftime("%Y%m%d_%H%M%S") + "." + uuid.uuid4().hex + ".json"
+            )
+            os.replace(path, archived_path)
+            normalize_path_permissions(archived_path)
+        _state_file_seen = None
+        _persisted_managed_job_ids = set()
+        state = _default_state()
+        _write_state(state)
+        return {
+            "ok": True,
+            "archivedState": str(archived_path) if archived_path else "",
+            "activeJobId": "",
+            "queuePaused": False,
+            "queuePauseReason": "",
+            "jobs": [],
+        }, 200
+
+
 def _sync_job_history(job):
     if job.get("historyHidden") or job.get("status") not in HISTORY_STATUSES:
         return
@@ -266,6 +293,25 @@ def _to_wsl_path(path, distribution=""):
     if code != 0 or not value:
         raise RuntimeError((stderr or stdout or "wslpath failed").strip())
     return value
+
+
+def _repair_training_set_permissions(folder_path, distribution=""):
+    """Restore WSL read/write access to a selected training set before it is used."""
+    try:
+        wsl_folder = _to_wsl_path(folder_path, distribution)
+    except Exception as exc:
+        return "Could not resolve the training set path in WSL: " + str(exc)
+    quoted_folder = shlex.quote(wsl_folder)
+    command = (
+        "chmod 775 -- " + quoted_folder
+        + " && find " + quoted_folder + " -type d -exec chmod 775 {} +"
+        + " && find " + quoted_folder + " -type f -exec chmod 664 {} +"
+    )
+    code, stdout, stderr = _run_wsl(command, timeout=120, distribution=distribution)
+    if code == 0:
+        return ""
+    detail = (stderr or stdout).strip() or ("exit " + str(code))
+    return "Could not restore training-set permissions: " + detail
 
 
 def _training_settings():
@@ -767,6 +813,20 @@ def _write_runner_script(job, settings, artifacts):
 
 
 def _launch_job(job, folder_path):
+    settings = _training_settings()
+    try:
+        last_repair = float(job.get("permissionsRepairedAt") or 0)
+    except (TypeError, ValueError):
+        last_repair = 0
+    if time.time() - last_repair >= 60:
+        permission_error = _repair_training_set_permissions(folder_path, settings["wslDistribution"])
+        if permission_error:
+            job["status"] = "failed"
+            job["stage"] = "permissions"
+            job["error"] = permission_error
+            job["finishedAt"] = time.time()
+            return False
+        job["permissionsRepairedAt"] = time.time()
     _, _, artifacts, settings, checks = _build_launch_preflight(job["folder"])
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     job["preflight"] = {"checks": checks, "blockers": len(blockers)}
@@ -1317,6 +1377,7 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "stage": "queued",
         "createdAt": time.time(),
         "updatedAt": time.time(),
+        "permissionsRepairedAt": time.time(),
         "snapshot": snapshot,
         "artifactPath": str(job_dir),
         "artifactDir": str(job_dir.relative_to(_artifact_root(folder_path, stages).parent)),
@@ -1335,6 +1396,11 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}, 400
     try:
+        _, folder_path = _resolve_folder(folder)
+        settings = _training_settings()
+        permission_error = _repair_training_set_permissions(folder_path, settings["wslDistribution"])
+        if permission_error:
+            return {"ok": False, "error": permission_error}, 400
         _, folder_path, _, _, checks = _build_launch_preflight(folder)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}, 400
@@ -1383,7 +1449,11 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
 def folder_statuses_for_folders(folder_paths):
     """Return the small training-status payload used by the folder backlog view."""
     with _lock:
-        state = _read_state()
+        try:
+            state = _read_state()
+        except TrainingStateError:
+            _logger.exception("Training queue state is unavailable; omitting folder training badges.")
+            return {}
         jobs = list(state.get("jobs", []))
     queue_position = 0
     queued_by_folder = {}
@@ -1428,7 +1498,10 @@ def folder_statuses_for_folders(folder_paths):
 def status_response():
     with _lock:
         _ensure_monitor_started()
-        state = _read_state()
+        try:
+            state = _read_state()
+        except TrainingStateError as exc:
+            return {"ok": False, "stateError": True, "recoveryAvailable": True, "error": str(exc)}, 409
         _apply_restart_hold(state)
         _refresh_state(state)
         _sync_histories(state)

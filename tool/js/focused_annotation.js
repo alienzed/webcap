@@ -885,6 +885,61 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
     .slice(0, 8);
 }
 
+function buildFocusedAnnotationSetUsageEntries(requirementLabel) {
+  var termsByKey = {};
+  var countsByKey = {};
+  getFocusedAnnotationTermsForRequirement(requirementLabel).forEach(function (term) {
+    var key = normalizeChecklistTerm(term).toLowerCase();
+    if (!key || termsByKey[key]) return;
+    termsByKey[key] = term;
+    countsByKey[key] = 0;
+  });
+  (state.items || []).forEach(function (item) {
+    if (!item || !item.key) return;
+    var seenOnItem = {};
+    getTagsForMediaKey(item.key).forEach(function (tag) {
+      var key = normalizeChecklistTerm(tag).toLowerCase();
+      if (!termsByKey[key] || seenOnItem[key]) return;
+      seenOnItem[key] = true;
+      countsByKey[key] += 1;
+    });
+  });
+  return Object.keys(countsByKey)
+    .filter(function (key) { return countsByKey[key] > 0; })
+    .sort(function (a, b) {
+      return countsByKey[b] - countsByKey[a] || termsByKey[a].localeCompare(termsByKey[b]);
+    })
+    .slice(0, 6)
+    .map(function (key) {
+      return { term: termsByKey[key], count: countsByKey[key] };
+    });
+}
+
+function appendFocusedAnnotationQuickPickRow(list, requirementLabel, term, metaText, classes) {
+  var row = document.createElement('div');
+  row.className = 'focused-annotation-quick-pick-row';
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn focused-annotation-quick-pick-btn';
+  (classes || []).forEach(function (className) { btn.classList.add(className); });
+  btn.textContent = term;
+  var isActive = hasTagForMediaKey(state.currentItem.key, term);
+  var buttonTitle = (isActive ? 'Remove "' : 'Add "') + term + '" on the current item';
+  btn.title = buttonTitle;
+  btn.onclick = function () {
+    toggleFocusedAnnotationTerm(requirementLabel, term);
+  };
+  bindFocusedAnnotationTermAffixContextMenu(btn, term, buttonTitle);
+  row.appendChild(btn);
+  if (metaText) {
+    var meta = document.createElement('div');
+    meta.className = 'focused-annotation-quick-pick-meta';
+    meta.textContent = metaText;
+    row.appendChild(meta);
+  }
+  list.appendChild(row);
+}
+
 function renderFocusedAnnotationQuickPicks(requirementLabel, entries) {
   var els = getFocusedAnnotationEls();
   if (!els.quickPicks) return;
@@ -900,42 +955,45 @@ function renderFocusedAnnotationQuickPicks(requirementLabel, entries) {
   title.className = 'focused-annotation-quick-picks-title';
   title.textContent = 'Quick Picks';
   picksEl.appendChild(title);
-  if (!entriesList.length) {
+  if (entriesList.length) {
+    var list = document.createElement('div');
+    list.className = 'focused-annotation-quick-pick-list';
+    entriesList.forEach(function (entry) {
+      var classes = [];
+      if (entry.kinds.active) classes.push('active');
+      if (entry.kinds.matched) classes.push('matched');
+      if (entry.kinds.suggested) classes.push('suggested');
+      appendFocusedAnnotationQuickPickRow(list, requirementLabel, entry.term, entry.reasons.join(' | '), classes);
+    });
+    picksEl.appendChild(list);
+  } else {
     var empty = document.createElement('div');
     empty.className = 'focused-annotation-quick-picks-empty';
     empty.textContent = 'No strong quick picks for this group yet.';
     picksEl.appendChild(empty);
-    renderFocusedAnnotationCurrentTags(picksEl);
-    return;
   }
-  var list = document.createElement('div');
-  list.className = 'focused-annotation-quick-pick-list';
-  entriesList.forEach(function (entry) {
-    var row = document.createElement('div');
-    row.className = 'focused-annotation-quick-pick-row';
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn focused-annotation-quick-pick-btn';
-    if (entry.kinds.active) btn.classList.add('active');
-    if (entry.kinds.matched) btn.classList.add('matched');
-    if (entry.kinds.suggested) btn.classList.add('suggested');
-    btn.textContent = entry.term;
-    var buttonTitle = (entry.kinds.active ? 'Remove "' : 'Add "') + entry.term + '" on the current item';
-    btn.title = buttonTitle;
-    btn.onclick = function () {
-      toggleFocusedAnnotationTerm(requirementLabel, entry.term);
-    };
-    bindFocusedAnnotationTermAffixContextMenu(btn, entry.term, buttonTitle);
-    row.appendChild(btn);
-    if (entry.reasons.length) {
-      var meta = document.createElement('div');
-      meta.className = 'focused-annotation-quick-pick-meta';
-      meta.textContent = entry.reasons.join(' | ');
-      row.appendChild(meta);
-    }
-    list.appendChild(row);
-  });
-  picksEl.appendChild(list);
+  var usageEntries = buildFocusedAnnotationSetUsageEntries(requirementLabel);
+  if (usageEntries.length) {
+    var usageSection = document.createElement('div');
+    usageSection.className = 'focused-annotation-set-usage';
+    var usageTitle = document.createElement('div');
+    usageTitle.className = 'focused-annotation-set-usage-title';
+    usageTitle.textContent = 'Used in this set';
+    usageSection.appendChild(usageTitle);
+    var usageList = document.createElement('div');
+    usageList.className = 'focused-annotation-set-usage-list';
+    usageEntries.forEach(function (entry) {
+      appendFocusedAnnotationQuickPickRow(
+        usageList,
+        requirementLabel,
+        entry.term,
+        entry.count + ' item' + (entry.count === 1 ? '' : 's'),
+        hasTagForMediaKey(state.currentItem.key, entry.term) ? ['active'] : []
+      );
+    });
+    usageSection.appendChild(usageList);
+    picksEl.appendChild(usageSection);
+  }
   renderFocusedAnnotationCurrentTags(picksEl);
 }
 

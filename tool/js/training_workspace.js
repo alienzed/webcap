@@ -9,6 +9,7 @@ var trainingWorkspaceState = {
   runnerPollTimer: 0,
   runnerStatusPending: false,
   runnerStatusError: '',
+  runnerRecoveryAvailable: false,
   runnerPreflight: null,
   runStages: 'both',
   resumeParentJobId: '',
@@ -375,7 +376,10 @@ function renderTrainingRunner() {
   syncUtilityTrainingActivity();
   if (!els.runnerSummary || !els.runnerActions) return;
   if (trainingWorkspaceState.runnerStatusError) {
-    els.runnerSummary.innerHTML = '<div class="training-runner-detail is-error">' + escapeHtml(trainingWorkspaceState.runnerStatusError) + '</div>';
+    els.runnerSummary.innerHTML = '<div class="training-runner-detail is-error">' + escapeHtml(trainingWorkspaceState.runnerStatusError) + '</div>' +
+      (trainingWorkspaceState.runnerRecoveryAvailable
+        ? '<button type="button" class="btn" data-training-runner-recover>Recover queue</button><div class="training-runner-detail">The damaged queue state will be archived before an empty queue is created.</div>'
+        : '');
     els.runnerActions.classList.add('hidden');
     if (els.runnerQueue) els.runnerQueue.classList.add('hidden');
     if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
@@ -691,9 +695,17 @@ function scheduleTrainingRunnerPoll() {
 function refreshTrainingRunnerStatus() {
   if (!isTrainingWorkspaceActive() || trainingWorkspaceState.runnerStatusPending) return;
   trainingWorkspaceState.runnerStatusPending = true;
-  trainingRunnerRequest('/fs/training_runner/status')
+  trainingRunnerRequest('/fs/training_runner/status', { allowNotOk: true })
     .then(function (payload) {
+      if (!payload.ok) {
+        var stateError = !!payload.stateError;
+        trainingWorkspaceState.runnerRecoveryAvailable = stateError && !!payload.recoveryAvailable;
+        trainingWorkspaceState.runnerStatusError = 'Training queue status unavailable: ' + String(payload.error || 'Unknown queue error.');
+        renderTrainingRunner();
+        return;
+      }
       trainingWorkspaceState.runnerStatusError = '';
+      trainingWorkspaceState.runnerRecoveryAvailable = false;
       var priorJobsById = {};
       (trainingWorkspaceState.runnerJobs || []).forEach(function (job) { priorJobsById[job.id] = job.status; });
       trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
@@ -724,6 +736,7 @@ function refreshTrainingRunnerStatus() {
       }
     })
     .catch(function (err) {
+      trainingWorkspaceState.runnerRecoveryAvailable = false;
       trainingWorkspaceState.runnerStatusError = 'Training queue status unavailable: ' + String(err && err.message ? err.message : err);
       renderTrainingRunner();
       setStatus(trainingWorkspaceState.runnerStatusError);
@@ -732,6 +745,24 @@ function refreshTrainingRunnerStatus() {
     .then(function () {
       trainingWorkspaceState.runnerStatusPending = false;
       scheduleTrainingRunnerPoll();
+    });
+}
+
+function recoverManagedTrainingQueue() {
+  if (!window.confirm('Archive the damaged queue state and start an empty queue? Existing job files will be kept.')) return;
+  trainingRunnerRequest('/fs/training_runner/recover', { method: 'POST' })
+    .then(function () {
+      trainingWorkspaceState.runnerJobs = [];
+      trainingWorkspaceState.runnerActiveJobId = '';
+      trainingWorkspaceState.runnerQueuePaused = false;
+      trainingWorkspaceState.runnerQueuePauseReason = '';
+      trainingWorkspaceState.runnerStatusError = '';
+      trainingWorkspaceState.runnerRecoveryAvailable = false;
+      setStatus('Training queue recovered. The damaged state was archived.');
+      refreshTrainingRunnerStatus();
+    })
+    .catch(function (err) {
+      setStatus('Could not recover training queue: ' + String(err && err.message ? err.message : err));
     });
 }
 
@@ -1484,6 +1515,9 @@ function wireTrainingWorkspace() {
   runnerPauseBtn.onclick = function () { stopManagedTraining(false, true); };
   runnerCancelBtn.onclick = function () { stopManagedTraining(true); };
   runnerResumeQueueBtn.onclick = resumeManagedTrainingQueue;
+  getTrainingWorkspaceEls().runnerSummary.onclick = function (event) {
+    if (event.target.closest('[data-training-runner-recover]')) recoverManagedTrainingQueue();
+  };
   runnerConsoleBtn.onclick = function () {
     toggleTrainingRunnerConsole();
   };

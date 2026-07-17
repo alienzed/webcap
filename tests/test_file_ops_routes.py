@@ -954,9 +954,12 @@ def test_superset_search_preserves_alias_for_source_resolved_outside_root(tmp_pa
     write_text(child_dir / "two.txt", "short hair")
 
     def resolve_alias(rel_path):
-        if str(rel_path or "").replace("\\", "/").strip("/") == "aliases/hair":
-            return external_set.resolve()
-        return (fs_root / str(rel_path or "")).resolve()
+        logical = str(rel_path or "").replace("\\", "/").strip("/")
+        alias = "aliases/hair"
+        if logical == alias or logical.startswith(alias + "/"):
+            suffix = logical[len(alias):].strip("/")
+            return (external_set / suffix).resolve()
+        return (fs_root / logical).resolve()
 
     monkeypatch.setattr(smart_set_module.app_config, "FS_ROOT", fs_root)
     monkeypatch.setattr(smart_set_module.app_config, "safe_join_fs_root", resolve_alias)
@@ -972,6 +975,23 @@ def test_superset_search_preserves_alias_for_source_resolved_outside_root(tmp_pa
         "aliases/hair/one.png",
         "aliases/hair/child/two.png",
     ]
+
+    create_response = app_module.app.test_client().post(
+        "/fs/create_set_from_results",
+        json={
+            "destination_parent": "aliases/hair",
+            "set_name": "result",
+            "items": [
+                {"source_media_rel": row["source_media_rel"]}
+                for row in payload["results"]
+            ],
+        },
+    )
+
+    assert create_response.status_code == 200
+    create_payload = create_response.get_json()
+    assert create_payload["folder"] == "aliases/hair/result"
+    assert sorted(path.name for path in (external_set / "result").glob("*.png")) == ["one.png", "two.png"]
 
 
 def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, monkeypatch):

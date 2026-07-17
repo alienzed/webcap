@@ -2,7 +2,7 @@ import json
 import re
 import shutil
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from flask import jsonify
 
@@ -745,6 +745,14 @@ def _collect_source_media_rels(payload_items) -> list[str]:
     return sorted(out, key=lambda v: v.lower())
 
 
+def _logical_source_media_path(value: str) -> PurePosixPath:
+    text = str(value or "").strip().replace("\\", "/").strip("/")
+    path = PurePosixPath(text)
+    if not text or path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
+        raise ValueError(f"Invalid source media path: {value}")
+    return path
+
+
 def _clone_primer_block(state_obj: dict) -> dict:
     src = state_obj.get("primer") if isinstance(state_obj, dict) else {}
     if isinstance(src, dict):
@@ -763,7 +771,6 @@ def create_set_from_results_response(data: dict):
             raise ValueError("Missing set_name.")
         source_media_rels = _collect_source_media_rels(payload.get("items"))
 
-        root = Path(app_config.FS_ROOT).resolve()
         destination_parent_path = app_config.safe_join_fs_root(destination_parent)
         if not destination_parent_path.exists() or not destination_parent_path.is_dir():
             raise ValueError("Destination parent folder does not exist.")
@@ -771,6 +778,17 @@ def create_set_from_results_response(data: dict):
         dest_dir = destination_parent_path / set_name
         if dest_dir.exists():
             return jsonify({"error": "Destination set folder already exists."}), 409
+
+        resolved_sources = []
+        for source_media_rel in source_media_rels:
+            source_media_rel_path = _logical_source_media_path(source_media_rel)
+            source_media_path = app_config.safe_join_fs_root(source_media_rel)
+            if not source_media_path.exists() or not source_media_path.is_file():
+                raise ValueError(f"Source media not found: {source_media_rel}")
+            if source_media_path.suffix.lower() not in MEDIA_ALL_EXTS:
+                raise ValueError(f"Unsupported media extension: {source_media_rel}")
+            resolved_sources.append((source_media_rel_path, source_media_path))
+
         dest_dir.mkdir(parents=False, exist_ok=False)
         normalize_path_permissions(dest_dir)
 
@@ -790,17 +808,7 @@ def create_set_from_results_response(data: dict):
         dest_media_metadata = {}
         source_folder_order = []
 
-        for source_media_rel in source_media_rels:
-            source_media_path = app_config.safe_join_fs_root(source_media_rel)
-            if not source_media_path.exists() or not source_media_path.is_file():
-                raise ValueError(f"Source media not found: {source_media_rel}")
-            if source_media_path.suffix.lower() not in MEDIA_ALL_EXTS:
-                raise ValueError(f"Unsupported media extension: {source_media_rel}")
-            try:
-                source_media_rel_path = source_media_path.relative_to(root)
-            except Exception:
-                raise ValueError(f"Invalid source media path: {source_media_rel}")
-
+        for source_media_rel_path, source_media_path in resolved_sources:
             source_folder = source_media_rel_path.parent
             media_name = source_media_path.name
             dest_media_name = _build_dest_name_with_suffix(dest_dir, media_name)
@@ -925,7 +933,7 @@ def create_set_from_results_response(data: dict):
             dest_metadata_path.write_text(json.dumps(dest_media_metadata, indent=2), encoding="utf-8")
             normalize_path_permissions(dest_metadata_path)
 
-        dest_folder_rel = dest_dir.relative_to(root).as_posix()
+        dest_folder_rel = (PurePosixPath(destination_parent) / set_name).as_posix() if destination_parent else set_name
         return jsonify(
             {
                 "ok": True,

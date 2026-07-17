@@ -395,6 +395,21 @@ textarea:focus, input:focus {
   color: #111827;
 }
 
+.editor-floating-action-btn.is-caption-apply-saving,
+.editor-floating-action-btn.is-caption-apply-saved {
+  color: #ecfdf5;
+  border-color: rgba(52, 211, 153, 0.92);
+  background: rgba(5, 150, 105, 0.96);
+}
+
+.editor-floating-action-btn.is-caption-apply-saved {
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.18);
+}
+
+.editor-floating-action-btn.is-caption-apply-autosaved {
+  opacity: 0.5;
+}
+
 textarea#editor {
   min-height: calc(50vh - 40px);
   width: 100%;

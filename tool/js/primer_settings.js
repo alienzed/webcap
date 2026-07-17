@@ -139,6 +139,51 @@ function getPrimerResetCurrentMediaItem() {
   return state.currentItem;
 }
 
+var captionApplyConfirmation = null;
+
+function syncCaptionApplyConfirmationUi() {
+  var applyCaptionBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
+  if (!applyCaptionBtn) return;
+  var mediaItem = getPrimerResetCurrentMediaItem();
+  var editorText = String((ui && ui.editorEl && ui.editorEl.value) || '');
+  var confirmation = captionApplyConfirmation;
+  if (!confirmation || !mediaItem || confirmation.mediaKey !== mediaItem.key || confirmation.text !== editorText) {
+    captionApplyConfirmation = null;
+    applyCaptionBtn.classList.remove('is-caption-apply-saving', 'is-caption-apply-saved', 'is-caption-apply-autosaved');
+    applyCaptionBtn.disabled = false;
+    applyCaptionBtn.textContent = 'Apply';
+    applyCaptionBtn.title = 'Write the current caption to disk. Shift+click to apply it and go to the next captionless item.';
+    return;
+  }
+  var isSaving = confirmation.state === 'saving';
+  var isAutoSaved = confirmation.state === 'autosaved';
+  applyCaptionBtn.classList.toggle('is-caption-apply-saving', isSaving);
+  applyCaptionBtn.classList.toggle('is-caption-apply-saved', !isSaving && !isAutoSaved);
+  applyCaptionBtn.classList.toggle('is-caption-apply-autosaved', isAutoSaved);
+  applyCaptionBtn.disabled = isSaving;
+  applyCaptionBtn.textContent = isSaving ? 'Saving…' : (confirmation.state === 'unchanged' ? 'Already saved' : (isAutoSaved ? 'Apply' : 'Saved ✓'));
+  applyCaptionBtn.title = isSaving
+    ? 'Saving current caption.'
+    : (confirmation.state === 'unchanged'
+      ? 'This caption is already saved.'
+      : (isAutoSaved ? 'Caption saved automatically. Type to make further changes.' : 'Caption saved. Type to make further changes.'));
+}
+
+function setCaptionApplyConfirmation(mediaKey, text, confirmationState) {
+  captionApplyConfirmation = {
+    mediaKey: String(mediaKey || ''),
+    text: String(text || ''),
+    state: confirmationState || 'saved'
+  };
+  syncCaptionApplyConfirmationUi();
+}
+
+function clearCaptionApplyConfirmation() {
+  if (!captionApplyConfirmation) return;
+  captionApplyConfirmation = null;
+  syncCaptionApplyConfirmationUi();
+}
+
 function updatePrimerCaptionResetUi() {
   var resetBtn = document.getElementById('primer-reset-caption-btn');
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
@@ -150,7 +195,10 @@ function updatePrimerCaptionResetUi() {
   if (!hasSelectedMedia) {
     resetBtn.classList.add('hidden');
     undoBtn.classList.add('hidden');
-    if (applyCaptionBtn) applyCaptionBtn.classList.add('hidden');
+    if (applyCaptionBtn) {
+      syncCaptionApplyConfirmationUi();
+      applyCaptionBtn.classList.add('hidden');
+    }
     return;
   }
 
@@ -164,6 +212,7 @@ function updatePrimerCaptionResetUi() {
   if (applyCaptionBtn) {
     applyCaptionBtn.classList.remove('hidden');
     applyCaptionBtn.classList.toggle('is-captionless-apply', !mediaItem.hasCaption);
+    syncCaptionApplyConfirmationUi();
   }
 }
 
@@ -256,9 +305,21 @@ function wirePrimerCaptionResetUi() {
       }
       var textToSave = String((ui && ui.editorEl && ui.editorEl.value) || '');
       var mediaKey = mediaItem.key;
+      if (textToSave === String(mediaItem.caption || '')) {
+        setCaptionApplyConfirmation(mediaKey, textToSave, 'unchanged');
+        setStatus('Caption already saved.');
+        if (!event.shiftKey) return;
+        return selectNextCaptionlessMediaItem(mediaKey).catch(function (err) {
+          setStatus(String(err && err.message ? err.message : err));
+        });
+      }
+      setCaptionApplyConfirmation(mediaKey, textToSave, 'saving');
       saveCaptionDirect(state.folder, mediaItem.fileName, textToSave, mediaItem.key)
         .then(function () {
           primerResetUndoState = null;
+          if (state.currentItem && state.currentItem.key === mediaKey && String(ui.editorEl.value || '') === textToSave) {
+            setCaptionApplyConfirmation(mediaKey, textToSave, 'saved');
+          }
           updatePrimerCaptionResetUi();
           if (!event.shiftKey) return;
           return selectNextCaptionlessMediaItem(mediaKey).catch(function (err) {
@@ -266,6 +327,7 @@ function wirePrimerCaptionResetUi() {
           });
         })
         .catch(function (err) {
+          clearCaptionApplyConfirmation();
           setStatus(String(err && err.message ? err.message : err));
         });
     });

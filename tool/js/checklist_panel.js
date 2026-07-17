@@ -1,4 +1,5 @@
-function renderChecklistPanel() {
+function renderChecklistPanel(options) {
+  var opts = options || {};
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   var itemsDiv = document.getElementById('checklist-items');
   var groupWorkbenchList = document.getElementById('group-workbench-list');
@@ -27,9 +28,11 @@ function renderChecklistPanel() {
       });
     }
     setChecklistPanelVisible(true);
-    renderItemTagsPanel();
-    renderItemMetadataPanel();
-    renderAnnotateStrip();
+    if (!opts.skipItemDetailRefresh) {
+      renderItemTagsPanel();
+      renderItemMetadataPanel();
+      renderAnnotateStrip();
+    }
     return;
   }
   setChecklistPanelVisible(true);
@@ -197,7 +200,9 @@ function renderChecklistPanel() {
 
     itemsDiv.appendChild(row);
   }
-  renderItemTagsPanel();
-  renderItemMetadataPanel();
-  renderAnnotateStrip();
+  if (!opts.skipItemDetailRefresh) {
+    renderItemTagsPanel();
+    renderItemMetadataPanel();
+    renderAnnotateStrip();
+  }
 }

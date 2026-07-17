@@ -1,5 +1,27 @@
 // Per-target debounce timers
 var autosaveTimers = {};
+var editorLiveUiTimer = 0;
+
+function scheduleEditorLiveUiRefresh() {
+    var mediaKey = state && state.currentItem && state.currentItem.key;
+    if (editorLiveUiTimer) {
+        clearTimeout(editorLiveUiTimer);
+    }
+    editorLiveUiTimer = setTimeout(function () {
+        editorLiveUiTimer = 0;
+        if (!mediaKey || !state || !state.currentItem || state.currentItem.key !== mediaKey) return;
+        invalidateChecklistReviewedRequirementsForCurrentTagMismatch({ skipRender: true });
+        renderChecklistPanel({ skipItemDetailRefresh: true });
+    }, 150);
+}
+
+function refreshEditorDeferredUi(mediaKey) {
+    if (mediaKey && (!state || !state.currentItem || state.currentItem.key !== mediaKey)) return;
+    renderItemTagsPanel();
+    renderItemMetadataPanel();
+    updateBalanceDistributionWheel();
+    updatePrimerCaptionResetUi();
+}
 
 // Helper: get current autosave target key and payload
 function getAutosaveTargetAndPayload() {
@@ -34,13 +56,9 @@ function getAutosaveTargetAndPayload() {
 
 // Main autosave input handler
 function handleEditorInputAutosave(e) {
-    invalidateChecklistReviewedRequirementsForCurrentTagMismatch({ skipRender: true });
-    // Always refresh live highlight UI while typing.
-    renderChecklistPanel();
-    renderItemTagsPanel();
-    renderItemMetadataPanel();
-    updateBalanceDistributionWheel();
-    updatePrimerCaptionResetUi();
+    clearCaptionApplyConfirmation();
+    // Keep caption-match feedback responsive without rebuilding every panel per keystroke.
+    scheduleEditorLiveUiRefresh();
 
     var target = getAutosaveTargetAndPayload();
     if (!target) {
@@ -66,6 +84,7 @@ function handleEditorInputAutosave(e) {
     }
     autosaveTimers[target.key] = setTimeout(function() {
         debugLog('[autosave] Debounce fired.');
+        refreshEditorDeferredUi(snapshot.mediaKey);
         
         // Caption autosave
         if (snapshot.endpoint === '/caption/save') {
@@ -80,6 +99,9 @@ function handleEditorInputAutosave(e) {
                 debugLog('[autosave] Saving caption.');
                 saveCaptionDirect(snapshot.folder, snapshot.media, snapshot.text, snapshot.mediaKey)
                   .then(function() {
+                    if (state.currentItem && state.currentItem.key === snapshot.mediaKey && String(ui.editorEl.value || '') === snapshot.text) {
+                      setCaptionApplyConfirmation(snapshot.mediaKey, snapshot.text, 'autosaved');
+                    }
                     debugLog('[autosave] Save succeeded');
                   })
                   .catch(function(err) {

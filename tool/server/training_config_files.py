@@ -140,6 +140,10 @@ def _with_output_dir(config_text: str, output_dir: Path):
     return updated
 
 
+def _is_prefixed_output_dir(path):
+    return bool(path and _OUTPUT_PREFIX_PATTERN.match(Path(path).name))
+
+
 def _config_stage_for_template(name):
     for item in profiles():
         for config in item["configs"]:
@@ -159,8 +163,8 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, reset=False
 
     selected_names = profile_config_files(profile_id) if profile_id else TRAINING_CONFIG_TEMPLATE_NAMES
     existing_roots = {name: output_dir_from_config(folder, _config_stage_for_template(name)) for name in TRAINING_CONFIG_TEMPLATE_NAMES}
-    assigned_root = next((root for root in existing_roots.values() if root), None)
-    if not assigned_root:
+    assigned_root = next((root for root in existing_roots.values() if _is_prefixed_output_dir(root)), None)
+    if not assigned_root and (reset or any(not (folder / name).exists() for name in selected_names)):
         assigned_root = _next_output_dir(folder)
     written = []
     for name in selected_names:
@@ -168,7 +172,7 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, reset=False
         if dest.exists() and not reset:
             continue
         rendered = render_training_config_template(name, folder)
-        rendered = _with_output_dir(rendered, existing_roots[name] or assigned_root)
+        rendered = _with_output_dir(rendered, assigned_root)
         dest.write_text(rendered, encoding="utf-8")
         normalize_path_permissions(dest)
         written.append(dest)
@@ -176,15 +180,15 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, reset=False
 
 
 def reset_training_config_file(folder_path: Path, filename: str):
-    """Explicitly restore one config; generation never overwrites it implicitly."""
+    """Explicitly restore one config with a prefixed output root."""
     folder = Path(folder_path)
     name = str(filename or "").strip()
     if name not in TRAINING_CONFIG_TEMPLATE_NAMES:
         raise ValueError("Unknown training config: " + name)
     existing_roots = {item: output_dir_from_config(folder, _config_stage_for_template(item)) for item in TRAINING_CONFIG_TEMPLATE_NAMES}
-    assigned_root = next((root for root in existing_roots.values() if root), None) or _next_output_dir(folder)
+    assigned_root = next((root for root in existing_roots.values() if _is_prefixed_output_dir(root)), None) or _next_output_dir(folder)
     destination = folder / name
-    rendered = _with_output_dir(render_training_config_template(name, folder), existing_roots[name] or assigned_root)
+    rendered = _with_output_dir(render_training_config_template(name, folder), assigned_root)
     destination.write_text(rendered, encoding="utf-8")
     normalize_path_permissions(destination)
     return destination

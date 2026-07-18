@@ -25,7 +25,7 @@ In scope:
 - Create new destination set folder under `FS_ROOT`
 - Copy media files
 - Copy caption sidecars (`.txt`) when present
-- Copy matching `originals/<media>` when present
+- Seed destination `originals/<media>` from the matching source original when present, otherwise from the selected source media
 - Carry per-item folder-state metadata into destination `.webcap_state.json`:
   - `reviewedKeys`
   - `flags`
@@ -86,7 +86,7 @@ For each selected item:
 
 1. Copy media file to destination set.
 2. Copy caption sidecar (`.txt`) if present.
-3. Copy `originals/<media>` if present.
+3. Create the destination original from `originals/<media>` when present; otherwise use the selected source media as the new set's baseline.
 4. Carry matching item metadata from source folder state into destination folder state maps.
 
 ## Duplicate / Collision Rules

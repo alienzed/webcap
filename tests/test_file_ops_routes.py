@@ -1110,6 +1110,32 @@ def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, m
     assert out_metadata["one.png"]["resolution"] == "128x128"
 
 
+def test_create_set_from_results_seeds_original_from_working_media_when_source_original_is_missing(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    source_dir = fs_root / "sets" / "a"
+    source_dir.mkdir(parents=True)
+    write_image(source_dir / "one.png")
+
+    monkeypatch.setattr(smart_set_module.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    client = app_module.app.test_client()
+    response = client.post(
+        "/fs/create_set_from_results",
+        json={
+            "destination_parent": "sets",
+            "set_name": "result_set",
+            "items": [{"source_media_rel": "sets/a/one.png"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["originals_copied_count"] == 1
+    out_dir = fs_root / "sets" / "result_set"
+    assert (out_dir / "originals" / "one.png").read_bytes() == (out_dir / "one.png").read_bytes()
+
+
 def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_a = fs_root / "set_a"

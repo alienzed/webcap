@@ -397,8 +397,8 @@ Global shortcuts when not typing in an input:
 - `Delete`: prune selected media outside `originals`
 - `C`: open Crop for the selected image
 - `D`: deface the selected media with the default threshold
+- `R`: reset the selected media to its original version, with confirmation
 - `0..5`: clear or set rating
-- `G`, `Y`, `O`, `B`, `R`: set flag color
 
 Editor and rename:
 - `Ctrl+S` / `Cmd+S`: save caption or open config file

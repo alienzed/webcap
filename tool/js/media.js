@@ -127,8 +127,10 @@ function updatePreviewActionControls() {
   ui.previewMutationIndicatorEl.classList.toggle('hidden', !showMutationReset);
   if (showMutationReset) {
     ui.previewMutationIndicatorEl.textContent = 'Reset';
+    ui.previewMutationIndicatorEl.title = 'Reset (R)';
     ui.previewMutationIndicatorEl.setAttribute('data-action-label', 'Reset');
   } else {
+    ui.previewMutationIndicatorEl.removeAttribute('title');
     ui.previewMutationIndicatorEl.removeAttribute('data-action-label');
   }
 

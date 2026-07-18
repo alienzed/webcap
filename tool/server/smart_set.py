@@ -848,14 +848,14 @@ def create_set_from_results_response(data: dict):
                 normalize_path_permissions(dest_caption_path)
 
             source_original_path = source_media_path.parent / "originals" / media_name
-            if source_original_path.exists() and source_original_path.is_file():
-                dest_originals_dir = dest_dir / "originals"
-                dest_originals_dir.mkdir(parents=True, exist_ok=True)
-                normalize_path_permissions(dest_originals_dir)
-                dest_original_path = dest_originals_dir / dest_media_name
-                shutil.copy2(source_original_path, dest_original_path)
-                normalize_path_permissions(dest_original_path)
-                originals_copied += 1
+            source_baseline_path = source_original_path if source_original_path.is_file() else source_media_path
+            dest_originals_dir = dest_dir / "originals"
+            dest_originals_dir.mkdir(parents=True, exist_ok=True)
+            normalize_path_permissions(dest_originals_dir)
+            dest_original_path = dest_originals_dir / dest_media_name
+            shutil.copy2(source_baseline_path, dest_original_path)
+            normalize_path_permissions(dest_original_path)
+            originals_copied += 1
 
             reviewed = src_state.get("reviewedKeys")
             if isinstance(reviewed, list) and media_name in reviewed:

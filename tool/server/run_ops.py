@@ -159,9 +159,6 @@ def generate_dataset_config_response(folder: str, mode: str = "", profile_id: st
             return Response(f"[ERROR] Missing prep manifest: {prep_manifest_path}\n", status=400, mimetype="text/plain")
 
         try:
-            from .training_profiles import KREA2_PROFILE_ID
-            if profile_id == KREA2_PROFILE_ID and not _manifest_is_image_only(prep_manifest_path):
-                return Response("[ERROR] Krea2 Raw requires image-only prepared media.\n", status=400, mimetype="text/plain")
             text = generate_dataset_configs(
                 folder_path,
                 mode=mode,
@@ -180,7 +177,7 @@ def generate_dataset_config_response(folder: str, mode: str = "", profile_id: st
                 if updated:
                     text += "[INFO] Image-only set detected: defaulted micro_batch_size_per_gpu to 2 in " + ", ".join(updated) + ".\n"
             return Response(text, mimetype="text/plain")
-        except FileNotFoundError as e:
+        except (FileNotFoundError, ValueError) as e:
             return Response(f"[ERROR] {e}\n", status=400, mimetype="text/plain")
     except Exception as e:
         app_config.debug_traceback()
@@ -224,9 +221,6 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
         from .training_profiles import profile_run
         selected_profile, selected_run = profile_run(profile_id, run_id, stages)
         stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
-        prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
-        if stages == "krea2" and prep_manifest_path.is_file() and not _manifest_is_image_only(prep_manifest_path):
-            return Response("[ERROR] Krea2 Raw requires image-only prepared media.\n", status=400, mimetype="text/plain")
         hi_path = folder_path / hi_name
         lo_path = folder_path / lo_name
         krea2_path = folder_path / krea2_name
@@ -343,6 +337,8 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
                 yield f"[ERROR] {e}\n"
 
         return Response(stream_with_context(generate()), mimetype="text/plain")
+    except ValueError as e:
+        return Response(f"[ERROR] {e}\n", status=400, mimetype="text/plain")
     except Exception as e:
         app_config.debug_traceback()
         return Response(f"[ERROR] {e}\n", status=500, mimetype="text/plain")

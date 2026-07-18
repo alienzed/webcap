@@ -179,10 +179,10 @@ function getTrainingRunnerJobById(jobId) {
 }
 
 function formatTrainingRunnerElapsed(job) {
-  var started = Number(job && job.startedAt || 0);
-  if (!started) return '';
-  var seconds = Math.max(0, Math.floor(Date.now() / 1000 - started));
-  return formatTrainingRunnerDuration(seconds);
+  var progress = job && job.progress && typeof job.progress === 'object' ? job.progress : {};
+  var seconds = Number(progress.estimatedTrainingSeconds);
+  if (!isFinite(seconds) || seconds <= 0) return '';
+  return '~' + formatTrainingRunnerDuration(seconds) + ' training';
 }
 
 function formatTrainingRunnerDuration(seconds) {
@@ -598,9 +598,11 @@ function renderTrainingHistory() {
     var finalStep = Number(progress.step);
     var hasStarted = Number(job.startedAt || 0) > 0;
     var hasFinished = Number(job.finishedAt || 0) > 0;
-    var elapsedSeconds = hasStarted && hasFinished ? Number(job.finishedAt) - Number(job.startedAt) : 0;
+    var estimatedTrainingSeconds = Number(progress.estimatedTrainingSeconds);
     var details = [];
-    var duration = elapsedSeconds > 0 ? formatTrainingRunnerDuration(elapsedSeconds) : '';
+    var duration = isFinite(estimatedTrainingSeconds) && estimatedTrainingSeconds > 0
+      ? '~' + formatTrainingRunnerDuration(estimatedTrainingSeconds) + ' training'
+      : '';
     var timingError = hasFinished && !hasStarted ? 'Timing invariant error: terminal job has no start time.' : '';
     var timestamp = job.finishedAt || job.startedAt || job.createdAt;
     var timestampKind = trainingHistoryTimestampKind(job);
@@ -618,7 +620,7 @@ function renderTrainingHistory() {
         (details.length || duration ? '<div>' +
           (details.length ? escapeHtml(details.join(' · ')) : '') +
           (details.length && duration ? ' · ' : '') +
-          (duration ? '<span title="Run duration">' + escapeHtml(duration) + '</span>' : '') +
+          (duration ? '<span title="Estimated training time from global step and recent average iteration time">' + escapeHtml(duration) + '</span>' : '') +
           '</div>' : '') +
         (trainingOutputIdentity(job) ? '<div title="' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '') + '">Output: ' + escapeHtml(trainingOutputIdentity(job)) + '</div>' : '') +
         (timingError ? '<div class="training-runner-detail is-error">' + escapeHtml(timingError) + '</div>' : '') +

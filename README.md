@@ -395,6 +395,8 @@ Settings support:
 Global shortcuts when not typing in an input:
 - `ArrowUp` / `ArrowDown`: previous or next visible media
 - `Delete`: prune selected media outside `originals`
+- `C`: open Crop for the selected image
+- `D`: deface the selected media with the default threshold
 - `0..5`: clear or set rating
 - `G`, `Y`, `O`, `B`, `R`: set flag color
 

@@ -683,6 +683,7 @@ def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_pa
         "estimated": True,
         "plannedSteps": 20000,
         "source": "steps",
+        "estimatedTrainingSeconds": 29100,
         "etaSeconds": 30900,
         "etaScope": "completion",
     }
@@ -717,6 +718,7 @@ def test_runner_progress_uses_epoch_progress_and_a_rolling_step_eta(tmp_path):
         "overallPercent": 94.4,
         "estimated": False,
         "source": "epochs",
+        "estimatedTrainingSeconds": 28230,
         "etaSeconds": 31770,
         "etaScope": "completion",
     }

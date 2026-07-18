@@ -205,7 +205,8 @@ function buildCurrentFolderContextActions() {
           },
           function (err) {
             setStatus('Defacing failed: ' + err);
-          }
+          },
+          { showConsole: false }
         );
       }
     },
@@ -297,6 +298,30 @@ function buildFolderContextMenuActions(key) {
   return actions;
 }
 
+function runDefaceMediaItem(mediaItem, threshold) {
+  var wasCurrentItem = !!(state.currentItem && state.currentItem.key === mediaItem.key);
+  setStatus('Defacing file...');
+  streamPreviewFromFetch(
+    '/fs/deface',
+    { file: buildRowRelativePath(mediaItem.fileName), thresh: String(threshold) },
+    ui,
+    function () {
+      setStatus('Defacing finished.');
+      markMediaMutated(mediaItem.key, 'best_effort');
+      bumpMediaCacheBustToken(mediaItem.key);
+      saveFolderStateForCurrentRoot();
+      refreshMediaResolutionCache();
+      if (wasCurrentItem) {
+        selectPathMedia(mediaItem).catch(function () {});
+      }
+    },
+    function (err) {
+      setStatus('Defacing failed: ' + err);
+    },
+    { showConsole: false }
+  );
+}
+
 function buildMediaContextMenuActions(mediaItem, key) {
   var actions = [];
   var isInOriginals = (state.folder && state.folder.split(/[\/]/).pop() === 'originals');
@@ -349,37 +374,25 @@ function buildMediaContextMenuActions(mediaItem, key) {
   }
 
   var defaceAction = null;
+  var defaceOptionsAction = null;
   if (MEDIA_EXTENSIONS['.' + ext]) {
     defaceAction = {
+      label: 'Deface',
+      run: function () {
+        runDefaceMediaItem(mediaItem, '0.4');
+      }
+    };
+    defaceOptionsAction = {
       label: 'Deface...',
       run: function () {
-        var wasCurrentItem = !!(state.currentItem && state.currentItem.key === mediaItem.key);
-        clearEditorAndPreview();
-        var defaultThresh = '0.4';
-        var t = prompt('Deface: Enter threshold (-t, 0.0-1.0)', defaultThresh);
+        var t = prompt('Deface: Enter threshold (-t, 0.0-1.0)', '0.4');
         if (t === null) return;
         t = String(t).trim();
-        if (!/^0(\.\d+)?|1(\.0+)?$/.test(t)) {
+        if (!/^(?:0(?:\.\d+)?|1(?:\.0+)?)$/.test(t)) {
           setStatus('Invalid threshold');
           return;
         }
-        setStatus('Defacing file...');
-        var filePath = buildRowRelativePath(mediaItem.fileName);
-        streamPreviewFromFetch(
-          '/fs/deface',
-          { file: filePath, thresh: t },
-          ui,
-          function () {
-            setStatus('Defacing finished.');
-            markMediaMutated(mediaItem.key, 'best_effort');
-            bumpMediaCacheBustToken(mediaItem.key);
-            saveFolderStateForCurrentRoot();
-            refreshMediaResolutionCache();
-            if (wasCurrentItem) {
-              selectPathMedia(mediaItem).catch(function () {});
-            }
-          }
-        );
+        runDefaceMediaItem(mediaItem, t);
       }
     };
   }
@@ -408,6 +421,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
       }
     });
     if (defaceAction) actions.push(defaceAction);
+    if (defaceOptionsAction) actions.push(defaceOptionsAction);
     actions.push({ separator: true });
     actions.push({
       label: 'Rotate Left 90 deg',
@@ -435,6 +449,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
     });
   } else if (defaceAction) {
     actions.push(defaceAction);
+    actions.push(defaceOptionsAction);
   }
 
   if (isVideoFile) {

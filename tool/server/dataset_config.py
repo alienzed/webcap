@@ -246,18 +246,25 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID
 
     single_stage = str(profile_id or "") in (KREA2_PROFILE_ID, WAN21_PROFILE_ID)
+    krea2_profile = str(profile_id or "") == KREA2_PROFILE_ID
     single_stage_name = "krea2" if profile_id == KREA2_PROFILE_ID else "wan21"
     single_config_name = "config.krea2.toml" if profile_id == KREA2_PROFILE_ID else "config.wan21.toml"
+    lo_run_entries = lo_image_entries if krea2_profile else lo_entries
+    if krea2_profile and not lo_run_entries:
+        raise ValueError("Krea2 Raw requires at least one prepared image.")
+    if krea2_profile and video_entries:
+        excluded_videos = sum(int(entry["sample_count"]) for entry in video_entries)
+        lines.append(f"[INFO] Krea2 Raw: excluded {excluded_videos} prepared video(s).")
     hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
     default_hi_epochs, default_lo_epochs = default_training_config_epochs()
     hi_epochs = read_epochs_from_training_config(folder / HI_CONFIG_NAME, default_hi_epochs)
     lo_epochs = read_epochs_from_training_config(folder / (single_config_name if single_stage else LO_CONFIG_NAME), default_lo_epochs)
     hi_scalar, hi_base = solve_repeat_scalar(hi_entries, hi_target_steps, hi_epochs)
-    lo_scalar, lo_base = solve_repeat_scalar(lo_entries, lo_target_steps, lo_epochs)
+    lo_scalar, lo_base = solve_repeat_scalar(lo_run_entries, lo_target_steps, lo_epochs)
     hi_repeats = build_repeats(hi_entries, hi_scalar)
-    lo_repeats = build_repeats(lo_entries, lo_scalar)
+    lo_repeats = build_repeats(lo_run_entries, lo_scalar)
     hi_est = estimate_steps(hi_entries, hi_repeats, hi_epochs)
-    lo_est = estimate_steps(lo_entries, lo_repeats, lo_epochs)
+    lo_est = estimate_steps(lo_run_entries, lo_repeats, lo_epochs)
     training_stages = {
         "hi": {"epochs": hi_epochs, "targetSteps": hi_target_steps, "estimatedSteps": hi_est},
         "lo": {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est},
@@ -286,7 +293,7 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lo_blocks = []
     for idx, entry in enumerate(hi_entries):
         hi_blocks.append(render_dataset_entry(entry, hi_repeats[idx]))
-    for idx, entry in enumerate(lo_entries):
+    for idx, entry in enumerate(lo_run_entries):
         lo_blocks.append(render_dataset_entry(entry, lo_repeats[idx]))
 
     snapshot_lines = build_selection_snapshot_comment_lines(folder, dataset_root, manifest) if write_selection_snapshot_comments else None

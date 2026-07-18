@@ -717,7 +717,7 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     write_image(set_dir / "clip.png")
     prepared_img_dir = auto_dataset / "square_img"
     prepared_img_dir.mkdir(parents=True)
-    write_image(prepared_img_dir / "clip.png")
+    write_image(prepared_img_dir / "clip.png", (512, 512))
     write_text(prepared_img_dir / "clip.txt", "prepared caption")
     (auto_dataset / "prep_manifest.json").write_text(
         json.dumps(
@@ -789,7 +789,7 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     assert " ; " not in lo_body
 
     krea2_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "krea2"})
-    assert krea2_response.status_code == 200
+    assert krea2_response.status_code == 200, krea2_response.get_data(as_text=True)
     krea2_body = krea2_response.get_data(as_text=True)
     assert "config.krea2.toml" in krea2_body
     assert "Config Krea2 Raw:" in krea2_body

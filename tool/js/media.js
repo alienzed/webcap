@@ -31,12 +31,12 @@ function getPreviewPrimaryActionPlan(fileName) {
   if (isPreviewVideoFileName(fileName)) {
     return [
       { label: 'Clip', actionLabel: 'Clip...' },
-      { label: 'Deface', actionLabel: 'Deface...' }
+      { label: 'Deface', actionLabel: 'Deface', shortcut: 'D' }
     ];
   }
   return [
-    { label: 'Crop', actionLabel: 'Crop...' },
-    { label: 'Deface', actionLabel: 'Deface...' }
+    { label: 'Crop', actionLabel: 'Crop...', shortcut: 'C' },
+    { label: 'Deface', actionLabel: 'Deface', shortcut: 'D' }
   ];
 }
 
@@ -140,6 +140,7 @@ function updatePreviewActionControls() {
   if (primaryA) {
     used[plan[0].actionLabel] = true;
     ui.previewPrimaryActionAEl.textContent = plan[0].label;
+    ui.previewPrimaryActionAEl.title = plan[0].shortcut ? plan[0].label + ' (' + plan[0].shortcut + ')' : plan[0].label;
     ui.previewPrimaryActionAEl.setAttribute('data-action-label', plan[0].actionLabel);
     ui.previewPrimaryActionAEl.classList.remove('hidden');
   } else {
@@ -150,6 +151,7 @@ function updatePreviewActionControls() {
   if (primaryB) {
     used[plan[1].actionLabel] = true;
     ui.previewPrimaryActionBEl.textContent = plan[1].label;
+    ui.previewPrimaryActionBEl.title = plan[1].shortcut ? plan[1].label + ' (' + plan[1].shortcut + ')' : plan[1].label;
     ui.previewPrimaryActionBEl.setAttribute('data-action-label', plan[1].actionLabel);
     ui.previewPrimaryActionBEl.classList.remove('hidden');
   } else {

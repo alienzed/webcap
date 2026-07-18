@@ -498,9 +498,26 @@ function wireAllUi() {
     });
   });
   document.addEventListener('keydown', function (e) {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.defaultPrevented || e.repeat || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (!state.currentItem || !state.currentItem.fileName) return;
     if (isEditableElement(document.activeElement)) return;
+    var shortcutSurface = normalizeWorkspaceSurface(workspaceState.surface);
+    if (shortcutSurface !== 'default' && shortcutSurface !== 'focus') return;
+    if (normalizeWorkspaceViewMode(workspaceUiState.viewMode) !== 'single') return;
+    if (document.querySelector('.modal:not(.hidden), .modal-overlay:not(.hidden), .crop-modal:not(.hidden), .focused-annotation-modal:not(.hidden), .media-grid-modal:not(.hidden), .media-grid-viewer-modal:not(.hidden), .app-settings-modal:not(.hidden)')) return;
+    var actionKey = String(e.key || '').toLowerCase();
+    if (actionKey === 'c' && isCroppableImageFile(state.currentItem.fileName)) {
+      e.preventDefault();
+      runPreviewActionByLabel('Crop...');
+      return;
+    }
+    if (actionKey === 'd') {
+      var defaceAction = findPreviewActionByLabel(getPreviewContextActionsForCurrentItem(), 'Deface');
+      if (!defaceAction) return;
+      e.preventDefault();
+      defaceAction.run();
+      return;
+    }
     if (!/^[0-5]$/.test(e.key)) return;
     if (typeof setRatingForMediaKey !== 'function') return;
     e.preventDefault();

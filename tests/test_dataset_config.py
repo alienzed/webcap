@@ -17,6 +17,7 @@ from tool.server.dataset_config import (
     read_epochs_from_training_config,
     repeat_targets_for_mode,
 )
+from tool.server.training_profiles import KREA2_PROFILE_ID
 
 
 def write_image(path: Path, size):
@@ -112,6 +113,14 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     training_plan = json.loads((auto_dataset / "training_plan.json").read_text(encoding="utf-8"))
     assert training_plan["stages"]["hi"]["estimatedSteps"] > 0
     assert training_plan["stages"]["lo"]["estimatedSteps"] > 0
+
+    krea_report = generate_dataset_configs(set_folder, mode="normal", profile_id=KREA2_PROFILE_ID)
+    krea_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    assert 'group = "videos"' not in krea_text
+    assert 'group = "images"' in krea_text
+    assert "Krea2 Raw: excluded 1 prepared video(s)." in krea_report
+    krea_plan = json.loads((auto_dataset / "training_plan.json").read_text(encoding="utf-8"))
+    assert krea_plan["stages"]["krea2"]["estimatedSteps"] > 0
 
 
 def test_generate_dataset_configs_fails_without_prep_manifest(tmp_path):
@@ -262,6 +271,13 @@ def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
     assert "Wrote" in response.get_data(as_text=True)
     assert (set_folder / "dataset.hi.toml").exists()
     assert (set_folder / "dataset.lo.toml").exists()
+
+    krea_response = client.post(
+        "/fs/generate_dataset_config",
+        json={"folder": "set", "profileId": KREA2_PROFILE_ID},
+    )
+    assert krea_response.status_code == 200
+    assert 'group = "videos"' not in (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
 
 def test_choose_video_detail_bucket_respects_mfp_limit():

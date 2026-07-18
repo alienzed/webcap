@@ -1086,6 +1086,8 @@ def _sync_job_progress(job, log_text):
     else:
         progress["source"] = "epochs"
     seconds_per_step = _recent_seconds_per_step(log_text, stage)
+    if step is not None and seconds_per_step is not None:
+        progress["estimatedTrainingSeconds"] = round(max(0, step) * seconds_per_step)
     if step is not None and planned_steps > 0 and seconds_per_step is not None:
         remaining_steps = max(0, planned_steps - step)
         eta_scope = "completion"

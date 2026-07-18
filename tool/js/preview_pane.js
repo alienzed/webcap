@@ -1,6 +1,7 @@
 // Utility: Stream fetch output to preview pane
-function streamPreviewFromFetch(url, body, ui, onDone, onError) {
-  showConsolePanel();
+function streamPreviewFromFetch(url, body, ui, onDone, onError, options) {
+  var opts = options || {};
+  if (opts.showConsole !== false) showConsolePanel();
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

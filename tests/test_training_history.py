@@ -316,6 +316,34 @@ def test_discover_runs_detects_the_noise_model_from_the_saved_run_config(tmp_pat
     assert runs["run-lo"]["stage"] == "lo"
 
 
+def test_discover_runs_prefers_saved_run_config_over_current_shared_root_stage(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "char" / "lilly" / "lsAnfisa"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    shared_output = root / "output" / "runs" / "01-lsAnfisa"
+    current_hi_output = root / "output" / "runs" / "02-lsAnfisa" / "wan22-hi"
+    (set_folder / "config.hi.toml").write_text(
+        'output_dir = "' + str(current_hi_output) + '"\nepochs = 50\n', encoding="utf-8"
+    )
+    (set_folder / "config.lo.toml").write_text(
+        'output_dir = "' + str(shared_output) + '"\nepochs = 90\n', encoding="utf-8"
+    )
+    run = shared_output / "20260717_19-11-37"
+    (run / "epoch50").mkdir(parents=True)
+    (run / "global_step2950").mkdir()
+    (run / "latest").write_text("global_step2950", encoding="utf-8")
+    (run / "config.hi.toml").write_text(
+        'dataset = "' + str(set_folder / "dataset.hi.toml") + '"\nepochs = 50\n', encoding="utf-8"
+    )
+
+    runs = {item["name"]: item for item in training_history.discover_runs(set_folder)}
+
+    assert runs["20260717_19-11-37"]["stage"] == "hi"
+    assert runs["20260717_19-11-37"]["expectedEpochs"] == 50
+    assert runs["20260717_19-11-37"]["completed"] is True
+
+
 def test_discover_runs_ignores_webcap_job_sidecars(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"

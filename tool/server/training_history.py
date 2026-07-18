@@ -284,7 +284,10 @@ def discover_runs(folder_path, stage=""):
             seen.add(entry)
             if not _run_belongs_to_set(entry, Path(folder_path).name):
                 continue
-            entry_stage = root_stage or _stage_from_run_name(entry.name) or _stage_from_run_config(entry)
+            # The config saved inside the run is authoritative. Current set
+            # configs may have moved or may now associate this shared root with
+            # a different stage than the historical run actually trained.
+            entry_stage = _stage_from_run_config(entry) or _stage_from_run_name(entry.name) or root_stage
             if stage in ("hi", "lo", "krea2", "wan21") and entry_stage != stage:
                 continue
             expected_epochs = _configured_epochs(folder_path, entry_stage) if entry_stage else 0

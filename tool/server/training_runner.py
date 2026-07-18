@@ -1544,7 +1544,7 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         return {"ok": False, "error": "Launch checks failed.", "preflight": preflight}, 400
     if resume_from_checkpoint:
         try:
-            validate_resumable_run_for_path(folder_path, resume_stage, resume_from_checkpoint)
+            validate_resumable_run_for_path(folder_path, resume_stage, resume_from_checkpoint, enforce_identity=False)
         except ValueError as exc:
             return {"ok": False, "error": str(exc)}, 400
     with _lock:

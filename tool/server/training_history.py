@@ -325,8 +325,8 @@ def resumable_run_for_path(folder_path, stage, run_path):
     ), {})
 
 
-def validate_resumable_run_for_path(folder_path, stage, run_path):
-    """Validate checkpoint identity from saved run artifacts, not current config contents."""
+def validate_resumable_run_for_path(folder_path, stage, run_path, enforce_identity=True):
+    """Validate a checkpoint; identity checks apply only to automatic resume selection."""
     raw_path = str(run_path or "").strip()
     if not raw_path:
         raise ValueError("A resume directory is required.")
@@ -335,10 +335,10 @@ def validate_resumable_run_for_path(folder_path, stage, run_path):
         raise ValueError("The saved run directory is unavailable.")
     set_name = Path(folder_path).name
     saved_set_name = _set_name_from_run_config(directory, "")
-    if saved_set_name and saved_set_name != set_name:
+    if enforce_identity and saved_set_name and saved_set_name != set_name:
         raise ValueError("The saved checkpoint belongs to set " + saved_set_name + ", not " + set_name + ".")
     saved_stage = _stage_from_run_config(directory)
-    if saved_stage and saved_stage != str(stage or ""):
+    if enforce_identity and saved_stage and saved_stage != str(stage or ""):
         raise ValueError("The saved checkpoint is for " + saved_stage + ", not " + str(stage or "") + ".")
     resume_artifacts = _resume_artifacts(directory)
     if not resume_artifacts:

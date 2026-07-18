@@ -1,3 +1,5 @@
+import pytest
+
 from tool.server import config as config_module
 from tool.server import training_history
 from tool.server import training_runner
@@ -181,6 +183,8 @@ def test_resume_validation_allows_current_config_changes_but_rejects_another_set
     other_set.mkdir()
     with pytest.raises(ValueError, match="belongs to set Estel"):
         training_history.validate_resumable_run_for_path(other_set, "lo", str(run))
+    explicit = training_history.validate_resumable_run_for_path(other_set, "hi", str(run), enforce_identity=False)
+    assert explicit["checkpointAvailable"] is True
 
 
 def test_discover_runs_scans_new_launch_group_stage_directories(tmp_path, monkeypatch):

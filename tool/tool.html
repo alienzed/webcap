@@ -349,12 +349,12 @@
                         <div class="workbench-bottom">
                             <div class="workbench-card editor-surface">
                                 <div id="config-editor-toolbar" class="config-editor-toolbar hidden">
-                                    <button id="config-editor-back-btn" type="button" class="review-captions-btn">Back</button>
                                     <div class="config-editor-title-copy">
                                         <div class="config-editor-title">Config Editor</div>
                                         <div id="config-editor-current-file" class="config-editor-current-file">No config selected.</div>
                                     </div>
                                     <div class="config-editor-toolbar-actions">
+                                        <button id="config-editor-back-btn" type="button" class="review-captions-btn">Close</button>
                                         <button id="config-editor-console-btn" type="button" class="review-captions-btn">Console</button>
                                         <button id="config-editor-generate-btn" type="button" class="review-captions-btn">Generate</button>
                                         <button id="config-editor-train-btn" type="button" class="review-captions-btn">Train Preview</button>
@@ -375,7 +375,10 @@
                                     <section id="training-runner-console" class="training-runner-console hidden" aria-label="Training output">
                                         <div class="training-runner-console-heading">
                                             <strong id="training-runner-console-title">Training output</strong>
-                                            <button id="training-runner-console-close-btn" type="button" class="training-runner-console-close-btn" aria-label="Return to Training" title="Return to Training">Back to Training</button>
+                                            <div class="training-runner-console-heading-actions">
+                                                <button id="training-runner-console-reveal-btn" type="button" class="training-runner-console-close-btn" title="Select this job's run.log in Explorer">Reveal log file</button>
+                                                <button id="training-runner-console-close-btn" type="button" class="training-runner-console-close-btn" aria-label="Return to Training" title="Return to Training">Back to Training</button>
+                                            </div>
                                         </div>
                                         <pre id="training-runner-console-log" class="training-runner-console-log"></pre>
                                     </section>

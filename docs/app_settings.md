@@ -1,6 +1,6 @@
 # App Settings
 
-Last reviewed against code: 2026-07-05
+Last reviewed against code: 2026-07-18
 
 The app settings modal is the global configuration surface for values stored in `tool/config.json`.
 
@@ -10,12 +10,14 @@ The app settings modal is the global configuration surface for values stored in 
   - filesystem root
   - models root
   - diffusion-pipe WSL path
+  - WSL distribution
+  - Conda executable and environment
   - activate script
+  - TensorBoard port
 - `Caption Editor`
   - app-wide default caption template
 - `Training`
   - selection snapshot comment toggle
-  - training mode
 - `Analysis & Appearance`
   - face analysis toggle
   - MediaPipe analysis toggle
@@ -36,3 +38,5 @@ The app settings modal is the global configuration surface for values stored in 
 - Frontend modal logic: `tool/js/app_settings.js`
 - Frontend primer-specific UI logic: `tool/js/primer_settings.js`
 - Backend config validation / persistence: `tool/server/config.py`
+
+The Training workspace's Dataset target (`POC`, `Normal`, `Quality`) applies to one Generate Configs action. It is not an app-settings field.

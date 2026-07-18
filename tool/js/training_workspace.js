@@ -81,6 +81,7 @@ function getTrainingWorkspaceEls() {
     runnerConsole: document.getElementById('training-runner-console'),
     runnerConsoleTitle: document.getElementById('training-runner-console-title'),
     runnerConsoleLog: document.getElementById('training-runner-console-log'),
+    runnerConsoleRevealBtn: document.getElementById('training-runner-console-reveal-btn'),
     runnerConsoleCloseBtn: document.getElementById('training-runner-console-close-btn'),
     runnerPreflight: document.getElementById('training-runner-preflight'),
     gpuStatus: document.getElementById('training-gpu-status'),
@@ -692,6 +693,7 @@ function showTrainingRunnerConsole(job, options) {
     els.runnerConsoleLog.textContent = '';
     trainingWorkspaceState.runnerLogOffsets[target.id] = 0;
   }
+  if (els.runnerConsoleRevealBtn) els.runnerConsoleRevealBtn.disabled = false;
   els.runnerConsoleTitle.textContent = 'Training output · ' + trainingFolderName(target.folder);
   els.runnerConsole.classList.remove('hidden');
   syncTrainingConsoleUi();
@@ -704,7 +706,7 @@ function fetchTrainingRunnerLog(job, reset) {
   var requestVersion = trainingWorkspaceState.runnerConsoleRequestVersion;
   if (trainingWorkspaceState.runnerConsoleLogRequestVersion === requestVersion) return;
   trainingWorkspaceState.runnerConsoleLogRequestVersion = requestVersion;
-  fetch('/fs/training_runner/log?jobId=' + encodeURIComponent(job.id) + '&offset=' + encodeURIComponent(offset))
+  fetch('/fs/training_runner/log?jobId=' + encodeURIComponent(job.id) + '&offset=' + encodeURIComponent(offset) + (reset ? '&tail=1' : ''))
     .then(function (response) { return response.json(); })
     .then(function (payload) {
       if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'Could not load training output.');
@@ -721,6 +723,9 @@ function fetchTrainingRunnerLog(job, reset) {
         return;
       }
       trainingWorkspaceState.runnerLogOffsets[job.id] = nextOffset;
+      if (payload.truncated) {
+        appendToTrainingRunnerConsole('[webcap] Showing the latest log output. Earlier output is available in the log file.\n\n');
+      }
       if (payload.text) appendToTrainingRunnerConsole(payload.text);
       if (!payload.text && offset === 0 && payload.job && payload.job.error) {
         appendToTrainingRunnerConsole('[webcap] ' + payload.job.error + '\n');
@@ -744,6 +749,23 @@ function fetchTrainingRunnerLog(job, reset) {
         trainingWorkspaceState.runnerConsoleLogRequestVersion = 0;
       }
     });
+}
+
+function revealTrainingRunnerLog() {
+  var job = getTrainingRunnerJobById(trainingWorkspaceState.runnerConsoleJobId);
+  if (!job || !job.id) {
+    setStatus('No training log is selected.');
+    return;
+  }
+  trainingRunnerRequest('/fs/training_runner/open_log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: job.id })
+  }).then(function () {
+    setStatus('Revealed training log file.');
+  }).catch(function (err) {
+    setStatus('Could not reveal training log: ' + String(err && err.message ? err.message : err));
+  });
 }
 
 function scheduleTrainingRunnerPoll() {
@@ -1683,6 +1705,7 @@ function wireTrainingWorkspace() {
   var runnerCancelBtn = document.getElementById('training-runner-cancel-btn');
   var runnerResumeQueueBtn = document.getElementById('training-runner-resume-queue-btn');
   var runnerConsoleBtn = document.getElementById('training-runner-console-btn');
+  var runnerConsoleRevealBtn = document.getElementById('training-runner-console-reveal-btn');
   var runnerConsoleCloseBtn = document.getElementById('training-runner-console-close-btn');
   var runnerQueue = document.getElementById('training-runner-queue');
   var historyList = document.getElementById('training-history-list');
@@ -1759,6 +1782,7 @@ function wireTrainingWorkspace() {
   runnerConsoleBtn.onclick = function () {
     toggleTrainingRunnerConsole();
   };
+  runnerConsoleRevealBtn.onclick = revealTrainingRunnerLog;
   runnerConsoleCloseBtn.onclick = hideTrainingRunnerConsole;
   runnerQueue.onclick = function (event) {
     var queueToggle = event.target.closest('[data-training-queue-toggle]');

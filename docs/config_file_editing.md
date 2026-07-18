@@ -1,19 +1,10 @@
-# Config File Editing (Safe, Minimal)
+# Config File Editing
 
-## Purpose
-Enable editing of TOML config files (such as dataset configs) using the main text editor, with clear separation from caption/media editing.
+Configuration TOML is edited from the Train workspace, separate from media browsing and caption work.
 
-## UI/UX
-- The Review Report UI includes a dedicated config panel that lists all `.toml` files in the current folder.
-- When a user selects a config file from this panel:
-  - The file’s contents are loaded into the main text editor (the same editor used for captions).
-  - Any current media/caption selection is cleared.
-  - The editor is fully editable for config files.
-- Edits to config files are autosaved (debounced, atomic, same timing as captions).
+1. Select a file in **Configuration Files**.
+2. Its contents open in the central text editor and the current media selection is cleared.
+3. Save explicitly or use **Close**, which saves and returns to Training Items.
+4. Use the file's **Reset** control only to intentionally replace that one config with its resolved app template.
 
-## Implementation
-
-## Safety & Maintainability
-- Config and caption/media logic are completely separated in both frontend and backend.
-- All config file operations are atomic and auditable.
-- The UI and code structure make it clear which file type is being edited.
+Config files use dedicated read/save routes, so configuration edits do not use caption persistence. Generate only fills in missing profile files; it preserves existing TOML, including manual edits.

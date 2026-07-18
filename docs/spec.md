@@ -1,109 +1,52 @@
 # WebCap Specification (Current Behavior)
 
-Last updated: 2026-05-30
+Last updated: 2026-07-18
 
-## 1. Scope
-WebCap is a local-first media curation and captioning app for dataset preparation workflows. It focuses on explicit, reversible file mutations and fast iteration on set quality.
+## Scope and architecture
 
-## 2. Architecture
-1. Backend: Flask routes for filesystem/media operations and dataset workflow actions.
-2. Frontend: plain global JavaScript state and functions (intentionally non-module).
-3. Storage:
-- App config: `tool/config.json`
-- Per-folder state: `.webcap_state.json`
-- Metadata cache: `media_metadata.json`
-- Backup folder: `originals/`
-- Prepare outputs: `auto_dataset/`
+WebCap is a local-first media curation, captioning, dataset-preparation, and managed Diffusion Pipe training app. It uses Flask on the backend, classic global JavaScript in the browser, and file-based state beside the user's sets.
 
-## 3. Folder Classes
-1. Set folder (normal working folder):
-- Captioning, review, prepare, generate, train preview are available.
-- `originals/` backup behavior applies.
-2. System/source folders:
-- `originals`: backup container, protected semantics.
-- `auto_dataset`: generated artifacts.
-- `src_videos`: source-inspection workspace (metadata and clip flow allowed, set scaffolding excluded).
+Key on-disk artifacts are:
 
-## 4. Core Workflows
-1. Navigation and selection:
-- Folder browsing and media selection are driven by `/fs/describe`.
- - Filter summary row shows match count plus folder-level rating progress as `Rated A/B`.
-2. Caption editing:
-- Load/save caption sidecars per media.
-- Autosave/manual save flows are supported.
-- The helper panel includes Requirements, Tags, QA, and Metadata views.
-- QA is intended for actionable curation signals, not raw analysis metadata display.
-- The Tags view supports a session-only tag clipboard:
-  - `Copy Tags` copies the current item's tags into an in-memory clipboard.
-  - `Paste Tags` merges copied tags into the current item additively only.
-  - Paste requires explicit user confirmation and reports merged vs already-present counts.
-  - The same actions are exposed from the Tags panel header and the media-item context menu.
-3. Review:
-- `Review Set` runs on the current visible/filtered set.
-- Report links can focus file subsets in the UI.
-4. Reversible media mutation:
-- Prune/reset/restore/crop/transform/deface/clip workflows are exposed through context menus and routes.
-- Set-folder mutations rely on `originals/` backups for reversibility.
-- UI mutation indicator:
-- Media rows and preview actions show `Mutated` state when files differ from their baseline original.
-- Video mutation state is best-effort (action-sourced + persisted).
-- Image mutation state is reconciled by deterministic SHA256 compare (`/fs/mutation_status`) against `originals/<fileName>`.
- - Preview quick actions:
- - Images show always-visible `Crop` and `Deface`.
- - Videos show always-visible `Clip` and `Deface`.
- - A preview `More` menu preserves full media-list context-menu action parity.
-5. Dataset prep/generate:
-- Prepare can run on visible subset with selection snapshot metadata.
-- Generate can auto-run Prepare once if prep manifest is missing.
-6. Train:
-- Train route returns command preview text; execution is currently disabled in-app.
+- `*.txt`: caption sidecars
+- `.webcap_state.json`: per-set state
+- `media_metadata.json`: metadata cache
+- `originals/`: reversible-mutation backing store
+- `auto_dataset/`: prepared media, manifest, and generated training plan
 
-## 5. State Model (`.webcap_state.json`)
-Primary persisted fields include:
-1. `reviewedKeys`
-2. `flags`
-3. `stats`
-4. `primer`
-5. `caption_requirements`
-6. `caption_requirements_checked`
-7. `caption_requirement_keywords`
-8. `caption_set_notes`
-9. `caption_tags_by_media`
-10. `ratings_by_media`
-11. `mutated_media_keys`
+## Set workflow
 
-## 6. Config Template Behavior
-1. Config templates are not created on folder load.
-2. Missing config files are created during generate/train paths when needed.
-3. Placeholder substitution uses the configured filesystem/training roots.
+1. Browse, filter, annotate, review, and curate media in a normal set folder.
+2. Prepare the currently visible subset into `auto_dataset/`; the manifest records the selected subset.
+3. In Training, choose a supported profile, generate the profile's dataset/config artifacts, then preview, run, or queue its valid run option.
+4. Monitor jobs in the shared managed queue or use a copied manual WSL command for an external handoff.
 
-## 7. Safety and Guardrails
-1. Explicit user actions for destructive operations.
-2. Backups in `originals/` for set-folder mutation flows.
-3. Protected handling for system folders (`originals`, `auto_dataset`, `src_videos`).
-4. Streaming endpoints surface command output and errors directly.
+`originals`, `auto_dataset`, and `src_videos` have protected/system semantics. Set-folder mutations preserve originals where the workflow requires reversibility.
 
-## 8. Current Non-Goals
-1. In-app long-running training orchestration.
-2. TensorBoard lifecycle management.
-3. Broad multi-hour process orchestration.
+## Training profiles
 
-## 9. Primer Mappings V2
-Structured primer mappings and review rules are specified in:
-- `docs/primer_mappings_v2.md`
+Supported profiles are Wan2.2 T2V, Krea2 Raw, and Wan2.1 T2V 14B. The profile registry owns each profile's supported media, TOML files, run options, and standard DeepSpeed launch behavior.
 
-This defines:
-1. `primer.mappings` structured rows (`scope`, `token`, `key`, `value`, `enabled`)
-2. `stats.reviewRules` structured rows (`scope`, `trigger`, `required`, `enabled`)
-3. Deterministic evaluation semantics and UI contract.
-4. System defaults for requirements/aliases/scope are centralized in `tool/js/constants.js` under `MAPPINGS_SYSTEM_DEFAULTS`.
+- Wan2.2 supports image/video preparation and separate HI and LO configs/datasets. HI -> LO queues two independent jobs.
+- Krea2 Raw is image-only and uses `config.krea2.toml` with `dataset.train.toml`.
+- Wan2.1 supports normal image/video preparation and uses `config.wan21.toml` with `dataset.train.toml`.
+- All newly written configs in one set share a three-character base-36 output directory under `output/runs/`.
 
-## 10. QA Panel Direction
-The helper-panel `Analysis` tab is being replaced in practice by a `QA` view.
+See [training_profiles.md](training_profiles.md) and [train.md](train.md).
 
-The first approved QA signals are:
-1. Tag-similarity / redundancy warnings for the current item within the current set.
-2. Likely missing tags inferred from highly similar neighboring items in the current set.
+## Configuration behavior
 
-Detailed behavior is specified in:
-- `docs/qa_panel.md`
+Training templates are not created on ordinary folder load. Generate, manual preview, and managed launch create missing files for the selected profile. Existing TOML is preserved; Reset is the explicit per-file template replacement action. Config TOML is edited in the central editor with dedicated config read/save routes.
+
+## Managed training
+
+Managed training starts the selected profile/run immediately when idle or places it in the queue. It provides output logs, per-job progress, completion and checkpoint ETA where trainer timing supports them, queue ordering, pause, finish, queued-item cancellation, history, resume, GPU status, diagnostics, and TensorBoard controls.
+
+Manual command generation resolves and copies commands but never launches a process.
+
+## Guardrails
+
+- Destructive media actions are explicit and use backups when reversible behavior is expected.
+- Prepare operates on the visible subset and records that scope.
+- Krea2 generation and launch reject prepared video data.
+- Required failures are surfaced in the UI/console rather than silently ignored.

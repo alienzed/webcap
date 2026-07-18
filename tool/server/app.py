@@ -15,7 +15,7 @@ from .media import media_blur_background_response, media_crop_response, media_fl
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
 from .training_profiles import profiles as training_profiles
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, resume_job_response as training_runner_resume_job_response, clear_history_response as training_runner_clear_history_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, resume_job_response as training_runner_resume_job_response, clear_history_response as training_runner_clear_history_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, output_root_for_folder
 from .training_tensorboard import start_response as tensorboard_start_response, status_response as tensorboard_status_response, stop_response as tensorboard_stop_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
@@ -428,8 +428,19 @@ def training_runner_gpu_route():
 
 @app.route("/fs/training_runner/log", methods=["GET"])
 def training_runner_log_route():
-    payload, status = training_runner_log_response(request.args.get("jobId", ""), request.args.get("offset", "0"))
+    payload, status = training_runner_log_response(
+        request.args.get("jobId", ""), request.args.get("offset", "0"), request.args.get("tail") == "1"
+    )
     return jsonify(payload), status
+
+
+@app.route("/fs/training_runner/open_log", methods=["POST"])
+def training_runner_open_log_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        return open_path_in_explorer_response(training_runner_log_path_for_job(data.get("jobId", "")))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.route("/fs/training_runner/stop", methods=["POST"])

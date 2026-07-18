@@ -2241,6 +2241,12 @@ iframe {
   font-size: 12px;
 }
 
+.workspace-surface-training .training-runner-console-heading-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .workspace-surface-training .training-runner-console-close-btn {
   min-height: 24px;
   padding: 2px 6px;

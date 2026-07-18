@@ -48,19 +48,20 @@ Notes:
 
 ---
 
-## 6. Generate Configs
-1. Run `Generate` to write/update dataset config output.
-2. If prep manifest is missing, Generate auto-runs Prepare once.
-3. Missing config templates are created during generate/train flows, not on folder load.
+## 6. Choose profile and generate configs
+1. Open `Train` and choose a model profile.
+2. Choose a Dataset target (`POC`, `Normal`, or `Quality`).
+3. Run `Generate Configs` to write the selected profile's dataset TOML and training plan.
+4. Missing config templates are created during Generate, command preview, or launch; existing edited TOML is preserved unless explicitly reset.
 
 ---
 
-## 7. Training Handoff
-1. Use `Train` to print command preview and resolved config paths.
-2. Execute training externally.
+## 7. Run or hand off training
+1. Choose the profile's valid run option.
+2. Use `Generate & Copy Manual Command` for a non-launching WSL handoff, or select `Train this set` to start/queue managed training.
+3. Follow job-specific progress, output, checkpoint ETA, queue state, and history in Training.
 
-Notes:
-- Current Train flow is command preview only; execution is intentionally disabled in-app.
+See [training_profiles.md](training_profiles.md) for the current model and dataset combinations.
 
 ---
 

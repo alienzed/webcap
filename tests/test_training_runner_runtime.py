@@ -759,6 +759,26 @@ def test_log_response_restarts_from_zero_when_the_log_was_truncated(tmp_path, mo
     assert payload["text"] == ""
 
 
+def test_log_response_tail_returns_only_the_latest_chunk(tmp_path, monkeypatch):
+    log_path = tmp_path / "run.log"
+    log_path.write_bytes(b"a" * 70000)
+    job = {"id": "active", "status": "running", "logPath": str(log_path)}
+    state = {"activeJobId": "active", "jobs": [job]}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
+
+    payload, status = training_runner.log_response("active", tail=True)
+
+    assert status == 200
+    assert payload["offset"] == 70000 - 65536
+    assert payload["nextOffset"] == 70000
+    assert len(payload["text"]) == 65536
+    assert payload["truncated"] is True
+
+
 def test_cancelling_a_paused_job_removes_it_from_the_queue(monkeypatch):
     active = {"id": "active", "folder": "set", "status": "paused", "progress": {"epoch": 85, "epochs": 90}}
     state = {

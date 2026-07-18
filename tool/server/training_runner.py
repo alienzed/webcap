@@ -1611,7 +1611,7 @@ def gpu_status_response():
     return {"ok": True, "gpu": _gpu_snapshot()}, 200
 
 
-def log_response(job_id, offset=0):
+def log_response(job_id, offset=0, tail=False):
     with _lock:
         state = _read_state()
         _apply_restart_hold(state)
@@ -1630,11 +1630,35 @@ def log_response(job_id, offset=0):
             return {"ok": True, "job": _public_job(job), "offset": 0, "nextOffset": 0, "text": ""}, 200
         with open(path, "rb") as handle:
             handle.seek(0, os.SEEK_END)
-            position = min(position, handle.tell())
+            size = handle.tell()
+            if tail:
+                position = max(0, size - 65536)
+            else:
+                position = min(position, size)
             handle.seek(position)
             raw = handle.read(65536)
             next_offset = handle.tell()
-        return {"ok": True, "job": _public_job(job), "offset": position, "nextOffset": next_offset, "text": raw.decode("utf-8", errors="replace")}, 200
+        return {
+            "ok": True,
+            "job": _public_job(job),
+            "offset": position,
+            "nextOffset": next_offset,
+            "text": raw.decode("utf-8", errors="replace"),
+            "truncated": bool(tail and position > 0),
+        }, 200
+
+
+def log_path_for_job(job_id):
+    """Return the managed log path for a known job; never accept a caller path."""
+    with _lock:
+        state = _read_state()
+        job = _find_job(state, job_id)
+        if not job:
+            raise ValueError("Training job not found")
+        path = _job_dir(job) / "run.log"
+        if not path.is_file():
+            raise FileNotFoundError("Training log is not available yet")
+        return path
 
 
 def stop_response(job_id, cancel=False, pause=False, finish=False):

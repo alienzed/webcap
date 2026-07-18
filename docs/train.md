@@ -1,50 +1,43 @@
-## Training
+# Training
 
-WebCap supports managed training alongside a retained manual WSL handoff. Open `Train` from a set to prepare its data, inspect generated configuration files, and manage the shared queue.
+WebCap supports managed Diffusion Pipe training and an explicit manual WSL handoff. Open `Train` from a set, choose a training profile, prepare the selected media, generate its files, then preview, run, or queue the profile's valid run option.
 
-## Readiness
+See [training_profiles.md](training_profiles.md) for the supported models, files, media requirements, and output-root behavior.
 
-`Ready to train` means the set has both stage configs, both generated dataset configs, and a valid prepared-data manifest with non-empty prepared captions.
+## Workflow
 
-It also checks for incomplete annotation work: an item with assigned tags but no source caption is partial. When at least three such items make up at least 15% of the set's touched items (tagged or captioned), the folder instead shows `Caption review needed (N of M)`. Untouched, uncaptioned items are ignored so intentional exclusions do not block a set.
+1. Select a model profile. The choice is remembered per set as a convenience and controls the available run options.
+2. Use `Prepare Dataset` to rebuild `auto_dataset/` from the currently visible subset.
+3. Choose a Dataset target (`POC`, `Normal`, or `Quality`) and use `Generate Configs`. It creates missing config TOML files for the selected profile and writes the selected profile's dataset TOML and training plan.
+4. Open any generated TOML from Configuration Files to inspect or edit it. The editor's **Close** control saves and returns to Training Items. Use **Reset** only when you intentionally want to replace one config from its template.
+5. Choose the available run option, optionally select a prior run or enter a custom checkpoint path, then select `Train this set`.
 
-## Managed workflow
+For Wan2.2, `HI -> LO` creates two independent queued jobs. HI and LO are distinct models and each job reports its own progress. Krea2 Raw and Wan2.1 each create one job.
 
-1. Use `Prepare Dataset` to rebuild `auto_dataset` from the current visible subset.
-2. Use `Generate Configs` to write `dataset.hi.toml` and `dataset.lo.toml`, then inspect or edit `config.hi.toml` and `config.lo.toml` if needed.
-3. Choose HI → LO, HI-only, or LO-only. Optionally select a prior run or enter a custom checkpoint path and choose the stage to resume.
-4. Select `Train this set`. It starts when the runner is idle or queues behind active work. HI → LO is represented as two independent jobs.
-5. Use the Training workspace to follow progress, GPU status, logs, recent runs, queue order, and attention prompts.
+## Queue and run controls
 
-- `Pause` holds the current stage and queue for an explicit resume. `Finish` intentionally ends the stage while preserving its output and continuing the queue.
-- Queued jobs can be moved, removed, or resumed after a hold. After an app restart, WebCap holds queued work rather than launching it automatically.
-- `Run Diagnostics` performs the fuller WSL, runtime, launcher, and CUDA check. Normal managed launches use lighter prerequisites.
-- New generated configs use `<filesystem.root>/output/sets/<three-character-base36-sequence>-<set-name>/`. The active stage config's `output_dir` remains authoritative for run discovery and resume.
-- TensorBoard can be started, stopped, and opened from the training workspace when it is available in the configured runtime.
+- `Train this set` starts when the runner is idle or adds the job behind active work.
+- `Pause` holds the active job and queue until explicitly resumed.
+- `Finish` intentionally ends the active job and allows queue processing to continue.
+- Canceling a queued item removes that item only; it does not stop the active job.
+- The queue exposes ordering, output logs, recent history, GPU status, and checkpoint-resume controls. The in-app output view opens at the recent log tail; use **Reveal log file** to inspect the complete `run.log` in Explorer.
+- Progress is per job. When trainer timing is available, the UI shows completion ETA and the estimated time to the next configured checkpoint.
+- `Run Diagnostics` performs the fuller WSL, runtime, launcher, and CUDA checks. Normal launches use the lighter required checks.
+- TensorBoard can be started, stopped, and opened from the Training workspace when it is available in the configured runtime.
 
 ## Manual command handoff
 
-`Print & Copy Manual Command` posts to `/fs/train_run`, prints the resolved command, shows it inline, and copies it to the clipboard. It never launches training itself.
+`Generate & Copy Manual Command` resolves and copies the selected profile/run command but never starts a process. Wan2.2 HI -> LO previews two standard DeepSpeed commands; each single-stage profile/run previews one.
 
-For manual HI → LO, the handoff remains one chained command. HI-only and LO-only produce one command each.
+## Training settings
 
-```
-NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed --config <HI_CONFIG> ; NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed --config <LO_CONFIG>
-```
+Relevant `tool/config.json` fields include:
 
-## Config settings
+- `training.diffusion_pipe_wsl`: Diffusion Pipe working directory in WSL.
+- `training.wsl_distribution`: optional explicit WSL distribution.
+- `training.conda_executable` and `training.conda_environment`: optional managed Conda runtime pair. WebCap uses `conda run` for its child process and does not alter the user's interactive shell.
+- `training.activate_script`: optional WSL environment activation script when Conda is not configured.
+- `training.tensorboard_port`: local port for TensorBoard controls.
+- `training.write_selection_snapshot_comments`: adds the prep snapshot header to generated dataset TOML.
 
-Add these fields in `tool/config.json` (example in `tool/config.example.json`):
-
-- `training.diffusion_pipe_wsl`: expected working directory in WSL.
-- `training.wsl_distribution`: optional explicit WSL distribution; leave blank to use the Windows default.
-- `training.conda_executable` and `training.conda_environment`: optional pair for managed Conda runtime commands. WebCap uses `conda run` in its child processes and does not alter the user's WSL shell or environment.
-- `training.activate_script`: optional WSL virtual-environment activation script used only when no Conda runtime is configured, for example `/home/user/diffusion-pipe/.venv/bin/activate`.
-- `training.tensorboard_port`: local port used by the TensorBoard controls.
-- Training config filenames are fixed to `config.hi.toml` and `config.lo.toml` in each set folder.
-
-## Notes
-
-- Manual handoff is explicit: copy the displayed command and run it in WSL yourself.
-- Managed training is the preferred way to sequence HI and LO through the queue.
-- Missing config/dataset files are auto-generated where possible before preview output.
+The generated TOML remains the configuration interface. WebCap does not provide arbitrary custom launch commands or global template editing.

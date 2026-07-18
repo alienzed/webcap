@@ -10,8 +10,8 @@ It is built around explicit, reversible mutations, visible subset prep, and fast
 - Review a visible subset for caption coverage, required phrases, balance, validation rules, duplicates, near-duplicates, and caption outliers.
 - Build focused work queues from review output, filters, or recursive SuperSet searches, then materialize filtered results into new sets.
 - Make reversible media edits including crop, clip, rotation, flip, blur/remove background, deface, duplicate, prune, and reset from preserved originals.
-- Prepare visible media subsets into a dataset, generate HI/LO configuration files, and retain a selection snapshot beside the generated artifacts.
-- Run managed HI/LO training with a queue, progress, output logs, resume paths, diagnostics, history, GPU status, and optional TensorBoard; a manual WSL command remains available when preferred.
+- Prepare visible media subsets into a dataset, then generate profile-specific Diffusion Pipe TOML and a training plan.
+- Run managed Wan2.2 T2V, Krea2 Raw, and Wan2.1 T2V 14B jobs with a queue, per-run progress and checkpoint ETA, output logs, resume paths, diagnostics, history, GPU status, and optional TensorBoard; a manual WSL command remains available when preferred.
 - Keep app state and per-set artifacts on disk. WebCap uses Python and the browser only—no database or hosted service is required.
 
 ## Requirements
@@ -58,7 +58,6 @@ Minimum practical shape:
     "conda_executable": "/home/user/miniconda3/bin/conda",
     "conda_environment": "training-env",
     "activate_script": "",
-    "mode": "normal",
     "write_selection_snapshot_comments": false
   },
   "analysis": {
@@ -84,9 +83,9 @@ Minimum practical shape:
 
 Notes:
 - `filesystem.root` is required.
-- Training mode supports `poc`, `normal`, and `quality`.
-- `training.write_selection_snapshot_comments` controls whether Generate writes the prep snapshot header into `dataset.hi.toml` and `dataset.lo.toml`.
-- Training config filenames are fixed: `config.hi.toml` and `config.lo.toml`.
+- Dataset target supports `POC`, `Normal`, and `Quality` in the Training workspace.
+- `training.write_selection_snapshot_comments` controls whether Generate writes the prep snapshot header into generated dataset TOML.
+- Supported profiles generate fixed TOML names: Wan2.2 uses `config.hi.toml`, `config.lo.toml`, `dataset.hi.toml`, and `dataset.lo.toml`; Krea2 Raw uses `config.krea2.toml` and `dataset.train.toml`; Wan2.1 T2V 14B uses `config.wan21.toml` and `dataset.train.toml`.
 - `analysis.enableFaceAnalysis` enables Face Focus metadata available in `Review Set` analysis details.
 - `analysis.enableMediaPipeAnalysis` enables selection-pose metadata and tag suggestions.
 - `set_destinations.presets` powers destination shortcuts in `Create Set`.
@@ -132,7 +131,7 @@ Open:
 6. Use `QA` and `Review Set` to tighten consistency and coverage.
 7. Run `Prepare Dataset` on the current visible subset.
 8. Run `Generate`.
-9. Open `Train`, confirm readiness, choose stages or a resume checkpoint, and queue the set; use the manual command only when you want an external handoff.
+9. Open `Train`, choose a model profile and its run option, then run or queue the set; use the manual command only when you want an external handoff.
 
 Practical loop:
 - Use `Captionless`, `Incomplete`, ratings, and flags to focus work.
@@ -352,27 +351,31 @@ Video clip flow:
 ### 13. Train tab and dataset generation
 
 Train tab includes:
-- config file list for `config.hi.toml` and `config.lo.toml`
+- model/profile selection: Wan2.2 T2V, Krea2 Raw, or Wan2.1 T2V 14B
+- profile-grouped configuration files
 - `Prepare Dataset`
-- `Generate`
-- managed `Train this set` for HI → LO, HI-only, or LO-only runs
+- `Generate Configs` with POC, Normal, or Quality dataset targets
+- managed runs for the selected profile's available run option
 - optional checkpoint resume, a manual command preview, and full diagnostics
 - training queue, GPU status, output console, recent-run history, and TensorBoard controls
 
 Behavior:
-- opening a config file loads it into the center editor
+- opening a config file loads it into the center editor; Close saves and returns to Training Items
 - `Prepare Dataset` rebuilds `auto_dataset` from the current visible subset
 - Prepare blocks on zero visible rows
 - Prepare performs missing-caption preflight and reports missing, primer-fallback, and still-empty counts
-- `Generate` reads `prep_manifest.json` and writes dataset outputs
+- `Generate Configs` reads `prep_manifest.json`, writes the selected profile's dataset TOML, and records its training plan
 - if the prep manifest is missing, Generate auto-runs Prepare once and retries
+- Generate creates only missing configuration TOML; **Reset** is the explicit replacement action for one config
+- Krea2 Raw requires image-only prepared media; Wan2.1 and Wan2.2 accept prepared images and videos
 - the folder badge shows `Ready to train` only when prepared artifacts exist, prepared captions are present, and the set has no material tagged-but-uncaptioned backlog; otherwise it can show `Caption review needed`
-- `Train this set` starts immediately when idle or adds the set behind current work; HI → LO is queued as independent stages
-- active jobs expose progress, logs, pause/finish controls, explicit queue resume, and resume-from-checkpoint controls
-- `Print & Copy Manual Command` remains a non-launching WSL handoff, while `Run Diagnostics` runs the fuller environment check
+- `Train this set` starts immediately when idle or adds the selected run behind current work; Wan2.2 HI -> LO queues independent HI and LO jobs
+- active jobs expose per-run progress, completion ETA, next-checkpoint ETA, logs, pause/finish controls, explicit queue resume, and resume-from-checkpoint controls
+- the output view starts at the recent log tail; `Reveal log file` selects the complete managed log in Explorer
+- `Generate & Copy Manual Command` remains a non-launching WSL handoff, while `Run Diagnostics` runs the fuller environment check
 - TensorBoard can be started, stopped, and opened from the training workspace when available
 
-See [docs/train.md](docs/train.md) for the operational training reference.
+See [docs/train.md](docs/train.md) and [docs/training_profiles.md](docs/training_profiles.md) for the operational reference.
 
 ### 14. App settings
 
@@ -380,7 +383,7 @@ Settings support:
 - filesystem root and models paths
 - training paths
 - selection snapshot comment toggle
-- training mode
+- TensorBoard port
 - Face Focus analysis toggle
 - MediaPipe selection analysis toggle
 - debug mode
@@ -458,17 +461,24 @@ Selection, review, and dataset flow:
 - `/fs/smart_set_materialize`
 - `/fs/prepare_dataset`
 - `/fs/generate_dataset_config`
+- `/fs/training_profiles`
+- `/fs/training_config/reset`
 - `/fs/train_run`
 - `/fs/training_runner/validate`
 - `/fs/training_runner/start`
 - `/fs/training_runner/status`
+- `/fs/training_runner/recover`
 - `/fs/training_runner/gpu`
 - `/fs/training_runner/log`
+- `/fs/training_runner/open_log`
 - `/fs/training_runner/stop`
 - `/fs/training_runner/reorder`
 - `/fs/training_runner/resume_queue`
 - `/fs/training_runner/resume_job`
 - `/fs/training_history`
+- `/fs/training_history/all`
+- `/fs/training_history/clear`
+- `/fs/training_history/job/clear`
 - `/fs/tensorboard/status`
 - `/fs/tensorboard/start`
 - `/fs/tensorboard/stop`
@@ -482,6 +492,9 @@ Current test files:
 - `tests/test_filtered_selection_snapshot.py`
 - `tests/test_prune_restore.py`
 - `tests/test_training_runner_runtime.py`
+- `tests/test_training_profiles.py`
+- `tests/test_training_history.py`
+- `tests/test_training_tensorboard.py`
 
 Example runs:
 

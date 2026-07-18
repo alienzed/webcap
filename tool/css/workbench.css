@@ -1021,7 +1021,6 @@
   min-height: calc(100vh - 320px);
 }
 
-.app.shell-revamp.workspace-surface-training #config-editor-back-btn,
 .app.shell-revamp.workspace-surface-training #config-editor-generate-btn,
 .app.shell-revamp.workspace-surface-training #config-editor-train-btn {
   display: none;

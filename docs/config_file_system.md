@@ -1,46 +1,22 @@
-# Configuration File System Overview (Current Behavior)
+# Configuration File System
 
-## Config File Handling in UI
+## Discovery and editor
 
-- Config files are **not** mixed into the main media list.
-- The Train panel has a dedicated config list (`training-config-list`) populated via:
-  - `GET /fs/list_config?folder=<current-folder>`
-- Config files are displayed in High Noise / Low Noise columns and can be opened in the editor.
+- Config files are not mixed into the media list.
+- The Train workspace lists TOML files grouped by training profile.
+- Open a file to edit it in the central editor. The editor has **Save** and **Close**; Close saves then returns to Training Items.
+- `/fs/list_config` lists the set's TOML files, `/fs/read_config` reads one, and `/fs/save_config` saves one in place.
 
-## Source of Truth for Config Discovery
+## Templates and generated files
 
-- Backend route: `tool/server/app.py` -> `/fs/list_config`
-- Backend helper: `tool/server/config.py` -> `list_toml_files(folder_path)`
+Canonical templates live in `tool/templates/`:
 
-This returns `.toml` filenames in the selected folder only.
+- `config.hi.toml` and `config.lo.toml` for Wan2.2 T2V
+- `config.krea2.toml` for Krea2 Raw
+- `config.wan21.toml` for Wan2.1 T2V 14B
 
-## Automatic Config File Creation
+Templates are not written on folder load. `Generate Configs`, command preview, and managed launch create missing files for the selected profile. Placeholder substitution resolves the training root, models root, set path, and one shared prefixed output root for the set.
 
-- Config templates are **not** created on ordinary folder load (`/fs/describe`).
-- Missing template files are created during dataset-generation/training flows:
-  - `/fs/generate_dataset_config`
-  - `/fs/train_run`
-- Canonical training config templates live in `tool/templates/config.hi.toml` and `tool/templates/config.lo.toml`.
-- A shared backend helper materializes those templates into set folders, with placeholder substitution via `fill_template_placeholders(...)`.
-- Dataset TOML examples are documentation-only and live under `docs/examples/`; generated `dataset.hi.toml` / `dataset.lo.toml` come from code, not templates.
+Generation never silently overwrites an existing TOML. The per-file **Reset** action is the explicit way to restore the resolved template.
 
-## Editing Flow
-
-- Open config file: frontend requests `/fs/read_config`.
-- Save config file: frontend posts `/fs/save_config`.
-- Saving writes the selected TOML file in place.
-
-## App-Wide Caption Template Default
-
-- Global app settings now include `config.json -> primer.template`.
-- This value is a fallback default for the caption editor template.
-- Per-folder `.webcap_state.json -> primer.template` still wins when present.
-- If a folder has never saved its own template, the frontend fills `#primer-template` from the app-wide setting.
-- Leaving the app-wide setting blank falls back to the built-in shipped template in `tool/js/common.js`.
-
-## Summary
-
-Config editing is intentionally separated from media browsing:
-- media list for media items only
-- train panel for config files
-- config file scaffolding created during generate/train workflows, not directory browsing
+Generated dataset TOML comes from `tool/server/dataset_config.py`, not static template files. See [training_profiles.md](training_profiles.md) for the file each profile uses.

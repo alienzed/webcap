@@ -530,10 +530,8 @@ function renderTrainingRunner() {
     '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
     queuePosition +
     queueState +
+    (trainingOutputIdentity(job) ? '<button type="button" class="training-runner-output-action" data-training-job-output="' + escapeHtml(job.id || '') + '" title="Open ' + (runOutputPath ? 'run output: ' + escapeHtml(runOutputPath) : 'output root: ' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '')) + '" aria-label="Open training output folder">&#128193;</button>' : '') +
     '</div>' +
-    (trainingOutputIdentity(job) ? '<div class="training-runner-detail" title="' + escapeHtml(runOutputPath || job.effectiveOutputDir || job.outputRoot || '') + '">' +
-      (runOutputPath ? 'Run output: ' + escapeHtml(runOutputPath) : 'Output root: ' + escapeHtml(trainingOutputIdentity(job))) +
-      ' <button type="button" class="training-history-action" data-training-job-output="' + escapeHtml(job.id || '') + '" title="Open ' + (runOutputPath ? 'run output' : 'effective output') + ' folder" aria-label="Open training output folder">&#128193;</button></div>' : '') +
     (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
     buildTrainingFailureDetailsHtml(job) +
     (job.confirmationNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.confirmationNote) + '</div>' : '') +

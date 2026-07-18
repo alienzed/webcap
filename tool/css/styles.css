@@ -2154,6 +2154,26 @@ iframe {
   font-size: 13px;
 }
 
+.workspace-surface-training .training-runner-output-action {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.workspace-surface-training .training-runner-output-action:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--panel) 88%, var(--accent));
+}
+
 .workspace-surface-training .training-runner-queued-count,
 .workspace-surface-training .training-runner-queue-state {
   color: var(--muted);

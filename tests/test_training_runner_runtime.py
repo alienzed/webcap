@@ -338,7 +338,7 @@ def test_new_runner_binds_the_first_new_matching_run_directory(monkeypatch):
 def test_paused_job_uses_its_bound_run_path_before_legacy_discovery(monkeypatch):
     job = {"folder": "set", "stages": "lo", "status": "paused", "outputRunPath": "/mnt/w/output/run"}
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
-    monkeypatch.setattr(training_runner, "resumable_run_for_path", lambda folder, stage, path: {"path": path})
+    monkeypatch.setattr(training_runner, "validate_resumable_run_for_path", lambda folder, stage, path: {"path": path})
     monkeypatch.setattr(training_runner, "ranked_resumable_runs", lambda *args: (_ for _ in ()).throw(AssertionError("bound path should win")))
 
     assert training_runner._prepare_paused_job_for_resume(job) == ""
@@ -412,6 +412,91 @@ def test_launch_failure_records_start_before_terminal_time(tmp_path, monkeypatch
     assert launched is False
     assert job["status"] == "failed"
     assert job["startedAt"] <= job["finishedAt"]
+
+
+def test_job_local_preflight_failure_does_not_block_the_next_queue_item(monkeypatch):
+    first = {"id": "first", "folder": "missing", "stages": "lo", "status": "queued"}
+    second = {"id": "second", "folder": "ready", "stages": "lo", "status": "queued"}
+    state = {"activeJobId": "", "queuePaused": False, "queuePauseReason": "", "jobs": [first, second]}
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: Path(folder))
+
+    def launch(job, folder):
+        if job["id"] == "first":
+            job.update(status="failed", failureScope="job", error="Missing config.")
+            return False
+        job.update(status="starting", stage="starting")
+        return True
+
+    monkeypatch.setattr(training_runner, "_launch_job", launch)
+
+    training_runner._start_next(state)
+
+    assert first["status"] == "failed"
+    assert state["activeJobId"] == "second"
+    assert state["queuePaused"] is False
+
+
+def test_runtime_failure_does_not_block_the_next_queue_item(monkeypatch):
+    failed = {"id": "failed", "folder": "one", "stages": "lo", "status": "running"}
+    following = {"id": "following", "folder": "two", "stages": "lo", "status": "queued"}
+    state = {"activeJobId": "failed", "queuePaused": False, "queuePauseReason": "", "jobs": [failed, following]}
+    monkeypatch.setattr(training_runner, "_refresh_job", lambda job: job.update(status="failed", error="Trainer failed.", finishedAt=2))
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: Path(folder))
+    monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: job.update(status="starting", stage="starting"))
+
+    training_runner._refresh_state(state)
+
+    assert failed["status"] == "failed"
+    assert state["activeJobId"] == "following"
+    assert state["queuePaused"] is False
+
+
+def test_invalid_training_toml_is_a_job_local_preflight_blocker(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    (folder / "auto_dataset").mkdir(parents=True)
+    (folder / "config.lo.toml").write_text("not valid toml = [\n", encoding="utf-8")
+    (folder / "dataset.lo.toml").write_text("[[directory]]\npath = '/data'\n", encoding="utf-8")
+    for name in ("config.hi.toml", "dataset.hi.toml"):
+        (folder / name).write_text("value = 1\n", encoding="utf-8")
+    (folder / "auto_dataset" / "prep_manifest.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "_resolve_folder", lambda value: ("set", folder))
+    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"cwd": "/pipe"})
+    monkeypatch.setattr(training_runner, "_wsl_executable", lambda: "wsl.exe")
+
+    _, _, _, _, checks = training_runner._build_launch_preflight("set", "lo")
+    failed = [item for item in checks if not item["ok"]]
+
+    assert [item["id"] for item in failed] == ["training_toml"]
+    assert "config.lo.toml" in failed[0]["details"]
+
+
+def test_queue_refresh_reads_resume_progress_from_disk(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    run = root / "output" / "run"
+    folder.mkdir(parents=True)
+    (folder / "config.lo.toml").write_text("epochs = 90\n", encoding="utf-8")
+    (run / "global_step640").mkdir(parents=True)
+    (run / "epoch8").mkdir()
+    (run / "latest").write_text("global_step640", encoding="utf-8")
+    job = {
+        "id": "resume",
+        "folder": "set",
+        "stages": "lo",
+        "resumeStage": "lo",
+        "resumeFromCheckpoint": str(run),
+        "status": "queued",
+        "progressPlan": {"lo": {"estimatedSteps": 1000, "epochs": 90}},
+    }
+    state = {"activeJobId": "", "queuePaused": True, "queuePauseReason": "Paused", "jobs": [job]}
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda value: root / value)
+
+    training_runner._refresh_state(state)
+
+    assert job["resumePoint"]["checkpointTag"] == "global_step640"
+    assert job["resumePoint"]["epoch"] == 8
+    assert job["resumePoint"]["step"] == 640
 
 
 def test_start_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):
@@ -964,7 +1049,7 @@ def test_starting_both_creates_adjacent_hi_and_lo_jobs(tmp_path, monkeypatch):
     }
     state = training_runner._default_state()
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
-    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value: ("set", folder, artifacts, {}, []))
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value, stages="both": ("set", folder, artifacts, {}, []))
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
@@ -1000,7 +1085,7 @@ def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypat
     monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
     monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda value: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda value: None)
-    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value: ("set", "folder", {}, {}, []))
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value, stages="both": ("set", "folder", {}, {}, []))
     monkeypatch.setattr(training_runner, "_new_job", lambda *args: job)
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
     monkeypatch.setattr(training_runner, "_resolve_folder", lambda folder: ("set", "folder"))

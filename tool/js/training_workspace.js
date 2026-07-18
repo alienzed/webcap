@@ -227,7 +227,9 @@ function trainingOutputIdentity(job) {
 
 function buildQueuedResumePointHtml(job) {
   var point = job && job.resumePoint && typeof job.resumePoint === 'object' ? job.resumePoint : {};
-  if (!job || !job.resumeFromCheckpoint || !Object.keys(point).length) return '';
+  if (!job || !job.resumeFromCheckpoint) return '';
+  if (job.resumePointError) return '<div class="training-runner-queue-resume is-error">Could not inspect resume progress: ' + escapeHtml(job.resumePointError) + '</div>';
+  if (!Object.keys(point).length) return '';
   var step = Number(point.step);
   var epoch = Number(point.epoch);
   var expectedEpochs = Number(point.expectedEpochs);
@@ -238,8 +240,23 @@ function buildQueuedResumePointHtml(job) {
   if (point.checkpointTag) parts.push(point.checkpointTag);
   if (epoch > 0) parts.push('epoch ' + Math.round(epoch).toLocaleString() + (expectedEpochs > 0 ? ' / ' + Math.round(expectedEpochs).toLocaleString() : ''));
   if (step > 0) parts.push('step ' + Math.round(step).toLocaleString());
-  return '<div class="training-runner-queue-resume-point"><span>' + escapeHtml(parts.join(' · ') || 'Checkpoint found') + '</span>' +
+  var fallbackLabel = point.checkpointAvailable ? 'Checkpoint found' : 'No valid latest checkpoint marker found';
+  return '<div class="training-runner-queue-resume-point"><span>' + escapeHtml(parts.join(' · ') || fallbackLabel) + '</span>' +
     (percent ? '<div class="training-runner-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(percent) + '"><span style="width:' + percent.toFixed(1) + '%"></span></div>' : '') + '</div>';
+}
+
+function buildTrainingFailureDetailsHtml(job) {
+  if (!job || job.status !== 'failed') return '';
+  var preflight = job.preflight && typeof job.preflight === 'object' ? job.preflight : {};
+  var checks = Array.isArray(preflight.checks) ? preflight.checks.filter(function (check) { return !check.ok; }) : [];
+  var rows = checks.map(function (check) {
+    return '<div><strong>' + escapeHtml(check.message || check.id || 'Failed check') + '</strong>' +
+      (check.details ? '<div>' + escapeHtml(check.details) + '</div>' : '') + '</div>';
+  }).join('');
+  var excerpt = String(job.failureExcerpt || '').trim();
+  if (!rows && !excerpt) return '';
+  return '<details class="training-failure-details"><summary>Failure details</summary>' + rows +
+    (excerpt ? '<pre>' + escapeHtml(excerpt) + '</pre>' : '') + '</details>';
 }
 
 function buildTrainingQueueHtml(queuedJobs) {
@@ -509,6 +526,7 @@ function renderTrainingRunner() {
     '</div>' +
     (trainingOutputIdentity(job) ? '<div class="training-runner-detail" title="' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '') + '">Output: ' + escapeHtml(trainingOutputIdentity(job)) + ' <button type="button" class="training-history-action" data-training-job-output="' + escapeHtml(job.id || '') + '" title="Open effective output folder">&#128193;</button></div>' : '') +
     (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
+    buildTrainingFailureDetailsHtml(job) +
     (job.confirmationNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.confirmationNote) + '</div>' : '') +
     (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
     buildTrainingRunnerProgressHtml(job);
@@ -581,7 +599,7 @@ function renderTrainingHistory() {
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
     var resumePath = String(job.outputRunPath || job.resumeCheckpoint || '');
     var resumeStage = String(job.resumeStage || job.stages || '');
-    var canResume = (job.status === 'finished_early' || job.status === 'interrupted') && resumePath && ['hi', 'lo', 'krea2', 'wan21'].indexOf(resumeStage) !== -1;
+    var canResume = job.status !== 'cancelled' && !!resumePath && ['hi', 'lo', 'krea2', 'wan21'].indexOf(resumeStage) !== -1;
     var status = String(job.status || 'unknown');
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</span></div>' +
@@ -597,6 +615,7 @@ function renderTrainingHistory() {
         (trainingOutputIdentity(job) ? '<div title="' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '') + '">Output: ' + escapeHtml(trainingOutputIdentity(job)) + '</div>' : '') +
         (timingError ? '<div class="training-runner-detail is-error">' + escapeHtml(timingError) + '</div>' : '') +
         (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
+        buildTrainingFailureDetailsHtml(job) +
         (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
       '</div>' +
       '<div class="training-history-actions">' +

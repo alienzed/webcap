@@ -21,7 +21,8 @@ For Wan2.2, `HI -> LO` creates two independent queued jobs. HI and LO are distin
 - `Finish` intentionally ends the active job and allows queue processing to continue.
 - Canceling a queued item removes that item only; it does not stop the active job.
 - The queue exposes ordering, effective launch/stage output paths, output-folder actions, output logs, recent history, GPU status, and checkpoint-resume controls. Queued resume jobs show the checkpoint tag and artifact-derived epoch/step progress. The in-app output view opens at the recent log tail; use **Reveal log file** to inspect the complete `run.log` in Explorer.
-- A failed or interrupted job pauses the queue and displays the actual hold reason. Continuing the queue is explicit. Lifecycle timing failures are shown as invariant errors rather than formatted as plausible durations.
+- A job-local launch failure, such as a missing set/config/dataset, is recorded and the queue continues. Environment-wide preflight failures, trainer failures, and interrupted jobs pause the queue because WebCap cannot safely infer that later jobs will work. Failed history retains structured preflight checks and at most an 8 KB trainer-log excerpt; the complete `run.log` remains the authoritative log. Lifecycle timing failures are shown as invariant errors rather than formatted as plausible durations.
+- Queued resume progress is live filesystem state, not a queue-time snapshot: each status refresh rereads `latest`, `global_step*`, and `epoch*` artifacts from the recorded resume directory.
 - Progress is per job. When trainer timing is available, the UI shows completion ETA and the estimated time to the next configured checkpoint.
 - `Run Diagnostics` performs the fuller WSL, runtime, launcher, and CUDA checks. Normal launches use the lighter required checks.
 - TensorBoard can be started, stopped, and opened from the Training workspace when it is available in the configured runtime.

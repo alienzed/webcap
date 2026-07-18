@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import threading
 import time
+import tomllib
 import uuid
 from pathlib import Path, PurePosixPath
 
@@ -21,7 +22,7 @@ from .training_commands import build_training_command_plan, build_training_launc
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, allocate_training_launch_group, with_output_dir
 from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_run
 from .dataset_config import repeat_targets_for_mode
-from .training_history import completed_stages, discover_runs, ranked_resumable_runs, resumable_run_for_path, resume_point_for_path, host_path_for_training_path, output_root_for_folder, record_job, clear_history_job
+from .training_history import completed_stages, discover_runs, ranked_resumable_runs, resumable_run_for_path, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, record_job, clear_history_job
 from .training_runtime import (
     build_runtime_command,
     build_training_launcher,
@@ -347,6 +348,10 @@ def _resolve_artifacts(folder, folder_path, stages="both"):
         required = ("krea2Config", "trainDataset", "manifest")
     elif stages == "wan21":
         required = ("wan21Config", "trainDataset", "manifest")
+    elif stages == "hi":
+        required = ("hiConfig", "hiDataset", "manifest")
+    elif stages == "lo":
+        required = ("loConfig", "loDataset", "manifest")
     else:
         required = (
         "hiConfig", "loConfig", "hiDataset", "loDataset", "manifest"
@@ -586,6 +591,27 @@ def _build_launch_preflight(folder, stages="both"):
         _make_check("training_cwd", "blocker", bool(settings["cwd"]),
                     "Diffusion Pipe WSL path is configured." if settings["cwd"] else "Set training.diffusion_pipe_wsl in App Settings."),
     ]
+    toml_keys = (
+        ("krea2Config", "trainDataset") if stages == "krea2" else
+        ("wan21Config", "trainDataset") if stages == "wan21" else
+        ("hiConfig", "hiDataset") if stages == "hi" else
+        ("loConfig", "loDataset") if stages == "lo" else
+        ("hiConfig", "loConfig", "hiDataset", "loDataset")
+    )
+    toml_errors = []
+    for key in toml_keys:
+        path = artifacts[key]
+        if not path.is_file():
+            continue
+        try:
+            tomllib.loads(path.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            toml_errors.append(path.name + ": " + str(exc))
+    checks.append(_make_check(
+        "training_toml", "blocker", not toml_errors,
+        "Training TOML is valid." if not toml_errors else "Training TOML could not be parsed.",
+        "; ".join(toml_errors),
+    ))
     if has_conda_runtime(settings) and not has_complete_conda_runtime(settings):
         checks.append(_make_check("conda_runtime", "blocker", False,
                                   "Conda runtime needs both the executable path and environment name."))
@@ -708,7 +734,7 @@ def _plan_run_steps(progress_plan, snapshot):
 
 def _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir):
     snapshot = {}
-    config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21" else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
+    config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21" else ((stages, HI_CONFIG_NAME if stages == "hi" else LO_CONFIG_NAME),) if stages in ("hi", "lo") else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
     for key, filename in config_files:
         source = artifacts[key + "Config"]
         target = job_dir / filename
@@ -716,7 +742,8 @@ def _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir
         normalize_path_permissions(target)
         snapshot[key] = str(target)
     dataset_files = ("dataset.train.toml", "auto_dataset/training_plan.json") if stages in ("krea2", "wan21") else (
-        "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
+        ("dataset." + stages + ".toml", "auto_dataset/training_plan.json") if stages in ("hi", "lo") else
+        ("dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json")
     )
     for filename in dataset_files:
         source = Path(folder_path) / filename
@@ -892,7 +919,14 @@ def _launch_job(job, folder_path):
     if blockers:
         job["status"] = "failed"
         job["stage"] = "launch"
-        job["error"] = "Preflight failed before launch."
+        job_local_checks = {"set_folder_exists", "training_artifacts", "training_toml"}
+        job["failureScope"] = "job" if all(item.get("id") in job_local_checks for item in blockers) else "system"
+        blocker_messages = []
+        for item in blockers:
+            text = str(item.get("message") or item.get("id") or "Preflight blocker").strip()
+            details = str(item.get("details") or "").strip()
+            blocker_messages.append(text + ((" — " + details) if details else ""))
+        job["error"] = "Preflight failed: " + "; ".join(blocker_messages)
         job["finishedAt"] = time.time()
         return False
     try:
@@ -1166,9 +1200,11 @@ def _refresh_job(job):
         result_status = str(result.get("status") or "failed")
         requested_action = str(job.get("actionRequested") or "")
         log_path = Path(job.get("logPath") or "")
+        failure_excerpt = ""
         if log_path.is_file():
             try:
                 tail = _read_log_tail(log_path)
+                failure_excerpt = tail[-8192:]
                 if "[webcap] stage=wan21" in tail:
                     job["stage"] = "wan21"
                 elif "[webcap] stage=krea2" in tail:
@@ -1195,6 +1231,10 @@ def _refresh_job(job):
         else:
             job["status"] = result_status
         job["exitCode"] = exit_code
+        if job["status"] == "failed":
+            job["failureScope"] = "unknown"
+            job["failureExcerpt"] = failure_excerpt
+            job["error"] = "Training process exited with code " + str(exit_code) + ". See failure details or open the run log."
         job["finishedAt"] = float(result.get("finishedAt") or time.time())
         job["updatedAt"] = time.time()
         _annotate_completed_job(job)
@@ -1251,15 +1291,18 @@ def _refresh_job(job):
 
 def _prepare_paused_job_for_resume(job):
     stage = str(job.get("stages") or "")
-    if stage not in ("hi", "lo"):
+    if stage not in ("hi", "lo", "krea2", "wan21"):
         return "Only an individual training stage can resume."
     folder = str(job.get("folder") or "")
     folder_path = app_config.safe_join_fs_root(folder)
     bound_path = str(job.get("outputRunPath") or "").strip()
     if bound_path:
-        run = resumable_run_for_path(folder_path, stage, bound_path)
-        if not run:
-            return "The saved run directory does not contain a valid DeepSpeed checkpoint."
+        try:
+            run = validate_resumable_run_for_path(folder_path, stage, bound_path)
+        except ValueError as exc:
+            if "does not contain a valid DeepSpeed checkpoint" not in str(exc):
+                return str(exc)
+            run = {}
     else:
         run = next(iter(ranked_resumable_runs(folder_path, stage, job)), {})
         if run:
@@ -1291,24 +1334,32 @@ def _start_next(state):
             resume_error = _prepare_paused_job_for_resume(job)
             if resume_error:
                 job["error"] = resume_error
-                state["queuePaused"] = True
-                state["queuePauseReason"] = "Queue held: " + resume_error
-                return
+                job["status"] = "failed"
+                job["stage"] = "resume"
+                job["finishedAt"] = time.time()
+                continue
         folder_path = app_config.safe_join_fs_root(job["folder"])
         _launch_job(job, folder_path)
         if job.get("status") in ACTIVE_STATUSES:
             state["activeJobId"] = job["id"]
             return
         if job.get("status") == "failed":
-            state["queuePaused"] = True
-            state["queuePauseReason"] = "Queue held: " + str(job.get("error") or (str(job.get("stages") or "training") + " failed."))
-            return
+            continue
 
 
 def _refresh_state(state):
     for job in state.get("jobs", []):
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
+        if job.get("status") == "queued" and str(job.get("resumeFromCheckpoint") or "").strip():
+            try:
+                folder_path = app_config.safe_join_fs_root(job["folder"])
+                stage = str(job.get("resumeStage") or job.get("stages") or "")
+                job["resumePoint"] = resume_point_from_directory(folder_path, stage, job["resumeFromCheckpoint"])
+                job.pop("resumePointError", None)
+            except Exception as exc:
+                job["resumePoint"] = {}
+                job["resumePointError"] = str(exc)
         elif job.get("status") == "completed":
             _annotate_completed_job(job)
     active_id = str(state.get("activeJobId") or "")
@@ -1319,15 +1370,8 @@ def _refresh_state(state):
             state["queuePaused"] = True
             state["queuePauseReason"] = state.get("queuePauseReason") or "Queue paused by the user."
             state["activeJobId"] = ""
-        elif active.get("status") == "interrupted":
-            state["queuePaused"] = True
-            state["queuePauseReason"] = "Queue held: " + str(active.get("error") or (str(active.get("stages") or "training") + " interrupted."))
-            state["activeJobId"] = ""
         if active.get("status") in TERMINAL_STATUSES:
             state["activeJobId"] = ""
-            if active.get("status") in ("failed", "interrupted"):
-                state["queuePaused"] = True
-                state["queuePauseReason"] = "Queue held: " + str(active.get("error") or (str(active.get("stage") or "training") + " " + str(active.get("status")) + "."))
     _start_next(state)
 
 
@@ -1355,7 +1399,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
+    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -1491,19 +1535,18 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         permission_error = _repair_training_set_permissions(folder_path, settings["wslDistribution"])
         if permission_error:
             return {"ok": False, "error": permission_error}, 400
-        _, folder_path, _, _, checks = (
-            _build_launch_preflight(folder, stages)
-            if stages in ("krea2", "wan21")
-            else _build_launch_preflight(folder)
-        )
+        _, folder_path, _, _, checks = _build_launch_preflight(folder, stages)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}, 400
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     preflight = {"checks": checks, "summary": {"blockers": len(blockers), "warnings": 0}}
     if blockers:
         return {"ok": False, "error": "Launch checks failed.", "preflight": preflight}, 400
-    if resume_from_checkpoint and not resumable_run_for_path(folder_path, resume_stage, resume_from_checkpoint):
-        return {"ok": False, "error": "The selected run directory does not contain a valid DeepSpeed checkpoint."}, 400
+    if resume_from_checkpoint:
+        try:
+            validate_resumable_run_for_path(folder_path, resume_stage, resume_from_checkpoint)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}, 400
     with _lock:
         _ensure_monitor_started()
         state = _read_state()
@@ -1778,16 +1821,6 @@ def resume_queue_response():
         active = _find_job(state, state.get("activeJobId")) if state.get("activeJobId") else None
         if active and active.get("status") in ACTIVE_STATUSES:
             return {"ok": False, "error": "A training job is already active."}, 409
-        next_job = next((job for job in state.get("jobs", []) if job.get("status") in QUEUE_STATUSES), None)
-        if next_job and next_job.get("status") in ("paused", "interrupted"):
-            resume_error = _prepare_paused_job_for_resume(next_job)
-            if resume_error:
-                next_job["error"] = resume_error
-                state["queuePaused"] = True
-                state["queuePauseReason"] = "Queue held: " + resume_error
-                _sync_histories(state)
-                _write_state(state)
-                return {"ok": False, "error": resume_error}, 409
         state["queuePaused"] = False
         state["queuePauseReason"] = ""
         _refresh_state(state)

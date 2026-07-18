@@ -155,6 +155,33 @@ def test_resume_point_reports_latest_checkpoint_and_artifact_progress(tmp_path, 
         "completed": False,
     }
 
+    direct_point = training_history.resume_point_from_directory(set_folder, "lo", str(run))
+    assert direct_point["checkpointAvailable"] is True
+    assert direct_point["checkpointTag"] == "global_step420"
+    assert direct_point["epoch"] == 12
+    assert direct_point["step"] == 420
+
+
+def test_resume_validation_allows_current_config_changes_but_rejects_another_set(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "Estel"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    run = root / "output" / "runs" / "001-Estel" / "wan22-lo" / "run"
+    run.mkdir(parents=True)
+    (run / "config.lo.toml").write_text('dataset = "/training/Estel/dataset.lo.toml"\nlr = 1e-4\n', encoding="utf-8")
+    (run / "global_step42").mkdir()
+    (run / "latest").write_text("global_step42", encoding="utf-8")
+    (set_folder / "config.lo.toml").write_text("lr = 9e-6\nepochs = 200\n", encoding="utf-8")
+
+    validated = training_history.validate_resumable_run_for_path(set_folder, "lo", str(run))
+    assert validated["checkpointAvailable"] is True
+
+    other_set = root / "Anfisa"
+    other_set.mkdir()
+    with pytest.raises(ValueError, match="belongs to set Estel"):
+        training_history.validate_resumable_run_for_path(other_set, "lo", str(run))
+
 
 def test_discover_runs_scans_new_launch_group_stage_directories(tmp_path, monkeypatch):
     root = tmp_path / "training"

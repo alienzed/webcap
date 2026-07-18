@@ -325,6 +325,28 @@ def resumable_run_for_path(folder_path, stage, run_path):
     ), {})
 
 
+def validate_resumable_run_for_path(folder_path, stage, run_path):
+    """Validate checkpoint identity from saved run artifacts, not current config contents."""
+    raw_path = str(run_path or "").strip()
+    if not raw_path:
+        raise ValueError("A resume directory is required.")
+    directory = host_path_for_training_path(raw_path)
+    if not directory.is_dir():
+        raise ValueError("The saved run directory is unavailable.")
+    set_name = Path(folder_path).name
+    saved_set_name = _set_name_from_run_config(directory, "")
+    if saved_set_name and saved_set_name != set_name:
+        raise ValueError("The saved checkpoint belongs to set " + saved_set_name + ", not " + set_name + ".")
+    saved_stage = _stage_from_run_config(directory)
+    if saved_stage and saved_stage != str(stage or ""):
+        raise ValueError("The saved checkpoint is for " + saved_stage + ", not " + str(stage or "") + ".")
+    resume_artifacts = _resume_artifacts(directory)
+    if not resume_artifacts:
+        raise ValueError("The saved run directory does not contain a valid DeepSpeed checkpoint.")
+    point = resume_point_from_directory(folder_path, stage, raw_path)
+    return {"path": raw_path, "runPath": raw_path, "stage": stage, **point}
+
+
 def resume_point_for_path(folder_path, stage, run_path):
     run = resumable_run_for_path(folder_path, stage, run_path)
     if not run:
@@ -335,6 +357,30 @@ def resume_point_for_path(folder_path, stage, run_path):
         "step": run.get("steps"),
         "expectedEpochs": run.get("expectedEpochs"),
         "completed": bool(run.get("completed")),
+    }
+
+
+def resume_point_from_directory(folder_path, stage, run_path):
+    """Read current resume progress directly from a job-owned run directory."""
+    raw_path = str(run_path or "").strip()
+    if not raw_path:
+        return {}
+    directory = host_path_for_training_path(raw_path)
+    if not directory.is_dir():
+        raise FileNotFoundError("Resume directory is unavailable: " + raw_path)
+    expected_epochs = _configured_epochs(folder_path, stage)
+    completed, highest_epoch, highest_step = _run_artifact_state(directory, expected_epochs)
+    resume_artifacts = _resume_artifacts(directory)
+    checkpoint_tag = ""
+    if resume_artifacts:
+        checkpoint_tag = resume_artifacts[0].read_text(encoding="utf-8").strip().splitlines()[0].strip()
+    return {
+        "checkpointAvailable": bool(resume_artifacts),
+        "checkpointTag": checkpoint_tag,
+        "epoch": highest_epoch or None,
+        "step": highest_step or None,
+        "expectedEpochs": expected_epochs or None,
+        "completed": completed,
     }
 
 
@@ -386,13 +432,15 @@ def record_job(folder_path, job):
     runs = discover_runs(folder_path, str(job.get("stages") or ""))
     record_fields = (
         "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
-        "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "parentJobId",
+        "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId",
         "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
     )
     record = {field: job.get(field) for field in record_fields if field in job}
     for field in ("error", "completionNote"):
         if isinstance(record.get(field), str):
             record[field] = record[field][:1000]
+    if isinstance(record.get("failureExcerpt"), str):
+        record["failureExcerpt"] = record["failureExcerpt"][-8192:]
     if isinstance(record.get("model"), dict):
         record["model"] = {
             "label": str(record["model"].get("label") or "")[:160],

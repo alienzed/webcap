@@ -522,6 +522,26 @@
   height: 5px;
 }
 
+.app.shell-revamp.workspace-surface-training .training-failure-details {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-failure-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--danger, #f87171);
+}
+
+.app.shell-revamp.workspace-surface-training .training-failure-details pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 7px 0 0;
+  padding: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .app.shell-revamp.workspace-surface-training .training-runner-queue-controls {
   grid-area: controls;
   align-self: center;

@@ -24,13 +24,9 @@ Last reviewed: 2026-07-10.
 
 ## Backlog (Do Not Implement Yet)
 - Training Items: clicking on an item should probably highlight it in the media-list and preview it back in captioning mode.. it's odd to show these but have them inert. Also, the Hide Items button is full width... this should probably just be a chevron, let's try to be consistent across the app.
-- Training Quality isn't modifying quite as much as I remembered it was supposed to. I thought LR was supposed to change. The only thing that should remain stable is epochs and repeats (right?). less repeats just means more epochs so lowering those doesn't make training faster in a comparable way.
+- Training Quality isn't modifying quite as much as it is supposed to. LR is supposed to change. The only thing that should remain stable is epochs and repeats. The idea is to train on lower resolutions more aggressively.
 - I think this app should do a better job at suggesting the next run. High was trained? Give me ONE button to train Low. The last run was cancelled/finished early/interupted. ONE button to throw that back on the queue (resume where appropriate).
 - Add future compatible models through the app-owned training-profile registry, with one reviewed TOML template and explicit media/run requirements. Do not add arbitrary user-supplied commands.
-- Review longest duplicate phrase detection inside a single caption.
-- Chaos / clutter scoring for scene complexity.
-- Lighting tone / color cast detection for warm, cool, or tinted scenes.
-
 
 ## Cleanup Candidates
 - Consolidate set-context gating around shared helper usage and remove stale checks.

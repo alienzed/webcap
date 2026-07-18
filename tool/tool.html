@@ -662,6 +662,7 @@
                                     <label class="training-profile-control">Training profile
                                         <select id="training-model-profile-select"></select>
                                     </label>
+                                    <div id="training-model-trained-status" class="training-model-trained-status hidden" aria-live="polite"></div>
                                 </div>
                             </div>
                             <div class="training-workflow-step">
@@ -698,8 +699,8 @@
                                 </div>
                                 <div class="training-run-setup-fields">
                                     <div class="training-run-option">
-                                        <span>Stage</span>
-                                        <div id="training-run-stage-buttons" class="training-run-stage-buttons" role="group" aria-label="Training stage">
+                                        <span>Run option</span>
+                                        <div id="training-run-stage-buttons" class="training-run-stage-buttons" role="group" aria-label="Training run option">
                                             <button type="button" class="training-run-stage-btn active" data-training-stage="both" aria-pressed="true">HI → LO</button>
                                             <button type="button" class="training-run-stage-btn" data-training-stage="hi" aria-pressed="false">HI only</button>
                                             <button type="button" class="training-run-stage-btn" data-training-stage="lo" aria-pressed="false">LO only</button>
@@ -712,6 +713,7 @@
                                         <select id="training-run-checkpoint-select">
                                             <option value="">Start a new run</option>
                                         </select>
+                                        <div id="training-run-checkpoint-path" class="training-run-checkpoint-path"></div>
                                     </label>
                                     <label id="training-run-resume-stage-option" class="training-run-option training-run-resume-stage-option">
                                         <span>Apply resume to</span>

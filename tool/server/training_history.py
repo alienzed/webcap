@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -5,13 +6,14 @@ import shlex
 import shutil
 import subprocess
 import time
-from datetime import datetime
 from pathlib import Path, PurePosixPath
+
+import tomllib
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_config_files import output_dir_from_config, training_config_path
-from .training_profiles import profiles
+from .training_profiles import config_for_id
 
 
 HISTORY_FILE_NAME = ".webcap_training.json"
@@ -19,9 +21,7 @@ HISTORY_VERSION = 3
 _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
-_RUN_STAGE_PATTERN = re.compile(r"(?:^|[-_.])(hi|lo|krea2|wan21)(?:$|[-_.])", re.IGNORECASE)
 _DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(?:#.*)?$", re.MULTILINE)
-_NOISE_MODEL_PATTERN = re.compile(r"\b(high|low)[_ -]?noise(?:[_ -]?model)?\b", re.IGNORECASE)
 
 
 def output_root_for_folder(folder_path, stage="hi"):
@@ -76,32 +76,6 @@ def _training_path_for_entry(entry, host_root, training_root):
     return str(path)
 
 
-def output_roots_for_folder(folder_path):
-    roots = []
-    folder = Path(folder_path)
-    stages = [stage for stage in ("hi", "lo", "krea2", "wan21") if training_config_path(folder, stage).is_file()] or ["hi", "lo"]
-    for stage in stages:
-        root = output_root_for_folder(folder_path, stage)
-        if root not in roots:
-            roots.append(root)
-    runs_root = Path(app_config.FS_ROOT) / "output" / "runs"
-    launch_pattern = re.compile(r"^[0-9A-Z]{3}-" + re.escape(folder.name) + r"$")
-    slugs = {
-        config["outputSlug"]
-        for item in profiles()
-        for config in item["configs"]
-    }
-    if runs_root.is_dir():
-        for launch_root in runs_root.iterdir():
-            if not launch_root.is_dir() or not launch_pattern.match(launch_root.name):
-                continue
-            for slug in slugs:
-                stage_root = launch_root / slug
-                if stage_root.is_dir() and stage_root not in roots:
-                    roots.append(stage_root)
-    return roots
-
-
 def _history_path(folder_path):
     return Path(folder_path) / HISTORY_FILE_NAME
 
@@ -115,28 +89,51 @@ def _configured_epochs(folder_path, stage):
     return int(match.group(1)) if match else 0
 
 
-def _stage_from_run_name(name):
-    matches = _RUN_STAGE_PATTERN.findall(str(name or ""))
-    return matches[-1].lower() if matches else ""
+def config_sha256(path):
+    """Return the byte-exact identity Diffusion Pipe preserves in run output."""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def _stage_from_run_config(entry):
-    """Identify a run's noise stage from the config copied beside its checkpoints."""
-    for config_path in sorted(Path(entry).glob("*.toml")):
-        named_stage = _stage_from_run_name(config_path.name)
-        if named_stage:
-            return named_stage
-        try:
-            config_text = config_path.read_text(encoding="utf-8")
-        except OSError:
+def _parsed_config(path):
+    try:
+        return tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError):
+        return None
+
+
+def _model_identity(config, keys):
+    model = config.get("model") if isinstance(config, dict) else None
+    if not isinstance(model, dict):
+        return None
+    identity = {}
+    for key in keys:
+        value = model.get(key)
+        if not isinstance(value, str) or not value.strip():
+            return None
+        identity[key] = value.strip()
+    return identity
+
+
+def _epochs_from_parsed_config(config):
+    try:
+        value = int(config.get("epochs") or 0)
+    except (AttributeError, TypeError, ValueError):
+        return 0
+    return max(0, value)
+
+
+def _saved_config_for_candidate(run_dir, config_meta, wanted_identity):
+    preferred = Path(run_dir) / config_meta["file"]
+    paths = [preferred] if preferred.is_file() else []
+    paths.extend(path for path in sorted(Path(run_dir).glob("config*.toml")) if path not in paths)
+    for path in paths:
+        parsed = _parsed_config(path)
+        if parsed is None:
             continue
-        dataset_stage = _stage_from_run_name(config_text)
-        if dataset_stage:
-            return dataset_stage
-        noise_model = _NOISE_MODEL_PATTERN.search(config_text)
-        if noise_model:
-            return "hi" if noise_model.group(1).lower() == "high" else "lo"
-    return ""
+        identity = _model_identity(parsed, config_meta["modelIdentityKeys"])
+        if identity == wanted_identity:
+            return path, parsed
+    return None, None
 
 
 def _set_name_from_run_config(entry, fallback_name):
@@ -153,24 +150,6 @@ def _set_name_from_run_config(entry, fallback_name):
         if set_name and set_name != ".":
             return set_name
     return str(fallback_name or "")
-
-
-def _run_belongs_to_set(entry, set_name):
-    """Reject a run when its saved dataset config names another set."""
-    for config_path in sorted(Path(entry).glob("*.toml")):
-        try:
-            config_text = config_path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        match = _DATASET_CONFIG_PATTERN.search(config_text)
-        if not match:
-            continue
-        dataset_path = match.group(1).strip().replace("\\", "/")
-        saved_set_name = Path(dataset_path).parent.name
-        if saved_set_name and saved_set_name != ".":
-            return saved_set_name == str(set_name or "")
-    # Older/manual runs without their saved config remain discoverable.
-    return True
 
 
 def _run_artifact_state(entry, expected_epochs):
@@ -204,11 +183,6 @@ def _resume_artifacts(entry):
     if not _STEP_PATTERN.match(tag) or not (directory / tag).is_dir():
         return []
     return [latest]
-
-
-def _is_checkpoint_artifact(entry):
-    name = Path(entry).name
-    return name.lower() == "latest" or bool(_STEP_PATTERN.match(name)) or bool(_EPOCH_PATTERN.match(name))
 
 
 def _default_history(folder_path):
@@ -248,119 +222,119 @@ def _write_history(folder_path, data):
 
 def discover_runs(folder_path, stage=""):
     folder = Path(folder_path)
-    root_stages = (stage,) if stage in ("hi", "lo", "krea2", "wan21") else tuple(
-        item for item in ("hi", "lo", "krea2", "wan21") if training_config_path(folder, item).is_file()
-    ) or ("hi", "lo")
-    roots = []
-    for root_stage in root_stages:
-        training_root = output_root_path_for_folder(folder_path, root_stage)
-        host_root = output_root_for_folder(folder_path, root_stage)
-        if not any(item[0] == host_root for item in roots):
-            roots.append((host_root, training_root))
-    for host_root in output_roots_for_folder(folder_path):
-        if not any(item[0] == host_root for item in roots):
-            roots.append((host_root, str(host_root)))
+    if stage not in ("hi", "lo", "krea2", "wan21"):
+        combined = []
+        for item in ("hi", "lo", "krea2", "wan21"):
+            if training_config_path(folder, item).is_file():
+                combined.extend(discover_runs(folder, item))
+        return sorted(combined, key=lambda run: run["modifiedAt"], reverse=True)
+    stages = (stage,)
     runs = []
-    seen = set()
-    for root, training_root in roots:
-        matching_stages = [name for name in ("hi", "lo", "krea2", "wan21") if output_root_for_folder(folder_path, name) == root]
-        root_stage = matching_stages[0] if len(matching_stages) == 1 else ""
-        if not root.exists() or not root.is_dir():
+    for candidate_stage in stages:
+        source_config = training_config_path(folder, candidate_stage)
+        parsed_source = _parsed_config(source_config)
+        if parsed_source is None:
+            if not source_config.is_file():
+                continue
+            raise ValueError("Cannot discover resume candidates from unreadable config: " + str(source_config))
+        config_meta = config_for_id(candidate_stage)
+        wanted_identity = _model_identity(parsed_source, config_meta["modelIdentityKeys"])
+        if wanted_identity is None:
+            raise ValueError(
+                "Cannot discover resume candidates because " + source_config.name
+                + " is missing its supported base-model identity keys."
+            )
+        source_hash = config_sha256(source_config)
+        training_root = output_root_path_for_folder(folder, candidate_stage)
+        root = output_root_for_folder(folder, candidate_stage)
+        if not root.is_dir():
             continue
-        candidates = [root] if _resume_artifacts(root) else []
         try:
-            candidates.extend(root.iterdir())
+            latest_markers = list(root.rglob("latest"))
         except OSError:
             continue
-        for entry in candidates:
-            # WebCap stores job snapshots under <output>/.webcap.  Those are not
-            # trainer runs and must never become resume candidates.
-            if not entry.is_dir() or entry.name.startswith(".") or _is_checkpoint_artifact(entry) or entry in seen:
+        for latest in latest_markers:
+            entry = latest.parent
+            if ".webcap" in entry.parts or not _resume_artifacts(entry):
+                continue
+            saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, wanted_identity)
+            if saved_config is None:
                 continue
             try:
                 modified = entry.stat().st_mtime
-            except OSError:
+                checkpoint_tag = latest.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+            except (OSError, IndexError):
                 continue
-            seen.add(entry)
-            if not _run_belongs_to_set(entry, Path(folder_path).name):
-                continue
-            # The config saved inside the run is authoritative. Current set
-            # configs may have moved or may now associate this shared root with
-            # a different stage than the historical run actually trained.
-            entry_stage = _stage_from_run_config(entry) or _stage_from_run_name(entry.name) or root_stage
-            if stage in ("hi", "lo", "krea2", "wan21") and entry_stage != stage:
-                continue
-            expected_epochs = _configured_epochs(folder_path, entry_stage) if entry_stage else 0
+            expected_epochs = _epochs_from_parsed_config(parsed_saved)
             completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
-            resume_artifacts = _resume_artifacts(entry)
-            checkpoint = resume_artifacts[0] if resume_artifacts else None
-            checkpoint_tag = ""
-            if checkpoint:
-                checkpoint_tag = checkpoint.read_text(encoding="utf-8").strip().splitlines()[0].strip()
             training_path = _training_path_for_entry(entry, root, training_root)
             runs.append({
-                # DeepSpeed expects the run directory, then resolves its own
-                # latest marker or checkpoint tag inside that directory.
                 "path": training_path,
                 "runPath": training_path,
                 "name": entry.name,
-                "setName": _set_name_from_run_config(entry, Path(folder_path).name),
-                "stage": entry_stage,
+                "setName": _set_name_from_run_config(entry, folder.name),
+                "stage": candidate_stage,
+                "candidateFor": candidate_stage,
+                "modelLabel": config_meta["label"],
+                "matchType": "exact" if config_sha256(saved_config) == source_hash else "compatible",
+                "configHash": config_sha256(saved_config),
                 "modifiedAt": modified,
-                "checkpointAvailable": bool(checkpoint),
-                "checkpointName": checkpoint.name if checkpoint else "",
+                "checkpointAvailable": True,
+                "checkpointName": "latest",
                 "checkpointTag": checkpoint_tag,
                 "completed": completed,
                 "epoch": highest_epoch or None,
                 "steps": highest_step or None,
                 "expectedEpochs": expected_epochs or None,
             })
-    return sorted(runs, key=lambda run: run["modifiedAt"], reverse=True)
+    exact = [run for run in runs if run["matchType"] == "exact"]
+    selected = exact if exact else runs
+    return sorted(selected, key=lambda run: run["modifiedAt"], reverse=True)
 
 
-def resumable_run_for_path(folder_path, stage, run_path):
-    wanted = str(run_path or "").strip()
-    if not wanted:
-        return {}
-    return next((
-        run for run in discover_runs(folder_path, stage)
-        if run.get("checkpointAvailable") and str(run.get("path") or "") == wanted
-    ), {})
-
-
-def validate_resumable_run_for_path(folder_path, stage, run_path, enforce_identity=True):
-    """Validate a checkpoint; identity checks apply only to automatic resume selection."""
+def validate_resumable_run_for_path(folder_path, stage, run_path):
+    """Validate the exact checkpoint path recorded for an automatic resume."""
     raw_path = str(run_path or "").strip()
     if not raw_path:
         raise ValueError("A resume directory is required.")
     directory = host_path_for_training_path(raw_path)
     if not directory.is_dir():
-        raise ValueError("The saved run directory is unavailable.")
-    set_name = Path(folder_path).name
-    saved_set_name = _set_name_from_run_config(directory, "")
-    if enforce_identity and saved_set_name and saved_set_name != set_name:
-        raise ValueError("The saved checkpoint belongs to set " + saved_set_name + ", not " + set_name + ".")
-    saved_stage = _stage_from_run_config(directory)
-    if enforce_identity and saved_stage and saved_stage != str(stage or ""):
-        raise ValueError("The saved checkpoint is for " + saved_stage + ", not " + str(stage or "") + ".")
+        raise ValueError("Recorded resume directory is unavailable: " + raw_path)
     resume_artifacts = _resume_artifacts(directory)
     if not resume_artifacts:
-        raise ValueError("The saved run directory does not contain a valid DeepSpeed checkpoint.")
+        raise ValueError("Recorded resume directory has no valid latest DeepSpeed checkpoint: " + raw_path)
     point = resume_point_from_directory(folder_path, stage, raw_path)
     return {"path": raw_path, "runPath": raw_path, "stage": stage, **point}
 
 
+def discovered_run_output_path(folder_path, stage, run_path):
+    """Resolve one currently discovered same-model run for an Explorer action."""
+    raw_path = str(run_path or "").strip()
+    if not raw_path:
+        raise ValueError("A training run directory is required.")
+    match = next(
+        (run for run in discover_runs(folder_path, str(stage or "")) if str(run.get("path") or "") == raw_path),
+        None,
+    )
+    if match is None:
+        raise ValueError("Training run is not a current same-model candidate: " + raw_path)
+    directory = host_path_for_training_path(raw_path)
+    if not directory.is_dir():
+        raise FileNotFoundError("Training run directory is unavailable: " + raw_path)
+    return directory
+
+
 def resume_point_for_path(folder_path, stage, run_path):
-    run = resumable_run_for_path(folder_path, stage, run_path)
-    if not run:
+    raw_path = str(run_path or "").strip()
+    if not raw_path:
         return {}
-    return {
-        "checkpointTag": run.get("checkpointTag") or "",
-        "epoch": run.get("epoch"),
-        "step": run.get("steps"),
-        "expectedEpochs": run.get("expectedEpochs"),
-        "completed": bool(run.get("completed")),
-    }
+    try:
+        point = resume_point_from_directory(folder_path, stage, raw_path)
+    except (OSError, RuntimeError):
+        return {}
+    if not point.get("checkpointAvailable"):
+        return {}
+    return {key: point.get(key) for key in ("checkpointTag", "epoch", "step", "expectedEpochs", "completed")}
 
 
 def resume_point_from_directory(folder_path, stage, run_path):
@@ -387,39 +361,6 @@ def resume_point_from_directory(folder_path, stage, run_path):
     }
 
 
-def ranked_resumable_runs(folder_path, stage, job=None):
-    runs = [run for run in discover_runs(folder_path, stage) if run.get("checkpointAvailable")]
-    job = job if isinstance(job, dict) else {}
-    preferred_path = str(job.get("outputRunPath") or "").strip()
-    started_at = float(job.get("startedAt") or job.get("createdAt") or 0)
-    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
-    expected_step = float(progress.get("step") or 0)
-    expected_epoch = float(progress.get("epoch") or 0)
-
-    def timestamp_distance(run):
-        if not started_at:
-            return float("inf")
-        try:
-            stamp = datetime.strptime(str(run.get("name") or ""), "%Y%m%d_%H-%M-%S").timestamp()
-        except ValueError:
-            return float("inf")
-        return abs(stamp - started_at)
-
-    def progress_distance(run):
-        if expected_step and run.get("steps"):
-            return abs(float(run["steps"]) - expected_step)
-        if expected_epoch and run.get("epoch"):
-            return abs(float(run["epoch"]) - expected_epoch)
-        return float("inf")
-
-    return sorted(runs, key=lambda run: (
-        0 if str(run.get("path") or "") == preferred_path else 1,
-        progress_distance(run),
-        timestamp_distance(run),
-        -float(run.get("modifiedAt") or 0),
-    ))
-
-
 def summarize_history(folder_path):
     history = read_history(folder_path)
     jobs = history.get("jobs") or []
@@ -434,7 +375,7 @@ def record_job(folder_path, job):
     history = read_history(folder_path)
     runs = discover_runs(folder_path, str(job.get("stages") or ""))
     record_fields = (
-        "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
+        "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "configHashes", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId",
         "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
     )
@@ -472,14 +413,7 @@ def record_job(folder_path, job):
 def history_payload(folder_path):
     history = read_history(folder_path)
     history["runs"] = discover_runs(folder_path)
-    defaults = {}
-    for stage in ("hi", "lo", "krea2", "wan21"):
-        stage_jobs = [job for job in history.get("jobs") or [] if str(job.get("stages") or "") == stage]
-        job = max(stage_jobs, key=lambda item: float(item.get("startedAt") or item.get("createdAt") or 0), default={})
-        run = next(iter(ranked_resumable_runs(folder_path, stage, job)), {})
-        if run:
-            defaults[stage] = run["path"]
-    history["resumeDefaults"] = defaults
+    history["resumeDefaults"] = {}
     return history
 
 

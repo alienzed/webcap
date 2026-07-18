@@ -21,8 +21,8 @@ _PROFILES = {
         "mediaKinds": ("image", "video"),
         "datasetFiles": ("dataset.hi.toml", "dataset.lo.toml"),
         "configs": (
-            {"id": "hi", "file": "config.hi.toml", "dataset": "dataset.hi.toml", "label": "High Noise", "outputSlug": "wan22-hi"},
-            {"id": "lo", "file": "config.lo.toml", "dataset": "dataset.lo.toml", "label": "Low Noise", "outputSlug": "wan22-lo"},
+            {"id": "hi", "file": "config.hi.toml", "dataset": "dataset.hi.toml", "label": "Wan2.2 High Noise", "outputSlug": "wan22-hi", "modelIdentityKeys": ("type", "ckpt_path", "transformer_path")},
+            {"id": "lo", "file": "config.lo.toml", "dataset": "dataset.lo.toml", "label": "Wan2.2 Low Noise", "outputSlug": "wan22-lo", "modelIdentityKeys": ("type", "ckpt_path", "transformer_path")},
         ),
         "runs": (
             {"id": "both", "label": "HI → LO", "stages": ("hi", "lo")},
@@ -37,7 +37,7 @@ _PROFILES = {
         "mediaKinds": ("image",),
         "datasetFiles": ("dataset.train.toml",),
         "configs": (
-            {"id": "krea2", "file": "config.krea2.toml", "dataset": "dataset.train.toml", "label": "Krea2 Raw", "outputSlug": "krea2-raw"},
+            {"id": "krea2", "file": "config.krea2.toml", "dataset": "dataset.train.toml", "label": "Krea2 Raw", "outputSlug": "krea2-raw", "modelIdentityKeys": ("type", "diffusion_model")},
         ),
         "runs": (
             {"id": "train", "label": "Train", "stages": ("krea2",)},
@@ -50,7 +50,7 @@ _PROFILES = {
         "mediaKinds": ("image", "video"),
         "datasetFiles": ("dataset.train.toml",),
         "configs": (
-            {"id": "wan21", "file": "config.wan21.toml", "dataset": "dataset.train.toml", "label": "Wan2.1 T2V 14B", "outputSlug": "wan21-t2v"},
+            {"id": "wan21", "file": "config.wan21.toml", "dataset": "dataset.train.toml", "label": "Wan2.1 T2V 14B", "outputSlug": "wan21-t2v", "modelIdentityKeys": ("type", "ckpt_path")},
         ),
         "runs": (
             {"id": "train", "label": "Train", "stages": ("wan21",)},
@@ -107,6 +107,16 @@ def config_for_stage(profile_id, stage):
         if config["id"] == key:
             return config
     raise ValueError("Unknown configuration stage for " + selected["label"] + ": " + str(stage or ""))
+
+
+def config_for_id(config_id):
+    """Return one supported model config by its globally unique id."""
+    key = str(config_id or "").strip().lower()
+    for selected in _PROFILES.values():
+        for config in selected["configs"]:
+            if config["id"] == key:
+                return config
+    raise ValueError("Unknown training configuration: " + str(config_id or ""))
 
 
 def profile_config_files(profile_id):

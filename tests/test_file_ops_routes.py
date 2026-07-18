@@ -440,6 +440,24 @@ def test_training_history_opens_the_recorded_effective_output_folder(tmp_path, m
     assert opened == [output_dir]
 
 
+def test_training_history_opens_a_discovered_same_model_run(tmp_path, monkeypatch):
+    set_dir = tmp_path / "set_training"
+    run_dir = tmp_path / "output" / "20260718_14-20-10"
+    set_dir.mkdir()
+    run_dir.mkdir(parents=True)
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: set_dir)
+    monkeypatch.setattr(app_module, "discovered_run_output_path", lambda folder, model_id, path: run_dir)
+    opened = []
+    monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))
+
+    response = app_module.app.test_client().post("/fs/training_history/open_run", json={
+        "folder": "set_training", "modelId": "krea2", "path": "/mnt/w/output/20260718_14-20-10",
+    })
+
+    assert response.status_code == 200
+    assert opened == [run_dir]
+
+
 def test_training_runner_open_log_reveals_the_known_job_log(monkeypatch):
     log_path = Path("C:/training/output/runs/001-set/.webcap/jobs/job/run.log")
     opened = []

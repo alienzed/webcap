@@ -19,10 +19,10 @@ from .caption_ops import _caption_name_for_media
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, allocate_training_launch_group, with_output_dir
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, allocate_training_launch_group, output_dir_from_config, with_output_dir
 from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_run
 from .dataset_config import repeat_targets_for_mode
-from .training_history import completed_stages, discover_runs, ranked_resumable_runs, resumable_run_for_path, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, record_job, clear_history_job
+from .training_history import completed_stages, config_sha256, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, record_job, clear_history_job
 from .training_runtime import (
     build_runtime_command,
     build_training_launcher,
@@ -738,7 +738,7 @@ def _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir
     for key, filename in config_files:
         source = artifacts[key + "Config"]
         target = job_dir / filename
-        target.write_text(with_output_dir(source.read_text(encoding="utf-8"), effective_output_dir), encoding="utf-8")
+        shutil.copy2(source, target)
         normalize_path_permissions(target)
         snapshot[key] = str(target)
     dataset_files = ("dataset.train.toml", "auto_dataset/training_plan.json") if stages in ("krea2", "wan21") else (
@@ -896,6 +896,20 @@ def _launch_job(job, folder_path):
     job["updatedAt"] = launch_time
     job["status"] = "starting"
     job["stage"] = "launch"
+    if job.get("parentJobId") and str(job.get("resumeFromCheckpoint") or "").strip():
+        try:
+            validate_resumable_run_for_path(
+                folder_path,
+                str(job.get("resumeStage") or job.get("stages") or ""),
+                job["resumeFromCheckpoint"],
+            )
+        except ValueError as exc:
+            job["status"] = "failed"
+            job["stage"] = "resume"
+            job["failureScope"] = "job"
+            job["error"] = "Resume invariant failed: " + str(exc)
+            job["finishedAt"] = time.time()
+            return False
     settings = _training_settings()
     try:
         last_repair = float(job.get("permissionsRepairedAt") or 0)
@@ -927,14 +941,6 @@ def _launch_job(job, folder_path):
             details = str(item.get("details") or "").strip()
             blocker_messages.append(text + ((" — " + details) if details else ""))
         job["error"] = "Preflight failed: " + "; ".join(blocker_messages)
-        job["finishedAt"] = time.time()
-        return False
-    try:
-        job["outputRunPathsAtLaunch"] = [run["path"] for run in discover_runs(folder_path, job.get("stages") or "")]
-    except Exception as exc:
-        job["status"] = "failed"
-        job["stage"] = "launch"
-        job["error"] = "Could not inspect the configured training output: " + str(exc)
         job["finishedAt"] = time.time()
         return False
     job_dir = _job_dir(job)
@@ -1170,22 +1176,41 @@ def _job_runner_pid(job):
 
 
 def _bind_job_run_path(job):
-    """Persist the trainer-created run directory as soon as it is observable."""
-    stage = str(job.get("stages") or "")
-    if stage not in ("hi", "lo") or job.get("outputRunPath"):
+    """Bind only a run directory carrying the exact launched config bytes."""
+    model_id = str(job.get("stages") or "")
+    if model_id not in ("hi", "lo", "krea2", "wan21") or job.get("outputRunPath"):
         return
-    folder = str(job.get("folder") or "")
-    if not folder:
+    hashes = job.get("configHashes") if isinstance(job.get("configHashes"), dict) else {}
+    wanted_hash = str(hashes.get(model_id) or "")
+    snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
+    snapshot_path = str(snapshot.get(model_id) or "")
+    if not wanted_hash and snapshot_path:
+        try:
+            wanted_hash = config_sha256(snapshot_path)
+            hashes[model_id] = wanted_hash
+            job["configHashes"] = hashes
+        except OSError:
+            return
+    output_root = Path(str(job.get("outputRoot") or ""))
+    if not wanted_hash or not output_root.is_dir():
         return
+    filename = Path(snapshot_path).name
+    exact = []
     try:
-        folder_path = app_config.safe_join_fs_root(folder)
-        known_paths = set(str(path) for path in job.get("outputRunPathsAtLaunch") or [])
-        candidates = [run for run in discover_runs(folder_path, stage) if str(run.get("path") or "") not in known_paths]
-    except Exception:
+        for config_path in output_root.rglob(filename):
+            if ".webcap" in config_path.parts or config_sha256(config_path) != wanted_hash:
+                continue
+            exact.append(config_path.parent)
+    except (OSError, ValueError):
         return
-    if not candidates:
+    if len(exact) != 1:
         return
-    job["outputRunPath"] = str(candidates[0]["path"])
+    training_root = str(job.get("effectiveOutputDir") or "")
+    try:
+        relative = exact[0].relative_to(output_root).as_posix()
+        job["outputRunPath"] = str(PurePosixPath(training_root) / relative) if training_root.startswith("/") else str(exact[0])
+    except ValueError:
+        job["outputRunPath"] = str(exact[0])
     job["updatedAt"] = time.time()
 
 
@@ -1296,17 +1321,12 @@ def _prepare_paused_job_for_resume(job):
     folder = str(job.get("folder") or "")
     folder_path = app_config.safe_join_fs_root(folder)
     bound_path = str(job.get("outputRunPath") or "").strip()
-    if bound_path:
-        try:
-            run = validate_resumable_run_for_path(folder_path, stage, bound_path)
-        except ValueError as exc:
-            if "does not contain a valid DeepSpeed checkpoint" not in str(exc):
-                return str(exc)
-            run = {}
-    else:
-        run = next(iter(ranked_resumable_runs(folder_path, stage, job)), {})
-        if run:
-            job["outputRunPath"] = run["path"]
+    if not bound_path:
+        return "Resume invariant failed: this job has no recorded output run path."
+    try:
+        run = validate_resumable_run_for_path(folder_path, stage, bound_path)
+    except ValueError as exc:
+        return "Resume invariant failed: " + str(exc)
     checkpoint = str(run.get("path") or "")
     job["resumeFromCheckpoint"] = checkpoint
     job["resumeStage"] = stage if checkpoint else ""
@@ -1399,7 +1419,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
+    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "configHashes", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -1466,19 +1486,33 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
     resume_path = str(resume_from_checkpoint or "").strip()
     distribution = _training_settings()["wslDistribution"]
     if resume_path:
-        effective_output_dir = str(PurePosixPath(resume_path).parent) if resume_path.startswith("/") else str(Path(resume_path).parent)
+        configured_output = output_dir_from_config(folder_path, stages)
+        if configured_output is None:
+            raise ValueError("Current training config is missing output_dir.")
+        effective_output_dir = str(configured_output).replace("\\", "/")
         output_root = host_path_for_training_path(effective_output_dir)
-        group_root = output_root.parent
+        group_root = output_root
     else:
         group_root = Path(launch_group) if launch_group else allocate_training_launch_group(folder_path)
         output_root = group_root / output_slug
         output_root.mkdir(parents=True, exist_ok=False)
         normalize_path_permissions(output_root)
         effective_output_dir = _to_wsl_path(output_root, distribution)
+        source_config = artifacts[stages + "Config"]
+        source_config.write_text(
+            with_output_dir(source_config.read_text(encoding="utf-8"), effective_output_dir),
+            encoding="utf-8",
+        )
+        normalize_path_permissions(source_config)
     job_dir = group_root / ".webcap" / "jobs" / job_id
     job_dir.mkdir(parents=True, exist_ok=False)
     normalize_path_permissions(job_dir)
     snapshot = _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir)
+    config_hashes = {
+        model_id: config_sha256(config_path)
+        for model_id, config_path in snapshot.items()
+        if model_id in ("hi", "lo", "krea2", "wan21")
+    }
     progress_plan = _plan_run_steps(_read_training_plan(folder_path) or _default_progress_plan(), snapshot)
     input_evidence = _input_evidence(folder_path, stages)
     model = _model_identity(artifacts, selected_profile["id"], stages)
@@ -1506,6 +1540,7 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "updatedAt": time.time(),
         "permissionsRepairedAt": time.time(),
         "snapshot": snapshot,
+        "configHashes": config_hashes,
         "artifactPath": str(job_dir),
         "artifactDir": str(job_dir),
         "progressPlan": progress_plan,
@@ -1542,11 +1577,6 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
     preflight = {"checks": checks, "summary": {"blockers": len(blockers), "warnings": 0}}
     if blockers:
         return {"ok": False, "error": "Launch checks failed.", "preflight": preflight}, 400
-    if resume_from_checkpoint:
-        try:
-            validate_resumable_run_for_path(folder_path, resume_stage, resume_from_checkpoint, enforce_identity=False)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}, 400
     with _lock:
         _ensure_monitor_started()
         state = _read_state()
@@ -1727,12 +1757,18 @@ def log_path_for_job(job_id):
 
 
 def output_path_for_job(job_id):
-    """Return the effective output directory for a known managed job."""
+    """Return the trainer-created run directory, or its parent before binding."""
     with _lock:
         state = _read_state()
         job = _find_job(state, job_id)
         if not job:
             raise ValueError("Training job was not found.")
+        raw_run_path = str(job.get("outputRunPath") or "").strip()
+        if raw_run_path:
+            path = host_path_for_training_path(raw_run_path)
+            if not path.is_dir():
+                raise FileNotFoundError("Recorded training run directory is unavailable: " + raw_run_path)
+            return path
         raw_path = str(job.get("outputRoot") or "").strip()
         if not raw_path:
             raise ValueError("Training job has no effective output directory.")

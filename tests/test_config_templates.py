@@ -64,6 +64,25 @@ def test_new_training_configs_reserve_a_shared_base36_output_dir(tmp_path, monke
     assert expected.is_dir()
 
 
+def test_krea2_config_is_rendered_with_the_existing_shared_output_dir(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "lilly"
+    folder.mkdir(parents=True)
+    (folder / "clip.png").write_bytes(b"media")
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+
+    training_config_files_module.ensure_training_config_files(folder)
+
+    krea2_path = folder / "config.krea2.toml"
+    assert krea2_path.is_file()
+    krea2_text = krea2_path.read_text(encoding="utf-8")
+    assert 'dataset    = "' in krea2_text
+    assert "dataset.lo.toml" in krea2_text
+    assert "{TRAINING_ROOT}" not in krea2_text
+    assert "{DATASET}" not in krea2_text
+    assert training_config_files_module.output_dir_from_config(folder, "krea2") == training_config_files_module.output_dir_from_config(folder, "hi")
+
+
 def test_new_training_config_sequence_advances_in_base36(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "lilly"

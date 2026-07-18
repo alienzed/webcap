@@ -889,7 +889,7 @@ function getManagedTrainingOptions() {
   var checkpointEl = document.getElementById('training-run-checkpoint-select');
   var resumeStageEl = document.getElementById('training-run-resume-stage-select');
   var stages = String(trainingWorkspaceState.runStages || 'both');
-  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both') stages = 'both';
+  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2') stages = 'both';
   return {
     stages: stages,
     resumeFromCheckpoint: checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : (resumeEl ? String(resumeEl.value || '').trim() : ''),
@@ -899,7 +899,7 @@ function getManagedTrainingOptions() {
 }
 
 function setManagedTrainingStages(stages) {
-  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both') stages = 'both';
+  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2') stages = 'both';
   trainingWorkspaceState.runStages = stages;
   var buttons = document.querySelectorAll('[data-training-stage]');
   buttons.forEach(function (button) {
@@ -920,7 +920,7 @@ function syncManagedTrainingResumeUi() {
 }
 
 function trainingStageLabel(stages) {
-  return stages === 'hi' ? 'High Noise' : stages === 'lo' ? 'Low Noise' : 'High Noise to Low Noise';
+  return stages === 'hi' ? 'High Noise' : stages === 'lo' ? 'Low Noise' : stages === 'krea2' ? 'Krea2 Raw' : 'High Noise to Low Noise';
 }
 
 function trainingModelLabel(job) {
@@ -930,6 +930,7 @@ function trainingModelLabel(job) {
 }
 
 function trainingJobLabel(job) {
+  if (job && job.stages === 'krea2') return 'Krea2 Raw';
   return trainingModelLabel(job) + ' · ' + trainingStageLabel(String(job && job.stages || 'both'));
 }
 
@@ -939,7 +940,7 @@ function startManagedTraining() {
     return;
   }
   var options = getManagedTrainingOptions();
-  ensureGeneratedTrainingArtifactsForCurrentFolder()
+  ensureGeneratedTrainingArtifactsForCurrentFolder(options.stages)
     .then(function () {
       setStatus('Adding training job...');
       return trainingRunnerRequest('/fs/training_runner/start', {

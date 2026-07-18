@@ -29,7 +29,7 @@ def output_root_for_folder(folder_path, stage="hi"):
 
 def output_root_path_for_folder(folder_path, stage="hi"):
     folder = Path(folder_path)
-    configured = output_dir_from_config(folder, stage) if stage in ("hi", "lo") else None
+    configured = output_dir_from_config(folder, stage) if stage in ("hi", "lo", "krea2") else None
     if configured:
         return str(configured)
     return str(Path(app_config.FS_ROOT) / "output" / "runs" / folder.name)

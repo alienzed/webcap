@@ -18,7 +18,7 @@ from .caption_ops import _caption_name_for_media
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME
 from .dataset_config import repeat_targets_for_mode
 from .training_history import completed_stages, discover_runs, ranked_resumable_runs, resumable_run_for_path, output_root_for_folder, record_job, clear_history_job
 from .training_runtime import (
@@ -331,15 +331,19 @@ def _resolve_folder(folder):
     return value, path
 
 
-def _resolve_artifacts(folder, folder_path):
+def _resolve_artifacts(folder, folder_path, stages="both"):
     paths = {
         "hiConfig": folder_path / HI_CONFIG_NAME,
         "loConfig": folder_path / LO_CONFIG_NAME,
+        "krea2Config": folder_path / KREA2_CONFIG_NAME,
         "hiDataset": folder_path / "dataset.hi.toml",
         "loDataset": folder_path / "dataset.lo.toml",
         "manifest": folder_path / "auto_dataset" / "prep_manifest.json",
     }
-    missing = [name for name, path in paths.items() if not path.exists() or not path.is_file()]
+    required = ("krea2Config", "loDataset", "manifest") if stages == "krea2" else (
+        "hiConfig", "loConfig", "hiDataset", "loDataset", "manifest"
+    )
+    missing = [name for name in required if not paths[name].exists() or not paths[name].is_file()]
     return paths, missing
 
 
@@ -478,9 +482,9 @@ def _gpu_snapshot():
     }
 
 
-def _build_preflight(folder):
+def _build_preflight(folder, stages="both"):
     folder_value, folder_path = _resolve_folder(folder)
-    artifacts, missing = _resolve_artifacts(folder_value, folder_path)
+    artifacts, missing = _resolve_artifacts(folder_value, folder_path, stages)
     settings = _training_settings()
     checks = []
     checks.append(_make_check("set_folder_exists", "blocker", True, "Set folder is available.", str(folder_path)))
@@ -549,9 +553,9 @@ def _build_preflight(folder):
     return folder_value, folder_path, artifacts, settings, checks
 
 
-def _build_launch_preflight(folder):
+def _build_launch_preflight(folder, stages="both"):
     folder_value, folder_path = _resolve_folder(folder)
-    artifacts, missing = _resolve_artifacts(folder_value, folder_path)
+    artifacts, missing = _resolve_artifacts(folder_value, folder_path, stages)
     settings = _training_settings()
     shell_available = bool(shutil.which("bash")) if _uses_native_wsl_shell() else bool(_wsl_executable())
     checks = [
@@ -570,8 +574,8 @@ def _build_launch_preflight(folder):
     return folder_value, folder_path, artifacts, settings, checks
 
 
-def _preflight_payload(folder):
-    folder_value, folder_path, artifacts, settings, checks = _build_preflight(folder)
+def _preflight_payload(folder, stages="both"):
+    folder_value, folder_path, artifacts, settings, checks = _build_preflight(folder, stages)
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     warnings = [item for item in checks if item["severity"] == "warning" and not item["ok"]]
     return {
@@ -593,7 +597,7 @@ def _file_digest(path):
     return digest.hexdigest()
 
 
-def _input_evidence(folder_path):
+def _input_evidence(folder_path, stages="both"):
     folder = Path(folder_path)
     manifest_path = folder / "auto_dataset" / "prep_manifest.json"
     digest = hashlib.sha256()
@@ -616,7 +620,10 @@ def _input_evidence(folder_path):
             digest.update(caption.read_bytes())
         except OSError:
             digest.update(b"<missing-caption>")
-    config_paths = [folder / name for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json")]
+    config_names = (KREA2_CONFIG_NAME, "dataset.lo.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (
+        HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
+    )
+    config_paths = [folder / name for name in config_names]
     config_digest = hashlib.sha256()
     for path in config_paths:
         config_digest.update(path.name.encode("utf-8"))
@@ -681,15 +688,19 @@ def _plan_run_steps(progress_plan, snapshot):
     return planned
 
 
-def _copy_snapshot(job_dir, artifacts, folder_path):
+def _copy_snapshot(job_dir, artifacts, folder_path, stages):
     snapshot = {}
-    for key, filename in (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME)):
+    config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
+    for key, filename in config_files:
         source = artifacts[key + "Config"]
         target = job_dir / filename
         shutil.copy2(source, target)
         normalize_path_permissions(target)
         snapshot[key] = str(target)
-    for filename in ("dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"):
+    dataset_files = ("dataset.lo.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (
+        "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
+    )
+    for filename in dataset_files:
         source = Path(folder_path) / filename
         if not source.is_file():
             continue
@@ -720,8 +731,8 @@ def _default_progress_plan():
 
 def _normalize_training_stages(stages):
     value = str(stages or "both").strip().lower()
-    if value not in ("hi", "lo", "both"):
-        raise ValueError("Training stage must be hi, lo, or both.")
+    if value not in ("hi", "lo", "both", "krea2"):
+        raise ValueError("Training stage must be hi, lo, both, or krea2.")
     return value
 
 
@@ -737,13 +748,19 @@ def _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage):
 
 
 def _build_runner_script(job, settings, artifacts, job_dir):
-    use_snapshot = not (artifacts["hiConfig"].is_file() and artifacts["loConfig"].is_file())
-    hi_path = Path(job["snapshot"]["hi"]) if use_snapshot else artifacts["hiConfig"]
-    lo_path = Path(job["snapshot"]["lo"]) if use_snapshot else artifacts["loConfig"]
+    stages = _normalize_training_stages(job.get("stages"))
+    if stages == "krea2":
+        use_snapshot = not artifacts["krea2Config"].is_file()
+        krea2_path = Path(job["snapshot"]["krea2"]) if use_snapshot else artifacts["krea2Config"]
+        hi_path = krea2_path
+        lo_path = krea2_path
+    else:
+        use_snapshot = not (artifacts["hiConfig"].is_file() and artifacts["loConfig"].is_file())
+        hi_path = Path(job["snapshot"]["hi"]) if use_snapshot else artifacts["hiConfig"]
+        lo_path = Path(job["snapshot"]["lo"]) if use_snapshot else artifacts["loConfig"]
     distribution = settings["wslDistribution"]
     hi_wsl = _to_wsl_path(hi_path, distribution)
     lo_wsl = _to_wsl_path(lo_path, distribution)
-    stages = _normalize_training_stages(job.get("stages"))
     resume_stage = _normalize_resume_stage(stages, job.get("resumeFromCheckpoint"), job.get("resumeStage"))
     resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
     if resume_path and not resume_path.startswith("/"):
@@ -796,9 +813,19 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "if [ \"$LO_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
             "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
         ])
+    if stages == "krea2":
+        lines.extend([
+            "echo '[webcap] stage=krea2'",
+            "printf '%s\\n' " + shlex.quote("[webcap] command krea2: " + command_plan["loCommand"]),
+            command_plan["loCommand"],
+            "KREA2_CODE=$?",
+            "finish_requested_stop",
+            "if [ \"$KREA2_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$KREA2_CODE\"; exit \"$KREA2_CODE\"; fi",
+            "if [ \"$KREA2_CODE\" -ne 0 ]; then echo '[webcap] Krea2 failed'; write_result failed \"$KREA2_CODE\"; exit \"$KREA2_CODE\"; fi",
+        ])
     lines.extend(["echo '[webcap] completed'", "write_result completed 0"])
     script = "\n".join(lines) + "\n"
-    return script, {"hi": hi_wsl, "lo": lo_wsl, "usedSnapshot": use_snapshot}
+    return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "usedSnapshot": use_snapshot}
 
 
 def _write_runner_script(job, settings, artifacts):
@@ -827,7 +854,12 @@ def _launch_job(job, folder_path):
             job["finishedAt"] = time.time()
             return False
         job["permissionsRepairedAt"] = time.time()
-    _, _, artifacts, settings, checks = _build_launch_preflight(job["folder"])
+    stages = job.get("stages") or "both"
+    _, _, artifacts, settings, checks = (
+        _build_launch_preflight(job["folder"], stages)
+        if stages == "krea2"
+        else _build_launch_preflight(job["folder"])
+    )
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     job["preflight"] = {"checks": checks, "blockers": len(blockers)}
     if blockers:
@@ -1212,7 +1244,7 @@ def _prepare_paused_job_for_resume(job):
 
 def _inputs_changed(job, folder_path):
     recorded = job.get("input") if isinstance(job.get("input"), dict) else {}
-    current = _input_evidence(folder_path)
+    current = _input_evidence(folder_path, _normalize_training_stages(job.get("stages")))
     return bool(recorded) and (
         recorded.get("fingerprint") != current.get("fingerprint") or
         recorded.get("configFingerprint") != current.get("configFingerprint")
@@ -1220,9 +1252,10 @@ def _inputs_changed(job, folder_path):
 
 
 def _refresh_input_snapshot(job, folder_path):
-    artifacts, _ = _resolve_artifacts(job["folder"], folder_path)
-    job["snapshot"] = _copy_snapshot(_job_dir(job), artifacts, folder_path)
-    job["input"] = _input_evidence(folder_path)
+    stages = _normalize_training_stages(job.get("stages"))
+    artifacts, _ = _resolve_artifacts(job["folder"], folder_path, stages)
+    job["snapshot"] = _copy_snapshot(_job_dir(job), artifacts, folder_path, stages)
+    job["input"] = _input_evidence(folder_path, stages)
     job["profile"] = _training_profile(folder_path)
     job["model"] = _model_identity(artifacts)
     job["modelLabel"] = job["model"]["label"]
@@ -1322,7 +1355,7 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
     try:
         stages = _normalize_training_stages(stages)
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
-        payload = _preflight_payload(folder)
+        payload = _preflight_payload(folder, stages)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}
         blockers = [item for item in payload["checks"] if item["severity"] == "blocker" and not item["ok"]]
@@ -1334,7 +1367,11 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
             return payload, 200
         diagnostic_job = {
             "id": "diagnostic",
-            "snapshot": {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])},
+            "snapshot": (
+                {"krea2": str(artifacts["krea2Config"])}
+                if stages == "krea2"
+                else {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])}
+            ),
             "stages": stages,
             "resumeFromCheckpoint": str(resume_from_checkpoint or "").strip(),
             "resumeStage": resume_stage,
@@ -1370,14 +1407,14 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
 def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id=""):
     job_id = uuid.uuid4().hex[:12]
     _, folder_path = _resolve_folder(folder)
-    artifacts, _ = _resolve_artifacts(folder, folder_path)
     stages = _normalize_training_stages(stages)
+    artifacts, _ = _resolve_artifacts(folder, folder_path, stages)
     job_dir = _artifact_root(folder_path, stages) / job_id
     job_dir.mkdir(parents=True, exist_ok=False)
     normalize_path_permissions(job_dir)
-    snapshot = _copy_snapshot(job_dir, artifacts, folder_path)
+    snapshot = _copy_snapshot(job_dir, artifacts, folder_path, stages)
     progress_plan = _plan_run_steps(_read_training_plan(folder_path) or _default_progress_plan(), snapshot)
-    input_evidence = _input_evidence(folder_path)
+    input_evidence = _input_evidence(folder_path, stages)
     model = _model_identity(artifacts)
     resume_path = str(resume_from_checkpoint or "").strip()
     return {
@@ -1419,7 +1456,11 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         permission_error = _repair_training_set_permissions(folder_path, settings["wslDistribution"])
         if permission_error:
             return {"ok": False, "error": permission_error}, 400
-        _, folder_path, _, _, checks = _build_launch_preflight(folder)
+        _, folder_path, _, _, checks = (
+            _build_launch_preflight(folder, stages)
+            if stages == "krea2"
+            else _build_launch_preflight(folder)
+        )
     except Exception as exc:
         return {"ok": False, "error": str(exc)}, 400
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]

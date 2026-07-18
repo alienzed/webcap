@@ -77,10 +77,41 @@ def test_krea2_config_is_rendered_with_the_existing_shared_output_dir(tmp_path, 
     assert krea2_path.is_file()
     krea2_text = krea2_path.read_text(encoding="utf-8")
     assert 'dataset    = "' in krea2_text
-    assert "dataset.lo.toml" in krea2_text
+    assert "dataset.train.toml" in krea2_text
     assert "{TRAINING_ROOT}" not in krea2_text
     assert "{DATASET}" not in krea2_text
     assert training_config_files_module.output_dir_from_config(folder, "krea2") == training_config_files_module.output_dir_from_config(folder, "hi")
+
+
+def test_profile_generation_only_creates_missing_selected_configs_and_reset_is_explicit(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "lilly"
+    folder.mkdir(parents=True)
+    (folder / "clip.png").write_bytes(b"media")
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+
+    training_config_files_module.ensure_training_config_files(folder, profile_id="krea2_raw")
+    krea = folder / "config.krea2.toml"
+    assert krea.is_file()
+    assert not (folder / "config.hi.toml").exists()
+    krea.write_text("edited = true\n", encoding="utf-8")
+
+    training_config_files_module.ensure_training_config_files(folder, profile_id="krea2_raw")
+    assert krea.read_text(encoding="utf-8") == "edited = true\n"
+    training_config_files_module.reset_training_config_file(folder, "config.krea2.toml")
+    assert "type = \"krea2\"" in krea.read_text(encoding="utf-8")
+
+
+def test_wan21_config_shares_the_set_output_root(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "lilly"
+    folder.mkdir(parents=True)
+    (folder / "clip.mp4").write_bytes(b"media")
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+
+    training_config_files_module.ensure_training_config_files(folder, profile_id="wan22_t2v")
+    training_config_files_module.ensure_training_config_files(folder, profile_id="wan21_t2v_14b")
+    assert training_config_files_module.output_dir_from_config(folder, "wan21") == training_config_files_module.output_dir_from_config(folder, "hi")
 
 
 def test_new_training_config_sequence_advances_in_base36(tmp_path, monkeypatch):

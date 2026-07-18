@@ -18,7 +18,8 @@ from .caption_ops import _caption_name_for_media
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME
+from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, profile_run
 from .dataset_config import repeat_targets_for_mode
 from .training_history import completed_stages, discover_runs, ranked_resumable_runs, resumable_run_for_path, output_root_for_folder, record_job, clear_history_job
 from .training_runtime import (
@@ -240,7 +241,7 @@ def _job_action_path(job):
 
 
 def _artifact_root(folder_path, stage):
-    root = output_root_for_folder(folder_path, stage if stage in ("hi", "lo") else "hi")
+    root = output_root_for_folder(folder_path, stage if stage in ("hi", "lo", "krea2", "wan21") else "hi")
     return root / ".webcap" / "jobs"
 
 
@@ -336,13 +337,26 @@ def _resolve_artifacts(folder, folder_path, stages="both"):
         "hiConfig": folder_path / HI_CONFIG_NAME,
         "loConfig": folder_path / LO_CONFIG_NAME,
         "krea2Config": folder_path / KREA2_CONFIG_NAME,
+        "wan21Config": folder_path / WAN21_CONFIG_NAME,
         "hiDataset": folder_path / "dataset.hi.toml",
         "loDataset": folder_path / "dataset.lo.toml",
+        "trainDataset": folder_path / "dataset.train.toml",
         "manifest": folder_path / "auto_dataset" / "prep_manifest.json",
     }
-    required = ("krea2Config", "loDataset", "manifest") if stages == "krea2" else (
+    if stages == "krea2":
+        # Existing generated Krea configs may intentionally still use dataset.lo.toml.
+        try:
+            legacy_krea_dataset = "dataset.lo.toml" in paths["krea2Config"].read_text(encoding="utf-8")
+        except OSError:
+            legacy_krea_dataset = False
+        dataset_name = "loDataset" if legacy_krea_dataset else "trainDataset"
+        required = ("krea2Config", dataset_name, "manifest")
+    elif stages == "wan21":
+        required = ("wan21Config", "trainDataset", "manifest")
+    else:
+        required = (
         "hiConfig", "loConfig", "hiDataset", "loDataset", "manifest"
-    )
+        )
     missing = [name for name in required if not paths[name].exists() or not paths[name].is_file()]
     return paths, missing
 
@@ -501,6 +515,16 @@ def _build_preflight(folder, stages="both"):
     ))
     checks.append(_make_check("training_cwd", "blocker", bool(settings["cwd"]),
                               "Diffusion Pipe WSL path is configured." if settings["cwd"] else "Set training.diffusion_pipe_wsl in App Settings."))
+    if stages == "krea2":
+        try:
+            manifest = json.loads((folder_path / "auto_dataset" / "prep_manifest.json").read_text(encoding="utf-8"))
+            image_only = not bool(manifest.get("videos"))
+        except (OSError, ValueError, AttributeError):
+            image_only = False
+        checks.append(_make_check(
+            "krea2_image_only", "blocker", image_only,
+            "Krea2 Raw input is image-only." if image_only else "Krea2 Raw requires image-only prepared media.",
+        ))
     if not all(item["ok"] for item in checks if item["severity"] == "blocker"):
         return folder_value, folder_path, artifacts, settings, checks
 
@@ -620,7 +644,7 @@ def _input_evidence(folder_path, stages="both"):
             digest.update(caption.read_bytes())
         except OSError:
             digest.update(b"<missing-caption>")
-    config_names = (KREA2_CONFIG_NAME, "dataset.lo.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (
+    config_names = (KREA2_CONFIG_NAME, "dataset.train.toml", "dataset.lo.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (WAN21_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "wan21" else (
         HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
     )
     config_paths = [folder / name for name in config_names]
@@ -646,10 +670,10 @@ def _training_profile(folder_path):
 def _model_identity(artifacts):
     source = ""
     pattern = re.compile(r"^\s*(?:model|model_path|checkpoint|base_model|ckpt_path)\s*=\s*[\"']?([^\"'\n#]+)", re.MULTILINE | re.IGNORECASE)
-    for key in ("hiConfig", "loConfig"):
+    for key in ("hiConfig", "loConfig", "krea2Config", "wan21Config"):
         try:
             match = pattern.search(Path(artifacts[key]).read_text(encoding="utf-8"))
-        except OSError:
+        except (KeyError, OSError):
             match = None
         if match:
             source = match.group(1).strip()
@@ -679,7 +703,7 @@ def _plan_run_steps(progress_plan, snapshot):
         stage = dict(stage_plan) if isinstance(stage_plan, dict) else {}
         exposures = int(stage.get("estimatedSteps") or 0)
         has_generated_shape = exposures > 0 and int(stage.get("epochs") or 0) > 0
-        if has_generated_shape and stage_name in ("hi", "lo"):
+        if has_generated_shape:
             micro_batch = _read_config_positive_int(snapshot.get(stage_name), "micro_batch_size_per_gpu", 1)
             stage["sampleExposures"] = exposures
             stage["microBatchSize"] = micro_batch
@@ -690,14 +714,14 @@ def _plan_run_steps(progress_plan, snapshot):
 
 def _copy_snapshot(job_dir, artifacts, folder_path, stages):
     snapshot = {}
-    config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
+    config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21" else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
     for key, filename in config_files:
         source = artifacts[key + "Config"]
         target = job_dir / filename
         shutil.copy2(source, target)
         normalize_path_permissions(target)
         snapshot[key] = str(target)
-    dataset_files = ("dataset.lo.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (
+    dataset_files = (("dataset.lo.toml" if artifacts["loDataset"].is_file() and "dataset.lo.toml" in artifacts["krea2Config"].read_text(encoding="utf-8") else "dataset.train.toml"), "auto_dataset/training_plan.json") if stages == "krea2" else ("dataset.train.toml", "auto_dataset/training_plan.json") if stages == "wan21" else (
         "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
     )
     for filename in dataset_files:
@@ -731,15 +755,15 @@ def _default_progress_plan():
 
 def _normalize_training_stages(stages):
     value = str(stages or "both").strip().lower()
-    if value not in ("hi", "lo", "both", "krea2"):
-        raise ValueError("Training stage must be hi, lo, both, or krea2.")
+    if value not in ("hi", "lo", "both", "krea2", "wan21"):
+        raise ValueError("Training stage must be hi, lo, both, krea2, or wan21.")
     return value
 
 
 def _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage):
     if not str(resume_from_checkpoint or "").strip():
         return ""
-    if stages in ("hi", "lo"):
+    if stages in ("hi", "lo", "krea2", "wan21"):
         return stages
     value = str(resume_stage or "lo").strip().lower()
     if value not in ("hi", "lo"):
@@ -749,11 +773,13 @@ def _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage):
 
 def _build_runner_script(job, settings, artifacts, job_dir):
     stages = _normalize_training_stages(job.get("stages"))
-    if stages == "krea2":
-        use_snapshot = not artifacts["krea2Config"].is_file()
-        krea2_path = Path(job["snapshot"]["krea2"]) if use_snapshot else artifacts["krea2Config"]
-        hi_path = krea2_path
-        lo_path = krea2_path
+    if stages in ("krea2", "wan21"):
+        config_key = "krea2" if stages == "krea2" else "wan21"
+        artifact_key = config_key + "Config"
+        use_snapshot = not artifacts[artifact_key].is_file()
+        config_path = Path(job["snapshot"][config_key]) if use_snapshot else artifacts[artifact_key]
+        hi_path = config_path
+        lo_path = config_path
     else:
         use_snapshot = not (artifacts["hiConfig"].is_file() and artifacts["loConfig"].is_file())
         hi_path = Path(job["snapshot"]["hi"]) if use_snapshot else artifacts["hiConfig"]
@@ -813,19 +839,21 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "if [ \"$LO_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
             "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
         ])
-    if stages == "krea2":
+    if stages in ("krea2", "wan21"):
+        stage_title = "Krea2" if stages == "krea2" else "Wan2.1"
+        stage_code = "KREA2" if stages == "krea2" else "WAN21"
         lines.extend([
-            "echo '[webcap] stage=krea2'",
-            "printf '%s\\n' " + shlex.quote("[webcap] command krea2: " + command_plan["loCommand"]),
+            "echo '[webcap] stage=" + stages + "'",
+            "printf '%s\\n' " + shlex.quote("[webcap] command " + stages + ": " + command_plan["loCommand"]),
             command_plan["loCommand"],
-            "KREA2_CODE=$?",
+            stage_code + "_CODE=$?",
             "finish_requested_stop",
-            "if [ \"$KREA2_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$KREA2_CODE\"; exit \"$KREA2_CODE\"; fi",
-            "if [ \"$KREA2_CODE\" -ne 0 ]; then echo '[webcap] Krea2 failed'; write_result failed \"$KREA2_CODE\"; exit \"$KREA2_CODE\"; fi",
+            "if [ \"$" + stage_code + "_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$" + stage_code + "_CODE\"; exit \"$" + stage_code + "_CODE\"; fi",
+            "if [ \"$" + stage_code + "_CODE\" -ne 0 ]; then echo '[webcap] " + stage_title + " failed'; write_result failed \"$" + stage_code + "_CODE\"; exit \"$" + stage_code + "_CODE\"; fi",
         ])
     lines.extend(["echo '[webcap] completed'", "write_result completed 0"])
     script = "\n".join(lines) + "\n"
-    return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "usedSnapshot": use_snapshot}
+    return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "wan21": lo_wsl if stages == "wan21" else "", "usedSnapshot": use_snapshot}
 
 
 def _write_runner_script(job, settings, artifacts):
@@ -857,8 +885,6 @@ def _launch_job(job, folder_path):
     stages = job.get("stages") or "both"
     _, _, artifacts, settings, checks = (
         _build_launch_preflight(job["folder"], stages)
-        if stages == "krea2"
-        else _build_launch_preflight(job["folder"])
     )
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     job["preflight"] = {"checks": checks, "blockers": len(blockers)}
@@ -963,7 +989,7 @@ def _recent_seconds_per_step(log_text, stage):
 
 def _sync_job_progress(job, log_text):
     stage = str(job.get("stage") or "").lower()
-    if stage not in ("hi", "lo"):
+    if stage not in ("hi", "lo", "krea2", "wan21"):
         job.pop("progress", None)
         return
 
@@ -982,6 +1008,10 @@ def _sync_job_progress(job, log_text):
     step = int(step_matches[-1]) if step_matches else previous.get("step")
     plan = job.get("progressPlan") if isinstance(job.get("progressPlan"), dict) else {}
     stage_plan = plan.get(stage) if isinstance(plan.get(stage), dict) else {}
+    # Krea2 and Wan2.1 use the neutral/LO bucket policy. Jobs created before
+    # profile plans existed still carry the older LO-only plan in their snapshot.
+    if not stage_plan and stage in ("krea2", "wan21") and isinstance(plan.get("lo"), dict):
+        stage_plan = plan["lo"]
     planned_steps = int(stage_plan.get("estimatedSteps") or 0)
     # Epochs come directly from diffusion-pipe's log and are authoritative when
     # available. The generated step budget is only a fallback for logs without
@@ -1143,7 +1173,11 @@ def _refresh_job(job):
         if log_path.is_file():
             try:
                 tail = _read_log_tail(log_path)
-                if "[webcap] stage=lo" in tail:
+                if "[webcap] stage=wan21" in tail:
+                    job["stage"] = "wan21"
+                elif "[webcap] stage=krea2" in tail:
+                    job["stage"] = "krea2"
+                elif "[webcap] stage=lo" in tail:
                     job["stage"] = "lo"
                 elif "[webcap] stage=hi" in tail:
                     job["stage"] = "hi"
@@ -1182,7 +1216,11 @@ def _refresh_job(job):
             tail = _read_log_tail(log_path)
             log_advanced = bool(prior_log_mtime and log_mtime > prior_log_mtime)
             log_has_progress = bool(_LOG_EPOCH_PATTERN.search(tail) or _LOG_STEP_PATTERN.search(tail))
-            if "[webcap] stage=lo" in tail:
+            if "[webcap] stage=wan21" in tail:
+                job["stage"] = "wan21"
+            elif "[webcap] stage=krea2" in tail:
+                job["stage"] = "krea2"
+            elif "[webcap] stage=lo" in tail:
                 job["stage"] = "lo"
             elif "[webcap] stage=hi" in tail:
                 job["stage"] = "hi"
@@ -1242,27 +1280,6 @@ def _prepare_paused_job_for_resume(job):
     return ""
 
 
-def _inputs_changed(job, folder_path):
-    recorded = job.get("input") if isinstance(job.get("input"), dict) else {}
-    current = _input_evidence(folder_path, _normalize_training_stages(job.get("stages")))
-    return bool(recorded) and (
-        recorded.get("fingerprint") != current.get("fingerprint") or
-        recorded.get("configFingerprint") != current.get("configFingerprint")
-    )
-
-
-def _refresh_input_snapshot(job, folder_path):
-    stages = _normalize_training_stages(job.get("stages"))
-    artifacts, _ = _resolve_artifacts(job["folder"], folder_path, stages)
-    job["snapshot"] = _copy_snapshot(_job_dir(job), artifacts, folder_path, stages)
-    job["input"] = _input_evidence(folder_path, stages)
-    job["profile"] = _training_profile(folder_path)
-    job["model"] = _model_identity(artifacts)
-    job["modelLabel"] = job["model"]["label"]
-    job.pop("inputConfirmationRequired", None)
-    job["updatedAt"] = time.time()
-
-
 def _start_next(state):
     if state.get("queuePaused"):
         return
@@ -1282,11 +1299,6 @@ def _start_next(state):
                 state["queuePauseReason"] = "Queue held: " + resume_error
                 return
         folder_path = app_config.safe_join_fs_root(job["folder"])
-        if _inputs_changed(job, folder_path):
-            job["inputConfirmationRequired"] = True
-            state["queuePaused"] = True
-            state["queuePauseReason"] = "Queued inputs changed. Confirm current inputs or cancel this item."
-            return
         _launch_job(job, folder_path)
         if job.get("status") in ACTIVE_STATUSES:
             state["activeJobId"] = job["id"]
@@ -1298,6 +1310,13 @@ def _start_next(state):
 
 
 def _refresh_state(state):
+    # Jobs queued by older versions may still carry the removed input-change
+    # confirmation hold. Current files are now always intentional launch input.
+    if state.get("queuePauseReason") == "Queued inputs changed. Confirm current inputs or cancel this item.":
+        state["queuePaused"] = False
+        state["queuePauseReason"] = ""
+        for job in state.get("jobs", []):
+            job.pop("inputConfirmationRequired", None)
     for job in state.get("jobs", []):
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
@@ -1347,12 +1366,15 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "modelLabel", "model", "profile", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "inputConfirmationRequired")
+    fields = ("id", "folder", "stages", "profileId", "runId", "modelLabel", "model", "profile", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
     return {field: job.get(field) for field in fields if field in job}
 
 
-def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage=""):
+def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", profile_id="", run_id=""):
     try:
+        if profile_id or run_id:
+            _, selected_run = profile_run(profile_id, run_id, stages)
+            stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
         stages = _normalize_training_stages(stages)
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
         payload = _preflight_payload(folder, stages)
@@ -1367,11 +1389,7 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
             return payload, 200
         diagnostic_job = {
             "id": "diagnostic",
-            "snapshot": (
-                {"krea2": str(artifacts["krea2Config"])}
-                if stages == "krea2"
-                else {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])}
-            ),
+            "snapshot": ({"krea2": str(artifacts["krea2Config"])} if stages == "krea2" else {"wan21": str(artifacts["wan21Config"])} if stages == "wan21" else {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])}),
             "stages": stages,
             "resumeFromCheckpoint": str(resume_from_checkpoint or "").strip(),
             "resumeStage": resume_stage,
@@ -1404,7 +1422,7 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
         return {"ok": False, "error": str(exc), "checks": [], "summary": {"blockers": 1, "warnings": 0}}, 400
 
 
-def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id=""):
+def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id=""):
     job_id = uuid.uuid4().hex[:12]
     _, folder_path = _resolve_folder(folder)
     stages = _normalize_training_stages(stages)
@@ -1421,6 +1439,8 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "id": job_id,
         "folder": folder,
         "stages": stages,
+        "profileId": str(profile_id or ""),
+        "runId": str(run_id or ""),
         "modelLabel": model["label"],
         "model": model,
         "profile": _training_profile(folder_path),
@@ -1444,8 +1464,13 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
     }
 
 
-def start_response(folder, queue=False, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id=""):
+def start_response(folder, queue=False, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id=""):
     try:
+        selected_profile = None
+        selected_run = None
+        if profile_id or run_id:
+            selected_profile, selected_run = profile_run(profile_id, run_id, stages)
+            stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
         stages = _normalize_training_stages(stages)
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
     except ValueError as exc:
@@ -1458,7 +1483,7 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
             return {"ok": False, "error": permission_error}, 400
         _, folder_path, _, _, checks = (
             _build_launch_preflight(folder, stages)
-            if stages == "krea2"
+            if stages in ("krea2", "wan21")
             else _build_launch_preflight(folder)
         )
     except Exception as exc:
@@ -1490,7 +1515,8 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         for job_stage in job_stages:
             stage_resume = resume_from_checkpoint if resume_stage == job_stage else ""
             jobs.append(_new_job(
-                str(folder).strip(), preflight, job_stage, stage_resume, job_stage if stage_resume else "", parent_job_id
+                str(folder).strip(), preflight, job_stage, stage_resume, job_stage if stage_resume else "", parent_job_id,
+                selected_profile["id"] if selected_profile else "", selected_run["id"] if selected_run else ""
             ))
         state["jobs"].extend(jobs)
         if not active or active.get("status") in TERMINAL_STATUSES:
@@ -1640,6 +1666,8 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
                 clear_history_job(app_config.safe_join_fs_root(folder), job.get("id"))
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
+        if cancel:
+            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Stop, Pause, or Finish for the active job."}, 400
         if job.get("status") not in ACTIVE_STATUSES:
             return {"ok": False, "error": "Training job is not running."}, 400
         pid = int(job.get("pid") or 0)
@@ -1723,28 +1751,6 @@ def resume_queue_response():
                 "jobs": [_public_job(job) for job in state["jobs"]],
             }, 409
         return {"ok": True, "activeJobId": state.get("activeJobId") or "", "jobs": [_public_job(job) for job in state["jobs"]]}, 200
-
-
-def confirm_inputs_response(job_id, use_current=False):
-    with _lock:
-        state = _read_state()
-        job = _find_job(state, job_id)
-        if not job or job.get("status") not in QUEUE_STATUSES:
-            return {"ok": False, "error": "Queued training job not found."}, 404
-        if not job.get("inputConfirmationRequired"):
-            return {"ok": False, "error": "This queued job does not need input confirmation."}, 409
-        if not use_current:
-            job["status"] = "cancelled"
-            job["stage"] = "cancelled"
-            job["finishedAt"] = time.time()
-        else:
-            _refresh_input_snapshot(job, app_config.safe_join_fs_root(job["folder"]))
-            state["queuePaused"] = False
-            state["queuePauseReason"] = ""
-            _start_next(state)
-        _sync_histories(state)
-        _write_state(state)
-        return {"ok": True, "job": _public_job(job), "jobs": [_public_job(item) for item in state["jobs"]]}, 200
 
 
 def resume_job_response(job_id):

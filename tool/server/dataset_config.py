@@ -156,7 +156,7 @@ def estimate_steps(entries, repeats, epochs: int):
     return int(epochs) * int(per_epoch)
 
 
-def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False):
+def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False, profile_id: str = ""):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
     manifest_path = dataset_root / PREP_MANIFEST_NAME
@@ -243,23 +243,40 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lo_entries.extend(video_entries)
     lo_entries.extend(lo_image_entries)
 
+    from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID
+
+    single_stage = str(profile_id or "") in (KREA2_PROFILE_ID, WAN21_PROFILE_ID)
+    single_stage_name = "krea2" if profile_id == KREA2_PROFILE_ID else "wan21"
+    single_config_name = "config.krea2.toml" if profile_id == KREA2_PROFILE_ID else "config.wan21.toml"
+    legacy_krea_dataset = False
+    if profile_id == KREA2_PROFILE_ID:
+        try:
+            legacy_krea_dataset = "dataset.lo.toml" in (folder / single_config_name).read_text(encoding="utf-8")
+        except OSError:
+            pass
     hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
     default_hi_epochs, default_lo_epochs = default_training_config_epochs()
     hi_epochs = read_epochs_from_training_config(folder / HI_CONFIG_NAME, default_hi_epochs)
-    lo_epochs = read_epochs_from_training_config(folder / LO_CONFIG_NAME, default_lo_epochs)
+    lo_epochs = read_epochs_from_training_config(folder / (single_config_name if single_stage else LO_CONFIG_NAME), default_lo_epochs)
     hi_scalar, hi_base = solve_repeat_scalar(hi_entries, hi_target_steps, hi_epochs)
     lo_scalar, lo_base = solve_repeat_scalar(lo_entries, lo_target_steps, lo_epochs)
     hi_repeats = build_repeats(hi_entries, hi_scalar)
     lo_repeats = build_repeats(lo_entries, lo_scalar)
     hi_est = estimate_steps(hi_entries, hi_repeats, hi_epochs)
     lo_est = estimate_steps(lo_entries, lo_repeats, lo_epochs)
+    training_stages = {
+        "hi": {"epochs": hi_epochs, "targetSteps": hi_target_steps, "estimatedSteps": hi_est},
+        "lo": {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est},
+    }
+    if single_stage:
+        training_stages = {
+            single_stage_name: {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est},
+        }
     training_plan = {
         "version": 1,
         "mode": generate_mode,
-        "stages": {
-            "hi": {"epochs": hi_epochs, "targetSteps": hi_target_steps, "estimatedSteps": hi_est},
-            "lo": {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est},
-        },
+        "profileId": str(profile_id or "wan22_t2v"),
+        "stages": training_stages,
     }
     training_plan_path = dataset_root / TRAINING_PLAN_FILE_NAME
     training_plan_path.write_text(json.dumps(training_plan, indent=2), encoding="utf-8")
@@ -281,14 +298,20 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     snapshot_lines = build_selection_snapshot_comment_lines(folder, dataset_root, manifest) if write_selection_snapshot_comments else None
     hi_text = render_dataset_toml(hi_blocks, snapshot_lines)
     lo_text = render_dataset_toml(lo_blocks, snapshot_lines)
-    hi_path = folder / "dataset.hi.toml"
-    lo_path = folder / "dataset.lo.toml"
-    hi_path.write_text(hi_text, encoding="utf-8")
-    lo_path.write_text(lo_text, encoding="utf-8")
-    normalize_path_permissions(hi_path)
-    normalize_path_permissions(lo_path)
-    lines.append(f"[INFO] Wrote {hi_path}")
-    lines.append(f"[INFO] Wrote {lo_path}")
+    if single_stage:
+        train_path = folder / ("dataset.lo.toml" if legacy_krea_dataset else "dataset.train.toml")
+        train_path.write_text(lo_text, encoding="utf-8")
+        normalize_path_permissions(train_path)
+        lines.append(f"[INFO] Wrote {train_path}")
+    else:
+        hi_path = folder / "dataset.hi.toml"
+        lo_path = folder / "dataset.lo.toml"
+        hi_path.write_text(hi_text, encoding="utf-8")
+        lo_path.write_text(lo_text, encoding="utf-8")
+        normalize_path_permissions(hi_path)
+        normalize_path_permissions(lo_path)
+        lines.append(f"[INFO] Wrote {hi_path}")
+        lines.append(f"[INFO] Wrote {lo_path}")
 
     return "\n".join(lines) + "\n"
 

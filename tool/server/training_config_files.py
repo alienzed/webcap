@@ -4,13 +4,15 @@ from pathlib import Path
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
 from .permissions import normalize_path_permissions
+from .training_profiles import profile_config_files, profiles
 
 ROOT = Path(__file__).resolve().parents[2]
 TRAINING_TEMPLATES_DIR = ROOT / "tool" / "templates"
 HI_CONFIG_NAME = "config.hi.toml"
 LO_CONFIG_NAME = "config.lo.toml"
 KREA2_CONFIG_NAME = "config.krea2.toml"
-TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME)
+WAN21_CONFIG_NAME = "config.wan21.toml"
+TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME)
 
 _EPOCHS_TEXT_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?$', re.MULTILINE)
@@ -26,7 +28,7 @@ _FALLBACK_LO_EPOCHS = 90
 def _fallback_epochs_for_template(name: str):
     if name == HI_CONFIG_NAME:
         return _FALLBACK_HI_EPOCHS
-    if name == LO_CONFIG_NAME:
+    if name in (LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME):
         return _FALLBACK_LO_EPOCHS
     raise ValueError(f"Unknown training config template: {name}")
 
@@ -80,7 +82,9 @@ def training_config_path(folder_path: Path, stage: str):
         return Path(folder_path) / LO_CONFIG_NAME
     if stage == "krea2":
         return Path(folder_path) / KREA2_CONFIG_NAME
-    raise ValueError("Training stage must be hi, lo, or krea2.")
+    if stage == "wan21":
+        return Path(folder_path) / WAN21_CONFIG_NAME
+    raise ValueError("Unknown training configuration stage: " + stage)
 
 
 def output_dir_from_config(folder_path: Path, stage: str):
@@ -136,7 +140,16 @@ def _with_output_dir(config_text: str, output_dir: Path):
     return updated
 
 
-def ensure_training_config_files(folder_path: Path):
+def _config_stage_for_template(name):
+    for item in profiles():
+        for config in item["configs"]:
+            if config["file"] == name:
+                return config["id"]
+    raise ValueError("Unknown training config template: " + str(name))
+
+
+def ensure_training_config_files(folder_path: Path, profile_id=None, reset=False):
+    """Create missing per-set configs, or explicitly reset one profile's files."""
     folder = Path(folder_path)
     if folder.name in ("originals", "auto_dataset"):
         return []
@@ -144,22 +157,34 @@ def ensure_training_config_files(folder_path: Path):
     if not media_files:
         return []
 
-    existing_roots = {
-        name: output_dir_from_config(
-            folder,
-            "hi" if name == HI_CONFIG_NAME else ("lo" if name == LO_CONFIG_NAME else "krea2"),
-        )
-        for name in TRAINING_CONFIG_TEMPLATE_NAMES
-    }
+    selected_names = profile_config_files(profile_id) if profile_id else TRAINING_CONFIG_TEMPLATE_NAMES
+    existing_roots = {name: output_dir_from_config(folder, _config_stage_for_template(name)) for name in TRAINING_CONFIG_TEMPLATE_NAMES}
     assigned_root = next((root for root in existing_roots.values() if root), None)
     if not assigned_root:
         assigned_root = _next_output_dir(folder)
     written = []
-    for name in TRAINING_CONFIG_TEMPLATE_NAMES:
+    for name in selected_names:
         dest = folder / name
+        if dest.exists() and not reset:
+            continue
         rendered = render_training_config_template(name, folder)
         rendered = _with_output_dir(rendered, existing_roots[name] or assigned_root)
         dest.write_text(rendered, encoding="utf-8")
         normalize_path_permissions(dest)
         written.append(dest)
     return written
+
+
+def reset_training_config_file(folder_path: Path, filename: str):
+    """Explicitly restore one config; generation never overwrites it implicitly."""
+    folder = Path(folder_path)
+    name = str(filename or "").strip()
+    if name not in TRAINING_CONFIG_TEMPLATE_NAMES:
+        raise ValueError("Unknown training config: " + name)
+    existing_roots = {item: output_dir_from_config(folder, _config_stage_for_template(item)) for item in TRAINING_CONFIG_TEMPLATE_NAMES}
+    assigned_root = next((root for root in existing_roots.values() if root), None) or _next_output_dir(folder)
+    destination = folder / name
+    rendered = _with_output_dir(render_training_config_template(name, folder), existing_roots[name] or assigned_root)
+    destination.write_text(rendered, encoding="utf-8")
+    normalize_path_permissions(destination)
+    return destination

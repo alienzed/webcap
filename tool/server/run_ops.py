@@ -142,7 +142,7 @@ def prepare_dataset_response(folder: str, selected_media=None, selection_criteri
         return jsonify({"error": str(e)}), 400
 
 
-def generate_dataset_config_response(folder: str, mode: str = ""):
+def generate_dataset_config_response(folder: str, mode: str = "", profile_id: str = ""):
     if not folder:
         return Response("[ERROR] Missing folder argument\n", status=400, mimetype="text/plain")
     try:
@@ -157,10 +157,14 @@ def generate_dataset_config_response(folder: str, mode: str = ""):
             return Response(f"[ERROR] Missing prep manifest: {prep_manifest_path}\n", status=400, mimetype="text/plain")
 
         try:
+            from .training_profiles import KREA2_PROFILE_ID
+            if profile_id == KREA2_PROFILE_ID and not _manifest_is_image_only(prep_manifest_path):
+                return Response("[ERROR] Krea2 Raw requires image-only prepared media.\n", status=400, mimetype="text/plain")
             text = generate_dataset_configs(
                 folder_path,
                 mode=mode,
                 write_selection_snapshot_comments=write_snapshot_comments,
+                profile_id=profile_id,
             )
             image_only = _manifest_is_image_only(prep_manifest_path)
             if image_only:
@@ -195,7 +199,7 @@ def _to_wsl_path(path_obj: Path, distribution=""):
     return out
 
 
-def train_run_response(folder: str, stages="both", resume_from_checkpoint="", resume_stage=""):
+def train_run_response(folder: str, stages="both", resume_from_checkpoint="", resume_stage="", profile_id="", run_id=""):
     if not folder:
         return Response("[ERROR] Missing folder argument\n", status=400, mimetype="text/plain")
 
@@ -206,6 +210,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
     hi_name = HI_CONFIG_NAME
     lo_name = LO_CONFIG_NAME
     krea2_name = KREA2_CONFIG_NAME
+    wan21_name = "config.wan21.toml"
     mode = "normal"
     write_snapshot_comments = bool(training_cfg.get("write_selection_snapshot_comments"))
 
@@ -214,25 +219,39 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
         if not folder_path.exists() or not folder_path.is_dir():
             return Response(f"[ERROR] Folder does not exist: {folder}\n", status=404, mimetype="text/plain")
 
+        from .training_profiles import profile_run
+        selected_profile, selected_run = profile_run(profile_id, run_id, stages)
+        stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
+        prep_manifest_path = folder_path / "auto_dataset" / "prep_manifest.json"
+        if stages == "krea2" and prep_manifest_path.is_file() and not _manifest_is_image_only(prep_manifest_path):
+            return Response("[ERROR] Krea2 Raw requires image-only prepared media.\n", status=400, mimetype="text/plain")
         hi_path = folder_path / hi_name
         lo_path = folder_path / lo_name
         krea2_path = folder_path / krea2_name
         dataset_hi_path = folder_path / "dataset.hi.toml"
         dataset_lo_path = folder_path / "dataset.lo.toml"
+        dataset_train_path = folder_path / "dataset.train.toml"
+        wan21_path = folder_path / wan21_name
 
-        required_paths = (krea2_path, dataset_lo_path) if stages == "krea2" else (
+        selected_config = krea2_path if stages == "krea2" else wan21_path if stages == "wan21" else None
+        selected_dataset = dataset_train_path if stages in ("krea2", "wan21") else None
+        # Older Krea configs deliberately remain runnable until reset or migrated.
+        if stages == "krea2" and krea2_path.is_file() and "dataset.lo.toml" in krea2_path.read_text(encoding="utf-8"):
+            selected_dataset = dataset_lo_path
+        required_paths = (selected_config, selected_dataset) if selected_config else (
             hi_path, lo_path, dataset_hi_path, dataset_lo_path
         )
         if any(not path.exists() for path in required_paths):
-            ensure_training_config_files(folder_path)
+            ensure_training_config_files(folder_path, profile_id=selected_profile["id"] if profile_id else None)
             generate_dataset_configs(
                 folder_path,
                 mode=mode,
                 write_selection_snapshot_comments=write_snapshot_comments,
+                profile_id=selected_profile["id"],
             )
 
         missing_files = []
-        required_files = ((krea2_name, krea2_path), ("dataset.lo.toml", dataset_lo_path)) if stages == "krea2" else (
+        required_files = ((selected_config.name, selected_config), (selected_dataset.name, selected_dataset)) if selected_config else (
             (hi_name, hi_path), (lo_name, lo_path), ("dataset.hi.toml", dataset_hi_path), ("dataset.lo.toml", dataset_lo_path)
         )
         for name, path in required_files:
@@ -257,12 +276,12 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
         except Exception:
             lo_wsl = lo_path.as_posix()
             warnings.append(f"[WARN] Could not resolve WSL path for {lo_name}; using native path.")
-        if stages == "krea2":
+        if stages in ("krea2", "wan21"):
             try:
-                lo_wsl = _to_wsl_path(krea2_path, runtime_settings["wslDistribution"])
+                lo_wsl = _to_wsl_path(selected_config, runtime_settings["wslDistribution"])
             except Exception:
-                lo_wsl = krea2_path.as_posix()
-                warnings.append(f"[WARN] Could not resolve WSL path for {krea2_name}; using native path.")
+                lo_wsl = selected_config.as_posix()
+                warnings.append(f"[WARN] Could not resolve WSL path for {selected_config.name}; using native path.")
 
         if not diffusion_pipe_wsl:
             diffusion_pipe_wsl = "<set training.diffusion_pipe_wsl>"
@@ -277,7 +296,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
         )
         if stages == "hi":
             handoff_cmd = command_plan["hiCommand"]
-        elif stages in ("lo", "krea2"):
+        elif stages in ("lo", "krea2", "wan21"):
             handoff_cmd = command_plan["loCommand"]
         else:
             handoff_cmd = command_plan["handoffCommand"]
@@ -287,8 +306,8 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
                 yield f"[INFO] Training stages: {stages}\n"
                 if resume_from_checkpoint:
                     yield f"[INFO] Resume {resume_stage.upper()} checkpoint: {resume_from_checkpoint}\n"
-                if stages == "krea2":
-                    yield f"[INFO] Config Krea2: {lo_wsl}\n"
+                if stages in ("krea2", "wan21"):
+                    yield f"[INFO] Config {selected_profile['label']}: {lo_wsl}\n"
                 else:
                     yield f"[INFO] Config HI: {hi_wsl}\n"
                     yield f"[INFO] Config LO: {lo_wsl}\n"

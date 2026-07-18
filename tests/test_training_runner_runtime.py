@@ -279,6 +279,24 @@ def test_krea2_runner_script_uses_only_the_krea2_config(tmp_path, monkeypatch):
     assert resolved["krea2"] == "/mnt/w/config.krea2.toml"
 
 
+def test_wan21_runner_script_uses_only_the_wan21_config(tmp_path, monkeypatch):
+    wan21_path = tmp_path / "config.wan21.toml"
+    wan21_path.write_text("wan21", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + path.name)
+    settings = training_runtime_settings({"diffusion_pipe_wsl": "/home/user/diffusion-pipe"})
+
+    script, resolved = training_runner._build_runner_script(
+        {"snapshot": {}, "stages": "wan21"}, settings, {"wan21Config": wan21_path}, tmp_path / "job"
+    )
+
+    assert "[webcap] stage=wan21" in script
+    assert "[webcap] command wan21:" in script
+    assert "/mnt/w/config.wan21.toml" in script
+    assert "[webcap] stage=hi" not in script
+    assert "[webcap] stage=lo" not in script
+    assert resolved["wan21"] == "/mnt/w/config.wan21.toml"
+
+
 def test_discovered_resume_path_is_the_run_directory_not_its_latest_marker(tmp_path, monkeypatch):
     folder = tmp_path / "set"
     output_root = tmp_path / "output"
@@ -767,6 +785,21 @@ def test_cancelling_a_paused_job_removes_it_from_the_queue(monkeypatch):
     assert cleared == [("set", "active")]
     assert state["queuePaused"] is True
     assert advanced == []
+
+
+def test_cancelling_a_running_job_is_rejected_without_signalling_it(monkeypatch):
+    active = {"id": "active", "folder": "set", "status": "running", "pid": 42}
+    state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active]}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not signal a cancel request")))
+
+    payload, status = training_runner.stop_response("active", cancel=True)
+
+    assert status == 400
+    assert active["status"] == "running"
+    assert "Only queued" in payload["error"]
 
 
 def test_resuming_a_paused_job_keeps_its_queue_position(monkeypatch):

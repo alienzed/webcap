@@ -3,6 +3,8 @@ var trainingWorkspaceState = {
   trainingPlan: null,
   trainingPlanFolder: '',
   configFiles: [],
+  profiles: [],
+  selectedProfileId: 'wan22_t2v',
   runnerJobs: [],
   runnerActiveJobId: '',
   runnerSelectedJobId: '',
@@ -56,6 +58,7 @@ function getTrainingWorkspaceEls() {
     runSetup: document.getElementById('training-run-setup'),
     readiness: document.getElementById('training-readiness'),
     configList: document.getElementById('training-workspace-config-list'),
+    modelProfileSelect: document.getElementById('training-model-profile-select'),
     profileSelect: document.getElementById('training-workspace-profile-select'),
     configStepNumber: document.getElementById('training-workspace-config-step-number'),
     runStepNumber: document.getElementById('training-run-step-number'),
@@ -233,9 +236,6 @@ function buildTrainingQueueHtml(queuedJobs) {
       var resume = queuedJob.resumeFromCheckpoint
         ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(trainingStageLabel(queuedJob.resumeStage || queuedJob.stages || 'both')) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
         : '';
-      var confirmation = queuedJob.inputConfirmationRequired
-        ? '<div class="training-runner-queue-resume is-warning">Inputs changed. <button type="button" data-training-confirm-inputs="current" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Use current inputs</button> <button type="button" data-training-confirm-inputs="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Cancel</button></div>'
-        : '';
       var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
       var exceptionalStatus = status !== 'queued'
         ? '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>'
@@ -245,7 +245,7 @@ function buildTrainingQueueHtml(queuedJobs) {
         '<div class="training-runner-queue-copy">' +
           '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(stage) + '</strong>' + workload + '</div>' +
           '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
-          resume + confirmation + error +
+          resume + error +
         '</div>' +
         '<div class="training-runner-queue-controls">' +
           '<button type="button" class="training-runner-queue-control" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + '>&#8593;</button>' +
@@ -873,6 +873,8 @@ function validateTrainingRunner(options) {
     body: JSON.stringify({
       folder: state.folder,
       stages: options && options.stages ? options.stages : 'both',
+      profileId: options && options.profileId ? options.profileId : '',
+      runId: options && options.runId ? options.runId : '',
       resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
       resumeStage: options && options.resumeStage ? options.resumeStage : ''
     }),
@@ -889,9 +891,13 @@ function getManagedTrainingOptions() {
   var checkpointEl = document.getElementById('training-run-checkpoint-select');
   var resumeStageEl = document.getElementById('training-run-resume-stage-select');
   var stages = String(trainingWorkspaceState.runStages || 'both');
-  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2') stages = 'both';
+  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21') stages = 'both';
+  var selectedProfile = getSelectedTrainingModelProfile();
+  var selectedRun = getTrainingProfileRunForStage(selectedProfile, stages);
   return {
     stages: stages,
+    profileId: selectedProfile ? selectedProfile.id : '',
+    runId: selectedRun ? selectedRun.id : '',
     resumeFromCheckpoint: checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : (resumeEl ? String(resumeEl.value || '').trim() : ''),
     resumeStage: stages === 'both' ? (resumeStageEl ? String(resumeStageEl.value || 'lo') : 'lo') : stages,
     parentJobId: String(trainingWorkspaceState.resumeParentJobId || '')
@@ -899,11 +905,17 @@ function getManagedTrainingOptions() {
 }
 
 function setManagedTrainingStages(stages) {
-  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2') stages = 'both';
+  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21') stages = 'both';
+  var selectedProfile = getSelectedTrainingModelProfile();
+  if (selectedProfile && !getTrainingProfileRunForStage(selectedProfile, stages)) {
+    stages = String(selectedProfile.runs[0].stages[0] || 'both');
+  }
   trainingWorkspaceState.runStages = stages;
   var buttons = document.querySelectorAll('[data-training-stage]');
   buttons.forEach(function (button) {
     var active = button.getAttribute('data-training-stage') === stages;
+    var valid = !selectedProfile || !!getTrainingProfileRunForStage(selectedProfile, button.getAttribute('data-training-stage'));
+    button.classList.toggle('hidden', !valid);
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
@@ -920,7 +932,7 @@ function syncManagedTrainingResumeUi() {
 }
 
 function trainingStageLabel(stages) {
-  return stages === 'hi' ? 'High Noise' : stages === 'lo' ? 'Low Noise' : stages === 'krea2' ? 'Krea2 Raw' : 'High Noise to Low Noise';
+  return stages === 'hi' ? 'High Noise' : stages === 'lo' ? 'Low Noise' : stages === 'krea2' ? 'Krea2 Raw' : stages === 'wan21' ? 'Wan2.1 T2V' : 'High Noise to Low Noise';
 }
 
 function trainingModelLabel(job) {
@@ -940,7 +952,7 @@ function startManagedTraining() {
     return;
   }
   var options = getManagedTrainingOptions();
-  ensureGeneratedTrainingArtifactsForCurrentFolder(options.stages)
+  ensureGeneratedTrainingArtifactsForCurrentFolder(options.stages, options.profileId)
     .then(function () {
       setStatus('Adding training job...');
       return trainingRunnerRequest('/fs/training_runner/start', {
@@ -950,6 +962,8 @@ function startManagedTraining() {
           folder: state.folder,
           queue: true,
           stages: options.stages,
+          profileId: options.profileId,
+          runId: options.runId,
           resumeFromCheckpoint: options.resumeFromCheckpoint,
           resumeStage: options.resumeStage,
           parentJobId: options.parentJobId
@@ -992,6 +1006,27 @@ function stopManagedTraining(cancel, pause, finish) {
   });
 }
 
+function cancelQueuedTrainingJob(jobId) {
+  var job = getTrainingRunnerJobById(jobId);
+  if (!job || job.status !== 'queued') {
+    setStatus('That item is no longer queued. Refreshing training status.');
+    refreshTrainingRunnerStatus();
+    return;
+  }
+  if (!window.confirm('Cancel this queued training job?')) return;
+  trainingRunnerRequest('/fs/training_runner/stop', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: job.id, cancel: true })
+  }).then(function () {
+    setStatus('Queued training job cancelled.');
+    refreshTrainingRunnerStatus();
+    refreshTrainingHistory(true);
+  }).catch(function (err) {
+    setStatus('Could not cancel queued training job: ' + String(err && err.message ? err.message : err));
+  });
+}
+
 function reorderManagedTraining(jobId, direction) {
   trainingRunnerRequest('/fs/training_runner/reorder', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1011,16 +1046,6 @@ function resumeManagedTrainingQueue() {
       refreshTrainingRunnerStatus();
     })
     .catch(function (err) { setStatus('Could not resume training queue: ' + String(err.message || err)); });
-}
-
-function confirmManagedTrainingInputs(jobId, useCurrent) {
-  trainingRunnerRequest('/fs/training_runner/confirm_inputs', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobId: jobId, useCurrent: !!useCurrent })
-  }).then(function () {
-    refreshTrainingRunnerStatus();
-    refreshTrainingHistory(true);
-  }).catch(function (err) { setStatus('Could not confirm queued inputs: ' + String(err.message || err)); });
 }
 
 function clearTrainingHistory() {
@@ -1231,6 +1256,62 @@ function getTrainingWorkspaceSelectedProfile(folder) {
   return trainingWorkspaceProfileForPlan({ mode: els.profileSelect ? els.profileSelect.value : '' });
 }
 
+function fetchTrainingProfiles() {
+  if (trainingWorkspaceState.profiles.length) return Promise.resolve(trainingWorkspaceState.profiles);
+  return fetch('/fs/training_profiles').then(function (response) {
+    if (!response.ok) throw new Error('Could not load training profiles.');
+    return response.json();
+  }).then(function (payload) {
+    trainingWorkspaceState.profiles = Array.isArray(payload.profiles) ? payload.profiles : [];
+    return trainingWorkspaceState.profiles;
+  });
+}
+
+function trainingProfileStorageKey(folder) {
+  return 'webcap.trainingProfile.' + String(folder || '');
+}
+
+function getSelectedTrainingModelProfile() {
+  var profiles = trainingWorkspaceState.profiles || [];
+  for (var i = 0; i < profiles.length; i++) {
+    if (profiles[i].id === trainingWorkspaceState.selectedProfileId) return profiles[i];
+  }
+  return profiles[0] || null;
+}
+
+function getTrainingProfileRunForStage(profile, stage) {
+  if (!profile || !Array.isArray(profile.runs)) return null;
+  for (var i = 0; i < profile.runs.length; i++) {
+    var run = profile.runs[i];
+    var runStage = run.stages && run.stages.length === 1 ? run.stages[0] : 'both';
+    if (runStage === stage) return run;
+  }
+  return null;
+}
+
+function syncTrainingModelProfileSelect(folder) {
+  var select = getTrainingWorkspaceEls().modelProfileSelect;
+  if (!select) return;
+  var stored = '';
+  try { stored = localStorage.getItem(trainingProfileStorageKey(folder)) || ''; } catch (err) {}
+  if (stored && (trainingWorkspaceState.profiles || []).some(function (profile) { return profile.id === stored; })) {
+    trainingWorkspaceState.selectedProfileId = stored;
+  }
+  select.innerHTML = (trainingWorkspaceState.profiles || []).map(function (profile) {
+    return '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(profile.label) + '</option>';
+  }).join('');
+  select.value = trainingWorkspaceState.selectedProfileId;
+  setManagedTrainingStages(trainingWorkspaceState.runStages);
+}
+
+function setSelectedTrainingModelProfile(profileId) {
+  trainingWorkspaceState.selectedProfileId = String(profileId || 'wan22_t2v');
+  try { localStorage.setItem(trainingProfileStorageKey(state.folder), trainingWorkspaceState.selectedProfileId); } catch (err) {}
+  setManagedTrainingStages(trainingWorkspaceState.runStages);
+  syncTrainingWorkflowReadiness(trainingWorkspaceState.manifest, trainingWorkspaceState.configFiles);
+  renderTrainingWorkspaceConfigList(trainingWorkspaceState.configFiles);
+}
+
 function fetchTrainingWorkspaceConfigFiles(folder) {
   return fetch('/fs/list_config?folder=' + encodeURIComponent(folder)).then(function (response) {
     if (!response.ok) throw new Error('Could not list training config files.');
@@ -1265,7 +1346,9 @@ function trainingConfigFilesAreReady(configFiles) {
   var files = Array.isArray(configFiles) ? configFiles : [];
   var available = {};
   files.forEach(function (fileName) { available[String(fileName || '').toLowerCase()] = true; });
-  return ['config.hi.toml', 'config.lo.toml', 'dataset.hi.toml', 'dataset.lo.toml'].every(function (fileName) {
+  var profile = getSelectedTrainingModelProfile();
+  var needed = profile && Array.isArray(profile.configs) ? profile.configs.map(function (config) { return config.file; }).concat(profile.datasetFiles || []) : ['config.hi.toml', 'config.lo.toml', 'dataset.hi.toml', 'dataset.lo.toml'];
+  return needed.every(function (fileName) {
     return !!available[fileName];
   });
 }
@@ -1411,15 +1494,37 @@ function renderTrainingWorkspaceConfigList(files) {
     els.configList.textContent = 'Generate configs to inspect and edit them here.';
     return;
   }
-  els.configList.innerHTML = '<div class="training-config-links">' + files.map(function (fileName) {
-    var active = !!(state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName);
-    return '<button type="button" class="training-config-link' + (active ? ' active' : '') + '" data-training-config="' + encodeURIComponent(fileName) + '">' + escapeHtml(fileName) + '</button>';
-  }).join('') + '</div>';
+  var grouped = {};
+  (trainingWorkspaceState.profiles || []).forEach(function (profile) { grouped[profile.id] = []; });
+  files.forEach(function (fileName) {
+    var owner = (trainingWorkspaceState.profiles || []).filter(function (profile) {
+      return (profile.configs || []).some(function (config) { return config.file === fileName; }) || (profile.datasetFiles || []).indexOf(fileName) !== -1 || (profile.legacyDatasetFiles || []).indexOf(fileName) !== -1;
+    })[0];
+    (grouped[owner ? owner.id : 'other'] || (grouped.other = [])).push(fileName);
+  });
+  els.configList.innerHTML = Object.keys(grouped).filter(function (id) { return grouped[id].length; }).map(function (id) {
+    var profile = (trainingWorkspaceState.profiles || []).filter(function (item) { return item.id === id; })[0];
+    var label = profile ? profile.label : 'Other files';
+    return '<div class="training-config-group"><span>' + escapeHtml(label) + '</span><div class="training-config-links">' + grouped[id].map(function (fileName) {
+      var active = !!(state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName);
+      var reset = /^config\./.test(fileName) ? '<button type="button" class="training-config-reset" data-training-reset-config="' + encodeURIComponent(fileName) + '">Reset</button>' : '';
+      return '<span><button type="button" class="training-config-link' + (active ? ' active' : '') + '" data-training-config="' + encodeURIComponent(fileName) + '">' + escapeHtml(fileName) + '</button>' + reset + '</span>';
+    }).join('') + '</div></div>';
+  }).join('');
   Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-config]'), function (button) {
     button.onclick = function () {
       loadConfigFileToEditor(decodeURIComponent(button.getAttribute('data-training-config') || ''), {
         preserveTrainingWorkspace: true
       });
+    };
+  });
+  Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-reset-config]'), function (button) {
+    button.onclick = function () {
+      var fileName = decodeURIComponent(button.getAttribute('data-training-reset-config') || '');
+      if (!window.confirm('Reset ' + fileName + ' from the app template? Your edits to this file will be replaced.')) return;
+      trainingRunnerRequest('/fs/training_config/reset', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: state.folder, file: fileName })
+      }).then(function () { refreshTrainingWorkspace(); }).catch(function (err) { setStatus('Could not reset config: ' + String(err.message || err)); });
     };
   });
 }
@@ -1482,18 +1587,19 @@ function refreshTrainingWorkspace() {
   if (els.readiness) els.readiness.textContent = 'Loading dataset readiness...';
   trainingWorkspaceState.trainingPlanFolder = '';
   syncTrainingWorkspaceProfile(null);
-  Promise.all([fetchTrainingWorkspaceManifest(folder), fetchTrainingWorkspaceConfigFiles(folder), fetchTrainingWorkspacePlan(folder), refreshTrainingHistory()])
+  Promise.all([fetchTrainingProfiles(), fetchTrainingWorkspaceManifest(folder), fetchTrainingWorkspaceConfigFiles(folder), fetchTrainingWorkspacePlan(folder), refreshTrainingHistory()])
     .then(function (results) {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
-      trainingWorkspaceState.manifest = results[0];
-      trainingWorkspaceState.configFiles = results[1];
-      trainingWorkspaceState.trainingPlan = results[2];
+      trainingWorkspaceState.manifest = results[1];
+      trainingWorkspaceState.configFiles = results[2];
+      trainingWorkspaceState.trainingPlan = results[3];
       trainingWorkspaceState.trainingPlanFolder = folder;
-      syncTrainingWorkspaceProfile(results[2]);
-      syncTrainingWorkflowReadiness(results[0], results[1]);
-      if (els.readiness) els.readiness.innerHTML = buildTrainingReadinessHtml(results[0], results[1]);
-      renderTrainingItemOverview(results[0]);
-      renderTrainingWorkspaceConfigList(results[1]);
+      syncTrainingWorkspaceProfile(results[3]);
+      syncTrainingModelProfileSelect(folder);
+      syncTrainingWorkflowReadiness(results[1], results[2]);
+      if (els.readiness) els.readiness.innerHTML = buildTrainingReadinessHtml(results[1], results[2]);
+      renderTrainingItemOverview(results[1]);
+      renderTrainingWorkspaceConfigList(results[2]);
       renderTrainingCommandHandoff();
       syncWorkspaceConfigEditorUi();
     })
@@ -1548,6 +1654,7 @@ function wireTrainingWorkspace() {
   var sidebarCollapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
   var prepareBtn = document.getElementById('training-workspace-prepare-btn');
   var generateBtn = document.getElementById('training-workspace-generate-btn');
+  var modelProfileSelect = document.getElementById('training-model-profile-select');
   var stageButtons = document.querySelectorAll('[data-training-stage]');
   var resumeInput = document.getElementById('training-run-resume-input');
   var checkpointSelect = document.getElementById('training-run-checkpoint-select');
@@ -1581,6 +1688,7 @@ function wireTrainingWorkspace() {
   };
   prepareBtn.onclick = function () { runTrainingWorkspaceAction('prepare'); };
   generateBtn.onclick = function () { runTrainingWorkspaceAction('generate'); };
+  if (modelProfileSelect) modelProfileSelect.onchange = function () { setSelectedTrainingModelProfile(modelProfileSelect.value); };
   stageButtons.forEach(function (button) {
     button.onclick = function () {
       setManagedTrainingStages(button.getAttribute('data-training-stage'));
@@ -1655,16 +1763,10 @@ function wireTrainingWorkspace() {
     }
     var action = event.target.getAttribute('data-training-queue-action');
     var jobId = event.target.getAttribute('data-training-job-id');
-    var confirmation = event.target.getAttribute('data-training-confirm-inputs');
-    if (confirmation && jobId) {
-      confirmManagedTrainingInputs(jobId, confirmation === 'current');
-      return;
-    }
     if (action && jobId) {
       event.stopPropagation();
       if (action === 'cancel') {
-        trainingWorkspaceState.runnerSelectedJobId = jobId;
-        stopManagedTraining(true, false);
+        cancelQueuedTrainingJob(jobId);
       } else {
         reorderManagedTraining(jobId, action);
       }

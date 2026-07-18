@@ -142,18 +142,18 @@ function ensurePrepManifestForCurrentFolder() {
     });
 }
 
-function ensureGeneratedTrainingArtifactsForCurrentFolder(stages) {
-  var requiredFiles = stages === 'krea2'
-    ? ['config.krea2.toml', 'dataset.lo.toml']
+function ensureGeneratedTrainingArtifactsForCurrentFolder(stages, profileId) {
+  var requiredFiles = stages === 'krea2' || stages === 'wan21'
+    ? [stages === 'krea2' ? 'config.krea2.toml' : 'config.wan21.toml', 'dataset.train.toml']
     : ['config.hi.toml', 'config.lo.toml', 'dataset.hi.toml', 'dataset.lo.toml'];
   return Promise.all(requiredFiles.map(fetchPathExistsForCurrentFolder)).then(function (results) {
     var ready = results.every(function (value) { return !!value; });
     if (ready) return '';
-    return runGenerateDatasetConfigsForCurrentFolder();
+    return runGenerateDatasetConfigsForCurrentFolder(null, profileId);
   });
 }
 
-function runGenerateDatasetConfigsForCurrentFolder(onSuccess) {
+function runGenerateDatasetConfigsForCurrentFolder(onSuccess, profileId) {
   if (!ensureFolderSelected('No folder selected for config generation.')) {
     return Promise.reject(new Error('No folder selected for config generation.'));
   }
@@ -163,7 +163,8 @@ function runGenerateDatasetConfigsForCurrentFolder(onSuccess) {
       setStatus('Generating dataset configs...');
        return runTrainingActionRequest('/fs/generate_dataset_config', {
          folder: state.folder,
-         mode: getTrainingWorkspaceSelectedProfile(state.folder)
+          mode: getTrainingWorkspaceSelectedProfile(state.folder),
+          profileId: profileId || (typeof getSelectedTrainingModelProfile === 'function' && getSelectedTrainingModelProfile() ? getSelectedTrainingModelProfile().id : '')
        });
     })
     .then(function (outputText) {
@@ -225,12 +226,14 @@ function runTrainCommandPreviewForCurrentFolder(options) {
   if (!ensureFolderSelected('No folder selected for training.')) {
     return Promise.reject(new Error('No folder selected for training.'));
   }
-  return ensureGeneratedTrainingArtifactsForCurrentFolder(options && options.stages)
+  return ensureGeneratedTrainingArtifactsForCurrentFolder(options && options.stages, options && options.profileId)
     .then(function () {
       setStatus('Generating manual training command...');
       return runTrainingActionRequest('/fs/train_run', {
         folder: state.folder,
         stages: options && options.stages ? options.stages : 'both',
+        profileId: options && options.profileId ? options.profileId : '',
+        runId: options && options.runId ? options.runId : '',
         resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
         resumeStage: options && options.resumeStage ? options.resumeStage : ''
       });

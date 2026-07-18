@@ -655,18 +655,27 @@
                             <div class="training-workflow-step">
                                 <div class="training-workflow-step-number">1</div>
                                 <div class="training-workflow-step-copy">
+                                    <div class="training-workspace-section-title">Model</div>
+                                    <label class="training-profile-control">Training profile
+                                        <select id="training-model-profile-select"></select>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="training-workflow-step">
+                                <div class="training-workflow-step-number">2</div>
+                                <div class="training-workflow-step-copy">
                                     <div class="training-workspace-section-title">Dataset</div>
                                     <div id="training-readiness" class="training-readiness">Loading training readiness...</div>
                                 </div>
                                 <button id="training-workspace-prepare-btn" type="button" class="training-btn training-workflow-action">Prepare Dataset</button>
                             </div>
                             <div class="training-workflow-step">
-                                <div id="training-workspace-config-step-number" class="training-workflow-step-number">2</div>
+                                <div id="training-workspace-config-step-number" class="training-workflow-step-number">3</div>
                                 <div class="training-workflow-step-copy">
                                     <div class="training-workspace-section-title">Configuration Files</div>
                                     <div id="training-workspace-config-list" class="training-config-list">Generate configs to inspect and edit them here.</div>
                                     <label class="training-profile-control">Profile
-                                        <select id="training-workspace-profile-select">
+                                        <select id="training-workspace-profile-select" title="Dataset repeat target">
                                             <option value="poc">POC</option>
                                             <option value="normal" selected>Normal</option>
                                             <option value="quality">Quality</option>
@@ -680,7 +689,7 @@
                             <div class="training-run-layout">
                                 <div class="training-run-setup-header">
                                     <div class="training-run-setup-heading">
-                                        <div id="training-run-step-number" class="training-workflow-step-number">3</div>
+                                        <div id="training-run-step-number" class="training-workflow-step-number">4</div>
                                         <div class="training-workspace-section-title">Run Training</div>
                                     </div>
                                 </div>
@@ -692,6 +701,7 @@
                                             <button type="button" class="training-run-stage-btn" data-training-stage="hi" aria-pressed="false">HI only</button>
                                             <button type="button" class="training-run-stage-btn" data-training-stage="lo" aria-pressed="false">LO only</button>
                                             <button type="button" class="training-run-stage-btn" data-training-stage="krea2" aria-pressed="false">Krea2 Raw</button>
+                                            <button type="button" class="training-run-stage-btn" data-training-stage="wan21" aria-pressed="false">Wan2.1 T2V</button>
                                         </div>
                                     </div>
                                     <label class="training-run-option training-run-resume-option">

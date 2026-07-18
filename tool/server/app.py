@@ -14,7 +14,8 @@ from .file_ops import duplicate_folder_response, duplicate_image_response, open_
 from .media import media_blur_background_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, resume_job_response as training_runner_resume_job_response, confirm_inputs_response as training_runner_confirm_inputs_response, clear_history_response as training_runner_clear_history_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses
+from .training_profiles import profiles as training_profiles
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, resume_job_response as training_runner_resume_job_response, clear_history_response as training_runner_clear_history_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, output_root_for_folder
 from .training_tensorboard import start_response as tensorboard_start_response, status_response as tensorboard_status_response, stop_response as tensorboard_stop_response
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
@@ -341,11 +342,28 @@ def generate_dataset_config_route():
     try:
         folder_path = safe_join_fs_root(folder)
         if folder_path.exists() and folder_path.is_dir():
-            ensure_training_config_files(folder_path)
+            ensure_training_config_files(folder_path, profile_id=data.get("profileId") or "")
     except Exception:
         # Let downstream route handler return canonical error responses.
         pass
-    return generate_dataset_config_response(folder, data.get("mode", ""))
+    return generate_dataset_config_response(folder, data.get("mode", ""), data.get("profileId") or "")
+
+
+@app.route("/fs/training_profiles", methods=["GET"])
+def training_profiles_route():
+    return jsonify({"profiles": training_profiles()})
+
+
+@app.route("/fs/training_config/reset", methods=["POST"])
+def training_config_reset_route():
+    from .training_config_files import reset_training_config_file
+    data = request.get_json(silent=True) or {}
+    try:
+        folder_path = safe_join_fs_root((data.get("folder") or "").strip())
+        reset_training_config_file(folder_path, data.get("file") or "")
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.route("/fs/train_run", methods=["POST"])
@@ -353,13 +371,11 @@ def train_run_route():
     data = request.get_json(silent=True) or {}
     folder = (data.get("folder") or "").strip()
     stages = str(data.get("stages") or "both").strip().lower()
-    if stages not in ("hi", "lo", "both", "krea2"):
-        return Response("[ERROR] Training stage must be hi, lo, both, or krea2.\n", status=400, mimetype="text/plain")
     resume_from_checkpoint = str(data.get("resumeFromCheckpoint") or "").strip()
     resume_stage = str(data.get("resumeStage") or (stages if stages in ("hi", "lo") else "lo")).strip().lower()
-    if resume_from_checkpoint and resume_stage not in ("hi", "lo"):
-        return Response("[ERROR] Resume stage must be hi or lo.\n", status=400, mimetype="text/plain")
-    return train_run_response(folder, stages, resume_from_checkpoint, resume_stage)
+    if resume_from_checkpoint and resume_stage not in ("hi", "lo", "krea2", "wan21"):
+        return Response("[ERROR] Resume stage must be hi, lo, krea2, or wan21.\n", status=400, mimetype="text/plain")
+    return train_run_response(folder, stages, resume_from_checkpoint, resume_stage, data.get("profileId") or "", data.get("runId") or "")
 
 
 @app.route("/fs/training_runner/validate", methods=["POST"])
@@ -370,6 +386,8 @@ def training_runner_validate_route():
         data.get("stages") or "both",
         data.get("resumeFromCheckpoint") or "",
         data.get("resumeStage") or "",
+        data.get("profileId") or "",
+        data.get("runId") or "",
     )
     return jsonify(payload), status
 
@@ -384,6 +402,8 @@ def training_runner_start_route():
         resume_from_checkpoint=data.get("resumeFromCheckpoint") or "",
         resume_stage=data.get("resumeStage") or "",
         parent_job_id=data.get("parentJobId") or "",
+        profile_id=data.get("profileId") or "",
+        run_id=data.get("runId") or "",
     )
     return jsonify(payload), status
 
@@ -438,13 +458,6 @@ def training_runner_resume_queue_route():
 def training_runner_resume_job_route():
     data = request.get_json(silent=True) or {}
     payload, status = training_runner_resume_job_response(data.get("jobId", ""))
-    return jsonify(payload), status
-
-
-@app.route("/fs/training_runner/confirm_inputs", methods=["POST"])
-def training_runner_confirm_inputs_route():
-    data = request.get_json(silent=True) or {}
-    payload, status = training_runner_confirm_inputs_response(data.get("jobId", ""), bool(data.get("useCurrent")))
     return jsonify(payload), status
 
 

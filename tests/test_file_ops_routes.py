@@ -542,7 +542,7 @@ def test_generate_dataset_config_creates_missing_config_templates(tmp_path, monk
     assert (set_dir / "config.krea2.toml").exists()
 
 
-def test_generate_dataset_config_overwrites_existing_config_templates(tmp_path, monkeypatch):
+def test_generate_dataset_config_preserves_existing_config_templates(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_g"
     auto_dataset = set_dir / "auto_dataset"
@@ -599,10 +599,8 @@ def test_generate_dataset_config_overwrites_existing_config_templates(tmp_path, 
     assert response.status_code == 200
     hi_text = (set_dir / "config.hi.toml").read_text(encoding="utf-8")
     lo_text = (set_dir / "config.lo.toml").read_text(encoding="utf-8")
-    assert "corrupted config" not in hi_text
-    assert "corrupted config" not in lo_text
-    assert 'output_dir = "' in hi_text
-    assert 'output_dir = "' in lo_text
+    assert hi_text == "corrupted config"
+    assert lo_text == "corrupted config"
 
 
 def test_generate_dataset_config_can_write_snapshot_comments_when_enabled(tmp_path, monkeypatch):
@@ -756,7 +754,7 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     assert krea2_response.status_code == 200
     krea2_body = krea2_response.get_data(as_text=True)
     assert "config.krea2.toml" in krea2_body
-    assert "Config Krea2:" in krea2_body
+    assert "Config Krea2 Raw:" in krea2_body
     assert " ; " not in krea2_body
 
 

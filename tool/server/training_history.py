@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
-from .training_config_files import output_dir_from_config
+from .training_config_files import output_dir_from_config, training_config_path
 
 
 HISTORY_FILE_NAME = ".webcap_training.json"
@@ -18,7 +18,7 @@ HISTORY_VERSION = 3
 _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
-_RUN_STAGE_PATTERN = re.compile(r"(?:^|[-_.])(hi|lo)(?:$|[-_.])", re.IGNORECASE)
+_RUN_STAGE_PATTERN = re.compile(r"(?:^|[-_.])(hi|lo|krea2|wan21)(?:$|[-_.])", re.IGNORECASE)
 _DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(?:#.*)?$", re.MULTILINE)
 _NOISE_MODEL_PATTERN = re.compile(r"\b(high|low)[_ -]?noise(?:[_ -]?model)?\b", re.IGNORECASE)
 
@@ -29,7 +29,7 @@ def output_root_for_folder(folder_path, stage="hi"):
 
 def output_root_path_for_folder(folder_path, stage="hi"):
     folder = Path(folder_path)
-    configured = output_dir_from_config(folder, stage) if stage in ("hi", "lo", "krea2") else None
+    configured = output_dir_from_config(folder, stage) if stage in ("hi", "lo", "krea2", "wan21") else None
     if configured:
         return str(configured)
     return str(Path(app_config.FS_ROOT) / "output" / "runs" / folder.name)
@@ -77,7 +77,9 @@ def _training_path_for_entry(entry, host_root, training_root):
 
 def output_roots_for_folder(folder_path):
     roots = []
-    for stage in ("hi", "lo"):
+    folder = Path(folder_path)
+    stages = [stage for stage in ("hi", "lo", "krea2", "wan21") if training_config_path(folder, stage).is_file()] or ["hi", "lo"]
+    for stage in stages:
         root = output_root_for_folder(folder_path, stage)
         if root not in roots:
             roots.append(root)
@@ -230,7 +232,10 @@ def _write_history(folder_path, data):
 
 
 def discover_runs(folder_path, stage=""):
-    root_stages = (stage,) if stage in ("hi", "lo") else ("hi", "lo")
+    folder = Path(folder_path)
+    root_stages = (stage,) if stage in ("hi", "lo", "krea2", "wan21") else tuple(
+        item for item in ("hi", "lo", "krea2", "wan21") if training_config_path(folder, item).is_file()
+    ) or ("hi", "lo")
     roots = []
     for root_stage in root_stages:
         training_root = output_root_path_for_folder(folder_path, root_stage)
@@ -240,7 +245,7 @@ def discover_runs(folder_path, stage=""):
     runs = []
     seen = set()
     for root, training_root in roots:
-        matching_stages = [name for name in ("hi", "lo") if output_root_for_folder(folder_path, name) == root]
+        matching_stages = [name for name in ("hi", "lo", "krea2", "wan21") if output_root_for_folder(folder_path, name) == root]
         root_stage = matching_stages[0] if len(matching_stages) == 1 else ""
         if not root.exists() or not root.is_dir():
             continue
@@ -262,7 +267,7 @@ def discover_runs(folder_path, stage=""):
             if not _run_belongs_to_set(entry, Path(folder_path).name):
                 continue
             entry_stage = root_stage or _stage_from_run_name(entry.name) or _stage_from_run_config(entry)
-            if stage in ("hi", "lo") and entry_stage != stage:
+            if stage in ("hi", "lo", "krea2", "wan21") and entry_stage != stage:
                 continue
             expected_epochs = _configured_epochs(folder_path, entry_stage) if entry_stage else 0
             completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
@@ -382,7 +387,7 @@ def history_payload(folder_path):
     history = read_history(folder_path)
     history["runs"] = discover_runs(folder_path)
     defaults = {}
-    for stage in ("hi", "lo"):
+    for stage in ("hi", "lo", "krea2", "wan21"):
         stage_jobs = [job for job in history.get("jobs") or [] if str(job.get("stages") or "") == stage]
         job = max(stage_jobs, key=lambda item: float(item.get("startedAt") or item.get("createdAt") or 0), default={})
         run = next(iter(ranked_resumable_runs(folder_path, stage, job)), {})
@@ -449,7 +454,7 @@ def clear_history_job(folder_path, job_id):
 
 def completed_stages(folder_path):
     folder = Path(folder_path)
-    stages = [stage for stage in ("hi", "lo") if (folder / ("config." + stage + ".toml")).is_file()]
+    stages = [stage for stage in ("hi", "lo", "krea2", "wan21") if (folder / ("config." + stage + ".toml")).is_file()]
     history = read_history(folder)
     completed = set()
     for job in history.get("jobs") or []:

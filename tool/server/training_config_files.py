@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[2]
 TRAINING_TEMPLATES_DIR = ROOT / "tool" / "templates"
 HI_CONFIG_NAME = "config.hi.toml"
 LO_CONFIG_NAME = "config.lo.toml"
-TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME)
+KREA2_CONFIG_NAME = "config.krea2.toml"
+TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME)
 
 _EPOCHS_TEXT_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?$', re.MULTILINE)
@@ -77,7 +78,9 @@ def training_config_path(folder_path: Path, stage: str):
         return Path(folder_path) / HI_CONFIG_NAME
     if stage == "lo":
         return Path(folder_path) / LO_CONFIG_NAME
-    raise ValueError("Training stage must be hi or lo.")
+    if stage == "krea2":
+        return Path(folder_path) / KREA2_CONFIG_NAME
+    raise ValueError("Training stage must be hi, lo, or krea2.")
 
 
 def output_dir_from_config(folder_path: Path, stage: str):
@@ -142,7 +145,10 @@ def ensure_training_config_files(folder_path: Path):
         return []
 
     existing_roots = {
-        name: output_dir_from_config(folder, "hi" if name == HI_CONFIG_NAME else "lo")
+        name: output_dir_from_config(
+            folder,
+            "hi" if name == HI_CONFIG_NAME else ("lo" if name == LO_CONFIG_NAME else "krea2"),
+        )
         for name in TRAINING_CONFIG_TEMPLATE_NAMES
     }
     assigned_root = next((root for root in existing_roots.values() if root), None)

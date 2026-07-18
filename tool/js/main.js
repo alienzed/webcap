@@ -142,13 +142,11 @@ function ensurePrepManifestForCurrentFolder() {
     });
 }
 
-function ensureGeneratedTrainingArtifactsForCurrentFolder() {
-  return Promise.all([
-    fetchPathExistsForCurrentFolder('config.hi.toml'),
-    fetchPathExistsForCurrentFolder('config.lo.toml'),
-    fetchPathExistsForCurrentFolder('dataset.hi.toml'),
-    fetchPathExistsForCurrentFolder('dataset.lo.toml')
-  ]).then(function (results) {
+function ensureGeneratedTrainingArtifactsForCurrentFolder(stages) {
+  var requiredFiles = stages === 'krea2'
+    ? ['config.krea2.toml', 'dataset.lo.toml']
+    : ['config.hi.toml', 'config.lo.toml', 'dataset.hi.toml', 'dataset.lo.toml'];
+  return Promise.all(requiredFiles.map(fetchPathExistsForCurrentFolder)).then(function (results) {
     var ready = results.every(function (value) { return !!value; });
     if (ready) return '';
     return runGenerateDatasetConfigsForCurrentFolder();
@@ -227,7 +225,7 @@ function runTrainCommandPreviewForCurrentFolder(options) {
   if (!ensureFolderSelected('No folder selected for training.')) {
     return Promise.reject(new Error('No folder selected for training.'));
   }
-  return ensureGeneratedTrainingArtifactsForCurrentFolder()
+  return ensureGeneratedTrainingArtifactsForCurrentFolder(options && options.stages)
     .then(function () {
       setStatus('Generating manual training command...');
       return runTrainingActionRequest('/fs/train_run', {

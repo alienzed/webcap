@@ -258,6 +258,27 @@ def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):
     assert "--resume_from_checkpoint /mnt/w/output/run-1" in script
 
 
+def test_krea2_runner_script_uses_only_the_krea2_config(tmp_path, monkeypatch):
+    krea2_path = tmp_path / "config.krea2.toml"
+    krea2_path.write_text("krea2", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + path.name)
+    settings = training_runtime_settings({"diffusion_pipe_wsl": "/home/user/diffusion-pipe"})
+
+    script, resolved = training_runner._build_runner_script(
+        {"snapshot": {}, "stages": "krea2"},
+        settings,
+        {"krea2Config": krea2_path},
+        tmp_path / "job",
+    )
+
+    assert "[webcap] stage=krea2" in script
+    assert "[webcap] command krea2:" in script
+    assert "/mnt/w/config.krea2.toml" in script
+    assert "[webcap] stage=hi" not in script
+    assert "[webcap] stage=lo" not in script
+    assert resolved["krea2"] == "/mnt/w/config.krea2.toml"
+
+
 def test_discovered_resume_path_is_the_run_directory_not_its_latest_marker(tmp_path, monkeypatch):
     folder = tmp_path / "set"
     output_root = tmp_path / "output"
@@ -906,6 +927,35 @@ def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypat
     assert state["activeJobId"] == "new"
     assert state["queuePaused"] is False
     assert state["queuePauseReason"] == ""
+
+
+def test_starting_krea2_creates_one_krea2_job(tmp_path, monkeypatch):
+    state = training_runner._default_state()
+    job = {"id": "krea2", "folder": "set", "stages": "krea2", "status": "queued"}
+    calls = []
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda value: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda value: None)
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: tmp_path)
+    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
+    monkeypatch.setattr(training_runner, "_repair_training_set_permissions", lambda folder, distribution: "")
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages: ("set", tmp_path, {}, {}, []))
+    monkeypatch.setattr(
+        training_runner,
+        "_new_job",
+        lambda folder, preflight, stages, *args: calls.append(stages) or job,
+    )
+    monkeypatch.setattr(training_runner, "_launch_job", lambda candidate, folder: candidate.update(status="starting"))
+
+    payload, status = training_runner.start_response("set", queue=True, stages="krea2")
+
+    assert status == 200
+    assert calls == ["krea2"]
+    assert [item["stages"] for item in payload["jobs"]] == ["krea2"]
+    assert state["activeJobId"] == "krea2"
 
 
 def test_folder_status_prefers_queue_state_over_output_artifacts(tmp_path, monkeypatch):

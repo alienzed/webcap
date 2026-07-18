@@ -353,8 +353,8 @@ def train_run_route():
     data = request.get_json(silent=True) or {}
     folder = (data.get("folder") or "").strip()
     stages = str(data.get("stages") or "both").strip().lower()
-    if stages not in ("hi", "lo", "both"):
-        return Response("[ERROR] Training stage must be hi, lo, or both.\n", status=400, mimetype="text/plain")
+    if stages not in ("hi", "lo", "both", "krea2"):
+        return Response("[ERROR] Training stage must be hi, lo, both, or krea2.\n", status=400, mimetype="text/plain")
     resume_from_checkpoint = str(data.get("resumeFromCheckpoint") or "").strip()
     resume_stage = str(data.get("resumeStage") or (stages if stages in ("hi", "lo") else "lo")).strip().lower()
     if resume_from_checkpoint and resume_stage not in ("hi", "lo"):

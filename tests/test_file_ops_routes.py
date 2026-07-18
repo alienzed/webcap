@@ -539,6 +539,7 @@ def test_generate_dataset_config_creates_missing_config_templates(tmp_path, monk
     assert response.status_code == 200
     assert (set_dir / "config.hi.toml").exists()
     assert (set_dir / "config.lo.toml").exists()
+    assert (set_dir / "config.krea2.toml").exists()
 
 
 def test_generate_dataset_config_overwrites_existing_config_templates(tmp_path, monkeypatch):
@@ -735,6 +736,7 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     assert "Manual handoff only" in body
     assert (set_dir / "config.hi.toml").exists()
     assert (set_dir / "config.lo.toml").exists()
+    assert (set_dir / "config.krea2.toml").exists()
     assert (set_dir / "dataset.hi.toml").exists()
     assert (set_dir / "dataset.lo.toml").exists()
 
@@ -749,6 +751,13 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     lo_body = lo_response.get_data(as_text=True)
     assert "config.lo.toml" in lo_body
     assert " ; " not in lo_body
+
+    krea2_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "krea2"})
+    assert krea2_response.status_code == 200
+    krea2_body = krea2_response.get_data(as_text=True)
+    assert "config.krea2.toml" in krea2_body
+    assert "Config Krea2:" in krea2_body
+    assert " ; " not in krea2_body
 
 
 def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path, monkeypatch):

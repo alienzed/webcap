@@ -418,18 +418,23 @@ def test_fs_describe_hides_internal_and_originals_directories(tmp_path, monkeypa
     assert "visible_folder" in names
 
 
-def test_training_history_opens_the_configured_stage_output_folder(tmp_path, monkeypatch):
+def test_training_history_opens_the_recorded_effective_output_folder(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_training"
     output_dir = fs_root / "output" / "runs" / "set-lo"
     set_dir.mkdir(parents=True)
     output_dir.mkdir(parents=True)
-    write_text(set_dir / "config.lo.toml", 'output_dir = "' + str(output_dir) + '"\n')
+    write_text(set_dir / ".webcap_training.json", json.dumps({
+        "version": 3,
+        "outputRoot": str(output_dir),
+        "jobs": [{"id": "job-1", "outputRoot": str(output_dir)}],
+        "runs": [],
+    }))
     monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
     opened = []
     monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))
 
-    response = app_module.app.test_client().post("/fs/training_history/open_output", json={"folder": "set_training", "stage": "lo"})
+    response = app_module.app.test_client().post("/fs/training_history/open_output", json={"folder": "set_training", "jobId": "job-1"})
 
     assert response.status_code == 200
     assert opened == [output_dir]
@@ -741,6 +746,9 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "[INFO] Manual training command (copy/paste):" in body
+    assert "[INFO] Launch group: 001-set_train" in body
+    assert "wan22-hi" in body
+    assert "wan22-lo" in body
     assert " ; " in body
     assert "pkill" not in body
     assert "Manual handoff only" in body

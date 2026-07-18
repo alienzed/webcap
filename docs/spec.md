@@ -40,9 +40,9 @@ Training templates are not created on ordinary folder load. Generate, manual pre
 
 ## Managed training
 
-Managed training starts the selected profile/run immediately when idle or places it in the queue. It provides output logs, per-job progress, completion and checkpoint ETA where trainer timing supports them, queue ordering, pause, finish, queued-item cancellation, history, resume, GPU status, diagnostics, and TensorBoard controls.
+Managed training starts the selected profile/run immediately when idle or places it in the queue. Each new launch reserves a global three-character base36 group and a profile/stage output directory; HI → LO shares its group across two independent jobs, while resume retains its existing output. It provides effective-output visibility and folder actions, output logs, per-job progress, artifact-derived queued-resume progress, completion and checkpoint ETA where trainer timing supports them, queue ordering, explicit failure holds, pause, finish, queued-item cancellation, history, resume, GPU status, diagnostics, and TensorBoard controls.
 
-Manual command generation resolves and copies commands but never launches a process.
+Manual command generation reserves the launch output, materializes output-resolved config snapshots, and copies commands but never launches a process.
 
 ## Guardrails
 

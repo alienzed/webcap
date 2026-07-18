@@ -117,6 +117,7 @@ def test_discover_runs_uses_a_latest_marker_but_returns_its_run_directory(tmp_pa
     output = root / "output" / "runs" / "set-lo"
     (set_folder / "config.lo.toml").write_text('output_dir = "' + str(output) + '"\n', encoding="utf-8")
     resumable = output / "run-resumable"
+    resumable.mkdir(parents=True)
     (resumable / "latest").write_text("global_step42", encoding="utf-8")
     (resumable / "global_step42").mkdir()
     not_resumable = output / "run-with-log-only"
@@ -130,6 +131,48 @@ def test_discover_runs_uses_a_latest_marker_but_returns_its_run_directory(tmp_pa
     assert runs["run-resumable"]["checkpointName"] == "latest"
     assert runs["run-with-log-only"]["checkpointAvailable"] is False
     assert runs["run-with-log-only"]["path"] == str(not_resumable)
+
+
+def test_resume_point_reports_latest_checkpoint_and_artifact_progress(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    output = root / "output" / "runs" / "set-lo"
+    (set_folder / "config.lo.toml").write_text('output_dir = "' + str(output) + '"\nepochs = 90\n', encoding="utf-8")
+    run = output / "run-resumable"
+    (run / "global_step420").mkdir(parents=True)
+    (run / "epoch12").mkdir()
+    (run / "latest").write_text("global_step420", encoding="utf-8")
+
+    point = training_history.resume_point_for_path(set_folder, "lo", str(run))
+
+    assert point == {
+        "checkpointTag": "global_step420",
+        "epoch": 12,
+        "step": 420,
+        "expectedEpochs": 90,
+        "completed": False,
+    }
+
+
+def test_discover_runs_scans_new_launch_group_stage_directories(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "Estel"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    (set_folder / "config.krea2.toml").write_text('output_dir = "/source/Estel"\nepochs = 100\n', encoding="utf-8")
+    run = root / "output" / "runs" / "00A-Estel" / "krea2-raw" / "20260718_00-30-10"
+    run.mkdir(parents=True)
+    (run / "config.krea2.toml").write_text('dataset = "/training/Estel/dataset.train.toml"\n', encoding="utf-8")
+    (run / "global_step75").mkdir()
+    (run / "latest").write_text("global_step75", encoding="utf-8")
+
+    discovered = training_history.discover_runs(set_folder, "krea2")
+
+    assert len(discovered) == 1
+    assert discovered[0]["stage"] == "krea2"
+    assert discovered[0]["checkpointTag"] == "global_step75"
 
 
 def test_discover_runs_rejects_a_global_step_without_a_deepspeed_latest_marker(tmp_path, monkeypatch):

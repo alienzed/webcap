@@ -20,7 +20,8 @@ For Wan2.2, `HI -> LO` creates two independent queued jobs. HI and LO are distin
 - `Pause` holds the active job and queue until explicitly resumed.
 - `Finish` intentionally ends the active job and allows queue processing to continue.
 - Canceling a queued item removes that item only; it does not stop the active job.
-- The queue exposes ordering, output logs, recent history, GPU status, and checkpoint-resume controls. The in-app output view opens at the recent log tail; use **Reveal log file** to inspect the complete `run.log` in Explorer.
+- The queue exposes ordering, effective launch/stage output paths, output-folder actions, output logs, recent history, GPU status, and checkpoint-resume controls. Queued resume jobs show the checkpoint tag and artifact-derived epoch/step progress. The in-app output view opens at the recent log tail; use **Reveal log file** to inspect the complete `run.log` in Explorer.
+- A failed or interrupted job pauses the queue and displays the actual hold reason. Continuing the queue is explicit. Lifecycle timing failures are shown as invariant errors rather than formatted as plausible durations.
 - Progress is per job. When trainer timing is available, the UI shows completion ETA and the estimated time to the next configured checkpoint.
 - `Run Diagnostics` performs the fuller WSL, runtime, launcher, and CUDA checks. Normal launches use the lighter required checks.
 - TensorBoard can be started, stopped, and opened from the Training workspace when it is available in the configured runtime.
@@ -40,4 +41,4 @@ Relevant `tool/config.json` fields include:
 - `training.tensorboard_port`: local port for TensorBoard controls.
 - `training.write_selection_snapshot_comments`: adds the prep snapshot header to generated dataset TOML.
 
-The generated TOML remains the configuration interface. WebCap does not provide arbitrary custom launch commands or global template editing.
+The generated TOML remains the configuration interface. Each new launch reserves `<base36>-<set>/<profile-stage>/` and executes a launch-owned snapshot with that effective `output_dir`; the source TOML remains unchanged. HI → LO shares one prefix across its two independent jobs. Resume keeps the existing output. WebCap does not provide arbitrary custom launch commands or global template editing.

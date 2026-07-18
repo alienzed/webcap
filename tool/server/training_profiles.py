@@ -21,8 +21,8 @@ _PROFILES = {
         "mediaKinds": ("image", "video"),
         "datasetFiles": ("dataset.hi.toml", "dataset.lo.toml"),
         "configs": (
-            {"id": "hi", "file": "config.hi.toml", "dataset": "dataset.hi.toml", "label": "High Noise"},
-            {"id": "lo", "file": "config.lo.toml", "dataset": "dataset.lo.toml", "label": "Low Noise"},
+            {"id": "hi", "file": "config.hi.toml", "dataset": "dataset.hi.toml", "label": "High Noise", "outputSlug": "wan22-hi"},
+            {"id": "lo", "file": "config.lo.toml", "dataset": "dataset.lo.toml", "label": "Low Noise", "outputSlug": "wan22-lo"},
         ),
         "runs": (
             {"id": "both", "label": "HI → LO", "stages": ("hi", "lo")},
@@ -37,7 +37,7 @@ _PROFILES = {
         "mediaKinds": ("image",),
         "datasetFiles": ("dataset.train.toml",),
         "configs": (
-            {"id": "krea2", "file": "config.krea2.toml", "dataset": "dataset.train.toml", "label": "Krea2 Raw"},
+            {"id": "krea2", "file": "config.krea2.toml", "dataset": "dataset.train.toml", "label": "Krea2 Raw", "outputSlug": "krea2-raw"},
         ),
         "runs": (
             {"id": "train", "label": "Train", "stages": ("krea2",)},
@@ -50,7 +50,7 @@ _PROFILES = {
         "mediaKinds": ("image", "video"),
         "datasetFiles": ("dataset.train.toml",),
         "configs": (
-            {"id": "wan21", "file": "config.wan21.toml", "dataset": "dataset.train.toml", "label": "Wan2.1 T2V 14B"},
+            {"id": "wan21", "file": "config.wan21.toml", "dataset": "dataset.train.toml", "label": "Wan2.1 T2V 14B", "outputSlug": "wan21-t2v"},
         ),
         "runs": (
             {"id": "train", "label": "Train", "stages": ("wan21",)},

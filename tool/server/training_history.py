@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_config_files import output_dir_from_config, training_config_path
+from .training_profiles import profiles
 
 
 HISTORY_FILE_NAME = ".webcap_training.json"
@@ -24,7 +25,7 @@ _NOISE_MODEL_PATTERN = re.compile(r"\b(high|low)[_ -]?noise(?:[_ -]?model)?\b", 
 
 
 def output_root_for_folder(folder_path, stage="hi"):
-    return _host_path_for_training_path(output_root_path_for_folder(folder_path, stage))
+    return host_path_for_training_path(output_root_path_for_folder(folder_path, stage))
 
 
 def output_root_path_for_folder(folder_path, stage="hi"):
@@ -40,7 +41,7 @@ def _wsl_distribution():
     return str(training.get("wsl_distribution") or "").strip() if isinstance(training, dict) else ""
 
 
-def _host_path_for_training_path(path):
+def host_path_for_training_path(path):
     value = str(path or "").strip()
     if not value or os.name != "nt" or not value.startswith("/"):
         return Path(value)
@@ -83,6 +84,21 @@ def output_roots_for_folder(folder_path):
         root = output_root_for_folder(folder_path, stage)
         if root not in roots:
             roots.append(root)
+    runs_root = Path(app_config.FS_ROOT) / "output" / "runs"
+    launch_pattern = re.compile(r"^[0-9A-Z]{3}-" + re.escape(folder.name) + r"$")
+    slugs = {
+        config["outputSlug"]
+        for item in profiles()
+        for config in item["configs"]
+    }
+    if runs_root.is_dir():
+        for launch_root in runs_root.iterdir():
+            if not launch_root.is_dir() or not launch_pattern.match(launch_root.name):
+                continue
+            for slug in slugs:
+                stage_root = launch_root / slug
+                if stage_root.is_dir() and stage_root not in roots:
+                    roots.append(stage_root)
     return roots
 
 
@@ -212,9 +228,8 @@ def read_history(folder_path):
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return _default_history(folder_path)
-    if not isinstance(data, dict) or data.get("version") not in (2, HISTORY_VERSION):
+    if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
         return _default_history(folder_path)
-    data["version"] = HISTORY_VERSION
     data["outputRoot"] = str(output_root_for_folder(folder_path))
     if not isinstance(data.get("jobs"), list):
         data["jobs"] = []
@@ -242,6 +257,9 @@ def discover_runs(folder_path, stage=""):
         host_root = output_root_for_folder(folder_path, root_stage)
         if not any(item[0] == host_root for item in roots):
             roots.append((host_root, training_root))
+    for host_root in output_roots_for_folder(folder_path):
+        if not any(item[0] == host_root for item in roots):
+            roots.append((host_root, str(host_root)))
     runs = []
     seen = set()
     for root, training_root in roots:
@@ -273,6 +291,9 @@ def discover_runs(folder_path, stage=""):
             completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
             resume_artifacts = _resume_artifacts(entry)
             checkpoint = resume_artifacts[0] if resume_artifacts else None
+            checkpoint_tag = ""
+            if checkpoint:
+                checkpoint_tag = checkpoint.read_text(encoding="utf-8").strip().splitlines()[0].strip()
             training_path = _training_path_for_entry(entry, root, training_root)
             runs.append({
                 # DeepSpeed expects the run directory, then resolves its own
@@ -285,6 +306,7 @@ def discover_runs(folder_path, stage=""):
                 "modifiedAt": modified,
                 "checkpointAvailable": bool(checkpoint),
                 "checkpointName": checkpoint.name if checkpoint else "",
+                "checkpointTag": checkpoint_tag,
                 "completed": completed,
                 "epoch": highest_epoch or None,
                 "steps": highest_step or None,
@@ -301,6 +323,19 @@ def resumable_run_for_path(folder_path, stage, run_path):
         run for run in discover_runs(folder_path, stage)
         if run.get("checkpointAvailable") and str(run.get("path") or "") == wanted
     ), {})
+
+
+def resume_point_for_path(folder_path, stage, run_path):
+    run = resumable_run_for_path(folder_path, stage, run_path)
+    if not run:
+        return {}
+    return {
+        "checkpointTag": run.get("checkpointTag") or "",
+        "epoch": run.get("epoch"),
+        "step": run.get("steps"),
+        "expectedEpochs": run.get("expectedEpochs"),
+        "completed": bool(run.get("completed")),
+    }
 
 
 def ranked_resumable_runs(folder_path, stage, job=None):
@@ -350,9 +385,9 @@ def record_job(folder_path, job):
     history = read_history(folder_path)
     runs = discover_runs(folder_path, str(job.get("stages") or ""))
     record_fields = (
-        "id", "folder", "stages", "modelLabel", "resumeFromCheckpoint", "resumeStage", "outputRunPath", "status", "stage",
+        "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "parentJobId",
-        "outputRoot", "progress", "profile", "model", "input", "artifactDir", "artifactSummary",
+        "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
     )
     record = {field: job.get(field) for field in record_fields if field in job}
     for field in ("error", "completionNote"):
@@ -420,6 +455,14 @@ def all_history_payload(query="", folder=""):
             jobs.append(item)
     jobs.sort(key=lambda job: float(job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0), reverse=True)
     return {"version": HISTORY_VERSION, "jobs": jobs}
+
+
+def history_job_output_path(folder_path, job_id):
+    wanted = str(job_id or "").strip()
+    job = next((item for item in read_history(folder_path).get("jobs", []) if str(item.get("id") or "") == wanted), None)
+    if not job or not str(job.get("outputRoot") or "").strip():
+        raise ValueError("Training history entry has no effective output directory.")
+    return Path(job["outputRoot"])
 
 
 def clear_history(folder_path=None):

@@ -508,6 +508,20 @@
   grid-area: auto;
 }
 
+.app.shell-revamp.workspace-surface-training .training-runner-queue-resume-point {
+  display: grid;
+  gap: 4px;
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-resume-point .training-runner-progress-track {
+  width: 100%;
+  max-width: 320px;
+  height: 5px;
+}
+
 .app.shell-revamp.workspace-surface-training .training-runner-queue-controls {
   grid-area: controls;
   align-self: center;

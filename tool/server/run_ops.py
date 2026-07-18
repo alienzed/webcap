@@ -4,8 +4,9 @@ import queue
 import threading
 import json
 import re
+import uuid
 from contextlib import redirect_stdout, redirect_stderr
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from flask import Response, jsonify, stream_with_context
 
@@ -13,7 +14,8 @@ from . import config as app_config
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
 from .permissions import normalize_path_permissions
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, ensure_training_config_files
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, ensure_training_config_files, allocate_training_launch_group, with_output_dir
+from .training_profiles import config_for_stage
 from .training_commands import build_training_command_plan
 from .training_runtime import build_training_launcher, training_runtime_settings
 
@@ -263,22 +265,42 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
 
         warnings = []
 
+        stage_names = ("hi", "lo") if stages == "both" else (stages,)
+        needs_new_output = any(not (resume_from_checkpoint and resume_stage == stage) for stage in stage_names)
+        launch_group = allocate_training_launch_group(folder_path) if needs_new_output else None
+        snapshot_paths = {}
+        output_dirs = {}
+        for stage in stage_names:
+            source = hi_path if stage == "hi" else lo_path if stage == "lo" else krea2_path if stage == "krea2" else wan21_path
+            meta = config_for_stage(selected_profile["id"], stage)
+            if resume_from_checkpoint and resume_stage == stage:
+                output_dir = str(Path(resume_from_checkpoint).parent) if not str(resume_from_checkpoint).startswith("/") else str(PurePosixPath(resume_from_checkpoint).parent)
+            else:
+                stage_output = launch_group / meta["outputSlug"]
+                stage_output.mkdir(parents=True, exist_ok=False)
+                normalize_path_permissions(stage_output)
+                try:
+                    output_dir = _to_wsl_path(stage_output, runtime_settings["wslDistribution"])
+                except Exception:
+                    output_dir = stage_output.as_posix()
+                    warnings.append("[WARN] Could not resolve the effective output path in WSL; using the native path.")
+            bundle = (launch_group if launch_group else folder_path) / ".webcap" / "manual" / uuid.uuid4().hex[:12]
+            bundle.mkdir(parents=True, exist_ok=False)
+            normalize_path_permissions(bundle)
+            snapshot = bundle / source.name
+            snapshot.write_text(with_output_dir(source.read_text(encoding="utf-8"), output_dir), encoding="utf-8")
+            normalize_path_permissions(snapshot)
+            snapshot_paths[stage] = snapshot
+            output_dirs[stage] = output_dir
+        hi_snapshot = snapshot_paths.get("hi") or next(iter(snapshot_paths.values()))
+        lo_snapshot = snapshot_paths.get("lo") or next(iter(snapshot_paths.values()))
         try:
-            hi_wsl = _to_wsl_path(hi_path, runtime_settings["wslDistribution"])
+            hi_wsl = _to_wsl_path(hi_snapshot, runtime_settings["wslDistribution"])
+            lo_wsl = _to_wsl_path(lo_snapshot, runtime_settings["wslDistribution"])
         except Exception:
-            hi_wsl = hi_path.as_posix()
-            warnings.append(f"[WARN] Could not resolve WSL path for {hi_name}; using native path.")
-        try:
-            lo_wsl = _to_wsl_path(lo_path, runtime_settings["wslDistribution"])
-        except Exception:
-            lo_wsl = lo_path.as_posix()
-            warnings.append(f"[WARN] Could not resolve WSL path for {lo_name}; using native path.")
-        if stages in ("krea2", "wan21"):
-            try:
-                lo_wsl = _to_wsl_path(selected_config, runtime_settings["wslDistribution"])
-            except Exception:
-                lo_wsl = selected_config.as_posix()
-                warnings.append(f"[WARN] Could not resolve WSL path for {selected_config.name}; using native path.")
+            hi_wsl = hi_snapshot.as_posix()
+            lo_wsl = lo_snapshot.as_posix()
+            warnings.append("[WARN] Could not resolve launch snapshot paths in WSL; using native paths.")
 
         if not diffusion_pipe_wsl:
             diffusion_pipe_wsl = "<set training.diffusion_pipe_wsl>"
@@ -301,6 +323,10 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
             try:
                 yield f"[INFO] Running from: {diffusion_pipe_wsl}\n"
                 yield f"[INFO] Training stages: {stages}\n"
+                if launch_group:
+                    yield f"[INFO] Launch group: {launch_group.name}\n"
+                for stage in stage_names:
+                    yield f"[INFO] Effective output {stage.upper()}: {output_dirs[stage]}\n"
                 if resume_from_checkpoint:
                     yield f"[INFO] Resume {resume_stage.upper()} checkpoint: {resume_from_checkpoint}\n"
                 if stages in ("krea2", "wan21"):

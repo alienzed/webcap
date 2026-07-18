@@ -11,17 +11,17 @@ import subprocess
 import threading
 import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .caption_ops import _caption_name_for_media
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan, build_training_launcher_probe
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME
-from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, profile_run
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, allocate_training_launch_group, with_output_dir
+from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_run
 from .dataset_config import repeat_targets_for_mode
-from .training_history import completed_stages, discover_runs, ranked_resumable_runs, resumable_run_for_path, output_root_for_folder, record_job, clear_history_job
+from .training_history import completed_stages, discover_runs, ranked_resumable_runs, resumable_run_for_path, resume_point_for_path, host_path_for_training_path, output_root_for_folder, record_job, clear_history_job
 from .training_runtime import (
     build_runtime_command,
     build_training_launcher,
@@ -661,21 +661,21 @@ def _training_profile(folder_path):
     return mode if mode in ("poc", "normal", "quality") else "unknown"
 
 
-def _model_identity(artifacts):
+def _model_identity(artifacts, profile_id="wan22_t2v", stage="hi"):
     source = ""
-    pattern = re.compile(r"^\s*(?:model|model_path|checkpoint|base_model|ckpt_path)\s*=\s*[\"']?([^\"'\n#]+)", re.MULTILINE | re.IGNORECASE)
-    for key in ("hiConfig", "loConfig", "krea2Config", "wan21Config"):
-        try:
-            match = pattern.search(Path(artifacts[key]).read_text(encoding="utf-8"))
-        except (KeyError, OSError):
-            match = None
-        if match:
-            source = match.group(1).strip()
-            break
+    pattern = re.compile(r"^\s*(?:model|model_path|checkpoint|base_model|ckpt_path|diffusion_model|transformer_path)\s*=\s*[\"']?([^\"'\n#]+)", re.MULTILINE | re.IGNORECASE)
+    key = str(stage) + "Config"
+    try:
+        match = pattern.search(Path(artifacts[key]).read_text(encoding="utf-8"))
+    except (KeyError, OSError):
+        match = None
+    if match:
+        source = match.group(1).strip()
     source_name = Path(source).name if source else ""
     if source_name.lower().endswith((".safetensors", ".ckpt", ".pt")):
         source_name = Path(source_name).stem
-    label = "Wan2.2-T2V-A14B" if "wan2.2-t2v-a14b" in source_name.lower() else (source_name or "Training model")
+    selected_profile, _ = profile_run(profile_id, None, stage)
+    label = selected_profile["label"]
     return {"label": label, "source": source}
 
 
@@ -706,13 +706,13 @@ def _plan_run_steps(progress_plan, snapshot):
     return planned
 
 
-def _copy_snapshot(job_dir, artifacts, folder_path, stages):
+def _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir):
     snapshot = {}
     config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21" else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
     for key, filename in config_files:
         source = artifacts[key + "Config"]
         target = job_dir / filename
-        shutil.copy2(source, target)
+        target.write_text(with_output_dir(source.read_text(encoding="utf-8"), effective_output_dir), encoding="utf-8")
         normalize_path_permissions(target)
         snapshot[key] = str(target)
     dataset_files = ("dataset.train.toml", "auto_dataset/training_plan.json") if stages in ("krea2", "wan21") else (
@@ -770,14 +770,15 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     if stages in ("krea2", "wan21"):
         config_key = "krea2" if stages == "krea2" else "wan21"
         artifact_key = config_key + "Config"
-        use_snapshot = not artifacts[artifact_key].is_file()
+        use_snapshot = bool(job.get("snapshot", {}).get(config_key))
         config_path = Path(job["snapshot"][config_key]) if use_snapshot else artifacts[artifact_key]
         hi_path = config_path
         lo_path = config_path
     else:
-        use_snapshot = not (artifacts["hiConfig"].is_file() and artifacts["loConfig"].is_file())
-        hi_path = Path(job["snapshot"]["hi"]) if use_snapshot else artifacts["hiConfig"]
-        lo_path = Path(job["snapshot"]["lo"]) if use_snapshot else artifacts["loConfig"]
+        snapshot = job.get("snapshot", {})
+        use_snapshot = bool(snapshot.get("hi") or snapshot.get("lo"))
+        hi_path = Path(snapshot.get("hi") or snapshot.get("lo")) if use_snapshot else artifacts["hiConfig"]
+        lo_path = Path(snapshot.get("lo") or snapshot.get("hi")) if use_snapshot else artifacts["loConfig"]
     distribution = settings["wslDistribution"]
     hi_wsl = _to_wsl_path(hi_path, distribution)
     lo_wsl = _to_wsl_path(lo_path, distribution)
@@ -862,6 +863,12 @@ def _write_runner_script(job, settings, artifacts):
 
 
 def _launch_job(job, folder_path):
+    launch_time = time.time()
+    if not job.get("startedAt"):
+        job["startedAt"] = launch_time
+    job["updatedAt"] = launch_time
+    job["status"] = "starting"
+    job["stage"] = "launch"
     settings = _training_settings()
     try:
         last_repair = float(job.get("permissionsRepairedAt") or 0)
@@ -920,7 +927,6 @@ def _launch_job(job, folder_path):
         "status": "starting",
         "stage": "starting",
         "pid": int(pid),
-        "startedAt": time.time(),
         "updatedAt": time.time(),
         "logPath": str(log_path),
         "error": "",
@@ -1295,18 +1301,11 @@ def _start_next(state):
             return
         if job.get("status") == "failed":
             state["queuePaused"] = True
-            state["queuePauseReason"] = "Queue held after " + str(job.get("stages") or "training") + " " + str(job.get("status")) + "."
+            state["queuePauseReason"] = "Queue held: " + str(job.get("error") or (str(job.get("stages") or "training") + " failed."))
             return
 
 
 def _refresh_state(state):
-    # Jobs queued by older versions may still carry the removed input-change
-    # confirmation hold. Current files are now always intentional launch input.
-    if state.get("queuePauseReason") == "Queued inputs changed. Confirm current inputs or cancel this item.":
-        state["queuePaused"] = False
-        state["queuePauseReason"] = ""
-        for job in state.get("jobs", []):
-            job.pop("inputConfirmationRequired", None)
     for job in state.get("jobs", []):
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
@@ -1322,13 +1321,13 @@ def _refresh_state(state):
             state["activeJobId"] = ""
         elif active.get("status") == "interrupted":
             state["queuePaused"] = True
-            state["queuePauseReason"] = "Queue held after " + str(active.get("stages") or "training") + " interrupted."
+            state["queuePauseReason"] = "Queue held: " + str(active.get("error") or (str(active.get("stages") or "training") + " interrupted."))
             state["activeJobId"] = ""
         if active.get("status") in TERMINAL_STATUSES:
             state["activeJobId"] = ""
             if active.get("status") in ("failed", "interrupted"):
                 state["queuePaused"] = True
-                state["queuePauseReason"] = "Queue held after " + str(active.get("stage") or "training") + " " + str(active.get("status")) + "."
+                state["queuePauseReason"] = "Queue held: " + str(active.get("error") or (str(active.get("stage") or "training") + " " + str(active.get("status")) + "."))
     _start_next(state)
 
 
@@ -1356,7 +1355,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "runId", "modelLabel", "model", "profile", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
+    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -1412,32 +1411,51 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
         return {"ok": False, "error": str(exc), "checks": [], "summary": {"blockers": 1, "warnings": 0}}, 400
 
 
-def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id=""):
+def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id="", launch_group=None):
     job_id = uuid.uuid4().hex[:12]
     _, folder_path = _resolve_folder(folder)
     stages = _normalize_training_stages(stages)
     artifacts, _ = _resolve_artifacts(folder, folder_path, stages)
-    job_dir = _artifact_root(folder_path, stages) / job_id
+    selected_profile, _ = profile_run(profile_id, run_id, stages)
+    config_meta = config_for_stage(selected_profile["id"], stages)
+    output_slug = config_meta["outputSlug"]
+    resume_path = str(resume_from_checkpoint or "").strip()
+    distribution = _training_settings()["wslDistribution"]
+    if resume_path:
+        effective_output_dir = str(PurePosixPath(resume_path).parent) if resume_path.startswith("/") else str(Path(resume_path).parent)
+        output_root = host_path_for_training_path(effective_output_dir)
+        group_root = output_root.parent
+    else:
+        group_root = Path(launch_group) if launch_group else allocate_training_launch_group(folder_path)
+        output_root = group_root / output_slug
+        output_root.mkdir(parents=True, exist_ok=False)
+        normalize_path_permissions(output_root)
+        effective_output_dir = _to_wsl_path(output_root, distribution)
+    job_dir = group_root / ".webcap" / "jobs" / job_id
     job_dir.mkdir(parents=True, exist_ok=False)
     normalize_path_permissions(job_dir)
-    snapshot = _copy_snapshot(job_dir, artifacts, folder_path, stages)
+    snapshot = _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir)
     progress_plan = _plan_run_steps(_read_training_plan(folder_path) or _default_progress_plan(), snapshot)
     input_evidence = _input_evidence(folder_path, stages)
-    model = _model_identity(artifacts)
-    resume_path = str(resume_from_checkpoint or "").strip()
+    model = _model_identity(artifacts, selected_profile["id"], stages)
+    sequence_match = re.match(r"^([0-9A-Z]{3})-", group_root.name)
+    action_run_id = str(run_id or "")
+    job_run_id = stages if selected_profile["id"] == "wan22_t2v" and action_run_id == "both" else action_run_id
     return {
         "id": job_id,
         "folder": folder,
         "stages": stages,
-        "profileId": str(profile_id or ""),
-        "runId": str(run_id or ""),
+        "profileId": selected_profile["id"],
+        "runId": job_run_id,
+        "actionRunId": action_run_id,
         "modelLabel": model["label"],
         "model": model,
-        "profile": _training_profile(folder_path),
+        "datasetTarget": _training_profile(folder_path),
         "input": input_evidence,
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
         "outputRunPath": resume_path,
+        "resumePoint": resume_point_for_path(folder_path, stages, resume_path) if resume_path else {},
         "status": "queued",
         "stage": "queued",
         "createdAt": time.time(),
@@ -1445,22 +1463,24 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "permissionsRepairedAt": time.time(),
         "snapshot": snapshot,
         "artifactPath": str(job_dir),
-        "artifactDir": str(job_dir.relative_to(_artifact_root(folder_path, stages).parent)),
+        "artifactDir": str(job_dir),
         "progressPlan": progress_plan,
-        "runtime": {"wslDistribution": _training_settings()["wslDistribution"]},
+        "runtime": {"wslDistribution": distribution},
         "preflight": {"checks": preflight.get("checks", []), "blockers": preflight.get("summary", {}).get("blockers", 0)},
-        "outputRoot": str(output_root_for_folder(folder_path, stages)),
+        "outputRoot": str(output_root),
+        "effectiveOutputDir": effective_output_dir,
+        "outputSlug": output_slug,
+        "launchGroupId": group_root.name,
+        "sequence": sequence_match.group(1) if sequence_match else "",
+        "launchGroupRoot": str(group_root),
         "parentJobId": str(parent_job_id or ""),
     }
 
 
 def start_response(folder, queue=False, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id=""):
     try:
-        selected_profile = None
-        selected_run = None
-        if profile_id or run_id:
-            selected_profile, selected_run = profile_run(profile_id, run_id, stages)
-            stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
+        selected_profile, selected_run = profile_run(profile_id, run_id, stages)
+        stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
         stages = _normalize_training_stages(stages)
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
     except ValueError as exc:
@@ -1501,12 +1521,14 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
             state["queuePaused"] = False
             state["queuePauseReason"] = ""
         job_stages = ("hi", "lo") if stages == "both" else (stages,)
+        needs_new_output = any(not (resume_from_checkpoint and resume_stage == job_stage) for job_stage in job_stages)
+        launch_group = allocate_training_launch_group(folder_path) if needs_new_output else None
         jobs = []
         for job_stage in job_stages:
             stage_resume = resume_from_checkpoint if resume_stage == job_stage else ""
             jobs.append(_new_job(
                 str(folder).strip(), preflight, job_stage, stage_resume, job_stage if stage_resume else "", parent_job_id,
-                selected_profile["id"] if selected_profile else "", selected_run["id"] if selected_run else ""
+                selected_profile["id"], selected_run["id"], launch_group
             ))
         state["jobs"].extend(jobs)
         if not active or active.get("status") in TERMINAL_STATUSES:
@@ -1659,6 +1681,19 @@ def log_path_for_job(job_id):
         if not path.is_file():
             raise FileNotFoundError("Training log is not available yet")
         return path
+
+
+def output_path_for_job(job_id):
+    """Return the effective output directory for a known managed job."""
+    with _lock:
+        state = _read_state()
+        job = _find_job(state, job_id)
+        if not job:
+            raise ValueError("Training job was not found.")
+        raw_path = str(job.get("outputRoot") or "").strip()
+        if not raw_path:
+            raise ValueError("Training job has no effective output directory.")
+        return Path(raw_path)
 
 
 def stop_response(job_id, cancel=False, pause=False, finish=False):

@@ -12,15 +12,17 @@ WebCap has a small, app-owned registry of supported Diffusion Pipe training prof
 
 Krea2 Raw rejects prepared video data. Wan2.1 and Wan2.2 accept the normal prepared image/video mix.
 
-## Set output root
+## Launch output identity
 
-All profiles in one set intentionally share one output root. When WebCap writes a new config for a set, it allocates a three-character base-36 directory under:
+Generated set TOML stays editable and uses the neutral template output path. When a launch is created, WebCap reserves a new, global three-character base-36 launch group under:
 
 ```text
 <filesystem.root>/output/runs/<prefix>-<set-name>/
 ```
 
-For example: `001-Estel`. The resolved `output_dir` in the generated TOML is authoritative for that run. Generating missing files does not overwrite an existing edited TOML; **Reset** is the explicit per-config replacement action.
+For example: `001-Estel`. Each model/stage writes beneath that group using a registry-owned slug: `wan22-hi`, `wan22-lo`, `krea2-raw`, or `wan21-t2v`. A Wan2.2 HI → LO action shares one launch group for its two independent jobs; every other new launch gets its own group. Resume continues the selected existing output, and canceled reservations are never recycled.
+
+Managed and manual launches execute job-owned snapshots whose `output_dir` is replaced with the effective stage directory. The editable source config is not rewritten. Generating missing files does not overwrite edited TOML; **Reset** is the explicit per-config replacement action.
 
 ## Dataset generation and progress
 
@@ -33,6 +35,6 @@ For example: `001-Estel`. The resolved `output_dir` in the generated TOML is aut
 
 ## Launching
 
-The selected profile controls Generate Configs, manual-command preview, direct start, and queueing. A normal launch runs the standard DeepSpeed command with that profile's generated TOML. WebCap keeps queue, output console, pause, finish, cancellation, history, resume, GPU status, diagnostics, and TensorBoard behavior shared across profiles.
+The selected profile controls Generate Configs, manual-command preview, direct start, and queueing. A normal launch runs the standard DeepSpeed command with its launch snapshot. WebCap keeps queue, output console, pause, finish, cancellation, history, resume, GPU status, diagnostics, and TensorBoard behavior shared across profiles.
 
 Manual command preview never starts a process. `Train this set` starts immediately when idle or queues the job behind active work.

@@ -49,7 +49,7 @@ def test_training_templates_use_the_tensorboard_output_root():
     assert 'output_dir = "{TRAINING_ROOT}/output/runs/{SET_NAME}"' in lo
 
 
-def test_new_training_configs_reserve_a_shared_base36_output_dir(tmp_path, monkeypatch):
+def test_generated_training_configs_keep_the_neutral_template_output_dir(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "lilly"
     folder.mkdir(parents=True)
@@ -58,10 +58,11 @@ def test_new_training_configs_reserve_a_shared_base36_output_dir(tmp_path, monke
 
     training_config_files_module.ensure_training_config_files(folder)
 
-    expected = root / "output" / "runs" / "001-lilly"
-    assert training_config_files_module.output_dir_from_config(folder, "hi") == expected
-    assert training_config_files_module.output_dir_from_config(folder, "lo") == expected
-    assert expected.is_dir()
+    hi = training_config_files_module.output_dir_from_config(folder, "hi")
+    lo = training_config_files_module.output_dir_from_config(folder, "lo")
+    assert hi == lo
+    assert hi.name == "lilly"
+    assert not hi.name.startswith("001-")
 
 
 def test_krea2_config_is_rendered_with_the_existing_shared_output_dir(tmp_path, monkeypatch):
@@ -114,7 +115,7 @@ def test_wan21_config_shares_the_set_output_root(tmp_path, monkeypatch):
     assert training_config_files_module.output_dir_from_config(folder, "wan21") == training_config_files_module.output_dir_from_config(folder, "hi")
 
 
-def test_new_training_config_sequence_advances_in_base36(tmp_path, monkeypatch):
+def test_launch_group_sequence_advances_in_base36(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "lilly"
     folder.mkdir(parents=True)
@@ -123,12 +124,12 @@ def test_new_training_config_sequence_advances_in_base36(tmp_path, monkeypatch):
     (output_root / "009-sana").mkdir(parents=True)
     monkeypatch.setattr(config_module, "FS_ROOT", root)
 
-    training_config_files_module.ensure_training_config_files(folder)
+    launch_group = training_config_files_module.allocate_training_launch_group(folder)
 
-    assert training_config_files_module.output_dir_from_config(folder, "hi") == output_root / "00A-lilly"
+    assert launch_group == output_root / "00A-lilly"
 
 
-def test_new_training_config_sequence_recognizes_legacy_two_character_prefixes(tmp_path, monkeypatch):
+def test_launch_group_sequence_ignores_nonstandard_old_prefixes(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "lilly"
     folder.mkdir(parents=True)
@@ -137,9 +138,9 @@ def test_new_training_config_sequence_recognizes_legacy_two_character_prefixes(t
     (output_root / "0A-sana").mkdir(parents=True)
     monkeypatch.setattr(config_module, "FS_ROOT", root)
 
-    training_config_files_module.ensure_training_config_files(folder)
+    launch_group = training_config_files_module.allocate_training_launch_group(folder)
 
-    assert training_config_files_module.output_dir_from_config(folder, "hi") == output_root / "00B-lilly"
+    assert launch_group == output_root / "001-lilly"
 
 
 def test_regenerating_training_configs_preserves_the_configured_output_dir(tmp_path, monkeypatch):

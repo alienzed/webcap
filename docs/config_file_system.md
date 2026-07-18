@@ -15,7 +15,7 @@ Canonical templates live in `tool/templates/`:
 - `config.krea2.toml` for Krea2 Raw
 - `config.wan21.toml` for Wan2.1 T2V 14B
 
-Templates are not written on folder load. `Generate Configs`, command preview, and managed launch create missing files for the selected profile. Placeholder substitution resolves the training root, models root, set path, and one shared prefixed output root for the set.
+Templates are not written on folder load. `Generate Configs`, command preview, and managed launch create missing files for the selected profile. Placeholder substitution resolves the training root, models root, and set path. Launch creation, not config generation, reserves the prefixed output group and writes its effective output directory into a launch-owned snapshot.
 
 Generation never silently overwrites an existing TOML. The per-file **Reset** action is the explicit way to restore the resolved template.
 

@@ -11,7 +11,7 @@ It is built around explicit, reversible mutations, visible subset prep, and fast
 - Build focused work queues from review output, filters, or recursive SuperSet searches, then materialize filtered results into new sets.
 - Make reversible media edits including crop, clip, rotation, flip, blur/remove background, deface, duplicate, prune, and reset from preserved originals.
 - Prepare visible media subsets into a dataset, then generate profile-specific Diffusion Pipe TOML and a training plan.
-- Run managed Wan2.2 T2V, Krea2 Raw, and Wan2.1 T2V 14B jobs with a queue, per-run progress and checkpoint ETA, output logs, resume paths, diagnostics, history, GPU status, and optional TensorBoard; a manual WSL command remains available when preferred.
+- Run managed Wan2.2 T2V, Krea2 Raw, and Wan2.1 T2V 14B jobs with launch-scoped base36 output identities, model/stage output folders, a queue, per-run progress and checkpoint ETA, output logs, resume paths, diagnostics, history, GPU status, and optional TensorBoard; a manual WSL command remains available when preferred.
 - Keep app state and per-set artifacts on disk. WebCap uses Python and the browser only—no database or hosted service is required.
 
 ## Requirements
@@ -370,9 +370,9 @@ Behavior:
 - Krea2 Raw requires image-only prepared media; Wan2.1 and Wan2.2 accept prepared images and videos
 - the folder badge shows `Ready to train` only when prepared artifacts exist, prepared captions are present, and the set has no material tagged-but-uncaptioned backlog; otherwise it can show `Caption review needed`
 - `Train this set` starts immediately when idle or adds the selected run behind current work; Wan2.2 HI -> LO queues independent HI and LO jobs
-- active jobs expose per-run progress, completion ETA, next-checkpoint ETA, logs, pause/finish controls, explicit queue resume, and resume-from-checkpoint controls
+- active jobs expose per-run progress, completion ETA, next-checkpoint ETA, effective output identity/folder, logs, pause/finish controls, explicit queue resume, and resume-from-checkpoint controls; queued resumes show checkpoint-derived progress
 - the output view starts at the recent log tail; `Reveal log file` selects the complete managed log in Explorer
-- `Generate & Copy Manual Command` remains a non-launching WSL handoff, while `Run Diagnostics` runs the fuller environment check
+- `Generate & Copy Manual Command` reserves a launch output and snapshot but remains a non-process-launching WSL handoff, while `Run Diagnostics` runs the fuller environment check
 - TensorBoard can be started, stopped, and opened from the training workspace when available
 
 See [docs/train.md](docs/train.md) and [docs/training_profiles.md](docs/training_profiles.md) for the operational reference.

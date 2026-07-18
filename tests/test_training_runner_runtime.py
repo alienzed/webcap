@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -323,6 +324,7 @@ def test_new_runner_binds_the_first_new_matching_run_directory(monkeypatch):
         "outputRunPathsAtLaunch": ["/mnt/w/output/older-run"],
     }
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    monkeypatch.setattr(training_runner, "_resolve_folder", lambda folder: ("set", "folder"))
     monkeypatch.setattr(training_runner, "discover_runs", lambda folder, stage: [
         {"path": "/mnt/w/output/older-run"},
         {"path": "/mnt/w/output/20260716_08-31-48"},
@@ -357,13 +359,16 @@ def test_new_job_keeps_large_snapshots_under_the_output_sidecar(tmp_path, monkey
     folder = root / "set"
     dataset = folder / "auto_dataset"
     dataset.mkdir(parents=True)
-    for name in ("config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"):
-        (folder / name).write_text("model_path = 'models/example.safetensors'\n", encoding="utf-8")
+    for name in ("config.hi.toml", "config.lo.toml"):
+        (folder / name).write_text("output_dir = '/output/source'\nmodel_path = 'models/example.safetensors'\n", encoding="utf-8")
+    for name in ("dataset.hi.toml", "dataset.lo.toml"):
+        (folder / name).write_text("ok\n", encoding="utf-8")
     (dataset / "training_plan.json").write_text('{"mode": "poc", "stages": {}}', encoding="utf-8")
     (dataset / "prep_manifest.json").write_text('{"images": [], "videos": []}', encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", root)
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
 
     job = training_runner._new_job("set", {"checks": [], "summary": {"blockers": 0}}, "hi")
 
@@ -372,7 +377,10 @@ def test_new_job_keeps_large_snapshots_under_the_output_sidecar(tmp_path, monkey
     assert ".webcap" in artifact.parts
     assert (artifact / "config.hi.toml").is_file()
     assert (artifact / "dataset.hi.toml").is_file()
-    assert job["profile"] == "poc"
+    assert job["datasetTarget"] == "poc"
+    assert job["launchGroupId"] == "001-set"
+    assert job["outputSlug"] == "wan22-hi"
+    assert "output_dir = \"/mnt/w/wan22-hi\"" in (artifact / "config.hi.toml").read_text(encoding="utf-8")
     assert job["model"]["source"] == "models/example.safetensors"
 
 
@@ -383,9 +391,27 @@ def test_model_identity_keeps_the_specific_wan_checkpoint_name(tmp_path):
     model = training_runner._model_identity({"hiConfig": config, "loConfig": config})
 
     assert model == {
-        "label": "Wan2.2-T2V-A14B",
+        "label": "Wan2.2 T2V",
         "source": "/models/Wan2.2-T2V-A14B",
     }
+
+
+def test_launch_failure_records_start_before_terminal_time(tmp_path, monkeypatch):
+    job = {
+        "id": "job",
+        "folder": "set",
+        "stages": "hi",
+        "permissionsRepairedAt": time.time(),
+    }
+    blocker = training_runner._make_check("config", "blocker", False, "Missing config.")
+    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages: ("set", tmp_path, {}, {}, [blocker]))
+
+    launched = training_runner._launch_job(job, tmp_path)
+
+    assert launched is False
+    assert job["status"] == "failed"
+    assert job["startedAt"] <= job["finishedAt"]
 
 
 def test_start_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):
@@ -929,7 +955,7 @@ def test_starting_both_creates_adjacent_hi_and_lo_jobs(tmp_path, monkeypatch):
     folder = root / "set"
     (folder / "auto_dataset").mkdir(parents=True)
     for name in ("config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"):
-        (folder / name).write_text("ok", encoding="utf-8")
+        (folder / name).write_text("output_dir = '/source'\n", encoding="utf-8")
     (folder / "auto_dataset" / "prep_manifest.json").write_text("{}", encoding="utf-8")
     artifacts = {
         "hiConfig": folder / "config.hi.toml", "loConfig": folder / "config.lo.toml",
@@ -944,12 +970,18 @@ def test_starting_both_creates_adjacent_hi_and_lo_jobs(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
+    monkeypatch.setattr(training_runner, "_repair_training_set_permissions", lambda folder, distribution: "")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
     monkeypatch.setattr(training_runner, "_launch_job", lambda job, path: job.update(status="running", stage=job["stages"]))
 
     payload, status = training_runner.start_response("set", stages="both")
 
     assert status == 200
     assert [job["stages"] for job in payload["jobs"]] == ["hi", "lo"]
+    assert payload["jobs"][0]["launchGroupId"] == payload["jobs"][1]["launchGroupId"]
+    assert [job["outputSlug"] for job in payload["jobs"]] == ["wan22-hi", "wan22-lo"]
+    assert [job["runId"] for job in payload["jobs"]] == ["hi", "lo"]
+    assert [job["actionRunId"] for job in payload["jobs"]] == ["both", "both"]
     assert state["jobs"][0]["status"] == "running"
     assert state["jobs"][1]["status"] == "queued"
 
@@ -971,6 +1003,10 @@ def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypat
     monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value: ("set", "folder", {}, {}, []))
     monkeypatch.setattr(training_runner, "_new_job", lambda *args: job)
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    monkeypatch.setattr(training_runner, "_resolve_folder", lambda folder: ("set", "folder"))
+    monkeypatch.setattr(training_runner, "_repair_training_set_permissions", lambda folder, distribution: "")
+    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
+    monkeypatch.setattr(training_runner, "allocate_training_launch_group", lambda folder: Path("launch"))
     monkeypatch.setattr(training_runner, "_launch_job", lambda candidate, folder: candidate.update(status="starting"))
 
     payload, status = training_runner.start_response("set", queue=True, stages="lo")
@@ -996,6 +1032,7 @@ def test_starting_krea2_creates_one_krea2_job(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
     monkeypatch.setattr(training_runner, "_repair_training_set_permissions", lambda folder, distribution: "")
     monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages: ("set", tmp_path, {}, {}, []))
+    monkeypatch.setattr(training_runner, "allocate_training_launch_group", lambda folder: tmp_path / "001-set")
     monkeypatch.setattr(
         training_runner,
         "_new_job",

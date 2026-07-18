@@ -36,7 +36,6 @@ _PROFILES = {
         "command": {"launcher": "standard_deepspeed"},
         "mediaKinds": ("image",),
         "datasetFiles": ("dataset.train.toml",),
-        "legacyDatasetFiles": ("dataset.lo.toml",),
         "configs": (
             {"id": "krea2", "file": "config.krea2.toml", "dataset": "dataset.train.toml", "label": "Krea2 Raw"},
         ),

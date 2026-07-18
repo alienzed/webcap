@@ -1499,7 +1499,7 @@ function renderTrainingWorkspaceConfigList(files) {
   (trainingWorkspaceState.profiles || []).forEach(function (profile) { grouped[profile.id] = []; });
   files.forEach(function (fileName) {
     var owner = (trainingWorkspaceState.profiles || []).filter(function (profile) {
-      return (profile.configs || []).some(function (config) { return config.file === fileName; }) || (profile.datasetFiles || []).indexOf(fileName) !== -1 || (profile.legacyDatasetFiles || []).indexOf(fileName) !== -1;
+      return (profile.configs || []).some(function (config) { return config.file === fileName; }) || (profile.datasetFiles || []).indexOf(fileName) !== -1;
     })[0];
     (grouped[owner ? owner.id : 'other'] || (grouped.other = [])).push(fileName);
   });

@@ -235,9 +235,6 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
 
         selected_config = krea2_path if stages == "krea2" else wan21_path if stages == "wan21" else None
         selected_dataset = dataset_train_path if stages in ("krea2", "wan21") else None
-        # Older Krea configs deliberately remain runnable until reset or migrated.
-        if stages == "krea2" and krea2_path.is_file() and "dataset.lo.toml" in krea2_path.read_text(encoding="utf-8"):
-            selected_dataset = dataset_lo_path
         required_paths = (selected_config, selected_dataset) if selected_config else (
             hi_path, lo_path, dataset_hi_path, dataset_lo_path
         )

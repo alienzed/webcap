@@ -584,28 +584,6 @@ def test_runner_progress_uses_epoch_progress_and_a_rolling_step_eta(tmp_path):
     }
 
 
-def test_krea2_progress_uses_the_legacy_lo_plan_for_checkpoint_eta(tmp_path):
-    krea_path = tmp_path / "config.krea2.toml"
-    krea_path.write_text("epochs = 90\ncheckpoint_every_n_epochs = 5\n", encoding="utf-8")
-    job = {
-        "stage": "krea2",
-        "stages": "krea2",
-        "snapshot": {"krea2": str(krea_path)},
-        "progressPlan": {"lo": {"estimatedSteps": 20000}},
-    }
-
-    training_runner._sync_job_progress(job, "\n".join([
-        "Started new epoch: 3",
-        "[INFO] [Rank 0] step=100, iter time (s): 2.0",
-        "[INFO] [Rank 0] step=101, iter time (s): 3.0",
-        "[INFO] [Rank 0] step=102, iter time (s): 4.0",
-    ]))
-
-    assert job["progress"]["nextCheckpointEpoch"] == 5
-    assert job["progress"]["checkpointEveryNEpochs"] == 5
-    assert job["progress"]["checkpointEtaSeconds"] == 1333
-
-
 def test_completed_job_flags_a_result_far_below_the_step_estimate_without_epoch_progress():
     job = {
         "status": "completed",

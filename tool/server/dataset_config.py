@@ -248,12 +248,6 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     single_stage = str(profile_id or "") in (KREA2_PROFILE_ID, WAN21_PROFILE_ID)
     single_stage_name = "krea2" if profile_id == KREA2_PROFILE_ID else "wan21"
     single_config_name = "config.krea2.toml" if profile_id == KREA2_PROFILE_ID else "config.wan21.toml"
-    legacy_krea_dataset = False
-    if profile_id == KREA2_PROFILE_ID:
-        try:
-            legacy_krea_dataset = "dataset.lo.toml" in (folder / single_config_name).read_text(encoding="utf-8")
-        except OSError:
-            pass
     hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
     default_hi_epochs, default_lo_epochs = default_training_config_epochs()
     hi_epochs = read_epochs_from_training_config(folder / HI_CONFIG_NAME, default_hi_epochs)
@@ -299,7 +293,7 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     hi_text = render_dataset_toml(hi_blocks, snapshot_lines)
     lo_text = render_dataset_toml(lo_blocks, snapshot_lines)
     if single_stage:
-        train_path = folder / ("dataset.lo.toml" if legacy_krea_dataset else "dataset.train.toml")
+        train_path = folder / "dataset.train.toml"
         train_path.write_text(lo_text, encoding="utf-8")
         normalize_path_permissions(train_path)
         lines.append(f"[INFO] Wrote {train_path}")

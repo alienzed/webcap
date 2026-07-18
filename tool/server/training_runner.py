@@ -344,13 +344,7 @@ def _resolve_artifacts(folder, folder_path, stages="both"):
         "manifest": folder_path / "auto_dataset" / "prep_manifest.json",
     }
     if stages == "krea2":
-        # Existing generated Krea configs may intentionally still use dataset.lo.toml.
-        try:
-            legacy_krea_dataset = "dataset.lo.toml" in paths["krea2Config"].read_text(encoding="utf-8")
-        except OSError:
-            legacy_krea_dataset = False
-        dataset_name = "loDataset" if legacy_krea_dataset else "trainDataset"
-        required = ("krea2Config", dataset_name, "manifest")
+        required = ("krea2Config", "trainDataset", "manifest")
     elif stages == "wan21":
         required = ("wan21Config", "trainDataset", "manifest")
     else:
@@ -644,7 +638,7 @@ def _input_evidence(folder_path, stages="both"):
             digest.update(caption.read_bytes())
         except OSError:
             digest.update(b"<missing-caption>")
-    config_names = (KREA2_CONFIG_NAME, "dataset.train.toml", "dataset.lo.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (WAN21_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "wan21" else (
+    config_names = (KREA2_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (WAN21_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "wan21" else (
         HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
     )
     config_paths = [folder / name for name in config_names]
@@ -721,7 +715,7 @@ def _copy_snapshot(job_dir, artifacts, folder_path, stages):
         shutil.copy2(source, target)
         normalize_path_permissions(target)
         snapshot[key] = str(target)
-    dataset_files = (("dataset.lo.toml" if artifacts["loDataset"].is_file() and "dataset.lo.toml" in artifacts["krea2Config"].read_text(encoding="utf-8") else "dataset.train.toml"), "auto_dataset/training_plan.json") if stages == "krea2" else ("dataset.train.toml", "auto_dataset/training_plan.json") if stages == "wan21" else (
+    dataset_files = ("dataset.train.toml", "auto_dataset/training_plan.json") if stages in ("krea2", "wan21") else (
         "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
     )
     for filename in dataset_files:
@@ -1008,10 +1002,6 @@ def _sync_job_progress(job, log_text):
     step = int(step_matches[-1]) if step_matches else previous.get("step")
     plan = job.get("progressPlan") if isinstance(job.get("progressPlan"), dict) else {}
     stage_plan = plan.get(stage) if isinstance(plan.get(stage), dict) else {}
-    # Krea2 and Wan2.1 use the neutral/LO bucket policy. Jobs created before
-    # profile plans existed still carry the older LO-only plan in their snapshot.
-    if not stage_plan and stage in ("krea2", "wan21") and isinstance(plan.get("lo"), dict):
-        stage_plan = plan["lo"]
     planned_steps = int(stage_plan.get("estimatedSteps") or 0)
     # Epochs come directly from diffusion-pipe's log and are authoritative when
     # available. The generated step budget is only a fallback for logs without

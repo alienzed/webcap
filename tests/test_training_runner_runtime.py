@@ -520,20 +520,26 @@ def test_restart_hold_keeps_a_dormant_queue_from_starting_unattended(monkeypatch
     assert state["queuePauseReason"] == "Queue held after WebCap restarted."
 
 
-def test_missing_queued_folder_is_failed_without_blocking_the_queue(tmp_path, monkeypatch):
+def test_missing_queued_folder_is_discarded_and_its_job_artifacts_are_removed(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", tmp_path)
+    artifact_path = tmp_path / "output" / "run" / ".webcap" / "jobs" / "missing"
+    artifact_path.mkdir(parents=True)
+    (artifact_path / "runner.sh").write_text("runner", encoding="utf-8")
     state = {
         "queuePaused": False,
         "activeJobId": "",
-        "jobs": [{"id": "missing", "folder": "moved-set", "status": "queued", "stage": "queued"}],
+        "jobs": [{
+            "id": "missing", "folder": "moved-set", "status": "queued", "stage": "queued",
+            "artifactPath": str(artifact_path),
+        }],
     }
 
-    training_runner._fail_queued_jobs_with_missing_folders(state)
+    training_runner._discard_queued_jobs_with_missing_folders(state)
 
     job = state["jobs"][0]
-    assert job["status"] == "failed"
-    assert job["stage"] == "dataset"
-    assert "moved or deleted" in job["error"]
+    assert job["status"] == "cancelled"
+    assert job["historyHidden"] is True
+    assert not artifact_path.exists()
 
 
 def test_missing_folder_history_is_skipped(tmp_path, monkeypatch):

@@ -234,8 +234,8 @@ def _sync_histories(state):
         _sync_job_history(job)
 
 
-def _fail_queued_jobs_with_missing_folders(state):
-    """Keep a moved or deleted set from blocking every later queue item."""
+def _discard_queued_jobs_with_missing_folders(state):
+    """Discard queued work whose source set was intentionally removed."""
     for job in state.get("jobs", []):
         if job.get("status") not in QUEUE_STATUSES:
             continue
@@ -246,15 +246,24 @@ def _fail_queued_jobs_with_missing_folders(state):
             folder_exists = False
         if folder_exists:
             continue
-        job["status"] = "failed"
-        job["stage"] = "dataset"
-        job["failureScope"] = "job"
-        job["error"] = (
-            "Queued training set is no longer available at '" + (folder or "(missing path)")
-            + "'. It may have been moved or deleted; requeue it from its current folder."
-        )
+        job["status"] = "cancelled"
+        job["stage"] = "cancelled"
+        job["historyHidden"] = True
+        job["error"] = "Discarded because its source set was removed: " + (folder or "(missing path)")
         job["finishedAt"] = time.time()
         job["updatedAt"] = time.time()
+        if str(state.get("activeJobId") or "") == str(job.get("id") or ""):
+            state["activeJobId"] = ""
+        artifact_path = _job_dir(job)
+        if artifact_path.name != str(job.get("id") or "") or artifact_path.parent.name != "jobs" or artifact_path.parent.parent.name != ".webcap":
+            _logger.warning("Skipped cleanup for unexpected training job artifact path: %s", artifact_path)
+            continue
+        try:
+            shutil.rmtree(artifact_path)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            _logger.warning("Could not remove discarded training job artifacts: %s", artifact_path)
 
 
 def relocate_folder_jobs(old_folder, new_folder):
@@ -908,7 +917,7 @@ def _monitor_loop():
             with _lock:
                 state = _read_state()
                 _apply_restart_hold(state)
-                _fail_queued_jobs_with_missing_folders(state)
+                _discard_queued_jobs_with_missing_folders(state)
                 _refresh_state(state)
                 _sync_histories(state)
                 _write_state(state)

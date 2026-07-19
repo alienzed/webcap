@@ -463,19 +463,13 @@ function stopManagedTraining(cancel, pause, finish) {
 }
 
 function cancelQueuedTrainingJob(jobId) {
-  var job = getTrainingRunnerJobById(jobId);
-  if (!job || job.status !== 'queued') {
-    setStatus('That item is no longer queued. Refreshing training status.');
-    refreshTrainingRunnerStatus();
-    return;
-  }
-  if (!window.confirm('Cancel this queued training job?')) return;
+  if (!window.confirm('Remove this training job from the queue?')) return;
   trainingRunnerRequest('/fs/training_runner/stop', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobId: job.id, cancel: true })
+    body: JSON.stringify({ jobId: jobId, cancel: true })
   }).then(function () {
-    setStatus('Queued training job cancelled.');
+    setStatus('Training job removed from the queue.');
     refreshTrainingRunnerStatus();
     refreshTrainingHistory(true);
   }).catch(function (err) {

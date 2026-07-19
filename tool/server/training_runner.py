@@ -3,36 +3,55 @@ import logging
 import math
 import os
 import re
-import csv
 import hashlib
 import shlex
 import shutil
-import subprocess
 import threading
 import time
-import tomllib
 import uuid
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .caption_ops import _caption_name_for_media
-from .originals import MEDIA_ALL_EXTS, is_transient_media_name
 from .permissions import normalize_path_permissions
-from .training_commands import build_training_command_plan, build_training_launcher_probe
+from .training_commands import build_training_command_plan
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, allocate_training_launch_group, output_dir_from_config, with_output_dir
 from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_run
 from .dataset_config import repeat_targets_for_mode
 from .training_history import completed_stages, config_sha256, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, record_job, clear_history_job
+from .training_preflight import (
+    build_launch_preflight as _build_launch_preflight,
+    gpu_snapshot as _gpu_snapshot,
+    make_check as _make_check,
+    needs_partial_annotation_caption_review as _needs_partial_annotation_caption_review,
+    preflight_payload as _preflight_payload,
+    prepared_dataset_is_ready as _prepared_dataset_is_ready,
+    resolve_artifacts as _resolve_artifacts,
+    resolve_folder as _resolve_folder,
+)
+from .training_progress import (
+    annotate_completed_job as _annotate_completed_job,
+    annotate_finished_early_job as _annotate_finished_early_job,
+    log_has_progress as _log_has_progress,
+    normalize_training_stages as _normalize_training_stages,
+    read_log_tail as _read_log_tail,
+    sync_job_progress as _sync_job_progress,
+)
 from .training_runtime import (
-    build_runtime_command,
+    TRAINING_RUNTIME_DIR_NAME,
+    activation_prefix as _activation_prefix,
     build_training_launcher,
-    has_complete_conda_runtime,
+    configured_training_settings as _training_settings,
     has_conda_runtime,
-    training_runtime_settings,
+    pid_alive as _pid_alive,
+    repair_training_set_permissions as _repair_training_set_permissions,
+    run_wsl as _run_wsl,
+    to_wsl_path as _to_wsl_path,
+    uses_native_wsl_shell as _uses_native_wsl_shell,
+    wsl_executable as _wsl_executable,
 )
 
 
-RUNNER_DIR_NAME = ".webcap_training"
+RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
 STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
 ACTIVE_STATUSES = {"starting", "running", "stopping", "unconfirmed"}
@@ -47,15 +66,6 @@ _history_signatures = {}
 _state_file_seen = None
 _persisted_managed_job_ids = set()
 _logger = logging.getLogger(__name__)
-_EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
-_CHECKPOINT_EPOCH_CONFIG_PATTERN = re.compile(r"^\s*checkpoint_every_n_epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
-_LOG_EPOCH_PATTERN = re.compile(r"Started new epoch:\s*(\d+)", re.IGNORECASE)
-_LOG_STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
-_LOG_ITER_TIME_PATTERN = re.compile(r"\biter time \(s\):\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
-ETA_MIN_SAMPLES = 3
-ETA_SAMPLE_WINDOW = 8
-PARTIAL_CAPTION_REVIEW_MIN_ITEMS = 3
-PARTIAL_CAPTION_REVIEW_MIN_RATIO = 0.15
 
 
 def _runtime_root():
@@ -252,387 +262,6 @@ def _find_job(state, job_id):
             return job
     return None
 
-
-def _wsl_executable():
-    return shutil.which("wsl.exe") or shutil.which("wsl")
-
-
-def _uses_native_wsl_shell():
-    return os.name != "nt"
-
-
-def _run_wsl(command, timeout=20, distribution=""):
-    if _uses_native_wsl_shell():
-        args = ["bash", "-lc", command]
-    else:
-        executable = _wsl_executable()
-        if not executable:
-            return 127, "", "wsl.exe was not found on PATH."
-        args = [executable]
-        if distribution:
-            args.extend(["--distribution", distribution])
-        args.extend(["--", "bash", "-lc", command])
-    try:
-        completed = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-        return completed.returncode, completed.stdout or "", completed.stderr or ""
-    except subprocess.TimeoutExpired as exc:
-        return 124, exc.stdout or "", "Timed out: " + str(exc)
-    except Exception as exc:
-        return 1, "", str(exc)
-
-
-def _to_wsl_path(path, distribution=""):
-    value = str(path)
-    if value.startswith("/"):
-        return value
-    code, stdout, stderr = _run_wsl("wslpath -a " + shlex.quote(value), timeout=10, distribution=distribution)
-    value = (stdout or "").strip()
-    if code != 0 or not value:
-        raise RuntimeError((stderr or stdout or "wslpath failed").strip())
-    return value
-
-
-def _repair_training_set_permissions(folder_path, distribution=""):
-    """Restore WSL read/write access to a selected training set before it is used."""
-    try:
-        wsl_folder = _to_wsl_path(folder_path, distribution)
-    except Exception as exc:
-        return "Could not resolve the training set path in WSL: " + str(exc)
-    quoted_folder = shlex.quote(wsl_folder)
-    command = (
-        "chmod 775 -- " + quoted_folder
-        + " && find " + quoted_folder + " -type d -exec chmod 775 {} +"
-        + " && find " + quoted_folder + " -type f -exec chmod 664 {} +"
-    )
-    code, stdout, stderr = _run_wsl(command, timeout=120, distribution=distribution)
-    if code == 0:
-        return ""
-    detail = (stderr or stdout).strip() or ("exit " + str(code))
-    return "Could not restore training-set permissions: " + detail
-
-
-def _training_settings():
-    config = app_config.config if isinstance(app_config.config, dict) else {}
-    training = config.get("training") if isinstance(config.get("training"), dict) else {}
-    return training_runtime_settings(training)
-
-
-def _resolve_folder(folder):
-    value = str(folder or "").strip()
-    if not value:
-        raise ValueError("Missing folder argument")
-    path = app_config.safe_join_fs_root(value)
-    if not path.exists() or not path.is_dir():
-        raise ValueError("Folder does not exist: " + value)
-    return value, path
-
-
-def _resolve_artifacts(folder, folder_path, stages="both"):
-    paths = {
-        "hiConfig": folder_path / HI_CONFIG_NAME,
-        "loConfig": folder_path / LO_CONFIG_NAME,
-        "krea2Config": folder_path / KREA2_CONFIG_NAME,
-        "wan21Config": folder_path / WAN21_CONFIG_NAME,
-        "hiDataset": folder_path / "dataset.hi.toml",
-        "loDataset": folder_path / "dataset.lo.toml",
-        "trainDataset": folder_path / "dataset.train.toml",
-        "manifest": folder_path / "auto_dataset" / "prep_manifest.json",
-    }
-    if stages == "krea2":
-        required = ("krea2Config", "trainDataset", "manifest")
-    elif stages == "wan21":
-        required = ("wan21Config", "trainDataset", "manifest")
-    elif stages == "hi":
-        required = ("hiConfig", "hiDataset", "manifest")
-    elif stages == "lo":
-        required = ("loConfig", "loDataset", "manifest")
-    else:
-        required = (
-        "hiConfig", "loConfig", "hiDataset", "loDataset", "manifest"
-        )
-    missing = [name for name in required if not paths[name].exists() or not paths[name].is_file()]
-    return paths, missing
-
-
-def _prepared_dataset_is_ready(folder_path):
-    folder = Path(folder_path)
-    manifest_path = folder / "auto_dataset" / "prep_manifest.json"
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False
-    if not isinstance(manifest, dict):
-        return False
-    rows = []
-    for key in ("images", "videos"):
-        values = manifest.get(key)
-        if not isinstance(values, list):
-            return False
-        rows.extend(values)
-    if not rows:
-        return False
-    dataset_root = manifest_path.parent
-    for row in rows:
-        if not isinstance(row, dict):
-            return False
-        prepared_path = str(row.get("prepared_path") or "").strip()
-        if not prepared_path or not row.get("caption"):
-            return False
-        caption_path = (dataset_root / prepared_path).with_suffix(".txt")
-        try:
-            if not caption_path.is_file() or not caption_path.read_text(encoding="utf-8").strip():
-                return False
-        except OSError:
-            return False
-    return True
-
-
-def _partial_annotation_caption_counts(folder_path):
-    folder = Path(folder_path)
-    try:
-        state = json.loads((folder / ".webcap_state.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return 0, 0
-    tags_by_media = state.get("caption_tags_by_media") if isinstance(state, dict) else {}
-    if not isinstance(tags_by_media, dict):
-        return 0, 0
-
-    partial_count = 0
-    touched_count = 0
-    for media_path in folder.iterdir():
-        if (
-            not media_path.is_file()
-            or media_path.suffix.lower() not in MEDIA_ALL_EXTS
-            or is_transient_media_name(media_path.name)
-        ):
-            continue
-        tags = tags_by_media.get(media_path.name)
-        tags = [str(tag).strip() for tag in tags] if isinstance(tags, list) else []
-        tags = [tag for tag in tags if tag]
-        try:
-            caption = (folder / _caption_name_for_media(media_path.name)).read_text(encoding="utf-8").strip()
-        except OSError:
-            caption = ""
-        if tags or caption:
-            touched_count += 1
-        if tags and not caption:
-            partial_count += 1
-    return partial_count, touched_count
-
-
-def _needs_partial_annotation_caption_review(folder_path):
-    partial_count, touched_count = _partial_annotation_caption_counts(folder_path)
-    if not touched_count or partial_count < PARTIAL_CAPTION_REVIEW_MIN_ITEMS:
-        return False, partial_count, touched_count
-    return partial_count / touched_count >= PARTIAL_CAPTION_REVIEW_MIN_RATIO, partial_count, touched_count
-
-
-def _activation_prefix(settings):
-    if has_conda_runtime(settings):
-        return ""
-    activate = settings["activate"]
-    if not activate:
-        return ""
-    return "source " + shlex.quote(activate) + " && "
-
-
-def _make_check(check_id, severity, ok, message, details=""):
-    return {
-        "id": check_id,
-        "severity": severity,
-        "ok": bool(ok),
-        "message": message,
-        "details": str(details or "").strip(),
-    }
-
-
-def _wsl_check(check_id, severity, settings, command, message):
-    cwd = settings["cwd"]
-    shell = "cd " + shlex.quote(cwd) + " && " + _activation_prefix(settings) + command
-    code, stdout, stderr = _run_wsl(shell, distribution=settings["wslDistribution"])
-    details = (stdout + stderr).strip()
-    return _make_check(check_id, severity, code == 0, message if code == 0 else message + " (exit " + str(code) + ")", details)
-
-
-def _parse_nvidia_smi_csv(text, fields):
-    rows = []
-    for values in csv.reader((text or "").splitlines()):
-        if len(values) != len(fields):
-            continue
-        rows.append({field: value.strip() for field, value in zip(fields, values)})
-    return rows
-
-
-def _gpu_snapshot():
-    settings = _training_settings()
-    distribution = settings.get("wslDistribution") or ""
-    gpu_fields = ("index", "name", "utilization", "memoryUsed", "memoryTotal", "temperature", "powerDraw")
-    gpu_command = "nvidia-smi --query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw --format=csv,noheader,nounits"
-    code, stdout, stderr = _run_wsl(gpu_command, timeout=5, distribution=distribution)
-    if code != 0:
-        return {
-            "available": False,
-            "gpus": [],
-            "processes": [],
-            "error": (stderr or stdout or "nvidia-smi failed (exit " + str(code) + ")").strip(),
-            "checkedAt": time.time(),
-        }
-    process_fields = ("pid", "name", "memoryUsed")
-    process_command = "nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits"
-    process_code, process_stdout, process_stderr = _run_wsl(process_command, timeout=5, distribution=distribution)
-    return {
-        "available": True,
-        "gpus": _parse_nvidia_smi_csv(stdout, gpu_fields),
-        "processes": _parse_nvidia_smi_csv(process_stdout, process_fields) if process_code == 0 else [],
-        "processError": (process_stderr or "").strip() if process_code != 0 else "",
-        "checkedAt": time.time(),
-    }
-
-
-def _build_preflight(folder, stages="both"):
-    folder_value, folder_path = _resolve_folder(folder)
-    artifacts, missing = _resolve_artifacts(folder_value, folder_path, stages)
-    settings = _training_settings()
-    checks = []
-    checks.append(_make_check("set_folder_exists", "blocker", True, "Set folder is available.", str(folder_path)))
-    checks.append(_make_check("training_artifacts", "blocker", not missing,
-                              "Training artifacts are available." if not missing else "Missing: " + ", ".join(missing),
-                              ""))
-    shell_available = bool(shutil.which("bash")) if _uses_native_wsl_shell() else bool(_wsl_executable())
-    checks.append(_make_check(
-        "wsl_available",
-        "blocker",
-        shell_available,
-        "Current WSL shell is available." if _uses_native_wsl_shell() and shell_available else
-        "WSL is available." if shell_available else "wsl.exe was not found on PATH.",
-    ))
-    checks.append(_make_check("training_cwd", "blocker", bool(settings["cwd"]),
-                              "Diffusion Pipe WSL path is configured." if settings["cwd"] else "Set training.diffusion_pipe_wsl in App Settings."))
-    if stages == "krea2":
-        try:
-            manifest = json.loads((folder_path / "auto_dataset" / "prep_manifest.json").read_text(encoding="utf-8"))
-            image_only = not bool(manifest.get("videos"))
-        except (OSError, ValueError, AttributeError):
-            image_only = False
-        checks.append(_make_check(
-            "krea2_image_only", "blocker", image_only,
-            "Krea2 Raw input is image-only." if image_only else "Krea2 Raw requires image-only prepared media.",
-        ))
-    if not all(item["ok"] for item in checks if item["severity"] == "blocker"):
-        return folder_value, folder_path, artifacts, settings, checks
-
-    checks.append(_wsl_check("cwd_exists", "blocker", settings, "test -d .", "Training working directory is available."))
-    if has_conda_runtime(settings) and not has_complete_conda_runtime(settings):
-        checks.append(_make_check(
-            "conda_runtime",
-            "blocker",
-            False,
-            "Conda runtime needs both the executable path and environment name.",
-        ))
-        return folder_value, folder_path, artifacts, settings, checks
-    if has_complete_conda_runtime(settings):
-        checks.append(_wsl_check(
-            "conda_executable",
-            "blocker",
-            settings,
-            "test -x " + shlex.quote(settings["condaExecutable"]),
-            "Conda executable is available.",
-        ))
-    elif settings["activate"]:
-        checks.append(_wsl_check("activate_script", "blocker", settings,
-                                 "test -f " + shlex.quote(settings["activate"]),
-                                 "Activation script is available."))
-    else:
-        checks.append(_make_check("activate_script", "warning", True, "No activation script configured; using the WSL shell environment."))
-    if has_complete_conda_runtime(settings) and not checks[-1]["ok"]:
-        return folder_value, folder_path, artifacts, settings, checks
-    checks.append(_wsl_check(
-        "python_available",
-        "blocker",
-        settings,
-        build_runtime_command(settings, "python --version"),
-        "Python is available.",
-    ))
-    checks.append(_wsl_check(
-        "deepspeed_available",
-        "blocker",
-        settings,
-        build_training_launcher_probe(build_training_launcher(settings)),
-        "DeepSpeed launcher is available.",
-    ))
-    checks.append(_wsl_check("train_py_present", "blocker", settings, "test -f train.py", "train.py is available."))
-    checks.append(_wsl_check(
-        "torch_cuda_visible", "blocker", settings,
-        build_runtime_command(settings, "python -c " + shlex.quote("import torch; raise SystemExit(0 if torch.cuda.is_available() and torch.cuda.device_count() else 1)")),
-        "CUDA is visible to PyTorch.",
-    ))
-    checks.append(_wsl_check("nvidia_smi", "warning", settings, "nvidia-smi", "nvidia-smi is available."))
-    return folder_value, folder_path, artifacts, settings, checks
-
-
-def _build_launch_preflight(folder, stages="both"):
-    folder_value, folder_path = _resolve_folder(folder)
-    artifacts, missing = _resolve_artifacts(folder_value, folder_path, stages)
-    settings = _training_settings()
-    shell_available = bool(shutil.which("bash")) if _uses_native_wsl_shell() else bool(_wsl_executable())
-    checks = [
-        _make_check("set_folder_exists", "blocker", True, "Set folder is available.", str(folder_path)),
-        _make_check("training_artifacts", "blocker", not missing,
-                    "Training artifacts are available." if not missing else "Missing: " + ", ".join(missing)),
-        _make_check("wsl_available", "blocker", shell_available,
-                    "Current WSL shell is available." if _uses_native_wsl_shell() and shell_available else
-                    "WSL is available." if shell_available else "wsl.exe was not found on PATH."),
-        _make_check("training_cwd", "blocker", bool(settings["cwd"]),
-                    "Diffusion Pipe WSL path is configured." if settings["cwd"] else "Set training.diffusion_pipe_wsl in App Settings."),
-    ]
-    toml_keys = (
-        ("krea2Config", "trainDataset") if stages == "krea2" else
-        ("wan21Config", "trainDataset") if stages == "wan21" else
-        ("hiConfig", "hiDataset") if stages == "hi" else
-        ("loConfig", "loDataset") if stages == "lo" else
-        ("hiConfig", "loConfig", "hiDataset", "loDataset")
-    )
-    toml_errors = []
-    for key in toml_keys:
-        path = artifacts[key]
-        if not path.is_file():
-            continue
-        try:
-            tomllib.loads(path.read_text(encoding="utf-8"))
-        except (OSError, tomllib.TOMLDecodeError) as exc:
-            toml_errors.append(path.name + ": " + str(exc))
-    checks.append(_make_check(
-        "training_toml", "blocker", not toml_errors,
-        "Training TOML is valid." if not toml_errors else "Training TOML could not be parsed.",
-        "; ".join(toml_errors),
-    ))
-    if has_conda_runtime(settings) and not has_complete_conda_runtime(settings):
-        checks.append(_make_check("conda_runtime", "blocker", False,
-                                  "Conda runtime needs both the executable path and environment name."))
-    return folder_value, folder_path, artifacts, settings, checks
-
-
-def _preflight_payload(folder, stages="both"):
-    folder_value, folder_path, artifacts, settings, checks = _build_preflight(folder, stages)
-    blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
-    warnings = [item for item in checks if item["severity"] == "warning" and not item["ok"]]
-    return {
-        "ok": not blockers,
-        "folder": folder_value,
-        "checks": checks,
-        "summary": {"blockers": len(blockers), "warnings": len(warnings)},
-        "settings": settings,
-        "artifacts": {key: str(value) for key, value in artifacts.items()},
-        "folderPath": str(folder_path),
-    }
-
-
 def _file_digest(path):
     digest = hashlib.sha256()
     with Path(path).open("rb") as handle:
@@ -772,13 +401,6 @@ def _default_progress_plan():
         "hi": {"estimatedSteps": hi_steps},
         "lo": {"estimatedSteps": lo_steps},
     }
-
-
-def _normalize_training_stages(stages):
-    value = str(stages or "both").strip().lower()
-    if value not in ("hi", "lo", "both", "krea2", "wan21"):
-        raise ValueError("Training stage must be hi, lo, both, krea2, or wan21.")
-    return value
 
 
 def _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage):
@@ -984,184 +606,9 @@ def _read_result(job):
     except Exception:
         return None
 
-
-def _read_config_epochs(path):
-    try:
-        text = Path(str(path or "")).read_text(encoding="utf-8")
-    except OSError:
-        return 0
-    match = _EPOCH_CONFIG_PATTERN.search(text)
-    return int(match.group(1)) if match else 0
-
-
-def _read_config_checkpoint_interval(path):
-    try:
-        text = Path(str(path or "")).read_text(encoding="utf-8")
-    except OSError:
-        return 0
-    match = _CHECKPOINT_EPOCH_CONFIG_PATTERN.search(text)
-    return int(match.group(1)) if match else 0
-
-
-def _read_log_tail(path, byte_count=4096):
-    try:
-        with Path(path).open("rb") as handle:
-            handle.seek(0, os.SEEK_END)
-            size = handle.tell()
-            handle.seek(max(0, size - byte_count))
-            return handle.read().decode("utf-8", errors="replace")
-    except OSError:
-        return ""
-
-
-def _recent_seconds_per_step(log_text, stage):
-    marker = "[webcap] stage=" + str(stage or "").lower()
-    stage_log = str(log_text or "")
-    marker_index = stage_log.lower().rfind(marker)
-    if marker_index >= 0:
-        stage_log = stage_log[marker_index:]
-    samples = [float(value) for value in _LOG_ITER_TIME_PATTERN.findall(stage_log)[-ETA_SAMPLE_WINDOW:]]
-    samples = [value for value in samples if value > 0]
-    if len(samples) < ETA_MIN_SAMPLES:
-        return None
-    return sum(samples) / len(samples)
-
-
-def _sync_job_progress(job, log_text):
-    stage = str(job.get("stage") or "").lower()
-    if stage not in ("hi", "lo", "krea2", "wan21"):
-        job.pop("progress", None)
-        return
-
-    snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
-    current_epochs = _read_config_epochs(snapshot.get(stage, ""))
-    checkpoint_every_epochs = _read_config_checkpoint_interval(snapshot.get(stage, ""))
-    if not current_epochs:
-        job.pop("progress", None)
-        return
-
-    previous = job.get("progress") if isinstance(job.get("progress"), dict) else {}
-    previous_epoch = previous.get("epoch") if previous.get("stage") == stage else None
-    epoch_matches = _LOG_EPOCH_PATTERN.findall(log_text or "")
-    step_matches = _LOG_STEP_PATTERN.findall(log_text or "")
-    epoch = int(epoch_matches[-1]) if epoch_matches else previous_epoch
-    step = int(step_matches[-1]) if step_matches else previous.get("step")
-    plan = job.get("progressPlan") if isinstance(job.get("progressPlan"), dict) else {}
-    stage_plan = plan.get(stage) if isinstance(plan.get(stage), dict) else {}
-    planned_steps = int(stage_plan.get("estimatedSteps") or 0)
-    # Epochs come directly from diffusion-pipe's log and are authoritative when
-    # available. The generated step budget is only a fallback for logs without
-    # an epoch marker.
-    use_steps = epoch is None and step is not None and planned_steps > 0
-    if not use_steps and epoch is None:
-        return
-    stage_fraction = min(1.0, max(0.0, float(step) / float(planned_steps))) if use_steps else min(1.0, max(0.0, float(epoch) / float(current_epochs)))
-
-    stages = _normalize_training_stages(job.get("stages"))
-    hi_planned_steps = int((plan.get("hi") or {}).get("estimatedSteps") or 0) if isinstance(plan.get("hi"), dict) else 0
-    lo_planned_steps = int((plan.get("lo") or {}).get("estimatedSteps") or 0) if isinstance(plan.get("lo"), dict) else 0
-    hi_epochs = _read_config_epochs(snapshot.get("hi", ""))
-    lo_epochs = _read_config_epochs(snapshot.get("lo", ""))
-    if stages == "both" and use_steps and hi_planned_steps and lo_planned_steps:
-        total_steps = hi_planned_steps + lo_planned_steps
-        overall_fraction = (stage_fraction * hi_planned_steps / total_steps) if stage == "hi" else ((hi_planned_steps + stage_fraction * lo_planned_steps) / total_steps)
-    elif stages == "both" and hi_epochs and lo_epochs:
-        total_epochs = hi_epochs + lo_epochs
-        overall_fraction = (stage_fraction * hi_epochs / total_epochs) if stage == "hi" else ((hi_epochs + stage_fraction * lo_epochs) / total_epochs)
-    else:
-        overall_fraction = stage_fraction
-
-    progress = {
-        "stage": stage,
-        "epoch": int(epoch) if epoch is not None else None,
-        "epochs": int(current_epochs),
-        "step": int(step) if step is not None else None,
-        "stagePercent": round(stage_fraction * 100, 1),
-        "overallPercent": round(overall_fraction * 100, 1),
-        "estimated": use_steps,
-    }
-    if use_steps:
-        progress["plannedSteps"] = planned_steps
-        progress["source"] = "steps"
-    else:
-        progress["source"] = "epochs"
-    seconds_per_step = _recent_seconds_per_step(log_text, stage)
-    if step is not None and seconds_per_step is not None:
-        progress["estimatedTrainingSeconds"] = round(max(0, step) * seconds_per_step)
-    if step is not None and planned_steps > 0 and seconds_per_step is not None:
-        remaining_steps = max(0, planned_steps - step)
-        eta_scope = "completion"
-        if stages == "both" and stage == "hi":
-            next_stage_steps = lo_planned_steps
-            if next_stage_steps > 0:
-                remaining_steps += next_stage_steps
-            else:
-                eta_scope = "stage"
-        progress["etaSeconds"] = round(remaining_steps * seconds_per_step)
-        progress["etaScope"] = eta_scope
-    if epoch is not None and checkpoint_every_epochs:
-        next_checkpoint_epoch = ((int(epoch) // checkpoint_every_epochs) + 1) * checkpoint_every_epochs
-        if next_checkpoint_epoch <= current_epochs:
-            progress["checkpointEveryNEpochs"] = checkpoint_every_epochs
-            progress["nextCheckpointEpoch"] = next_checkpoint_epoch
-            if planned_steps > 0 and seconds_per_step is not None:
-                checkpoint_steps = max(0.0, (next_checkpoint_epoch - float(epoch)) * planned_steps / float(current_epochs))
-                progress["checkpointEtaSeconds"] = round(checkpoint_steps * seconds_per_step)
-    job["progress"] = progress
-
-
 def _job_wsl_distribution(job):
     runtime = job.get("runtime") if isinstance(job.get("runtime"), dict) else {}
     return str(runtime.get("wslDistribution") or _training_settings()["wslDistribution"] or "").strip()
-
-
-def _annotate_completed_job(job):
-    if job.get("status") != "completed":
-        return
-    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
-    epoch = int(progress.get("epoch") or 0)
-    epochs = int(progress.get("epochs") or 0)
-    if epochs:
-        if epoch < epochs * 0.9:
-            job["completionNote"] = (
-                "Finished at epoch " + format(epoch, ",") + " of " + format(epochs, ",")
-                + " planned epochs. Review output; the run ended below the planned estimate."
-            )
-        else:
-            job.pop("completionNote", None)
-        return
-    step = int(progress.get("step") or 0)
-    planned_steps = int(progress.get("plannedSteps") or 0)
-    if planned_steps and step < planned_steps * 0.9:
-        job["completionNote"] = (
-            "Finished at step " + format(step, ",") + " of ~" + format(planned_steps, ",")
-            + " planned steps. Review output; the run ended below the planned estimate."
-        )
-    else:
-        job.pop("completionNote", None)
-
-
-def _annotate_finished_early_job(job):
-    if job.get("status") != "finished_early":
-        return
-    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
-    details = []
-    epoch = progress.get("epoch")
-    epochs = progress.get("epochs")
-    step = progress.get("step")
-    if isinstance(epoch, (int, float)) and isinstance(epochs, (int, float)) and epochs:
-        details.append("epoch " + str(int(epoch)) + " / " + str(int(epochs)))
-    if isinstance(step, (int, float)):
-        details.append("step " + format(int(step), ","))
-    job["completionNote"] = "Finished early by the user" + (" at " + " · ".join(details) if details else ".")
-
-
-def _pid_alive(pid, distribution=""):
-    if not pid:
-        return False
-    code, _, _ = _run_wsl("kill -0 " + str(int(pid)), timeout=8, distribution=distribution)
-    return code == 0
-
 
 def _job_runner_pid(job):
     """Use the PID recorded by the runner when it is available."""
@@ -1278,7 +725,7 @@ def _refresh_job(job):
             job["lastLogAt"] = log_mtime
             tail = _read_log_tail(log_path)
             log_advanced = bool(prior_log_mtime and log_mtime > prior_log_mtime)
-            log_has_progress = bool(_LOG_EPOCH_PATTERN.search(tail) or _LOG_STEP_PATTERN.search(tail))
+            log_has_progress = _log_has_progress(tail)
             if "[webcap] stage=wan21" in tail:
                 job["stage"] = "wan21"
             elif "[webcap] stage=krea2" in tail:

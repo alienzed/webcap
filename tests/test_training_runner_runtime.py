@@ -6,6 +6,7 @@ import pytest
 
 from tool.server import training_runner
 from tool.server import training_history
+from tool.server import training_preflight
 from tool.server import config as config_module
 from tool.server.training_runtime import training_runtime_settings
 
@@ -56,25 +57,6 @@ def test_folder_statuses_ignore_an_unreadable_queue(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
 
     assert training_runner.folder_statuses_for_folders([child]) == {}
-
-
-def test_training_set_permission_repair_uses_wsl_directory_and_file_modes(tmp_path, monkeypatch):
-    commands = []
-    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution: "/mnt/d/training/set")
-    monkeypatch.setattr(
-        training_runner,
-        "_run_wsl",
-        lambda command, timeout, distribution: commands.append((command, timeout, distribution)) or (0, "", ""),
-    )
-
-    error = training_runner._repair_training_set_permissions(tmp_path / "set", "Mint")
-
-    assert error == ""
-    assert commands == [(
-        "chmod 775 -- /mnt/d/training/set && find /mnt/d/training/set -type d -exec chmod 775 {} + && find /mnt/d/training/set -type f -exec chmod 664 {} +",
-        120,
-        "Mint",
-    )]
 
 
 def test_invalid_jobs_cannot_be_silently_replaced_with_an_empty_queue(tmp_path, monkeypatch):
@@ -173,68 +155,6 @@ def test_runner_script_uses_conda_run_without_sourcing_an_activation_script(tmp_
     assert "training working directory is unavailable" in script
     assert "ACTION_FILE=" in script
     assert "finish_requested_stop" in script
-
-
-def test_wsl_path_conversion_keeps_existing_wsl_paths(monkeypatch):
-    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("wslpath should not run")))
-
-    assert training_runner._to_wsl_path("/mnt/w/training/config.hi.toml", "Ubuntu_W") == "/mnt/w/training/config.hi.toml"
-
-
-def test_gpu_snapshot_reports_compact_gpu_and_process_data(monkeypatch):
-    commands = []
-    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": "Ubuntu_W"})
-
-    def fake_run(command, **kwargs):
-        commands.append((command, kwargs))
-        if "--query-gpu" in command:
-            return 0, "0, NVIDIA RTX, 92, 18842, 24576, 67, 302.14\n", ""
-        return 0, "1234, python, 18600\n", ""
-
-    monkeypatch.setattr(training_runner, "_run_wsl", fake_run)
-
-    payload, status = training_runner.gpu_status_response()
-
-    assert status == 200
-    assert payload["gpu"]["available"] is True
-    assert payload["gpu"]["gpus"] == [{
-        "index": "0", "name": "NVIDIA RTX", "utilization": "92", "memoryUsed": "18842",
-        "memoryTotal": "24576", "temperature": "67", "powerDraw": "302.14",
-    }]
-    assert payload["gpu"]["processes"] == [{"pid": "1234", "name": "python", "memoryUsed": "18600"}]
-    assert len(commands) == 2
-    assert all(kwargs["distribution"] == "Ubuntu_W" for _, kwargs in commands)
-
-
-def test_gpu_snapshot_reports_unavailable_without_raising(monkeypatch):
-    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": "Ubuntu_W"})
-    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (127, "", "nvidia-smi not found"))
-
-    payload, status = training_runner.gpu_status_response()
-
-    assert status == 200
-    assert payload["gpu"]["available"] is False
-    assert payload["gpu"]["gpus"] == []
-    assert payload["gpu"]["error"] == "nvidia-smi not found"
-
-
-def test_native_wsl_runner_uses_the_current_bash_shell(monkeypatch):
-    captured = {}
-
-    class Result:
-        returncode = 0
-        stdout = "ok"
-        stderr = ""
-
-    def fake_run(args, **kwargs):
-        captured["args"] = args
-        return Result()
-
-    monkeypatch.setattr(training_runner.os, "name", "posix")
-    monkeypatch.setattr(training_runner.subprocess, "run", fake_run)
-
-    assert training_runner._run_wsl("echo ok", distribution="Ubuntu_W") == (0, "ok", "")
-    assert captured["args"] == ["bash", "-lc", "echo ok"]
 
 
 def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):
@@ -423,7 +343,7 @@ def test_launch_failure_records_start_before_terminal_time(tmp_path, monkeypatch
         "stages": "hi",
         "permissionsRepairedAt": time.time(),
     }
-    blocker = training_runner._make_check("config", "blocker", False, "Missing config.")
+    blocker = training_preflight.make_check("config", "blocker", False, "Missing config.")
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
     monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages: ("set", tmp_path, {}, {}, [blocker]))
 
@@ -486,25 +406,6 @@ def test_runtime_failure_does_not_block_the_next_queue_item(monkeypatch):
     assert failed["status"] == "failed"
     assert state["activeJobId"] == "following"
     assert state["queuePaused"] is False
-
-
-def test_invalid_training_toml_is_a_job_local_preflight_blocker(tmp_path, monkeypatch):
-    folder = tmp_path / "set"
-    (folder / "auto_dataset").mkdir(parents=True)
-    (folder / "config.lo.toml").write_text("not valid toml = [\n", encoding="utf-8")
-    (folder / "dataset.lo.toml").write_text("[[directory]]\npath = '/data'\n", encoding="utf-8")
-    for name in ("config.hi.toml", "dataset.hi.toml"):
-        (folder / name).write_text("value = 1\n", encoding="utf-8")
-    (folder / "auto_dataset" / "prep_manifest.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(training_runner, "_resolve_folder", lambda value: ("set", folder))
-    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"cwd": "/pipe"})
-    monkeypatch.setattr(training_runner, "_wsl_executable", lambda: "wsl.exe")
-
-    _, _, _, _, checks = training_runner._build_launch_preflight("set", "lo")
-    failed = [item for item in checks if not item["ok"]]
-
-    assert [item["id"] for item in failed] == ["training_toml"]
-    assert "config.lo.toml" in failed[0]["details"]
 
 
 def test_queue_refresh_reads_resume_progress_from_disk(tmp_path, monkeypatch):
@@ -617,135 +518,6 @@ def test_restart_hold_keeps_a_dormant_queue_from_starting_unattended(monkeypatch
 
     assert state["queuePaused"] is True
     assert state["queuePauseReason"] == "Queue held after WebCap restarted."
-
-
-def test_runner_progress_estimates_stage_and_overall_from_epoch_logs(tmp_path):
-    hi_path = tmp_path / "config.hi.toml"
-    lo_path = tmp_path / "config.lo.toml"
-    hi_path.write_text("epochs = 50\n", encoding="utf-8")
-    lo_path.write_text("epochs = 90\n", encoding="utf-8")
-    job = {
-        "stage": "hi",
-        "stages": "both",
-        "snapshot": {"hi": str(hi_path), "lo": str(lo_path)},
-    }
-
-    training_runner._sync_job_progress(
-        job,
-        "Started new epoch: 38\n[INFO] [Rank 0] step=4160, skipped=0\n",
-    )
-
-    assert job["progress"] == {
-        "stage": "hi",
-        "epoch": 38,
-        "epochs": 50,
-        "step": 4160,
-        "stagePercent": 76.0,
-        "overallPercent": 27.1,
-        "estimated": False,
-        "source": "epochs",
-    }
-
-    training_runner._sync_job_progress(job, "[INFO] [Rank 0] step=4170, skipped=0\n")
-
-    assert job["progress"]["epoch"] == 38
-    assert job["progress"]["step"] == 4170
-
-
-def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_path):
-    hi_path = tmp_path / "config.hi.toml"
-    lo_path = tmp_path / "config.lo.toml"
-    hi_path.write_text("epochs = 50\n", encoding="utf-8")
-    lo_path.write_text("epochs = 90\n", encoding="utf-8")
-    job = {
-        "stage": "lo",
-        "stages": "both",
-        "snapshot": {"hi": str(hi_path), "lo": str(lo_path)},
-        "progressPlan": {
-            "hi": {"estimatedSteps": 5000},
-            "lo": {"estimatedSteps": 20000},
-        },
-    }
-
-    training_runner._sync_job_progress(job, "\n".join([
-        "[INFO] [Rank 0] step=9698, skipped=0, iter time (s): 2.0",
-        "[INFO] [Rank 0] step=9699, skipped=0, iter time (s): 3.0",
-        "[INFO] [Rank 0] step=9700, skipped=0, iter time (s): 4.0",
-    ]))
-
-    assert job["progress"] == {
-        "stage": "lo",
-        "epoch": None,
-        "epochs": 90,
-        "step": 9700,
-        "stagePercent": 48.5,
-        "overallPercent": 58.8,
-        "estimated": True,
-        "plannedSteps": 20000,
-        "source": "steps",
-        "estimatedTrainingSeconds": 29100,
-        "etaSeconds": 30900,
-        "etaScope": "completion",
-    }
-
-
-def test_runner_progress_uses_epoch_progress_and_a_rolling_step_eta(tmp_path):
-    lo_path = tmp_path / "config.lo.toml"
-    lo_path.write_text("epochs = 90\n", encoding="utf-8")
-    job = {
-        "stage": "lo",
-        "stages": "lo",
-        "snapshot": {"lo": str(lo_path)},
-        "progressPlan": {"lo": {"estimatedSteps": 20000}},
-    }
-
-    training_runner._sync_job_progress(
-        job,
-        "\n".join([
-            "Started new epoch: 85",
-            "[INFO] [Rank 0] step=9408, skipped=0, iter time (s): 2.0",
-            "[INFO] [Rank 0] step=9409, skipped=0, iter time (s): 3.0",
-            "[INFO] [Rank 0] step=9410, skipped=0, iter time (s): 4.0",
-        ]),
-    )
-
-    assert job["progress"] == {
-        "stage": "lo",
-        "epoch": 85,
-        "epochs": 90,
-        "step": 9410,
-        "stagePercent": 94.4,
-        "overallPercent": 94.4,
-        "estimated": False,
-        "source": "epochs",
-        "estimatedTrainingSeconds": 28230,
-        "etaSeconds": 31770,
-        "etaScope": "completion",
-    }
-
-
-def test_completed_job_flags_a_result_far_below_the_step_estimate_without_epoch_progress():
-    job = {
-        "status": "completed",
-        "progress": {"step": 1650, "plannedSteps": 20000},
-    }
-
-    training_runner._annotate_completed_job(job)
-
-    assert "step 1,650" in job["completionNote"]
-    assert "~20,000 planned steps" in job["completionNote"]
-
-
-def test_completed_job_uses_logged_epochs_instead_of_a_stale_step_estimate():
-    job = {
-        "status": "completed",
-        "completionNote": "Finished at step 10,080 of ~20,000 planned steps.",
-        "progress": {"epoch": 90, "epochs": 90, "step": 10080, "plannedSteps": 20000, "source": "epochs"},
-    }
-
-    training_runner._annotate_completed_job(job)
-
-    assert "completionNote" not in job
 
 
 def test_finish_action_records_a_finished_early_outcome(monkeypatch):

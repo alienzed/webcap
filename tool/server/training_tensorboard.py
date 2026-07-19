@@ -8,7 +8,14 @@ from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_history import output_root_for_folder
 from .training_runtime import build_runtime_command, has_complete_conda_runtime
-from . import training_runner
+from .training_runtime import (
+    TRAINING_RUNTIME_DIR_NAME,
+    activation_prefix,
+    configured_training_settings,
+    pid_alive,
+    run_wsl,
+    to_wsl_path,
+)
 
 
 STATE_FILE_NAME = "tensorboard.json"
@@ -16,7 +23,7 @@ LOG_FILE_NAME = "tensorboard.log"
 
 
 def _runtime_root():
-    return Path(app_config.FS_ROOT) / training_runner.RUNNER_DIR_NAME
+    return Path(app_config.FS_ROOT) / TRAINING_RUNTIME_DIR_NAME
 
 
 def _state_path():
@@ -51,7 +58,7 @@ def _write_state(state):
 def _settings():
     config = app_config.config if isinstance(app_config.config, dict) else {}
     training = config.get("training") if isinstance(config.get("training"), dict) else {}
-    return training_runner._training_settings(), training
+    return configured_training_settings(), training
 
 
 def _port(training):
@@ -68,7 +75,7 @@ def _port(training):
 def _refresh(state):
     if state.get("status") != "running":
         return state
-    if not training_runner._pid_alive(state.get("pid"), state.get("wslDistribution") or ""):
+    if not pid_alive(state.get("pid"), state.get("wslDistribution") or ""):
         state["status"] = "stopped"
         state["stoppedAt"] = time.time()
         state["error"] = "TensorBoard process exited."
@@ -95,8 +102,8 @@ def _validate_runtime(settings):
         command = build_runtime_command(settings, "python -m tensorboard.main --version")
     else:
         command = "python -m tensorboard.main --version"
-    shell = "cd " + shlex.quote(settings["cwd"]) + " && " + training_runner._activation_prefix(settings) + command
-    code, stdout, stderr = training_runner._run_wsl(shell, timeout=20, distribution=settings["wslDistribution"])
+    shell = "cd " + shlex.quote(settings["cwd"]) + " && " + activation_prefix(settings) + command
+    code, stdout, stderr = run_wsl(shell, timeout=20, distribution=settings["wslDistribution"])
     if code != 0:
         raise RuntimeError((stdout + stderr).strip() or "TensorBoard is not available in the training runtime.")
 
@@ -119,14 +126,14 @@ def start_response(folder=""):
         output_root_for_folder(folder_path).mkdir(parents=True, exist_ok=True)
     log_root = Path(app_config.FS_ROOT) / "output" / "runs"
     log_root.mkdir(parents=True, exist_ok=True)
-    root_wsl = training_runner._to_wsl_path(log_root, settings["wslDistribution"])
+    root_wsl = to_wsl_path(log_root, settings["wslDistribution"])
     log_path = _runtime_root() / LOG_FILE_NAME
-    log_wsl = training_runner._to_wsl_path(log_path, settings["wslDistribution"])
+    log_wsl = to_wsl_path(log_path, settings["wslDistribution"])
     probe = build_runtime_command(settings, "python -c " + shlex.quote(
         "import socket; s=socket.socket(); s.bind(('127.0.0.1', " + str(port) + ")); s.close()"
     ))
-    shell_prefix = "cd " + shlex.quote(settings["cwd"]) + " && " + training_runner._activation_prefix(settings)
-    code, stdout, stderr = training_runner._run_wsl(shell_prefix + probe, timeout=15, distribution=settings["wslDistribution"])
+    shell_prefix = "cd " + shlex.quote(settings["cwd"]) + " && " + activation_prefix(settings)
+    code, stdout, stderr = run_wsl(shell_prefix + probe, timeout=15, distribution=settings["wslDistribution"])
     if code != 0:
         return {"ok": False, "error": "TensorBoard port " + str(port) + " is unavailable. " + (stdout + stderr).strip()}, 400
     command = build_runtime_command(
@@ -134,7 +141,7 @@ def start_response(folder=""):
         "python -m tensorboard.main --logdir " + shlex.quote(root_wsl) + " --host 127.0.0.1 --port " + str(port),
     )
     launch = shell_prefix + "setsid " + command + " > " + shlex.quote(log_wsl) + " 2>&1 < /dev/null & echo $!"
-    code, stdout, stderr = training_runner._run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])
+    code, stdout, stderr = run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])
     pid = (stdout or "").strip().splitlines()[-1] if (stdout or "").strip() else ""
     if code != 0 or not pid.isdigit():
         return {"ok": False, "error": (stderr or stdout).strip() or "Could not launch TensorBoard."}, 400
@@ -159,12 +166,12 @@ def stop_response():
     if state.get("status") != "running":
         _write_state(state)
         return {"ok": False, "error": "TensorBoard is not running."}, 400
-    training_runner._run_wsl("kill -INT -- -" + str(int(state["pid"])), timeout=8, distribution=state.get("wslDistribution") or "")
+    run_wsl("kill -INT -- -" + str(int(state["pid"])), timeout=8, distribution=state.get("wslDistribution") or "")
     deadline = time.time() + 5
-    while time.time() < deadline and training_runner._pid_alive(state["pid"], state.get("wslDistribution") or ""):
+    while time.time() < deadline and pid_alive(state["pid"], state.get("wslDistribution") or ""):
         time.sleep(0.5)
-    if training_runner._pid_alive(state["pid"], state.get("wslDistribution") or ""):
-        training_runner._run_wsl("kill -KILL -- -" + str(int(state["pid"])), timeout=8, distribution=state.get("wslDistribution") or "")
+    if pid_alive(state["pid"], state.get("wslDistribution") or ""):
+        run_wsl("kill -KILL -- -" + str(int(state["pid"])), timeout=8, distribution=state.get("wslDistribution") or "")
     state["status"] = "stopped"
     state["stoppedAt"] = time.time()
     _write_state(state)

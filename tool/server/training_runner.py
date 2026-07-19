@@ -221,7 +221,11 @@ def _sync_job_history(job):
     }, sort_keys=True)
     if _history_signatures.get(job.get("id")) == signature:
         return
-    record_job(folder_path, job)
+    try:
+        record_job(folder_path, job)
+    except OSError:
+        _logger.warning("Skipped training history sync because its folder is unavailable: %s", folder_path)
+        return
     _history_signatures[job.get("id")] = signature
 
 
@@ -237,7 +241,7 @@ def _fail_queued_jobs_with_missing_folders(state):
             continue
         folder = str(job.get("folder") or "").strip()
         try:
-            folder_exists = bool(folder) and app_config.safe_join_fs_root(folder).is_dir()
+            folder_exists = bool(folder) and Path(app_config.safe_join_fs_root(folder)).is_dir()
         except ValueError:
             folder_exists = False
         if folder_exists:
@@ -871,7 +875,6 @@ def _start_next(state):
 
 
 def _refresh_state(state):
-    _fail_queued_jobs_with_missing_folders(state)
     for job in state.get("jobs", []):
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
@@ -905,6 +908,7 @@ def _monitor_loop():
             with _lock:
                 state = _read_state()
                 _apply_restart_hold(state)
+                _fail_queued_jobs_with_missing_folders(state)
                 _refresh_state(state)
                 _sync_histories(state)
                 _write_state(state)

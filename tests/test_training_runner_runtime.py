@@ -520,6 +520,57 @@ def test_restart_hold_keeps_a_dormant_queue_from_starting_unattended(monkeypatch
     assert state["queuePauseReason"] == "Queue held after WebCap restarted."
 
 
+def test_missing_queued_folder_is_failed_without_blocking_the_queue(tmp_path, monkeypatch):
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", tmp_path)
+    state = {
+        "queuePaused": False,
+        "activeJobId": "",
+        "jobs": [{"id": "missing", "folder": "moved-set", "status": "queued", "stage": "queued"}],
+    }
+
+    training_runner._fail_queued_jobs_with_missing_folders(state)
+
+    job = state["jobs"][0]
+    assert job["status"] == "failed"
+    assert job["stage"] == "dataset"
+    assert "moved or deleted" in job["error"]
+
+
+def test_missing_folder_history_is_skipped(tmp_path, monkeypatch):
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(training_runner, "record_job", lambda *args: (_ for _ in ()).throw(FileNotFoundError("folder moved")))
+    monkeypatch.setattr(training_runner, "_history_signatures", {})
+
+    training_runner._sync_job_history({
+        "id": "missing", "folder": "moved-set", "status": "failed", "updatedAt": 1,
+    })
+
+    assert training_runner._history_signatures == {}
+
+
+def test_relocate_folder_jobs_updates_matching_queue_paths(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "Queue held after WebCap restarted.",
+        "jobs": [
+            {"id": "parent", "folder": "old-set", "status": "queued"},
+            {"id": "child", "folder": "old-set/child", "status": "queued"},
+            {"id": "other", "folder": "other-set", "status": "queued"},
+        ],
+    })
+
+    assert training_runner.relocate_folder_jobs("old-set", "new-set") == 2
+
+    folders = [job["folder"] for job in training_runner._read_state()["jobs"]]
+    assert folders == ["new-set", "new-set/child", "other-set"]
+
+
 def test_finish_action_records_a_finished_early_outcome(monkeypatch):
     job = {
         "id": "finished-early",

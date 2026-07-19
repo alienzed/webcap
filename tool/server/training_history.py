@@ -480,7 +480,8 @@ def clear_history_job(folder_path, job_id):
     return True
 
 
-def completed_stages(folder_path):
+def completed_stages(folder_path, include_discovered_runs=True):
+    """Return completed stages, optionally avoiding an expensive output-tree scan."""
     folder = Path(folder_path)
     stages = [stage for stage in ("hi", "lo", "krea2", "wan21") if (folder / ("config." + stage + ".toml")).is_file()]
     history = read_history(folder)
@@ -493,7 +494,8 @@ def completed_stages(folder_path):
             completed.update(stages)
         elif stage in stages:
             completed.add(stage)
-    for stage in stages:
-        if any(run.get("completed") for run in discover_runs(folder, stage)):
-            completed.add(stage)
+    if include_discovered_runs:
+        for stage in stages:
+            if any(run.get("completed") for run in discover_runs(folder, stage)):
+                completed.add(stage)
     return stages, completed

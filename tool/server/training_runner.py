@@ -1163,7 +1163,14 @@ def folder_statuses_for_folders(folder_paths):
             queued = queued_by_folder[folder]
             result[path] = {"status": "queued", "label": "Queued #" + str(queued["position"]), "queuePosition": queued["position"]}
         else:
-            required_stages, completed = completed_stages(path)
+            try:
+                # Folder navigation must not recursively scan potentially huge
+                # trainer output trees just to render a status badge.
+                required_stages, completed = completed_stages(path, include_discovered_runs=False)
+            except Exception:
+                _logger.exception("Could not determine training status for folder: %s", path)
+                result[path] = {"status": "error", "label": "Training status unavailable"}
+                continue
             if required_stages and len(completed) == len(required_stages):
                 result[path] = {"status": "trained", "label": "Trained"}
             elif completed:

@@ -329,6 +329,7 @@ function closeTrainingWorkspaceConfigEditor() {
   Promise.resolve(saveCurrentEditorContent())
     .then(function () {
       if (!state.currentConfigFile || state.currentConfigFile.folder !== configFile.folder || state.currentConfigFile.file !== configFile.file) return;
+      state.currentConfigFile = null;
       clearEditorAndPreview();
       syncWorkspaceConfigEditorUi();
       syncTrainingWorkspaceConfigSelection();

@@ -1,8 +1,7 @@
 # WebCap Agent Guide
 
 This file is the root working contract for agents making changes in this repo.
-It is intentionally opinionated. Follow the structure that is already here unless
-there is a clear, concrete reason not to.
+It is intentionally opinionated. Follow the structure that is already here, confirm with the user before deviating.
 
 ## Project Intent
 
@@ -53,12 +52,13 @@ Prefer the smallest change that cleanly solves the real problem.
 When in doubt, ask:
 
 - What is already wired?
+- What do the included libraries already support?
 - What is the smallest explicit change?
 - Is this solving a real user workflow cost, or just reorganizing code?
 
 ## Error Handling
 
-Fail loudly when required wiring or invariants are broken.
+Fail loudly when required wiring or invariants are broken. Functionality is all that matters; a guard that prevents something from working is an additional failure mode, not a solution.
 
 - Do not add silent guards around required functions or required UI.
 - Do not use patterns like `if (typeof someFn === 'function')` for app-owned code.

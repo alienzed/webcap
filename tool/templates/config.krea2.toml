@@ -4,7 +4,7 @@ dataset    = "{TRAINING_ROOT}/{DATASET}/dataset.train.toml"
 epochs = 90
 save_every_n_epochs = 1
 
-micro_batch_size_per_gpu = 1
+micro_batch_size_per_gpu = 2
 pipeline_stages = 1
 gradient_accumulation_steps = 1
 gradient_clipping = 1.0

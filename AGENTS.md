@@ -63,6 +63,7 @@ Fail loudly when required wiring or invariants are broken. Functionality is all 
 - Do not add silent guards around required functions or required UI.
 - Do not use patterns like `if (typeof someFn === 'function')` for app-owned code.
 - Do not silently skip intended behavior.
+- Do not add fallbacks that are not completely valid alternatives; anything that does not produce intended outcomes should be a big loud error.
 - Critical invariant failures should break execution.
 - Errors should be visible in the browser console or server logs.
 - Visible failure is always the correct signal. Never add guards that intercept, reinterpret, or conceal failures from the requested operation.

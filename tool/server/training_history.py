@@ -222,6 +222,8 @@ def _write_history(folder_path, data):
 
 def discover_runs(folder_path, stage=""):
     folder = Path(folder_path)
+    if not folder.is_dir():
+        return []
     if stage not in ("hi", "lo", "krea2", "wan21"):
         combined = []
         for item in ("hi", "lo", "krea2", "wan21"):
@@ -234,19 +236,17 @@ def discover_runs(folder_path, stage=""):
         source_config = training_config_path(folder, candidate_stage)
         parsed_source = _parsed_config(source_config)
         if parsed_source is None:
-            if not source_config.is_file():
-                continue
-            raise ValueError("Cannot discover resume candidates from unreadable config: " + str(source_config))
+            continue
         config_meta = config_for_id(candidate_stage)
         wanted_identity = _model_identity(parsed_source, config_meta["modelIdentityKeys"])
         if wanted_identity is None:
-            raise ValueError(
-                "Cannot discover resume candidates because " + source_config.name
-                + " is missing its supported base-model identity keys."
-            )
-        source_hash = config_sha256(source_config)
-        training_root = output_root_path_for_folder(folder, candidate_stage)
-        root = output_root_for_folder(folder, candidate_stage)
+            continue
+        try:
+            source_hash = config_sha256(source_config)
+            training_root = output_root_path_for_folder(folder, candidate_stage)
+            root = output_root_for_folder(folder, candidate_stage)
+        except (OSError, RuntimeError):
+            continue
         if not root.is_dir():
             continue
         try:

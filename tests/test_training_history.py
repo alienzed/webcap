@@ -241,3 +241,14 @@ def test_completed_models_accept_terminal_jobs(tmp_path, monkeypatch):
     training_history.record_job(folder, {"id": "hi", "status": "completed", "stages": "hi"})
     training_history.record_job(folder, {"id": "lo", "status": "finished_early", "stages": "lo"})
     assert training_history.completed_stages(folder) == (["hi", "lo"], {"hi", "lo"})
+
+
+def test_run_discovery_ignores_removed_or_unreadable_set_artifacts(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    (folder / "config.lo.toml").write_text("not valid toml =", encoding="utf-8")
+
+    assert training_history.discover_runs(folder, "lo") == []
+    assert training_history.discover_runs(root / "deleted-set") == []

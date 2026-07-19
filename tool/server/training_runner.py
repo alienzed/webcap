@@ -761,6 +761,10 @@ def _refresh_job(job):
         job.pop("error", None)
         exit_code = int(result.get("exitCode") or 0)
         if requested_action == "pause":
+            stage = str(job.get("stages") or "")
+            resume_path = str(job.get("outputRunPath") or "").strip()
+            job["resumeFromCheckpoint"] = resume_path
+            job["resumeStage"] = stage if resume_path else ""
             job["status"] = "paused"
         elif requested_action == "finish" and result_status != "completed":
             job["status"] = "finished_early"
@@ -830,7 +834,7 @@ def _refresh_job(job):
     return
 
 
-def _prepare_paused_job_for_resume(job):
+def _paused_job_resume_error(job):
     stage = str(job.get("stages") or "")
     if stage not in ("hi", "lo", "krea2", "wan21"):
         return "Only an individual training stage can resume."
@@ -838,14 +842,21 @@ def _prepare_paused_job_for_resume(job):
     folder_path = app_config.safe_join_fs_root(folder)
     bound_path = str(job.get("outputRunPath") or "").strip()
     if not bound_path:
-        return "Resume invariant failed: this job has no recorded output run path."
+        return "this job has no recorded output run path."
     try:
-        run = validate_resumable_run_for_path(folder_path, stage, bound_path)
+        return "" if validate_resumable_run_for_path(folder_path, stage, bound_path) else "the recorded checkpoint could not be validated."
     except ValueError as exc:
-        return "Resume invariant failed: " + str(exc)
-    checkpoint = str(run.get("path") or "")
-    job["resumeFromCheckpoint"] = checkpoint
-    job["resumeStage"] = stage if checkpoint else ""
+        return str(exc)
+
+
+def _prepare_paused_job_for_resume(job):
+    resume_error = _paused_job_resume_error(job)
+    if resume_error:
+        return "Resume invariant failed: " + resume_error
+    stage = str(job.get("stages") or "")
+    bound_path = str(job.get("outputRunPath") or "").strip()
+    job["resumeFromCheckpoint"] = bound_path
+    job["resumeStage"] = stage
     job.pop("actionRequested", None)
     job.pop("actionRequestedAt", None)
     job["status"] = "queued"

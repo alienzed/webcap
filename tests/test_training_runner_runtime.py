@@ -680,8 +680,11 @@ def test_stop_request_failure_does_not_change_the_recorded_job_state(tmp_path, m
     assert not action_path.exists()
 
 
-def test_pause_result_is_recorded_as_paused_even_when_the_trainer_exits_nonzero(monkeypatch):
-    job = {"id": "paused", "status": "stopping", "actionRequested": "pause"}
+def test_pause_result_records_the_bound_timestamped_run_for_resume(monkeypatch):
+    job = {
+        "id": "paused", "status": "stopping", "actionRequested": "pause",
+        "folder": "set", "stages": "krea2", "outputRunPath": "/output/run",
+    }
     monkeypatch.setattr(
         training_runner,
         "_read_result",
@@ -691,7 +694,28 @@ def test_pause_result_is_recorded_as_paused_even_when_the_trainer_exits_nonzero(
     training_runner._refresh_job(job)
 
     assert job["status"] == "paused"
+    assert job["resumeFromCheckpoint"] == "/output/run"
+    assert job["resumeStage"] == "krea2"
     assert "error" not in job
+
+
+def test_pause_keeps_the_job_queued_even_before_checkpoint_validation(monkeypatch):
+    active = {
+        "id": "paused", "status": "stopping", "actionRequested": "pause",
+        "folder": "set", "stages": "krea2", "outputRunPath": "/output/run",
+    }
+    state = {"activeJobId": "paused", "queuePaused": False, "queuePauseReason": "", "jobs": [active]}
+    monkeypatch.setattr(training_runner, "_read_result", lambda candidate: {"status": "stopped", "exitCode": 130, "finishedAt": 123.0})
+    monkeypatch.setattr(training_runner, "_start_next", lambda candidate: None)
+
+    training_runner._refresh_state(state)
+
+    assert active["status"] == "paused"
+    assert active["resumeFromCheckpoint"] == "/output/run"
+    assert active["resumeStage"] == "krea2"
+    assert state["activeJobId"] == ""
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"] == "Queue paused by the user."
 
 
 def test_stop_request_without_a_recorded_pid_does_not_signal_any_process(monkeypatch):

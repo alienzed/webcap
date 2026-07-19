@@ -417,12 +417,15 @@ function loadConfigFileToEditor(fileName, options) {
   var folder = state.folder || '';
   state.currentItem = null;
   clearEditorAndPreview();
+  var loadToken = Number(state.configLoadToken || 0) + 1;
+  state.configLoadToken = loadToken;
   renderChecklistPanel();
   renderFileList(ui.filterEl.value);
   var xhr = new XMLHttpRequest();
   xhr.open('GET', '/fs/read_config?folder=' + encodeURIComponent(folder) + '&file=' + encodeURIComponent(fileName));
   xhr.onreadystatechange = function() {
     if (xhr.readyState !== 4) return;
+    if (state.configLoadToken !== loadToken || state.folder !== folder) return;
     if (xhr.status === 200) {
       // Set editor content and update state
       ui.editorEl.value = xhr.responseText;

@@ -24,15 +24,17 @@ _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MUL
 _DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(?:#.*)?$", re.MULTILINE)
 
 
-def output_root_for_folder(folder_path, stage="hi"):
+def output_root_for_folder(folder_path, stage=""):
     return host_path_for_training_path(output_root_path_for_folder(folder_path, stage))
 
 
-def output_root_path_for_folder(folder_path, stage="hi"):
+def output_root_path_for_folder(folder_path, stage=""):
     folder = Path(folder_path)
-    configured = output_dir_from_config(folder, stage) if stage in ("hi", "lo", "krea2", "wan21") else None
-    if configured:
-        return str(configured)
+    stages = (stage,) if stage in ("hi", "lo", "krea2", "wan21") else ("hi", "lo", "krea2", "wan21")
+    for candidate_stage in stages:
+        configured = output_dir_from_config(folder, candidate_stage)
+        if configured:
+            return str(configured)
     return str(Path(app_config.FS_ROOT) / "output" / "runs" / folder.name)
 
 
@@ -245,20 +247,25 @@ def discover_runs(folder_path, stage=""):
             source_hash = config_sha256(source_config)
             training_root = output_root_path_for_folder(folder, candidate_stage)
             root = output_root_for_folder(folder, candidate_stage)
-        except (OSError, RuntimeError):
-            continue
+        except (OSError, RuntimeError) as exc:
+            app_config.debug_print("[training_history] Could not resolve", candidate_stage, "output root", "for", folder, ":", exc)
+            raise
         if not root.is_dir():
+            app_config.debug_print("[training_history] No", candidate_stage, "output root to scan:", root)
             continue
         try:
+            app_config.debug_print("[training_history] Scanning", root, "for resumable", candidate_stage, "runs.")
             latest_markers = list(root.rglob("latest"))
-        except OSError:
-            continue
+        except OSError as exc:
+            app_config.debug_print("[training_history] Could not scan", root, ":", exc)
+            raise
         for latest in latest_markers:
             entry = latest.parent
             if ".webcap" in entry.parts or not _resume_artifacts(entry):
                 continue
             saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, wanted_identity)
             if saved_config is None:
+                app_config.debug_print("[training_history] Skipping", entry, ": no matching", candidate_stage, "model config.")
                 continue
             try:
                 modified = entry.stat().st_mtime
@@ -289,6 +296,7 @@ def discover_runs(folder_path, stage=""):
             })
     exact = [run for run in runs if run["matchType"] == "exact"]
     selected = exact if exact else runs
+    app_config.debug_print("[training_history] Found", len(selected), "resumable run(s) for", folder, "stage", stage or "all")
     return sorted(selected, key=lambda run: run["modifiedAt"], reverse=True)
 
 

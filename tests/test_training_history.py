@@ -19,6 +19,17 @@ def _wan_config(output, transformer="low_noise_model", set_name="set", epochs=90
     )
 
 
+def _krea_config(output, set_name="set"):
+    output = str(output).replace("\\", "/")
+    return (
+        f'output_dir = "{output}"\n'
+        f'dataset = "/training/{set_name}/dataset.train.toml"\n\n'
+        '[model]\n'
+        'type = "krea2"\n'
+        'diffusion_model = "/models/krea2.safetensors"\n'
+    )
+
+
 def _checkpoint(run, config_text, config_name="config.lo.toml", step=42, epoch=0):
     run.mkdir(parents=True)
     (run / config_name).write_text(config_text, encoding="utf-8")
@@ -46,6 +57,33 @@ def test_training_history_discovers_only_compatible_runs_in_the_configured_outpu
     assert [entry["name"] for entry in history["runs"]] == ["20260713_01-00-00"]
     assert history["runs"][0]["matchType"] == "exact"
     assert (set_folder / ".webcap_training.json").exists()
+
+
+def test_history_output_root_uses_the_available_profile_config(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "char" / "lilly"
+    output = root / "output" / "runs" / "007-lilly" / "krea2-raw"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    (set_folder / "config.krea2.toml").write_text(_krea_config(output, "lilly"), encoding="utf-8")
+
+    assert training_history.history_payload(set_folder)["outputRoot"] == str(output)
+
+
+def test_krea_history_discovers_a_checkpoint_under_a_prefixed_output_root(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "char" / "lilly"
+    output = root / "output" / "runs" / "007-lilly" / "krea2-raw"
+    config = _krea_config(output, "lilly")
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    (set_folder / "config.krea2.toml").write_text(config, encoding="utf-8")
+    _checkpoint(output / "20260719_13-29-01", config, "config.krea2.toml", step=4720)
+
+    runs = training_history.discover_runs(set_folder, "krea2")
+
+    assert [run["name"] for run in runs] == ["20260719_13-29-01"]
+    assert runs[0]["path"] == str(output / "20260719_13-29-01")
 
 
 def test_training_history_summary_uses_the_latest_managed_job(tmp_path, monkeypatch):

@@ -1013,7 +1013,7 @@ def test_folder_status_does_not_surface_failed_history_as_attention(tmp_path, mo
     monkeypatch.setattr(training_runner, "_read_state", lambda: {
         "jobs": [{"id": "failed", "folder": "set", "status": "failed", "stages": "lo"}]
     })
-    monkeypatch.setattr(training_runner, "completed_stages", lambda path: ([], set()))
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path, **kwargs: ([], set()))
 
     assert training_runner.folder_statuses_for_folders([folder])[folder] == {"status": "never", "label": ""}
 
@@ -1024,11 +1024,11 @@ def test_folder_status_distinguishes_partial_and_complete_training(tmp_path, mon
     folder.mkdir(parents=True)
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
     monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": []})
-    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], {"hi"}))
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path, **kwargs: (["hi", "lo"], {"hi"}))
 
     partial = training_runner.folder_statuses_for_folders([folder])[folder]
 
-    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], {"hi", "lo"}))
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path, **kwargs: (["hi", "lo"], {"hi", "lo"}))
     complete = training_runner.folder_statuses_for_folders([folder])[folder]
 
     assert partial == {"status": "partial", "label": "Partially trained"}
@@ -1046,7 +1046,7 @@ def test_folder_status_requires_prepared_captions_before_ready(tmp_path, monkeyp
     )
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
     monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": []})
-    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], set()))
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path, **kwargs: (["hi", "lo"], set()))
 
     assert training_runner.folder_statuses_for_folders([folder])[folder] == {"status": "never", "label": ""}
 
@@ -1076,7 +1076,7 @@ def test_folder_status_requires_caption_review_for_partial_annotations(tmp_path,
     )
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
     monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": []})
-    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], set()))
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path, **kwargs: (["hi", "lo"], set()))
 
     assert training_runner.folder_statuses_for_folders([folder])[folder] == {
         "status": "caption-review",
@@ -1105,7 +1105,7 @@ def test_folder_status_keeps_ready_for_low_rate_of_partial_annotations(tmp_path,
     )
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
     monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": []})
-    monkeypatch.setattr(training_runner, "completed_stages", lambda path: (["hi", "lo"], set()))
+    monkeypatch.setattr(training_runner, "completed_stages", lambda path, **kwargs: (["hi", "lo"], set()))
 
     assert training_runner.folder_statuses_for_folders([folder])[folder] == {
         "status": "ready",

@@ -427,7 +427,14 @@ function refreshCurrentDirectory() {
            refreshTrainingWorkspace();
         }
       } else {
-        setStatus('Error loading folder: ' + xhr.status);
+        var loadError = 'Error loading folder: ' + xhr.status;
+        try {
+          var errorPayload = JSON.parse(xhr.responseText || '{}');
+          if (errorPayload && errorPayload.error) loadError += ' — ' + errorPayload.error;
+        } catch (errorParseFailure) {
+          // The HTTP status remains useful when an intermediary returned non-JSON.
+        }
+        setStatus(loadError);
         state.childFolders = [];
         state.items = [];
         if (ui.upBtn) ui.upBtn.classList.add('hidden');

@@ -108,7 +108,18 @@ def rename_response(data):
             if old_name in ("originals", ".", "..") or new_name in ("originals", ".", ".."):
                 return jsonify({"error": "Invalid folder name"}), 400
             old_path.rename(new_path)
-            return jsonify({"ok": True})
+            old_rel = str(Path(folder) / old_name).replace("\\", "/").strip("/")
+            new_rel = str(Path(folder) / new_name).replace("\\", "/").strip("/")
+            try:
+                from .training_runner import relocate_folder_jobs
+                updated_jobs = relocate_folder_jobs(old_rel, new_rel)
+            except Exception as queue_error:
+                app_config.debug_print("[fs_rename] Folder renamed but training queue could not be updated:", queue_error)
+                return jsonify({
+                    "ok": True,
+                    "warning": "Folder was renamed, but the training queue could not be updated: " + str(queue_error),
+                })
+            return jsonify({"ok": True, "updatedTrainingJobs": updated_jobs})
         if old_path.is_file():
             originals_path = folder_path / "originals"
             old_orig_media = originals_path / old_name if originals_path.exists() else None

@@ -209,19 +209,73 @@ def _sync_job_history(job):
     folder = str(job.get("folder") or "").strip()
     if not folder:
         return
+    try:
+        folder_path = app_config.safe_join_fs_root(folder)
+    except ValueError:
+        return
+    if not folder_path.is_dir():
+        return
     signature = json.dumps({
         "status": job.get("status"), "stage": job.get("stage"), "updatedAt": job.get("updatedAt"),
         "finishedAt": job.get("finishedAt"), "error": job.get("error"), "exitCode": job.get("exitCode"),
     }, sort_keys=True)
     if _history_signatures.get(job.get("id")) == signature:
         return
-    record_job(app_config.safe_join_fs_root(folder), job)
+    record_job(folder_path, job)
     _history_signatures[job.get("id")] = signature
 
 
 def _sync_histories(state):
     for job in state.get("jobs", []):
         _sync_job_history(job)
+
+
+def _fail_queued_jobs_with_missing_folders(state):
+    """Keep a moved or deleted set from blocking every later queue item."""
+    for job in state.get("jobs", []):
+        if job.get("status") not in QUEUE_STATUSES:
+            continue
+        folder = str(job.get("folder") or "").strip()
+        try:
+            folder_exists = bool(folder) and app_config.safe_join_fs_root(folder).is_dir()
+        except ValueError:
+            folder_exists = False
+        if folder_exists:
+            continue
+        job["status"] = "failed"
+        job["stage"] = "dataset"
+        job["failureScope"] = "job"
+        job["error"] = (
+            "Queued training set is no longer available at '" + (folder or "(missing path)")
+            + "'. It may have been moved or deleted; requeue it from its current folder."
+        )
+        job["finishedAt"] = time.time()
+        job["updatedAt"] = time.time()
+
+
+def relocate_folder_jobs(old_folder, new_folder):
+    """Keep persisted jobs attached when a set is renamed through WebCap."""
+    old_folder = str(old_folder or "").strip().replace("\\", "/").strip("/")
+    new_folder = str(new_folder or "").strip().replace("\\", "/").strip("/")
+    if not old_folder or not new_folder or old_folder == new_folder:
+        return 0
+    with _lock:
+        state = _read_state()
+        changed = 0
+        prefix = old_folder + "/"
+        for job in state.get("jobs", []):
+            folder = str(job.get("folder") or "").strip().replace("\\", "/").strip("/")
+            if folder == old_folder:
+                job["folder"] = new_folder
+            elif folder.startswith(prefix):
+                job["folder"] = new_folder + folder[len(old_folder):]
+            else:
+                continue
+            job["updatedAt"] = time.time()
+            changed += 1
+        if changed:
+            _write_state(state)
+        return changed
 
 
 def _apply_restart_hold(state):
@@ -817,6 +871,7 @@ def _start_next(state):
 
 
 def _refresh_state(state):
+    _fail_queued_jobs_with_missing_folders(state)
     for job in state.get("jobs", []):
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()

@@ -39,7 +39,7 @@ dtype = "bfloat16"
 
 [optimizer]
 type = "AdamW8bitKahan"
-lr = 3e-5
+lr = 4e-5
 betas = [0.9, 0.99]
 weight_decay = 0.01
 eps = 1e-8

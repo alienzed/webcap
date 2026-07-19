@@ -65,8 +65,9 @@ Fail loudly when required wiring or invariants are broken.
 - Do not silently skip intended behavior.
 - Critical invariant failures should break execution.
 - Errors should be visible in the browser console or server logs.
+- Visible failure is always the correct signal. Never add guards that intercept, reinterpret, or conceal failures from the requested operation.
 
-Silent failure is worse than a visible breakage in this project.
+Silent failure is worse than a visible breakage in this project. “Fail loudly” means expose failures from required wiring or the requested operation; it does not authorize adding new checks that prevent that operation.
 
 ## Mutation Safety
 

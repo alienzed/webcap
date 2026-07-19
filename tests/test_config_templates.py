@@ -115,7 +115,7 @@ def test_wan21_config_shares_the_set_output_root(tmp_path, monkeypatch):
     assert training_config_files_module.output_dir_from_config(folder, "wan21") == training_config_files_module.output_dir_from_config(folder, "hi")
 
 
-def test_launch_group_sequence_advances_in_base36(tmp_path, monkeypatch):
+def test_launch_group_sequence_advances_in_decimal(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "lilly"
     folder.mkdir(parents=True)
@@ -126,7 +126,7 @@ def test_launch_group_sequence_advances_in_base36(tmp_path, monkeypatch):
 
     launch_group = training_config_files_module.allocate_training_launch_group(folder)
 
-    assert launch_group == output_root / "00A-lilly"
+    assert launch_group == output_root / "010-lilly"
 
 
 def test_launch_group_sequence_ignores_nonstandard_old_prefixes(tmp_path, monkeypatch):

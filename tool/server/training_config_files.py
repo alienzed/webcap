@@ -17,8 +17,7 @@ TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_N
 _EPOCHS_TEXT_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?$', re.MULTILINE)
 _OUTPUT_DIR_LINE_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\'][^"\']+["\']\s*(?:#.*)?$', re.MULTILINE)
-_OUTPUT_PREFIX_PATTERN = re.compile(r"^([0-9A-Z]{3})-")
-_BASE36_DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_OUTPUT_PREFIX_PATTERN = re.compile(r"^(\d{3})-")
 
 # Last-resort values only if a canonical template is missing or malformed.
 _FALLBACK_HI_EPOCHS = 50
@@ -99,19 +98,14 @@ def output_dir_from_config(folder_path: Path, stage: str):
     return Path(match.group(1).strip())
 
 
-def _base36_prefix(value):
-    base = len(_BASE36_DIGITS)
-    if value < 1 or value >= base ** 3:
-        raise RuntimeError("Training output sequence is exhausted at ZZZ.")
-    return (
-        _BASE36_DIGITS[(value // (base ** 2)) % base]
-        + _BASE36_DIGITS[(value // base) % base]
-        + _BASE36_DIGITS[value % base]
-    )
+def _decimal_prefix(value):
+    if value < 1 or value > 999:
+        raise RuntimeError("Training output sequence is exhausted at 999.")
+    return f"{value:03d}"
 
 
 def allocate_training_launch_group(folder_path: Path):
-    """Reserve one never-reused base36 launch identity."""
+    """Reserve one never-reused three-digit launch identity."""
     root = Path(app_config.FS_ROOT) / "output" / "runs"
     root.mkdir(parents=True, exist_ok=True)
     normalize_path_permissions(root)
@@ -125,8 +119,8 @@ def allocate_training_launch_group(folder_path: Path):
             continue
         match = _OUTPUT_PREFIX_PATTERN.match(entry.name)
         if match:
-            highest = max(highest, int(match.group(1), 36))
-    prefix = _base36_prefix(highest + 1)
+            highest = max(highest, int(match.group(1)))
+    prefix = _decimal_prefix(highest + 1)
     output_dir = root / (prefix + "-" + Path(folder_path).name)
     output_dir.mkdir(exist_ok=False)
     normalize_path_permissions(output_dir)

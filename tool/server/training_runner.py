@@ -486,15 +486,12 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     if stages in ("krea2", "wan21"):
         config_key = "krea2" if stages == "krea2" else "wan21"
         artifact_key = config_key + "Config"
-        use_snapshot = bool(job.get("snapshot", {}).get(config_key))
-        config_path = Path(job["snapshot"][config_key]) if use_snapshot else artifacts[artifact_key]
+        config_path = artifacts[artifact_key]
         hi_path = config_path
         lo_path = config_path
     else:
-        snapshot = job.get("snapshot", {})
-        use_snapshot = bool(snapshot.get("hi") or snapshot.get("lo"))
-        hi_path = Path(snapshot.get("hi") or snapshot.get("lo")) if use_snapshot else artifacts["hiConfig"]
-        lo_path = Path(snapshot.get("lo") or snapshot.get("hi")) if use_snapshot else artifacts["loConfig"]
+        hi_path = artifacts["hiConfig"]
+        lo_path = artifacts["loConfig"]
     distribution = settings["wslDistribution"]
     hi_wsl = _to_wsl_path(hi_path, distribution)
     lo_wsl = _to_wsl_path(lo_path, distribution)
@@ -564,7 +561,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         ])
     lines.extend(["echo '[webcap] completed'", "write_result completed 0"])
     script = "\n".join(lines) + "\n"
-    return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "wan21": lo_wsl if stages == "wan21" else "", "usedSnapshot": use_snapshot}
+    return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "wan21": lo_wsl if stages == "wan21" else "", "usedSnapshot": False}
 
 
 def _write_runner_script(job, settings, artifacts):
@@ -1085,6 +1082,8 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
 
 
 def start_response(folder, queue=False, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id=""):
+    if parent_job_id and not str(resume_from_checkpoint or "").strip():
+        return {"ok": False, "error": "Historical resume requires a checkpoint path; refusing to start a new run."}, 400
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id, stages)
         stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"

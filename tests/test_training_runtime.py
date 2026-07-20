@@ -14,7 +14,7 @@ def test_training_set_permission_repair_uses_wsl_directory_and_file_modes(tmp_pa
 
     assert error == ""
     assert commands == [(
-        "chmod 775 -- /mnt/d/training/set && find /mnt/d/training/set -type d -exec chmod 775 {} + && find /mnt/d/training/set -type f -exec chmod 664 {} +",
+        "chmod 775 -- /mnt/d/training/set && find /mnt/d/training/set -type d -name originals -prune -o -type d -exec chmod 775 {} + && find /mnt/d/training/set -type d -name originals -prune -o -type f -exec chmod 664 {} +",
         120,
         "Mint",
     )]

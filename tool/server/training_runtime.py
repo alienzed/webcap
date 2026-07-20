@@ -112,7 +112,7 @@ def pid_alive(pid, distribution=""):
 
 
 def repair_training_set_permissions(folder_path, distribution=""):
-    """Restore WSL read/write access to a selected training set before it is used."""
+    """Restore WSL access to the training inputs without touching reversible originals."""
     try:
         wsl_folder = to_wsl_path(folder_path, distribution)
     except Exception as exc:
@@ -120,8 +120,8 @@ def repair_training_set_permissions(folder_path, distribution=""):
     quoted_folder = shlex.quote(wsl_folder)
     command = (
         "chmod 775 -- " + quoted_folder
-        + " && find " + quoted_folder + " -type d -exec chmod 775 {} +"
-        + " && find " + quoted_folder + " -type f -exec chmod 664 {} +"
+        + " && find " + quoted_folder + " -type d -name originals -prune -o -type d -exec chmod 775 {} +"
+        + " && find " + quoted_folder + " -type d -name originals -prune -o -type f -exec chmod 664 {} +"
     )
     code, stdout, stderr = run_wsl(command, timeout=120, distribution=distribution)
     if code == 0:

@@ -343,6 +343,7 @@ function getManagedTrainingOptions() {
   var resumeEl = document.getElementById('training-run-resume-input');
   var checkpointEl = document.getElementById('training-run-checkpoint-select');
   var resumeStageEl = document.getElementById('training-run-resume-stage-select');
+  var customResumePath = resumeEl ? String(resumeEl.value || '').trim() : '';
   var stages = String(trainingWorkspaceState.runStages || 'both');
   if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21') stages = 'both';
   var selectedProfile = getSelectedTrainingModelProfile();
@@ -351,7 +352,7 @@ function getManagedTrainingOptions() {
     stages: stages,
     profileId: selectedProfile ? selectedProfile.id : '',
     runId: selectedRun ? selectedRun.id : '',
-    resumeFromCheckpoint: checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : (resumeEl ? String(resumeEl.value || '').trim() : ''),
+    resumeFromCheckpoint: customResumePath || (checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : ''),
     resumeStage: stages === 'both' ? (resumeStageEl ? String(resumeStageEl.value || 'lo') : 'lo') : stages,
     parentJobId: String(trainingWorkspaceState.resumeParentJobId || '')
   };

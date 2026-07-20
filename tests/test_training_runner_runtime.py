@@ -179,6 +179,31 @@ def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):
     assert "--resume_from_checkpoint /mnt/w/output/run-1" in script
 
 
+def test_runner_script_uses_the_set_config_even_when_a_job_snapshot_exists(tmp_path, monkeypatch):
+    set_dir = tmp_path / "set"
+    job_dir = tmp_path / "output" / ".webcap" / "jobs" / "job"
+    set_dir.mkdir()
+    job_dir.mkdir(parents=True)
+    set_config = set_dir / "config.lo.toml"
+    snapshot_config = job_dir / "config.lo.toml"
+    set_config.write_text("set config", encoding="utf-8")
+    snapshot_config.write_text("snapshot config", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w" + Path(path).as_posix())
+    settings = training_runtime_settings({"diffusion_pipe_wsl": "/home/user/diffusion-pipe"})
+
+    script, resolved = training_runner._build_runner_script(
+        {"snapshot": {"lo": str(snapshot_config)}, "stages": "lo", "resumeFromCheckpoint": "/mnt/w/output/run-1"},
+        settings,
+        {"hiConfig": set_dir / "config.hi.toml", "loConfig": set_config},
+        job_dir,
+    )
+
+    assert "/mnt/w" + set_config.as_posix() in script
+    assert "/mnt/w" + snapshot_config.as_posix() not in script
+    assert "--resume_from_checkpoint /mnt/w/output/run-1" in script
+    assert resolved["usedSnapshot"] is False
+
+
 def test_krea2_runner_script_uses_only_the_krea2_config(tmp_path, monkeypatch):
     krea2_path = tmp_path / "config.krea2.toml"
     krea2_path.write_text("krea2", encoding="utf-8")
@@ -983,6 +1008,15 @@ def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypat
     assert state["activeJobId"] == "new"
     assert state["queuePaused"] is False
     assert state["queuePauseReason"] == ""
+
+
+def test_historical_resume_without_a_checkpoint_is_rejected_before_a_new_job_is_created(monkeypatch):
+    monkeypatch.setattr(training_runner, "_new_job", lambda *args: (_ for _ in ()).throw(AssertionError("must not create a fresh job")))
+
+    payload, status = training_runner.start_response("set", stages="lo", parent_job_id="failed-job")
+
+    assert status == 400
+    assert payload["error"] == "Historical resume requires a checkpoint path; refusing to start a new run."
 
 
 def test_starting_krea2_creates_one_krea2_job(tmp_path, monkeypatch):

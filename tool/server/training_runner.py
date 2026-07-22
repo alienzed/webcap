@@ -689,6 +689,53 @@ def _job_runner_pid(job):
         return 0
 
 
+def _request_job_action(job, action, confirmation_note=""):
+    pid = _job_runner_pid(job)
+    if pid <= 0:
+        return "WebCap has no recorded runner PID, so it cannot send the " + action + " request safely."
+    action_path = _job_action_path(job)
+    action_path.write_text(action, encoding="utf-8")
+    normalize_path_permissions(action_path)
+    code, stdout, stderr = _run_wsl(
+        "kill -INT -- -" + str(pid), timeout=8, distribution=_job_wsl_distribution(job)
+    )
+    if code != 0:
+        try:
+            action_path.unlink()
+        except OSError:
+            pass
+        return (stderr or stdout or "Could not send the " + action + " request.").strip()
+    job["actionRequested"] = action
+    job["actionRequestedAt"] = time.time()
+    job["status"] = "stopping"
+    job["stage"] = "stopping"
+    job["confirmationNote"] = confirmation_note or action.capitalize() + " requested. Waiting for the runner result."
+    job["updatedAt"] = time.time()
+    return ""
+
+
+def _trigger_scheduled_finish(job):
+    target_epoch = int(job.get("finishAfterEpoch") or 0)
+    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    current_epoch = int(progress.get("epoch") or 0)
+    if target_epoch <= 0 or current_epoch <= target_epoch:
+        return False
+    error = _request_job_action(
+        job,
+        "finish",
+        "Epoch " + str(target_epoch) + " saved. Finish requested; waiting for the runner result.",
+    )
+    if error:
+        job["error"] = "Scheduled Finish could not be sent after epoch " + str(target_epoch) + " saved: " + error
+        job["updatedAt"] = time.time()
+        return False
+    job["finishTriggeredEpoch"] = target_epoch
+    job.pop("finishAfterEpoch", None)
+    job.pop("finishScheduledAt", None)
+    job.pop("error", None)
+    return True
+
+
 def _bind_job_run_path_from_log(job, log_text):
     """Remember the trainer-authored timestamp directory once a checkpoint is saved."""
     if job.get("outputRunPath"):
@@ -752,6 +799,8 @@ def _refresh_job(job):
             job["error"] = "Training process exited with code " + str(exit_code) + ". See failure details or open the run log."
         job["finishedAt"] = float(result.get("finishedAt") or time.time())
         job["updatedAt"] = time.time()
+        job.pop("finishAfterEpoch", None)
+        job.pop("finishScheduledAt", None)
         _annotate_completed_job(job)
         _annotate_finished_early_job(job)
         return
@@ -786,6 +835,7 @@ def _refresh_job(job):
             job["status"] = "running"
         job.pop("confirmationNote", None)
         job["updatedAt"] = now
+        _trigger_scheduled_finish(job)
         return
     requested_action = str(job.get("actionRequested") or "")
     job.pop("confirmationNote", None)
@@ -804,6 +854,8 @@ def _refresh_job(job):
         job["error"] = "Training runner is no longer available and did not write a result record."
     job["finishedAt"] = now
     job["updatedAt"] = now
+    job.pop("finishAfterEpoch", None)
+    job.pop("finishScheduledAt", None)
     _annotate_finished_early_job(job)
     return
 
@@ -921,7 +973,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
+    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -1303,30 +1355,62 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
             return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Stop, Pause, or Finish for the active job."}, 400
         if job.get("status") not in ACTIVE_STATUSES:
             return {"ok": False, "error": "Training job is not running."}, 400
-        pid = int(job.get("pid") or 0)
         action = "pause" if pause else "finish" if finish else "stop"
-        if pid <= 0:
-            return {"ok": False, "error": "WebCap has no recorded runner PID, so it cannot send the " + action + " request safely."}, 409
-        distribution = _job_wsl_distribution(job)
-        action_path = _job_action_path(job)
-        action_path.write_text(action, encoding="utf-8")
-        normalize_path_permissions(action_path)
-        code, stdout, stderr = _run_wsl("kill -INT -- -" + str(pid), timeout=8, distribution=distribution)
-        if code != 0:
-            try:
-                action_path.unlink()
-            except OSError:
-                pass
-            message = (stderr or stdout or "Could not send the " + action + " request.").strip()
+        message = _request_job_action(job, action)
+        if message:
             job["error"] = message
             job["updatedAt"] = time.time()
             _write_state(state)
-            return {"ok": False, "error": message, "job": _public_job(job)}, 502
-        job["actionRequested"] = action
-        job["actionRequestedAt"] = time.time()
-        job["status"] = "stopping"
-        job["stage"] = "stopping"
-        job["confirmationNote"] = action.capitalize() + " requested. Waiting for the runner result."
+            status = 409 if "no recorded runner PID" in message else 502
+            return {"ok": False, "error": message, "job": _public_job(job)}, status
+        job.pop("finishAfterEpoch", None)
+        job.pop("finishScheduledAt", None)
+        _write_state(state)
+        return {"ok": True, "job": _public_job(job)}, 200
+
+
+def finish_schedule_response(job_id, epoch=None, cancel=False):
+    with _lock:
+        state = _read_state()
+        _apply_restart_hold(state)
+        _refresh_state(state)
+        job = _find_job(state, job_id)
+        if not job:
+            return {"ok": False, "error": "Training job not found"}, 404
+        if cancel:
+            job.pop("finishAfterEpoch", None)
+            job.pop("finishScheduledAt", None)
+            job["updatedAt"] = time.time()
+            _write_state(state)
+            return {"ok": True, "job": _public_job(job)}, 200
+        if job.get("status") not in ("starting", "running", "unconfirmed"):
+            return {"ok": False, "error": "Only an active training job can schedule Finish."}, 400
+        raw_epoch = str(epoch or "").strip()
+        if not raw_epoch.isdigit() or int(raw_epoch) <= 0:
+            return {"ok": False, "error": "Finish epoch must be a positive whole number."}, 400
+        target_epoch = int(raw_epoch)
+        progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+        current_epoch = int(progress.get("epoch") or 0)
+        planned_epochs = int(progress.get("epochs") or 0)
+        stage = str(progress.get("stage") or "")
+        if current_epoch <= 0 or planned_epochs <= 0 or stage not in ("hi", "lo", "krea2", "wan21"):
+            return {"ok": False, "error": "Wait until the runner reports its current epoch before scheduling Finish."}, 409
+        if target_epoch < current_epoch:
+            return {"ok": False, "error": "Finish epoch must be the current epoch or a future epoch."}, 400
+        if target_epoch >= planned_epochs:
+            return {"ok": False, "error": "Finish epoch must be before the planned final epoch."}, 400
+        snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
+        save_every_epochs = _read_config_positive_int(snapshot.get(stage), "save_every_n_epochs", 0)
+        if save_every_epochs <= 0:
+            return {"ok": False, "error": "The launch snapshot has no save_every_n_epochs setting."}, 409
+        if target_epoch % save_every_epochs:
+            return {
+                "ok": False,
+                "error": "Epoch " + str(target_epoch) + " is not a configured save point; this run saves every " + str(save_every_epochs) + " epochs.",
+            }, 400
+        job["finishAfterEpoch"] = target_epoch
+        job["finishScheduledAt"] = time.time()
+        job.pop("finishTriggeredEpoch", None)
         job["updatedAt"] = time.time()
         _write_state(state)
         return {"ok": True, "job": _public_job(job)}, 200

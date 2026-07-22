@@ -2,20 +2,13 @@ This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-07-10.
 
 ## Active UX Work
-
-### Phase 1: Console Architecture
-- Establish one reliable console model across the app. It should be a resizable secondary activity pane, not a full-width bottom drawer and not the sole place important results appear.
-- Make console visibility and toggling consistent across media workspaces, Review, and Training.
-- Keep training command handoff visible in Training independently of console output.
-- Preserve existing streamed output behavior so the console can support future managed training runs.
-- Stabilize the right workbench rail width; it currently changes with workspace content and should use explicit sizing rules.
-- Add a collapsible right workbench rail with session-persisted state for single-item work, without hiding Training's navigator or other purpose-built workspace surfaces. Grid keeps its dedicated batch Groups workspace and has no inspector rail.
+- Set a target epoch / save to Finish Early, so like, I feel like 35 epochs is going to be enough (for testing at least), and the run is at 25 now, original target was 60, but that's overkill and I won't be around to Finish Early manually.
 
 ## Bugs
 - Rename video clip requires manual folder refresh to show new name
 
-## Enhancements
-- Set a target epoch / save to Finish Early, so like, I feel like 35 epochs is going to be enough (for testing at least), and the run is at 25 now, original target was 60, but that's overkill and I won't be around to Finish Early manually.
+## Enhancements / Ideas
+
 
 ## Documentation Sync Notes
 - `dataset_workflow.md` updated to reflect current in-app clip/crop/deface and `auto_dataset` behavior.
@@ -29,4 +22,4 @@ Last reviewed: 2026-07-10.
 - Add future compatible models through the app-owned training-profile registry, with one reviewed TOML template and explicit media/run requirements. Do not add arbitrary user-supplied commands.
 
 ## Cleanup Candidates
-- Consolidate set-context gating around shared helper usage and remove stale checks.
+- Seek out overengineered solutions and code portions that are too large and fragile compared to the value they offer.

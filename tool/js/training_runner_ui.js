@@ -463,6 +463,43 @@ function stopManagedTraining(cancel, pause, finish) {
   });
 }
 
+
+function scheduleManagedTrainingFinish(jobId) {
+  var job = getTrainingRunnerJobById(jobId);
+  if (!job || !job.id) return;
+  var progress = job.progress && typeof job.progress === 'object' ? job.progress : {};
+  var currentEpoch = Number(progress.epoch);
+  var plannedEpochs = Number(progress.epochs);
+  var saveEvery = Number(progress.saveEveryNEpochs);
+  var scheduledEpoch = Number(job.finishAfterEpoch);
+  var suggestedEpoch = isFinite(scheduledEpoch) && scheduledEpoch > 0
+    ? Math.round(scheduledEpoch)
+    : isFinite(currentEpoch) && currentEpoch > 0 && isFinite(saveEvery) && saveEvery > 0
+      ? Math.ceil(currentEpoch / saveEvery) * saveEvery
+      : '';
+  var context = isFinite(currentEpoch) && currentEpoch > 0
+    ? 'Current epoch: ' + Math.round(currentEpoch) + (isFinite(plannedEpochs) && plannedEpochs > 0 ? ' of ' + Math.round(plannedEpochs) + '.' : '.')
+    : '';
+  if (isFinite(saveEvery) && saveEvery > 0) context += ' Saves every ' + Math.round(saveEvery) + ' epoch' + (Math.round(saveEvery) === 1 ? '.' : 's.');
+  var promptLabel = 'Finish after which saved epoch?\n' + context + (isFinite(scheduledEpoch) && scheduledEpoch > 0 ? '\nLeave blank to cancel the current schedule.' : '');
+  var value = window.prompt(promptLabel, String(suggestedEpoch));
+  if (value === null) return;
+  value = String(value).trim();
+  var cancel = !value && isFinite(scheduledEpoch) && scheduledEpoch > 0;
+  if (!value && !cancel) return;
+  trainingRunnerRequest('/fs/training_runner/finish_schedule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: job.id, epoch: value, cancel: cancel })
+  }).then(function (payload) {
+    setStatus(cancel ? 'Scheduled Finish cancelled.' : 'Finish scheduled after epoch ' + payload.job.finishAfterEpoch + ' saves.');
+    refreshTrainingRunnerStatus();
+  }).catch(function (err) {
+    setStatus('Could not schedule Finish: ' + String(err && err.message ? err.message : err));
+  });
+}
+
+
 function cancelQueuedTrainingJob(jobId) {
   if (!window.confirm('Remove this training job from the queue?')) return;
   trainingRunnerRequest('/fs/training_runner/stop', {
@@ -843,12 +880,25 @@ function renderTrainingRunner() {
         ? 'The runner is stopping after the requested action.'
         : 'Training runner status: ' + statusLabel + '.';
   var running = status === 'starting' || status === 'running' || status === 'stopping';
+  var canScheduleFinish = status === 'starting' || status === 'running' || status === 'unconfirmed';
   var queued = status === 'queued' || status === 'paused';
   var queueState = trainingWorkspaceState.runnerQueuePaused && status !== 'paused'
     ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + ' — no job will start automatically</span>'
     : '';
   var selectedQueuePosition = queued && status !== 'paused' ? queuedJobs.indexOf(job) + 1 : 0;
   var runOutputPath = String(job.outputRunPath || '').trim();
+  var finishAfterEpoch = Number(job.finishAfterEpoch);
+  var finishScheduleTitle = isFinite(finishAfterEpoch) && finishAfterEpoch > 0
+    ? 'Finish after epoch ' + Math.round(finishAfterEpoch) + ' saves. Click to change or cancel.'
+    : 'Schedule Finish after a saved epoch';
+  var finishScheduleButton = canScheduleFinish
+    ? '<button type="button" class="training-runner-output-action training-runner-finish-schedule' + (isFinite(finishAfterEpoch) && finishAfterEpoch > 0 ? ' is-armed' : '') + '" data-training-finish-schedule="' + escapeHtml(job.id || '') + '" title="' + escapeHtml(finishScheduleTitle) + '" aria-label="' + escapeHtml(finishScheduleTitle) + '">&#9201;' + (isFinite(finishAfterEpoch) && finishAfterEpoch > 0 ? '<span>' + Math.round(finishAfterEpoch) + '</span>' : '') + '</button>'
+    : '';
+  var rowActions = finishScheduleButton || trainingOutputIdentity(job)
+    ? '<span class="training-runner-row-actions">' + finishScheduleButton +
+      (trainingOutputIdentity(job) ? '<button type="button" class="training-runner-output-action" data-training-job-output="' + escapeHtml(job.id || '') + '" title="Open ' + (runOutputPath ? 'run output: ' + escapeHtml(runOutputPath) : 'output root: ' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '')) + '" aria-label="Open training output folder">&#128193;</button>' : '') +
+      '</span>'
+    : '';
   var queuePosition = selectedQueuePosition
     ? '<span class="training-runner-queued-count">' + (selectedQueuePosition === 1 ? 'Next to start' : 'Queue position ' + selectedQueuePosition + ' of ' + queuedCount) + '</span>'
     : '';
@@ -860,7 +910,7 @@ function renderTrainingRunner() {
     '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
     queuePosition +
     queueState +
-    (trainingOutputIdentity(job) ? '<button type="button" class="training-runner-output-action" data-training-job-output="' + escapeHtml(job.id || '') + '" title="Open ' + (runOutputPath ? 'run output: ' + escapeHtml(runOutputPath) : 'output root: ' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '')) + '" aria-label="Open training output folder">&#128193;</button>' : '') +
+    rowActions +
     '</div>' +
     (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
     buildTrainingFailureDetailsHtml(job) +

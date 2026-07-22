@@ -2169,6 +2169,40 @@ iframe {
   line-height: 1;
 }
 
+.workspace-surface-training .training-runner-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.workspace-surface-training .training-runner-row-actions .training-runner-output-action {
+  margin-left: 0;
+}
+
+.workspace-surface-training .training-runner-finish-schedule {
+  position: relative;
+}
+
+.workspace-surface-training .training-runner-finish-schedule.is-armed {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--panel) 82%, var(--accent));
+}
+
+.workspace-surface-training .training-runner-finish-schedule span {
+  position: absolute;
+  right: -4px;
+  bottom: -5px;
+  min-width: 15px;
+  padding: 1px 3px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .workspace-surface-training .training-runner-output-action:hover {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--panel) 88%, var(--accent));

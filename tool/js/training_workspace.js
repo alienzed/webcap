@@ -546,6 +546,11 @@ function wireTrainingWorkspace() {
   runnerCancelBtn.onclick = function () { stopManagedTraining(true); };
   runnerResumeQueueBtn.onclick = resumeManagedTrainingQueue;
   getTrainingWorkspaceEls().runnerSummary.onclick = function (event) {
+    var finishScheduleButton = event.target.closest('[data-training-finish-schedule]');
+    if (finishScheduleButton) {
+      scheduleManagedTrainingFinish(finishScheduleButton.getAttribute('data-training-finish-schedule'));
+      return;
+    }
     var outputId = event.target.getAttribute('data-training-job-output');
     if (outputId) openTrainingJobOutput(outputId);
     if (event.target.closest('[data-training-runner-recover]')) recoverManagedTrainingQueue();

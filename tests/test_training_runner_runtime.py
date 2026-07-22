@@ -654,6 +654,90 @@ def test_finish_request_waits_for_the_runner_result(tmp_path, monkeypatch):
     assert state["queuePaused"] is True
 
 
+def test_finish_can_be_scheduled_for_a_future_configured_save(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.krea2.toml"
+    config_path.write_text("epochs = 60\nsave_every_n_epochs = 5\n", encoding="utf-8")
+    active = {
+        "id": "active",
+        "status": "running",
+        "stage": "krea2",
+        "snapshot": {"krea2": str(config_path)},
+        "progress": {"stage": "krea2", "epoch": 25, "epochs": 60},
+    }
+    state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
+
+    payload, status = training_runner.finish_schedule_response("active", epoch=35)
+
+    assert status == 200
+    assert payload["job"]["finishAfterEpoch"] == 35
+    assert active["finishAfterEpoch"] == 35
+    assert "actionRequested" not in active
+
+
+def test_finish_schedule_rejects_an_epoch_that_is_not_a_save_point(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.krea2.toml"
+    config_path.write_text("epochs = 60\nsave_every_n_epochs = 5\n", encoding="utf-8")
+    active = {
+        "id": "active",
+        "status": "running",
+        "stage": "krea2",
+        "snapshot": {"krea2": str(config_path)},
+        "progress": {"stage": "krea2", "epoch": 25, "epochs": 60},
+    }
+    state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+
+    payload, status = training_runner.finish_schedule_response("active", epoch=37)
+
+    assert status == 400
+    assert "not a configured save point" in payload["error"]
+    assert "finishAfterEpoch" not in active
+
+
+def test_scheduled_finish_waits_for_the_epoch_after_the_target_save(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.krea2.toml"
+    config_path.write_text("epochs = 60\nsave_every_n_epochs = 1\n", encoding="utf-8")
+    log_path = tmp_path / "run.log"
+    action_path = tmp_path / "action"
+    job = {
+        "id": "active",
+        "status": "running",
+        "stage": "krea2",
+        "stages": "krea2",
+        "pid": 42,
+        "logPath": str(log_path),
+        "snapshot": {"krea2": str(config_path)},
+        "finishAfterEpoch": 35,
+    }
+    monkeypatch.setattr(training_runner, "_read_result", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_pid_alive", lambda *args: True)
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
+    monkeypatch.setattr(training_runner, "_job_action_path", lambda candidate: action_path)
+
+    log_path.write_text("Saving model to directory epoch35\nStarted new epoch: 35\n", encoding="utf-8")
+    training_runner._refresh_job(job)
+
+    assert job["status"] == "running"
+    assert job["finishAfterEpoch"] == 35
+    assert not action_path.exists()
+
+    log_path.write_text("Saving model to directory epoch35\nStarted new epoch: 36\n", encoding="utf-8")
+    training_runner._refresh_job(job)
+
+    assert job["status"] == "stopping"
+    assert job["actionRequested"] == "finish"
+    assert job["finishTriggeredEpoch"] == 35
+    assert "finishAfterEpoch" not in job
+    assert action_path.read_text(encoding="utf-8") == "finish"
+    assert "Epoch 35 saved" in job["confirmationNote"]
+
+
 def test_pause_request_waits_for_the_runner_result(tmp_path, monkeypatch):
     active = {"id": "active", "status": "running", "pid": 42}
     state = {

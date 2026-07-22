@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
+_SAVE_EPOCH_CONFIG_PATTERN = re.compile(r"^\s*save_every_n_epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _CHECKPOINT_EPOCH_CONFIG_PATTERN = re.compile(r"^\s*checkpoint_every_n_epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _LOG_EPOCH_PATTERN = re.compile(r"Started new epoch:\s*(\d+)", re.IGNORECASE)
 _LOG_STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
@@ -34,6 +35,15 @@ def read_config_checkpoint_interval(path):
     except OSError:
         return 0
     match = _CHECKPOINT_EPOCH_CONFIG_PATTERN.search(text)
+    return int(match.group(1)) if match else 0
+
+
+def read_config_save_interval(path):
+    try:
+        text = Path(str(path or "")).read_text(encoding="utf-8")
+    except OSError:
+        return 0
+    match = _SAVE_EPOCH_CONFIG_PATTERN.search(text)
     return int(match.group(1)) if match else 0
 
 
@@ -73,6 +83,7 @@ def sync_job_progress(job, log_text):
 
     snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
     current_epochs = read_config_epochs(snapshot.get(stage, ""))
+    save_every_epochs = read_config_save_interval(snapshot.get(stage, ""))
     checkpoint_every_epochs = read_config_checkpoint_interval(snapshot.get(stage, ""))
     if not current_epochs:
         job.pop("progress", None)
@@ -120,6 +131,8 @@ def sync_job_progress(job, log_text):
         progress["source"] = "steps"
     else:
         progress["source"] = "epochs"
+    if save_every_epochs:
+        progress["saveEveryNEpochs"] = save_every_epochs
     seconds_per_step = recent_seconds_per_step(log_text, stage)
     if step is not None and seconds_per_step is not None:
         progress["estimatedTrainingSeconds"] = round(max(0, step) * seconds_per_step)

@@ -16,8 +16,9 @@ from tool.server.dataset_config import (
     pick_image_buckets,
     read_epochs_from_training_config,
     repeat_targets_for_mode,
+    video_resolution_cap,
 )
-from tool.server.training_profiles import KREA2_PROFILE_ID
+from tool.server.training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID
 
 
 def write_image(path: Path, size):
@@ -155,8 +156,8 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
     {
       "file": "clip_a.mp4",
       "ar": "169",
-      "width": 1024,
-      "height": 576,
+      "width": 1248,
+      "height": 704,
       "fps": 16,
       "frames": 49,
       "duration": 3.0,
@@ -167,8 +168,8 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
     {
       "file": "clip_b.mp4",
       "ar": "169",
-      "width": 1024,
-      "height": 576,
+      "width": 1248,
+      "height": 704,
       "fps": 16,
       "frames": 49,
       "duration": 3.0,
@@ -198,12 +199,24 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
     assert hi_text.count('group = "videos"') == 2
     assert lo_text.count('group = "videos"') == 2
     assert "  [672, 384, 37]," in hi_text
-    assert "  [1024, 576, 13]," in hi_text
+    assert "  [736, 416, 13]," in hi_text
+    assert "[800, 448, 13]" not in hi_text
+    assert "[1184, 672, 13]" not in hi_text
     assert "num_repeats = 40" in hi_text
     assert "num_repeats = 10" in hi_text
     assert "num_repeats = 89" in lo_text
     assert "num_repeats = 23" in lo_text
     assert "[INFO] Built 2 video directory block(s)." in report
+    assert "WAN normal video resolution cap 736x416" in report
+
+    quality_report = generate_dataset_configs(set_folder, mode="quality")
+    quality_text = (set_folder / "dataset.hi.toml").read_text(encoding="utf-8")
+
+    assert "  [1024, 576, 13]," in quality_text
+    assert "[1088, 608, 13]" not in quality_text
+    assert "[1184, 672, 13]" not in quality_text
+    assert "detail bucket 1024x576 @ 13" in quality_report
+    assert "WAN quality video resolution cap 1024x576" in quality_report
 
 
 def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
@@ -290,6 +303,13 @@ def test_choose_video_detail_bucket_respects_mfp_limit():
 
     assert detail is not None
     assert (detail["width"], detail["height"]) == (1184, 672)
+
+
+def test_wan_video_resolution_caps_follow_mode_targets_without_capping_other_profiles():
+    assert video_resolution_cap(WAN22_PROFILE_ID, "normal", "169") == (736, 416)
+    assert video_resolution_cap(WAN21_PROFILE_ID, "quality", "916") == (576, 1024)
+    assert video_resolution_cap("", "normal", "square") == (512, 512)
+    assert video_resolution_cap(KREA2_PROFILE_ID, "normal", "169") is None
 
 
 def test_rectangle_image_candidates_allow_long_edge_above_768():

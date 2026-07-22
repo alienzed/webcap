@@ -8,6 +8,7 @@ from pathlib import Path
 from PIL import Image
 from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
+from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
@@ -99,6 +100,7 @@ TRAINING_PLAN_FILE_NAME = "training_plan.json"
 VIDEO_DETAIL_REPEAT_WEIGHT = 0.25
 VIDEO_MOTION_REPEAT_WEIGHT = 1.0
 IMAGE_REPEAT_WEIGHT = 1.0
+WAN_VIDEO_PROFILE_IDS = {WAN22_PROFILE_ID, WAN21_PROFILE_ID}
 
 
 def normalize_training_generate_mode(mode):
@@ -112,6 +114,14 @@ def repeat_targets_for_mode(mode: str):
     normalized = normalize_training_generate_mode(mode)
     targets = REPEAT_TARGET_STEPS[normalized]
     return int(targets["hi"]), int(targets["lo"])
+
+
+def video_resolution_cap(profile_id: str, mode: str, ar_label: str):
+    selected_profile = str(profile_id or WAN22_PROFILE_ID).strip().lower()
+    if selected_profile not in WAN_VIDEO_PROFILE_IDS:
+        return None
+    generate_mode = normalize_training_generate_mode(mode)
+    return TRAINING_MODE_TARGETS[generate_mode][ar_label]
 
 
 _EPOCHS_PATTERN = re.compile(rb"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
@@ -169,7 +179,13 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lines.append(f"[INFO] Reading prep manifest: {manifest_path}")
     lines.append(f"[INFO] Training generate mode: {generate_mode}")
 
-    video_entries = build_video_blocks(dataset_root, manifest.get("videos", []), lines, mode=generate_mode)
+    video_entries = build_video_blocks(
+        dataset_root,
+        manifest.get("videos", []),
+        lines,
+        mode=generate_mode,
+        profile_id=profile_id,
+    )
     lines.append(f"[INFO] Built {len(video_entries)} video directory block(s).")
     image_only_set = len(video_entries) == 0
 
@@ -242,8 +258,6 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lo_entries = []
     lo_entries.extend(video_entries)
     lo_entries.extend(lo_image_entries)
-
-    from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID
 
     single_stage = str(profile_id or "") in (KREA2_PROFILE_ID, WAN21_PROFILE_ID)
     krea2_profile = str(profile_id or "") == KREA2_PROFILE_ID
@@ -330,7 +344,7 @@ def load_prep_manifest(manifest_path: Path):
     return data
 
 
-def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal"):
+def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", profile_id: str = ""):
     generate_mode = normalize_training_generate_mode(mode)
     grouped = {key: [] for key in AR_CLASSES}
     for row in videos:
@@ -372,8 +386,14 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal"):
             lines.append(f"[WARN] {ar_label}: unable to choose motion frame count.")
             continue
 
-        if generate_mode == "poc":
-            target_w, target_h = TRAINING_MODE_TARGETS["poc"][ar_label]
+        resolution_cap = video_resolution_cap(profile_id, generate_mode, ar_label)
+        if resolution_cap:
+            lines.append(
+                f"[INFO] {ar_label}: WAN {generate_mode} video resolution cap "
+                f"{resolution_cap[0]}x{resolution_cap[1]}"
+            )
+        if resolution_cap or generate_mode == "poc":
+            target_w, target_h = resolution_cap or TRAINING_MODE_TARGETS["poc"][ar_label]
             motion = choose_video_bucket_resolution_capped(
                 ar_label,
                 usable_for_frames,
@@ -408,10 +428,18 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal"):
             "buckets": [motion_bucket],
             "sample_count": motion["support"],
             "repeat_weight": VIDEO_MOTION_REPEAT_WEIGHT,
+            "resolution_cap": resolution_cap,
         })
 
         if generate_mode != "poc" or POC_VIDEO_DETAIL_ENABLED:
-            detail = choose_video_detail_bucket(ar_label, usable_for_frames, motion["width"], motion["height"])
+            detail = choose_video_detail_bucket(
+                ar_label,
+                usable_for_frames,
+                motion["width"],
+                motion["height"],
+                max_w=resolution_cap[0] if resolution_cap else None,
+                max_h=resolution_cap[1] if resolution_cap else None,
+            )
             if detail:
                 detail_tuple = (detail["width"], detail["height"], VIDEO_DETAIL_FRAMES)
                 lines.append(
@@ -425,6 +453,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal"):
                     "buckets": [detail_tuple],
                     "sample_count": detail["support"],
                     "repeat_weight": VIDEO_DETAIL_REPEAT_WEIGHT,
+                    "resolution_cap": resolution_cap,
                 })
     return entries
 
@@ -545,8 +574,12 @@ def choose_video_bucket_resolution_capped(
     return best
 
 
-def choose_video_detail_bucket(ar_label: str, clips, motion_w: int, motion_h: int):
-    candidates = generate_candidates(ar_label)
+def choose_video_detail_bucket(ar_label: str, clips, motion_w: int, motion_h: int, max_w=None, max_h=None):
+    candidates = [
+        (w, h, area)
+        for (w, h, area) in generate_candidates(ar_label)
+        if (max_w is None or w <= max_w) and (max_h is None or h <= max_h)
+    ]
     if not candidates:
         return None
     motion_area = motion_w * motion_h
@@ -580,7 +613,7 @@ def choose_video_detail_bucket(ar_label: str, clips, motion_w: int, motion_h: in
     return best
 
 
-def video_alternatives(selected_w: int, selected_h: int, selected_frames: int):
+def video_alternatives(selected_w: int, selected_h: int, selected_frames: int, max_w=None, max_h=None):
     # 2-3 lower and 2-3 higher valid buckets by area, same frame count
     short_side = min(selected_w, selected_h)
     offsets = [-96, -64, -32, 32, 64, 96]
@@ -601,6 +634,8 @@ def video_alternatives(selected_w: int, selected_h: int, selected_frames: int):
         # Skip invalid or duplicate
         if w < 256 or h < 256:
             continue
+        if (max_w is not None and w > max_w) or (max_h is not None and h > max_h):
+            continue
         if (w, h, selected_frames) == (selected_w, selected_h, selected_frames):
             continue
         if (w, h, selected_frames) in alts:
@@ -613,7 +648,7 @@ def video_alternatives(selected_w: int, selected_h: int, selected_frames: int):
     higher = sorted(higher, key=lambda x: abs(min(x[:2]) - short_side))[:3]
     return lower + higher
 
-def render_video_block(dir_path: str, buckets, num_repeats: int = 1):
+def render_video_block(dir_path: str, buckets, num_repeats: int = 1, resolution_cap=None):
     repeats = int(num_repeats) if isinstance(num_repeats, int) else 1
     if repeats < 1:
         repeats = 1
@@ -624,8 +659,9 @@ def render_video_block(dir_path: str, buckets, num_repeats: int = 1):
         'group = "videos"',
         "size_buckets = [",
     ]
+    max_w, max_h = resolution_cap or (None, None)
     for (w, h, frames) in buckets:
-        alts = video_alternatives(w, h, frames)
+        alts = video_alternatives(w, h, frames, max_w=max_w, max_h=max_h)
         mfp_val = (w * h * frames) / 1_000_000
         if alts:
             lines.append("# Alternatives: " + ", ".join(f"[{aw}, {ah}, {af}]" for (aw, ah, af) in alts))
@@ -936,7 +972,12 @@ def render_image_block(image_dir: Path, ar_label: str, buckets, num_repeats: int
 def render_dataset_entry(entry, num_repeats: int):
     kind = entry["kind"]
     if kind == "video":
-        return render_video_block(entry["dir_path"], entry["buckets"], num_repeats=num_repeats)
+        return render_video_block(
+            entry["dir_path"],
+            entry["buckets"],
+            num_repeats=num_repeats,
+            resolution_cap=entry.get("resolution_cap"),
+        )
     if kind == "image":
         return render_image_block(entry["path"], entry["ar_label"], entry["buckets"], num_repeats=num_repeats)
     raise ValueError(f"Unknown dataset entry kind: {kind}")

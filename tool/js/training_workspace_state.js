@@ -34,8 +34,7 @@ var trainingWorkspaceState = {
   historyExpanded: false,
   historyCollapsed: true,
   runnerQueueCollapsed: false,
-  itemOverviewHidden: false,
-  tensorboard: null
+  itemOverviewHidden: false
 };
 var utilityTrainingTurtleTimer = 0;
 var utilityTrainingTurtleAtLeft = true;
@@ -94,11 +93,7 @@ function getTrainingWorkspaceEls() {
     historyShowAllBtn: document.getElementById('training-history-show-all-btn'),
     historySearch: document.getElementById('training-history-search'),
     historyClearBtn: document.getElementById('training-history-clear-btn'),
-    checkpointSelect: document.getElementById('training-run-checkpoint-select'),
-    tensorboardSummary: document.getElementById('training-tensorboard-summary'),
-    tensorboardStartBtn: document.getElementById('training-tensorboard-start-btn'),
-    tensorboardStopBtn: document.getElementById('training-tensorboard-stop-btn'),
-    tensorboardOpenLink: document.getElementById('training-tensorboard-open-link')
+    checkpointSelect: document.getElementById('training-run-checkpoint-select')
   };
 }
 
@@ -113,4 +108,3 @@ function trainingRunnerRequest(path, options) {
     });
   });
 }
-

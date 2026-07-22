@@ -15,7 +15,6 @@ Last reviewed: 2026-07-10.
 - Rename video clip requires manual folder refresh to show new name
 
 ## Enhancements
-- The ability to manually mark a set as Trained... especially for legacy purposes, or when a Finished Early or some other badge got assigned by accident. I mean, I can archive sets, but until I do badges should be accurate, and I know better than the app in some cases.
 - Set a target epoch / save to Finish Early, so like, I feel like 35 epochs is going to be enough (for testing at least), and the run is at 25 now, original target was 60, but that's overkill and I won't be around to Finish Early manually.
 
 ## Documentation Sync Notes

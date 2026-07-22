@@ -226,8 +226,7 @@
 }
 
 .app.shell-revamp .training-set-context,
-.app.shell-revamp .training-history-card,
-.app.shell-revamp .training-tensorboard-card {
+.app.shell-revamp .training-history-card {
   display: grid;
   gap: 10px;
   padding: 12px;
@@ -798,8 +797,7 @@
   gap: 10px;
 }
 
-.app.shell-revamp .training-global-secondary .training-history-card,
-.app.shell-revamp .training-global-secondary .training-tensorboard-card {
+.app.shell-revamp .training-global-secondary .training-history-card {
   margin-top: 0;
 }
 

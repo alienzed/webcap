@@ -1,4 +1,4 @@
-// Recent runs, resume discovery, output access, and TensorBoard controls.
+// Recent runs, resume discovery, and output access.
 function formatTrainingHistoryTime(value) {
   var seconds = Number(value || 0);
   if (!seconds) return '';
@@ -134,22 +134,6 @@ function renderTrainingModelTrainedStatus() {
       '<button type="button" class="training-history-action" data-training-trained-output="' + escapeHtml(run.path || '') + '" data-training-trained-model="' + escapeHtml(run.candidateFor || run.stage || '') + '" title="Open run directory" aria-label="Open trained run directory">&#128193;</button>' +
     '</div>';
   }).join('');
-}
-
-function renderTensorboard() {
-  var els = getTrainingWorkspaceEls();
-  if (!els.tensorboardSummary) return;
-  var board = trainingWorkspaceState.tensorboard || {};
-  var running = board.status === 'running';
-  els.tensorboardSummary.textContent = running
-    ? 'Running at ' + (board.url || 'local URL') + ' · logs: ' + (board.setLogRoot || board.logRoot || '')
-    : (board.error || 'Not running. Logs will be grouped by set.');
-  if (els.tensorboardStartBtn) els.tensorboardStartBtn.classList.toggle('hidden', running);
-  if (els.tensorboardStopBtn) els.tensorboardStopBtn.classList.toggle('hidden', !running);
-  if (els.tensorboardOpenLink) {
-    els.tensorboardOpenLink.classList.toggle('hidden', !running || !board.url);
-    els.tensorboardOpenLink.href = board.url || '#';
-  }
 }
 
 function clearTrainingHistory() {
@@ -312,36 +296,3 @@ function refreshTrainingHistory(force) {
     })
     .catch(function (err) { setStatus('Could not load training history: ' + String(err.message || err)); });
 }
-
-function refreshTensorboardStatus() {
-  if (!isTrainingWorkspaceActive()) return Promise.resolve();
-  return fetch('/fs/tensorboard/status?folder=' + encodeURIComponent(state.folder || ''))
-    .then(function (response) { return response.json(); })
-    .then(function (payload) {
-      if (!payload.ok) throw new Error(payload.error || 'Could not load TensorBoard status.');
-      trainingWorkspaceState.tensorboard = payload.tensorboard || {};
-      renderTensorboard();
-    })
-    .catch(function (err) { setStatus('Could not load TensorBoard status: ' + String(err.message || err)); });
-}
-
-function startTensorboard() {
-  trainingRunnerRequest('/fs/tensorboard/start', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: state.folder || '' })
-  }).then(function (payload) {
-    trainingWorkspaceState.tensorboard = payload.tensorboard || {};
-    renderTensorboard();
-    setStatus('TensorBoard started.');
-  }).catch(function (err) { setStatus('Could not start TensorBoard: ' + String(err.message || err)); });
-}
-
-function stopTensorboard() {
-  trainingRunnerRequest('/fs/tensorboard/stop', { method: 'POST' })
-    .then(function (payload) {
-      trainingWorkspaceState.tensorboard = payload.tensorboard || {};
-      renderTensorboard();
-      setStatus('TensorBoard stopped.');
-    })
-    .catch(function (err) { setStatus('Could not stop TensorBoard: ' + String(err.message || err)); });
-}
-

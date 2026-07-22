@@ -135,12 +135,13 @@ def sync_job_progress(job, log_text):
         progress["etaSeconds"] = round(remaining_steps * seconds_per_step)
         progress["etaScope"] = eta_scope
     if epoch is not None and checkpoint_every_epochs:
-        next_checkpoint_epoch = ((int(epoch) // checkpoint_every_epochs) + 1) * checkpoint_every_epochs
+        completed_epochs = max(0, int(epoch) - 1)
+        next_checkpoint_epoch = ((completed_epochs // checkpoint_every_epochs) + 1) * checkpoint_every_epochs
         if next_checkpoint_epoch <= current_epochs:
             progress["checkpointEveryNEpochs"] = checkpoint_every_epochs
             progress["nextCheckpointEpoch"] = next_checkpoint_epoch
             if planned_steps > 0 and seconds_per_step is not None:
-                checkpoint_steps = max(0.0, (next_checkpoint_epoch - float(epoch)) * planned_steps / float(current_epochs))
+                checkpoint_steps = max(0.0, (next_checkpoint_epoch - float(epoch) + 1) * planned_steps / float(current_epochs))
                 progress["checkpointEtaSeconds"] = round(checkpoint_steps * seconds_per_step)
     job["progress"] = progress
 

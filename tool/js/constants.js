@@ -112,7 +112,6 @@ ui = {
   appSettingsTrainingCondaExecutableEl: document.getElementById('app-settings-training-conda-executable'),
   appSettingsTrainingCondaEnvironmentEl: document.getElementById('app-settings-training-conda-environment'),
   appSettingsTrainingActivateScriptEl: document.getElementById('app-settings-training-activate-script'),
-  appSettingsTrainingTensorboardPortEl: document.getElementById('app-settings-training-tensorboard-port'),
   appSettingsTrainingWriteSelectionSnapshotCommentsEl: document.getElementById('app-settings-training-write-selection-snapshot-comments'),
   appSettingsEnableFaceAnalysisEl: document.getElementById('app-settings-enable-face-analysis'),
   appSettingsEnableMediaPipeAnalysisEl: document.getElementById('app-settings-enable-mediapipe-analysis'),

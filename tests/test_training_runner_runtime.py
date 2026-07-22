@@ -268,24 +268,17 @@ def test_discovered_resume_path_is_the_run_directory_not_its_latest_marker(tmp_p
     assert runs[0]["checkpointName"] == "latest"
 
 
-def test_new_runner_binds_the_single_exact_config_match(tmp_path):
-    output = tmp_path / "output"
-    snapshot = tmp_path / "snapshot" / "config.lo.toml"
-    snapshot.parent.mkdir()
-    snapshot.write_text("exact config\n", encoding="utf-8")
-    run = output / "20260716_08-31-48"
-    run.mkdir(parents=True)
-    (run / "config.lo.toml").write_text("exact config\n", encoding="utf-8")
-    job = {
-        "folder": "set", "stages": "lo", "status": "running",
-        "outputRoot": str(output), "effectiveOutputDir": "/mnt/w/output",
-        "snapshot": {"lo": str(snapshot)},
-        "configHashes": {"lo": training_history.config_sha256(snapshot)},
-    }
+def test_runner_binds_the_timestamp_directory_from_a_checkpoint_log():
+    job = {"folder": "set", "stages": "lo", "status": "running"}
+    log = (
+        "[INFO] Saving model checkpoint: "
+        "/mnt/w/training/output/runs/014-tanya/wan22-lo/20260721_22-03-39/"
+        "global_step9282/mp_rank_00_model_states.pt\n"
+    )
 
-    training_runner._bind_job_run_path(job)
+    training_runner._bind_job_run_path_from_log(job, log)
 
-    assert job["outputRunPath"] == "/mnt/w/output/20260716_08-31-48"
+    assert job["outputRunPath"] == "/mnt/w/training/output/runs/014-tanya/wan22-lo/20260721_22-03-39"
 
 
 def test_open_output_prefers_the_bound_timestamp_run_directory(tmp_path, monkeypatch):
@@ -334,6 +327,7 @@ def test_new_job_keeps_large_snapshots_under_the_output_sidecar(tmp_path, monkey
     monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
 
     job = training_runner._new_job("set", {"checks": [], "summary": {"blockers": 0}}, "hi")
+    sibling = training_runner._new_job("set", {"checks": [], "summary": {"blockers": 0}}, "lo")
 
     artifact = Path(job["artifactPath"])
     assert artifact.is_dir()
@@ -342,10 +336,11 @@ def test_new_job_keeps_large_snapshots_under_the_output_sidecar(tmp_path, monkey
     assert (artifact / "dataset.hi.toml").is_file()
     assert job["datasetTarget"] == "poc"
     assert job["launchGroupId"] == "001-set"
+    assert sibling["launchGroupId"] == "001-set"
+    assert Path(sibling["outputRoot"]).parent == Path(job["outputRoot"]).parent
     assert job["outputSlug"] == "wan22-hi"
     assert "output_dir = \"/mnt/w/wan22-hi\"" in (artifact / "config.hi.toml").read_text(encoding="utf-8")
     assert (folder / "config.hi.toml").read_bytes() == (artifact / "config.hi.toml").read_bytes()
-    assert job["configHashes"]["hi"] == training_history.config_sha256(folder / "config.hi.toml")
     assert job["model"]["source"] == "models/example.safetensors"
 
 
@@ -883,23 +878,24 @@ def test_resume_queue_reports_a_hold_instead_of_a_false_success(monkeypatch):
     assert payload["error"] == "Queued inputs changed. Confirm current inputs or cancel this item."
 
 
-def test_refresh_state_marks_a_missing_confirmation_without_ending_the_job(monkeypatch):
-    active = {"id": "active", "status": "running", "stage": "hi", "stages": "hi", "pid": 42}
+def test_missing_runner_result_interrupts_the_job_and_advances_the_queue(monkeypatch):
+    active = {"id": "active", "status": "unconfirmed", "stage": "hi", "stages": "hi", "pid": 42}
     state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}]}
     monkeypatch.setattr(training_runner, "_read_result", lambda job: None)
     monkeypatch.setattr(training_runner, "_pid_alive", lambda *args: False)
-    monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("queue must be held")))
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: Path(folder))
+    monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: job.update(status="starting", stage="starting"))
 
     training_runner._refresh_state(state)
 
-    assert active["status"] == "unconfirmed"
-    assert "cannot currently confirm" in active["confirmationNote"]
+    assert active["status"] == "interrupted"
+    assert "no longer available" in active["error"]
     assert state["queuePaused"] is False
-    assert state["activeJobId"] == "active"
-    assert state["jobs"][1]["status"] == "queued"
+    assert state["activeJobId"] == "next"
+    assert state["jobs"][1]["status"] == "starting"
 
 
-def test_refresh_state_uses_new_log_output_as_current_confirmation(tmp_path, monkeypatch):
+def test_log_activity_does_not_keep_a_missing_runner_active(tmp_path, monkeypatch):
     log_path = tmp_path / "run.log"
     log_path.write_text("step=580\n", encoding="utf-8")
     active = {
@@ -912,8 +908,30 @@ def test_refresh_state_uses_new_log_output_as_current_confirmation(tmp_path, mon
 
     training_runner._refresh_state(state)
 
-    assert active["status"] == "running"
+    assert active["status"] == "interrupted"
+    assert state["activeJobId"] == ""
     assert "confirmationNote" not in active
+
+
+@pytest.mark.parametrize(
+    ("action", "expected_status"),
+    (("pause", "paused"), ("finish", "finished_early"), ("stop", "stopped")),
+)
+def test_missing_runner_result_honors_a_recorded_user_action(action, expected_status, monkeypatch):
+    job = {
+        "id": "active", "status": "stopping", "stages": "lo", "pid": 42,
+        "actionRequested": action, "outputRunPath": "/output/run",
+    }
+    monkeypatch.setattr(training_runner, "_read_result", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_pid_alive", lambda *args: False)
+
+    training_runner._refresh_job(job)
+
+    assert job["status"] == expected_status
+    assert "finishedAt" in job
+    if action == "pause":
+        assert job["resumeFromCheckpoint"] == "/output/run"
+        assert job["resumeStage"] == "lo"
 
 
 def test_runner_stopped_without_an_app_action_is_interrupted(monkeypatch):
@@ -998,7 +1016,7 @@ def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypat
     monkeypatch.setattr(training_runner, "_resolve_folder", lambda folder: ("set", "folder"))
     monkeypatch.setattr(training_runner, "_repair_training_set_permissions", lambda folder, distribution: "")
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
-    monkeypatch.setattr(training_runner, "allocate_training_launch_group", lambda folder: Path("launch"))
+    monkeypatch.setattr(training_runner, "training_output_group_for_folder", lambda folder, create=False: Path("launch"))
     monkeypatch.setattr(training_runner, "_launch_job", lambda candidate, folder: candidate.update(status="starting"))
 
     payload, status = training_runner.start_response("set", queue=True, stages="lo")
@@ -1033,7 +1051,7 @@ def test_starting_krea2_creates_one_krea2_job(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
     monkeypatch.setattr(training_runner, "_repair_training_set_permissions", lambda folder, distribution: "")
     monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages: ("set", tmp_path, {}, {}, []))
-    monkeypatch.setattr(training_runner, "allocate_training_launch_group", lambda folder: tmp_path / "001-set")
+    monkeypatch.setattr(training_runner, "training_output_group_for_folder", lambda folder, create=False: tmp_path / "001-set")
     monkeypatch.setattr(
         training_runner,
         "_new_job",

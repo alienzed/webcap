@@ -6,10 +6,10 @@ function getTrainingRunnerSelectedJob() {
   }
   var selectedId = trainingWorkspaceState.runnerSelectedJobId;
   for (var i = 0; i < jobs.length; i++) {
-    if (jobs[i].id === selectedId && (jobs[i].status === 'queued' || jobs[i].status === 'paused' || jobs[i].status === 'interrupted')) return jobs[i];
+    if (jobs[i].id === selectedId && (jobs[i].status === 'queued' || jobs[i].status === 'paused')) return jobs[i];
   }
   for (var queuedIndex = 0; queuedIndex < jobs.length; queuedIndex++) {
-    if (jobs[queuedIndex].status === 'queued' || jobs[queuedIndex].status === 'paused' || jobs[queuedIndex].status === 'interrupted') return jobs[queuedIndex];
+    if (jobs[queuedIndex].status === 'queued' || jobs[queuedIndex].status === 'paused') return jobs[queuedIndex];
   }
   return null;
 }
@@ -792,11 +792,11 @@ function renderTrainingRunner() {
   }
   var jobs = trainingWorkspaceState.runnerJobs || [];
   var activeCount = jobs.filter(function (job) { return job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'unconfirmed'; }).length;
-  var queuedJobs = jobs.filter(function (job) { return job.status === 'queued' || job.status === 'paused' || job.status === 'interrupted'; });
+  var queuedJobs = jobs.filter(function (job) { return job.status === 'queued' || job.status === 'paused'; });
   var queuedCount = queuedJobs.length;
   var job = getTrainingRunnerActiveJob();
   var followingQueuedJobs = queuedJobs;
-  if (job && (job.status === 'paused' || job.status === 'interrupted') && queuedJobs[0] && queuedJobs[0].id === job.id) {
+  if (job && job.status === 'paused' && queuedJobs[0] && queuedJobs[0].id === job.id) {
     followingQueuedJobs = queuedJobs.slice(1);
   }
   if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
@@ -843,7 +843,7 @@ function renderTrainingRunner() {
         ? 'The runner is stopping after the requested action.'
         : 'Training runner status: ' + statusLabel + '.';
   var running = status === 'starting' || status === 'running' || status === 'stopping';
-  var queued = status === 'queued' || status === 'paused' || status === 'interrupted';
+  var queued = status === 'queued' || status === 'paused';
   var queueState = trainingWorkspaceState.runnerQueuePaused && status !== 'paused'
     ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + ' — no job will start automatically</span>'
     : '';

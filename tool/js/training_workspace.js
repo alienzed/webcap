@@ -475,8 +475,6 @@ function wireTrainingWorkspace() {
   var historyShowAllBtn = document.getElementById('training-history-show-all-btn');
   var historySearch = document.getElementById('training-history-search');
   var historyClearBtn = document.getElementById('training-history-clear-btn');
-  var tensorboardStartBtn = document.getElementById('training-tensorboard-start-btn');
-  var tensorboardStopBtn = document.getElementById('training-tensorboard-stop-btn');
   backBtn.onclick = function () { exitWorkspaceSurface(); };
   sidebarCollapseBtn.onclick = function () { toggleSidebarCollapsed(); };
   itemOverviewToggleBtn.onclick = function () {
@@ -630,8 +628,6 @@ function wireTrainingWorkspace() {
   };
   if (historySearch) historySearch.oninput = renderTrainingHistory;
   if (historyClearBtn) historyClearBtn.onclick = clearTrainingHistory;
-  tensorboardStartBtn.onclick = startTensorboard;
-  tensorboardStopBtn.onclick = stopTensorboard;
 }
 
 function syncTrainingConsoleUi() {

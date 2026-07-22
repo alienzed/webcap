@@ -2341,8 +2341,7 @@ iframe {
   color: #d36a6a;
 }
 
-.workspace-surface-training .training-history-card,
-.workspace-surface-training .training-tensorboard-card {
+.workspace-surface-training .training-history-card {
   display: grid;
   gap: 7px;
   margin-top: 8px;
@@ -2420,13 +2419,11 @@ iframe {
   margin-top: 8px;
 }
 
-.workspace-surface-training .training-operations-context .training-history-card,
-.workspace-surface-training .training-operations-context .training-tensorboard-card {
+.workspace-surface-training .training-operations-context .training-history-card {
   margin-top: 0;
 }
 
-.workspace-surface-training .training-history-summary,
-.workspace-surface-training .training-tensorboard-summary {
+.workspace-surface-training .training-history-summary {
   color: var(--muted);
   font-size: 12px;
 }

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from tool.server import config as config_module
@@ -37,6 +39,49 @@ def _checkpoint(run, config_text, config_name="config.lo.toml", step=42, epoch=0
     (run / "latest").write_text(f"global_step{step}", encoding="utf-8")
     if epoch:
         (run / f"epoch{epoch}").mkdir()
+
+
+def test_set_adopts_the_group_with_real_run_activity_and_reuses_it(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    active_group = root / "output" / "runs" / "001-set"
+    abandoned_group = root / "output" / "runs" / "002-set"
+    _checkpoint(active_group / "wan22-hi" / "20260721_22-03-39", _wan_config(active_group / "wan22-hi"))
+    abandoned_group.mkdir(parents=True)
+
+    selected = training_history.training_output_group_for_folder(folder, create=True)
+
+    assert selected == active_group
+    assert training_history.training_output_group_for_folder(folder, create=True) == active_group
+    history = training_history.read_history(folder)
+    assert history["outputGroup"] == "001-set"
+    assert not (root / "output" / "runs" / "003-set").exists()
+
+
+def test_resume_discovery_uses_the_sets_remembered_model_folder(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    remembered_group = root / "output" / "runs" / "014-set"
+    remembered_model = remembered_group / "wan22-lo"
+    unrelated_current_output = root / "output" / "runs" / "099-set" / "wan22-lo"
+    current = _wan_config(unrelated_current_output)
+    (folder / "config.lo.toml").write_text(current, encoding="utf-8")
+    _checkpoint(remembered_model / "20260721_22-03-39", current, step=9282, epoch=40)
+    training_history._write_history(folder, {
+        "version": training_history.HISTORY_VERSION,
+        "outputGroup": remembered_group.name,
+        "jobs": [],
+        "runs": [],
+    })
+
+    runs = training_history.discover_runs(folder, "lo")
+
+    assert [run["name"] for run in runs] == ["20260721_22-03-39"]
+    assert Path(runs[0]["path"]) == remembered_model / "20260721_22-03-39"
 
 
 def test_training_history_discovers_only_compatible_runs_in_the_configured_output(tmp_path, monkeypatch):
@@ -150,7 +195,7 @@ def test_finished_early_history_keeps_the_exact_persisted_run_path(tmp_path, mon
     assert training_history.all_history_payload()["jobs"][0]["outputRunPath"] == str(output)
 
 
-def test_exact_hash_matches_suppress_compatible_fallbacks(tmp_path, monkeypatch):
+def test_discovery_keeps_exact_and_compatible_resume_choices(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "set"
     folder.mkdir(parents=True)
@@ -165,8 +210,8 @@ def test_exact_hash_matches_suppress_compatible_fallbacks(tmp_path, monkeypatch)
 
     runs = training_history.discover_runs(folder, "lo")
 
-    assert {run["name"] for run in runs} == {"exact-old", "exact-new"}
-    assert all(run["matchType"] == "exact" for run in runs)
+    assert {run["name"] for run in runs} == {"exact-old", "exact-new", "compatible"}
+    assert {run["matchType"] for run in runs} == {"exact", "compatible"}
 
 
 def test_discovered_run_output_path_accepts_a_current_same_model_candidate(tmp_path, monkeypatch):

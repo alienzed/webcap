@@ -14,7 +14,8 @@ from . import config as app_config
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
 from .permissions import normalize_path_permissions
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, ensure_training_config_files, allocate_training_launch_group, with_output_dir
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, ensure_training_config_files, with_output_dir
+from .training_history import training_output_group_for_folder
 from .training_profiles import config_for_stage
 from .training_commands import build_training_command_plan
 from .training_runtime import build_training_launcher, training_runtime_settings
@@ -261,7 +262,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
 
         stage_names = ("hi", "lo") if stages == "both" else (stages,)
         needs_new_output = any(not (resume_from_checkpoint and resume_stage == stage) for stage in stage_names)
-        launch_group = allocate_training_launch_group(folder_path) if needs_new_output else None
+        launch_group = training_output_group_for_folder(folder_path, create=True) if needs_new_output else None
         snapshot_paths = {}
         output_dirs = {}
         for stage in stage_names:
@@ -271,7 +272,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
                 output_dir = str(Path(resume_from_checkpoint).parent) if not str(resume_from_checkpoint).startswith("/") else str(PurePosixPath(resume_from_checkpoint).parent)
             else:
                 stage_output = launch_group / meta["outputSlug"]
-                stage_output.mkdir(parents=True, exist_ok=False)
+                stage_output.mkdir(parents=True, exist_ok=True)
                 normalize_path_permissions(stage_output)
                 try:
                     output_dir = _to_wsl_path(stage_output, runtime_settings["wslDistribution"])

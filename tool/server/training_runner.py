@@ -9,15 +9,15 @@ import shutil
 import threading
 import time
 import uuid
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, allocate_training_launch_group, output_dir_from_config, with_output_dir
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, output_dir_from_config, with_output_dir
 from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_run
 from .dataset_config import repeat_targets_for_mode
-from .training_history import completed_stages, config_sha256, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, record_job, clear_history_job
+from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, record_job, clear_history_job, training_output_group_for_folder
 from .training_preflight import (
     build_launch_preflight as _build_launch_preflight,
     gpu_snapshot as _gpu_snapshot,
@@ -55,7 +55,7 @@ RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
 STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
 ACTIVE_STATUSES = {"starting", "running", "stopping", "unconfirmed"}
-QUEUE_STATUSES = {"queued", "paused", "interrupted"}
+QUEUE_STATUSES = {"queued", "paused"}
 HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "interrupted"}
 TERMINAL_STATUSES = HISTORY_STATUSES | {"paused", "interrupted", "cancelled"}
 _lock = threading.Lock()
@@ -66,6 +66,7 @@ _history_signatures = {}
 _state_file_seen = None
 _persisted_managed_job_ids = set()
 _logger = logging.getLogger(__name__)
+_CHECKPOINT_SAVE_PATH_PATTERN = re.compile(r"Saving model checkpoint:\s+(.+?)[/\\]global_step\d+[/\\]")
 
 
 def _runtime_root():
@@ -688,42 +689,14 @@ def _job_runner_pid(job):
         return 0
 
 
-def _bind_job_run_path(job):
-    """Bind only a run directory carrying the exact launched config bytes."""
-    model_id = str(job.get("stages") or "")
-    if model_id not in ("hi", "lo", "krea2", "wan21") or job.get("outputRunPath"):
+def _bind_job_run_path_from_log(job, log_text):
+    """Remember the trainer-authored timestamp directory once a checkpoint is saved."""
+    if job.get("outputRunPath"):
         return
-    hashes = job.get("configHashes") if isinstance(job.get("configHashes"), dict) else {}
-    wanted_hash = str(hashes.get(model_id) or "")
-    snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
-    snapshot_path = str(snapshot.get(model_id) or "")
-    if not wanted_hash and snapshot_path:
-        try:
-            wanted_hash = config_sha256(snapshot_path)
-            hashes[model_id] = wanted_hash
-            job["configHashes"] = hashes
-        except OSError:
-            return
-    output_root = Path(str(job.get("outputRoot") or ""))
-    if not wanted_hash or not output_root.is_dir():
+    matches = _CHECKPOINT_SAVE_PATH_PATTERN.findall(str(log_text or ""))
+    if not matches:
         return
-    filename = Path(snapshot_path).name
-    exact = []
-    try:
-        for config_path in output_root.rglob(filename):
-            if ".webcap" in config_path.parts or config_sha256(config_path) != wanted_hash:
-                continue
-            exact.append(config_path.parent)
-    except (OSError, ValueError):
-        return
-    if len(exact) != 1:
-        return
-    training_root = str(job.get("effectiveOutputDir") or "")
-    try:
-        relative = exact[0].relative_to(output_root).as_posix()
-        job["outputRunPath"] = str(PurePosixPath(training_root) / relative) if training_root.startswith("/") else str(exact[0])
-    except ValueError:
-        job["outputRunPath"] = str(exact[0])
+    job["outputRunPath"] = matches[-1].strip().strip("'\"")
     job["updatedAt"] = time.time()
 
 
@@ -732,7 +705,6 @@ def _refresh_job(job):
         return
     if not job.get("progressPlan"):
         job["progressPlan"] = _default_progress_plan()
-    _bind_job_run_path(job)
     result = _read_result(job)
     if result:
         result_status = str(result.get("status") or "failed")
@@ -751,6 +723,7 @@ def _refresh_job(job):
                     job["stage"] = "lo"
                 elif "[webcap] stage=hi" in tail:
                     job["stage"] = "hi"
+                _bind_job_run_path_from_log(job, tail)
                 _sync_job_progress(job, tail)
             except OSError:
                 pass
@@ -783,16 +756,13 @@ def _refresh_job(job):
         _annotate_finished_early_job(job)
         return
     now = time.time()
-    log_advanced = False
     log_has_progress = False
     log_path = Path(job.get("logPath") or "")
     if log_path.exists():
         try:
             log_mtime = log_path.stat().st_mtime
-            prior_log_mtime = float(job.get("lastLogAt") or 0)
             job["lastLogAt"] = log_mtime
             tail = _read_log_tail(log_path)
-            log_advanced = bool(prior_log_mtime and log_mtime > prior_log_mtime)
             log_has_progress = _log_has_progress(tail)
             if "[webcap] stage=wan21" in tail:
                 job["stage"] = "wan21"
@@ -802,6 +772,7 @@ def _refresh_job(job):
                 job["stage"] = "lo"
             elif "[webcap] stage=hi" in tail:
                 job["stage"] = "hi"
+            _bind_job_run_path_from_log(job, tail)
             _sync_job_progress(job, tail)
         except OSError:
             pass
@@ -816,18 +787,24 @@ def _refresh_job(job):
         job.pop("confirmationNote", None)
         job["updatedAt"] = now
         return
-    if log_advanced:
-        job["status"] = "running"
-        job.pop("confirmationNote", None)
-        job["updatedAt"] = now
-        return
-    if job.get("status") != "stopping":
-        job["status"] = "unconfirmed"
-        job["confirmationNote"] = "WebCap cannot currently confirm the runner. Waiting for its result record."
+    requested_action = str(job.get("actionRequested") or "")
+    job.pop("confirmationNote", None)
+    if requested_action == "pause":
+        stage = str(job.get("stages") or "")
+        resume_path = str(job.get("outputRunPath") or "").strip()
+        job["resumeFromCheckpoint"] = resume_path
+        job["resumeStage"] = stage if resume_path else ""
+        job["status"] = "paused"
+    elif requested_action == "finish":
+        job["status"] = "finished_early"
+    elif requested_action == "stop":
+        job["status"] = "stopped"
     else:
-        action = str(job.get("actionRequested") or "stop")
-        job["confirmationNote"] = action.capitalize() + " requested. Waiting for the runner result."
-    job["updatedAt"] = time.time()
+        job["status"] = "interrupted"
+        job["error"] = "Training runner is no longer available and did not write a result record."
+    job["finishedAt"] = now
+    job["updatedAt"] = now
+    _annotate_finished_early_job(job)
     return
 
 
@@ -874,7 +851,7 @@ def _start_next(state):
     for job in state.get("jobs", []):
         if job.get("status") not in QUEUE_STATUSES:
             continue
-        if job.get("status") in ("paused", "interrupted"):
+        if job.get("status") == "paused":
             resume_error = _prepare_paused_job_for_resume(job)
             if resume_error:
                 job["error"] = resume_error
@@ -944,7 +921,7 @@ def _ensure_monitor_started():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "configHashes", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
+    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt")
     return {field: job.get(field) for field in fields if field in job}
 
 
@@ -1018,9 +995,9 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         output_root = host_path_for_training_path(effective_output_dir)
         group_root = output_root
     else:
-        group_root = Path(launch_group) if launch_group else allocate_training_launch_group(folder_path)
+        group_root = Path(launch_group) if launch_group else training_output_group_for_folder(folder_path, create=True)
         output_root = group_root / output_slug
-        output_root.mkdir(parents=True, exist_ok=False)
+        output_root.mkdir(parents=True, exist_ok=True)
         normalize_path_permissions(output_root)
         effective_output_dir = _to_wsl_path(output_root, distribution)
         source_config = artifacts[stages + "Config"]
@@ -1033,11 +1010,6 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
     job_dir.mkdir(parents=True, exist_ok=False)
     normalize_path_permissions(job_dir)
     snapshot = _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir)
-    config_hashes = {
-        model_id: config_sha256(config_path)
-        for model_id, config_path in snapshot.items()
-        if model_id in ("hi", "lo", "krea2", "wan21")
-    }
     progress_plan = _plan_run_steps(_read_training_plan(folder_path) or _default_progress_plan(), snapshot)
     input_evidence = _input_evidence(folder_path, stages)
     model = _model_identity(artifacts, selected_profile["id"], stages)
@@ -1065,7 +1037,6 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "updatedAt": time.time(),
         "permissionsRepairedAt": time.time(),
         "snapshot": snapshot,
-        "configHashes": config_hashes,
         "artifactPath": str(job_dir),
         "artifactDir": str(job_dir),
         "progressPlan": progress_plan,
@@ -1122,7 +1093,7 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
             state["queuePauseReason"] = ""
         job_stages = ("hi", "lo") if stages == "both" else (stages,)
         needs_new_output = any(not (resume_from_checkpoint and resume_stage == job_stage) for job_stage in job_stages)
-        launch_group = allocate_training_launch_group(folder_path) if needs_new_output else None
+        launch_group = training_output_group_for_folder(folder_path, create=True) if needs_new_output else None
         jobs = []
         for job_stage in job_stages:
             stage_resume = resume_from_checkpoint if resume_stage == job_stage else ""
@@ -1413,8 +1384,8 @@ def resume_job_response(job_id):
         prior = _find_job(state, job_id)
         if not prior:
             return {"ok": False, "error": "Training job not found."}, 404
-        if prior.get("status") not in ("paused", "interrupted"):
-            return {"ok": False, "error": "Only paused or interrupted jobs can resume."}, 400
+        if prior.get("status") != "paused":
+            return {"ok": False, "error": "Only paused jobs can resume."}, 400
         next_job = next((job for job in state.get("jobs", []) if job.get("status") in QUEUE_STATUSES), None)
         if next_job is not prior:
             return {"ok": False, "error": "Reorder the queue, then resume its first item."}, 409

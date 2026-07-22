@@ -41,7 +41,7 @@ def test_default_training_epochs_follow_canonical_templates():
     assert training_config_files_module.default_training_config_epochs() == (50, 90)
 
 
-def test_training_templates_use_the_tensorboard_output_root():
+def test_training_templates_use_the_shared_output_root():
     hi = training_config_files_module.read_training_config_template("config.hi.toml")
     lo = training_config_files_module.read_training_config_template("config.lo.toml")
 

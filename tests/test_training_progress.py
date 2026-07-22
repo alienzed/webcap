@@ -103,6 +103,30 @@ def test_runner_progress_uses_epoch_progress_and_a_rolling_step_eta(tmp_path):
         "etaScope": "completion",
     }
 
+
+def test_runner_progress_targets_the_end_of_the_current_checkpoint_epoch(tmp_path):
+    lo_path = tmp_path / "config.lo.toml"
+    lo_path.write_text("epochs = 10\ncheckpoint_every_n_epochs = 5\n", encoding="utf-8")
+    job = {
+        "stage": "lo",
+        "stages": "lo",
+        "snapshot": {"lo": str(lo_path)},
+        "progressPlan": {"lo": {"estimatedSteps": 1000}},
+    }
+
+    training_progress.sync_job_progress(
+        job,
+        "\n".join([
+            "Started new epoch: 5",
+            "[INFO] [Rank 0] step=400, skipped=0, iter time (s): 2.0",
+            "[INFO] [Rank 0] step=401, skipped=0, iter time (s): 2.0",
+            "[INFO] [Rank 0] step=402, skipped=0, iter time (s): 2.0",
+        ]),
+    )
+
+    assert job["progress"]["nextCheckpointEpoch"] == 5
+    assert job["progress"]["checkpointEtaSeconds"] == 200
+
 def test_completed_job_flags_a_result_far_below_the_step_estimate_without_epoch_progress():
     job = {
         "status": "completed",

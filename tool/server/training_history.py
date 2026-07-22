@@ -12,7 +12,7 @@ import tomllib
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
-from .training_config_files import output_dir_from_config, training_config_path
+from .training_config_files import allocate_training_launch_group, output_dir_from_config, training_config_path
 from .training_profiles import config_for_id
 
 
@@ -22,6 +22,7 @@ _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(?:#.*)?$", re.MULTILINE)
+_OUTPUT_GROUP_PATTERN = re.compile(r"^\d{3}-.+$")
 
 
 def output_root_for_folder(folder_path, stage=""):
@@ -222,6 +223,93 @@ def _write_history(folder_path, data):
     normalize_path_permissions(path)
 
 
+def _read_history_index(folder_path):
+    """Read optional set-local metadata without resolving any configured paths."""
+    path = _history_path(folder_path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"version": HISTORY_VERSION, "jobs": [], "runs": []}
+    if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
+        return {"version": HISTORY_VERSION, "jobs": [], "runs": []}
+    if not isinstance(data.get("jobs"), list):
+        data["jobs"] = []
+    if not isinstance(data.get("runs"), list):
+        data["runs"] = []
+    return data
+
+
+def _recorded_output_group(folder_path):
+    history = _read_history_index(folder_path)
+    group_name = str(history.get("outputGroup") or "").strip()
+    if not group_name or Path(group_name).name != group_name or not _OUTPUT_GROUP_PATTERN.match(group_name):
+        return None
+    candidate = Path(app_config.FS_ROOT) / "output" / "runs" / group_name
+    return candidate if candidate.is_dir() else None
+
+
+def _output_group_activity(group):
+    """Return the newest trainer-created run activity under one set group."""
+    newest = 0.0
+    try:
+        model_dirs = [path for path in group.iterdir() if path.is_dir() and path.name != ".webcap"]
+    except OSError:
+        return newest
+    for model_dir in model_dirs:
+        try:
+            run_dirs = [path for path in model_dir.iterdir() if path.is_dir()]
+        except OSError:
+            continue
+        for run_dir in run_dirs:
+            latest = run_dir / "latest"
+            try:
+                configs = list(run_dir.glob("config*.toml"))
+            except OSError:
+                continue
+            if not latest.is_file() and not configs:
+                continue
+            try:
+                newest = max(newest, latest.stat().st_mtime if latest.is_file() else run_dir.stat().st_mtime)
+            except OSError:
+                continue
+    return newest
+
+
+def _adopt_existing_output_group(folder_path):
+    root = Path(app_config.FS_ROOT) / "output" / "runs"
+    if not root.is_dir():
+        return None
+    suffix = "-" + Path(folder_path).name
+    try:
+        candidates = [
+            path for path in root.iterdir()
+            if path.is_dir() and path.name.endswith(suffix) and _OUTPUT_GROUP_PATTERN.match(path.name)
+        ]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: (_output_group_activity(path), path.name))
+
+
+def training_output_group_for_folder(folder_path, create=False):
+    """Return the set's optional managed output group, allocating only on request."""
+    folder = Path(folder_path)
+    group = _recorded_output_group(folder) or _adopt_existing_output_group(folder)
+    if group is None and create:
+        group = allocate_training_launch_group(folder)
+    if group is None:
+        return None
+    history = _read_history_index(folder)
+    if history.get("outputGroup") != group.name:
+        history["outputGroup"] = group.name
+        try:
+            _write_history(folder, history)
+        except OSError as exc:
+            app_config.debug_print("[training_history] Could not remember output group for", folder, ":", exc)
+    return group
+
+
 def discover_runs(folder_path, stage=""):
     folder = Path(folder_path)
     if not folder.is_dir():
@@ -245,8 +333,13 @@ def discover_runs(folder_path, stage=""):
             continue
         try:
             source_hash = config_sha256(source_config)
-            training_root = output_root_path_for_folder(folder, candidate_stage)
-            root = output_root_for_folder(folder, candidate_stage)
+            output_group = training_output_group_for_folder(folder)
+            if output_group is not None:
+                root = output_group / config_meta["outputSlug"]
+                training_root = str(root)
+            else:
+                training_root = output_root_path_for_folder(folder, candidate_stage)
+                root = output_root_for_folder(folder, candidate_stage)
         except (OSError, RuntimeError) as exc:
             app_config.debug_print("[training_history] Could not resolve", candidate_stage, "output root", "for", folder, ":", exc)
             raise
@@ -294,10 +387,8 @@ def discover_runs(folder_path, stage=""):
                 "steps": highest_step or None,
                 "expectedEpochs": expected_epochs or None,
             })
-    exact = [run for run in runs if run["matchType"] == "exact"]
-    selected = exact if exact else runs
-    app_config.debug_print("[training_history] Found", len(selected), "resumable run(s) for", folder, "stage", stage or "all")
-    return sorted(selected, key=lambda run: run["modifiedAt"], reverse=True)
+    app_config.debug_print("[training_history] Found", len(runs), "resumable run(s) for", folder, "stage", stage or "all")
+    return sorted(runs, key=lambda run: run["modifiedAt"], reverse=True)
 
 
 def validate_resumable_run_for_path(folder_path, stage, run_path):
@@ -383,7 +474,7 @@ def record_job(folder_path, job):
     history = read_history(folder_path)
     runs = discover_runs(folder_path, str(job.get("stages") or ""))
     record_fields = (
-        "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "configHashes", "status", "stage",
+        "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId",
         "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
     )

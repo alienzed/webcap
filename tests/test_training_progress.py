@@ -99,9 +99,35 @@ def test_runner_progress_uses_epoch_progress_and_a_rolling_step_eta(tmp_path):
         "estimated": False,
         "source": "epochs",
         "estimatedTrainingSeconds": 28230,
-        "etaSeconds": 31770,
+        "etaSeconds": 1661,
         "etaScope": "completion",
     }
+
+
+def test_runner_progress_uses_epoch_fraction_when_the_step_plan_is_too_small(tmp_path):
+    hi_path = tmp_path / "config.hi.toml"
+    hi_path.write_text("epochs = 50\n", encoding="utf-8")
+    job = {
+        "stage": "hi",
+        "stages": "hi",
+        "snapshot": {"hi": str(hi_path)},
+        "progressPlan": {"hi": {"estimatedSteps": 6350}},
+    }
+
+    training_progress.sync_job_progress(
+        job,
+        "\n".join([
+            "Started new epoch: 36",
+            "[INFO] [Rank 0] step=5888, skipped=0, iter time (s): 5.0",
+            "[INFO] [Rank 0] step=5889, skipped=0, iter time (s): 5.0",
+            "[INFO] [Rank 0] step=5890, skipped=0, iter time (s): 5.0",
+        ]),
+    )
+
+    assert job["progress"]["stagePercent"] == 72.0
+    assert job["progress"]["estimatedTrainingSeconds"] == 29450
+    assert job["progress"]["etaSeconds"] == 11453
+    assert job["progress"]["etaScope"] == "completion"
 
 
 def test_runner_progress_targets_the_end_of_the_current_checkpoint_epoch(tmp_path):

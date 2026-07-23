@@ -613,7 +613,7 @@ def test_finish_action_records_a_finished_early_outcome(monkeypatch):
     training_runner._refresh_job(job)
 
     assert job["status"] == "finished_early"
-    assert job["completionNote"] == "Finished early by the user at epoch 85 / 90 · step 9,410"
+    assert job["completionNote"] == "Finished early at epoch 85 / 90 · step 9,410"
 
 
 def test_runner_result_overrides_a_finish_request_when_the_job_completed(monkeypatch):

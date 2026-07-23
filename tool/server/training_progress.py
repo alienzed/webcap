@@ -136,8 +136,12 @@ def sync_job_progress(job, log_text):
     seconds_per_step = recent_seconds_per_step(log_text, stage)
     if step is not None and seconds_per_step is not None:
         progress["estimatedTrainingSeconds"] = round(max(0, step) * seconds_per_step)
-    if step is not None and planned_steps > 0 and seconds_per_step is not None:
-        remaining_steps = max(0, planned_steps - step)
+    if step is not None and seconds_per_step is not None and (planned_steps > 0 or epoch is not None):
+        if epoch is not None and stage_fraction > 0:
+            estimated_stage_steps = float(step) / stage_fraction
+            remaining_steps = max(0.0, estimated_stage_steps - float(step))
+        else:
+            remaining_steps = max(0, planned_steps - step)
         eta_scope = "completion"
         if stages == "both" and stage == "hi":
             next_stage_steps = lo_planned_steps
@@ -197,4 +201,4 @@ def annotate_finished_early_job(job):
         details.append("epoch " + str(int(epoch)) + " / " + str(int(epochs)))
     if isinstance(step, (int, float)):
         details.append("step " + format(int(step), ","))
-    job["completionNote"] = "Finished early by the user" + (" at " + " · ".join(details) if details else ".")
+    job["completionNote"] = "Finished early" + (" at " + " · ".join(details) if details else ".")

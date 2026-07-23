@@ -505,6 +505,11 @@ function wireAllUi() {
     if (normalizeWorkspaceViewMode(workspaceUiState.viewMode) !== 'single') return;
     if (document.querySelector('.modal:not(.hidden), .modal-overlay:not(.hidden), .crop-modal:not(.hidden), .focused-annotation-modal:not(.hidden), .media-grid-modal:not(.hidden), .media-grid-viewer-modal:not(.hidden), .app-settings-modal:not(.hidden)')) return;
     var actionKey = String(e.key || '').toLowerCase();
+    if (actionKey === 'f') {
+      e.preventDefault();
+      openFocusedAnnotationModal();
+      return;
+    }
     if (actionKey === 'c' && isCroppableImageFile(state.currentItem.fileName)) {
       e.preventDefault();
       runPreviewActionByLabel('Crop...');

@@ -46,7 +46,9 @@ function isFocusedAnnotationNestedModalOpen() {
     'checklist-group-terms-modal',
     'checklist-term-affixes-modal',
     'checklist-keywords-modal',
-    'review-rules-modal'
+    'review-rules-modal',
+    'crop-modal',
+    'video-clip-modal'
   ];
   for (var i = 0; i < ids.length; i++) {
     var el = document.getElementById(ids[i]);
@@ -589,6 +591,32 @@ function scheduleFocusedAnnotationActionRefresh() {
     if (!focusedAnnotationState.open) return;
     renderFocusedAnnotationModal();
   }, 900);
+}
+
+function runFocusedAnnotationSingleItemShortcut(actionKey) {
+  var mediaItem = state.currentItem;
+  if (!mediaItem || !mediaItem.fileName) return false;
+  if (/^[0-5]$/.test(actionKey)) {
+    var previousKeys = focusedAnnotationState.itemKeys.slice();
+    var previousIndex = focusedAnnotationState.itemIndex;
+    var rating = Number(actionKey);
+    setRatingForMediaKey(mediaItem.key, rating);
+    setStatus(rating > 0 ? 'Rating set: ' + rating + ' stars' : 'Rating cleared');
+    refreshFocusedAnnotationSequenceAfterRating(mediaItem.key, previousKeys, previousIndex);
+    return true;
+  }
+
+  var actionLabel = '';
+  if (actionKey === 'c' && isCroppableImageFile(mediaItem.fileName)) actionLabel = 'Crop...';
+  if (actionKey === 'd') actionLabel = 'Deface';
+  if (actionKey === 'r') actionLabel = 'Reset';
+  if (!actionLabel) return false;
+
+  var action = findPreviewActionByLabel(getFocusedAnnotationPreviewContextActions(mediaItem), actionLabel);
+  if (!action) return false;
+  action.run();
+  scheduleFocusedAnnotationActionRefresh();
+  return true;
 }
 
 function renderFocusedAnnotationPreviewActions(mediaItem) {
@@ -1397,6 +1425,13 @@ function wireFocusedAnnotationModal() {
       e.preventDefault();
       closeFocusedAnnotationModal();
       return;
+    }
+    if (!e.repeat && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      var actionKey = String(e.key || '').toLowerCase();
+      if (runFocusedAnnotationSingleItemShortcut(actionKey)) {
+        e.preventDefault();
+        return;
+      }
     }
     if (e.key === 'Enter') {
       e.preventDefault();

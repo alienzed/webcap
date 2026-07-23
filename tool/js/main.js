@@ -462,7 +462,12 @@ function wireAllUi() {
     if (String(e.key || '').toLowerCase() !== 'z') return;
     if (isEditableElement(document.activeElement)) return;
     e.preventDefault();
-    undoLastOperation();
+    var undone = undoLastOperation();
+    if (undone && isFocusedAnnotationOpen()) {
+      syncFocusedAnnotationQueue({
+        anchorMediaKey: state.currentItem && state.currentItem.key
+      });
+    }
   });
 
   document.addEventListener('keydown', function(e) {

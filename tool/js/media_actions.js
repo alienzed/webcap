@@ -1,16 +1,17 @@
 // media_actions.js
 // Global functions: pruneMedia, duplicateImageItem, restoreMediaItem, resetMediaItem, promptRenameMedia, renameMedia
 
-pruneMedia = async function (mediaItem) {
+pruneMedia = async function (mediaItem, options) {
+  var opts = options || {};
   // Confirm before pruning
   if (!state.folder || !mediaItem || !mediaItem.key) {
     setStatus('No folder or media selected for prune');
-    return;
+    return false;
   }
   var confirmed = confirm('Remove this media file from the current set?\n\n' + mediaItem.key + '\n\nYou can restore it later from originals.');
   if (!confirmed) {
     setStatus('Prune cancelled');
-    return;
+    return false;
   }
   setStatus('Pruning media: ' + mediaItem.key + ' ...');
   try {
@@ -22,7 +23,7 @@ pruneMedia = async function (mediaItem) {
     if (!resp.ok) {
       const msg = await resp.text();
       setStatus('Prune failed: ' + getErrorMessage(msg, resp.statusText));
-      return;
+      return false;
     }
     setStatus('Media pruned: ' + mediaItem.key);
     var prunedWasCurrent = !!(state.currentItem && (state.currentItem.key === mediaItem.key || state.currentItem.fileName === mediaItem.key));
@@ -44,15 +45,17 @@ pruneMedia = async function (mediaItem) {
       clearEditorAndPreview();
       window.renderChecklistPanel();
       renderFileList();
-      if (nextItemToSelect) {
+      if (nextItemToSelect && opts.selectReplacement !== false) {
         // Best-effort next-item selection; silent no-op on failure.
         selectPathMedia(nextItemToSelect).catch(function () {});
       }
     } else {
       renderFileList();
     }
+    return true;
   } catch (err) {
     setStatus('Prune error: ' + (err && err.message ? err.message : err));
+    return false;
   }
 };
 

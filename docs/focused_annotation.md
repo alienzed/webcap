@@ -2,7 +2,7 @@
 
 Status: Current behavior with a few forward-looking notes removed. Verified against `tool/js/focused_annotation.js` and `tool/tool.html`.
 
-Last updated: 2026-07-04
+Last updated: 2026-07-23
 
 ## Goal
 
@@ -13,35 +13,34 @@ The wizard should preserve the strong parts of annotation guidance while making 
 Current shipped shape:
 
 - Scope comes from the current filtered view or active focus set.
-- The wizard resumes on the first incomplete item/group step in traversal order.
+- The wizard starts on the selected visible item's first incomplete group.
+- If that item is complete, startup checks subsequent visible items and wraps once.
+- The item queue is replaced from the current filtered view after filter-sensitive mutations, so items that stop matching leave immediately.
 - Completion is currently `Reviewed` only.
 - Group-local `Copy Tags` / `Paste Tags` is available in the group header.
 
 ## Phase 1 Decisions
 
-1. `Group-first` is the default traversal mode.
+1. Traversal is `Group-first`.
    - Meaning: stay on one group and move across visible items before advancing to the next group.
-2. `Item-first` remains available as a secondary mode.
-3. The traversal switch is visible but low-noise.
-   - Placement: preview toolbar near the item progress pill, not mixed into the main tagging controls.
-4. The wizard keeps the full raw group term list.
-5. Guidance is additive.
+2. The wizard keeps the full raw group term list.
+3. Guidance is additive.
    - Use a separate `Quick Picks` rail rather than removing terms from the main list.
-6. True blind batch tagging is not part of this wizard phase.
+4. True blind batch tagging is not part of this wizard phase.
    - That belongs with the upcoming grid, where the user can see the full scope being affected.
 
 ## Layout
 
 ### Preview Pane
 
-- Left: item axis controls with `Up` / `Down` buttons around the `Item X/Y` progress pill.
-- Right: traversal mode switch (`Group-first`, `Item-first`) and close button.
+- Toolbar: item axis controls, rating, and contextual media actions.
+- Main area: the current media preview.
 
 ### Group Pane
 
-- Top row: group axis controls with `Left` / `Right` buttons around the `Group X/Y` progress pill.
+- Top row: group axis controls with `Left` / `Right` buttons around the `Group X/Y` progress pill, plus the close button.
 - Second row: group title on the left, action buttons on the right.
-- Action buttons currently include `Edit Terms`, `Copy Tags`, and `Paste Tags` when clipboard data exists.
+- Action buttons include `Edit Terms`, `Delete Group`, `Copy Tags`, and `Paste Tags`.
 - Main content:
   - Left: full group term list
   - Right: quieter `Quick Picks` rail
@@ -70,7 +69,7 @@ Current shipped shape:
 
 ## Wrapping Rules
 
-The arrow keys move on a 2D item/group grid, but only the active traversal axis wraps into the other dimension.
+The arrow keys move on a Group-first 2D item/group grid. The item axis wraps into the group axis.
 
 ### Group-first
 
@@ -78,13 +77,6 @@ The arrow keys move on a 2D item/group grid, but only the active traversal axis 
 - Moving past the last item advances to the next group at the first item.
 - Moving past the first item goes to the previous group at the last item.
 - `Left` / `Right` changes group directly but does not wrap across items.
-
-### Item-first
-
-- `Left` / `Right` is the primary traversal axis.
-- Moving past the last group advances to the next item at the first group.
-- Moving past the first group goes to the previous item at the last group.
-- `Up` / `Down` changes item directly but does not wrap across groups.
 
 ## Visual Emphasis
 

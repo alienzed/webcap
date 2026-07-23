@@ -368,7 +368,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
     actions.push({
       label: 'Paste Tags',
       run: function () {
-        pasteClipboardTagsToMediaKey(mediaItem.key);
+        return pasteClipboardTagsToMediaKey(mediaItem.key);
       }
     });
   }
@@ -546,9 +546,10 @@ function buildMediaContextMenuActions(mediaItem, key) {
   });
   actions.push({
     label: 'Prune',
-    run: function () {
-      pruneMedia(mediaItem).catch(function (err) {
+    run: function (options) {
+      return pruneMedia(mediaItem, options).catch(function (err) {
         setStatus(String(err && err.message ? err.message : err));
+        return false;
       });
     }
   });

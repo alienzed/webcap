@@ -182,7 +182,6 @@ function undoLastOperation() {
           checklistItems.length - 1,
           Number(op.index) || 0
         ));
-        focusedAnnotationState.history = [];
         renderFocusedAnnotationModal();
       }
       return restoredGroup;

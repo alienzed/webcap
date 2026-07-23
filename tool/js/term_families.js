@@ -99,9 +99,9 @@ function positionTermFamilyPopover(trigger, popover) {
   var width = popover.offsetWidth || 0;
   var height = popover.offsetHeight || 0;
   var left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
-  var top = rect.bottom + 7;
+  var top = rect.bottom - 1;
   if (top + height > window.innerHeight - margin) {
-    top = Math.max(margin, rect.top - height - 7);
+    top = Math.max(margin, rect.top - height + 1);
   }
   popover.style.left = Math.round(left) + 'px';
   popover.style.top = Math.round(top) + 'px';

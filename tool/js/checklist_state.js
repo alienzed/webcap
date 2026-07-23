@@ -440,6 +440,11 @@ function deleteChecklistGroupByIndex(index) {
   var requirementLabel = checklistItems[idx];
   var requirement = normalizeChecklistRequirementKey(requirementLabel);
   if (!requirement) return false;
+  if (!confirm(
+    'Delete group "' + requirementLabel + '"?\n\n' +
+    'This removes its terms and reviewed state from all items.\n\n' +
+    'You can restore everything immediately with Ctrl+Z.'
+  )) return false;
 
   var reviewedByMedia = {};
   Object.keys(checklistCheckedByMedia).forEach(function (mediaKey) {

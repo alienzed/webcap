@@ -157,7 +157,6 @@ function mediaGridRenderSelectionState() {
 }
 
 function mediaGridRenderSharedWorkbench() {
-  if (typeof renderGroupWorkbench !== 'function') return;
   var targetEl = mediaGridIsSurfaceMode()
     ? document.getElementById('group-workbench-list')
     : (document.getElementById('media-grid-group-workbench-list') || document.getElementById('group-workbench-list'));
@@ -181,7 +180,7 @@ function mediaGridHandleTileContextMenu(mediaItem, e) {
   mediaGridMarkContextTarget(mediaItem.key);
   var key = mediaItem.key || mediaItem.fileName;
   var actions = buildMediaContextMenuActions(mediaItem, key).map(function (action) {
-    if (!action || action.separator || typeof action.run !== 'function') return action;
+    if (!action || action.separator) return action;
     return {
       label: action.label,
       render: action.render,

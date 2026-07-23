@@ -653,7 +653,7 @@ function renderFocusedAnnotationPreviewActions(mediaItem) {
     appendActionButton('More', function (event) {
       var rect = event.currentTarget.getBoundingClientRect();
       var menuActions = secondaryActions.map(function (action) {
-        if (!action || action.separator || typeof action.run !== 'function') return action;
+        if (!action || action.separator) return action;
         return {
           label: action.label,
           render: action.render,
@@ -1020,7 +1020,7 @@ function toggleFocusedAnnotationTerm(requirementLabel, termText) {
 }
 
 function bindFocusedAnnotationTermAffixContextMenu(targetEl, termText, titlePrefix) {
-  if (!targetEl || typeof openChecklistTermAffixesModal !== 'function') return;
+  if (!targetEl) return;
   var term = normalizeChecklistTerm(termText);
   if (!term) return;
   var baseTitle = String(titlePrefix || '').trim();
@@ -1112,7 +1112,7 @@ function renderFocusedAnnotationModal() {
   }
   if (!state.currentItem || state.currentItem.key !== targetItemKey) {
     var targetItem = findFocusedAnnotationMediaItemByKey(targetItemKey);
-    if (!targetItem || typeof selectPathMedia !== 'function') {
+    if (!targetItem) {
       if (moveFocusedAnnotationToAvailableItem(1)) {
         return;
       }
@@ -1218,7 +1218,7 @@ function navigateFocusedAnnotation(itemIndex, groupIndex, options) {
   focusedAnnotationState.itemIndex = nextItemIndex;
   focusedAnnotationState.groupIndex = nextGroupIndex;
   var targetItem = findFocusedAnnotationMediaItemByKey(itemKeys[nextItemIndex]);
-  if (!targetItem || typeof selectPathMedia !== 'function') {
+  if (!targetItem) {
     if (moveFocusedAnnotationToAvailableItem(nextItemIndex < previousItemIndex ? -1 : 1)) {
       return;
     }
@@ -1318,10 +1318,6 @@ function openFocusedAnnotationForMediaItem(mediaItem) {
     beginFocusedAnnotationRun(mediaItem.key);
   };
   if (state.currentItem && state.currentItem.key === mediaItem.key) {
-    run();
-    return;
-  }
-  if (typeof selectPathMedia !== 'function') {
     run();
     return;
   }

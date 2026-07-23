@@ -461,7 +461,6 @@ function wireAllUi() {
     if (!(e.ctrlKey || e.metaKey)) return;
     if (String(e.key || '').toLowerCase() !== 'z') return;
     if (isEditableElement(document.activeElement)) return;
-    if (typeof undoLastOperation !== 'function') return;
     e.preventDefault();
     undoLastOperation();
   });
@@ -526,7 +525,6 @@ function wireAllUi() {
       return;
     }
     if (!/^[0-5]$/.test(e.key)) return;
-    if (typeof setRatingForMediaKey !== 'function') return;
     e.preventDefault();
     var rating = Number(e.key);
     setRatingForMediaKey(state.currentItem.key, rating);

@@ -274,7 +274,7 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
 
 function getGroupWorkbenchGridUsageState(term, mediaKeys) {
   var total = Array.isArray(mediaKeys) ? mediaKeys.length : 0;
-  if (total <= 0 || typeof hasTagForMediaKey !== 'function') return 'none';
+  if (total <= 0) return 'none';
   var count = 0;
   mediaKeys.forEach(function (key) {
     if (hasTagForMediaKey(key, term)) count += 1;

@@ -313,10 +313,6 @@ function toggleAnnotateTag(term, options) {
 }
 
 function toggleAnnotateGroupReviewed(mediaKey, requirementLabel) {
-  if (typeof toggleChecklistRequirementCheckedForMediaKey !== 'function') {
-    setStatus('Reviewed toggle is unavailable.');
-    return false;
-  }
   return toggleChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel);
 }
 

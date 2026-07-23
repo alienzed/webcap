@@ -113,7 +113,7 @@ function mediaKeyHasSavedCaption(mediaKey) {
 function checklistMediaHasTag(mediaKey, termText) {
   var key = String(mediaKey || '').trim();
   var term = normalizeChecklistTerm(termText);
-  if (!key || !term || typeof getTagsForMediaKey !== 'function') return false;
+  if (!key || !term) return false;
   var target = term.toLowerCase();
   return getTagsForMediaKey(key).some(function (tag) {
     return normalizeChecklistTerm(tag).toLowerCase() === target;
@@ -516,7 +516,7 @@ function requirementKeywordsMatch(requirementLabel, captionText, mediaKey) {
 function getChecklistSelectedTagsForRequirementForMediaKey(mediaKey, requirementLabel) {
   var key = String(mediaKey || '').trim();
   var requirement = normalizeChecklistRequirementKey(requirementLabel);
-  if (!key || !requirement || typeof getTagsForMediaKey !== 'function') return [];
+  if (!key || !requirement) return [];
   var terms = getChecklistKeywordTermsForRequirement(requirement);
   if (!Array.isArray(terms) || !terms.length) return [];
   var termSet = {};
@@ -542,7 +542,6 @@ function moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tagT
   }
   var nextIdx = idx + Number(offset || 0);
   if (idx < 0 || nextIdx < 0 || nextIdx >= tags.length) return false;
-  if (typeof swapTagOrderForMediaKey !== 'function') return false;
   return swapTagOrderForMediaKey(mediaKey, tags[idx], tags[nextIdx]);
 }
 

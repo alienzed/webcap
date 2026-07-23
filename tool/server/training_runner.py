@@ -747,6 +747,47 @@ def _bind_job_run_path_from_log(job, log_text):
     job["updatedAt"] = time.time()
 
 
+def _sync_job_log_evidence(job):
+    log_path = Path(job.get("logPath") or "")
+    if not log_path.is_file():
+        return "", None
+    try:
+        log_mtime = log_path.stat().st_mtime
+        tail = _read_log_tail(log_path)
+    except OSError:
+        return "", None
+    if "[webcap] stage=wan21" in tail:
+        job["stage"] = "wan21"
+    elif "[webcap] stage=krea2" in tail:
+        job["stage"] = "krea2"
+    elif "[webcap] stage=lo" in tail:
+        job["stage"] = "lo"
+    elif "[webcap] stage=hi" in tail:
+        job["stage"] = "hi"
+    _bind_job_run_path_from_log(job, tail)
+    _sync_job_progress(job, tail)
+    return tail, log_mtime
+
+
+def _apply_terminal_job_status(job, result_status=""):
+    requested_action = str(job.get("actionRequested") or "")
+    if requested_action == "pause":
+        stage = str(job.get("stages") or "")
+        resume_path = str(job.get("outputRunPath") or "").strip()
+        job["resumeFromCheckpoint"] = resume_path
+        job["resumeStage"] = stage if resume_path else ""
+        job["status"] = "paused"
+    elif requested_action == "finish" and result_status != "completed":
+        job["status"] = "finished_early"
+    elif requested_action == "stop":
+        job["status"] = "stopped"
+    elif result_status == "stopped" or not result_status:
+        job["status"] = "interrupted"
+    else:
+        job["status"] = result_status
+    return requested_action
+
+
 def _refresh_job(job):
     if str(job.get("status")) not in ACTIVE_STATUSES:
         return
@@ -755,43 +796,14 @@ def _refresh_job(job):
     result = _read_result(job)
     if result:
         result_status = str(result.get("status") or "failed")
-        requested_action = str(job.get("actionRequested") or "")
-        log_path = Path(job.get("logPath") or "")
-        failure_excerpt = ""
-        if log_path.is_file():
-            try:
-                tail = _read_log_tail(log_path)
-                failure_excerpt = tail[-8192:]
-                if "[webcap] stage=wan21" in tail:
-                    job["stage"] = "wan21"
-                elif "[webcap] stage=krea2" in tail:
-                    job["stage"] = "krea2"
-                elif "[webcap] stage=lo" in tail:
-                    job["stage"] = "lo"
-                elif "[webcap] stage=hi" in tail:
-                    job["stage"] = "hi"
-                _bind_job_run_path_from_log(job, tail)
-                _sync_job_progress(job, tail)
-            except OSError:
-                pass
+        tail, _ = _sync_job_log_evidence(job)
+        failure_excerpt = tail[-8192:]
         job.pop("confirmationNote", None)
         job.pop("error", None)
         exit_code = int(result.get("exitCode") or 0)
-        if requested_action == "pause":
-            stage = str(job.get("stages") or "")
-            resume_path = str(job.get("outputRunPath") or "").strip()
-            job["resumeFromCheckpoint"] = resume_path
-            job["resumeStage"] = stage if resume_path else ""
-            job["status"] = "paused"
-        elif requested_action == "finish" and result_status != "completed":
-            job["status"] = "finished_early"
-        elif requested_action == "stop":
-            job["status"] = "stopped"
-        elif result_status == "stopped":
-            job["status"] = "interrupted"
+        requested_action = _apply_terminal_job_status(job, result_status)
+        if job["status"] == "interrupted" and result_status == "stopped" and requested_action not in ("pause", "finish", "stop"):
             job["error"] = "Runner stopped without a WebCap stop or pause action."
-        else:
-            job["status"] = result_status
         job["exitCode"] = exit_code
         if job["status"] == "failed":
             job["failureScope"] = "unknown"
@@ -805,26 +817,10 @@ def _refresh_job(job):
         _annotate_finished_early_job(job)
         return
     now = time.time()
-    log_has_progress = False
-    log_path = Path(job.get("logPath") or "")
-    if log_path.exists():
-        try:
-            log_mtime = log_path.stat().st_mtime
-            job["lastLogAt"] = log_mtime
-            tail = _read_log_tail(log_path)
-            log_has_progress = _log_has_progress(tail)
-            if "[webcap] stage=wan21" in tail:
-                job["stage"] = "wan21"
-            elif "[webcap] stage=krea2" in tail:
-                job["stage"] = "krea2"
-            elif "[webcap] stage=lo" in tail:
-                job["stage"] = "lo"
-            elif "[webcap] stage=hi" in tail:
-                job["stage"] = "hi"
-            _bind_job_run_path_from_log(job, tail)
-            _sync_job_progress(job, tail)
-        except OSError:
-            pass
+    tail, log_mtime = _sync_job_log_evidence(job)
+    log_has_progress = _log_has_progress(tail)
+    if log_mtime is not None:
+        job["lastLogAt"] = log_mtime
     runner_pid = _job_runner_pid(job)
     if runner_pid:
         job["pid"] = runner_pid
@@ -837,20 +833,9 @@ def _refresh_job(job):
         job["updatedAt"] = now
         _trigger_scheduled_finish(job)
         return
-    requested_action = str(job.get("actionRequested") or "")
     job.pop("confirmationNote", None)
-    if requested_action == "pause":
-        stage = str(job.get("stages") or "")
-        resume_path = str(job.get("outputRunPath") or "").strip()
-        job["resumeFromCheckpoint"] = resume_path
-        job["resumeStage"] = stage if resume_path else ""
-        job["status"] = "paused"
-    elif requested_action == "finish":
-        job["status"] = "finished_early"
-    elif requested_action == "stop":
-        job["status"] = "stopped"
-    else:
-        job["status"] = "interrupted"
+    requested_action = _apply_terminal_job_status(job)
+    if requested_action not in ("pause", "finish", "stop"):
         job["error"] = "Training runner is no longer available and did not write a result record."
     job["finishedAt"] = now
     job["updatedAt"] = now

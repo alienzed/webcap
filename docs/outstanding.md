@@ -6,10 +6,8 @@ Last reviewed: 2026-07-10.
 
 ## Bugs
 - Rename video clip requires manual folder refresh to show new name
-- Finished early in recent runs, some have, finished early by the user, I find this redundant, is this space used for other types of messages?
 
 ## Enhancements / Ideas
-
 
 
 ## Documentation Sync Notes

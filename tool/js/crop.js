@@ -175,7 +175,7 @@ function closeCropModal() {
 }
 
 function buildCroppedImageDataUrl() {
-  if (!cropperInstance || typeof cropperInstance.getCroppedCanvas !== 'function') {
+  if (!cropperInstance) {
     throw new Error('Cropper is not ready');
   }
   var canvas = cropperInstance.getCroppedCanvas({
@@ -183,7 +183,7 @@ function buildCroppedImageDataUrl() {
     imageSmoothingQuality: 'high',
     fillColor: '#000000'
   });
-  if (!canvas || typeof canvas.toDataURL !== 'function') {
+  if (!canvas) {
     throw new Error('Unable to render cropped image');
   }
   var dataUrl = canvas.toDataURL('image/png');

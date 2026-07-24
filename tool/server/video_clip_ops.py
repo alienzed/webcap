@@ -1,5 +1,6 @@
 import math
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -184,6 +185,51 @@ def _run_clip_ffmpeg_overwrite_source(source_path, start_sec, duration_sec, crop
             pass
 
 
+def _copy_clip_caption(source_path, out_path):
+    source_caption = source_path.with_suffix(".txt")
+    if not source_caption.exists() or not source_caption.is_file():
+        return
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=out_path.stem + "_caption_tmp_",
+        suffix=".txt",
+        dir=str(out_path.parent),
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        shutil.copyfile(source_caption, tmp_path)
+        os.replace(tmp_path, out_path.with_suffix(".txt"))
+        normalize_path_permissions(out_path.with_suffix(".txt"))
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+
+
+def _run_clip_ffmpeg_new_file(source_path, out_path, start_sec, duration_sec, crop_rect):
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=out_path.stem + "_clip_tmp_",
+        suffix=out_path.suffix or ".mp4",
+        dir=str(out_path.parent),
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        _run_clip_ffmpeg(source_path, tmp_path, start_sec, duration_sec, crop_rect)
+        os.replace(tmp_path, out_path)
+        normalize_path_permissions(out_path)
+        _copy_clip_caption(source_path, out_path)
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+
+
 def _format_signature(source_path, out_path, start_sec, duration_sec, crop_rect):
     return "|".join([
         str(source_path).lower(),
@@ -272,7 +318,7 @@ def _clip_worker_loop():
                     job["crop"],
                 )
             else:
-                _run_clip_ffmpeg(
+                _run_clip_ffmpeg_new_file(
                     Path(job["sourcePath"]),
                     Path(job["outputPath"]),
                     float(job["startSec"]),
@@ -362,6 +408,8 @@ def clip_video_response(data):
             output_name = _normalize_output_name(output_name_raw)
             set_folder = src_folder.parent if in_src_videos else src_folder
             out_path = set_folder / output_name
+            if out_path == source_path:
+                return jsonify({"error": "Use source overwrite mode when the output name matches the source"}), 400
             if out_path.exists() and not overwrite:
                 return jsonify({"error": "Output file already exists", "requiresOverwrite": True, "outputName": output_name}), 409
 

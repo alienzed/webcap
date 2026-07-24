@@ -11,6 +11,7 @@ var videoClipInlineCropper = null;
 var videoClipCropEditActive = false;
 var videoClipLoopPreviewActive = false;
 var videoClipPlaybackRate = 1;
+var videoClipRangeDrag = null;
 
 function clearVideoClipStatusPoll() {
   if (videoClipStatusPollTimer) {
@@ -203,6 +204,30 @@ function normalizeVideoClipOutputName(name) {
   return value;
 }
 
+function shouldVideoClipOverwriteSource(outputName) {
+  if (isVideoClipInSrcVideosFolder() || !videoClipTargetItem || !videoClipTargetItem.fileName) {
+    return false;
+  }
+  var rawOutput = String(outputName || '').trim().toLowerCase();
+  var sourceName = String(videoClipTargetItem.fileName || '').trim().toLowerCase();
+  if (!rawOutput || !sourceName) return false;
+  if (rawOutput === sourceName) return true;
+  return getFileExtension(sourceName) === '.mp4' &&
+    normalizeVideoClipOutputName(rawOutput).toLowerCase() === sourceName;
+}
+
+function syncVideoClipOutputMode() {
+  var outputEl = getVideoClipEl('video-clip-output-input');
+  videoClipOverwriteSourceMode = shouldVideoClipOverwriteSource(outputEl ? outputEl.value : '');
+  var titleEl = getVideoClipEl('video-clip-title');
+  if (titleEl && videoClipTargetItem && videoClipTargetItem.fileName) {
+    titleEl.textContent = videoClipOverwriteSourceMode
+      ? ('Clip video (overwrite source): ' + videoClipTargetItem.fileName)
+      : ('Clip video: ' + videoClipTargetItem.fileName);
+  }
+  return videoClipOverwriteSourceMode;
+}
+
 function getVideoClipCurrentCrop() {
   if (!videoClipPendingCrop) return null;
   return {
@@ -263,7 +288,7 @@ function setVideoClipBusy(isBusy) {
   videoClipCropBusy = !!isBusy;
   updateVideoClipExportAvailability();
   var outputEl = getVideoClipEl('video-clip-output-input');
-  if (outputEl) outputEl.disabled = videoClipCropBusy || videoClipOverwriteSourceMode;
+  if (outputEl) outputEl.disabled = videoClipCropBusy;
   var startEl = getVideoClipEl('video-clip-start-input');
   if (startEl) startEl.disabled = videoClipCropBusy;
   var endEl = getVideoClipEl('video-clip-end-input');
@@ -425,43 +450,21 @@ function updateVideoClipCropSummary() {
   var label = getVideoClipRatioLabel(videoClipCropRatio);
   if (videoClipCropEditActive) {
     summaryEl.textContent = 'Editing ' + label + ' crop on the preview stage. Apply or cancel when it looks right.';
+    summaryEl.classList.remove('hidden');
     return;
   }
   if (crop) {
     summaryEl.textContent = 'Applied ' + label + ' crop at ' + Math.round(crop.width) + ' x ' + Math.round(crop.height) + ' px.';
+    summaryEl.classList.remove('hidden');
     return;
   }
-  summaryEl.textContent = 'Ratio: ' + label + '. No crop placed; export uses the full frame.';
+  summaryEl.textContent = '';
+  summaryEl.classList.add('hidden');
 }
 
 function updateVideoClipExportSummary() {
-  var summaryEl = getVideoClipEl('video-clip-export-summary');
   var stateNoteEl = getVideoClipEl('video-clip-export-state-note');
-  if (!summaryEl) return;
-
-  var outputEl = getVideoClipEl('video-clip-output-input');
-  var range = readVideoClipTrimState();
-  if (!range || !outputEl) {
-    summaryEl.textContent = '';
-    if (stateNoteEl) {
-      stateNoteEl.textContent = '';
-      stateNoteEl.classList.add('hidden');
-    }
-    updateVideoClipExportAvailability();
-    return;
-  }
-
-  var outputName = videoClipOverwriteSourceMode
-    ? String(videoClipTargetItem && videoClipTargetItem.fileName || '')
-    : normalizeVideoClipOutputName(outputEl.value || '');
-  var crop = getVideoClipCurrentCrop();
-  var cropText = crop
-    ? ('Crop ' + Math.round(crop.width) + ' x ' + Math.round(crop.height) + ' px')
-    : 'Full frame';
-
-  summaryEl.textContent = (outputName || 'Set output name') + ' | ' +
-    formatVideoClipSeconds(range.start) + 's -> ' + formatVideoClipSeconds(range.end) + 's (' + formatVideoClipSeconds(range.duration) + 's) | ' +
-    cropText;
+  syncVideoClipOutputMode();
 
   if (stateNoteEl) {
     var unchanged = false;
@@ -528,6 +531,56 @@ function updateVideoClipTimelineUi() {
   updateVideoClipExportSummary();
 }
 
+function endVideoClipRangeDrag(event) {
+  var drag = videoClipRangeDrag;
+  if (!drag) return;
+  if (event && event.pointerId !== undefined && event.pointerId !== drag.pointerId) return;
+  var selectionEl = getVideoClipEl('video-clip-selection-range');
+  if (selectionEl) {
+    selectionEl.classList.remove('is-dragging');
+    try {
+      if (selectionEl.hasPointerCapture && selectionEl.hasPointerCapture(drag.pointerId)) {
+        selectionEl.releasePointerCapture(drag.pointerId);
+      }
+    } catch (e) {}
+  }
+  videoClipRangeDrag = null;
+}
+
+function beginVideoClipRangeDrag(event) {
+  if (videoClipCropBusy || videoClipCropEditActive || (event.button !== undefined && event.button !== 0)) return;
+  var selectionEl = getVideoClipEl('video-clip-selection-range');
+  var trackEl = selectionEl && selectionEl.parentElement;
+  var range = readVideoClipTrimState();
+  if (!selectionEl || !trackEl || !range || range.sourceDuration <= 0 || range.duration <= 0) return;
+  var rect = trackEl.getBoundingClientRect();
+  if (!rect || rect.width <= 0) return;
+
+  videoClipRangeDrag = {
+    pointerId: event.pointerId,
+    originClientX: Number(event.clientX || 0),
+    originStart: range.start,
+    duration: range.duration,
+    sourceDuration: range.sourceDuration,
+    trackWidth: rect.width
+  };
+  selectionEl.classList.add('is-dragging');
+  selectionEl.setPointerCapture(event.pointerId);
+  event.preventDefault();
+}
+
+function moveVideoClipRangeDrag(event) {
+  var drag = videoClipRangeDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  var deltaSeconds = ((Number(event.clientX || 0) - drag.originClientX) / drag.trackWidth) * drag.sourceDuration;
+  var maxStart = Math.max(0, drag.sourceDuration - drag.duration);
+  var nextStart = Math.max(0, Math.min(maxStart, drag.originStart + deltaSeconds));
+  var range = clampVideoClipRange(nextStart, nextStart + drag.duration, drag.sourceDuration);
+  writeVideoClipTrimInputs(range);
+  seekVideoClipPlayhead(range.start);
+  event.preventDefault();
+}
+
 function isVideoFileName(fileName) {
   var ext = getFileExtension(fileName || '');
   return !!MEDIA_EXTENSIONS[ext] && ['.mp4', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.m4v'].indexOf(ext) !== -1;
@@ -571,6 +624,7 @@ function buildVideoClipFullFrameCrop() {
 }
 
 function closeVideoClipModal() {
+  endVideoClipRangeDrag();
   clearVideoClipStatusPoll();
   stopVideoClipLoopPreview();
   videoClipCropEditActive = false;
@@ -640,7 +694,7 @@ function openVideoClipModal(mediaItem) {
   }
 
   videoClipTargetItem = mediaItem;
-  videoClipOverwriteSourceMode = !isVideoClipInSrcVideosFolder();
+  videoClipOverwriteSourceMode = false;
   videoClipSourceResolution = null;
   videoClipLastExportSignature = '';
   videoClipLoopPreviewActive = false;
@@ -654,8 +708,8 @@ function openVideoClipModal(mediaItem) {
   updateVideoClipCropButtons();
 
   var stem = mediaItem.fileName.replace(/\.[^.]+$/, '');
-  outputEl.value = videoClipOverwriteSourceMode ? mediaItem.fileName : (stem + '_clip');
-  outputEl.disabled = videoClipOverwriteSourceMode;
+  outputEl.value = isVideoClipInSrcVideosFolder() ? (stem + '_clip') : mediaItem.fileName;
+  outputEl.disabled = false;
   startEl.value = '0';
   trimEndEl.value = '2.000';
   durationEl.value = '2.0';
@@ -664,9 +718,7 @@ function openVideoClipModal(mediaItem) {
   if (cropFrameBtn) cropFrameBtn.disabled = true;
   syncVideoClipTrimInputs('duration');
 
-  titleEl.textContent = videoClipOverwriteSourceMode
-    ? ('Clip video (overwrite source): ' + mediaItem.fileName)
-    : ('Clip video: ' + mediaItem.fileName);
+  syncVideoClipOutputMode();
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
   focusFirstModalTextField(modal);
@@ -731,7 +783,8 @@ function getVideoClipPayload(overwrite) {
   }
 
   var outputName = String(outputEl.value || '').trim();
-  if (!videoClipOverwriteSourceMode && !outputName) {
+  syncVideoClipOutputMode();
+  if (!outputName) {
     throw new Error('Output name is required');
   }
   if (videoClipOverwriteSourceMode) {
@@ -1090,6 +1143,7 @@ function wireVideoClipModal() {
   var durationEl = getVideoClipEl('video-clip-duration-input');
   var outputEl = getVideoClipEl('video-clip-output-input');
   var videoEl = getVideoClipEl('video-clip-video');
+  var selectionEl = getVideoClipEl('video-clip-selection-range');
 
   if (exportBtn) exportBtn.onclick = function () { applyVideoClip(false, false); };
   if (cancelBtn) cancelBtn.onclick = closeVideoClipModal;
@@ -1123,6 +1177,14 @@ function wireVideoClipModal() {
         applyVideoClip(false, false);
       }
     });
+  }
+
+  if (selectionEl) {
+    selectionEl.addEventListener('pointerdown', beginVideoClipRangeDrag);
+    selectionEl.addEventListener('pointermove', moveVideoClipRangeDrag);
+    selectionEl.addEventListener('pointerup', endVideoClipRangeDrag);
+    selectionEl.addEventListener('pointercancel', endVideoClipRangeDrag);
+    selectionEl.addEventListener('lostpointercapture', endVideoClipRangeDrag);
   }
 
   if (startEl && videoEl) {

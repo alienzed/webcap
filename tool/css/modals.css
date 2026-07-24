@@ -1520,6 +1520,14 @@ body.focused-annotation-open .caption-context-menu {
   border: 1px solid rgba(125, 211, 252, 0.72);
   border-radius: 2px;
   background: rgba(14, 165, 233, 0.34);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.video-clip-selection-range.is-dragging {
+  cursor: grabbing;
+  background: rgba(14, 165, 233, 0.48);
 }
 
 .video-clip-playhead {
@@ -1530,6 +1538,7 @@ body.focused-annotation-open .caption-context-menu {
   width: 2px;
   background: #f97316;
   box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.25);
+  pointer-events: none;
 }
 
 .video-clip-timeline-ticks {

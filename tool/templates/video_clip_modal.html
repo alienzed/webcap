@@ -114,9 +114,7 @@
 
                 <div class="video-clip-setting-group">
                     <div class="video-clip-form-label">Crop Ratio</div>
-                    <div id="video-clip-crop-summary" class="video-clip-section-note">
-                        Ratio: 1:1. No crop placed yet.
-                    </div>
+                    <div id="video-clip-crop-summary" class="video-clip-section-note hidden"></div>
                     <div class="video-clip-ratio-row" role="group" aria-label="Crop aspect ratio">
                         <button type="button" class="video-clip-ratio-btn active" data-ratio="1">1:1</button>
                         <button type="button" class="video-clip-ratio-btn" data-ratio="1.3333333333">4:3</button>
@@ -128,14 +126,13 @@
                         <button id="video-clip-crop-apply-btn" type="button" class="video-clip-inline-btn hidden">Apply Crop</button>
                         <button id="video-clip-crop-cancel-btn" type="button" class="video-clip-inline-btn hidden">Cancel</button>
                         <button id="video-clip-crop-clear-btn" type="button" class="video-clip-inline-btn hidden">Clear</button>
-                        <span id="video-clip-size-readout" class="video-clip-size-readout">0 x 0 px</span>
+                        <span id="video-clip-size-readout" class="video-clip-size-readout">Full frame</span>
                     </div>
                 </div>
 
                 <div class="video-clip-setting-group">
                     <label for="video-clip-output-input" class="video-clip-form-label">Output</label>
                     <input id="video-clip-output-input" type="text" value="">
-                    <div id="video-clip-export-summary" class="video-clip-section-note"></div>
                     <div id="video-clip-export-state-note" class="video-clip-section-note hidden"></div>
                 </div>
 

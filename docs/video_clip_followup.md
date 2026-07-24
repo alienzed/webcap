@@ -2,8 +2,16 @@
 
 ## Status
 
-This note records the preferred next direction for the existing Clip tool. It is
-not an implementation specification for automatic dataset segmentation.
+The focused Clip modal improvements were implemented on 2026-07-24:
+
+- Output naming is editable in every folder while retaining the existing
+  overwrite-first default outside `src_videos`.
+- A changed output name creates a sibling clip atomically and copies the source
+  caption.
+- The blue timeline range moves Start and End together by pointer drag.
+- Redundant full-frame and export-summary rows were removed.
+
+The automatic dataset segmentation ideas remain intentionally deferred.
 
 ## Product Direction
 

@@ -100,6 +100,36 @@ def test_app_config_get_prefers_disk_config(monkeypatch):
     assert response.get_json()["filesystem"]["root"] == "C:/disk-root"
 
 
+def test_training_root_permission_repair_runs_in_background_and_prints_failure(monkeypatch, capsys):
+    captured = {}
+
+    class ImmediateThread:
+        def __init__(self, target, name, daemon):
+            captured.update(target=target, name=name, daemon=daemon)
+
+        def start(self):
+            captured["started"] = True
+            captured["target"]()
+
+    monkeypatch.setattr(app_module.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(
+        app_module,
+        "repair_configured_training_root_permissions",
+        lambda: "Could not restore training-root permissions: denied",
+    )
+    monkeypatch.setattr(app_module.time, "monotonic", lambda: 10.0)
+
+    thread = app_module.start_training_root_permission_repair()
+    output = capsys.readouterr().out
+
+    assert isinstance(thread, ImmediateThread)
+    assert captured["started"] is True
+    assert captured["name"] == "webcap-training-root-permissions"
+    assert captured["daemon"] is True
+    assert "[webcap] Restoring configured training-root permissions in the background." in output
+    assert "[webcap] Could not restore training-root permissions: denied (0.0s)" in output
+
+
 def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
     monkeypatch.setattr(app_module.app_config, "CONFIG_PATH", config_path)

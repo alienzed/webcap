@@ -1,4 +1,5 @@
 import os
+import posixpath
 import shlex
 import shutil
 import subprocess
@@ -111,20 +112,46 @@ def pid_alive(pid, distribution=""):
     return code == 0
 
 
-def repair_training_set_permissions(folder_path, distribution=""):
-    """Restore WSL access to the training inputs without touching reversible originals."""
+def _repair_permissions_recursively(path, distribution, timeout, label):
     try:
-        wsl_folder = to_wsl_path(folder_path, distribution)
+        wsl_path = to_wsl_path(path, distribution)
     except Exception as exc:
-        return "Could not resolve the training set path in WSL: " + str(exc)
-    quoted_folder = shlex.quote(wsl_folder)
-    command = (
-        "chmod 775 -- " + quoted_folder
-        + " && find " + quoted_folder + " -type d -name originals -prune -o -type d -exec chmod 775 {} +"
-        + " && find " + quoted_folder + " -type d -name originals -prune -o -type f -exec chmod 664 {} +"
-    )
-    code, stdout, stderr = run_wsl(command, timeout=120, distribution=distribution)
+        return "Could not resolve the " + label + " path in WSL: " + str(exc)
+    command = "chmod -R 775 -- " + shlex.quote(wsl_path)
+    code, stdout, stderr = run_wsl(command, timeout=timeout, distribution=distribution)
     if code == 0:
         return ""
     detail = (stderr or stdout).strip() or ("exit " + str(code))
-    return "Could not restore training-set permissions: " + detail
+    return "Could not restore " + label + " permissions: " + detail
+
+
+def repair_configured_training_root_permissions():
+    """Restore access throughout the configured training root."""
+    settings = configured_training_settings()
+    return _repair_permissions_recursively(
+        app_config.FS_ROOT,
+        settings["wslDistribution"],
+        timeout=600,
+        label="training-root",
+    )
+
+
+def repair_boot_critical_training_permissions():
+    """Restore the small training subtree required by the managed runner."""
+    settings = configured_training_settings()
+    distribution = settings["wslDistribution"]
+    try:
+        wsl_root = to_wsl_path(app_config.FS_ROOT, distribution)
+    except Exception as exc:
+        return "Could not resolve the training-root path in WSL: " + str(exc)
+    runtime_root = posixpath.join(wsl_root, TRAINING_RUNTIME_DIR_NAME)
+    command = (
+        "chmod 775 -- " + shlex.quote(wsl_root)
+        + " && if [ -e " + shlex.quote(runtime_root) + " ]; then chmod -R 775 -- "
+        + shlex.quote(runtime_root) + "; fi"
+    )
+    code, stdout, stderr = run_wsl(command, timeout=30, distribution=distribution)
+    if code == 0:
+        return ""
+    detail = (stderr or stdout).strip() or ("exit " + str(code))
+    return "Could not restore boot-critical training permissions: " + detail

@@ -43,7 +43,6 @@ from .training_runtime import (
     configured_training_settings as _training_settings,
     has_conda_runtime,
     pid_alive as _pid_alive,
-    repair_training_set_permissions as _repair_training_set_permissions,
     run_wsl as _run_wsl,
     to_wsl_path as _to_wsl_path,
     uses_native_wsl_shell as _uses_native_wsl_shell,
@@ -597,20 +596,6 @@ def _launch_job(job, folder_path):
             job["error"] = "Resume invariant failed: " + str(exc)
             job["finishedAt"] = time.time()
             return False
-    settings = _training_settings()
-    try:
-        last_repair = float(job.get("permissionsRepairedAt") or 0)
-    except (TypeError, ValueError):
-        last_repair = 0
-    if time.time() - last_repair >= 60:
-        permission_error = _repair_training_set_permissions(folder_path, settings["wslDistribution"])
-        if permission_error:
-            job["status"] = "failed"
-            job["stage"] = "permissions"
-            job["error"] = permission_error
-            job["finishedAt"] = time.time()
-            return False
-        job["permissionsRepairedAt"] = time.time()
     stages = job.get("stages") or "both"
     _, _, artifacts, settings, checks = (
         _build_launch_preflight(job["folder"], stages)
@@ -1072,7 +1057,6 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "stage": "queued",
         "createdAt": time.time(),
         "updatedAt": time.time(),
-        "permissionsRepairedAt": time.time(),
         "snapshot": snapshot,
         "artifactPath": str(job_dir),
         "artifactDir": str(job_dir),
@@ -1101,10 +1085,6 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         return {"ok": False, "error": str(exc)}, 400
     try:
         _, folder_path = _resolve_folder(folder)
-        settings = _training_settings()
-        permission_error = _repair_training_set_permissions(folder_path, settings["wslDistribution"])
-        if permission_error:
-            return {"ok": False, "error": permission_error}, 400
         _, folder_path, _, _, checks = _build_launch_preflight(folder, stages)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}, 400

@@ -361,7 +361,6 @@ def test_launch_failure_records_start_before_terminal_time(tmp_path, monkeypatch
         "id": "job",
         "folder": "set",
         "stages": "hi",
-        "permissionsRepairedAt": time.time(),
     }
     blocker = training_preflight.make_check("config", "blocker", False, "Missing config.")
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
@@ -1064,7 +1063,6 @@ def test_starting_both_creates_adjacent_hi_and_lo_jobs(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
-    monkeypatch.setattr(training_runner, "_repair_training_set_permissions", lambda folder, distribution: "")
     monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
     monkeypatch.setattr(training_runner, "_launch_job", lambda job, path: job.update(status="running", stage=job["stages"]))
 
@@ -1098,7 +1096,6 @@ def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypat
     monkeypatch.setattr(training_runner, "_new_job", lambda *args: job)
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
     monkeypatch.setattr(training_runner, "_resolve_folder", lambda folder: ("set", "folder"))
-    monkeypatch.setattr(training_runner, "_repair_training_set_permissions", lambda folder, distribution: "")
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
     monkeypatch.setattr(training_runner, "training_output_group_for_folder", lambda folder, create=False: Path("launch"))
     monkeypatch.setattr(training_runner, "_launch_job", lambda candidate, folder: candidate.update(status="starting"))
@@ -1133,7 +1130,6 @@ def test_starting_krea2_creates_one_krea2_job(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_refresh_state", lambda value: None)
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: tmp_path)
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
-    monkeypatch.setattr(training_runner, "_repair_training_set_permissions", lambda folder, distribution: "")
     monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages: ("set", tmp_path, {}, {}, []))
     monkeypatch.setattr(training_runner, "training_output_group_for_folder", lambda folder, create=False: tmp_path / "001-set")
     monkeypatch.setattr(

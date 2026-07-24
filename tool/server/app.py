@@ -3,6 +3,8 @@ import json
 from flask import Response, stream_with_context
 import traceback
 import re
+import threading
+import time
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
@@ -19,6 +21,7 @@ from .training_runner import TrainingStateError, log_response as training_runner
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .training_config_files import ensure_training_config_files
+from .training_runtime import repair_boot_critical_training_permissions, repair_configured_training_root_permissions
 from .permissions import normalize_path_permissions, run_with_directory_repair
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
@@ -30,6 +33,26 @@ CSS_DIR = TOOL_DIR / "css"
 TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
+
+
+def start_training_root_permission_repair():
+    def repair():
+        started = time.monotonic()
+        print("[webcap] Restoring configured training-root permissions in the background.", flush=True)
+        error = repair_configured_training_root_permissions()
+        elapsed = time.monotonic() - started
+        if error:
+            print(f"[webcap] {error} ({elapsed:.1f}s)", flush=True)
+            return
+        print(f"[webcap] Restored configured training-root permissions ({elapsed:.1f}s).", flush=True)
+
+    thread = threading.Thread(
+        target=repair,
+        name="webcap-training-root-permissions",
+        daemon=True,
+    )
+    thread.start()
+    return thread
 
 
 @app.errorhandler(TrainingStateError)
@@ -840,6 +863,13 @@ def open_in_vscode():
     return open_in_vscode_response(rel_path)
     
 if __name__ == "__main__":
+    print("[webcap] Restoring boot-critical training permissions.", flush=True)
+    boot_permission_error = repair_boot_critical_training_permissions()
+    if boot_permission_error:
+        print(f"[webcap] {boot_permission_error}", flush=True)
+    else:
+        print("[webcap] Restored boot-critical training permissions.", flush=True)
+    start_training_root_permission_repair()
     # Only bind to localhost for desktop/offline use.
     # Disable Flask debug mode for a production-like local runtime.
     app.run(host="127.0.0.1", port=4200, debug=False)

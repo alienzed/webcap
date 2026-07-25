@@ -521,9 +521,36 @@ function renderGroupWorkbench(options) {
     var titleMainEl = document.createElement('div');
     titleMainEl.className = 'group-workbench-group-title-main';
 
-    var titleEl = document.createElement('div');
-    titleEl.className = 'group-workbench-group-title';
+    var titleEl = document.createElement('button');
+    titleEl.type = 'button';
+    titleEl.className = 'group-workbench-group-title group-workbench-reviewed-title-btn';
     titleEl.textContent = requirementLabel;
+    titleEl.title = 'Toggle reviewed';
+    titleEl.setAttribute('aria-label', 'Toggle reviewed for ' + requirementLabel);
+    titleEl.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
+    titleEl.classList.toggle('active', isReviewed);
+    titleEl.classList.toggle('mixed', isReviewedMixed);
+    titleEl.disabled = !hasActionTarget;
+    if (isReviewedMixed) {
+      titleEl.title = 'Mixed reviewed state for ' + requirementLabel;
+      titleEl.setAttribute('aria-label', 'Mixed reviewed state for ' + requirementLabel);
+    }
+    (function (key, label, mode, getMediaKeys, afterMutation, getContextMediaKeys, nextIsReviewed) {
+      bindGroupWorkbenchHeaderButton(titleEl, function () {
+        if (mode === 'grid') {
+          setChecklistRequirementCheckedForMediaKeys(getMediaKeys(), label, !nextIsReviewed, {
+            targetEl: targetEl,
+            contextMediaKeys: getContextMediaKeys(),
+            getContextMediaKeys: getContextMediaKeys,
+            onAfterMutation: afterMutation
+          });
+          return;
+        }
+        if (!key) return;
+        toggleChecklistRequirementCheckedForMediaKey(key, label);
+        refreshGroupWorkbenchForCurrentItem();
+      });
+    })(mediaKey, requirementLabel, opts.mode, opts.getMediaKeys, opts.onAfterMutation, opts.getContextMediaKeys, isReviewed);
 
     var actionsEl = document.createElement('div');
     actionsEl.className = 'group-workbench-group-actions';
@@ -555,33 +582,6 @@ function renderGroupWorkbench(options) {
       });
     })(i, opts.onAfterMutation);
     actionsEl.appendChild(deleteBtn);
-
-    var reviewedBtn = createGroupWorkbenchActionButton('group-workbench-reviewed-btn', '\u2713', 'Toggle reviewed', 'Toggle reviewed for ' + requirementLabel);
-    reviewedBtn.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
-    reviewedBtn.classList.toggle('active', isReviewed);
-    reviewedBtn.classList.toggle('mixed', isReviewedMixed);
-    reviewedBtn.disabled = !hasActionTarget;
-    if (isReviewedMixed) {
-      reviewedBtn.title = 'Mixed reviewed state for ' + requirementLabel;
-      reviewedBtn.setAttribute('aria-label', 'Mixed reviewed state for ' + requirementLabel);
-    }
-    (function (key, label, mode, getMediaKeys, afterMutation, getContextMediaKeys, nextIsReviewed) {
-      bindGroupWorkbenchHeaderButton(reviewedBtn, function () {
-        if (mode === 'grid') {
-          setChecklistRequirementCheckedForMediaKeys(getMediaKeys(), label, !nextIsReviewed, {
-            targetEl: targetEl,
-            contextMediaKeys: getContextMediaKeys(),
-            getContextMediaKeys: getContextMediaKeys,
-            onAfterMutation: afterMutation
-          });
-          return;
-        }
-        if (!key) return;
-        toggleChecklistRequirementCheckedForMediaKey(key, label);
-        refreshGroupWorkbenchForCurrentItem();
-      });
-    })(mediaKey, requirementLabel, opts.mode, opts.getMediaKeys, opts.onAfterMutation, opts.getContextMediaKeys, isReviewed);
-    actionsEl.appendChild(reviewedBtn);
 
     titleMainEl.appendChild(titleEl);
     headerRowEl.appendChild(titleMainEl);

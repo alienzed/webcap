@@ -1396,11 +1396,16 @@ html[data-theme="dark"] .training-runner-card {
 }
 
 .group-workbench-group-title {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: visible;
   text-overflow: clip;
   white-space: normal;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
@@ -1408,8 +1413,29 @@ html[data-theme="dark"] .training-runner-card {
   text-transform: uppercase;
 }
 
+.group-workbench-reviewed-title-btn:hover {
+  border-color: var(--border);
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.group-workbench-reviewed-title-btn.active {
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(34, 197, 94, 0.14);
+  color: #166534;
+}
+
+.group-workbench-reviewed-title-btn.mixed:not(.active) {
+  border-color: rgba(59, 130, 246, 0.42);
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.group-workbench-reviewed-title-btn:disabled {
+  cursor: default;
+}
+
 .group-workbench-group-title-main {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -1712,13 +1738,13 @@ html[data-theme="dark"] .group-workbench-action-btn:hover {
   color: #ffffff;
 }
 
-html[data-theme="dark"] .group-workbench-reviewed-btn.active {
+html[data-theme="dark"] .group-workbench-reviewed-title-btn.active {
   border-color: rgba(74, 222, 128, 0.34);
   background: rgba(34, 197, 94, 0.22);
   color: #dcfce7;
 }
 
-html[data-theme="dark"] .group-workbench-reviewed-btn.mixed:not(.active) {
+html[data-theme="dark"] .group-workbench-reviewed-title-btn.mixed:not(.active) {
   border-color: rgba(96, 165, 250, 0.42);
   background: rgba(30, 64, 175, 0.24);
   color: #bfdbfe;

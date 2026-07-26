@@ -17,13 +17,15 @@ For Wan2.2, `HI -> LO` creates two independent queued jobs. HI and LO are distin
 ## Queue and run controls
 
 - `Train this set` starts when the runner is idle or adds the job behind active work.
-- `Pause` holds the active job and queue until explicitly resumed.
+- `Pause Queue` disables automatic handoff without interrupting the active job.
 - `Finish` intentionally ends the active job and allows queue processing to continue.
 - Canceling a queued item removes that item only; it does not stop the active job.
+- A temporarily unavailable set folder leaves its job and job bundle intact. The queue shows the unavailable source and waits for explicit cancellation or a later launch attempt.
 - The queue exposes ordering, effective launch/stage output paths, output-folder actions, output logs, recent history, GPU status, and checkpoint-resume controls. Queued resume jobs show the checkpoint tag and artifact-derived epoch/step progress. The in-app output view opens at the recent log tail; use **Reveal log file** to inspect the complete `run.log` in Explorer.
-- Any ordinary job failure is recorded loudly and the queue continues. Queue-wide holds are reserved for runner-control uncertainty, explicit user pause, restart confirmation, or invalid queue state. Failed history retains structured preflight checks and at most an 8 KB trainer-log excerpt; the complete `run.log` remains the authoritative log. Lifecycle timing failures are shown as invariant errors rather than formatted as plausible durations.
-- Explicit resume paths are user intent: WebCap requires a real DeepSpeed checkpoint but does not reject it because saved set/stage metadata differs. Automatic checkpoint selection and automatic paused-job continuation apply same-set and same-stage sanity checks. Current LR, epochs, buckets, captions, and generated TOML fingerprints never gate resume.
+- Any ordinary job failure is recorded loudly and the queue continues. Queue-wide holds are reserved for runner-control uncertainty, explicit user pause, restart confirmation, or invalid queue state. Starting WebCap may rediscover a verified live runner, but never launches dormant queued work until the user explicitly starts or resumes the queue. Failed history retains structured preflight checks and at most an 8 KB trainer-log excerpt; the complete `run.log` remains the authoritative log. Lifecycle timing failures are shown as invariant errors rather than formatted as plausible durations.
+- Explicit resume paths are user intent: WebCap requires a real DeepSpeed checkpoint but does not reject it because saved set/stage metadata differs. Current LR, epochs, buckets, captions, and generated TOML fingerprints never gate resume.
 - Queued resume progress is live filesystem state, not a queue-time snapshot: each status refresh rereads `latest`, `global_step*`, and `epoch*` artifacts from the recorded resume directory.
+- Terminal jobs leave the live scheduler after their outcome is written to Recent Runs. If that index cannot be written, the terminal job remains visible until its set folder is available again.
 - Progress is per job. When trainer timing is available, the UI shows completion ETA and the estimated time to the next configured checkpoint.
 - `Run Diagnostics` performs the fuller WSL, runtime, launcher, and CUDA checks. Normal launches use the lighter required checks.
 - TensorBoard can be started, stopped, and opened from the Training workspace when it is available in the configured runtime.

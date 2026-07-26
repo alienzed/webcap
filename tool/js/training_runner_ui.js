@@ -6,10 +6,10 @@ function getTrainingRunnerSelectedJob() {
   }
   var selectedId = trainingWorkspaceState.runnerSelectedJobId;
   for (var i = 0; i < jobs.length; i++) {
-    if (jobs[i].id === selectedId && (jobs[i].status === 'queued' || jobs[i].status === 'paused')) return jobs[i];
+    if (jobs[i].id === selectedId && jobs[i].status === 'queued') return jobs[i];
   }
   for (var queuedIndex = 0; queuedIndex < jobs.length; queuedIndex++) {
-    if (jobs[queuedIndex].status === 'queued' || jobs[queuedIndex].status === 'paused') return jobs[queuedIndex];
+    if (jobs[queuedIndex].status === 'queued') return jobs[queuedIndex];
   }
   return null;
 }
@@ -137,7 +137,7 @@ function fetchTrainingRunnerLog(job, reset) {
   var requestVersion = trainingWorkspaceState.runnerConsoleRequestVersion;
   if (trainingWorkspaceState.runnerConsoleLogRequestVersion === requestVersion) return;
   trainingWorkspaceState.runnerConsoleLogRequestVersion = requestVersion;
-  fetch('/fs/training_runner/log?jobId=' + encodeURIComponent(job.id) + '&offset=' + encodeURIComponent(offset) + (reset ? '&tail=1' : ''))
+  fetch('/fs/training_runner/log?jobId=' + encodeURIComponent(job.id) + '&folder=' + encodeURIComponent(job.folder || '') + '&offset=' + encodeURIComponent(offset) + (reset ? '&tail=1' : ''))
     .then(function (response) { return response.json(); })
     .then(function (payload) {
       if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'Could not load training output.');
@@ -191,7 +191,7 @@ function revealTrainingRunnerLog() {
   trainingRunnerRequest('/fs/training_runner/open_log', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobId: job.id })
+    body: JSON.stringify({ jobId: job.id, folder: job.folder || '' })
   }).then(function () {
     setStatus('Revealed training log file.');
   }).catch(function (err) {
@@ -240,12 +240,18 @@ function refreshTrainingRunnerStatus() {
         return (job.status === 'completed' || job.status === 'finished_early' || job.status === 'failed' || job.status === 'stopped' || job.status === 'cancelled') &&
           priorJobsById[job.id] !== job.status;
       });
+      var currentJobsById = {};
+      trainingWorkspaceState.runnerJobs.forEach(function (job) { currentJobsById[job.id] = true; });
+      var retiredOutcome = Object.keys(priorJobsById).some(function (jobId) {
+        var prior = priorJobsById[jobId];
+        return !currentJobsById[jobId] && prior !== 'queued';
+      });
       var recoveredOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
         var prior = priorJobsById[job.id];
         var active = job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'unconfirmed';
         return active && (prior === 'interrupted' || prior === 'failed' || prior === 'stopped');
       });
-      if (terminalOutcome || recoveredOutcome) {
+      if (terminalOutcome || retiredOutcome || recoveredOutcome) {
         trainingWorkspaceState.historyCollapsed = false;
         refreshTrainingHistory(true);
       }
@@ -451,7 +457,7 @@ function stopManagedTraining(cancel, pause, finish) {
   var job = getTrainingRunnerSelectedJob();
   if (!job || !job.id) return;
   var label = cancel ? 'Cancel this queued training job?' : pause
-    ? 'Pause this job? It will interrupt training, hold the queue, and free the GPU.'
+    ? 'Pause the queue? The current training process will continue, but no next job will start automatically.'
     : finish
       ? 'Finish this run early? Its current output will be kept, the run will be marked finished early, and the queue will continue.'
       : 'Stop this job and continue to the next queued set?';
@@ -461,7 +467,7 @@ function stopManagedTraining(cancel, pause, finish) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jobId: job.id, cancel: !!cancel, pause: !!pause, finish: !!finish })
   }).then(function () {
-    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Pause requested; waiting for the runner result.' : finish ? 'Finish requested; waiting for the runner result.' : 'Stop requested; waiting for the runner result.'));
+    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Training queue paused; the current job will continue.' : finish ? 'Finish requested; waiting for the runner result.' : 'Stop requested; waiting for the runner result.'));
     refreshTrainingRunnerStatus();
     refreshTrainingHistory(true);
   }).catch(function (err) {
@@ -547,6 +553,11 @@ function getTrainingRunnerJobById(jobId) {
   var jobs = trainingWorkspaceState.runnerJobs || [];
   for (var i = 0; i < jobs.length; i++) {
     if (jobs[i].id === jobId) return jobs[i];
+  }
+  var historyJobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
+    ? trainingWorkspaceState.history.jobs : [];
+  for (var historyIndex = 0; historyIndex < historyJobs.length; historyIndex++) {
+    if (historyJobs[historyIndex].id === jobId) return historyJobs[historyIndex];
   }
   return null;
 }
@@ -653,6 +664,9 @@ function buildTrainingQueueHtml(queuedJobs) {
       var workload = workloadParts.length ? '<span class="training-runner-queue-workload">' + escapeHtml(workloadParts.join(' · ')) + '</span>' : '';
       var status = String(queuedJob.status || 'queued');
       var error = queuedJob.error ? '<div class="training-runner-queue-resume">' + escapeHtml(queuedJob.error) + '</div>' : '';
+      var sourceUnavailable = queuedJob.sourceUnavailable
+        ? '<div class="training-runner-queue-resume is-error">' + escapeHtml(queuedJob.sourceUnavailable) + '</div>'
+        : '';
       var resume = queuedJob.resumeFromCheckpoint
         ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(trainingStageLabel(queuedJob.resumeStage || queuedJob.stages || 'both')) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
         : '';
@@ -667,7 +681,7 @@ function buildTrainingQueueHtml(queuedJobs) {
         '<div class="training-runner-queue-copy">' +
           '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(stage) + '</strong>' + workload + '</div>' +
           '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
-          resume + buildQueuedResumePointHtml(queuedJob) + output + error +
+          resume + buildQueuedResumePointHtml(queuedJob) + output + sourceUnavailable + error +
         '</div>' +
         '<div class="training-runner-queue-controls">' +
           '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' +
@@ -767,8 +781,8 @@ function buildTrainingGpuStatusHtml() {
 }
 
 function trainingQueueHoldLabel() {
-  return trainingWorkspaceState.runnerQueuePauseReason === 'Queue held after WebCap restarted.'
-    ? 'Queue needs confirmation'
+  return trainingWorkspaceState.runnerQueuePauseReason === 'Queue waiting for manual start after WebCap restarted.'
+    ? 'Queue waiting for manual start'
     : (trainingWorkspaceState.runnerQueuePauseReason || 'Queue paused');
 }
 
@@ -778,7 +792,9 @@ function trainingFolderName(folder) {
 }
 
 function trainingQueueStartLabel() {
-  return /^Queue held:/i.test(trainingWorkspaceState.runnerQueuePauseReason || '') ? 'Continue with next job' : 'Resume Queue';
+  return trainingWorkspaceState.runnerQueuePauseReason === 'Queue waiting for manual start after WebCap restarted.'
+    ? 'Start Queue'
+    : /^Queue held:/i.test(trainingWorkspaceState.runnerQueuePauseReason || '') ? 'Continue with next job' : 'Resume Queue';
 }
 
 function syncTrainingQueueResumeButton(els, queuedJobs) {
@@ -835,13 +851,10 @@ function renderTrainingRunner() {
   }
   var jobs = trainingWorkspaceState.runnerJobs || [];
   var activeCount = jobs.filter(function (job) { return job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'unconfirmed'; }).length;
-  var queuedJobs = jobs.filter(function (job) { return job.status === 'queued' || job.status === 'paused'; });
+  var queuedJobs = jobs.filter(function (job) { return job.status === 'queued'; });
   var queuedCount = queuedJobs.length;
   var job = getTrainingRunnerActiveJob();
   var followingQueuedJobs = queuedJobs;
-  if (job && job.status === 'paused' && queuedJobs[0] && queuedJobs[0].id === job.id) {
-    followingQueuedJobs = queuedJobs.slice(1);
-  }
   if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
   syncTrainingQueueResumeButton(els, queuedJobs);
   if (els.runnerQueue) {
@@ -890,11 +903,11 @@ function renderTrainingRunner() {
         : 'Training runner status: ' + statusLabel + '.';
   var running = status === 'starting' || status === 'running' || status === 'stopping';
   var canScheduleFinish = status === 'starting' || status === 'running' || status === 'unconfirmed';
-  var queued = status === 'queued' || status === 'paused';
-  var queueState = trainingWorkspaceState.runnerQueuePaused && status !== 'paused'
+  var queued = status === 'queued';
+  var queueState = trainingWorkspaceState.runnerQueuePaused
     ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + ' — no job will start automatically</span>'
     : '';
-  var selectedQueuePosition = queued && status !== 'paused' ? queuedJobs.indexOf(job) + 1 : 0;
+  var selectedQueuePosition = queued ? queuedJobs.indexOf(job) + 1 : 0;
   var runOutputPath = String(job.outputRunPath || '').trim();
   var finishAfterEpoch = Number(job.finishAfterEpoch);
   var finishScheduleTitle = isFinite(finishAfterEpoch) && finishAfterEpoch > 0
@@ -929,7 +942,7 @@ function renderTrainingRunner() {
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
   if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !running);
-  if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !running);
+  if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !running || trainingWorkspaceState.runnerQueuePaused);
   if (els.runnerCancelBtn) els.runnerCancelBtn.classList.toggle('hidden', !queued);
   if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
   if (!activeCount && !queuedCount && !trainingWorkspaceState.runnerQueuePaused && status !== 'failed' && status !== 'completed' && status !== 'finished_early' && status !== 'stopped') {

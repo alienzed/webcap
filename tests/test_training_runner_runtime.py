@@ -11,6 +11,11 @@ from tool.server import config as config_module
 from tool.server.training_runtime import training_runtime_settings
 
 
+@pytest.fixture(autouse=True)
+def mark_startup_reconciled_for_runtime_tests(monkeypatch):
+    monkeypatch.setattr(training_runner, "_startup_reconciled", True)
+
+
 def test_invalid_existing_queue_state_is_preserved(tmp_path, monkeypatch):
     root = tmp_path / "training"
     state_path = root / ".webcap_training" / "queue.json"
@@ -89,7 +94,7 @@ def test_queue_state_cannot_disappear_after_webcap_has_seen_it(tmp_path, monkeyp
         training_runner._read_state()
 
 
-@pytest.mark.parametrize("status", ["running", "queued", "paused"])
+@pytest.mark.parametrize("status", ["running", "queued"])
 def test_state_writer_refuses_to_drop_a_managed_job(tmp_path, monkeypatch, status):
     root = tmp_path / "training"
     state_path = root / ".webcap_training" / "queue.json"
@@ -123,6 +128,22 @@ def test_state_reader_refuses_a_valid_file_that_drops_a_managed_job(tmp_path, mo
 
     with pytest.raises(training_runner.TrainingStateError, match="dropped managed jobs"):
         training_runner._read_state()
+
+
+def test_state_writer_allows_an_explicit_terminal_retirement(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+    training_runner._write_state({
+        "version": 3, "activeJobId": "live", "jobs": [{"id": "live", "status": "running"}],
+        "queuePaused": False, "queuePauseReason": "",
+    })
+    retired = training_runner._default_state()
+
+    training_runner._write_state(retired, retired_job_ids={"live"})
+
+    assert json.loads((root / ".webcap_training" / "queue.json").read_text(encoding="utf-8")) == retired
 
 
 def test_runner_script_uses_conda_run_without_sourcing_an_activation_script(tmp_path, monkeypatch):
@@ -292,13 +313,14 @@ def test_open_output_prefers_the_bound_timestamp_run_directory(tmp_path, monkeyp
     assert training_runner.output_path_for_job("job") == run
 
 
-def test_paused_job_uses_its_bound_run_path_before_legacy_discovery(monkeypatch):
+def test_legacy_paused_job_becomes_queued_with_its_bound_resume_path():
     job = {"folder": "set", "stages": "lo", "status": "paused", "outputRunPath": "/mnt/w/output/run"}
-    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
-    monkeypatch.setattr(training_runner, "validate_resumable_run_for_path", lambda folder, stage, path: {"path": path})
 
-    assert training_runner._prepare_paused_job_for_resume(job) == ""
+    training_runner._queue_legacy_paused_job(job)
+
+    assert job["status"] == "queued"
     assert job["resumeFromCheckpoint"] == "/mnt/w/output/run"
+    assert job["resumeStage"] == "lo"
 
 
 def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
@@ -504,41 +526,22 @@ def test_queue_refresh_reads_resume_progress_from_disk(tmp_path, monkeypatch):
     assert job["resumePoint"]["step"] == 640
 
 
-def test_launch_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):
+def test_legacy_paused_item_becomes_queued_and_holds_the_global_queue(monkeypatch):
     paused = {"id": "paused", "status": "paused", "folder": "penny", "stages": "lo"}
     queued = {"id": "next", "status": "queued", "folder": "sue", "stages": "hi"}
     state = {"queuePaused": False, "activeJobId": "", "jobs": [paused, queued]}
-    launched = []
-    monkeypatch.setattr(training_runner, "_prepare_paused_job_for_resume", lambda job: job.update(status="queued") or "")
-    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
-    monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: launched.append(job["id"]) or job.update(status="starting"))
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("queue must remain held")))
 
-    training_runner._launch_next_queued_job(state)
+    training_runner._refresh_state(state)
 
-    assert launched == ["paused"]
-    assert state["activeJobId"] == "paused"
+    assert paused["status"] == "queued"
+    assert "resumeFromCheckpoint" not in paused
     assert queued["status"] == "queued"
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"] == "Queue paused by the user."
 
 
-def test_paused_job_without_a_bound_path_fails_the_resume_invariant(monkeypatch):
-    job = {"folder": "set", "stages": "lo", "status": "paused", "actionRequested": "pause"}
-    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
-
-    assert "no recorded output run path" in training_runner._prepare_paused_job_for_resume(job)
-
-
-def test_paused_job_with_an_invalid_recorded_checkpoint_fails_loudly(monkeypatch):
-    job = {
-        "folder": "set", "stages": "lo", "status": "paused",
-        "actionRequested": "pause", "outputRunPath": "stale-path",
-    }
-    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
-    monkeypatch.setattr(training_runner, "validate_resumable_run_for_path", lambda *args: (_ for _ in ()).throw(ValueError("missing latest")))
-
-    assert training_runner._prepare_paused_job_for_resume(job) == "Resume invariant failed: missing latest"
-
-
-def test_user_paused_job_stays_at_the_front_of_the_queue(monkeypatch):
+def test_legacy_paused_job_keeps_its_queue_position(monkeypatch):
     paused = {"id": "paused", "folder": "penny", "stages": "lo", "status": "paused", "createdAt": 1}
     state = {
         "activeJobId": "",
@@ -551,10 +554,13 @@ def test_user_paused_job_stays_at_the_front_of_the_queue(monkeypatch):
     training_runner._refresh_state(state)
 
     assert state["activeJobId"] == ""
+    assert [job["id"] for job in state["jobs"]] == ["paused", "next"]
+    assert paused["status"] == "queued"
     assert state["queuePauseReason"] == "Queue paused by the user."
 
 
 def test_restart_reconciles_a_live_run_before_handing_off_to_its_queue(monkeypatch):
+    monkeypatch.setattr(training_runner, "_startup_reconciled", False)
     state = {
         "queuePaused": False,
         "queuePauseReason": "",
@@ -575,26 +581,28 @@ def test_restart_reconciles_a_live_run_before_handing_off_to_its_queue(monkeypat
     assert state["activeJobId"] == "active"
     assert state["jobs"][0]["status"] == "starting"
     assert state["jobs"][1]["status"] == "queued"
+    assert training_runner._startup_reconciled is True
 
 
-def test_restart_continues_a_dormant_queue(monkeypatch):
+def test_restart_holds_a_dormant_queue_for_manual_start(monkeypatch):
+    monkeypatch.setattr(training_runner, "_startup_reconciled", False)
     state = {
         "queuePaused": False,
         "queuePauseReason": "",
         "activeJobId": "",
         "jobs": [{"id": "next", "status": "queued", "folder": "set"}],
     }
-    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
-    monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: job.update(status="starting"))
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("startup must not launch queued work")))
 
     training_runner._refresh_state(state)
 
-    assert state["queuePaused"] is False
-    assert state["activeJobId"] == "next"
-    assert state["jobs"][0]["status"] == "starting"
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"] == "Queue waiting for manual start after WebCap restarted."
+    assert state["activeJobId"] == ""
+    assert state["jobs"][0]["status"] == "queued"
 
 
-def test_missing_queued_folder_is_discarded_and_its_job_artifacts_are_removed(tmp_path, monkeypatch):
+def test_missing_queued_folder_remains_visible_and_keeps_its_artifacts(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", tmp_path)
     artifact_path = tmp_path / "output" / "run" / ".webcap" / "jobs" / "missing"
     artifact_path.mkdir(parents=True)
@@ -608,12 +616,14 @@ def test_missing_queued_folder_is_discarded_and_its_job_artifacts_are_removed(tm
         }],
     }
 
-    training_runner._discard_queued_jobs_with_missing_folders(state)
+    payload = training_runner._public_job(state["jobs"][0])
 
     job = state["jobs"][0]
-    assert job["status"] == "cancelled"
-    assert job["historyHidden"] is True
-    assert not artifact_path.exists()
+    assert job["status"] == "queued"
+    assert "error" not in job
+    assert payload["sourceUnavailable"] == "Set folder is currently unavailable; this job remains queued."
+    assert artifact_path.is_dir()
+    assert (artifact_path / "runner.sh").is_file()
 
 
 def test_missing_folder_history_is_skipped(tmp_path, monkeypatch):
@@ -626,6 +636,50 @@ def test_missing_folder_history_is_skipped(tmp_path, monkeypatch):
     })
 
     assert training_runner._history_signatures == {}
+
+
+def test_terminal_job_retires_after_history_is_durably_projected(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    terminal = {"id": "done", "folder": "set", "status": "completed", "stage": "lo", "updatedAt": 2}
+    queued = {"id": "next", "folder": "set", "status": "queued"}
+    state = {"activeJobId": "", "queuePaused": True, "jobs": [terminal, queued]}
+    recorded = []
+    written = []
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda value: tmp_path / value)
+    monkeypatch.setattr(training_runner, "record_job", lambda folder_path, job: recorded.append((folder_path, job["id"])))
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate, **kwargs: written.append(list(candidate["jobs"])))
+    monkeypatch.setattr(training_runner, "_history_signatures", {})
+
+    training_runner._persist_reconciled_state(state)
+
+    assert recorded == [(folder, "done")]
+    assert state["jobs"] == [queued]
+    assert written == [[queued]]
+
+
+def test_terminal_job_stays_visible_when_history_cannot_be_projected(tmp_path, monkeypatch):
+    terminal = {"id": "failed", "folder": "missing", "status": "failed", "stage": "launch", "updatedAt": 2}
+    state = {"activeJobId": "", "queuePaused": True, "jobs": [terminal]}
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda value: tmp_path / value)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate, **kwargs: None)
+
+    training_runner._persist_reconciled_state(state)
+
+    assert state["jobs"] == [terminal]
+    assert state["runnerNotice"] == "1 terminal training outcome cannot be added to Recent Runs while the set folder is unavailable."
+
+
+def test_cancelled_job_retires_without_creating_history(monkeypatch):
+    cancelled = {"id": "cancelled", "folder": "set", "status": "cancelled", "historyHidden": True}
+    state = {"activeJobId": "", "queuePaused": True, "jobs": [cancelled]}
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate, **kwargs: None)
+
+    training_runner._persist_reconciled_state(state)
+
+    assert state["jobs"] == []
 
 
 def test_relocate_folder_jobs_updates_matching_queue_paths(tmp_path, monkeypatch):
@@ -789,7 +843,7 @@ def test_scheduled_finish_waits_for_the_epoch_after_the_target_save(tmp_path, mo
     assert "Epoch 35 saved" in job["confirmationNote"]
 
 
-def test_pause_request_waits_for_the_runner_result(tmp_path, monkeypatch):
+def test_pause_queue_leaves_the_running_job_untouched(monkeypatch):
     active = {"id": "active", "status": "running", "pid": 42, "runnerVerified": True}
     state = {
         "activeJobId": "active",
@@ -799,19 +853,17 @@ def test_pause_request_waits_for_the_runner_result(tmp_path, monkeypatch):
     }
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("pause must not signal the runner")))
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
-    action_path = tmp_path / "action"
-    monkeypatch.setattr(training_runner, "_job_action_path", lambda job: action_path)
 
     payload, status = training_runner.stop_response("active", pause=True)
 
     assert status == 200
-    assert payload["job"]["status"] == "stopping"
-    assert payload["job"]["actionRequested"] == "pause"
+    assert payload["job"]["status"] == "running"
+    assert "actionRequested" not in payload["job"]
     assert state["activeJobId"] == "active"
-    assert state["queuePaused"] is False
-    assert action_path.read_text(encoding="utf-8") == "pause"
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"] == "Queue paused by the user."
 
 
 def test_stop_request_failure_does_not_change_the_recorded_job_state(tmp_path, monkeypatch):
@@ -824,7 +876,7 @@ def test_stop_request_failure_does_not_change_the_recorded_job_state(tmp_path, m
     action_path = tmp_path / "action"
     monkeypatch.setattr(training_runner, "_job_action_path", lambda job: action_path)
 
-    payload, status = training_runner.stop_response("active", pause=True)
+    payload, status = training_runner.stop_response("active")
 
     assert status == 502
     assert active["status"] == "running"
@@ -833,7 +885,7 @@ def test_stop_request_failure_does_not_change_the_recorded_job_state(tmp_path, m
     assert not action_path.exists()
 
 
-def test_pause_result_records_the_bound_timestamped_run_for_resume(monkeypatch):
+def test_legacy_pause_result_becomes_an_ordinary_queued_resume(monkeypatch):
     job = {
         "id": "paused", "status": "stopping", "actionRequested": "pause",
         "folder": "set", "stages": "krea2", "outputRunPath": "/output/run",
@@ -846,13 +898,13 @@ def test_pause_result_records_the_bound_timestamped_run_for_resume(monkeypatch):
 
     training_runner._refresh_job(job)
 
-    assert job["status"] == "paused"
+    assert job["status"] == "queued"
     assert job["resumeFromCheckpoint"] == "/output/run"
     assert job["resumeStage"] == "krea2"
     assert "error" not in job
 
 
-def test_pause_keeps_the_job_queued_even_before_checkpoint_validation(monkeypatch):
+def test_legacy_pause_result_holds_the_global_queue(monkeypatch):
     active = {
         "id": "paused", "status": "stopping", "actionRequested": "pause",
         "folder": "set", "stages": "krea2", "outputRunPath": "/output/run",
@@ -863,7 +915,7 @@ def test_pause_keeps_the_job_queued_even_before_checkpoint_validation(monkeypatc
 
     training_runner._refresh_state(state)
 
-    assert active["status"] == "paused"
+    assert active["status"] == "queued"
     assert active["resumeFromCheckpoint"] == "/output/run"
     assert active["resumeStage"] == "krea2"
     assert state["activeJobId"] == ""
@@ -871,18 +923,19 @@ def test_pause_keeps_the_job_queued_even_before_checkpoint_validation(monkeypatc
     assert state["queuePauseReason"] == "Queue paused by the user."
 
 
-def test_stop_request_without_a_recorded_pid_does_not_signal_any_process(monkeypatch):
+def test_pause_queue_does_not_require_a_runner_pid(monkeypatch):
     active = {"id": "active", "status": "running"}
     state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not signal without a PID")))
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
 
     payload, status = training_runner.stop_response("active", pause=True)
 
-    assert status == 409
+    assert status == 200
     assert active["status"] == "running"
-    assert "no recorded runner PID" in payload["error"]
+    assert state["queuePaused"] is True
 
 
 def test_log_response_restarts_from_zero_when_the_log_was_truncated(tmp_path, monkeypatch):
@@ -922,8 +975,26 @@ def test_log_response_tail_returns_only_the_latest_chunk(tmp_path, monkeypatch):
     assert payload["truncated"] is True
 
 
-def test_cancelling_a_paused_job_removes_it_from_the_queue(monkeypatch):
-    active = {"id": "active", "folder": "set", "status": "paused", "progress": {"epoch": 85, "epochs": 90}}
+def test_log_response_reads_a_retired_job_from_history(tmp_path, monkeypatch):
+    artifact_dir = tmp_path / "job"
+    artifact_dir.mkdir()
+    (artifact_dir / "run.log").write_text("retired output\n", encoding="utf-8")
+    history_job = {"id": "retired", "folder": "set", "status": "completed", "artifactDir": str(artifact_dir)}
+    state = {"activeJobId": "", "queuePaused": True, "jobs": []}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_persist_reconciled_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_find_history_job", lambda folder, job_id: history_job)
+
+    payload, status = training_runner.log_response("retired", folder="set")
+
+    assert status == 200
+    assert payload["text"].splitlines() == ["retired output"]
+    assert payload["job"]["status"] == "completed"
+
+
+def test_cancelling_a_queued_job_removes_it_from_the_queue(monkeypatch):
+    active = {"id": "active", "folder": "set", "status": "queued"}
     state = {
         "activeJobId": "active",
         "queuePaused": True,
@@ -963,32 +1034,27 @@ def test_cancelling_a_running_job_is_rejected_without_signalling_it(monkeypatch)
     assert "Only queued" in payload["error"]
 
 
-def test_resuming_a_paused_job_keeps_its_queue_position(monkeypatch):
-    paused = {"id": "paused", "folder": "penny", "stages": "lo", "status": "paused"}
+def test_resuming_the_queue_while_a_job_runs_only_enables_handoff(monkeypatch):
+    active = {"id": "active", "folder": "penny", "stages": "lo", "status": "running"}
     queued = {"id": "next", "folder": "sue", "stages": "hi", "status": "queued"}
     state = {
-        "activeJobId": "",
+        "activeJobId": "active",
         "queuePaused": True,
         "queuePauseReason": "Queue paused by the user.",
-        "jobs": [paused, queued],
+        "jobs": [active, queued],
     }
-    advanced = []
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_prepare_paused_job_for_resume", lambda job: job.update(status="queued") or "")
-    monkeypatch.setattr(training_runner, "_launch_next_queued_job", lambda candidate: advanced.append(candidate["activeJobId"]))
     monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
 
-    payload, status = training_runner.resume_job_response("paused")
+    payload, status = training_runner.resume_queue_response()
 
     assert status == 200
-    assert payload["job"]["id"] == "paused"
-    assert [job["id"] for job in state["jobs"]] == ["paused", "next"]
-    assert paused["status"] == "queued"
-    assert state["activeJobId"] == ""
+    assert payload["activeJobId"] == "active"
+    assert active["status"] == "running"
+    assert queued["status"] == "queued"
     assert state["queuePaused"] is False
-    assert advanced == [""]
 
 
 def test_resume_queue_reports_a_hold_instead_of_a_false_success(monkeypatch):
@@ -1163,7 +1229,7 @@ def test_log_activity_does_not_keep_a_missing_runner_active(tmp_path, monkeypatc
 
 @pytest.mark.parametrize(
     ("action", "expected_status"),
-    (("pause", "paused"), ("finish", "finished_early"), ("stop", "stopped")),
+    (("finish", "finished_early"), ("stop", "stopped")),
 )
 def test_missing_runner_result_honors_a_recorded_user_action(action, expected_status, monkeypatch):
     job = {
@@ -1177,9 +1243,6 @@ def test_missing_runner_result_honors_a_recorded_user_action(action, expected_st
 
     assert job["status"] == expected_status
     assert "finishedAt" in job
-    if action == "pause":
-        assert job["resumeFromCheckpoint"] == "/output/run"
-        assert job["resumeStage"] == "lo"
 
 
 def test_runner_stopped_without_an_app_action_is_interrupted(monkeypatch):
@@ -1189,7 +1252,7 @@ def test_runner_stopped_without_an_app_action_is_interrupted(monkeypatch):
     training_runner._refresh_job(job)
 
     assert job["status"] == "interrupted"
-    assert job["error"] == "Runner stopped without a WebCap stop or pause action."
+    assert job["error"] == "Runner stopped without a WebCap stop action."
 
 
 def test_stop_outcome_advances_to_the_next_queued_job(monkeypatch):

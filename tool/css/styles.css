@@ -2126,7 +2126,6 @@ iframe {
 }
 
 .workspace-surface-training .training-runner-status--queued,
-.workspace-surface-training .training-runner-status--paused,
 .workspace-surface-training .training-runner-status--interrupted {
   border-color: #cc7a3f;
   color: #cc7a3f;
@@ -2746,7 +2745,6 @@ iframe {
 
 .training-folder-status--failed,
 .training-folder-status--stopped,
-.training-folder-status--paused,
 .training-folder-status--caption-review {
   border-color: #cc7a3f;
   color: #cc7a3f;

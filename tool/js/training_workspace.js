@@ -546,6 +546,12 @@ function wireTrainingWorkspace() {
   runnerCancelBtn.onclick = function () { stopManagedTraining(true); };
   runnerResumeQueueBtn.onclick = resumeManagedTrainingQueue;
   getTrainingWorkspaceEls().runnerSummary.onclick = function (event) {
+    var folderButton = event.target.closest('[data-training-open-folder]');
+    var folder = folderButton && folderButton.getAttribute('data-training-open-folder');
+    if (folder) {
+      openTrainingWorkspaceFolder(folder);
+      return;
+    }
     var finishScheduleButton = event.target.closest('[data-training-finish-schedule]');
     if (finishScheduleButton) {
       scheduleManagedTrainingFinish(finishScheduleButton.getAttribute('data-training-finish-schedule'));

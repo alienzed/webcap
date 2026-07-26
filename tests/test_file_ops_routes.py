@@ -491,7 +491,7 @@ def test_training_history_opens_a_discovered_same_model_run(tmp_path, monkeypatc
 def test_training_runner_open_log_reveals_the_known_job_log(monkeypatch):
     log_path = Path("C:/training/output/runs/001-set/.webcap/jobs/job/run.log")
     opened = []
-    monkeypatch.setattr(app_module, "training_runner_log_path_for_job", lambda job_id: log_path)
+    monkeypatch.setattr(app_module, "training_runner_log_path_for_job", lambda job_id, folder="": log_path)
     monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))
 
     response = app_module.app.test_client().post("/fs/training_runner/open_log", json={"jobId": "job"})

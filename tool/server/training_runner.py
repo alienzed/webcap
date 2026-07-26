@@ -17,7 +17,7 @@ from .training_commands import build_training_command_plan
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, output_dir_from_config, with_output_dir
 from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_run
 from .dataset_config import repeat_targets_for_mode
-from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, record_job, clear_history_job, training_output_group_for_folder
+from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, training_output_group_for_folder
 from .training_preflight import (
     build_launch_preflight as _build_launch_preflight,
     gpu_snapshot as _gpu_snapshot,
@@ -53,12 +53,13 @@ RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
 STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
 ACTIVE_STATUSES = {"starting", "running", "stopping", "unconfirmed"}
-QUEUE_STATUSES = {"queued", "paused"}
+QUEUE_STATUSES = {"queued"}
 HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "interrupted"}
-TERMINAL_STATUSES = HISTORY_STATUSES | {"paused", "interrupted", "cancelled"}
+TERMINAL_STATUSES = HISTORY_STATUSES | {"cancelled"}
 _lock = threading.Lock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
+_startup_reconciled = False
 _history_signatures = {}
 _state_file_seen = None
 _persisted_managed_job_ids = set()
@@ -151,12 +152,13 @@ def _read_state():
     return parsed
 
 
-def _write_state(state):
+def _write_state(state, retired_job_ids=()):
     global _state_file_seen, _persisted_managed_job_ids
     _ensure_runtime_dirs()
     path = _state_path()
     job_ids = _state_job_ids(state, path)
-    missing_job_ids = _persisted_managed_job_ids - job_ids if _state_file_seen == path else set()
+    allowed_retirements = {str(job_id) for job_id in retired_job_ids}
+    missing_job_ids = _persisted_managed_job_ids - job_ids - allowed_retirements if _state_file_seen == path else set()
     if missing_job_ids:
         raise TrainingStateError(
             "Refusing to remove managed training jobs from queue state: " + ", ".join(sorted(missing_job_ids))
@@ -207,65 +209,75 @@ def recover_state_response():
 
 def _sync_job_history(job):
     if job.get("historyHidden") or job.get("status") not in HISTORY_STATUSES:
-        return
+        return True
     folder = str(job.get("folder") or "").strip()
     if not folder:
-        return
+        return False
     try:
         folder_path = app_config.safe_join_fs_root(folder)
     except ValueError:
-        return
+        return False
     if not folder_path.is_dir():
-        return
+        return False
     signature = json.dumps({
         "status": job.get("status"), "stage": job.get("stage"), "updatedAt": job.get("updatedAt"),
         "finishedAt": job.get("finishedAt"), "error": job.get("error"), "exitCode": job.get("exitCode"),
     }, sort_keys=True)
     if _history_signatures.get(job.get("id")) == signature:
-        return
+        return True
     try:
         record_job(folder_path, job)
     except OSError:
         _logger.warning("Skipped training history sync because its folder is unavailable: %s", folder_path)
-        return
+        return False
     _history_signatures[job.get("id")] = signature
+    return True
 
 
 def _sync_histories(state):
-    for job in state.get("jobs", []):
-        _sync_job_history(job)
+    return {
+        str(job.get("id") or "")
+        for job in state.get("jobs", [])
+        if _sync_job_history(job)
+    }
 
 
-def _discard_queued_jobs_with_missing_folders(state):
-    """Discard queued work whose source set was intentionally removed."""
+def _retire_terminal_jobs(state, projected_job_ids):
+    """Keep only scheduler work after terminal outcomes are durably indexed."""
+    projected_job_ids = set(projected_job_ids or ())
+    retained = []
+    retired_job_ids = set()
+    unprojected_count = 0
     for job in state.get("jobs", []):
-        if job.get("status") not in QUEUE_STATUSES:
+        status = str(job.get("status") or "")
+        job_id = str(job.get("id") or "")
+        if status == "cancelled" or (status in HISTORY_STATUSES and job_id in projected_job_ids):
+            _history_signatures.pop(job_id, None)
+            retired_job_ids.add(job_id)
             continue
-        folder = str(job.get("folder") or "").strip()
-        try:
-            folder_exists = bool(folder) and Path(app_config.safe_join_fs_root(folder)).is_dir()
-        except ValueError:
-            folder_exists = False
-        if folder_exists:
-            continue
-        job["status"] = "cancelled"
-        job["stage"] = "cancelled"
-        job["historyHidden"] = True
-        job["error"] = "Discarded because its source set was removed: " + (folder or "(missing path)")
-        job["finishedAt"] = time.time()
-        job["updatedAt"] = time.time()
-        if str(state.get("activeJobId") or "") == str(job.get("id") or ""):
-            state["activeJobId"] = ""
-        artifact_path = _job_dir(job)
-        if artifact_path.name != str(job.get("id") or "") or artifact_path.parent.name != "jobs" or artifact_path.parent.parent.name != ".webcap":
-            _logger.warning("Skipped cleanup for unexpected training job artifact path: %s", artifact_path)
-            continue
-        try:
-            shutil.rmtree(artifact_path)
-        except FileNotFoundError:
-            pass
-        except OSError:
-            _logger.warning("Could not remove discarded training job artifacts: %s", artifact_path)
+        if status in HISTORY_STATUSES:
+            unprojected_count += 1
+        retained.append(job)
+    state["jobs"] = retained
+    if unprojected_count:
+        notice = (
+            str(unprojected_count) + " terminal training outcome"
+            + ("" if unprojected_count == 1 else "s")
+            + " cannot be added to Recent Runs while the set folder is unavailable."
+        )
+        prior_notice = str(state.get("runnerNotice") or "").strip()
+        if notice not in prior_notice:
+            state["runnerNotice"] = (prior_notice + " " + notice).strip()
+    return retired_job_ids
+
+
+def _persist_reconciled_state(state):
+    projected_job_ids = _sync_histories(state)
+    retired_job_ids = _retire_terminal_jobs(state, projected_job_ids)
+    if retired_job_ids:
+        _write_state(state, retired_job_ids=retired_job_ids)
+    else:
+        _write_state(state)
 
 
 def relocate_folder_jobs(old_folder, new_folder):
@@ -295,8 +307,8 @@ def relocate_folder_jobs(old_folder, new_folder):
 
 def _job_dir(job):
     """Job-owned artifacts live beside trainer output, not in the queue state area."""
-    if isinstance(job, dict) and job.get("artifactPath"):
-        return Path(job["artifactPath"])
+    if isinstance(job, dict) and (job.get("artifactPath") or job.get("artifactDir")):
+        return Path(job.get("artifactPath") or job.get("artifactDir"))
     job_id = job.get("id") if isinstance(job, dict) else job
     return _jobs_root() / str(job_id)
 
@@ -315,6 +327,21 @@ def _find_job(state, job_id):
         if str(job.get("id") or "") == str(job_id or ""):
             return job
     return None
+
+
+def _find_history_job(folder, job_id):
+    folder_text = str(folder or "").strip()
+    wanted = str(job_id or "").strip()
+    if not folder_text or not wanted:
+        return None
+    try:
+        folder_path = app_config.safe_join_fs_root(folder_text)
+    except ValueError:
+        return None
+    return next(
+        (job for job in read_history(folder_path).get("jobs", []) if str(job.get("id") or "") == wanted),
+        None,
+    )
 
 def _file_digest(path):
     digest = hashlib.sha256()
@@ -504,7 +531,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         "ACTION_FILE=" + shlex.quote(action_wsl),
         "echo $$ > \"$PID_FILE\"",
         "write_result() { printf '{\\\"status\\\":\\\"%s\\\",\\\"exitCode\\\":%s,\\\"finishedAt\\\":%s}\\n' \"$1\" \"$2\" \"$(date +%s)\" > \"$RESULT_FILE\"; }",
-        "finish_requested_stop() { case \"$(cat \"$ACTION_FILE\" 2>/dev/null || true)\" in pause|finish|stop) echo '[webcap] requested stop'; write_result stopped 130; exit 130 ;; esac; }",
+        "finish_requested_stop() { case \"$(cat \"$ACTION_FILE\" 2>/dev/null || true)\" in finish|stop) echo '[webcap] requested stop'; write_result stopped 130; exit 130 ;; esac; }",
         "trap 'echo [webcap] stopped; write_result stopped 130; exit 130' INT TERM",
         "cd " + shlex.quote(settings["cwd"]) + " || { echo '[webcap] training working directory is unavailable'; write_result failed 1; exit 1; }",
     ]
@@ -569,7 +596,7 @@ def _launch_job(job, folder_path):
     job["updatedAt"] = launch_time
     job["status"] = "starting"
     job["stage"] = "launch"
-    if job.get("parentJobId") and str(job.get("resumeFromCheckpoint") or "").strip():
+    if str(job.get("resumeFromCheckpoint") or "").strip():
         try:
             validate_resumable_run_for_path(
                 folder_path,
@@ -790,11 +817,7 @@ def _sync_job_log_evidence(job):
 def _apply_terminal_job_status(job, result_status=""):
     requested_action = str(job.get("actionRequested") or "")
     if requested_action == "pause":
-        stage = str(job.get("stages") or "")
-        resume_path = str(job.get("outputRunPath") or "").strip()
-        job["resumeFromCheckpoint"] = resume_path
-        job["resumeStage"] = stage if resume_path else ""
-        job["status"] = "paused"
+        _queue_legacy_paused_job(job)
     elif requested_action == "finish" and result_status != "completed":
         job["status"] = "finished_early"
     elif requested_action == "stop":
@@ -804,6 +827,28 @@ def _apply_terminal_job_status(job, result_status=""):
     else:
         job["status"] = result_status
     return requested_action
+
+
+def _queue_legacy_paused_job(job):
+    """Convert the removed per-job pause state into ordinary queued intent."""
+    resume_path = str(job.get("outputRunPath") or "").strip()
+    if resume_path:
+        job["resumeFromCheckpoint"] = resume_path
+        job["resumeStage"] = str(job.get("stages") or "")
+    else:
+        job.pop("resumeFromCheckpoint", None)
+        job.pop("resumeStage", None)
+        job.pop("resumePoint", None)
+        job.pop("resumePointError", None)
+    for field in (
+        "pid", "runnerVerified", "actionRequested", "actionRequestedAt", "startedAt", "finishedAt",
+        "lastLogAt", "exitCode", "failureScope", "failureExcerpt", "completionNote", "confirmationNote",
+        "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "progress", "error",
+    ):
+        job.pop(field, None)
+    job["status"] = "queued"
+    job["stage"] = "queued"
+    job["updatedAt"] = time.time()
 
 
 def _distributed_socket_hold_reason(log_text):
@@ -869,8 +914,10 @@ def _refresh_job(job):
         job.pop("error", None)
         exit_code = int(result.get("exitCode") or 0)
         requested_action = _apply_terminal_job_status(job, result_status)
-        if job["status"] == "interrupted" and result_status == "stopped" and requested_action not in ("pause", "finish", "stop"):
-            job["error"] = "Runner stopped without a WebCap stop or pause action."
+        if job["status"] == "queued":
+            return {"holdReason": "", "pauseQueue": requested_action == "pause"}
+        if job["status"] == "interrupted" and result_status == "stopped" and requested_action not in ("finish", "stop"):
+            job["error"] = "Runner stopped without a WebCap stop action."
         job["exitCode"] = exit_code
         if job["status"] == "failed":
             job["failureExcerpt"] = failure_excerpt
@@ -888,7 +935,7 @@ def _refresh_job(job):
         else:
             job.pop("updatedAt", None)
         hold_reason = _distributed_socket_hold_reason(failure_excerpt) if job["status"] == "failed" and prior_status != "failed" else ""
-        return {"holdReason": hold_reason, "pauseQueue": job["status"] == "paused" and prior_status != "paused"}
+        return {"holdReason": hold_reason}
     now = time.time()
     tail, log_mtime = _sync_job_log_evidence(job)
     log_has_progress = _log_has_progress(tail)
@@ -925,7 +972,9 @@ def _refresh_job(job):
     job.pop("confirmationNote", None)
     job.pop("runnerVerified", None)
     requested_action = _apply_terminal_job_status(job)
-    if requested_action not in ("pause", "finish", "stop"):
+    if job["status"] == "queued":
+        return {"holdReason": "", "pauseQueue": requested_action == "pause"}
+    if requested_action not in ("finish", "stop"):
         job["error"] = process_detail or "Training runner is no longer available and did not write a result record."
     job["finishedAt"] = prior_finished_at if job["status"] == prior_status and prior_finished_at is not None else now
     job.pop("finishAfterEpoch", None)
@@ -937,39 +986,7 @@ def _refresh_job(job):
         job["updatedAt"] = prior_updated_at
     else:
         job.pop("updatedAt", None)
-    return {"holdReason": "", "pauseQueue": job["status"] == "paused" and prior_status != "paused"}
-
-
-def _paused_job_resume_error(job):
-    stage = str(job.get("stages") or "")
-    if stage not in ("hi", "lo", "krea2", "wan21"):
-        return "Only an individual training stage can resume."
-    folder = str(job.get("folder") or "")
-    folder_path = app_config.safe_join_fs_root(folder)
-    bound_path = str(job.get("outputRunPath") or "").strip()
-    if not bound_path:
-        return "this job has no recorded output run path."
-    try:
-        return "" if validate_resumable_run_for_path(folder_path, stage, bound_path) else "the recorded checkpoint could not be validated."
-    except ValueError as exc:
-        return str(exc)
-
-
-def _prepare_paused_job_for_resume(job):
-    resume_error = _paused_job_resume_error(job)
-    if resume_error:
-        return "Resume invariant failed: " + resume_error
-    stage = str(job.get("stages") or "")
-    bound_path = str(job.get("outputRunPath") or "").strip()
-    job["resumeFromCheckpoint"] = bound_path
-    job["resumeStage"] = stage
-    job.pop("actionRequested", None)
-    job.pop("actionRequestedAt", None)
-    job["status"] = "queued"
-    job["stage"] = "queued"
-    job["error"] = ""
-    job.pop("finishedAt", None)
-    return ""
+    return {"holdReason": ""}
 
 
 def _launch_next_queued_job(state):
@@ -981,14 +998,6 @@ def _launch_next_queued_job(state):
     for job in state.get("jobs", []):
         if job.get("status") not in QUEUE_STATUSES:
             continue
-        if job.get("status") == "paused":
-            resume_error = _prepare_paused_job_for_resume(job)
-            if resume_error:
-                job["error"] = resume_error
-                job["status"] = "failed"
-                job["stage"] = "resume"
-                job["finishedAt"] = time.time()
-                continue
         folder_path = app_config.safe_join_fs_root(job["folder"])
         _launch_job(job, folder_path)
         if job.get("status") in ACTIVE_STATUSES:
@@ -999,9 +1008,13 @@ def _launch_next_queued_job(state):
 
 
 def _refresh_state(state):
+    global _startup_reconciled
     hold_reason = ""
     pause_requested = False
     for job in state.get("jobs", []):
+        if job.get("status") == "paused":
+            _queue_legacy_paused_job(job)
+            pause_requested = True
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
         if job.get("status") == "queued" and str(job.get("resumeFromCheckpoint") or "").strip():
@@ -1035,6 +1048,11 @@ def _refresh_state(state):
     if hold_reason:
         state["queuePaused"] = True
         state["queuePauseReason"] = hold_reason
+    queued_jobs = [job for job in state.get("jobs", []) if job.get("status") == "queued"]
+    if not _startup_reconciled and queued_jobs and not any(job.get("runnerVerified") for job in active_jobs):
+        state["queuePaused"] = True
+        state["queuePauseReason"] = state.get("queuePauseReason") or "Queue waiting for manual start after WebCap restarted."
+    _startup_reconciled = True
     _launch_next_queued_job(state)
 
 
@@ -1043,10 +1061,8 @@ def _monitor_loop():
         try:
             with _lock:
                 state = _read_state()
-                _discard_queued_jobs_with_missing_folders(state)
                 _refresh_state(state)
-                _sync_histories(state)
-                _write_state(state)
+                _persist_reconciled_state(state)
         except Exception:
             _logger.exception("Training queue monitor failed; the existing queue state was not replaced.")
         time.sleep(2)
@@ -1063,7 +1079,16 @@ def _ensure_monitor_started():
 
 def _public_job(job):
     fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch")
-    return {field: job.get(field) for field in fields if field in job}
+    payload = {field: job.get(field) for field in fields if field in job}
+    if job.get("status") == "queued":
+        folder = str(job.get("folder") or "").strip()
+        try:
+            available = bool(folder) and Path(app_config.safe_join_fs_root(folder)).is_dir()
+        except ValueError:
+            available = False
+        if not available:
+            payload["sourceUnavailable"] = "Set folder is currently unavailable; this job remains queued."
+    return payload
 
 
 def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", profile_id="", run_id=""):
@@ -1239,8 +1264,7 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         state["jobs"].extend(jobs)
         if not active or active.get("status") in TERMINAL_STATUSES:
             _launch_next_queued_job(state)
-        _sync_histories(state)
-        _write_state(state)
+        _persist_reconciled_state(state)
         return {
             "ok": True,
             "job": _public_job(jobs[0]),
@@ -1313,8 +1337,7 @@ def status_response():
         except TrainingStateError as exc:
             return {"ok": False, "stateError": True, "recoveryAvailable": True, "error": str(exc)}, 409
         _refresh_state(state)
-        _sync_histories(state)
-        _write_state(state)
+        _persist_reconciled_state(state)
         return {
             "ok": True,
             "activeJobId": state.get("activeJobId") or "",
@@ -1346,13 +1369,14 @@ def gpu_status_response():
     return {"ok": True, "gpu": _gpu_snapshot()}, 200
 
 
-def log_response(job_id, offset=0, tail=False):
+def log_response(job_id, offset=0, tail=False, folder=""):
     with _lock:
         state = _read_state()
         _refresh_state(state)
         job = _find_job(state, job_id)
-        _sync_histories(state)
-        _write_state(state)
+        _persist_reconciled_state(state)
+        if not job:
+            job = _find_history_job(folder, job_id)
         if not job:
             return {"error": "Training job not found"}, 404
         path = Path(job.get("logPath") or (_job_dir(job) / "run.log"))
@@ -1382,11 +1406,11 @@ def log_response(job_id, offset=0, tail=False):
         }, 200
 
 
-def log_path_for_job(job_id):
+def log_path_for_job(job_id, folder=""):
     """Return the managed log path for a known job; never accept a caller path."""
     with _lock:
         state = _read_state()
-        job = _find_job(state, job_id)
+        job = _find_job(state, job_id) or _find_history_job(folder, job_id)
         if not job:
             raise ValueError("Training job not found")
         path = _job_dir(job) / "run.log"
@@ -1421,6 +1445,11 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
         job = _find_job(state, job_id)
         if not job:
             return {"ok": False, "error": "Training job not found"}, 404
+        if pause:
+            state["queuePaused"] = True
+            state["queuePauseReason"] = "Queue paused by the user."
+            _write_state(state)
+            return {"ok": True, "job": _public_job(job)}, 200
         if job.get("status") in QUEUE_STATUSES and cancel:
             job["status"] = "cancelled"
             job["stage"] = "cancelled"
@@ -1433,10 +1462,10 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if cancel:
-            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Stop, Pause, or Finish for the active job."}, 400
+            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Stop or Finish for the active job."}, 400
         if job.get("status") not in ACTIVE_STATUSES:
             return {"ok": False, "error": "Training job is not running."}, 400
-        action = "pause" if pause else "finish" if finish else "stop"
+        action = "finish" if finish else "stop"
         message = _request_job_action(job, action)
         if message:
             job["error"] = message
@@ -1513,8 +1542,7 @@ def reorder_response(job_id, direction):
         state["jobs"][current], state["jobs"][target] = state["jobs"][target], state["jobs"][current]
         state["jobs"][current]["updatedAt"] = time.time()
         state["jobs"][target]["updatedAt"] = time.time()
-        _sync_histories(state)
-        _write_state(state)
+        _persist_reconciled_state(state)
         return {"ok": True, "jobs": [_public_job(job) for job in state["jobs"]]}, 200
 
 
@@ -1522,14 +1550,10 @@ def resume_queue_response():
     with _lock:
         state = _read_state()
         _refresh_state(state)
-        active = _find_job(state, state.get("activeJobId")) if state.get("activeJobId") else None
-        if active and active.get("status") in ACTIVE_STATUSES:
-            return {"ok": False, "error": "A training job is already active."}, 409
         state["queuePaused"] = False
         state["queuePauseReason"] = ""
         _refresh_state(state)
-        _sync_histories(state)
-        _write_state(state)
+        _persist_reconciled_state(state)
         if state.get("queuePaused") and not state.get("activeJobId"):
             return {
                 "ok": False,
@@ -1537,29 +1561,3 @@ def resume_queue_response():
                 "jobs": [_public_job(job) for job in state["jobs"]],
             }, 409
         return {"ok": True, "activeJobId": state.get("activeJobId") or "", "jobs": [_public_job(job) for job in state["jobs"]]}, 200
-
-
-def resume_job_response(job_id):
-    with _lock:
-        state = _read_state()
-        _refresh_state(state)
-        prior = _find_job(state, job_id)
-        if not prior:
-            return {"ok": False, "error": "Training job not found."}, 404
-        if prior.get("status") != "paused":
-            return {"ok": False, "error": "Only paused jobs can resume."}, 400
-        next_job = next((job for job in state.get("jobs", []) if job.get("status") in QUEUE_STATUSES), None)
-        if next_job is not prior:
-            return {"ok": False, "error": "Reorder the queue, then resume its first item."}, 409
-        resume_error = _prepare_paused_job_for_resume(prior)
-        if resume_error:
-            prior["error"] = resume_error
-            _sync_histories(state)
-            _write_state(state)
-            return {"ok": False, "error": resume_error}, 409
-        state["queuePaused"] = False
-        state["queuePauseReason"] = ""
-        _launch_next_queued_job(state)
-        _sync_histories(state)
-        _write_state(state)
-        return {"ok": True, "job": _public_job(prior), "resumeFromCheckpoint": prior.get("resumeFromCheckpoint", "")}, 200

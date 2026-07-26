@@ -370,7 +370,7 @@ Behavior:
 - Krea2 Raw requires image-only prepared media; Wan2.1 and Wan2.2 accept prepared images and videos
 - the folder badge shows `Ready to train` only when prepared artifacts exist, prepared captions are present, and the set has no material tagged-but-uncaptioned backlog; otherwise it can show `Caption review needed`
 - `Train this set` starts immediately when idle or adds the selected run behind current work; Wan2.2 HI -> LO queues independent HI and LO jobs
-- active jobs expose per-run progress, completion ETA, next-checkpoint ETA, effective output identity/folder, logs, pause/finish controls, explicit queue resume, and resume-from-checkpoint controls; queued resumes show checkpoint-derived progress
+- active jobs expose per-run progress, completion ETA, next-checkpoint ETA, effective output identity/folder, logs, queue-pause/finish controls, explicit queue start/resume, and resume-from-checkpoint controls; queued resumes show checkpoint-derived progress
 - the output view starts at the recent log tail; `Reveal log file` selects the complete managed log in Explorer
 - `Generate & Copy Manual Command` reserves a launch output and snapshot but remains a non-process-launching WSL handoff, while `Run Diagnostics` runs the fuller environment check
 - TensorBoard can be started, stopped, and opened from the training workspace when available
@@ -476,7 +476,6 @@ Selection, review, and dataset flow:
 - `/fs/training_runner/stop`
 - `/fs/training_runner/reorder`
 - `/fs/training_runner/resume_queue`
-- `/fs/training_runner/resume_job`
 - `/fs/training_history`
 - `/fs/training_history/all`
 - `/fs/training_history/clear`

@@ -305,7 +305,7 @@ def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
     state = {"queuePaused": True, "activeJobId": "", "jobs": [{"id": "next", "status": "queued", "folder": "set"}]}
     monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("queue must remain held")))
 
-    training_runner._start_next(state)
+    training_runner._launch_next_queued_job(state)
 
     assert state["activeJobId"] == ""
 
@@ -388,7 +388,7 @@ def test_job_local_preflight_failure_does_not_block_the_next_queue_item(monkeypa
 
     monkeypatch.setattr(training_runner, "_launch_job", launch)
 
-    training_runner._start_next(state)
+    training_runner._launch_next_queued_job(state)
 
     assert first["status"] == "failed"
     assert state["activeJobId"] == "second"
@@ -427,6 +427,54 @@ def test_runtime_failure_does_not_block_the_next_queue_item(monkeypatch):
     assert state["queuePaused"] is False
 
 
+def test_distributed_server_socket_address_conflict_holds_the_queue(tmp_path, monkeypatch):
+    log_path = tmp_path / "run.log"
+    log_path.write_text(
+        "torch.distributed.DistNetworkError: The server socket has failed to listen on any local network address. "
+        "port: 29500, code: -98, name: EADDRINUSE, message: address already in use\n",
+        encoding="utf-8",
+    )
+    active = {
+        "id": "failed", "folder": "one", "stages": "hi", "status": "running", "logPath": str(log_path),
+    }
+    following = {"id": "following", "folder": "two", "stages": "lo", "status": "queued"}
+    state = {
+        "activeJobId": "failed", "queuePaused": False, "queuePauseReason": "", "jobs": [active, following],
+    }
+    monkeypatch.setattr(
+        training_runner,
+        "_read_result_evidence",
+        lambda job: ("result", {"status": "failed", "exitCode": 1, "finishedAt": 2}, ""),
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda job, folder: (_ for _ in ()).throw(AssertionError("queue must remain held")),
+    )
+
+    training_runner._refresh_state(state)
+
+    assert active["status"] == "failed"
+    assert active["failureScope"] == "system"
+    assert state["activeJobId"] == ""
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"] == training_runner._DISTRIBUTED_SOCKET_HOLD_REASON
+    assert following["status"] == "queued"
+
+
+@pytest.mark.parametrize(
+    "log_text",
+    (
+        "application server socket has failed to listen: address already in use",
+        "torch.distributed.DistNetworkError: connection reset by peer",
+        "torch.distributed.DistNetworkError: server socket has failed to listen",
+        "torch.distributed.DistNetworkError: EADDRINUSE",
+    ),
+)
+def test_other_socket_or_distributed_failures_do_not_hold_the_queue(log_text):
+    assert training_runner._distributed_socket_hold_reason(log_text) == ""
+
+
 def test_queue_refresh_reads_resume_progress_from_disk(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "set"
@@ -456,7 +504,7 @@ def test_queue_refresh_reads_resume_progress_from_disk(tmp_path, monkeypatch):
     assert job["resumePoint"]["step"] == 640
 
 
-def test_start_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):
+def test_launch_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):
     paused = {"id": "paused", "status": "paused", "folder": "penny", "stages": "lo"}
     queued = {"id": "next", "status": "queued", "folder": "sue", "stages": "hi"}
     state = {"queuePaused": False, "activeJobId": "", "jobs": [paused, queued]}
@@ -465,7 +513,7 @@ def test_start_next_resumes_a_paused_item_before_later_queued_work(monkeypatch):
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
     monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: launched.append(job["id"]) or job.update(status="starting"))
 
-    training_runner._start_next(state)
+    training_runner._launch_next_queued_job(state)
 
     assert launched == ["paused"]
     assert state["activeJobId"] == "paused"
@@ -490,7 +538,7 @@ def test_paused_job_with_an_invalid_recorded_checkpoint_fails_loudly(monkeypatch
     assert training_runner._prepare_paused_job_for_resume(job) == "Resume invariant failed: missing latest"
 
 
-def test_user_paused_job_from_legacy_state_stays_at_the_front_of_the_queue(monkeypatch):
+def test_user_paused_job_stays_at_the_front_of_the_queue(monkeypatch):
     paused = {"id": "paused", "folder": "penny", "stages": "lo", "status": "paused", "createdAt": 1}
     state = {
         "activeJobId": "",
@@ -498,45 +546,52 @@ def test_user_paused_job_from_legacy_state_stays_at_the_front_of_the_queue(monke
         "queuePauseReason": "Queue paused by the user.",
         "jobs": [paused, {"id": "next", "folder": "sue", "stages": "hi", "status": "queued", "createdAt": 2}],
     }
-    monkeypatch.setattr(training_runner, "_startup_reconciled", False)
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("paused queue must remain held")))
 
-    training_runner._apply_restart_hold(state)
+    training_runner._refresh_state(state)
 
     assert state["activeJobId"] == ""
     assert state["queuePauseReason"] == "Queue paused by the user."
 
 
-def test_restart_hold_keeps_an_active_run_handing_off_to_its_queue(monkeypatch):
+def test_restart_reconciles_a_live_run_before_handing_off_to_its_queue(monkeypatch):
     state = {
         "queuePaused": False,
         "queuePauseReason": "",
         "activeJobId": "active",
         "jobs": [
-            {"id": "active", "status": "running", "folder": "set"},
+            {"id": "active", "status": "interrupted", "folder": "set", "pid": 42, "runnerScript": "/run/runner.sh"},
             {"id": "next", "status": "queued", "folder": "set"},
         ],
     }
-    monkeypatch.setattr(training_runner, "_startup_reconciled", False)
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda job: ("absent", None, ""))
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("running", ""))
+    monkeypatch.setattr(training_runner, "_remove_stale_terminal_history", lambda job: None)
 
-    training_runner._apply_restart_hold(state)
+    training_runner._refresh_state(state)
 
     assert state["queuePaused"] is False
     assert state["queuePauseReason"] == ""
+    assert state["activeJobId"] == "active"
+    assert state["jobs"][0]["status"] == "starting"
+    assert state["jobs"][1]["status"] == "queued"
 
 
-def test_restart_hold_keeps_a_dormant_queue_from_starting_unattended(monkeypatch):
+def test_restart_continues_a_dormant_queue(monkeypatch):
     state = {
         "queuePaused": False,
         "queuePauseReason": "",
         "activeJobId": "",
         "jobs": [{"id": "next", "status": "queued", "folder": "set"}],
     }
-    monkeypatch.setattr(training_runner, "_startup_reconciled", False)
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
+    monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: job.update(status="starting"))
 
-    training_runner._apply_restart_hold(state)
+    training_runner._refresh_state(state)
 
-    assert state["queuePaused"] is True
-    assert state["queuePauseReason"] == "Queue held after WebCap restarted."
+    assert state["queuePaused"] is False
+    assert state["activeJobId"] == "next"
+    assert state["jobs"][0]["status"] == "starting"
 
 
 def test_missing_queued_folder_is_discarded_and_its_job_artifacts_are_removed(tmp_path, monkeypatch):
@@ -605,8 +660,8 @@ def test_finish_action_records_a_finished_early_outcome(monkeypatch):
     }
     monkeypatch.setattr(
         training_runner,
-        "_read_result",
-        lambda candidate: {"status": "stopped", "exitCode": 130, "finishedAt": 123.0},
+        "_read_result_evidence",
+        lambda candidate: ("result", {"status": "stopped", "exitCode": 130, "finishedAt": 123.0}, ""),
     )
 
     training_runner._refresh_job(job)
@@ -619,8 +674,8 @@ def test_runner_result_overrides_a_finish_request_when_the_job_completed(monkeyp
     job = {"id": "completed", "status": "stopping", "actionRequested": "finish"}
     monkeypatch.setattr(
         training_runner,
-        "_read_result",
-        lambda candidate: {"status": "completed", "exitCode": 0, "finishedAt": 123.0},
+        "_read_result_evidence",
+        lambda candidate: ("result", {"status": "completed", "exitCode": 0, "finishedAt": 123.0}, ""),
     )
 
     training_runner._refresh_job(job)
@@ -629,7 +684,7 @@ def test_runner_result_overrides_a_finish_request_when_the_job_completed(monkeyp
 
 
 def test_finish_request_waits_for_the_runner_result(tmp_path, monkeypatch):
-    active = {"id": "active", "status": "running", "pid": 42, "progress": {"epoch": 85, "epochs": 90}}
+    active = {"id": "active", "status": "running", "pid": 42, "runnerVerified": True, "progress": {"epoch": 85, "epochs": 90}}
     state = {
         "activeJobId": "active",
         "queuePaused": True,
@@ -637,7 +692,6 @@ def test_finish_request_waits_for_the_runner_result(tmp_path, monkeypatch):
         "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}],
     }
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
@@ -665,7 +719,6 @@ def test_finish_can_be_scheduled_for_a_future_configured_save(tmp_path, monkeypa
     }
     state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
 
@@ -689,7 +742,6 @@ def test_finish_schedule_rejects_an_epoch_that_is_not_a_save_point(tmp_path, mon
     }
     state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
 
     payload, status = training_runner.finish_schedule_response("active", epoch=37)
@@ -714,8 +766,8 @@ def test_scheduled_finish_waits_for_the_epoch_after_the_target_save(tmp_path, mo
         "snapshot": {"krea2": str(config_path)},
         "finishAfterEpoch": 35,
     }
-    monkeypatch.setattr(training_runner, "_read_result", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_pid_alive", lambda *args: True)
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda candidate: ("absent", None, ""))
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda candidate: ("running", ""))
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
     monkeypatch.setattr(training_runner, "_job_action_path", lambda candidate: action_path)
 
@@ -738,7 +790,7 @@ def test_scheduled_finish_waits_for_the_epoch_after_the_target_save(tmp_path, mo
 
 
 def test_pause_request_waits_for_the_runner_result(tmp_path, monkeypatch):
-    active = {"id": "active", "status": "running", "pid": 42}
+    active = {"id": "active", "status": "running", "pid": 42, "runnerVerified": True}
     state = {
         "activeJobId": "active",
         "queuePaused": False,
@@ -746,7 +798,6 @@ def test_pause_request_waits_for_the_runner_result(tmp_path, monkeypatch):
         "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}],
     }
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
@@ -764,10 +815,9 @@ def test_pause_request_waits_for_the_runner_result(tmp_path, monkeypatch):
 
 
 def test_stop_request_failure_does_not_change_the_recorded_job_state(tmp_path, monkeypatch):
-    active = {"id": "active", "status": "running", "pid": 42}
+    active = {"id": "active", "status": "running", "pid": 42, "runnerVerified": True}
     state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (1, "", "no such process"))
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
@@ -790,8 +840,8 @@ def test_pause_result_records_the_bound_timestamped_run_for_resume(monkeypatch):
     }
     monkeypatch.setattr(
         training_runner,
-        "_read_result",
-        lambda candidate: {"status": "failed", "exitCode": 1, "finishedAt": 123.0},
+        "_read_result_evidence",
+        lambda candidate: ("result", {"status": "failed", "exitCode": 1, "finishedAt": 123.0}, ""),
     )
 
     training_runner._refresh_job(job)
@@ -808,8 +858,8 @@ def test_pause_keeps_the_job_queued_even_before_checkpoint_validation(monkeypatc
         "folder": "set", "stages": "krea2", "outputRunPath": "/output/run",
     }
     state = {"activeJobId": "paused", "queuePaused": False, "queuePauseReason": "", "jobs": [active]}
-    monkeypatch.setattr(training_runner, "_read_result", lambda candidate: {"status": "stopped", "exitCode": 130, "finishedAt": 123.0})
-    monkeypatch.setattr(training_runner, "_start_next", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda candidate: ("result", {"status": "stopped", "exitCode": 130, "finishedAt": 123.0}, ""))
+    monkeypatch.setattr(training_runner, "_launch_next_queued_job", lambda candidate: None)
 
     training_runner._refresh_state(state)
 
@@ -825,7 +875,6 @@ def test_stop_request_without_a_recorded_pid_does_not_signal_any_process(monkeyp
     active = {"id": "active", "status": "running"}
     state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not signal without a PID")))
 
@@ -842,7 +891,6 @@ def test_log_response_restarts_from_zero_when_the_log_was_truncated(tmp_path, mo
     job = {"id": "active", "status": "running", "logPath": str(log_path)}
     state = {"activeJobId": "active", "jobs": [job]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
@@ -861,7 +909,6 @@ def test_log_response_tail_returns_only_the_latest_chunk(tmp_path, monkeypatch):
     job = {"id": "active", "status": "running", "logPath": str(log_path)}
     state = {"activeJobId": "active", "jobs": [job]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
@@ -885,13 +932,12 @@ def test_cancelling_a_paused_job_removes_it_from_the_queue(monkeypatch):
     }
     advanced = []
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
     cleared = []
     monkeypatch.setattr(training_runner, "clear_history_job", lambda folder, job_id: cleared.append((folder, job_id)) or True)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_start_next", lambda candidate: advanced.append(candidate["queuePaused"]))
+    monkeypatch.setattr(training_runner, "_launch_next_queued_job", lambda candidate: advanced.append(candidate["queuePaused"]))
 
     payload, status = training_runner.stop_response("active", cancel=True)
 
@@ -907,7 +953,6 @@ def test_cancelling_a_running_job_is_rejected_without_signalling_it(monkeypatch)
     active = {"id": "active", "folder": "set", "status": "running", "pid": 42}
     state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not signal a cancel request")))
 
@@ -929,10 +974,9 @@ def test_resuming_a_paused_job_keeps_its_queue_position(monkeypatch):
     }
     advanced = []
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_prepare_paused_job_for_resume", lambda job: job.update(status="queued") or "")
-    monkeypatch.setattr(training_runner, "_start_next", lambda candidate: advanced.append(candidate["activeJobId"]))
+    monkeypatch.setattr(training_runner, "_launch_next_queued_job", lambda candidate: advanced.append(candidate["activeJobId"]))
     monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
 
@@ -950,7 +994,6 @@ def test_resuming_a_paused_job_keeps_its_queue_position(monkeypatch):
 def test_resume_queue_reports_a_hold_instead_of_a_false_success(monkeypatch):
     state = {"activeJobId": "", "queuePaused": True, "queuePauseReason": "Queue paused by the user.", "jobs": [{"id": "next", "status": "queued", "folder": "set"}]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: candidate.update(queuePaused=True, queuePauseReason="Queued inputs changed. Confirm current inputs or cancel this item."))
     monkeypatch.setattr(training_runner, "_sync_histories", lambda candidate: None)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
@@ -961,11 +1004,133 @@ def test_resume_queue_reports_a_hold_instead_of_a_false_success(monkeypatch):
     assert payload["error"] == "Queued inputs changed. Confirm current inputs or cancel this item."
 
 
+def test_interrupted_job_is_derived_running_from_its_exact_live_runner(tmp_path, monkeypatch):
+    artifact_path = tmp_path / ".webcap" / "jobs" / "46b8ba3d7612"
+    artifact_path.mkdir(parents=True)
+    log_path = artifact_path / "run.log"
+    log_path.write_text("[webcap] stage=lo\nstep=580\n", encoding="utf-8")
+    active = {
+        "id": "46b8ba3d7612",
+        "folder": "two-fingers/wan22",
+        "status": "interrupted",
+        "stages": "lo",
+        "pid": 181579,
+        "runnerScript": "/mnt/w/training/output/runs/018-wan22/.webcap/jobs/46b8ba3d7612/runner.sh",
+        "artifactPath": str(artifact_path),
+        "logPath": str(log_path),
+        "finishedAt": 10,
+        "error": "Training runner is no longer available and did not write a result record.",
+    }
+    following = {"id": "next", "folder": "set", "status": "queued"}
+    state = {"activeJobId": "", "queuePaused": False, "queuePauseReason": "", "jobs": [active, following]}
+    cleared = []
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("running", ""))
+    monkeypatch.setattr(training_runner, "_remove_stale_terminal_history", lambda job: cleared.append(job["id"]))
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *args: (_ for _ in ()).throw(AssertionError("live runner must block the queue")),
+    )
+
+    training_runner._refresh_state(state)
+
+    assert active["status"] == "running"
+    assert active["runnerVerified"] is True
+    assert "finishedAt" not in active
+    assert "error" not in active
+    assert state["activeJobId"] == active["id"]
+    assert following["status"] == "queued"
+    assert cleared == [active["id"]]
+
+
+def test_runner_process_inspection_requires_the_exact_runner_script(monkeypatch):
+    job = {"pid": 42, "runnerScriptWsl": "/runs/job/runner.sh", "runtime": {"wslDistribution": "Ubuntu_W"}}
+    monkeypatch.setattr(
+        training_runner,
+        "_run_wsl",
+        lambda *args, **kwargs: (0, "/usr/bin/bash\n/runs/other/runner.sh\n", ""),
+    )
+
+    assert training_runner._inspect_job_runner(job) == (
+        "absent",
+        "Recorded runner PID is now used by a different process.",
+    )
+
+
+def test_runner_process_inspection_accepts_the_exact_runner_script(monkeypatch):
+    job = {"pid": 42, "runnerScriptWsl": "/runs/job/runner.sh", "runtime": {"wslDistribution": "Ubuntu_W"}}
+    monkeypatch.setattr(
+        training_runner,
+        "_run_wsl",
+        lambda *args, **kwargs: (0, "/usr/bin/bash\n/runs/job/runner.sh\n", ""),
+    )
+
+    assert training_runner._inspect_job_runner(job) == ("running", "")
+
+
+def test_runner_process_inspection_failure_is_unknown(monkeypatch):
+    job = {"pid": 42, "runnerScriptWsl": "/runs/job/runner.sh", "runtime": {"wslDistribution": "Ubuntu_W"}}
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (124, "", "Timed out"))
+
+    state, detail = training_runner._inspect_job_runner(job)
+
+    assert state == "unknown"
+    assert "Timed out" in detail
+
+
+def test_malformed_result_keeps_the_job_unconfirmed_and_blocks_the_queue(tmp_path, monkeypatch):
+    artifact_path = tmp_path / ".webcap" / "jobs" / "active"
+    artifact_path.mkdir(parents=True)
+    (artifact_path / "result.json").write_text("{bad json", encoding="utf-8")
+    active = {
+        "id": "active", "folder": "set", "status": "running", "pid": 42,
+        "runnerScript": "/runs/active/runner.sh", "artifactPath": str(artifact_path),
+    }
+    following = {"id": "next", "folder": "set", "status": "queued"}
+    state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, following]}
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *args: (_ for _ in ()).throw(AssertionError("unknown result must block the queue")),
+    )
+
+    training_runner._refresh_state(state)
+
+    assert active["status"] == "unconfirmed"
+    assert "could not be read" in active["confirmationNote"]
+    assert "finishedAt" not in active
+    assert state["activeJobId"] == "active"
+    assert following["status"] == "queued"
+
+
+def test_multiple_derived_live_runners_are_visible_and_block_launch(monkeypatch):
+    jobs = [
+        {"id": "one", "status": "interrupted", "pid": 41, "runnerScript": "/runs/one/runner.sh"},
+        {"id": "two", "status": "interrupted", "pid": 42, "runnerScript": "/runs/two/runner.sh"},
+        {"id": "next", "status": "queued", "folder": "set"},
+    ]
+    state = {"activeJobId": "", "queuePaused": False, "queuePauseReason": "", "jobs": jobs}
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda job: ("absent", None, ""))
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("running", ""))
+    monkeypatch.setattr(training_runner, "_remove_stale_terminal_history", lambda job: None)
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *args: (_ for _ in ()).throw(AssertionError("multiple live runners must block the queue")),
+    )
+
+    training_runner._refresh_state(state)
+
+    assert [job["status"] for job in jobs] == ["starting", "starting", "queued"]
+    assert state["activeJobId"] == "one"
+    assert state["runnerNotice"].startswith("2 managed runners")
+
+
 def test_missing_runner_result_interrupts_the_job_and_advances_the_queue(monkeypatch):
     active = {"id": "active", "status": "unconfirmed", "stage": "hi", "stages": "hi", "pid": 42}
     state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}]}
-    monkeypatch.setattr(training_runner, "_read_result", lambda job: None)
-    monkeypatch.setattr(training_runner, "_pid_alive", lambda *args: False)
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda job: ("absent", None, ""))
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("absent", ""))
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: Path(folder))
     monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: job.update(status="starting", stage="starting"))
 
@@ -986,8 +1151,8 @@ def test_log_activity_does_not_keep_a_missing_runner_active(tmp_path, monkeypatc
         "logPath": str(log_path), "lastLogAt": 1,
     }
     state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active]}
-    monkeypatch.setattr(training_runner, "_read_result", lambda job: None)
-    monkeypatch.setattr(training_runner, "_pid_alive", lambda *args: False)
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda job: ("absent", None, ""))
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("absent", ""))
 
     training_runner._refresh_state(state)
 
@@ -1005,8 +1170,8 @@ def test_missing_runner_result_honors_a_recorded_user_action(action, expected_st
         "id": "active", "status": "stopping", "stages": "lo", "pid": 42,
         "actionRequested": action, "outputRunPath": "/output/run",
     }
-    monkeypatch.setattr(training_runner, "_read_result", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_pid_alive", lambda *args: False)
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda candidate: ("absent", None, ""))
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda candidate: ("absent", ""))
 
     training_runner._refresh_job(job)
 
@@ -1019,7 +1184,7 @@ def test_missing_runner_result_honors_a_recorded_user_action(action, expected_st
 
 def test_runner_stopped_without_an_app_action_is_interrupted(monkeypatch):
     job = {"id": "external-stop", "status": "running"}
-    monkeypatch.setattr(training_runner, "_read_result", lambda candidate: {"status": "stopped", "exitCode": 130, "finishedAt": 123.0})
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda candidate: ("result", {"status": "stopped", "exitCode": 130, "finishedAt": 123.0}, ""))
 
     training_runner._refresh_job(job)
 
@@ -1090,7 +1255,6 @@ def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypat
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda value: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda value: None)
     monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value, stages="both": ("set", "folder", {}, {}, []))
     monkeypatch.setattr(training_runner, "_new_job", lambda *args: job)
@@ -1126,7 +1290,6 @@ def test_starting_krea2_creates_one_krea2_job(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
-    monkeypatch.setattr(training_runner, "_apply_restart_hold", lambda value: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda value: None)
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: tmp_path)
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})

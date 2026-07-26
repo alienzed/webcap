@@ -234,12 +234,18 @@ function refreshTrainingRunnerStatus() {
       trainingWorkspaceState.runnerActiveJobId = String(payload.activeJobId || '');
       trainingWorkspaceState.runnerQueuePaused = !!payload.queuePaused;
       trainingWorkspaceState.runnerQueuePauseReason = String(payload.queuePauseReason || '');
+      trainingWorkspaceState.runnerNotice = String(payload.runnerNotice || '');
       renderTrainingRunner();
       var terminalOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
         return (job.status === 'completed' || job.status === 'finished_early' || job.status === 'failed' || job.status === 'stopped' || job.status === 'cancelled') &&
           priorJobsById[job.id] !== job.status;
       });
-      if (terminalOutcome) {
+      var recoveredOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
+        var prior = priorJobsById[job.id];
+        var active = job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'unconfirmed';
+        return active && (prior === 'interrupted' || prior === 'failed' || prior === 'stopped');
+      });
+      if (terminalOutcome || recoveredOutcome) {
         trainingWorkspaceState.historyCollapsed = false;
         refreshTrainingHistory(true);
       }
@@ -858,7 +864,10 @@ function renderTrainingRunner() {
     var noJobMessage = trainingWorkspaceState.runnerQueuePaused
       ? trainingQueueHoldLabel()
       : queuedCount ? 'No active training job.' : 'No managed training jobs.';
-    els.runnerSummary.innerHTML = '<div>' + escapeHtml(noJobMessage) + '</div>';
+    els.runnerSummary.innerHTML = '<div>' + escapeHtml(noJobMessage) + '</div>' +
+      (trainingWorkspaceState.runnerNotice
+        ? '<div class="training-runner-detail is-warning">' + escapeHtml(trainingWorkspaceState.runnerNotice) + '</div>'
+        : '');
     els.runnerActions.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
     if (els.runnerFinishBtn) els.runnerFinishBtn.classList.add('hidden');
     if (els.runnerPauseBtn) els.runnerPauseBtn.classList.add('hidden');
@@ -915,6 +924,7 @@ function renderTrainingRunner() {
     (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
     buildTrainingFailureDetailsHtml(job) +
     (job.confirmationNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.confirmationNote) + '</div>' : '') +
+    (trainingWorkspaceState.runnerNotice ? '<div class="training-runner-detail is-warning">' + escapeHtml(trainingWorkspaceState.runnerNotice) + '</div>' : '') +
     (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');

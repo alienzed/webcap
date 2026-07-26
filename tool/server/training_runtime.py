@@ -105,13 +105,6 @@ def activation_prefix(settings):
     return "source " + shlex.quote(activate) + " && "
 
 
-def pid_alive(pid, distribution=""):
-    if not pid:
-        return False
-    code, _, _ = run_wsl("kill -0 " + str(int(pid)), timeout=8, distribution=distribution)
-    return code == 0
-
-
 def _repair_permissions_recursively(path, distribution, timeout, label):
     try:
         wsl_path = to_wsl_path(path, distribution)

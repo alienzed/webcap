@@ -22,6 +22,7 @@ var trainingWorkspaceState = {
   resumeParentJobId: '',
   runnerQueuePaused: false,
   runnerQueuePauseReason: '',
+  runnerNotice: '',
   entryMode: 'global',
   gpu: null,
   gpuStatusPending: false,

@@ -400,7 +400,7 @@ def test_open_output_prefers_the_bound_timestamp_run_directory(tmp_path, monkeyp
 def test_legacy_paused_job_becomes_queued_with_its_bound_resume_path():
     job = {"folder": "set", "stages": "lo", "status": "paused", "outputRunPath": "/mnt/w/output/run"}
 
-    training_runner._queue_legacy_paused_job(job)
+    training_runner._queue_paused_job(job)
 
     assert job["status"] == "queued"
     assert job["resumeFromCheckpoint"] == "/mnt/w/output/run"
@@ -950,7 +950,7 @@ def test_scheduled_finish_waits_for_the_epoch_after_the_target_save(tmp_path, mo
     assert "Epoch 35 saved" in job["confirmationNote"]
 
 
-def test_pause_queue_leaves_the_running_job_untouched(monkeypatch):
+def test_pause_interrupts_the_running_job_and_holds_the_queue(tmp_path, monkeypatch):
     active = {"id": "active", "status": "running", "pid": 42, "runnerVerified": True}
     state = {
         "activeJobId": "active",
@@ -960,14 +960,17 @@ def test_pause_queue_leaves_the_running_job_untouched(monkeypatch):
     }
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("pause must not signal the runner")))
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
+    action_path = tmp_path / "action"
+    monkeypatch.setattr(training_runner, "_job_action_path", lambda candidate: action_path)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
 
     payload, status = training_runner.stop_response("active", pause=True)
 
     assert status == 200
-    assert payload["job"]["status"] == "running"
-    assert "actionRequested" not in payload["job"]
+    assert payload["job"]["status"] == "stopping"
+    assert payload["job"]["actionRequested"] == "pause"
+    assert action_path.read_text(encoding="utf-8") == "pause"
     assert state["activeJobId"] == "active"
     assert state["queuePaused"] is True
     assert state["queuePauseReason"] == "Queue paused by the user."
@@ -1030,7 +1033,7 @@ def test_legacy_pause_result_holds_the_global_queue(monkeypatch):
     assert state["queuePauseReason"] == "Queue paused by the user."
 
 
-def test_pause_queue_does_not_require_a_runner_pid(monkeypatch):
+def test_pause_without_a_runner_pid_fails_without_holding_the_queue(monkeypatch):
     active = {"id": "active", "status": "running"}
     state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
@@ -1040,9 +1043,10 @@ def test_pause_queue_does_not_require_a_runner_pid(monkeypatch):
 
     payload, status = training_runner.stop_response("active", pause=True)
 
-    assert status == 200
+    assert status == 409
     assert active["status"] == "running"
-    assert state["queuePaused"] is True
+    assert state["queuePaused"] is False
+    assert "no recorded runner PID" in payload["error"]
 
 
 def test_log_response_restarts_from_zero_when_the_log_was_truncated(tmp_path, monkeypatch):

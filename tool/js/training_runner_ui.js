@@ -457,7 +457,7 @@ function stopManagedTraining(cancel, pause, finish) {
   var job = getTrainingRunnerSelectedJob();
   if (!job || !job.id) return;
   var label = cancel ? 'Cancel this queued training job?' : pause
-    ? 'Pause the queue? The current training process will continue, but no next job will start automatically.'
+    ? 'Pause this run? Training will stop, this item will remain at the front, and the queue will wait until you resume it.'
     : finish
       ? 'Finish this run early? Its current output will be kept, the run will be marked finished early, and the queue will continue.'
       : 'Stop this job and continue to the next queued set?';
@@ -467,7 +467,7 @@ function stopManagedTraining(cancel, pause, finish) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jobId: job.id, cancel: !!cancel, pause: !!pause, finish: !!finish })
   }).then(function () {
-    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Training queue paused; the current job will continue.' : finish ? 'Finish requested; waiting for the runner result.' : 'Stop requested; waiting for the runner result.'));
+    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Pause requested; this item will remain at the front of the paused queue.' : finish ? 'Finish requested; waiting for the runner result.' : 'Stop requested; waiting for the runner result.'));
     refreshTrainingRunnerStatus();
     refreshTrainingHistory(true);
   }).catch(function (err) {
@@ -794,7 +794,7 @@ function trainingFolderName(folder) {
 function trainingQueueStartLabel() {
   return trainingWorkspaceState.runnerQueuePauseReason === 'Queue waiting for manual start after WebCap restarted.'
     ? 'Start Queue'
-    : /^Queue held:/i.test(trainingWorkspaceState.runnerQueuePauseReason || '') ? 'Continue with next job' : 'Resume Queue';
+    : /^Queue held:/i.test(trainingWorkspaceState.runnerQueuePauseReason || '') ? 'Continue with next job' : 'Resume';
 }
 
 function syncTrainingQueueResumeButton(els, queuedJobs) {
@@ -905,7 +905,7 @@ function renderTrainingRunner() {
   var canScheduleFinish = status === 'starting' || status === 'running' || status === 'unconfirmed';
   var queued = status === 'queued';
   var queueState = trainingWorkspaceState.runnerQueuePaused
-    ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + ' — no job will start automatically</span>'
+    ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + (activeCount ? ' — waiting for the current run to stop' : ' — Resume will start the first item') + '</span>'
     : '';
   var selectedQueuePosition = queued ? queuedJobs.indexOf(job) + 1 : 0;
   var runOutputPath = String(job.outputRunPath || '').trim();
@@ -944,7 +944,7 @@ function renderTrainingRunner() {
   if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !running);
   if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !running || trainingWorkspaceState.runnerQueuePaused);
   if (els.runnerCancelBtn) els.runnerCancelBtn.classList.toggle('hidden', !queued);
-  if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
+  if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused || !!activeCount);
   if (!activeCount && !queuedCount && !trainingWorkspaceState.runnerQueuePaused && status !== 'failed' && status !== 'completed' && status !== 'finished_early' && status !== 'stopped') {
     els.runnerActions.classList.add('hidden');
   }

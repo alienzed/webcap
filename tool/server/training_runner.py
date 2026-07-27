@@ -620,7 +620,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         "ACTION_FILE=" + shlex.quote(action_wsl),
         "echo $$ > \"$PID_FILE\"",
         "write_result() { local tmp=\"${RESULT_FILE}.tmp.$$\"; printf '{\\\"status\\\":\\\"%s\\\",\\\"exitCode\\\":%s,\\\"finishedAt\\\":%s}\\n' \"$1\" \"$2\" \"$(date +%s)\" > \"$tmp\" && mv -f \"$tmp\" \"$RESULT_FILE\"; }",
-        "finish_requested_stop() { case \"$(cat \"$ACTION_FILE\" 2>/dev/null || true)\" in finish|stop) echo '[webcap] requested stop'; write_result stopped 130; exit 130 ;; esac; }",
+        "finish_requested_stop() { case \"$(cat \"$ACTION_FILE\" 2>/dev/null || true)\" in pause|finish|stop) echo '[webcap] requested stop'; write_result stopped 130; exit 130 ;; esac; }",
         "trap 'echo [webcap] stopped; write_result stopped 130; exit 130' INT TERM",
         "cd " + shlex.quote(settings["cwd"]) + " || { echo '[webcap] training working directory is unavailable'; write_result failed 1; exit 1; }",
     ]
@@ -943,7 +943,7 @@ def _sync_job_log_evidence(job):
 def _apply_terminal_job_status(job, result_status=""):
     requested_action = str(job.get("actionRequested") or "")
     if requested_action == "pause":
-        _queue_legacy_paused_job(job)
+        _queue_paused_job(job)
     elif requested_action == "finish" and result_status != "completed":
         job["status"] = "finished_early"
     elif requested_action == "stop":
@@ -955,8 +955,8 @@ def _apply_terminal_job_status(job, result_status=""):
     return requested_action
 
 
-def _queue_legacy_paused_job(job):
-    """Convert the removed per-job pause state into ordinary queued intent."""
+def _queue_paused_job(job):
+    """Return paused work to the front as ordinary queued resume intent."""
     resume_path = str(job.get("outputRunPath") or "").strip()
     if resume_path:
         job["resumeFromCheckpoint"] = resume_path
@@ -1138,7 +1138,7 @@ def _refresh_state(state):
     pause_requested = False
     for job in state.get("jobs", []):
         if job.get("status") == "paused":
-            _queue_legacy_paused_job(job)
+            _queue_paused_job(job)
             pause_requested = True
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
@@ -1569,11 +1569,6 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
         job = _find_job(state, job_id)
         if not job:
             return {"ok": False, "error": "Training job not found"}, 404
-        if pause:
-            state["queuePaused"] = True
-            state["queuePauseReason"] = "Queue paused by the user."
-            _write_state(state)
-            return {"ok": True, "job": _public_job(job)}, 200
         if job.get("status") in QUEUE_STATUSES and cancel:
             job["status"] = "cancelled"
             job["stage"] = "cancelled"
@@ -1586,10 +1581,10 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if cancel:
-            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Stop or Finish for the active job."}, 400
+            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Pause, Stop, or Finish for the active job."}, 400
         if job.get("status") not in ACTIVE_STATUSES:
             return {"ok": False, "error": "Training job is not running."}, 400
-        action = "finish" if finish else "stop"
+        action = "pause" if pause else "finish" if finish else "stop"
         message = _request_job_action(job, action)
         if message:
             job["error"] = message
@@ -1597,6 +1592,9 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
             _write_state(state)
             status = 409 if "no recorded runner PID" in message or "not verified" in message else 502
             return {"ok": False, "error": message, "job": _public_job(job)}, status
+        if pause:
+            state["queuePaused"] = True
+            state["queuePauseReason"] = "Queue paused by the user."
         job.pop("finishAfterEpoch", None)
         job.pop("finishScheduledAt", None)
         _write_state(state)

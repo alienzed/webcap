@@ -17,7 +17,7 @@ For Wan2.2, `HI -> LO` creates two independent queued jobs. HI and LO are distin
 ## Queue and run controls
 
 - `Train this set` starts when the runner is idle or adds the job behind active work.
-- `Pause Queue` disables automatic handoff without interrupting the active job.
+- `Pause` interrupts the active job, keeps it first, and holds the queue until `Resume`.
 - `Finish` intentionally ends the active job and allows queue processing to continue.
 - Canceling a queued item removes that item only; it does not stop the active job.
 - A temporarily unavailable set folder leaves its job and job bundle intact. The queue shows the unavailable source and waits for explicit cancellation or a later launch attempt.

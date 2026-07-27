@@ -3,7 +3,6 @@ import logging
 import math
 import os
 import re
-import hashlib
 import shlex
 import shutil
 import threading
@@ -14,10 +13,17 @@ from pathlib import Path
 from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, output_dir_from_config, with_output_dir
-from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_run
+from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, with_output_dir
+from .training_profiles import config_for_stage, profile_run
 from .dataset_config import repeat_targets_for_mode
-from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, training_output_group_for_folder
+from .training_history import (
+    HISTORY_FILE_NAME,
+    discover_runs,
+    validate_resumable_run_for_path,
+    resume_point_from_directory,
+    host_path_for_training_path,
+    training_output_group_for_folder,
+)
 from .training_preflight import (
     build_launch_preflight as _build_launch_preflight,
     gpu_snapshot as _gpu_snapshot,
@@ -25,7 +31,6 @@ from .training_preflight import (
     needs_partial_annotation_caption_review as _needs_partial_annotation_caption_review,
     preflight_payload as _preflight_payload,
     prepared_dataset_is_ready as _prepared_dataset_is_ready,
-    resolve_artifacts as _resolve_artifacts,
     resolve_folder as _resolve_folder,
 )
 from .training_progress import (
@@ -38,36 +43,39 @@ from .training_progress import (
 )
 from .training_runtime import (
     TRAINING_RUNTIME_DIR_NAME,
-    activation_prefix as _activation_prefix,
     build_training_launcher,
     configured_training_settings as _training_settings,
     has_conda_runtime,
     run_wsl as _run_wsl,
     to_wsl_path as _to_wsl_path,
-    uses_native_wsl_shell as _uses_native_wsl_shell,
-    wsl_executable as _wsl_executable,
 )
 
 
 RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
 STATE_FILE_NAME = "queue.json"
-JOB_DIR_NAME = "jobs"
+STATE_VERSION = 4
 ACTIVE_STATUSES = {"starting", "running", "stopping", "unconfirmed"}
-QUEUE_STATUSES = {"queued"}
-HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "interrupted"}
-TERMINAL_STATUSES = HISTORY_STATUSES | {"cancelled"}
+TERMINAL_OUTCOMES = {"completed", "finished_early"}
+FAILED_OUTCOMES = {"failed", "interrupted", "stopped"}
 _lock = threading.Lock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
-_startup_reconciled = False
-_history_signatures = {}
-_state_file_seen = None
-_persisted_managed_job_ids = set()
+_handoff_job_id = ""
+_startup_checked = False
 _logger = logging.getLogger(__name__)
 _CHECKPOINT_SAVE_PATH_PATTERN = re.compile(r"Saving model checkpoint:\s+(.+?)[/\\]global_step\d+[/\\]")
-_DISTRIBUTED_SOCKET_HOLD_REASON = (
-    "Queue held: PyTorch distributed could not open its server socket because the address is already in use. "
-    "Stop the other training process before continuing."
+
+_JOB_FIELDS = (
+    "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel",
+    "resumeFromCheckpoint", "resumeStage", "createdAt", "outputRoot", "effectiveOutputDir", "outputSlug",
+    "launchGroupId", "sequence", "launchGroupRoot", "artifactDir", "parentJobId", "finishAfterEpoch",
+)
+_RECENT_FIELDS = (
+    "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel",
+    "status", "createdAt", "startedAt", "finishedAt", "error", "completionNote", "exitCode",
+    "failureExcerpt", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence",
+    "launchGroupRoot", "artifactDir", "logPath", "outputRunPath", "resumeFromCheckpoint", "resumeStage",
+    "progress", "parentJobId",
 )
 
 
@@ -79,54 +87,232 @@ def _state_path():
     return _runtime_root() / STATE_FILE_NAME
 
 
-def _jobs_root():
-    return _runtime_root() / JOB_DIR_NAME
-
-
 def _ensure_runtime_dirs():
-    _jobs_root().mkdir(parents=True, exist_ok=True)
+    _runtime_root().mkdir(parents=True, exist_ok=True)
     normalize_path_permissions(_runtime_root())
-    normalize_path_permissions(_jobs_root())
 
 
 def _default_state():
-    return {"version": 3, "activeJobId": "", "jobs": [], "queuePaused": False, "queuePauseReason": ""}
+    return {"version": STATE_VERSION, "jobs": [], "recentRuns": []}
 
 
 class TrainingStateError(RuntimeError):
     pass
 
 
-def _state_job_ids(state, path):
-    jobs = state.get("jobs") if isinstance(state, dict) else None
-    if not isinstance(jobs, list):
-        raise TrainingStateError("Existing training queue jobs are invalid; the state was left unchanged: " + str(path))
-    job_ids = []
-    for job in jobs:
-        job_id = str(job.get("id") or "") if isinstance(job, dict) else ""
-        if not job_id:
-            raise TrainingStateError("Existing training queue contains a job without an ID; the state was left unchanged: " + str(path))
-        job_ids.append(job_id)
+def _clean_string(value):
+    return str(value or "").strip()
+
+
+def _serialized_job(job):
+    serialized = {field: job.get(field) for field in _JOB_FIELDS if field in job}
+    if not _clean_string(serialized.get("artifactDir")) and _clean_string(job.get("artifactPath")):
+        serialized["artifactDir"] = _clean_string(job.get("artifactPath"))
+    serialized["id"] = _clean_string(serialized.get("id"))
+    serialized["folder"] = _clean_string(serialized.get("folder"))
+    serialized["stages"] = _clean_string(serialized.get("stages"))
+    serialized["artifactDir"] = _clean_string(serialized.get("artifactDir"))
+    if not serialized["id"] or not serialized["folder"] or not serialized["stages"] or not serialized["artifactDir"]:
+        raise TrainingStateError("Training queue contains an incomplete job intent.")
+    return serialized
+
+
+def _serialized_recent(job):
+    serialized = {field: job.get(field) for field in _RECENT_FIELDS if field in job}
+    serialized["id"] = _clean_string(serialized.get("id"))
+    if not serialized["id"]:
+        raise TrainingStateError("Recent Runs contains an entry without an ID.")
+    return serialized
+
+
+def _serialized_state(state):
+    if not isinstance(state, dict):
+        raise TrainingStateError("Training state must be a JSON object.")
+    jobs = state.get("jobs")
+    recent = state.get("recentRuns")
+    if not isinstance(jobs, list) or not isinstance(recent, list):
+        raise TrainingStateError("Training state must contain jobs and recentRuns lists.")
+    if any(not isinstance(job, dict) for job in jobs):
+        raise TrainingStateError("Training queue contains an invalid job intent.")
+    if any(not isinstance(job, dict) for job in recent):
+        raise TrainingStateError("Recent Runs contains an invalid entry.")
+    clean_jobs = [_serialized_job(job) for job in jobs]
+    clean_recent = [_serialized_recent(job) for job in recent]
+    job_ids = [job["id"] for job in clean_jobs]
+    recent_ids = [job["id"] for job in clean_recent]
     if len(job_ids) != len(set(job_ids)):
-        raise TrainingStateError("Existing training queue contains duplicate job IDs; the state was left unchanged: " + str(path))
-    return set(job_ids)
+        raise TrainingStateError("Training queue contains duplicate job IDs.")
+    if len(recent_ids) != len(set(recent_ids)):
+        raise TrainingStateError("Recent Runs contains duplicate job IDs.")
+    if set(job_ids) & set(recent_ids):
+        raise TrainingStateError("A training job cannot be both queued and in Recent Runs.")
+    return {"version": STATE_VERSION, "jobs": clean_jobs, "recentRuns": clean_recent}
 
 
-def _managed_job_ids(state):
-    return {
-        str(job["id"])
-        for job in state.get("jobs", [])
-        if str(job.get("status") or "") in ACTIVE_STATUSES | QUEUE_STATUSES
-    }
+def _compact_legacy_recent(job):
+    status = _clean_string(job.get("status"))
+    if status == "cancelled":
+        return None
+    record = {field: job.get(field) for field in _RECENT_FIELDS if field in job}
+    record["id"] = _clean_string(job.get("id"))
+    if not record["id"]:
+        return None
+    record["status"] = status or "interrupted"
+    if "artifactDir" not in record and job.get("artifactPath"):
+        record["artifactDir"] = job.get("artifactPath")
+    return record
+
+
+def _legacy_history_records():
+    root = Path(app_config.FS_ROOT)
+    records = []
+    if not root.is_dir():
+        return records
+    for path in root.rglob(HISTORY_FILE_NAME):
+        if _runtime_root() in path.parents or "auto_dataset" in path.parts:
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise TrainingStateError("Could not migrate set training metadata; it was left unchanged: " + str(path)) from exc
+        if not isinstance(data, dict) or data.get("version") not in (3, STATE_VERSION):
+            raise TrainingStateError("Set training metadata is invalid; it was left unchanged: " + str(path))
+        legacy_jobs = data.get("jobs") or []
+        if not isinstance(legacy_jobs, list) or any(not isinstance(job, dict) for job in legacy_jobs):
+            raise TrainingStateError("Set training history is invalid; it was left unchanged: " + str(path))
+        try:
+            relative = str(path.parent.relative_to(root)).replace("\\", "/")
+        except ValueError:
+            relative = ""
+        for job in legacy_jobs:
+            candidate = dict(job)
+            if relative:
+                candidate["folder"] = relative
+            compact = _compact_legacy_recent(candidate)
+            if compact:
+                records.append(compact)
+    return records
+
+
+def _legacy_current_candidate(parsed):
+    jobs = [job for job in parsed.get("jobs") or [] if isinstance(job, dict)]
+    active_id = _clean_string(parsed.get("activeJobId"))
+    if active_id:
+        active = next((job for job in jobs if _clean_string(job.get("id")) == active_id), None)
+        if active and _clean_string(active.get("status")) in ACTIVE_STATUSES | {"paused"}:
+            return active
+        if active and _clean_string(active.get("status")) == "interrupted":
+            bundle = _clean_string(active.get("artifactDir") or active.get("artifactPath"))
+            try:
+                has_pid_file = bool(bundle) and (host_path_for_training_path(bundle) / "pid").is_file()
+            except (OSError, RuntimeError, ValueError):
+                has_pid_file = False
+            if active.get("pid") or has_pid_file:
+                return active
+    active = next((job for job in jobs if _clean_string(job.get("status")) in ACTIVE_STATUSES | {"paused"}), None)
+    if active:
+        return active
+    # A legacy interrupted record with a PID is the only additional candidate
+    # worth preserving as current work. The version-4 observer will verify only
+    # this one job and will never search for additional runners.
+    for job in jobs:
+        if _clean_string(job.get("status")) != "interrupted":
+            continue
+        bundle = _clean_string(job.get("artifactDir") or job.get("artifactPath"))
+        try:
+            has_pid_file = bool(bundle) and (host_path_for_training_path(bundle) / "pid").is_file()
+        except (OSError, RuntimeError, ValueError):
+            has_pid_file = False
+        if job.get("pid") or has_pid_file:
+            return job
+    return None
+
+
+def _migrate_v3_state(parsed):
+    raw_jobs = parsed.get("jobs")
+    if not isinstance(raw_jobs, list) or any(not isinstance(job, dict) for job in raw_jobs):
+        raise TrainingStateError("Existing version-3 training jobs are invalid; the state was left unchanged.")
+    legacy_jobs = list(raw_jobs)
+    legacy_ids = [_clean_string(job.get("id")) for job in legacy_jobs]
+    valid_statuses = ACTIVE_STATUSES | TERMINAL_OUTCOMES | FAILED_OUTCOMES | {"queued", "paused", "cancelled"}
+    if any(not job_id for job_id in legacy_ids) or len(legacy_ids) != len(set(legacy_ids)):
+        raise TrainingStateError("Existing version-3 training job IDs are invalid; the state was left unchanged.")
+    if any(_clean_string(job.get("status")) not in valid_statuses for job in legacy_jobs):
+        raise TrainingStateError("Existing version-3 training job status is invalid; the state was left unchanged.")
+    current = _legacy_current_candidate(parsed)
+    current_id = _clean_string((current or {}).get("id"))
+    pending = []
+    if current:
+        pending.append(_serialized_job(current))
+    for job in legacy_jobs:
+        job_id = _clean_string(job.get("id"))
+        if not job_id or job_id == current_id:
+            continue
+        if _clean_string(job.get("status")) in ACTIVE_STATUSES | {"queued", "paused"}:
+            pending.append(_serialized_job(job))
+
+    recent_by_id = {}
+    for record in _legacy_history_records():
+        recent_by_id[record["id"]] = record
+    for job in legacy_jobs:
+        if _clean_string(job.get("id")) == current_id:
+            continue
+        if _clean_string(job.get("status")) in TERMINAL_OUTCOMES | FAILED_OUTCOMES:
+            record = _compact_legacy_recent(job)
+            if record:
+                recent_by_id[record["id"]] = record
+    for job in pending:
+        recent_by_id.pop(job["id"], None)
+
+    migrated = _serialized_state({
+        "jobs": pending,
+        "recentRuns": sorted(
+            recent_by_id.values(),
+            key=lambda job: float(job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0),
+            reverse=True,
+        ),
+    })
+    _write_state(migrated)
+    _strip_legacy_history_files()
+    return migrated
+
+
+def _strip_legacy_history_files():
+    root = Path(app_config.FS_ROOT)
+    if not root.is_dir():
+        return
+    for path in root.rglob(HISTORY_FILE_NAME):
+        if _runtime_root() in path.parents or "auto_dataset" in path.parts:
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise TrainingStateError("Could not reduce set training metadata; it was left unchanged: " + str(path)) from exc
+        if not isinstance(data, dict) or data.get("version") not in (3, STATE_VERSION):
+            raise TrainingStateError("Set training metadata is invalid; it was left unchanged: " + str(path))
+        replacement = {"version": STATE_VERSION}
+        output_group = _clean_string(data.get("outputGroup"))
+        if output_group:
+            replacement["outputGroup"] = output_group
+        tmp = path.with_name("." + path.name + "." + uuid.uuid4().hex + ".tmp")
+        try:
+            with tmp.open("x", encoding="utf-8") as handle:
+                json.dump(replacement, handle, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, path)
+            normalize_path_permissions(path)
+        finally:
+            try:
+                tmp.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def _read_state():
-    global _state_file_seen, _persisted_managed_job_ids
     _ensure_runtime_dirs()
     path = _state_path()
     if not path.exists():
-        if _state_file_seen == path:
-            raise TrainingStateError("Training queue state disappeared while WebCap was running: " + str(path))
         return _default_state()
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
@@ -134,39 +320,21 @@ def _read_state():
         raise TrainingStateError("Could not read the existing training queue state; it was left unchanged: " + str(path)) from exc
     if not isinstance(parsed, dict):
         raise TrainingStateError("Existing training queue state is not a JSON object; it was left unchanged: " + str(path))
-    if parsed.get("version") != 3:
+    if parsed.get("version") == 3:
+        return _migrate_v3_state(parsed)
+    if parsed.get("version") != STATE_VERSION:
         raise TrainingStateError("Unsupported training queue state version; it was left unchanged: " + str(path))
-    parsed.setdefault("activeJobId", "")
-    parsed.setdefault("jobs", [])
-    parsed.setdefault("queuePaused", False)
-    parsed.setdefault("queuePauseReason", "")
-    job_ids = _state_job_ids(parsed, path)
-    missing_job_ids = _persisted_managed_job_ids - job_ids if _state_file_seen == path else set()
-    if missing_job_ids:
-        raise TrainingStateError(
-            "Existing training queue state dropped managed jobs; it was left unchanged: "
-            + ", ".join(sorted(missing_job_ids))
-        )
-    _persisted_managed_job_ids = _managed_job_ids(parsed)
-    _state_file_seen = path
-    return parsed
+    return _serialized_state(parsed)
 
 
-def _write_state(state, retired_job_ids=()):
-    global _state_file_seen, _persisted_managed_job_ids
+def _write_state(state):
     _ensure_runtime_dirs()
     path = _state_path()
-    job_ids = _state_job_ids(state, path)
-    allowed_retirements = {str(job_id) for job_id in retired_job_ids}
-    missing_job_ids = _persisted_managed_job_ids - job_ids - allowed_retirements if _state_file_seen == path else set()
-    if missing_job_ids:
-        raise TrainingStateError(
-            "Refusing to remove managed training jobs from queue state: " + ", ".join(sorted(missing_job_ids))
-        )
+    payload = _serialized_state(state)
     tmp = path.with_name("." + path.name + "." + str(os.getpid()) + "." + uuid.uuid4().hex + ".tmp")
     try:
         with tmp.open("x", encoding="utf-8") as handle:
-            json.dump(state, handle, indent=2)
+            json.dump(payload, handle, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp, path)
@@ -176,108 +344,6 @@ def _write_state(state, retired_job_ids=()):
         except FileNotFoundError:
             pass
     normalize_path_permissions(path)
-    _state_file_seen = path
-    _persisted_managed_job_ids = _managed_job_ids(state)
-
-
-def recover_state_response():
-    """Archive an unreadable queue state and start a fresh, empty queue."""
-    global _state_file_seen, _persisted_managed_job_ids
-    with _lock:
-        _ensure_runtime_dirs()
-        path = _state_path()
-        archived_path = None
-        if path.exists():
-            archived_path = path.with_name(
-                "queue.recovery." + time.strftime("%Y%m%d_%H%M%S") + "." + uuid.uuid4().hex + ".json"
-            )
-            os.replace(path, archived_path)
-            normalize_path_permissions(archived_path)
-        _state_file_seen = None
-        _persisted_managed_job_ids = set()
-        state = _default_state()
-        _write_state(state)
-        return {
-            "ok": True,
-            "archivedState": str(archived_path) if archived_path else "",
-            "activeJobId": "",
-            "queuePaused": False,
-            "queuePauseReason": "",
-            "jobs": [],
-        }, 200
-
-
-def _sync_job_history(job):
-    if job.get("historyHidden") or job.get("status") not in HISTORY_STATUSES:
-        return True
-    folder = str(job.get("folder") or "").strip()
-    if not folder:
-        return False
-    try:
-        folder_path = app_config.safe_join_fs_root(folder)
-    except ValueError:
-        return False
-    if not folder_path.is_dir():
-        return False
-    signature = json.dumps({
-        "status": job.get("status"), "stage": job.get("stage"), "updatedAt": job.get("updatedAt"),
-        "finishedAt": job.get("finishedAt"), "error": job.get("error"), "exitCode": job.get("exitCode"),
-    }, sort_keys=True)
-    if _history_signatures.get(job.get("id")) == signature:
-        return True
-    try:
-        record_job(folder_path, job)
-    except OSError:
-        _logger.warning("Skipped training history sync because its folder is unavailable: %s", folder_path)
-        return False
-    _history_signatures[job.get("id")] = signature
-    return True
-
-
-def _sync_histories(state):
-    return {
-        str(job.get("id") or "")
-        for job in state.get("jobs", [])
-        if _sync_job_history(job)
-    }
-
-
-def _retire_terminal_jobs(state, projected_job_ids):
-    """Keep only scheduler work after terminal outcomes are durably indexed."""
-    projected_job_ids = set(projected_job_ids or ())
-    retained = []
-    retired_job_ids = set()
-    unprojected_count = 0
-    for job in state.get("jobs", []):
-        status = str(job.get("status") or "")
-        job_id = str(job.get("id") or "")
-        if status == "cancelled" or (status in HISTORY_STATUSES and job_id in projected_job_ids):
-            _history_signatures.pop(job_id, None)
-            retired_job_ids.add(job_id)
-            continue
-        if status in HISTORY_STATUSES:
-            unprojected_count += 1
-        retained.append(job)
-    state["jobs"] = retained
-    if unprojected_count:
-        notice = (
-            str(unprojected_count) + " terminal training outcome"
-            + ("" if unprojected_count == 1 else "s")
-            + " cannot be added to Recent Runs while the set folder is unavailable."
-        )
-        prior_notice = str(state.get("runnerNotice") or "").strip()
-        if notice not in prior_notice:
-            state["runnerNotice"] = (prior_notice + " " + notice).strip()
-    return retired_job_ids
-
-
-def _persist_reconciled_state(state):
-    projected_job_ids = _sync_histories(state)
-    retired_job_ids = _retire_terminal_jobs(state, projected_job_ids)
-    if retired_job_ids:
-        _write_state(state, retired_job_ids=retired_job_ids)
-    else:
-        _write_state(state)
 
 
 def relocate_folder_jobs(old_folder, new_folder):
@@ -300,6 +366,15 @@ def relocate_folder_jobs(old_folder, new_folder):
                 continue
             job["updatedAt"] = time.time()
             changed += 1
+        for job in state.get("recentRuns", []):
+            folder = str(job.get("folder") or "").strip().replace("\\", "/").strip("/")
+            if folder == old_folder:
+                job["folder"] = new_folder
+            elif folder.startswith(prefix):
+                job["folder"] = new_folder + folder[len(old_folder):]
+            else:
+                continue
+            changed += 1
         if changed:
             _write_state(state)
         return changed
@@ -307,19 +382,29 @@ def relocate_folder_jobs(old_folder, new_folder):
 
 def _job_dir(job):
     """Job-owned artifacts live beside trainer output, not in the queue state area."""
-    if isinstance(job, dict) and (job.get("artifactPath") or job.get("artifactDir")):
-        return Path(job.get("artifactPath") or job.get("artifactDir"))
-    job_id = job.get("id") if isinstance(job, dict) else job
-    return _jobs_root() / str(job_id)
+    path = _clean_string((job or {}).get("artifactDir")) if isinstance(job, dict) else ""
+    if not path:
+        raise TrainingStateError("Training job has no WebCap bundle path.")
+    try:
+        candidate = host_path_for_training_path(path).resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise TrainingStateError("Training job bundle path could not be resolved.") from exc
+    owned_root = (Path(app_config.FS_ROOT) / "output" / "runs").resolve()
+    try:
+        relative = candidate.relative_to(owned_root)
+    except ValueError as exc:
+        raise TrainingStateError("Training job bundle is outside WebCap's output area.") from exc
+    job_id = _clean_string((job or {}).get("id"))
+    parts = relative.parts
+    if len(parts) < 4 or tuple(parts[-3:-1]) != (".webcap", "jobs") or parts[-1] != job_id:
+        raise TrainingStateError("Training job bundle path does not match its job ID.")
+    return candidate
 
 
 def _job_action_path(job):
     return _job_dir(job) / "action"
 
 
-def _artifact_root(folder_path, stage):
-    root = output_root_for_folder(folder_path, stage if stage in ("hi", "lo", "krea2", "wan21") else "hi")
-    return root / ".webcap" / "jobs"
 
 
 def _find_job(state, job_id):
@@ -329,63 +414,22 @@ def _find_job(state, job_id):
     return None
 
 
-def _find_history_job(folder, job_id):
-    folder_text = str(folder or "").strip()
+def _find_history_job(state, folder, job_id):
+    folder_text = _clean_string(folder)
     wanted = str(job_id or "").strip()
-    if not folder_text or not wanted:
-        return None
-    try:
-        folder_path = app_config.safe_join_fs_root(folder_text)
-    except ValueError:
+    if not wanted:
         return None
     return next(
-        (job for job in read_history(folder_path).get("jobs", []) if str(job.get("id") or "") == wanted),
+        (
+            job for job in state.get("recentRuns", [])
+            if str(job.get("id") or "") == wanted
+            and (not folder_text or _clean_string(job.get("folder")) == folder_text)
+        ),
         None,
     )
 
-def _file_digest(path):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
-def _input_evidence(folder_path, stages="both"):
-    folder = Path(folder_path)
-    manifest_path = folder / "auto_dataset" / "prep_manifest.json"
-    digest = hashlib.sha256()
-    count = 0
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        manifest = {}
-    rows = (manifest.get("images") or []) + (manifest.get("videos") or []) if isinstance(manifest, dict) else []
-    for row in sorted((item for item in rows if isinstance(item, dict)), key=lambda item: str(item.get("prepared_path") or item.get("file") or "")):
-        prepared = str(row.get("prepared_path") or "")
-        name = str(row.get("file") or prepared)
-        if not prepared:
-            continue
-        count += 1
-        digest.update(name.encode("utf-8"))
-        caption = folder / "auto_dataset" / prepared
-        caption = caption.with_suffix(".txt")
-        try:
-            digest.update(caption.read_bytes())
-        except OSError:
-            digest.update(b"<missing-caption>")
-    config_names = (KREA2_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (WAN21_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "wan21" else (
-        HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
-    )
-    config_paths = [folder / name for name in config_names]
-    config_digest = hashlib.sha256()
-    for path in config_paths:
-        config_digest.update(path.name.encode("utf-8"))
-        try:
-            config_digest.update(path.read_bytes())
-        except OSError:
-            config_digest.update(b"<missing>")
-    return {"count": count, "fingerprint": "sha256:" + digest.hexdigest(), "configFingerprint": "sha256:" + config_digest.hexdigest()}
 
 
 def _training_profile(folder_path):
@@ -397,22 +441,6 @@ def _training_profile(folder_path):
     return mode if mode in ("poc", "normal", "quality") else "unknown"
 
 
-def _model_identity(artifacts, profile_id="wan22_t2v", stage="hi"):
-    source = ""
-    pattern = re.compile(r"^\s*(?:model|model_path|checkpoint|base_model|ckpt_path|diffusion_model|transformer_path)\s*=\s*[\"']?([^\"'\n#]+)", re.MULTILINE | re.IGNORECASE)
-    key = str(stage) + "Config"
-    try:
-        match = pattern.search(Path(artifacts[key]).read_text(encoding="utf-8"))
-    except (KeyError, OSError):
-        match = None
-    if match:
-        source = match.group(1).strip()
-    source_name = Path(source).name if source else ""
-    if source_name.lower().endswith((".safetensors", ".ckpt", ".pt")):
-        source_name = Path(source_name).stem
-    selected_profile, _ = profile_run(profile_id, None, stage)
-    label = selected_profile["label"]
-    return {"label": label, "source": source}
 
 
 def _read_config_positive_int(path, key, fallback=0):
@@ -442,28 +470,6 @@ def _plan_run_steps(progress_plan, snapshot):
     return planned
 
 
-def _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir):
-    snapshot = {}
-    config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21" else ((stages, HI_CONFIG_NAME if stages == "hi" else LO_CONFIG_NAME),) if stages in ("hi", "lo") else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
-    for key, filename in config_files:
-        source = artifacts[key + "Config"]
-        target = job_dir / filename
-        shutil.copy2(source, target)
-        normalize_path_permissions(target)
-        snapshot[key] = str(target)
-    dataset_files = ("dataset.train.toml", "auto_dataset/training_plan.json") if stages in ("krea2", "wan21") else (
-        ("dataset." + stages + ".toml", "auto_dataset/training_plan.json") if stages in ("hi", "lo") else
-        ("dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json")
-    )
-    for filename in dataset_files:
-        source = Path(folder_path) / filename
-        if not source.is_file():
-            continue
-        target = job_dir / Path(filename).name
-        shutil.copy2(source, target)
-        normalize_path_permissions(target)
-        snapshot[Path(filename).stem.replace(".", "_")] = str(target)
-    return snapshot
 
 
 def _read_training_plan(folder_path):
@@ -522,7 +528,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     )
     result_wsl = _to_wsl_path(job_dir / "result.json", distribution)
     pid_wsl = _to_wsl_path(job_dir / "pid", distribution)
-    action_wsl = _to_wsl_path(_job_action_path(job), distribution)
+    action_wsl = _to_wsl_path(Path(job_dir) / "action", distribution)
     lines = [
         "#!/usr/bin/env bash",
         "set -uo pipefail",
@@ -530,8 +536,8 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         "RESULT_FILE=" + shlex.quote(result_wsl),
         "ACTION_FILE=" + shlex.quote(action_wsl),
         "echo $$ > \"$PID_FILE\"",
-        "write_result() { printf '{\\\"status\\\":\\\"%s\\\",\\\"exitCode\\\":%s,\\\"finishedAt\\\":%s}\\n' \"$1\" \"$2\" \"$(date +%s)\" > \"$RESULT_FILE\"; }",
-        "finish_requested_stop() { case \"$(cat \"$ACTION_FILE\" 2>/dev/null || true)\" in finish|stop) echo '[webcap] requested stop'; write_result stopped 130; exit 130 ;; esac; }",
+        "write_result() { local tmp=\"${RESULT_FILE}.tmp.$$\"; printf '{\\\"status\\\":\\\"%s\\\",\\\"exitCode\\\":%s,\\\"finishedAt\\\":%s}\\n' \"$1\" \"$2\" \"$(date +%s)\" > \"$tmp\" && mv -f \"$tmp\" \"$RESULT_FILE\"; }",
+        "finish_requested_stop() { case \"$(cat \"$ACTION_FILE\" 2>/dev/null || true)\" in pause|finish) echo '[webcap] requested stop'; write_result stopped 130; exit 130 ;; esac; }",
         "trap 'echo [webcap] stopped; write_result stopped 130; exit 130' INT TERM",
         "cd " + shlex.quote(settings["cwd"]) + " || { echo '[webcap] training working directory is unavailable'; write_result failed 1; exit 1; }",
     ]
@@ -575,7 +581,43 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         ])
     lines.extend(["echo '[webcap] completed'", "write_result completed 0"])
     script = "\n".join(lines) + "\n"
-    return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "wan21": lo_wsl if stages == "wan21" else "", "usedSnapshot": False}
+    return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "wan21": lo_wsl if stages == "wan21" else "", "usedSnapshot": True}
+
+
+def _write_result_record(job, status, exit_code, error=""):
+    path = _job_dir(job) / "result.json"
+    payload = {"status": status, "exitCode": int(exit_code), "finishedAt": time.time()}
+    if error:
+        payload["error"] = str(error)[:2000]
+    tmp = path.with_name("." + path.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        with tmp.open("x", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+        normalize_path_permissions(path)
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _launch_artifacts(job, artifacts):
+    stage = _clean_string(job.get("stages"))
+    config_key = stage + "Config"
+    source = Path(artifacts[config_key])
+    target = _job_dir(job) / source.name
+    rendered = with_output_dir(
+        source.read_text(encoding="utf-8"),
+        _clean_string(job.get("effectiveOutputDir")),
+    )
+    target.write_text(rendered, encoding="utf-8")
+    normalize_path_permissions(target)
+    launch_artifacts = dict(artifacts)
+    launch_artifacts[config_key] = target
+    return launch_artifacts
 
 
 def _write_runner_script(job, settings, artifacts):
@@ -584,59 +626,48 @@ def _write_runner_script(job, settings, artifacts):
     path = job_dir / "runner.sh"
     path.write_text(script, encoding="utf-8", newline="\n")
     normalize_path_permissions(path)
-    job["runnerScript"] = str(path)
-    job["resolvedConfigs"] = resolved
-    return path
+    return path, resolved
 
 
 def _launch_job(job, folder_path):
-    launch_time = time.time()
-    if not job.get("startedAt"):
-        job["startedAt"] = launch_time
-    job["updatedAt"] = launch_time
-    job["status"] = "starting"
-    job["stage"] = "launch"
-    if str(job.get("resumeFromCheckpoint") or "").strip():
+    job_dir = _job_dir(job)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    for child in list(job_dir.iterdir()):
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+    if _clean_string(job.get("resumeFromCheckpoint")):
         try:
             validate_resumable_run_for_path(
                 folder_path,
-                str(job.get("resumeStage") or job.get("stages") or ""),
+                _clean_string(job.get("resumeStage") or job.get("stages")),
                 job["resumeFromCheckpoint"],
             )
         except ValueError as exc:
-            job["status"] = "failed"
-            job["stage"] = "resume"
-            job["failureScope"] = "job"
-            job["error"] = "Resume invariant failed: " + str(exc)
-            job["finishedAt"] = time.time()
+            _write_result_record(job, "failed", 1, "Resume failed: " + str(exc))
             return False
-    stages = job.get("stages") or "both"
-    _, _, artifacts, settings, checks = (
-        _build_launch_preflight(job["folder"], stages)
-    )
+    stages = _clean_string(job.get("stages")) or "both"
+    try:
+        _, _, artifacts, settings, checks = _build_launch_preflight(job["folder"], stages)
+    except Exception as exc:
+        _write_result_record(job, "failed", 1, "Launch checks failed: " + str(exc))
+        return False
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
-    job["preflight"] = {"checks": checks, "blockers": len(blockers)}
     if blockers:
-        job["status"] = "failed"
-        job["stage"] = "launch"
-        job_local_checks = {"set_folder_exists", "training_artifacts", "training_toml"}
-        job["failureScope"] = "job" if all(item.get("id") in job_local_checks for item in blockers) else "system"
         blocker_messages = []
         for item in blockers:
             text = str(item.get("message") or item.get("id") or "Preflight blocker").strip()
             details = str(item.get("details") or "").strip()
             blocker_messages.append(text + ((" — " + details) if details else ""))
-        job["error"] = "Preflight failed: " + "; ".join(blocker_messages)
-        job["finishedAt"] = time.time()
+        _write_result_record(job, "failed", 1, "Preflight failed: " + "; ".join(blocker_messages))
         return False
-    job_dir = _job_dir(job)
-    result_path = job_dir / "result.json"
-    if result_path.exists():
-        result_path.unlink()
-    action_path = _job_action_path(job)
-    if action_path.exists():
-        action_path.unlink()
-    script_path = _write_runner_script(job, settings, artifacts)
+    try:
+        launch_artifacts = _launch_artifacts(job, artifacts)
+        script_path, _ = _write_runner_script(job, settings, launch_artifacts)
+    except Exception as exc:
+        _write_result_record(job, "failed", 1, "Could not prepare the launch bundle: " + str(exc))
+        return False
     script_wsl = _to_wsl_path(script_path, settings["wslDistribution"])
     log_path = job_dir / "run.log"
     log_wsl = _to_wsl_path(log_path, settings["wslDistribution"])
@@ -644,21 +675,9 @@ def _launch_job(job, folder_path):
     code, stdout, stderr = _run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])
     pid = (stdout or "").strip().splitlines()[-1] if (stdout or "").strip() else ""
     if code != 0 or not pid.isdigit():
-        job["status"] = "failed"
-        job["stage"] = "launch"
-        job["error"] = (stderr or stdout).strip() or "Could not launch the managed training runner (exit " + str(code) + ")."
-        job["finishedAt"] = time.time()
+        error = (stderr or stdout).strip() or "Could not launch the managed training runner (exit " + str(code) + ")."
+        _write_result_record(job, "failed", code or 1, error)
         return False
-    job.update({
-        "status": "starting",
-        "stage": "starting",
-        "pid": int(pid),
-        "runnerScriptWsl": script_wsl,
-        "runnerVerified": True,
-        "updatedAt": time.time(),
-        "logPath": str(log_path),
-        "error": "",
-    })
     return True
 
 
@@ -672,36 +691,31 @@ def _read_result_evidence(job):
         return "unknown", None, "Runner result exists but could not be read: " + str(exc)
     if not isinstance(parsed, dict):
         return "unknown", None, "Runner result exists but is not a JSON object: " + str(path)
+    if parsed.get("status") not in ("completed", "failed", "stopped"):
+        return "unknown", None, "Runner result has an invalid status: " + str(path)
+    try:
+        int(parsed.get("exitCode"))
+        float(parsed.get("finishedAt"))
+    except (TypeError, ValueError):
+        return "unknown", None, "Runner result is incomplete: " + str(path)
     return "result", parsed, ""
 
 def _job_wsl_distribution(job):
-    runtime = job.get("runtime") if isinstance(job.get("runtime"), dict) else {}
-    return str(runtime.get("wslDistribution") or _training_settings()["wslDistribution"] or "").strip()
+    return _clean_string(_training_settings()["wslDistribution"])
 
 def _job_runner_pid(job):
-    """Use the PID recorded by the runner when it is available."""
+    """Use only the PID written by this job's runner."""
     try:
         recorded = (_job_dir(job) / "pid").read_text(encoding="utf-8").strip()
         if recorded.isdigit():
             return int(recorded)
     except OSError:
         pass
-    try:
-        return int(job.get("pid") or 0)
-    except (TypeError, ValueError):
-        return 0
+    return 0
 
 
 def _job_runner_script_wsl(job):
-    recorded = str(job.get("runnerScriptWsl") or "").strip()
-    if recorded:
-        return recorded
-    script = str(job.get("runnerScript") or "").strip()
-    if not script:
-        script = str(_job_dir(job) / "runner.sh")
-    if script.startswith("/"):
-        return script
-    return _to_wsl_path(script, _job_wsl_distribution(job))
+    return _to_wsl_path(_job_dir(job) / "runner.sh", _job_wsl_distribution(job))
 
 
 def _inspect_job_runner(job):
@@ -726,18 +740,17 @@ def _inspect_job_runner(job):
         return "unknown", "Could not inspect the runner process: " + detail
     arguments = [line.strip() for line in (stdout or "").splitlines() if line.strip()]
     if script_wsl in arguments:
-        job["pid"] = pid
-        job["runnerScriptWsl"] = script_wsl
         return "running", ""
     return "absent", "Recorded runner PID is now used by a different process."
 
 
-def _request_job_action(job, action, confirmation_note=""):
+def _request_job_action(job, action):
     pid = _job_runner_pid(job)
     if pid <= 0:
         return "WebCap has no recorded runner PID, so it cannot send the " + action + " request safely."
-    if not job.get("runnerVerified"):
-        return "WebCap has not verified the recorded runner process, so it cannot send the " + action + " request safely."
+    process_state, detail = _inspect_job_runner(job)
+    if process_state != "running":
+        return detail or "WebCap could not verify the recorded runner process."
     action_path = _job_action_path(job)
     action_path.write_text(action, encoding="utf-8")
     normalize_path_permissions(action_path)
@@ -750,35 +763,9 @@ def _request_job_action(job, action, confirmation_note=""):
         except OSError:
             pass
         return (stderr or stdout or "Could not send the " + action + " request.").strip()
-    job["actionRequested"] = action
-    job["actionRequestedAt"] = time.time()
-    job["status"] = "stopping"
-    job["stage"] = "stopping"
-    job["confirmationNote"] = confirmation_note or action.capitalize() + " requested. Waiting for the runner result."
-    job["updatedAt"] = time.time()
     return ""
 
 
-def _trigger_scheduled_finish(job):
-    target_epoch = int(job.get("finishAfterEpoch") or 0)
-    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
-    current_epoch = int(progress.get("epoch") or 0)
-    if target_epoch <= 0 or current_epoch <= target_epoch:
-        return False
-    error = _request_job_action(
-        job,
-        "finish",
-        "Epoch " + str(target_epoch) + " saved. Finish requested; waiting for the runner result.",
-    )
-    if error:
-        job["error"] = "Scheduled Finish could not be sent after epoch " + str(target_epoch) + " saved: " + error
-        job["updatedAt"] = time.time()
-        return False
-    job["finishTriggeredEpoch"] = target_epoch
-    job.pop("finishAfterEpoch", None)
-    job.pop("finishScheduledAt", None)
-    job.pop("error", None)
-    return True
 
 
 def _bind_job_run_path_from_log(job, log_text):
@@ -793,7 +780,8 @@ def _bind_job_run_path_from_log(job, log_text):
 
 
 def _sync_job_log_evidence(job):
-    log_path = Path(job.get("logPath") or "")
+    log_path = _job_dir(job) / "run.log"
+    job["logPath"] = str(log_path)
     if not log_path.is_file():
         return "", None
     try:
@@ -809,286 +797,187 @@ def _sync_job_log_evidence(job):
         job["stage"] = "lo"
     elif "[webcap] stage=hi" in tail:
         job["stage"] = "hi"
+    stage = _clean_string(job.get("stage") or job.get("stages"))
+    config_path = _job_dir(job) / (
+        KREA2_CONFIG_NAME if stage == "krea2" else WAN21_CONFIG_NAME if stage == "wan21"
+        else HI_CONFIG_NAME if stage == "hi" else LO_CONFIG_NAME
+    )
+    job["snapshot"] = {stage: str(config_path)}
+    try:
+        folder_path = app_config.safe_join_fs_root(job["folder"])
+        job["progressPlan"] = _plan_run_steps(
+            _read_training_plan(folder_path) or _default_progress_plan(),
+            job["snapshot"],
+        )
+    except Exception:
+        job["progressPlan"] = _default_progress_plan()
     _bind_job_run_path_from_log(job, tail)
     _sync_job_progress(job, tail)
     return tail, log_mtime
 
 
-def _apply_terminal_job_status(job, result_status=""):
-    requested_action = str(job.get("actionRequested") or "")
-    if requested_action == "pause":
-        _queue_legacy_paused_job(job)
-    elif requested_action == "finish" and result_status != "completed":
-        job["status"] = "finished_early"
-    elif requested_action == "stop":
-        job["status"] = "stopped"
-    elif result_status == "stopped" or not result_status:
-        job["status"] = "interrupted"
-    else:
-        job["status"] = result_status
-    return requested_action
+def _job_action(job):
+    try:
+        return (_job_action_path(job).read_text(encoding="utf-8").strip().lower())
+    except OSError:
+        return ""
 
 
-def _queue_legacy_paused_job(job):
-    """Convert the removed per-job pause state into ordinary queued intent."""
-    resume_path = str(job.get("outputRunPath") or "").strip()
-    if resume_path:
-        job["resumeFromCheckpoint"] = resume_path
-        job["resumeStage"] = str(job.get("stages") or "")
-    else:
-        job.pop("resumeFromCheckpoint", None)
-        job.pop("resumeStage", None)
-        job.pop("resumePoint", None)
-        job.pop("resumePointError", None)
-    for field in (
-        "pid", "runnerVerified", "actionRequested", "actionRequestedAt", "startedAt", "finishedAt",
-        "lastLogAt", "exitCode", "failureScope", "failureExcerpt", "completionNote", "confirmationNote",
-        "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "progress", "error",
-    ):
-        job.pop(field, None)
-    job["status"] = "queued"
-    job["stage"] = "queued"
-    job["updatedAt"] = time.time()
+def _job_started_at(job):
+    for path in (_job_dir(job) / "pid", _job_dir(job) / "run.log"):
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            continue
+    return 0
 
 
-def _distributed_socket_hold_reason(log_text):
-    text = str(log_text or "").lower()
-    has_distributed_context = "torch.distributed" in text or "_create_c10d_store" in text
-    has_server_socket_failure = "server socket has failed to listen" in text
-    has_address_conflict = "eaddrinuse" in text or "address already in use" in text
-    if has_distributed_context and has_server_socket_failure and has_address_conflict:
-        return _DISTRIBUTED_SOCKET_HOLD_REASON
+def _latest_checkpoint(job):
+    folder_path = app_config.safe_join_fs_root(job["folder"])
+    stage = _clean_string(job.get("stages"))
+    candidates = []
+    explicit = _clean_string(job.get("resumeFromCheckpoint"))
+    if explicit:
+        candidates.append(explicit)
+    transient = dict(job)
+    tail = _read_log_tail(_job_dir(job) / "run.log", byte_count=32768)
+    _bind_job_run_path_from_log(transient, tail)
+    logged = _clean_string(transient.get("outputRunPath"))
+    if logged and logged not in candidates:
+        candidates.append(logged)
+    try:
+        output_root = host_path_for_training_path(job.get("effectiveOutputDir"))
+        latest_markers = sorted(
+            output_root.rglob("latest"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        ) if output_root.is_dir() else []
+    except (OSError, RuntimeError):
+        latest_markers = []
+    for marker in latest_markers:
+        candidate = _to_wsl_path(marker.parent, _job_wsl_distribution(job))
+        if candidate not in candidates:
+            candidates.append(candidate)
+    for candidate in candidates:
+        try:
+            validate_resumable_run_for_path(folder_path, stage, candidate)
+            return candidate
+        except (OSError, RuntimeError, ValueError):
+            continue
     return ""
 
 
-def _remove_stale_terminal_history(job):
-    folder = str(job.get("folder") or "").strip()
-    if not folder:
-        return
-    try:
-        clear_history_job(app_config.safe_join_fs_root(folder), job.get("id"))
-    except (OSError, ValueError):
-        _logger.warning("Could not remove stale terminal training history for recovered job %s", job.get("id"))
-    _history_signatures.pop(job.get("id"), None)
-
-
-def _clear_terminal_projection(job):
-    for field in ("finishedAt", "exitCode", "failureScope", "failureExcerpt", "completionNote", "error"):
-        job.pop(field, None)
-
-
-def _terminal_projection_signature(job):
-    fields = (
-        "status", "stage", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt",
-        "finishedAt", "resumeFromCheckpoint", "resumeStage", "outputRunPath", "progress",
-    )
-    return json.dumps({field: job.get(field) for field in fields}, sort_keys=True, default=str)
-
-
 def _refresh_job(job):
-    if str(job.get("status") or "") in QUEUE_STATUSES | {"cancelled"}:
-        return {"holdReason": ""}
-    prior_status = str(job.get("status") or "")
-    result_state, result, result_error = _read_result_evidence(job)
-    has_runner_evidence = bool(
-        job.get("pid") or job.get("runnerScript") or job.get("runnerScriptWsl") or (_job_dir(job) / "pid").exists()
-    )
-    if result_state == "absent" and not has_runner_evidence:
-        if str(job.get("status") or "") in ACTIVE_STATUSES:
-            _clear_terminal_projection(job)
-            job.pop("runnerVerified", None)
-            job["status"] = "unconfirmed"
-            job["confirmationNote"] = "Runner PID and script evidence are unavailable."
-            job["updatedAt"] = time.time()
-        return {"holdReason": ""}
-    if not job.get("progressPlan"):
-        job["progressPlan"] = _default_progress_plan()
-    if result_state == "result":
-        prior_projection = _terminal_projection_signature(job)
-        prior_updated_at = job.get("updatedAt")
-        job.pop("runnerVerified", None)
-        result_status = str(result.get("status") or "failed")
-        tail, _ = _sync_job_log_evidence(job)
-        failure_excerpt = tail[-8192:]
-        job.pop("confirmationNote", None)
-        job.pop("error", None)
-        exit_code = int(result.get("exitCode") or 0)
-        requested_action = _apply_terminal_job_status(job, result_status)
-        if job["status"] == "queued":
-            return {"holdReason": "", "pauseQueue": requested_action == "pause"}
-        if job["status"] == "interrupted" and result_status == "stopped" and requested_action not in ("finish", "stop"):
-            job["error"] = "Runner stopped without a WebCap stop action."
-        job["exitCode"] = exit_code
-        if job["status"] == "failed":
-            job["failureExcerpt"] = failure_excerpt
-            job["failureScope"] = "system" if _distributed_socket_hold_reason(failure_excerpt) else "unknown"
-            job["error"] = "Training process exited with code " + str(exit_code) + ". See failure details or open the run log."
-        job["finishedAt"] = float(result.get("finishedAt") or time.time())
-        job.pop("finishAfterEpoch", None)
-        job.pop("finishScheduledAt", None)
-        _annotate_completed_job(job)
-        _annotate_finished_early_job(job)
-        if _terminal_projection_signature(job) != prior_projection:
-            job["updatedAt"] = time.time()
-        elif prior_updated_at is not None:
-            job["updatedAt"] = prior_updated_at
-        else:
-            job.pop("updatedAt", None)
-        hold_reason = _distributed_socket_hold_reason(failure_excerpt) if job["status"] == "failed" and prior_status != "failed" else ""
-        return {"holdReason": hold_reason}
-    now = time.time()
+    """Derive one public job view from its bundle and its exact recorded process."""
+    job.setdefault("status", "queued")
+    job.setdefault("stage", "queued")
+    job["logPath"] = str(_job_dir(job) / "run.log")
+    started_at = _job_started_at(job)
+    if started_at:
+        job["startedAt"] = started_at
     tail, log_mtime = _sync_job_log_evidence(job)
-    log_has_progress = _log_has_progress(tail)
     if log_mtime is not None:
         job["lastLogAt"] = log_mtime
-    runner_pid = _job_runner_pid(job)
-    if runner_pid:
-        job["pid"] = runner_pid
-    process_state, process_detail = (
-        ("unknown", result_error) if result_state == "unknown" else _inspect_job_runner(job)
-    )
-    if process_state == "running":
-        if prior_status in HISTORY_STATUSES:
-            _remove_stale_terminal_history(job)
-        _clear_terminal_projection(job)
-        job["runnerVerified"] = True
-        job["status"] = "stopping" if job.get("actionRequested") else ("running" if log_has_progress else "starting")
-        job.pop("confirmationNote", None)
-        job["updatedAt"] = now
-        _trigger_scheduled_finish(job)
-        return {"holdReason": ""}
-    if process_state == "unknown":
-        if prior_status in HISTORY_STATUSES:
-            _remove_stale_terminal_history(job)
-        _clear_terminal_projection(job)
-        job.pop("runnerVerified", None)
+    action = _job_action(job)
+    if action:
+        job["actionRequested"] = action
+
+    result_state, result, result_error = _read_result_evidence(job)
+    if result_state == "unknown":
         job["status"] = "unconfirmed"
-        job["confirmationNote"] = process_detail or "Runner confirmation is temporarily unavailable."
-        job["updatedAt"] = now
-        return {"holdReason": ""}
-    prior_projection = _terminal_projection_signature(job)
-    prior_updated_at = job.get("updatedAt")
-    prior_finished_at = job.get("finishedAt")
-    job.pop("confirmationNote", None)
-    job.pop("runnerVerified", None)
-    requested_action = _apply_terminal_job_status(job)
-    if job["status"] == "queued":
-        return {"holdReason": "", "pauseQueue": requested_action == "pause"}
-    if requested_action not in ("finish", "stop"):
-        job["error"] = process_detail or "Training runner is no longer available and did not write a result record."
-    job["finishedAt"] = prior_finished_at if job["status"] == prior_status and prior_finished_at is not None else now
-    job.pop("finishAfterEpoch", None)
-    job.pop("finishScheduledAt", None)
-    _annotate_finished_early_job(job)
-    if _terminal_projection_signature(job) != prior_projection:
-        job["updatedAt"] = now
-    elif prior_updated_at is not None:
-        job["updatedAt"] = prior_updated_at
-    else:
-        job.pop("updatedAt", None)
-    return {"holdReason": ""}
+        job["stage"] = "unconfirmed"
+        job["confirmationNote"] = result_error
+        return job
+    if result_state == "result":
+        result_status = _clean_string(result.get("status")) or "failed"
+        exit_code = int(result.get("exitCode") or 0)
+        job["exitCode"] = exit_code
+        job["finishedAt"] = float(result.get("finishedAt") or time.time())
+        if result_status == "completed":
+            job["status"] = "completed"
+        elif result_status == "stopped" and action == "finish":
+            job["status"] = "finished_early"
+        elif result_status == "stopped" and action == "pause":
+            job["status"] = "queued"
+            job["stage"] = "queued"
+            job["confirmationNote"] = "Queue paused. Resume retries this stage."
+            checkpoint = _latest_checkpoint(job)
+            if checkpoint:
+                job["resumeFromCheckpoint"] = checkpoint
+                job["resumeStage"] = _clean_string(job.get("stages"))
+                try:
+                    folder_path = app_config.safe_join_fs_root(job["folder"])
+                    job["resumePoint"] = resume_point_from_directory(folder_path, job["stages"], checkpoint)
+                except Exception as exc:
+                    job["resumePointError"] = str(exc)
+            return job
+        else:
+            job["status"] = "failed"
+        job["stage"] = job["status"]
+        if job["status"] == "failed":
+            job["error"] = _clean_string(result.get("error")) or (
+                "Training process exited with code " + str(exit_code) + ". Open the run log for details."
+            )
+            if tail:
+                job["failureExcerpt"] = tail[-8192:]
+        _annotate_completed_job(job)
+        _annotate_finished_early_job(job)
+        return job
 
-
-def _launch_next_queued_job(state):
-    if state.get("queuePaused"):
-        return
-    if any(job.get("status") in ACTIVE_STATUSES for job in state.get("jobs", [])):
-        return
-    state["activeJobId"] = ""
-    for job in state.get("jobs", []):
-        if job.get("status") not in QUEUE_STATUSES:
-            continue
-        folder_path = app_config.safe_join_fs_root(job["folder"])
-        _launch_job(job, folder_path)
-        if job.get("status") in ACTIVE_STATUSES:
-            state["activeJobId"] = job["id"]
-            return
-        if job.get("status") == "failed":
-            continue
-
-
-def _refresh_state(state):
-    global _startup_reconciled
-    hold_reason = ""
-    pause_requested = False
-    for job in state.get("jobs", []):
-        if job.get("status") == "paused":
-            _queue_legacy_paused_job(job)
-            pause_requested = True
-        if job.get("status") == "queued" and not job.get("progressPlan"):
-            job["progressPlan"] = _default_progress_plan()
-        if job.get("status") == "queued" and str(job.get("resumeFromCheckpoint") or "").strip():
+    has_launch_evidence = any(
+        (_job_dir(job) / name).exists()
+        for name in ("runner.sh", "pid", "run.log")
+    )
+    if not has_launch_evidence:
+        checkpoint = _latest_checkpoint(job)
+        if checkpoint:
+            job["resumeFromCheckpoint"] = checkpoint
+            job["resumeStage"] = _clean_string(job.get("stages"))
             try:
                 folder_path = app_config.safe_join_fs_root(job["folder"])
-                stage = str(job.get("resumeStage") or job.get("stages") or "")
-                job["resumePoint"] = resume_point_from_directory(folder_path, stage, job["resumeFromCheckpoint"])
-                job.pop("resumePointError", None)
+                job["resumePoint"] = resume_point_from_directory(folder_path, job["stages"], checkpoint)
             except Exception as exc:
-                job["resumePoint"] = {}
                 job["resumePointError"] = str(exc)
-        elif job.get("status") == "completed":
-            _annotate_completed_job(job)
-        outcome = _refresh_job(job) if job.get("status") not in QUEUE_STATUSES | {"cancelled"} else None
-        if outcome and outcome.get("holdReason"):
-            hold_reason = outcome["holdReason"]
-        if outcome and outcome.get("pauseQueue"):
-            pause_requested = True
-    active_jobs = [job for job in state.get("jobs", []) if job.get("status") in ACTIVE_STATUSES]
-    state["activeJobId"] = active_jobs[0]["id"] if active_jobs else ""
-    if len(active_jobs) > 1:
-        state["runnerNotice"] = (
-            str(len(active_jobs)) + " managed runners are active or awaiting confirmation. "
-            "The queue will wait until only derived terminal results remain."
-        )
-    else:
-        state.pop("runnerNotice", None)
-    if pause_requested:
-        state["queuePaused"] = True
-        state["queuePauseReason"] = state.get("queuePauseReason") or "Queue paused by the user."
-    if hold_reason:
-        state["queuePaused"] = True
-        state["queuePauseReason"] = hold_reason
-    queued_jobs = [job for job in state.get("jobs", []) if job.get("status") == "queued"]
-    if not _startup_reconciled and queued_jobs and not any(job.get("runnerVerified") for job in active_jobs):
-        state["queuePaused"] = True
-        state["queuePauseReason"] = state.get("queuePauseReason") or "Queue waiting for manual start after WebCap restarted."
-    _startup_reconciled = True
-    _launch_next_queued_job(state)
+        return job
+
+    process_state, process_detail = _inspect_job_runner(job)
+    if process_state == "running":
+        job["pid"] = _job_runner_pid(job)
+        job["runnerVerified"] = True
+        if action in ("pause", "finish"):
+            job["status"] = "stopping"
+            job["stage"] = "stopping"
+        else:
+            job["status"] = "running" if _log_has_progress(tail) else "starting"
+            if job["stage"] == "queued":
+                job["stage"] = "starting"
+        return job
+    if process_state == "unknown":
+        job["status"] = "unconfirmed"
+        job["stage"] = "unconfirmed"
+        job["confirmationNote"] = process_detail or "Runner confirmation is temporarily unavailable."
+        return job
+
+    job["status"] = "interrupted"
+    job["stage"] = "interrupted"
+    job["error"] = process_detail or "Training runner disappeared without writing a result."
+    checkpoint = _latest_checkpoint(job)
+    if checkpoint:
+        job["resumeFromCheckpoint"] = checkpoint
+        job["resumeStage"] = _clean_string(job.get("stages"))
+    return job
 
 
-def _monitor_loop():
-    while True:
-        try:
-            with _lock:
-                state = _read_state()
-                _refresh_state(state)
-                _persist_reconciled_state(state)
-        except Exception:
-            _logger.exception("Training queue monitor failed; the existing queue state was not replaced.")
-        time.sleep(2)
 
 
-def _ensure_monitor_started():
-    global _monitor_thread
-    with _monitor_lock:
-        if _monitor_thread and _monitor_thread.is_alive():
-            return
-        _monitor_thread = threading.Thread(target=_monitor_loop, name="webcap-training-runner", daemon=True)
-        _monitor_thread.start()
 
 
-def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch")
-    payload = {field: job.get(field) for field in fields if field in job}
-    if job.get("status") == "queued":
-        folder = str(job.get("folder") or "").strip()
-        try:
-            available = bool(folder) and Path(app_config.safe_join_fs_root(folder)).is_dir()
-        except ValueError:
-            available = False
-        if not available:
-            payload["sourceUnavailable"] = "Set folder is currently unavailable; this job remains queued."
-    return payload
+
+
+
+
+
+
 
 
 def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", profile_id="", run_id=""):
@@ -1110,6 +999,7 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
             return payload, 200
         diagnostic_job = {
             "id": "diagnostic",
+            "artifactDir": str(_runtime_root() / "diagnostic"),
             "snapshot": ({"krea2": str(artifacts["krea2Config"])} if stages == "krea2" else {"wan21": str(artifacts["wan21Config"])} if stages == "wan21" else {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])}),
             "stages": stages,
             "resumeFromCheckpoint": str(resume_from_checkpoint or "").strip(),
@@ -1143,92 +1033,300 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
         return {"ok": False, "error": str(exc), "checks": [], "summary": {"blockers": 1, "warnings": 0}}, 400
 
 
-def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id="", launch_group=None):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Version 4 deliberately keeps lifecycle evidence out of queue.json. These
+# definitions replace the persisted status-machine entry points above while the
+# remaining launch/config helpers stay shared.
+
+def _recent_record(view):
+    record = {field: view.get(field) for field in _RECENT_FIELDS if field in view}
+    record["id"] = _clean_string(view.get("id"))
+    record["status"] = _clean_string(view.get("status"))
+    record["finishedAt"] = float(view.get("finishedAt") or time.time())
+    if isinstance(record.get("error"), str):
+        record["error"] = record["error"][:1000]
+    if isinstance(record.get("failureExcerpt"), str):
+        record["failureExcerpt"] = record["failureExcerpt"][-8192:]
+    return record
+
+
+def _remember_recent(state, view):
+    record = _recent_record(view)
+    state["recentRuns"] = [
+        item for item in state.get("recentRuns", [])
+        if _clean_string(item.get("id")) != record["id"]
+    ]
+    state["recentRuns"].insert(0, record)
+
+
+def _first_view(state):
+    jobs = state.get("jobs") or []
+    return _refresh_job(dict(jobs[0])) if jobs else None
+
+
+def _launch_first(state):
+    global _handoff_job_id, _startup_checked
+    _startup_checked = True
+    if not state.get("jobs"):
+        _handoff_job_id = ""
+        return False, "The training queue is empty."
+    intent = state["jobs"][0]
+    launch_job = dict(intent)
+    checkpoint = _latest_checkpoint(launch_job)
+    if checkpoint:
+        launch_job["resumeFromCheckpoint"] = checkpoint
+        launch_job["resumeStage"] = _clean_string(launch_job.get("stages"))
+        intent["resumeFromCheckpoint"] = checkpoint
+        intent["resumeStage"] = _clean_string(intent.get("stages"))
+    else:
+        launch_job.pop("resumeFromCheckpoint", None)
+        launch_job.pop("resumeStage", None)
+        intent.pop("resumeFromCheckpoint", None)
+        intent.pop("resumeStage", None)
+    _write_state(state)
+    try:
+        folder_path = app_config.safe_join_fs_root(launch_job["folder"])
+        launched = _launch_job(launch_job, folder_path)
+    except Exception as exc:
+        _write_result_record(launch_job, "failed", 1, "Could not launch training: " + str(exc))
+        launched = False
+    _handoff_job_id = intent["id"] if launched else ""
+    return launched, "" if launched else "Training did not start. Correct the reported problem, then Resume."
+
+
+def _observe_state(state):
+    """Observe only the first intent and advance only a permitted live session."""
+    global _handoff_job_id, _startup_checked
+    changed = False
+    view = _first_view(state)
+    if view is None:
+        _handoff_job_id = ""
+        _startup_checked = True
+        return changed
+
+    job_id = _clean_string(view.get("id"))
+    status = _clean_string(view.get("status"))
+    startup_pass = not _startup_checked
+    _startup_checked = True
+
+    if status in ("starting", "running", "stopping"):
+        # A verified first runner is sufficient to reattach after restart.
+        _handoff_job_id = job_id
+        durable = state["jobs"][0]
+        target_epoch = int(durable.get("finishAfterEpoch") or 0)
+        progress = view.get("progress") if isinstance(view.get("progress"), dict) else {}
+        current_epoch = int(progress.get("epoch") or 0)
+        if target_epoch > 0 and current_epoch > target_epoch:
+            error = _request_job_action(view, "finish")
+            if not error:
+                durable.pop("finishAfterEpoch", None)
+                changed = True
+        return changed
+
+    if status == "unconfirmed":
+        return changed
+
+    if status in TERMINAL_OUTCOMES:
+        may_handoff = not startup_pass and _handoff_job_id == job_id
+        _remember_recent(state, view)
+        state["jobs"].pop(0)
+        _handoff_job_id = ""
+        changed = True
+        if may_handoff and state["jobs"]:
+            _launch_first(state)
+        return changed
+
+    # Pause, failure, or confirmed disappearance always leaves this same intent
+    # first and requires an explicit Resume.
+    _handoff_job_id = ""
+    return changed
+
+
+def _monitor_loop():
+    while True:
+        try:
+            with _lock:
+                state = _read_state()
+                if _observe_state(state):
+                    _write_state(state)
+        except Exception:
+            _logger.exception("Training queue observer failed; queue intent was left unchanged.")
+        time.sleep(2)
+
+
+def _ensure_monitor_started():
+    global _monitor_thread
+    with _monitor_lock:
+        if _monitor_thread and _monitor_thread.is_alive():
+            return
+        _monitor_thread = threading.Thread(target=_monitor_loop, name="webcap-training-runner", daemon=True)
+        _monitor_thread.start()
+
+
+def start_observer():
+    """Start the browser-independent first-job observer."""
+    _ensure_monitor_started()
+
+
+def _public_job(job):
+    fields = (
+        "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel",
+        "artifactDir", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError",
+        "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt",
+        "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureExcerpt",
+        "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence",
+        "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested",
+        "finishAfterEpoch", "finishScheduledAt",
+    )
+    payload = {field: job.get(field) for field in fields if field in job}
+    folder = _clean_string(job.get("folder"))
+    try:
+        available = bool(folder) and Path(app_config.safe_join_fs_root(folder)).is_dir()
+    except (OSError, ValueError):
+        available = False
+    if not available:
+        payload["sourceUnavailable"] = "Set folder is currently unavailable."
+    output_path = _clean_string(job.get("outputRunPath") or job.get("outputRoot"))
+    if output_path:
+        payload["outputAvailable"] = _path_available(output_path, directory=True)
+    return payload
+
+
+def _queue_views(state):
+    views = []
+    for index, intent in enumerate(state.get("jobs", [])):
+        if index == 0:
+            views.append(_refresh_job(dict(intent)))
+            continue
+        queued = dict(intent)
+        queued["status"] = "queued"
+        queued["stage"] = "queued"
+        explicit = _clean_string(queued.get("resumeFromCheckpoint"))
+        if explicit:
+            try:
+                folder_path = app_config.safe_join_fs_root(queued["folder"])
+                queued["resumePoint"] = resume_point_from_directory(
+                    folder_path, queued["stages"], explicit
+                )
+            except Exception as exc:
+                queued["resumePointError"] = str(exc)
+        views.append(queued)
+    return views
+
+
+def _queue_status_payload(state):
+    views = _queue_views(state)
+    first = views[0] if views else None
+    first_status = _clean_string((first or {}).get("status"))
+    active_id = (
+        _clean_string(first.get("id"))
+        if first_status in ("starting", "running", "stopping", "unconfirmed")
+        else ""
+    )
+    waiting = bool(first) and not active_id
+    reason = ""
+    if waiting:
+        if first_status in ("failed", "interrupted"):
+            reason = _clean_string(first.get("error")) or "Training stopped unexpectedly. Correct the problem, then Resume."
+        elif _job_action(first) == "pause":
+            reason = "Queue paused by the user."
+        else:
+            reason = "Queue waiting for Start or Resume."
+    elif first_status == "unconfirmed":
+        reason = _clean_string(first.get("confirmationNote"))
+    return {
+        "ok": True,
+        "activeJobId": active_id,
+        "queuePaused": waiting,
+        "queuePauseReason": reason,
+        "runnerNotice": "",
+        "jobs": [_public_job(job) for job in views],
+    }
+
+
+def _new_job(folder, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id="", launch_group=None):
     job_id = uuid.uuid4().hex[:12]
-    _, folder_path = _resolve_folder(folder)
+    folder, folder_path = _resolve_folder(folder)
     stages = _normalize_training_stages(stages)
-    artifacts, _ = _resolve_artifacts(folder, folder_path, stages)
     selected_profile, _ = profile_run(profile_id, run_id, stages)
     config_meta = config_for_stage(selected_profile["id"], stages)
     output_slug = config_meta["outputSlug"]
-    resume_path = str(resume_from_checkpoint or "").strip()
     distribution = _training_settings()["wslDistribution"]
-    if resume_path:
-        configured_output = output_dir_from_config(folder_path, stages)
-        if configured_output is None:
-            raise ValueError("Current training config is missing output_dir.")
-        effective_output_dir = str(configured_output).replace("\\", "/")
-        output_root = host_path_for_training_path(effective_output_dir)
-        group_root = output_root
-    else:
-        group_root = Path(launch_group) if launch_group else training_output_group_for_folder(folder_path, create=True)
-        output_root = group_root / output_slug
-        output_root.mkdir(parents=True, exist_ok=True)
-        normalize_path_permissions(output_root)
-        effective_output_dir = _to_wsl_path(output_root, distribution)
-        source_config = artifacts[stages + "Config"]
-        source_config.write_text(
-            with_output_dir(source_config.read_text(encoding="utf-8"), effective_output_dir),
-            encoding="utf-8",
-        )
-        normalize_path_permissions(source_config)
+    resume_path = _clean_string(resume_from_checkpoint)
+
+    group_root = Path(launch_group) if launch_group else training_output_group_for_folder(folder_path, create=True)
+    if group_root is None:
+        raise RuntimeError("Could not reserve a training output group.")
+    output_root = group_root / output_slug
+    output_root.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(output_root)
+    effective_output_dir = _to_wsl_path(output_root, distribution)
+
     job_dir = group_root / ".webcap" / "jobs" / job_id
     job_dir.mkdir(parents=True, exist_ok=False)
     normalize_path_permissions(job_dir)
-    snapshot = _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir)
-    progress_plan = _plan_run_steps(_read_training_plan(folder_path) or _default_progress_plan(), snapshot)
-    input_evidence = _input_evidence(folder_path, stages)
-    model = _model_identity(artifacts, selected_profile["id"], stages)
     sequence_match = re.match(r"^([0-9A-Z]{3})-", group_root.name)
-    action_run_id = str(run_id or "")
+    action_run_id = _clean_string(run_id)
     job_run_id = stages if selected_profile["id"] == "wan22_t2v" and action_run_id == "both" else action_run_id
-    return {
+    job = {
         "id": job_id,
         "folder": folder,
         "stages": stages,
         "profileId": selected_profile["id"],
         "runId": job_run_id,
         "actionRunId": action_run_id,
-        "modelLabel": model["label"],
-        "model": model,
         "datasetTarget": _training_profile(folder_path),
-        "input": input_evidence,
-        "resumeFromCheckpoint": resume_path,
-        "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
-        "outputRunPath": resume_path,
-        "resumePoint": resume_point_for_path(folder_path, stages, resume_path) if resume_path else {},
-        "status": "queued",
-        "stage": "queued",
+        "modelLabel": selected_profile["label"],
         "createdAt": time.time(),
-        "updatedAt": time.time(),
-        "snapshot": snapshot,
-        "artifactPath": str(job_dir),
-        "artifactDir": str(job_dir),
-        "progressPlan": progress_plan,
-        "runtime": {"wslDistribution": distribution},
-        "preflight": {"checks": preflight.get("checks", []), "blockers": preflight.get("summary", {}).get("blockers", 0)},
         "outputRoot": str(output_root),
         "effectiveOutputDir": effective_output_dir,
         "outputSlug": output_slug,
         "launchGroupId": group_root.name,
         "sequence": sequence_match.group(1) if sequence_match else "",
         "launchGroupRoot": str(group_root),
-        "parentJobId": str(parent_job_id or ""),
+        "artifactDir": str(job_dir),
+        "parentJobId": _clean_string(parent_job_id),
     }
+    if resume_path:
+        job["resumeFromCheckpoint"] = resume_path
+        job["resumeStage"] = _clean_string(resume_stage or stages)
+    return job
 
 
 def start_response(folder, queue=False, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id=""):
-    if parent_job_id and not str(resume_from_checkpoint or "").strip():
+    del queue
+    if parent_job_id and not _clean_string(resume_from_checkpoint):
         return {"ok": False, "error": "Historical resume requires a checkpoint path; refusing to start a new run."}, 400
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id, stages)
         stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
         stages = _normalize_training_stages(stages)
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
-    except ValueError as exc:
-        return {"ok": False, "error": str(exc)}, 400
-    try:
-        _, folder_path = _resolve_folder(folder)
         _, folder_path, _, _, checks = _build_launch_preflight(folder, stages)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}, 400
@@ -1236,58 +1334,47 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
     preflight = {"checks": checks, "summary": {"blockers": len(blockers), "warnings": 0}}
     if blockers:
         return {"ok": False, "error": "Launch checks failed.", "preflight": preflight}, 400
+
     with _lock:
         _ensure_monitor_started()
         state = _read_state()
-        _refresh_state(state)
-        active = _find_job(state, state.get("activeJobId")) if state.get("activeJobId") else None
-        has_pending_queue = any(job.get("status") in QUEUE_STATUSES for job in state.get("jobs", []))
-        if active and active.get("status") not in TERMINAL_STATUSES and not queue:
-            _write_state(state)
-            return {"ok": False, "error": "A managed training job is already active.", "activeJob": _public_job(active)}, 409
-        # An explicit Train request is permission to start a fresh queue. A
-        # stale hold from a previous terminal job must not leave the new job
-        # queued forever when there is no active or pending work to protect.
-        if not active and not has_pending_queue:
-            state["queuePaused"] = False
-            state["queuePauseReason"] = ""
+        queue_was_empty = not state["jobs"]
         job_stages = ("hi", "lo") if stages == "both" else (stages,)
-        needs_new_output = any(not (resume_from_checkpoint and resume_stage == job_stage) for job_stage in job_stages)
+        needs_new_output = any(
+            not (_clean_string(resume_from_checkpoint) and resume_stage == job_stage)
+            for job_stage in job_stages
+        )
         launch_group = training_output_group_for_folder(folder_path, create=True) if needs_new_output else None
         jobs = []
         for job_stage in job_stages:
             stage_resume = resume_from_checkpoint if resume_stage == job_stage else ""
             jobs.append(_new_job(
-                str(folder).strip(), preflight, job_stage, stage_resume, job_stage if stage_resume else "", parent_job_id,
-                selected_profile["id"], selected_run["id"], launch_group
+                _clean_string(folder), job_stage, stage_resume,
+                job_stage if stage_resume else "", parent_job_id,
+                selected_profile["id"], selected_run["id"], launch_group,
             ))
         state["jobs"].extend(jobs)
-        if not active or active.get("status") in TERMINAL_STATUSES:
-            _launch_next_queued_job(state)
-        _persist_reconciled_state(state)
+        _write_state(state)
+        launched = False
+        if queue_was_empty:
+            launched, _ = _launch_first(state)
         return {
             "ok": True,
-            "job": _public_job(jobs[0]),
+            "job": _public_job(_refresh_job(dict(jobs[0]))),
             "jobs": [_public_job(job) for job in jobs],
-            "queued": jobs[0].get("status") == "queued",
+            "queued": not launched,
         }, 200
 
 
 def folder_statuses_for_folders(folder_paths):
-    """Return the small training-status payload used by the folder backlog view."""
     with _lock:
         try:
             state = _read_state()
+            views = _queue_views(state)
         except TrainingStateError:
             _logger.exception("Training queue state is unavailable; omitting folder training badges.")
             return {}
-        jobs = list(state.get("jobs", []))
-    queue_position = 0
-    queued_by_folder = {}
-    for job in jobs:
-        if job.get("status") in QUEUE_STATUSES:
-            queue_position += 1
-            queued_by_folder.setdefault(str(job.get("folder") or ""), {"position": queue_position, "status": job.get("status")})
+    active_id = _clean_string(views[0].get("id")) if views and views[0].get("status") in ACTIVE_STATUSES else ""
     result = {}
     for folder_path in folder_paths:
         path = Path(folder_path)
@@ -1295,37 +1382,36 @@ def folder_statuses_for_folders(folder_paths):
             folder = str(path.relative_to(app_config.FS_ROOT)).replace("\\", "/")
         except ValueError:
             continue
-        matching = [job for job in jobs if str(job.get("folder") or "") == folder]
-        active = next((job for job in matching if job.get("status") in ACTIVE_STATUSES), None)
-        if active:
-            result[path] = {"status": "training", "label": "Training", "jobId": active.get("id"), "stage": active.get("stages")}
-        elif folder in queued_by_folder:
-            queued = queued_by_folder[folder]
-            result[path] = {"status": "queued", "label": "Queued #" + str(queued["position"]), "queuePosition": queued["position"]}
-        else:
-            try:
-                # Folder navigation must not recursively scan potentially huge
-                # trainer output trees just to render a status badge.
-                required_stages, completed = completed_stages(path, include_discovered_runs=False)
-            except Exception:
-                _logger.exception("Could not determine training status for folder: %s", path)
-                result[path] = {"status": "error", "label": "Training status unavailable"}
-                continue
-            if required_stages and len(completed) == len(required_stages):
+        index = next((i for i, job in enumerate(views) if _clean_string(job.get("folder")) == folder), None)
+        if index is not None:
+            job = views[index]
+            if index == 0 and _clean_string(job.get("id")) == active_id:
+                result[path] = {"status": "training", "label": "Training", "jobId": active_id, "stage": job.get("stages")}
+            else:
+                result[path] = {"status": "queued", "label": "Queued #" + str(index + 1), "queuePosition": index + 1}
+            continue
+        try:
+            stages = [stage for stage in ("hi", "lo", "krea2", "wan21") if (path / ("config." + stage + ".toml")).is_file()]
+            completed = {
+                _clean_string(job.get("stages"))
+                for job in state.get("recentRuns", [])
+                if _clean_string(job.get("folder")) == folder and job.get("status") in TERMINAL_OUTCOMES
+            }
+            if stages and all(stage in completed for stage in stages):
                 result[path] = {"status": "trained", "label": "Trained"}
             elif completed:
                 result[path] = {"status": "partial", "label": "Partially trained"}
             elif all((path / name).is_file() for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml")) and _prepared_dataset_is_ready(path):
                 needs_review, partial_count, touched_count = _needs_partial_annotation_caption_review(path)
-                if needs_review:
-                    result[path] = {
-                        "status": "caption-review",
-                        "label": "Caption review needed (" + str(partial_count) + " of " + str(touched_count) + ")",
-                    }
-                else:
-                    result[path] = {"status": "ready", "label": "Ready to train"}
+                result[path] = (
+                    {"status": "caption-review", "label": "Caption review needed (" + str(partial_count) + " of " + str(touched_count) + ")"}
+                    if needs_review else {"status": "ready", "label": "Ready to train"}
+                )
             else:
                 result[path] = {"status": "never", "label": ""}
+        except Exception:
+            _logger.exception("Could not determine training status for folder: %s", path)
+            result[path] = {"status": "error", "label": "Training status unavailable"}
     return result
 
 
@@ -1334,35 +1420,167 @@ def status_response():
         _ensure_monitor_started()
         try:
             state = _read_state()
+            if _observe_state(state):
+                _write_state(state)
         except TrainingStateError as exc:
-            return {"ok": False, "stateError": True, "recoveryAvailable": True, "error": str(exc)}, 409
-        _refresh_state(state)
-        _persist_reconciled_state(state)
-        return {
-            "ok": True,
-            "activeJobId": state.get("activeJobId") or "",
-            "queuePaused": bool(state.get("queuePaused")),
-            "queuePauseReason": str(state.get("queuePauseReason") or ""),
-            "runnerNotice": str(state.get("runnerNotice") or ""),
-            "jobs": [_public_job(job) for job in state.get("jobs", [])],
-        }, 200
+            return {"ok": False, "stateError": True, "error": str(exc)}, 409
+        return _queue_status_payload(state), 200
+
+
+def _path_available(raw_path, directory=False):
+    try:
+        path = host_path_for_training_path(raw_path)
+        return path.is_dir() if directory else path.is_file()
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
+def _history_view(record):
+    item = _public_job(dict(record))
+    output_path = _clean_string(item.get("outputRunPath") or item.get("outputRoot"))
+    if output_path:
+        item["outputAvailable"] = _path_available(output_path, directory=True)
+    try:
+        log_path = str(_job_dir(record) / "run.log")
+    except TrainingStateError:
+        log_path = ""
+    if log_path:
+        item["logPath"] = log_path
+        item["logAvailable"] = _path_available(log_path)
+    else:
+        item["logAvailable"] = False
+    resume_path = _clean_string(item.get("outputRunPath") or item.get("resumeFromCheckpoint"))
+    if resume_path:
+        item["resumeAvailable"] = _path_available(resume_path, directory=True)
+    return item
+
+
+def history_payload(folder):
+    folder_text = _clean_string(folder)
+    if not folder_text:
+        raise ValueError("Training folder is required.")
+    folder_path = app_config.safe_join_fs_root(folder_text)
+    with _lock:
+        state = _read_state()
+        jobs = [
+            _history_view(job) for job in state.get("recentRuns", [])
+            if _clean_string(job.get("folder")) == folder_text
+        ]
+    return {
+        "version": STATE_VERSION,
+        "jobs": jobs,
+        "runs": discover_runs(folder_path),
+        "resumeDefaults": {},
+    }
+
+
+def all_history_payload(query="", folder=""):
+    del query
+    folder_text = _clean_string(folder)
+    with _lock:
+        state = _read_state()
+        jobs = [
+            _history_view(job) for job in state.get("recentRuns", [])
+            if not folder_text or _clean_string(job.get("folder")) == folder_text
+        ]
+    return {"version": STATE_VERSION, "jobs": jobs}
+
+
+def _validated_bundle_path(record):
+    raw = _clean_string(record.get("artifactDir"))
+    job_id = _clean_string(record.get("id"))
+    if not raw or not job_id:
+        return None
+    try:
+        candidate = host_path_for_training_path(raw).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+    owned_root = (Path(app_config.FS_ROOT) / "output" / "runs").resolve()
+    try:
+        relative = candidate.relative_to(owned_root)
+    except ValueError:
+        return None
+    parts = relative.parts
+    if len(parts) < 4 or tuple(parts[-3:-1]) != (".webcap", "jobs") or parts[-1] != job_id:
+        return None
+    return candidate
+
+
+def _delete_unreferenced_bundle(state, record):
+    path = _validated_bundle_path(record)
+    if path is None:
+        return False
+    raw = str(path)
+    for item in state.get("jobs", []) + state.get("recentRuns", []):
+        other = _validated_bundle_path(item)
+        if other is not None and str(other) == raw:
+            return False
+    if path.is_dir():
+        try:
+            shutil.rmtree(path)
+            for parent in (path.parent, path.parent.parent):
+                try:
+                    parent.rmdir()
+                except OSError:
+                    break
+            return True
+        except OSError:
+            _logger.exception("Could not remove WebCap training bundle: %s", path)
+    return False
 
 
 def clear_history_response(folder, job_id):
-    folder_text = str(folder or "").strip()
-    job_id = str(job_id or "").strip()
+    folder_text = _clean_string(folder)
+    job_id = _clean_string(job_id)
     if not folder_text or not job_id:
         return {"ok": False, "error": "Folder and job ID are required."}, 400
     with _lock:
-        folder_path = app_config.safe_join_fs_root(folder_text)
         state = _read_state()
-        job = _find_job(state, job_id)
-        if job and str(job.get("folder") or "") == folder_text:
-            job["historyHidden"] = True
-            job["updatedAt"] = time.time()
-        cleared = clear_history_job(folder_path, job_id)
+        record = _find_history_job(state, folder_text, job_id)
+        if record is None:
+            return {"ok": True, "cleared": False}, 200
+        state["recentRuns"] = [
+            item for item in state["recentRuns"]
+            if not (
+                _clean_string(item.get("id")) == job_id
+                and _clean_string(item.get("folder")) == folder_text
+            )
+        ]
         _write_state(state)
-        return {"ok": True, "cleared": cleared}, 200
+        deleted = _delete_unreferenced_bundle(state, record)
+        return {"ok": True, "cleared": True, "bundleDeleted": deleted}, 200
+
+
+def clear_all_history_response(folder=""):
+    folder_text = _clean_string(folder)
+    with _lock:
+        state = _read_state()
+        removed = [
+            item for item in state["recentRuns"]
+            if not folder_text or _clean_string(item.get("folder")) == folder_text
+        ]
+        state["recentRuns"] = [
+            item for item in state["recentRuns"]
+            if folder_text and _clean_string(item.get("folder")) != folder_text
+        ]
+        _write_state(state)
+        deleted = sum(1 for item in removed if _delete_unreferenced_bundle(state, item))
+        return {"ok": True, "cleared": len(removed), "bundlesDeleted": deleted}, 200
+
+
+def history_output_path(folder, job_id):
+    with _lock:
+        state = _read_state()
+        job = _find_history_job(state, folder, job_id)
+        if job is None:
+            raise ValueError("Training history entry was not found.")
+        raw = _clean_string(job.get("outputRunPath") or job.get("outputRoot"))
+        if not raw:
+            raise ValueError("Training history entry has no output directory.")
+        path = host_path_for_training_path(raw)
+        if not path.is_dir():
+            raise FileNotFoundError("Training output directory is unavailable: " + raw)
+        return path
 
 
 def gpu_status_response():
@@ -1372,14 +1590,11 @@ def gpu_status_response():
 def log_response(job_id, offset=0, tail=False, folder=""):
     with _lock:
         state = _read_state()
-        _refresh_state(state)
-        job = _find_job(state, job_id)
-        _persist_reconciled_state(state)
-        if not job:
-            job = _find_history_job(folder, job_id)
+        intent = _find_job(state, job_id)
+        job = _refresh_job(dict(intent)) if intent else _find_history_job(state, folder, job_id)
         if not job:
             return {"error": "Training job not found"}, 404
-        path = Path(job.get("logPath") or (_job_dir(job) / "run.log"))
+        path = _job_dir(job) / "run.log"
         try:
             position = max(0, int(offset or 0))
         except (TypeError, ValueError):
@@ -1389,10 +1604,7 @@ def log_response(job_id, offset=0, tail=False, folder=""):
         with open(path, "rb") as handle:
             handle.seek(0, os.SEEK_END)
             size = handle.tell()
-            if tail:
-                position = max(0, size - 65536)
-            else:
-                position = min(position, size)
+            position = max(0, size - 65536) if tail else min(position, size)
             handle.seek(position)
             raw = handle.read(65536)
             next_offset = handle.tell()
@@ -1407,10 +1619,9 @@ def log_response(job_id, offset=0, tail=False, folder=""):
 
 
 def log_path_for_job(job_id, folder=""):
-    """Return the managed log path for a known job; never accept a caller path."""
     with _lock:
         state = _read_state()
-        job = _find_job(state, job_id) or _find_history_job(folder, job_id)
+        job = _find_job(state, job_id) or _find_history_job(state, folder, job_id)
         if not job:
             raise ValueError("Training job not found")
         path = _job_dir(job) / "run.log"
@@ -1420,109 +1631,89 @@ def log_path_for_job(job_id, folder=""):
 
 
 def output_path_for_job(job_id):
-    """Return the trainer-created run directory, or its parent before binding."""
     with _lock:
         state = _read_state()
-        job = _find_job(state, job_id)
+        job = _find_job(state, job_id) or _find_history_job(state, "", job_id)
         if not job:
             raise ValueError("Training job was not found.")
-        raw_run_path = str(job.get("outputRunPath") or "").strip()
-        if raw_run_path:
-            path = host_path_for_training_path(raw_run_path)
-            if not path.is_dir():
-                raise FileNotFoundError("Recorded training run directory is unavailable: " + raw_run_path)
-            return path
-        raw_path = str(job.get("outputRoot") or "").strip()
-        if not raw_path:
-            raise ValueError("Training job has no effective output directory.")
-        return Path(raw_path)
+        view = _refresh_job(dict(job)) if _find_job(state, job_id) else job
+        raw = _clean_string(view.get("outputRunPath") or view.get("outputRoot"))
+        if not raw:
+            raise ValueError("Training job has no output directory.")
+        path = host_path_for_training_path(raw)
+        if not path.is_dir():
+            raise FileNotFoundError("Training output directory is unavailable: " + raw)
+        return path
 
 
 def stop_response(job_id, cancel=False, pause=False, finish=False):
+    global _handoff_job_id
     with _lock:
         state = _read_state()
-        _refresh_state(state)
         job = _find_job(state, job_id)
         if not job:
             return {"ok": False, "error": "Training job not found"}, 404
-        if pause:
-            state["queuePaused"] = True
-            state["queuePauseReason"] = "Queue paused by the user."
-            _write_state(state)
-            return {"ok": True, "job": _public_job(job)}, 200
-        if job.get("status") in QUEUE_STATUSES and cancel:
-            job["status"] = "cancelled"
-            job["stage"] = "cancelled"
-            job["finishedAt"] = time.time()
-            job["updatedAt"] = time.time()
-            job["historyHidden"] = True
-            folder = str(job.get("folder") or "").strip()
-            if folder:
-                clear_history_job(app_config.safe_join_fs_root(folder), job.get("id"))
-            _write_state(state)
-            return {"ok": True, "job": _public_job(job)}, 200
+        index = state["jobs"].index(job)
+        view = _refresh_job(dict(job)) if index == 0 else dict(job, status="queued", stage="queued")
         if cancel:
-            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Stop or Finish for the active job."}, 400
-        if job.get("status") not in ACTIVE_STATUSES:
-            return {"ok": False, "error": "Training job is not running."}, 400
-        action = "finish" if finish else "stop"
-        message = _request_job_action(job, action)
-        if message:
-            job["error"] = message
-            job["updatedAt"] = time.time()
+            if index == 0 and view.get("status") in ("starting", "running", "stopping", "unconfirmed"):
+                return {"ok": False, "error": "A running or unconfirmed job cannot be canceled. Pause or Finish it first."}, 400
+            state["jobs"].pop(index)
+            if index == 0:
+                _handoff_job_id = ""
             _write_state(state)
-            status = 409 if "no recorded runner PID" in message or "not verified" in message else 502
-            return {"ok": False, "error": message, "job": _public_job(job)}, status
-        job.pop("finishAfterEpoch", None)
-        job.pop("finishScheduledAt", None)
-        _write_state(state)
-        return {"ok": True, "job": _public_job(job)}, 200
+            deleted = _delete_unreferenced_bundle(state, job)
+            return {"ok": True, "job": _public_job(view), "bundleDeleted": deleted}, 200
+        if not pause and not finish:
+            return {"ok": False, "error": "Stop is not available. Use Pause or Finish."}, 400
+        if index != 0 or view.get("status") not in ("starting", "running"):
+            return {"ok": False, "error": "Training job is not running."}, 400
+        action = "finish" if finish else "pause"
+        error = _request_job_action(view, action)
+        if error:
+            status = 409 if "recorded runner PID" in error or "verify" in error else 502
+            return {"ok": False, "error": error, "job": _public_job(view)}, status
+        if finish:
+            job.pop("finishAfterEpoch", None)
+            _write_state(state)
+        return {"ok": True, "job": _public_job(_refresh_job(dict(job)))}, 200
 
 
 def finish_schedule_response(job_id, epoch=None, cancel=False):
     with _lock:
         state = _read_state()
-        _refresh_state(state)
-        job = _find_job(state, job_id)
-        if not job:
-            return {"ok": False, "error": "Training job not found"}, 404
+        if not state["jobs"] or _clean_string(state["jobs"][0].get("id")) != _clean_string(job_id):
+            return {"ok": False, "error": "Active training job not found"}, 404
+        job = state["jobs"][0]
+        view = _refresh_job(dict(job))
         if cancel:
             job.pop("finishAfterEpoch", None)
-            job.pop("finishScheduledAt", None)
-            job["updatedAt"] = time.time()
             _write_state(state)
-            return {"ok": True, "job": _public_job(job)}, 200
-        if job.get("status") not in ("starting", "running", "unconfirmed"):
-            return {"ok": False, "error": "Only an active training job can schedule Finish."}, 400
-        raw_epoch = str(epoch or "").strip()
+            return {"ok": True, "job": _public_job(view)}, 200
+        if view.get("status") not in ("starting", "running"):
+            return {"ok": False, "error": "Only a running training job can schedule Finish."}, 400
+        raw_epoch = _clean_string(epoch)
         if not raw_epoch.isdigit() or int(raw_epoch) <= 0:
             return {"ok": False, "error": "Finish epoch must be a positive whole number."}, 400
         target_epoch = int(raw_epoch)
-        progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+        progress = view.get("progress") if isinstance(view.get("progress"), dict) else {}
         current_epoch = int(progress.get("epoch") or 0)
         planned_epochs = int(progress.get("epochs") or 0)
-        stage = str(progress.get("stage") or "")
-        if current_epoch <= 0 or planned_epochs <= 0 or stage not in ("hi", "lo", "krea2", "wan21"):
+        stage = _clean_string(progress.get("stage"))
+        if current_epoch <= 0 or planned_epochs <= 0:
             return {"ok": False, "error": "Wait until the runner reports its current epoch before scheduling Finish."}, 409
-        if target_epoch < current_epoch:
-            return {"ok": False, "error": "Finish epoch must be the current epoch or a future epoch."}, 400
-        if target_epoch >= planned_epochs:
-            return {"ok": False, "error": "Finish epoch must be before the planned final epoch."}, 400
-        snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
-        save_every_epochs = _read_config_positive_int(snapshot.get(stage), "save_every_n_epochs", 0)
-        if save_every_epochs <= 0:
-            return {"ok": False, "error": "The launch snapshot has no save_every_n_epochs setting."}, 409
-        if target_epoch % save_every_epochs:
-            return {
-                "ok": False,
-                "error": "Epoch " + str(target_epoch) + " is not a configured save point; this run saves every " + str(save_every_epochs) + " epochs.",
-            }, 400
+        if target_epoch < current_epoch or target_epoch >= planned_epochs:
+            return {"ok": False, "error": "Finish epoch must be between the current and final epoch."}, 400
+        config_path = _job_dir(view) / (
+            KREA2_CONFIG_NAME if stage == "krea2" else WAN21_CONFIG_NAME if stage == "wan21"
+            else HI_CONFIG_NAME if stage == "hi" else LO_CONFIG_NAME
+        )
+        save_every_epochs = _read_config_positive_int(config_path, "save_every_n_epochs", 0)
+        if save_every_epochs <= 0 or target_epoch % save_every_epochs:
+            return {"ok": False, "error": "Finish epoch must be a configured saved epoch."}, 400
         job["finishAfterEpoch"] = target_epoch
-        job["finishScheduledAt"] = time.time()
-        job.pop("finishTriggeredEpoch", None)
-        job["updatedAt"] = time.time()
         _write_state(state)
-        return {"ok": True, "job": _public_job(job)}, 200
+        return {"ok": True, "job": _public_job(_refresh_job(dict(job)))}, 200
 
 
 def reorder_response(job_id, direction):
@@ -1530,34 +1721,35 @@ def reorder_response(job_id, direction):
         return {"ok": False, "error": "Queue direction must be up or down."}, 400
     with _lock:
         state = _read_state()
-        queued_indexes = [index for index, job in enumerate(state.get("jobs", [])) if job.get("status") in QUEUE_STATUSES]
-        current = next((index for index in queued_indexes if state["jobs"][index].get("id") == job_id), None)
+        views = _queue_views(state)
+        first_active = bool(views and views[0].get("status") in ACTIVE_STATUSES)
+        indexes = list(range(1 if first_active else 0, len(state["jobs"])))
+        current = next((index for index in indexes if _clean_string(state["jobs"][index].get("id")) == _clean_string(job_id)), None)
         if current is None:
             return {"ok": False, "error": "Queued training job not found."}, 404
-        queue_position = queued_indexes.index(current)
-        target_position = queue_position - 1 if direction == "up" else queue_position + 1
-        if target_position < 0 or target_position >= len(queued_indexes):
+        position = indexes.index(current)
+        target_position = position - 1 if direction == "up" else position + 1
+        if target_position < 0 or target_position >= len(indexes):
             return {"ok": False, "error": "Training job cannot move further in the queue."}, 400
-        target = queued_indexes[target_position]
+        target = indexes[target_position]
         state["jobs"][current], state["jobs"][target] = state["jobs"][target], state["jobs"][current]
-        state["jobs"][current]["updatedAt"] = time.time()
-        state["jobs"][target]["updatedAt"] = time.time()
-        _persist_reconciled_state(state)
-        return {"ok": True, "jobs": [_public_job(job) for job in state["jobs"]]}, 200
+        _write_state(state)
+        return {"ok": True, "jobs": _queue_status_payload(state)["jobs"]}, 200
 
 
 def resume_queue_response():
     with _lock:
+        _ensure_monitor_started()
         state = _read_state()
-        _refresh_state(state)
-        state["queuePaused"] = False
-        state["queuePauseReason"] = ""
-        _refresh_state(state)
-        _persist_reconciled_state(state)
-        if state.get("queuePaused") and not state.get("activeJobId"):
-            return {
-                "ok": False,
-                "error": state.get("queuePauseReason") or "No queued training job was started.",
-                "jobs": [_public_job(job) for job in state["jobs"]],
-            }, 409
-        return {"ok": True, "activeJobId": state.get("activeJobId") or "", "jobs": [_public_job(job) for job in state["jobs"]]}, 200
+        if not state["jobs"]:
+            return {"ok": False, "error": "The training queue is empty.", "jobs": []}, 400
+        view = _first_view(state)
+        if view.get("status") in ("starting", "running", "stopping", "unconfirmed"):
+            return {"ok": False, "error": "The first training job is already running or cannot yet be confirmed.", "jobs": _queue_status_payload(state)["jobs"]}, 409
+        launched, error = _launch_first(state)
+        payload = _queue_status_payload(state)
+        if not launched:
+            payload["ok"] = False
+            payload["error"] = error
+            return payload, 409
+        return payload, 200

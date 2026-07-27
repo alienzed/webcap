@@ -59,15 +59,20 @@ function renderTrainingHistory() {
     var timestamp = job.finishedAt || job.startedAt || job.createdAt;
     var timestampKind = trainingHistoryTimestampKind(job);
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
-    var resumePath = String(job.outputRunPath || job.resumeCheckpoint || '');
+    var resumePath = String(job.outputRunPath || job.resumeFromCheckpoint || job.resumeCheckpoint || '');
     var resumeStage = String(job.resumeStage || job.stages || '');
-    var canResume = job.status !== 'cancelled' && !!resumePath && ['hi', 'lo', 'krea2', 'wan21'].indexOf(resumeStage) !== -1;
+    var outputPath = String(job.outputRoot || '');
+    var outputAvailable = job.outputAvailable === true;
+    var logAvailable = job.logAvailable === true;
+    var canResume = job.status !== 'cancelled' && job.resumeAvailable === true && !!resumePath && ['hi', 'lo', 'krea2', 'wan21'].indexOf(resumeStage) !== -1;
     var status = String(job.status || 'unknown');
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</span></div>' +
         '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
       '<div class="training-history-context"><div class="training-history-model">' + escapeHtml((job.model && job.model.label) || job.modelLabel || 'Training model') + ' · ' + escapeHtml(job.datasetTarget || 'unknown') + '</div>' +
-        '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
+        '<div class="training-history-set">' + (job.sourceUnavailable
+          ? '<span class="training-history-folder">' + escapeHtml(job.folder || '') + '</span>'
+          : '<button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>') + '</div></div>' +
       '<div class="training-history-details">' +
         (details.length || duration ? '<div>' +
           (details.length ? escapeHtml(details.join(' · ')) : '') +
@@ -77,14 +82,16 @@ function renderTrainingHistory() {
         (trainingOutputIdentity(job) ? '<div title="' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '') + '">Output: ' + escapeHtml(trainingOutputIdentity(job)) + '</div>' : '') +
         (timingError ? '<div class="training-runner-detail is-error">' + escapeHtml(timingError) + '</div>' : '') +
         (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
+        (job.sourceUnavailable ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.sourceUnavailable) + '</div>' : '') +
         buildTrainingFailureDetailsHtml(job) +
+        (outputPath && !outputAvailable ? '<div class="training-runner-detail is-warning">Output folder is no longer available: ' + escapeHtml(outputPath) + '</div>' : '') +
         (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
       '</div>' +
       '<div class="training-history-actions">' +
-       (job.folder && job.outputRoot ? '<button type="button" class="training-history-action" data-training-history-output="' + escapeHtml(job.id || '') + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' : '') +
-       '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show log" aria-label="Show log">&#9998;</button>' +
+       (job.folder && outputAvailable ? '<button type="button" class="training-history-action" data-training-history-output="' + escapeHtml(job.id || '') + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' : '') +
+       (logAvailable ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show log" aria-label="Show log">&#9998;</button>' : '') +
        (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Resume this run" aria-label="Resume this run">&#9654;</button>' : '') +
-       '<button type="button" class="training-history-action training-history-action--clear" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove this entry from Recent Runs; logs and artifacts remain." aria-label="Remove from Recent Runs">&#215;</button>' +
+       '<button type="button" class="training-history-action training-history-action--clear" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Forget this entry and remove its WebCap-owned launch bundle. Trainer outputs and checkpoints remain." aria-label="Remove from Recent Runs">&#215;</button>' +
        '</div></div>';
   }).join('');
   if (els.historyShowAllBtn) {
@@ -137,7 +144,7 @@ function renderTrainingModelTrainedStatus() {
 }
 
 function clearTrainingHistory() {
-  if (!window.confirm('Clear all Recent Runs history? Output files, logs, and checkpoints will remain.')) return;
+  if (!window.confirm('Clear all Recent Runs history and their WebCap-owned launch bundles? Trainer outputs and checkpoints will remain.')) return;
   trainingRunnerRequest('/fs/training_history/clear', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
   }).then(function () { refreshTrainingHistory(true); }).catch(function (err) { setStatus('Could not clear training history: ' + String(err.message || err)); });
@@ -152,7 +159,7 @@ function clearTrainingHistoryJob(jobId) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: job.folder, jobId: jobId })
   }).then(function (payload) {
     if (!payload.cleared) throw new Error('Training history entry was not found.');
-    setStatus('Removed the run from Recent Runs. Logs and artifacts were kept.');
+    setStatus('Forgot the run and removed its WebCap-owned launch bundle. Trainer outputs were kept.');
     refreshTrainingHistory(true);
   }).catch(function (err) { setStatus('Could not clear training history entry: ' + String(err.message || err)); });
 }

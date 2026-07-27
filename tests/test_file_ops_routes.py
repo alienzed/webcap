@@ -8,6 +8,7 @@ import tool.server.config as config_module
 import tool.server.file_ops as file_ops_module
 import tool.server.run_ops as run_ops_module
 import tool.server.smart_set as smart_set_module
+import tool.server.training_runner as training_runner_module
 
 
 def write_text(path: Path, text: str):
@@ -454,12 +455,21 @@ def test_training_history_opens_the_recorded_effective_output_folder(tmp_path, m
     output_dir = fs_root / "output" / "runs" / "set-lo"
     set_dir.mkdir(parents=True)
     output_dir.mkdir(parents=True)
-    write_text(set_dir / ".webcap_training.json", json.dumps({
-        "version": 3,
-        "outputRoot": str(output_dir),
-        "jobs": [{"id": "job-1", "outputRoot": str(output_dir)}],
-        "runs": [],
-    }))
+    bundle = fs_root / "output" / "runs" / "001-set" / ".webcap" / "jobs" / "job-1"
+    bundle.mkdir(parents=True)
+    monkeypatch.setattr(training_runner_module.app_config, "FS_ROOT", fs_root)
+    training_runner_module._write_state({
+        "version": 4,
+        "jobs": [],
+        "recentRuns": [{
+            "id": "job-1",
+            "folder": "set_training",
+            "stages": "lo",
+            "status": "completed",
+            "outputRoot": str(output_dir),
+            "artifactDir": str(bundle),
+        }],
+    })
     monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
     opened = []
     monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))

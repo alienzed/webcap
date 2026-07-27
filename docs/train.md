@@ -16,16 +16,18 @@ For Wan2.2, `HI -> LO` creates two independent queued jobs. HI and LO are distin
 
 ## Queue and run controls
 
-- `Train this set` starts when the runner is idle or adds the job behind active work.
-- `Pause Queue` disables automatic handoff without interrupting the active job.
-- `Finish` intentionally ends the active job and allows queue processing to continue.
+- `Train this set` starts immediately only when the queue is empty. Otherwise it appends behind the existing first job without starting a waiting queue.
+- `Pause` interrupts the verified active runner and leaves that job first. `Resume` retries it from its latest valid checkpoint, or restarts the stage when no checkpoint exists.
+- `Finish` intentionally ends the active job and immediately allows the next queue item to start. The clock control can schedule Finish after a saved epoch.
 - Canceling a queued item removes that item only; it does not stop the active job.
 - A temporarily unavailable set folder leaves its job and job bundle intact. The queue shows the unavailable source and waits for explicit cancellation or a later launch attempt.
 - The queue exposes ordering, effective launch/stage output paths, output-folder actions, output logs, recent history, GPU status, and checkpoint-resume controls. Queued resume jobs show the checkpoint tag and artifact-derived epoch/step progress. The in-app output view opens at the recent log tail; use **Reveal log file** to inspect the complete `run.log` in Explorer.
-- Any ordinary job failure is recorded loudly and the queue continues. Queue-wide holds are reserved for runner-control uncertainty, explicit user pause, restart confirmation, or invalid queue state. Starting WebCap may rediscover a verified live runner, but never launches dormant queued work until the user explicitly starts or resumes the queue. Failed history retains structured preflight checks and at most an 8 KB trainer-log excerpt; the complete `run.log` remains the authoritative log. Lifecycle timing failures are shown as invariant errors rather than formatted as plausible durations.
+- Any unexpected launch, trainer, or runner-disappearance failure leaves that same job first and waits for explicit Resume. Starting WebCap may reconnect to the exact recorded first runner, but never launches dormant work. Inconclusive runner inspection remains visible and blocks action until the process can be confirmed.
 - Explicit resume paths are user intent: WebCap requires a real DeepSpeed checkpoint but does not reject it because saved set/stage metadata differs. Current LR, epochs, buckets, captions, and generated TOML fingerprints never gate resume.
-- Queued resume progress is live filesystem state, not a queue-time snapshot: each status refresh rereads `latest`, `global_step*`, and `epoch*` artifacts from the recorded resume directory.
-- Terminal jobs leave the live scheduler after their outcome is written to Recent Runs. If that index cannot be written, the terminal job remains visible until its set folder is available again.
+- Resume progress is live filesystem state, not a queue-time snapshot: WebCap rereads `latest`, `global_step*`, and `epoch*` artifacts from the job's output.
+- Terminal jobs leave the queue after completion or Finish. Recent Runs is compact, best-effort convenience history in the queue snapshot; missing set or output paths affect only their own row and never delay handoff.
+- Clearing Recent Runs or canceling queued work removes its exact WebCap-owned launch bundle. Trainer outputs, checkpoints, set configs, media, captions, and tags are never deleted.
+- `.webcap_training/queue.json` contains only ordered launch intent and compact Recent Runs. A set's `.webcap_training.json` contains only its remembered `outputGroup`.
 - Progress is per job. When trainer timing is available, the UI shows completion ETA and the estimated time to the next configured checkpoint.
 - `Run Diagnostics` performs the fuller WSL, runtime, launcher, and CUDA checks. Normal launches use the lighter required checks.
 - TensorBoard can be started, stopped, and opened from the Training workspace when it is available in the configured runtime.
@@ -45,4 +47,4 @@ Relevant `tool/config.json` fields include:
 - `training.tensorboard_port`: local port for TensorBoard controls.
 - `training.write_selection_snapshot_comments`: adds the prep snapshot header to generated dataset TOML.
 
-The generated TOML remains the configuration interface. Each new launch reserves `<base36>-<set>/<profile-stage>/` and executes a launch-owned snapshot with that effective `output_dir`; the source TOML remains unchanged. HI → LO shares one prefix across its two independent jobs. Resume keeps the existing output. WebCap does not provide arbitrary custom launch commands or global template editing.
+The generated TOML remains the configuration interface. Each new job reserves `<base36>-<set>/<profile-stage>/`; at launch or retry, WebCap copies the current stage config into the small job bundle and applies the reserved `output_dir`. The source TOML remains unchanged. HI → LO shares one prefix across its two independent jobs. WebCap does not provide arbitrary custom launch commands or global template editing.

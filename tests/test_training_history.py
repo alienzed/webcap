@@ -60,6 +60,20 @@ def test_set_adopts_the_group_with_real_run_activity_and_reuses_it(tmp_path, mon
     assert not (root / "output" / "runs" / "003-set").exists()
 
 
+def test_invalid_set_training_metadata_is_visible_and_untouched(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    path = folder / ".webcap_training.json"
+    path.write_text("{bad", encoding="utf-8")
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+
+    with pytest.raises(ValueError, match="left unchanged"):
+        training_history.training_output_group_for_folder(folder, create=True)
+
+    assert path.read_text(encoding="utf-8") == "{bad"
+
+
 def test_resume_discovery_uses_the_sets_remembered_model_folder(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "set"
@@ -95,13 +109,10 @@ def test_training_history_discovers_only_compatible_runs_in_the_configured_outpu
     _checkpoint(output / "20260713_01-00-00", source)
     _checkpoint(root / "output" / "runs" / "other" / "run", source)
 
-    history = training_history.record_job(set_folder, {
-        "id": "job-1", "folder": "char/lilly", "status": "paused", "stages": "lo", "createdAt": 1,
-    })
+    runs = training_history.discover_runs(set_folder, "lo")
 
-    assert [entry["name"] for entry in history["runs"]] == ["20260713_01-00-00"]
-    assert history["runs"][0]["matchType"] == "exact"
-    assert (set_folder / ".webcap_training.json").exists()
+    assert [entry["name"] for entry in runs] == ["20260713_01-00-00"]
+    assert runs[0]["matchType"] == "exact"
 
 
 def test_history_output_root_uses_the_available_profile_config(tmp_path, monkeypatch):
@@ -112,7 +123,7 @@ def test_history_output_root_uses_the_available_profile_config(tmp_path, monkeyp
     monkeypatch.setattr(config_module, "FS_ROOT", root)
     (set_folder / "config.krea2.toml").write_text(_krea_config(output, "lilly"), encoding="utf-8")
 
-    assert training_history.history_payload(set_folder)["outputRoot"] == str(output)
+    assert training_history.read_history(set_folder)["outputRoot"] == str(output)
 
 
 def test_krea_history_discovers_a_checkpoint_under_a_prefixed_output_root(tmp_path, monkeypatch):
@@ -131,68 +142,16 @@ def test_krea_history_discovers_a_checkpoint_under_a_prefixed_output_root(tmp_pa
     assert runs[0]["path"] == str(output / "20260719_13-29-01")
 
 
-def test_training_history_summary_uses_the_latest_managed_job(tmp_path, monkeypatch):
-    root = tmp_path / "training"
-    set_folder = root / "set"
-    set_folder.mkdir(parents=True)
-    monkeypatch.setattr(config_module, "FS_ROOT", root)
-    training_history.record_job(set_folder, {"id": "one", "folder": "set", "status": "failed", "createdAt": 1})
-    training_history.record_job(set_folder, {"id": "two", "folder": "set", "status": "completed", "createdAt": 2})
-    assert training_history.summarize_history(set_folder)["status"] == "completed"
 
 
-def test_global_history_is_compact_and_clear_does_not_touch_run_artifacts(tmp_path, monkeypatch):
-    root = tmp_path / "training"
-    set_folder = root / "char" / "lilly"
-    set_folder.mkdir(parents=True)
-    monkeypatch.setattr(config_module, "FS_ROOT", root)
-    run = root / "output" / "runs" / "lilly" / "run-one"
-    run.mkdir(parents=True)
-    training_history.record_job(set_folder, {
-        "id": "job-1", "folder": "char/lilly", "status": "completed", "stages": "hi",
-        "model": {"label": "Example", "source": "example.safetensors"},
-        "input": {"count": 2, "fingerprint": "sha256:test", "configFingerprint": "sha256:config"},
-    })
-    payload = training_history.all_history_payload("example")
-    assert len(payload["jobs"]) == 1
-    assert "runDirectories" not in payload["jobs"][0]
-    assert training_history.clear_history(set_folder) == 1
-    assert run.exists()
 
 
-def test_global_history_hides_cancelled_items(tmp_path, monkeypatch):
-    root = tmp_path / "training"
-    set_folder = root / "set"
-    set_folder.mkdir(parents=True)
-    monkeypatch.setattr(config_module, "FS_ROOT", root)
-    training_history.record_job(set_folder, {"id": "cancelled", "folder": "set", "status": "cancelled", "createdAt": 1})
-    training_history.record_job(set_folder, {"id": "completed", "folder": "set", "status": "completed", "createdAt": 2})
-    assert [job["id"] for job in training_history.all_history_payload()["jobs"]] == ["completed"]
 
 
-def test_global_history_returns_persisted_rows_without_rechecking_current_inputs(tmp_path, monkeypatch):
-    root = tmp_path / "training"
-    set_folder = root / "set"
-    set_folder.mkdir(parents=True)
-    monkeypatch.setattr(config_module, "FS_ROOT", root)
-    training_history.record_job(set_folder, {
-        "id": "job", "folder": "set", "status": "finished_early",
-        "input": {"fingerprint": "dataset-a", "configFingerprint": "config-a"},
-    })
-    monkeypatch.setattr(training_runner, "_input_evidence", lambda folder: (_ for _ in ()).throw(AssertionError("must not inspect inputs")))
-    assert training_history.all_history_payload()["jobs"][0]["input"]["fingerprint"] == "dataset-a"
 
 
-def test_finished_early_history_keeps_the_exact_persisted_run_path(tmp_path, monkeypatch):
-    root = tmp_path / "training"
-    set_folder = root / "set"
-    set_folder.mkdir(parents=True)
-    monkeypatch.setattr(config_module, "FS_ROOT", root)
-    output = root / "output" / "runs" / "set" / "run-one"
-    training_history.record_job(set_folder, {
-        "id": "early", "folder": "set", "status": "finished_early", "stages": "lo", "outputRunPath": str(output),
-    })
-    assert training_history.all_history_payload()["jobs"][0]["outputRunPath"] == str(output)
+
+
 
 
 def test_discovery_keeps_exact_and_compatible_resume_choices(tmp_path, monkeypatch):
@@ -313,17 +272,6 @@ def test_discovery_ignores_webcap_sidecars(tmp_path, monkeypatch):
     assert [run["name"] for run in training_history.discover_runs(folder, "lo")] == ["real"]
 
 
-def test_completed_models_accept_terminal_jobs(tmp_path, monkeypatch):
-    root = tmp_path / "training"
-    folder = root / "set"
-    folder.mkdir(parents=True)
-    monkeypatch.setattr(config_module, "FS_ROOT", root)
-    output = root / "output" / "runs" / "set"
-    (folder / "config.hi.toml").write_text(_wan_config(output, "high_noise_model", epochs=50), encoding="utf-8")
-    (folder / "config.lo.toml").write_text(_wan_config(output, "low_noise_model", epochs=90), encoding="utf-8")
-    training_history.record_job(folder, {"id": "hi", "status": "completed", "stages": "hi"})
-    training_history.record_job(folder, {"id": "lo", "status": "finished_early", "stages": "lo"})
-    assert training_history.completed_stages(folder) == (["hi", "lo"], {"hi", "lo"})
 
 
 def test_run_discovery_ignores_removed_or_unreadable_set_artifacts(tmp_path, monkeypatch):

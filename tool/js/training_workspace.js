@@ -559,7 +559,6 @@ function wireTrainingWorkspace() {
     }
     var outputId = event.target.getAttribute('data-training-job-output');
     if (outputId) openTrainingJobOutput(outputId);
-    if (event.target.closest('[data-training-runner-recover]')) recoverManagedTrainingQueue();
   };
   runnerConsoleBtn.onclick = function () {
     toggleTrainingRunnerConsole();

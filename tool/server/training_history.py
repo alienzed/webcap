@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import time
 from pathlib import Path, PurePosixPath
 
 import tomllib
@@ -16,7 +17,7 @@ from .training_profiles import config_for_id
 
 
 HISTORY_FILE_NAME = ".webcap_training.json"
-HISTORY_VERSION = 4
+HISTORY_VERSION = 3
 _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
@@ -191,6 +192,7 @@ def _default_history(folder_path):
     return {
         "version": HISTORY_VERSION,
         "outputRoot": str(output_root_for_folder(folder_path)),
+        "jobs": [],
         "runs": [],
     }
 
@@ -201,54 +203,40 @@ def read_history(folder_path):
         return _default_history(folder_path)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError("Could not read set training metadata; it was left unchanged: " + str(path)) from exc
-    if not isinstance(data, dict) or data.get("version") not in (3, HISTORY_VERSION):
-        raise ValueError("Set training metadata is invalid; it was left unchanged: " + str(path))
-    result = _default_history(folder_path)
-    output_group = str(data.get("outputGroup") or "").strip()
-    if output_group:
-        result["outputGroup"] = output_group
-    return result
+    except Exception:
+        return _default_history(folder_path)
+    if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
+        return _default_history(folder_path)
+    data["outputRoot"] = str(output_root_for_folder(folder_path))
+    if not isinstance(data.get("jobs"), list):
+        data["jobs"] = []
+    if not isinstance(data.get("runs"), list):
+        data["runs"] = []
+    return data
 
 
 def _write_history(folder_path, data):
     path = _history_path(folder_path)
-    payload = {"version": HISTORY_VERSION}
-    output_group = str((data or {}).get("outputGroup") or "").strip()
-    if output_group:
-        payload["outputGroup"] = output_group
-    tmp = path.with_name("." + path.name + "." + str(os.getpid()) + ".tmp")
-    try:
-        with tmp.open("x", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(tmp, path)
-        normalize_path_permissions(path)
-    finally:
-        try:
-            tmp.unlink()
-        except FileNotFoundError:
-            pass
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+    normalize_path_permissions(path)
 
 
 def _read_history_index(folder_path):
     """Read optional set-local metadata without resolving any configured paths."""
     path = _history_path(folder_path)
-    if not path.exists():
-        return {"version": HISTORY_VERSION}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError("Could not read set training metadata; it was left unchanged: " + str(path)) from exc
-    if not isinstance(data, dict) or data.get("version") not in (3, HISTORY_VERSION):
-        raise ValueError("Set training metadata is invalid; it was left unchanged: " + str(path))
-    result = {"version": HISTORY_VERSION}
-    output_group = str(data.get("outputGroup") or "").strip()
-    if output_group:
-        result["outputGroup"] = output_group
-    return result
+    except (OSError, ValueError):
+        return {"version": HISTORY_VERSION, "jobs": [], "runs": []}
+    if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
+        return {"version": HISTORY_VERSION, "jobs": [], "runs": []}
+    if not isinstance(data.get("jobs"), list):
+        data["jobs"] = []
+    if not isinstance(data.get("runs"), list):
+        data["runs"] = []
+    return data
 
 
 def _recorded_output_group(folder_path):
@@ -470,3 +458,143 @@ def resume_point_from_directory(folder_path, stage, run_path):
         "expectedEpochs": expected_epochs or None,
         "completed": completed,
     }
+
+
+def summarize_history(folder_path):
+    history = read_history(folder_path)
+    jobs = history.get("jobs") or []
+    latest = jobs[-1] if jobs else None
+    return {
+        "status": str((latest or {}).get("status") or "never"),
+        "updatedAt": (latest or {}).get("updatedAt") or (latest or {}).get("finishedAt") or (latest or {}).get("createdAt") or 0,
+    }
+
+
+def record_job(folder_path, job):
+    history = read_history(folder_path)
+    runs = discover_runs(folder_path, str(job.get("stages") or ""))
+    record_fields = (
+        "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
+        "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId",
+        "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
+    )
+    record = {field: job.get(field) for field in record_fields if field in job}
+    for field in ("error", "completionNote"):
+        if isinstance(record.get(field), str):
+            record[field] = record[field][:1000]
+    if isinstance(record.get("failureExcerpt"), str):
+        record["failureExcerpt"] = record["failureExcerpt"][-8192:]
+    if isinstance(record.get("model"), dict):
+        record["model"] = {
+            "label": str(record["model"].get("label") or "")[:160],
+            "source": str(record["model"].get("source") or "")[:512],
+        }
+    latest_run = runs[0] if runs else {}
+    record["artifactSummary"] = {
+        "runCount": len(runs), "latestName": latest_run.get("name", ""),
+        "checkpointAvailable": bool(latest_run.get("checkpointAvailable")),
+        "epoch": latest_run.get("epoch"), "steps": latest_run.get("steps"),
+    }
+    existing = history["jobs"]
+    for index, item in enumerate(existing):
+        if str(item.get("id") or "") == str(record.get("id") or ""):
+            existing[index] = record
+            break
+    else:
+        existing.append(record)
+    # Discovery data can be large. It is response-only, never persisted in the index.
+    history["runs"] = []
+    _write_history(folder_path, history)
+    history["runs"] = runs
+    return history
+
+
+def history_payload(folder_path):
+    history = read_history(folder_path)
+    history["runs"] = discover_runs(folder_path)
+    history["resumeDefaults"] = {}
+    return history
+
+
+def all_history_payload(query="", folder=""):
+    """Return persisted history rows; presentation filtering happens in the browser."""
+    root = Path(app_config.FS_ROOT)
+    jobs = []
+    for path in root.rglob(HISTORY_FILE_NAME):
+        if ".webcap_training" in path.parts or "auto_dataset" in path.parts:
+            continue
+        set_folder = path.parent
+        try:
+            relative = str(set_folder.relative_to(root)).replace("\\", "/")
+        except ValueError:
+            continue
+        history = read_history(set_folder)
+        for job in history.get("jobs") or []:
+            if not isinstance(job, dict):
+                continue
+            if job.get("status") == "cancelled":
+                continue
+            item = dict(job)
+            item["folder"] = relative
+            jobs.append(item)
+    jobs.sort(key=lambda job: float(job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0), reverse=True)
+    return {"version": HISTORY_VERSION, "jobs": jobs}
+
+
+def history_job_output_path(folder_path, job_id):
+    wanted = str(job_id or "").strip()
+    job = next((item for item in read_history(folder_path).get("jobs", []) if str(item.get("id") or "") == wanted), None)
+    if not job or not str(job.get("outputRoot") or "").strip():
+        raise ValueError("Training history entry has no effective output directory.")
+    return Path(job["outputRoot"])
+
+
+def clear_history(folder_path=None):
+    """Clear indexes only; job bundles and trainer artifacts are deliberately untouched."""
+    root = Path(app_config.FS_ROOT)
+    paths = [_history_path(folder_path)] if folder_path else list(root.rglob(HISTORY_FILE_NAME))
+    cleared = 0
+    for path in paths:
+        try:
+            if path.exists():
+                path.unlink()
+                cleared += 1
+        except OSError:
+            continue
+    return cleared
+
+
+def clear_history_job(folder_path, job_id):
+    """Remove one history index entry without touching its logs or training artifacts."""
+    history = read_history(folder_path)
+    wanted_id = str(job_id or "").strip()
+    if not wanted_id:
+        return False
+    original = history.get("jobs") or []
+    retained = [job for job in original if str(job.get("id") or "") != wanted_id]
+    if len(retained) == len(original):
+        return False
+    history["jobs"] = retained
+    _write_history(folder_path, history)
+    return True
+
+
+def completed_stages(folder_path, include_discovered_runs=True):
+    """Return completed stages, optionally avoiding an expensive output-tree scan."""
+    folder = Path(folder_path)
+    stages = [stage for stage in ("hi", "lo", "krea2", "wan21") if (folder / ("config." + stage + ".toml")).is_file()]
+    history = read_history(folder)
+    completed = set()
+    for job in history.get("jobs") or []:
+        if job.get("status") not in ("completed", "finished_early"):
+            continue
+        stage = str(job.get("stages") or "")
+        if stage == "both":
+            completed.update(stages)
+        elif stage in stages:
+            completed.add(stage)
+    if include_discovered_runs:
+        for stage in stages:
+            if any(run.get("completed") for run in discover_runs(folder, stage)):
+                completed.add(stage)
+    return stages, completed

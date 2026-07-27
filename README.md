@@ -469,6 +469,7 @@ Selection, review, and dataset flow:
 - `/fs/training_runner/validate`
 - `/fs/training_runner/start`
 - `/fs/training_runner/status`
+- `/fs/training_runner/recover`
 - `/fs/training_runner/gpu`
 - `/fs/training_runner/log`
 - `/fs/training_runner/open_log`

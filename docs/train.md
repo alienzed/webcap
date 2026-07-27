@@ -2,6 +2,8 @@
 
 WebCap supports managed Diffusion Pipe training and an explicit manual WSL handoff. Open `Train` from a set, choose a training profile, prepare the selected media, generate its files, then preview, run, or queue the profile's valid run option.
 
+The runner's ownership and recovery rules are defined in [training_runner_contract.md](training_runner_contract.md).
+
 See [training_profiles.md](training_profiles.md) for the supported models, files, media requirements, and output-root behavior.
 
 ## Workflow

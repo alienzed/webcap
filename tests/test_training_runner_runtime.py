@@ -163,7 +163,7 @@ def test_invalid_jobs_cannot_be_silently_replaced_with_an_empty_queue(tmp_path, 
     assert '"activeJobId": "live"' in state_path.read_text(encoding="utf-8")
 
 
-def test_queue_state_cannot_disappear_after_webcap_has_seen_it(tmp_path, monkeypatch):
+def test_deleted_queue_state_becomes_an_empty_disposable_queue(tmp_path, monkeypatch):
     root = tmp_path / "training"
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
     monkeypatch.setattr(training_runner, "_state_file_seen", None)
@@ -174,8 +174,9 @@ def test_queue_state_cannot_disappear_after_webcap_has_seen_it(tmp_path, monkeyp
     })
     (root / ".webcap_training" / "queue.json").unlink()
 
-    with pytest.raises(training_runner.TrainingStateError, match="disappeared"):
-        training_runner._read_state()
+    assert training_runner._read_state() == training_runner._default_state()
+    assert training_runner._state_file_seen is None
+    assert training_runner._persisted_managed_job_ids == set()
 
 
 @pytest.mark.parametrize("status", ["running", "queued"])
@@ -198,7 +199,7 @@ def test_state_writer_refuses_to_drop_a_managed_job(tmp_path, monkeypatch, statu
     assert json.loads(state_path.read_text(encoding="utf-8"))["jobs"][0]["status"] == status
 
 
-def test_state_reader_refuses_a_valid_file_that_drops_a_managed_job(tmp_path, monkeypatch):
+def test_state_reader_accepts_an_explicitly_shortened_queue_file(tmp_path, monkeypatch):
     root = tmp_path / "training"
     state_path = root / ".webcap_training" / "queue.json"
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
@@ -210,8 +211,8 @@ def test_state_reader_refuses_a_valid_file_that_drops_a_managed_job(tmp_path, mo
     })
     state_path.write_text(json.dumps(training_runner._default_state()), encoding="utf-8")
 
-    with pytest.raises(training_runner.TrainingStateError, match="dropped managed jobs"):
-        training_runner._read_state()
+    assert training_runner._read_state() == training_runner._default_state()
+    assert training_runner._persisted_managed_job_ids == set()
 
 
 def test_state_writer_allows_an_explicit_terminal_retirement(tmp_path, monkeypatch):
@@ -1255,7 +1256,7 @@ def test_runner_process_inspection_failure_is_unknown(monkeypatch):
     assert "Timed out" in detail
 
 
-def test_malformed_result_keeps_the_job_unconfirmed_and_blocks_the_queue(tmp_path, monkeypatch):
+def test_malformed_result_is_local_when_the_runner_is_confirmed_absent(tmp_path, monkeypatch):
     artifact_path = tmp_path / ".webcap" / "jobs" / "active"
     artifact_path.mkdir(parents=True)
     (artifact_path / "result.json").write_text("{bad json", encoding="utf-8")
@@ -1265,19 +1266,49 @@ def test_malformed_result_keeps_the_job_unconfirmed_and_blocks_the_queue(tmp_pat
     }
     following = {"id": "next", "folder": "set", "status": "queued"}
     state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, following]}
-    monkeypatch.setattr(
-        training_runner,
-        "_launch_job",
-        lambda *args: (_ for _ in ()).throw(AssertionError("unknown result must block the queue")),
-    )
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("absent", ""))
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: Path(folder))
+    monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: job.update(status="starting", stage="starting"))
 
     training_runner._refresh_state(state)
 
-    assert active["status"] == "unconfirmed"
-    assert "could not be read" in active["confirmationNote"]
-    assert "finishedAt" not in active
-    assert state["activeJobId"] == "active"
-    assert following["status"] == "queued"
+    assert active["status"] == "interrupted"
+    assert "could not be read" in active["error"]
+    assert state["activeJobId"] == "next"
+    assert following["status"] == "starting"
+
+
+def test_unknown_runner_returns_the_job_to_the_front_and_holds_for_manual_recovery(monkeypatch):
+    active = {
+        "id": "active", "folder": "set", "status": "running", "pid": 42,
+        "runnerScript": "/runs/active/runner.sh", "outputRunPath": "/output/run",
+    }
+    following = {"id": "next", "folder": "set", "status": "queued"}
+    state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, following]}
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda job: ("absent", None, ""))
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("unknown", "Runner inspection timed out."))
+
+    training_runner._refresh_state(state)
+
+    assert [job["id"] for job in state["jobs"]] == ["active", "next"]
+    assert active["status"] == "queued"
+    assert active["resumeFromCheckpoint"] == "/output/run"
+    assert state["activeJobId"] == ""
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"] == "Previous runner could not be confirmed. Resume or cancel the first item."
+
+
+def test_missing_runner_evidence_uses_the_same_recoverable_front_item(monkeypatch):
+    active = {"id": "active", "folder": "set", "status": "running", "stages": "lo"}
+    state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active]}
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda job: ("absent", None, ""))
+
+    training_runner._refresh_state(state)
+
+    assert active["status"] == "queued"
+    assert state["activeJobId"] == ""
+    assert state["queuePaused"] is True
+    assert "PID and script evidence are unavailable" in active["error"]
 
 
 def test_multiple_derived_live_runners_are_visible_and_block_launch(monkeypatch):

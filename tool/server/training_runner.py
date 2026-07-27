@@ -52,7 +52,7 @@ from .training_runtime import (
 RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
 STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
-ACTIVE_STATUSES = {"starting", "running", "stopping", "unconfirmed"}
+ACTIVE_STATUSES = {"starting", "running", "stopping"}
 QUEUE_STATUSES = {"queued"}
 HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "interrupted"}
 TERMINAL_STATUSES = HISTORY_STATUSES | {"cancelled"}
@@ -233,8 +233,8 @@ def _read_state():
     _ensure_runtime_dirs()
     path = _state_path()
     if not path.exists():
-        if _state_file_seen == path:
-            raise TrainingStateError("Training queue state disappeared while WebCap was running: " + str(path))
+        _state_file_seen = None
+        _persisted_managed_job_ids = set()
         return _default_state()
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
@@ -250,13 +250,7 @@ def _read_state():
     parsed.setdefault("jobs", [])
     parsed.setdefault("queuePaused", False)
     parsed.setdefault("queuePauseReason", "")
-    job_ids = _state_job_ids(parsed, path)
-    missing_job_ids = _persisted_managed_job_ids - job_ids if _state_file_seen == path else set()
-    if missing_job_ids:
-        raise TrainingStateError(
-            "Existing training queue state dropped managed jobs; it was left unchanged: "
-            + ", ".join(sorted(missing_job_ids))
-        )
+    _state_job_ids(parsed, path)
     _persisted_managed_job_ids = _managed_job_ids(parsed)
     _state_file_seen = path
     return parsed
@@ -977,6 +971,15 @@ def _queue_paused_job(job):
     job["updatedAt"] = time.time()
 
 
+def _hold_job_for_manual_recovery(job, detail=""):
+    """Keep uncertain work recoverable without occupying the active runner slot."""
+    _queue_paused_job(job)
+    job["error"] = str(detail or "WebCap could not confirm the previous runner.").strip()
+    return {
+        "holdReason": "Previous runner could not be confirmed. Resume or cancel the first item.",
+    }
+
+
 def _distributed_socket_hold_reason(log_text):
     text = str(log_text or "").lower()
     has_distributed_context = "torch.distributed" in text or "_create_c10d_store" in text
@@ -1019,12 +1022,8 @@ def _refresh_job(job):
         job.get("pid") or job.get("runnerScript") or job.get("runnerScriptWsl") or (_job_dir(job) / "pid").exists()
     )
     if result_state == "absent" and not has_runner_evidence:
-        if str(job.get("status") or "") in ACTIVE_STATUSES:
-            _clear_terminal_projection(job)
-            job.pop("runnerVerified", None)
-            job["status"] = "unconfirmed"
-            job["confirmationNote"] = "Runner PID and script evidence are unavailable."
-            job["updatedAt"] = time.time()
+        if prior_status in ACTIVE_STATUSES | {"unconfirmed"}:
+            return _hold_job_for_manual_recovery(job, "Runner PID and script evidence are unavailable.")
         return {"holdReason": ""}
     if not job.get("progressPlan"):
         job["progressPlan"] = _default_progress_plan()
@@ -1069,9 +1068,7 @@ def _refresh_job(job):
     runner_pid = _job_runner_pid(job)
     if runner_pid:
         job["pid"] = runner_pid
-    process_state, process_detail = (
-        ("unknown", result_error) if result_state == "unknown" else _inspect_job_runner(job)
-    )
+    process_state, process_detail = _inspect_job_runner(job)
     if process_state == "running":
         if prior_status in HISTORY_STATUSES:
             _remove_stale_terminal_history(job)
@@ -1083,13 +1080,8 @@ def _refresh_job(job):
         _trigger_scheduled_finish(job)
         return {"holdReason": ""}
     if process_state == "unknown":
-        if prior_status in HISTORY_STATUSES:
-            _remove_stale_terminal_history(job)
-        _clear_terminal_projection(job)
-        job.pop("runnerVerified", None)
-        job["status"] = "unconfirmed"
-        job["confirmationNote"] = process_detail or "Runner confirmation is temporarily unavailable."
-        job["updatedAt"] = now
+        if prior_status in ACTIVE_STATUSES | {"unconfirmed"}:
+            return _hold_job_for_manual_recovery(job, result_error or process_detail)
         return {"holdReason": ""}
     prior_projection = _terminal_projection_signature(job)
     prior_updated_at = job.get("updatedAt")
@@ -1100,7 +1092,7 @@ def _refresh_job(job):
     if job["status"] == "queued":
         return {"holdReason": "", "pauseQueue": requested_action == "pause"}
     if requested_action not in ("finish", "stop"):
-        job["error"] = process_detail or "Training runner is no longer available and did not write a result record."
+        job["error"] = result_error or process_detail or "Training runner is no longer available and did not write a result record."
     job["finishedAt"] = prior_finished_at if job["status"] == prior_status and prior_finished_at is not None else now
     job.pop("finishAfterEpoch", None)
     job.pop("finishScheduledAt", None)
@@ -1614,7 +1606,7 @@ def finish_schedule_response(job_id, epoch=None, cancel=False):
             job["updatedAt"] = time.time()
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
-        if job.get("status") not in ("starting", "running", "unconfirmed"):
+        if job.get("status") not in ("starting", "running"):
             return {"ok": False, "error": "Only an active training job can schedule Finish."}, 400
         raw_epoch = str(epoch or "").strip()
         if not raw_epoch.isdigit() or int(raw_epoch) <= 0:

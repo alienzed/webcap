@@ -22,10 +22,10 @@ function getTrainingRunnerActiveJob() {
   var jobs = trainingWorkspaceState.runnerJobs || [];
   for (var i = 0; i < jobs.length; i++) {
     if (jobs[i].id === trainingWorkspaceState.runnerActiveJobId &&
-        (jobs[i].status === 'starting' || jobs[i].status === 'running' || jobs[i].status === 'stopping' || jobs[i].status === 'unconfirmed')) return jobs[i];
+        (jobs[i].status === 'starting' || jobs[i].status === 'running' || jobs[i].status === 'stopping')) return jobs[i];
   }
   for (var j = 0; j < jobs.length; j++) {
-    if (jobs[j].status === 'starting' || jobs[j].status === 'running' || jobs[j].status === 'stopping' || jobs[j].status === 'unconfirmed') return jobs[j];
+    if (jobs[j].status === 'starting' || jobs[j].status === 'running' || jobs[j].status === 'stopping') return jobs[j];
   }
   return null;
 }
@@ -204,7 +204,7 @@ function scheduleTrainingRunnerPoll() {
   if (!isTrainingWorkspaceActive()) return;
   var activeStatus = (trainingWorkspaceState.runnerJobs || []).map(function (job) { return job.status; });
   var hasActiveJob = activeStatus.some(function (status) {
-    return status === 'starting' || status === 'running' || status === 'stopping' || status === 'unconfirmed';
+    return status === 'starting' || status === 'running' || status === 'stopping';
   });
   if (!hasActiveJob) return;
   var transitioning = activeStatus.some(function (status) { return status === 'starting' || status === 'stopping'; });
@@ -248,7 +248,7 @@ function refreshTrainingRunnerStatus() {
       });
       var recoveredOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
         var prior = priorJobsById[job.id];
-        var active = job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'unconfirmed';
+        var active = job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
         return active && (prior === 'interrupted' || prior === 'failed' || prior === 'stopped');
       });
       if (terminalOutcome || retiredOutcome || recoveredOutcome) {
@@ -577,7 +577,6 @@ function formatTrainingRunnerDuration(seconds) {
 }
 
 function trainingRunnerStatusLabel(status) {
-  if (status === 'unconfirmed') return 'Confirmation unavailable';
   var value = String(status || 'unknown').replace(/_/g, ' ');
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -850,7 +849,7 @@ function renderTrainingRunner() {
     return;
   }
   var jobs = trainingWorkspaceState.runnerJobs || [];
-  var activeCount = jobs.filter(function (job) { return job.status === 'starting' || job.status === 'running' || job.status === 'stopping' || job.status === 'unconfirmed'; }).length;
+  var activeCount = jobs.filter(function (job) { return job.status === 'starting' || job.status === 'running' || job.status === 'stopping'; }).length;
   var queuedJobs = jobs.filter(function (job) { return job.status === 'queued'; });
   var queuedCount = queuedJobs.length;
   var job = getTrainingRunnerActiveJob();
@@ -902,7 +901,7 @@ function renderTrainingRunner() {
         ? 'The runner is stopping after the requested action.'
         : 'Training runner status: ' + statusLabel + '.';
   var running = status === 'starting' || status === 'running' || status === 'stopping';
-  var canScheduleFinish = status === 'starting' || status === 'running' || status === 'unconfirmed';
+  var canScheduleFinish = status === 'starting' || status === 'running';
   var queued = status === 'queued';
   var queueState = trainingWorkspaceState.runnerQueuePaused
     ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + (activeCount ? ' — waiting for the current run to stop' : ' — Resume will start the first item') + '</span>'

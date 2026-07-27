@@ -139,7 +139,7 @@ def _migrate_legacy_histories():
             except (OSError, json.JSONDecodeError):
                 app_config.debug_print("[training_history] Left unreadable legacy metadata unchanged:", path)
                 continue
-            if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
+            if not isinstance(data, dict) or data.get("version") not in (HISTORY_VERSION, 4):
                 app_config.debug_print("[training_history] Left unsupported legacy metadata unchanged:", path)
                 continue
             try:

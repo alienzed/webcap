@@ -31,6 +31,90 @@ def test_invalid_existing_queue_state_is_preserved(tmp_path, monkeypatch):
     assert state_path.read_text(encoding="utf-8") == "{not json"
 
 
+def test_version_4_queue_migrates_jobs_history_and_progress_plan(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    bundle = tmp_path / "output" / ".webcap" / "jobs" / "live"
+    queued_bundle = tmp_path / "output" / ".webcap" / "jobs" / "queued"
+    state_path = root / ".webcap_training" / "queue.json"
+    (folder / "auto_dataset").mkdir(parents=True)
+    bundle.mkdir(parents=True)
+    queued_bundle.mkdir(parents=True)
+    (folder / "auto_dataset" / "training_plan.json").write_text(json.dumps({
+        "stages": {"lo": {"epochs": 12, "estimatedSteps": 240}},
+    }), encoding="utf-8")
+    (bundle / "config.lo.toml").write_text("micro_batch_size_per_gpu = 2\n", encoding="utf-8")
+    (bundle / "pid").write_text("123", encoding="utf-8")
+    (bundle / "run.log").write_text("steps: 10%| 24/120 [00:10<00:40, 2.00it/s]\n", encoding="utf-8")
+    state_path.parent.mkdir(parents=True)
+    version_4 = {
+        "version": 4,
+        "jobs": [
+            {"id": "live", "folder": "set", "stages": "lo", "artifactDir": str(bundle)},
+            {"id": "queued", "folder": "set", "stages": "lo", "artifactDir": str(queued_bundle)},
+        ],
+        "recentRuns": [
+            {"id": "old", "folder": "set", "stages": "lo", "status": "completed", "createdAt": 1},
+        ],
+    }
+    state_path.write_text(json.dumps(version_4), encoding="utf-8")
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+
+    migrated = training_runner._read_state()
+
+    assert migrated["version"] == 3
+    assert migrated["activeJobId"] == "live"
+    assert [job["status"] for job in migrated["jobs"]] == ["starting", "queued"]
+    assert migrated["jobs"][0]["progressPlan"]["lo"]["epochs"] == 12
+    assert migrated["jobs"][0]["progressPlan"]["lo"]["estimatedSteps"] == 120
+    assert json.loads((state_path.parent / "queue.version4.backup.json").read_text(encoding="utf-8")) == version_4
+    assert [job["id"] for job in training_history.all_history_payload()["jobs"]] == ["old"]
+    assert json.loads(state_path.read_text(encoding="utf-8"))["version"] == 3
+
+
+def test_invalid_version_4_queue_is_left_unchanged(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    state_path = root / ".webcap_training" / "queue.json"
+    state_path.parent.mkdir(parents=True)
+    version_4 = {"version": 4, "jobs": [{"id": "missing-fields"}], "recentRuns": []}
+    state_path.write_text(json.dumps(version_4), encoding="utf-8")
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+
+    with pytest.raises(training_runner.TrainingStateError, match="intent is incomplete"):
+        training_runner._read_state()
+
+    assert json.loads(state_path.read_text(encoding="utf-8")) == version_4
+
+
+def test_version_4_recent_runs_error_does_not_block_queue_migration(tmp_path, monkeypatch, caplog):
+    root = tmp_path / "training"
+    folder = root / "set"
+    bundle = tmp_path / "output" / ".webcap" / "jobs" / "queued"
+    state_path = root / ".webcap_training" / "queue.json"
+    folder.mkdir(parents=True)
+    bundle.mkdir(parents=True)
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(json.dumps({
+        "version": 4,
+        "jobs": [{"id": "queued", "folder": "set", "stages": "lo", "artifactDir": str(bundle)}],
+        "recentRuns": [{"id": "broken", "status": "completed"}],
+    }), encoding="utf-8")
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+
+    migrated = training_runner._read_state()
+
+    assert migrated["version"] == 3
+    assert migrated["jobs"][0]["id"] == "queued"
+    assert "could not be migrated" in caplog.text
+    assert (state_path.parent / "queue.version4.backup.json").is_file()
+
+
 def test_recover_state_archives_invalid_queue_and_starts_empty(tmp_path, monkeypatch):
     root = tmp_path / "training"
     state_path = root / ".webcap_training" / "queue.json"

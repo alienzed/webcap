@@ -185,6 +185,22 @@ def test_legacy_set_histories_migrate_once_to_central_recent_runs(tmp_path, monk
     assert local == {"version": training_history.HISTORY_VERSION, "outputGroup": "001-set"}
 
 
+def test_version_4_set_metadata_compacts_without_losing_output_group(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    (folder / training_history.HISTORY_FILE_NAME).write_text(json.dumps({
+        "version": 4,
+        "outputGroup": "002-set",
+    }), encoding="utf-8")
+
+    assert training_history.all_history_payload()["jobs"] == []
+
+    local = json.loads((folder / training_history.HISTORY_FILE_NAME).read_text(encoding="utf-8"))
+    assert local == {"version": training_history.HISTORY_VERSION, "outputGroup": "002-set"}
+
+
 def test_global_history_hides_cancelled_items(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"

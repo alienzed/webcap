@@ -28,8 +28,9 @@ There is no independently paused item elsewhere in the queue and no user-facing 
 On refresh or restart:
 
 - A plainly verified live runner is reattached.
-- A plainly absent runner becomes a local interrupted outcome, allowing the queue to continue.
-- If runner inspection itself is unavailable, the same job returns to the front as queued intent and the queue pauses for the existing `Resume` or `Cancel` action.
+- A previously active but now absent runner without a result returns to the front as queued intent and waits for manual action, regardless of when WebCap discovers the loss.
+- The recovery action is `Resume` when a checkpoint path was captured, or `Restart` when the run had not yet produced a checkpoint. A restart lets the trainer create a new timestamped run directory.
+- If runner inspection itself is unavailable, the same job returns to the front as queued intent and the queue pauses for `Resume`, `Restart`, or `Cancel` as appropriate.
 - Uncertain evidence never occupies the active runner slot indefinitely.
 
 Removing queue state means forgetting WebCap's queue. It does not kill external processes or delete training output.

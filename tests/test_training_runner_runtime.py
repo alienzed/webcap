@@ -584,6 +584,35 @@ def test_restart_holds_a_dormant_queue_for_manual_start(monkeypatch):
     assert state["jobs"][0]["status"] == "queued"
 
 
+def test_restart_returns_an_absent_active_run_to_the_front(monkeypatch):
+    monkeypatch.setattr(training_runner, "_startup_reconciled", False)
+    active = {
+        "id": "active", "status": "running", "stage": "hi", "stages": "hi",
+        "pid": 42, "runnerScript": "/run/runner.sh",
+    }
+    state = {
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "activeJobId": "active",
+        "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}],
+    }
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda job: ("absent", None, ""))
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("absent", ""))
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *args: (_ for _ in ()).throw(AssertionError("restart recovery must wait for manual start")),
+    )
+
+    training_runner._refresh_state(state)
+
+    assert [job["status"] for job in state["jobs"]] == ["queued", "queued"]
+    assert state["activeJobId"] == ""
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"] == "Previous runner ended without a result. Resume or restart the first item."
+    assert "resumeFromCheckpoint" not in active
+
+
 def test_missing_queued_folder_remains_visible_and_keeps_its_artifacts(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", tmp_path)
     artifact_path = tmp_path / "output" / "run" / ".webcap" / "jobs" / "missing"
@@ -1129,7 +1158,7 @@ def test_runner_process_inspection_failure_is_unknown(monkeypatch):
     assert "Timed out" in detail
 
 
-def test_malformed_result_is_local_when_the_runner_is_confirmed_absent(tmp_path, monkeypatch):
+def test_malformed_result_keeps_the_job_recoverable_when_the_runner_is_absent(tmp_path, monkeypatch):
     artifact_path = tmp_path / ".webcap" / "jobs" / "active"
     artifact_path.mkdir(parents=True)
     (artifact_path / "result.json").write_text("{bad json", encoding="utf-8")
@@ -1140,15 +1169,19 @@ def test_malformed_result_is_local_when_the_runner_is_confirmed_absent(tmp_path,
     following = {"id": "next", "folder": "set", "status": "queued"}
     state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, following]}
     monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("absent", ""))
-    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: Path(folder))
-    monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: job.update(status="starting", stage="starting"))
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *args: (_ for _ in ()).throw(AssertionError("uncertain terminal evidence must wait for user action")),
+    )
 
     training_runner._refresh_state(state)
 
-    assert active["status"] == "interrupted"
+    assert active["status"] == "queued"
     assert "could not be read" in active["error"]
-    assert state["activeJobId"] == "next"
-    assert following["status"] == "starting"
+    assert state["activeJobId"] == ""
+    assert state["queuePaused"] is True
+    assert following["status"] == "queued"
 
 
 def test_unknown_runner_returns_the_job_to_the_front_and_holds_for_manual_recovery(monkeypatch):
@@ -1207,24 +1240,27 @@ def test_multiple_derived_live_runners_are_visible_and_block_launch(monkeypatch)
     assert state["runnerNotice"].startswith("2 managed runners")
 
 
-def test_missing_runner_result_interrupts_the_job_and_advances_the_queue(monkeypatch):
+def test_missing_runner_result_keeps_the_job_first_and_holds_the_queue(monkeypatch):
     active = {"id": "active", "status": "running", "stage": "hi", "stages": "hi", "pid": 42}
     state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}]}
     monkeypatch.setattr(training_runner, "_read_result_evidence", lambda job: ("absent", None, ""))
     monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("absent", ""))
-    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: Path(folder))
-    monkeypatch.setattr(training_runner, "_launch_job", lambda job, folder: job.update(status="starting", stage="starting"))
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *args: (_ for _ in ()).throw(AssertionError("missing runner recovery must wait for user action")),
+    )
 
     training_runner._refresh_state(state)
 
-    assert active["status"] == "interrupted"
-    assert "no longer available" in active["error"]
-    assert state["queuePaused"] is False
-    assert state["activeJobId"] == "next"
-    assert state["jobs"][1]["status"] == "starting"
+    assert [job["status"] for job in state["jobs"]] == ["queued", "queued"]
+    assert "no longer active" in active["error"]
+    assert state["queuePaused"] is True
+    assert state["activeJobId"] == ""
+    assert state["queuePauseReason"] == "Previous runner ended without a result. Resume or restart the first item."
 
 
-def test_log_activity_does_not_keep_a_missing_runner_active(tmp_path, monkeypatch):
+def test_log_activity_does_not_prevent_missing_runner_recovery(tmp_path, monkeypatch):
     log_path = tmp_path / "run.log"
     log_path.write_text("step=580\n", encoding="utf-8")
     active = {
@@ -1237,7 +1273,8 @@ def test_log_activity_does_not_keep_a_missing_runner_active(tmp_path, monkeypatc
 
     training_runner._refresh_state(state)
 
-    assert active["status"] == "interrupted"
+    assert active["status"] == "queued"
+    assert state["queuePaused"] is True
     assert state["activeJobId"] == ""
     assert "confirmationNote" not in active
 

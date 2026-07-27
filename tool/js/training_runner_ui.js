@@ -790,18 +790,19 @@ function trainingFolderName(folder) {
   return parts.length ? parts[parts.length - 1] : String(folder || 'this set');
 }
 
-function trainingQueueStartLabel() {
+function trainingQueueStartLabel(nextJob) {
   return trainingWorkspaceState.runnerQueuePauseReason === 'Queue waiting for manual start after WebCap restarted.'
     ? 'Start Queue'
-    : /^Queue held:/i.test(trainingWorkspaceState.runnerQueuePauseReason || '') ? 'Continue with next job' : 'Resume';
+    : /^Queue held:/i.test(trainingWorkspaceState.runnerQueuePauseReason || '') ? 'Continue with next job'
+    : nextJob && !nextJob.resumeFromCheckpoint ? 'Restart' : 'Resume';
 }
 
 function syncTrainingQueueResumeButton(els, queuedJobs) {
   if (!els.runnerResumeQueueBtn) return;
   var nextJob = queuedJobs[0];
-  els.runnerResumeQueueBtn.textContent = trainingQueueStartLabel();
+  els.runnerResumeQueueBtn.textContent = trainingQueueStartLabel(nextJob);
   els.runnerResumeQueueBtn.title = nextJob
-    ? 'Resume the queue from its first item.'
+    ? (nextJob.resumeFromCheckpoint ? 'Resume the first item from its saved checkpoint.' : 'Restart the first item from the beginning.')
     : 'Allow queued training jobs to run.';
 }
 

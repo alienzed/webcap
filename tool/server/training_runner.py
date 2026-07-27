@@ -860,13 +860,15 @@ def _queue_paused_job(job):
     job["updatedAt"] = time.time()
 
 
-def _hold_job_for_manual_recovery(job, detail=""):
+def _hold_job_for_manual_recovery(
+    job,
+    detail="",
+    hold_reason="Previous runner could not be confirmed. Resume or cancel the first item.",
+):
     """Keep uncertain work recoverable without occupying the active runner slot."""
     _queue_paused_job(job)
     job["error"] = str(detail or "WebCap could not confirm the previous runner.").strip()
-    return {
-        "holdReason": "Previous runner could not be confirmed. Resume or cancel the first item.",
-    }
+    return {"holdReason": hold_reason}
 
 
 def _distributed_socket_hold_reason(log_text):
@@ -972,6 +974,12 @@ def _refresh_job(job):
         if prior_status in ACTIVE_STATUSES:
             return _hold_job_for_manual_recovery(job, result_error or process_detail)
         return {"holdReason": ""}
+    if prior_status in ACTIVE_STATUSES and not job.get("actionRequested"):
+        return _hold_job_for_manual_recovery(
+            job,
+            result_error or "The previous runner is no longer active and did not write a result; this item remains first.",
+            "Previous runner ended without a result. Resume or restart the first item.",
+        )
     prior_projection = _terminal_projection_signature(job)
     prior_updated_at = job.get("updatedAt")
     prior_finished_at = job.get("finishedAt")

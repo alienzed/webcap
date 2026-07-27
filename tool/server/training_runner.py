@@ -119,115 +119,6 @@ def _managed_job_ids(state):
     }
 
 
-def _version_4_progress_plan(job):
-    folder = str(job.get("folder") or "").strip()
-    stages = str(job.get("stages") or "").strip()
-    bundle = _job_dir(job)
-    snapshot = {}
-    for stage in ("hi", "lo", "krea2", "wan21"):
-        path = bundle / ("config." + stage + ".toml")
-        if path.is_file():
-            snapshot[stage] = str(path)
-    try:
-        folder_path = app_config.safe_join_fs_root(folder)
-        source_plan = _read_training_plan(folder_path)
-    except (OSError, ValueError):
-        source_plan = {}
-    if not source_plan:
-        try:
-            bundle_plan = json.loads((bundle / "training_plan.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            bundle_plan = {}
-        stages_plan = bundle_plan.get("stages") if isinstance(bundle_plan, dict) else None
-        source_plan = stages_plan if isinstance(stages_plan, dict) else {}
-    plan = _plan_run_steps(source_plan or _default_progress_plan(), snapshot)
-    if stages in ("hi", "lo", "krea2", "wan21") and stages not in plan:
-        plan[stages] = {}
-    return plan
-
-
-def _migrate_version_4_state(parsed, path):
-    """Restore explicit queue state from the short-lived version-4 intent format."""
-    jobs = parsed.get("jobs")
-    recent_runs = parsed.get("recentRuns")
-    if not isinstance(jobs, list) or any(not isinstance(job, dict) for job in jobs):
-        raise TrainingStateError("Existing version-4 training jobs are invalid; the state was left unchanged: " + str(path))
-    if not isinstance(recent_runs, list) or any(not isinstance(job, dict) for job in recent_runs):
-        raise TrainingStateError("Existing version-4 Recent Runs are invalid; the state was left unchanged: " + str(path))
-    ids = [str(job.get("id") or "").strip() for job in jobs]
-    if any(not job_id for job_id in ids) or len(ids) != len(set(ids)):
-        raise TrainingStateError("Existing version-4 training job IDs are invalid; the state was left unchanged: " + str(path))
-    normalized_jobs = []
-    for intent in jobs:
-        job = dict(intent)
-        if not str(job.get("artifactDir") or "").strip() and str(job.get("artifactPath") or "").strip():
-            job["artifactDir"] = job["artifactPath"]
-        required = ("id", "folder", "stages", "artifactDir")
-        if any(not str(job.get(field) or "").strip() for field in required):
-            raise TrainingStateError(
-                "Existing version-4 training job intent is incomplete; the state was left unchanged: " + str(path)
-            )
-        normalized_jobs.append(job)
-
-    backup = path.with_name("queue.version4.backup.json")
-    if not backup.exists():
-        shutil.copy2(path, backup)
-        normalize_path_permissions(backup)
-
-    for record in recent_runs:
-        folder = str(record.get("folder") or "").strip()
-        job_id = str(record.get("id") or "").strip()
-        if record.get("status") == "cancelled":
-            continue
-        if not folder or not job_id:
-            _logger.error("Version-4 Recent Runs entry could not be migrated; it remains in %s", backup)
-            continue
-        migrated_record = dict(record)
-        migrated_record["status"] = str(record.get("status") or "interrupted")
-        try:
-            folder_path = app_config.safe_join_fs_root(folder)
-            record_job(folder_path, migrated_record)
-        except Exception as exc:
-            _logger.error(
-                "Version-4 Recent Runs entry %s could not be migrated; it remains in %s: %s",
-                job_id, backup, exc,
-            )
-
-    migrated_jobs = []
-    for index, job in enumerate(normalized_jobs):
-        job["status"] = "queued"
-        job["stage"] = "queued"
-        job["progressPlan"] = _version_4_progress_plan(job)
-        bundle = _job_dir(job)
-        if index == 0 and any((bundle / name).exists() for name in ("runner.sh", "pid", "run.log", "result.json")):
-            job["status"] = "starting"
-            job["stage"] = "starting"
-            job["logPath"] = str(bundle / "run.log")
-            for evidence in (bundle / "pid", bundle / "run.log"):
-                try:
-                    job["startedAt"] = evidence.stat().st_mtime
-                    break
-                except OSError:
-                    continue
-            try:
-                action = (bundle / "action").read_text(encoding="utf-8").strip().lower()
-            except OSError:
-                action = ""
-            if action in ("pause", "finish", "stop"):
-                job["actionRequested"] = action
-        migrated_jobs.append(job)
-
-    migrated = {
-        "version": 3,
-        "activeJobId": migrated_jobs[0]["id"] if migrated_jobs and migrated_jobs[0]["status"] == "starting" else "",
-        "jobs": migrated_jobs,
-        "queuePaused": False,
-        "queuePauseReason": "",
-    }
-    _write_state(migrated)
-    return migrated
-
-
 def _read_state():
     global _state_file_seen, _persisted_managed_job_ids
     _ensure_runtime_dirs()
@@ -242,8 +133,6 @@ def _read_state():
         raise TrainingStateError("Could not read the existing training queue state; it was left unchanged: " + str(path)) from exc
     if not isinstance(parsed, dict):
         raise TrainingStateError("Existing training queue state is not a JSON object; it was left unchanged: " + str(path))
-    if parsed.get("version") == 4:
-        return _migrate_version_4_state(parsed, path)
     if parsed.get("version") != 3:
         raise TrainingStateError("Unsupported training queue state version; it was left unchanged: " + str(path))
     parsed.setdefault("activeJobId", "")
@@ -1022,7 +911,7 @@ def _refresh_job(job):
         job.get("pid") or job.get("runnerScript") or job.get("runnerScriptWsl") or (_job_dir(job) / "pid").exists()
     )
     if result_state == "absent" and not has_runner_evidence:
-        if prior_status in ACTIVE_STATUSES | {"unconfirmed"}:
+        if prior_status in ACTIVE_STATUSES:
             return _hold_job_for_manual_recovery(job, "Runner PID and script evidence are unavailable.")
         return {"holdReason": ""}
     if not job.get("progressPlan"):
@@ -1080,7 +969,7 @@ def _refresh_job(job):
         _trigger_scheduled_finish(job)
         return {"holdReason": ""}
     if process_state == "unknown":
-        if prior_status in ACTIVE_STATUSES | {"unconfirmed"}:
+        if prior_status in ACTIVE_STATUSES:
             return _hold_job_for_manual_recovery(job, result_error or process_detail)
         return {"holdReason": ""}
     prior_projection = _terminal_projection_signature(job)
@@ -1129,9 +1018,6 @@ def _refresh_state(state):
     hold_reason = ""
     pause_requested = False
     for job in state.get("jobs", []):
-        if job.get("status") == "paused":
-            _queue_paused_job(job)
-            pause_requested = True
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
         if job.get("status") == "queued" and str(job.get("resumeFromCheckpoint") or "").strip():

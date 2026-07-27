@@ -55,6 +55,5 @@ Relevant `tool/config.json` fields include:
 - Per-set `.webcap_training.json` stores only set-local output-group metadata. Existing per-set job history is migrated once when the central index is first created, then WebCap reads Recent Runs directly without rescanning every set.
 
 The runner observer starts with WebCap, so progress and terminal handoff continue even when the Training workspace is closed. Restart recovery still requires explicit confirmation before dormant queued work can launch.
-The short-lived version-4 queue format is migrated back to explicit live state automatically. Its original file is retained as `.webcap_training/queue.version4.backup.json`.
 
 The generated TOML remains the configuration interface. Each new launch reserves `<base36>-<set>/<profile-stage>/` and executes a launch-owned snapshot with that effective `output_dir`; the source TOML remains unchanged. HI → LO shares one prefix across its two independent jobs. Resume keeps the existing output. WebCap does not provide arbitrary custom launch commands or global template editing.

@@ -31,90 +31,6 @@ def test_invalid_existing_queue_state_is_preserved(tmp_path, monkeypatch):
     assert state_path.read_text(encoding="utf-8") == "{not json"
 
 
-def test_version_4_queue_migrates_jobs_history_and_progress_plan(tmp_path, monkeypatch):
-    root = tmp_path / "training"
-    folder = root / "set"
-    bundle = tmp_path / "output" / ".webcap" / "jobs" / "live"
-    queued_bundle = tmp_path / "output" / ".webcap" / "jobs" / "queued"
-    state_path = root / ".webcap_training" / "queue.json"
-    (folder / "auto_dataset").mkdir(parents=True)
-    bundle.mkdir(parents=True)
-    queued_bundle.mkdir(parents=True)
-    (folder / "auto_dataset" / "training_plan.json").write_text(json.dumps({
-        "stages": {"lo": {"epochs": 12, "estimatedSteps": 240}},
-    }), encoding="utf-8")
-    (bundle / "config.lo.toml").write_text("micro_batch_size_per_gpu = 2\n", encoding="utf-8")
-    (bundle / "pid").write_text("123", encoding="utf-8")
-    (bundle / "run.log").write_text("steps: 10%| 24/120 [00:10<00:40, 2.00it/s]\n", encoding="utf-8")
-    state_path.parent.mkdir(parents=True)
-    version_4 = {
-        "version": 4,
-        "jobs": [
-            {"id": "live", "folder": "set", "stages": "lo", "artifactDir": str(bundle)},
-            {"id": "queued", "folder": "set", "stages": "lo", "artifactDir": str(queued_bundle)},
-        ],
-        "recentRuns": [
-            {"id": "old", "folder": "set", "stages": "lo", "status": "completed", "createdAt": 1},
-        ],
-    }
-    state_path.write_text(json.dumps(version_4), encoding="utf-8")
-    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
-    monkeypatch.setattr(training_runner, "_state_file_seen", None)
-    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
-
-    migrated = training_runner._read_state()
-
-    assert migrated["version"] == 3
-    assert migrated["activeJobId"] == "live"
-    assert [job["status"] for job in migrated["jobs"]] == ["starting", "queued"]
-    assert migrated["jobs"][0]["progressPlan"]["lo"]["epochs"] == 12
-    assert migrated["jobs"][0]["progressPlan"]["lo"]["estimatedSteps"] == 120
-    assert json.loads((state_path.parent / "queue.version4.backup.json").read_text(encoding="utf-8")) == version_4
-    assert [job["id"] for job in training_history.all_history_payload()["jobs"]] == ["old"]
-    assert json.loads(state_path.read_text(encoding="utf-8"))["version"] == 3
-
-
-def test_invalid_version_4_queue_is_left_unchanged(tmp_path, monkeypatch):
-    root = tmp_path / "training"
-    state_path = root / ".webcap_training" / "queue.json"
-    state_path.parent.mkdir(parents=True)
-    version_4 = {"version": 4, "jobs": [{"id": "missing-fields"}], "recentRuns": []}
-    state_path.write_text(json.dumps(version_4), encoding="utf-8")
-    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
-    monkeypatch.setattr(training_runner, "_state_file_seen", None)
-    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
-
-    with pytest.raises(training_runner.TrainingStateError, match="intent is incomplete"):
-        training_runner._read_state()
-
-    assert json.loads(state_path.read_text(encoding="utf-8")) == version_4
-
-
-def test_version_4_recent_runs_error_does_not_block_queue_migration(tmp_path, monkeypatch, caplog):
-    root = tmp_path / "training"
-    folder = root / "set"
-    bundle = tmp_path / "output" / ".webcap" / "jobs" / "queued"
-    state_path = root / ".webcap_training" / "queue.json"
-    folder.mkdir(parents=True)
-    bundle.mkdir(parents=True)
-    state_path.parent.mkdir(parents=True)
-    state_path.write_text(json.dumps({
-        "version": 4,
-        "jobs": [{"id": "queued", "folder": "set", "stages": "lo", "artifactDir": str(bundle)}],
-        "recentRuns": [{"id": "broken", "status": "completed"}],
-    }), encoding="utf-8")
-    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
-    monkeypatch.setattr(training_runner, "_state_file_seen", None)
-    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
-
-    migrated = training_runner._read_state()
-
-    assert migrated["version"] == 3
-    assert migrated["jobs"][0]["id"] == "queued"
-    assert "could not be migrated" in caplog.text
-    assert (state_path.parent / "queue.version4.backup.json").is_file()
-
-
 def test_recover_state_archives_invalid_queue_and_starts_empty(tmp_path, monkeypatch):
     root = tmp_path / "training"
     state_path = root / ".webcap_training" / "queue.json"
@@ -398,16 +314,6 @@ def test_open_output_prefers_the_bound_timestamp_run_directory(tmp_path, monkeyp
     assert training_runner.output_path_for_job("job") == run
 
 
-def test_legacy_paused_job_becomes_queued_with_its_bound_resume_path():
-    job = {"folder": "set", "stages": "lo", "status": "paused", "outputRunPath": "/mnt/w/output/run"}
-
-    training_runner._queue_paused_job(job)
-
-    assert job["status"] == "queued"
-    assert job["resumeFromCheckpoint"] == "/mnt/w/output/run"
-    assert job["resumeStage"] == "lo"
-
-
 def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
     state = {"queuePaused": True, "activeJobId": "", "jobs": [{"id": "next", "status": "queued", "folder": "set"}]}
     monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("queue must remain held")))
@@ -633,39 +539,6 @@ def test_queue_refresh_reads_resume_progress_from_disk(tmp_path, monkeypatch):
     assert job["resumePoint"]["checkpointTag"] == "global_step640"
     assert job["resumePoint"]["epoch"] == 8
     assert job["resumePoint"]["step"] == 640
-
-
-def test_legacy_paused_item_becomes_queued_and_holds_the_global_queue(monkeypatch):
-    paused = {"id": "paused", "status": "paused", "folder": "penny", "stages": "lo"}
-    queued = {"id": "next", "status": "queued", "folder": "sue", "stages": "hi"}
-    state = {"queuePaused": False, "activeJobId": "", "jobs": [paused, queued]}
-    monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("queue must remain held")))
-
-    training_runner._refresh_state(state)
-
-    assert paused["status"] == "queued"
-    assert "resumeFromCheckpoint" not in paused
-    assert queued["status"] == "queued"
-    assert state["queuePaused"] is True
-    assert state["queuePauseReason"] == "Queue paused by the user."
-
-
-def test_legacy_paused_job_keeps_its_queue_position(monkeypatch):
-    paused = {"id": "paused", "folder": "penny", "stages": "lo", "status": "paused", "createdAt": 1}
-    state = {
-        "activeJobId": "",
-        "queuePaused": True,
-        "queuePauseReason": "Queue paused by the user.",
-        "jobs": [paused, {"id": "next", "folder": "sue", "stages": "hi", "status": "queued", "createdAt": 2}],
-    }
-    monkeypatch.setattr(training_runner, "_launch_job", lambda *args: (_ for _ in ()).throw(AssertionError("paused queue must remain held")))
-
-    training_runner._refresh_state(state)
-
-    assert state["activeJobId"] == ""
-    assert [job["id"] for job in state["jobs"]] == ["paused", "next"]
-    assert paused["status"] == "queued"
-    assert state["queuePauseReason"] == "Queue paused by the user."
 
 
 def test_restart_reconciles_a_live_run_before_handing_off_to_its_queue(monkeypatch):
@@ -996,7 +869,7 @@ def test_stop_request_failure_does_not_change_the_recorded_job_state(tmp_path, m
     assert not action_path.exists()
 
 
-def test_legacy_pause_result_becomes_an_ordinary_queued_resume(monkeypatch):
+def test_pause_result_becomes_an_ordinary_queued_resume(monkeypatch):
     job = {
         "id": "paused", "status": "stopping", "actionRequested": "pause",
         "folder": "set", "stages": "krea2", "outputRunPath": "/output/run",
@@ -1015,7 +888,7 @@ def test_legacy_pause_result_becomes_an_ordinary_queued_resume(monkeypatch):
     assert "error" not in job
 
 
-def test_legacy_pause_result_holds_the_global_queue(monkeypatch):
+def test_pause_result_holds_the_global_queue(monkeypatch):
     active = {
         "id": "paused", "status": "stopping", "actionRequested": "pause",
         "folder": "set", "stages": "krea2", "outputRunPath": "/output/run",
@@ -1335,7 +1208,7 @@ def test_multiple_derived_live_runners_are_visible_and_block_launch(monkeypatch)
 
 
 def test_missing_runner_result_interrupts_the_job_and_advances_the_queue(monkeypatch):
-    active = {"id": "active", "status": "unconfirmed", "stage": "hi", "stages": "hi", "pid": 42}
+    active = {"id": "active", "status": "running", "stage": "hi", "stages": "hi", "pid": 42}
     state = {"activeJobId": "active", "queuePaused": False, "queuePauseReason": "", "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}]}
     monkeypatch.setattr(training_runner, "_read_result_evidence", lambda job: ("absent", None, ""))
     monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda job: ("absent", ""))

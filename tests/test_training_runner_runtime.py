@@ -362,8 +362,32 @@ def test_new_job_keeps_large_snapshots_under_the_output_sidecar(tmp_path, monkey
     assert Path(sibling["outputRoot"]).parent == Path(job["outputRoot"]).parent
     assert job["outputSlug"] == "wan22-hi"
     assert "output_dir = \"/mnt/w/wan22-hi\"" in (artifact / "config.hi.toml").read_text(encoding="utf-8")
-    assert (folder / "config.hi.toml").read_bytes() == (artifact / "config.hi.toml").read_bytes()
+    assert "output_dir = '/output/source'" in (folder / "config.hi.toml").read_text(encoding="utf-8")
     assert job["model"]["source"] == "models/example.safetensors"
+
+
+def test_launch_refreshes_snapshot_from_current_config_without_mutating_source(tmp_path):
+    folder = tmp_path / "set"
+    bundle = tmp_path / "output" / ".webcap" / "jobs" / "job"
+    folder.mkdir()
+    bundle.mkdir(parents=True)
+    source = folder / "config.lo.toml"
+    source.write_text("output_dir = '/source'\nlearning_rate = 2e-5\n", encoding="utf-8")
+    target = bundle / "config.lo.toml"
+    target.write_text("output_dir = '/old'\nlearning_rate = 1e-5\n", encoding="utf-8")
+    job = {
+        "artifactDir": str(bundle),
+        "stages": "lo",
+        "effectiveOutputDir": "/mnt/w/output/run",
+        "snapshot": {"lo": str(target)},
+    }
+
+    artifacts = training_runner._launch_artifacts(job, {"loConfig": source})
+
+    assert artifacts["loConfig"] == target
+    assert "output_dir = \"/mnt/w/output/run\"" in target.read_text(encoding="utf-8")
+    assert "learning_rate = 2e-5" in target.read_text(encoding="utf-8")
+    assert source.read_text(encoding="utf-8") == "output_dir = '/source'\nlearning_rate = 2e-5\n"
 
 
 def test_model_identity_keeps_the_specific_wan_checkpoint_name(tmp_path):
@@ -626,19 +650,18 @@ def test_missing_queued_folder_remains_visible_and_keeps_its_artifacts(tmp_path,
     assert (artifact_path / "runner.sh").is_file()
 
 
-def test_missing_folder_history_is_skipped(tmp_path, monkeypatch):
+def test_history_write_error_is_reported_without_changing_the_job(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(training_runner, "record_job", lambda *args: (_ for _ in ()).throw(FileNotFoundError("folder moved")))
-    monkeypatch.setattr(training_runner, "_history_signatures", {})
 
-    training_runner._sync_job_history({
+    error = training_runner._sync_job_history({
         "id": "missing", "folder": "moved-set", "status": "failed", "updatedAt": 1,
     })
 
-    assert training_runner._history_signatures == {}
+    assert error == "Could not add training outcome to Recent Runs: folder moved"
 
 
-def test_terminal_job_retires_after_history_is_durably_projected(tmp_path, monkeypatch):
+def test_terminal_job_retires_after_recent_runs_is_updated(tmp_path, monkeypatch):
     folder = tmp_path / "set"
     folder.mkdir()
     terminal = {"id": "done", "folder": "set", "status": "completed", "stage": "lo", "updatedAt": 2}
@@ -650,7 +673,6 @@ def test_terminal_job_retires_after_history_is_durably_projected(tmp_path, monke
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda value: tmp_path / value)
     monkeypatch.setattr(training_runner, "record_job", lambda folder_path, job: recorded.append((folder_path, job["id"])))
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate, **kwargs: written.append(list(candidate["jobs"])))
-    monkeypatch.setattr(training_runner, "_history_signatures", {})
 
     training_runner._persist_reconciled_state(state)
 
@@ -659,17 +681,18 @@ def test_terminal_job_retires_after_history_is_durably_projected(tmp_path, monke
     assert written == [[queued]]
 
 
-def test_terminal_job_stays_visible_when_history_cannot_be_projected(tmp_path, monkeypatch):
+def test_recent_runs_failure_does_not_block_terminal_retirement(tmp_path, monkeypatch, caplog):
     terminal = {"id": "failed", "folder": "missing", "status": "failed", "stage": "launch", "updatedAt": 2}
     state = {"activeJobId": "", "queuePaused": True, "jobs": [terminal]}
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda value: tmp_path / value)
+    monkeypatch.setattr(training_runner, "record_job", lambda *args: (_ for _ in ()).throw(OSError("disk unavailable")))
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate, **kwargs: None)
 
     training_runner._persist_reconciled_state(state)
 
-    assert state["jobs"] == [terminal]
-    assert state["runnerNotice"] == "1 terminal training outcome cannot be added to Recent Runs while the set folder is unavailable."
+    assert state["jobs"] == []
+    assert "Could not add training outcome to Recent Runs: disk unavailable" in caplog.text
 
 
 def test_cancelled_job_retires_without_creating_history(monkeypatch):
@@ -1288,7 +1311,7 @@ def test_starting_both_creates_adjacent_hi_and_lo_jobs(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value, stages="both": ("set", folder, artifacts, {}, []))
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda value, **kwargs: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
     monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
@@ -1316,7 +1339,7 @@ def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypat
     job = {"id": "new", "folder": "set", "stages": "lo", "status": "queued"}
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
-    monkeypatch.setattr(training_runner, "_write_state", lambda value: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda value, **kwargs: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda value: None)
     monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value, stages="both": ("set", "folder", {}, {}, []))

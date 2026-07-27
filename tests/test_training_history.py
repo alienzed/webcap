@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -101,7 +102,8 @@ def test_training_history_discovers_only_compatible_runs_in_the_configured_outpu
 
     assert [entry["name"] for entry in history["runs"]] == ["20260713_01-00-00"]
     assert history["runs"][0]["matchType"] == "exact"
-    assert (set_folder / ".webcap_training.json").exists()
+    assert (root / ".webcap_training" / training_history.RECENT_RUNS_FILE_NAME).is_file()
+    assert not (set_folder / ".webcap_training.json").exists()
 
 
 def test_history_output_root_uses_the_available_profile_config(tmp_path, monkeypatch):
@@ -160,6 +162,29 @@ def test_global_history_is_compact_and_clear_does_not_touch_run_artifacts(tmp_pa
     assert run.exists()
 
 
+def test_legacy_set_histories_migrate_once_to_central_recent_runs(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    legacy = {
+        "version": training_history.HISTORY_VERSION,
+        "outputGroup": "001-set",
+        "jobs": [{"id": "legacy", "status": "completed", "createdAt": 1}],
+        "runs": [],
+    }
+    (folder / training_history.HISTORY_FILE_NAME).write_text(json.dumps(legacy), encoding="utf-8")
+
+    assert [job["id"] for job in training_history.all_history_payload()["jobs"]] == ["legacy"]
+
+    central = json.loads(
+        (root / ".webcap_training" / training_history.RECENT_RUNS_FILE_NAME).read_text(encoding="utf-8")
+    )
+    local = json.loads((folder / training_history.HISTORY_FILE_NAME).read_text(encoding="utf-8"))
+    assert central["jobs"][0]["folder"] == "set"
+    assert local == {"version": training_history.HISTORY_VERSION, "outputGroup": "001-set"}
+
+
 def test_global_history_hides_cancelled_items(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "set"
@@ -181,6 +206,30 @@ def test_global_history_returns_persisted_rows_without_rechecking_current_inputs
     })
     monkeypatch.setattr(training_runner, "_input_evidence", lambda folder: (_ for _ in ()).throw(AssertionError("must not inspect inputs")))
     assert training_history.all_history_payload()["jobs"][0]["input"]["fingerprint"] == "dataset-a"
+
+
+def test_global_history_reports_artifact_availability(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    folder = root / "set"
+    output = tmp_path / "output"
+    artifact_dir = tmp_path / "job"
+    folder.mkdir(parents=True)
+    output.mkdir()
+    artifact_dir.mkdir()
+    (artifact_dir / "run.log").write_text("running", encoding="utf-8")
+    monkeypatch.setattr(training_history.app_config, "FS_ROOT", root)
+    training_history.record_job(folder, {
+        "id": "available",
+        "status": "completed",
+        "outputRoot": str(output),
+        "artifactDir": str(artifact_dir),
+    })
+
+    job = training_history.all_history_payload()["jobs"][0]
+
+    assert job["sourceAvailable"] is True
+    assert job["outputAvailable"] is True
+    assert job["logAvailable"] is True
 
 
 def test_finished_early_history_keeps_the_exact_persisted_run_path(tmp_path, monkeypatch):

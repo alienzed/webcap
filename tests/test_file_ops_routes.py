@@ -460,6 +460,7 @@ def test_training_history_opens_the_recorded_effective_output_folder(tmp_path, m
         "jobs": [{"id": "job-1", "outputRoot": str(output_dir)}],
         "runs": [],
     }))
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
     monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
     opened = []
     monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))

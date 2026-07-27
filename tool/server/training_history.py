@@ -5,7 +5,9 @@ import re
 import shlex
 import shutil
 import subprocess
+import threading
 import time
+import uuid
 from pathlib import Path, PurePosixPath
 
 import tomllib
@@ -18,6 +20,9 @@ from .training_profiles import config_for_id
 
 HISTORY_FILE_NAME = ".webcap_training.json"
 HISTORY_VERSION = 3
+RECENT_RUNS_FILE_NAME = "recent_runs.json"
+RECENT_RUNS_VERSION = 1
+_history_lock = threading.RLock()
 _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
@@ -81,6 +86,115 @@ def _training_path_for_entry(entry, host_root, training_root):
 
 def _history_path(folder_path):
     return Path(folder_path) / HISTORY_FILE_NAME
+
+
+def _recent_runs_path():
+    return Path(app_config.FS_ROOT) / ".webcap_training" / RECENT_RUNS_FILE_NAME
+
+
+def _folder_key(folder_path):
+    folder = Path(folder_path).resolve()
+    root = Path(app_config.FS_ROOT).resolve()
+    return folder.relative_to(root).as_posix()
+
+
+def _write_json_atomic(path, payload):
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    normalize_path_permissions(target.parent)
+    tmp = target.with_name("." + target.name + "." + str(os.getpid()) + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        with tmp.open("x", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, target)
+        normalize_path_permissions(target)
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _local_metadata(data=None):
+    payload = {"version": HISTORY_VERSION}
+    output_group = str((data or {}).get("outputGroup") or "").strip()
+    if output_group:
+        payload["outputGroup"] = output_group
+    return payload
+
+
+def _migrate_legacy_histories():
+    """Move legacy per-set job rows into the central Recent Runs index once."""
+    root = Path(app_config.FS_ROOT)
+    jobs_by_key = {}
+    local_metadata = []
+    if root.is_dir():
+        for path in root.rglob(HISTORY_FILE_NAME):
+            if ".webcap_training" in path.parts or "auto_dataset" in path.parts:
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                app_config.debug_print("[training_history] Left unreadable legacy metadata unchanged:", path)
+                continue
+            if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
+                app_config.debug_print("[training_history] Left unsupported legacy metadata unchanged:", path)
+                continue
+            try:
+                folder = path.parent.relative_to(root).as_posix()
+            except ValueError:
+                continue
+            for job in data.get("jobs") or []:
+                if not isinstance(job, dict) or job.get("status") == "cancelled":
+                    continue
+                item = dict(job)
+                item["folder"] = folder
+                job_id = str(item.get("id") or "").strip()
+                if not job_id:
+                    continue
+                key = (folder, job_id)
+                existing = jobs_by_key.get(key)
+                item_time = float(item.get("finishedAt") or item.get("startedAt") or item.get("createdAt") or 0)
+                existing_time = float((existing or {}).get("finishedAt") or (existing or {}).get("startedAt") or (existing or {}).get("createdAt") or 0)
+                if existing is None or item_time >= existing_time:
+                    jobs_by_key[key] = item
+            local_metadata.append((path.parent, _local_metadata(data)))
+    jobs = sorted(
+        jobs_by_key.values(),
+        key=lambda job: float(job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0),
+        reverse=True,
+    )
+    payload = {"version": RECENT_RUNS_VERSION, "jobs": jobs}
+    _write_json_atomic(_recent_runs_path(), payload)
+    for folder, metadata in local_metadata:
+        try:
+            _write_json_atomic(_history_path(folder), metadata)
+        except OSError as exc:
+            app_config.debug_print("[training_history] Could not compact legacy set metadata:", folder, exc)
+    return payload
+
+
+def _read_recent_runs():
+    path = _recent_runs_path()
+    if not path.exists():
+        return _migrate_legacy_histories()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Could not read Recent Runs; it was left unchanged: " + str(path)) from exc
+    if not isinstance(data, dict) or data.get("version") != RECENT_RUNS_VERSION or not isinstance(data.get("jobs"), list):
+        raise ValueError("Recent Runs is invalid; it was left unchanged: " + str(path))
+    return data
+
+
+def _write_recent_runs(data):
+    payload = {
+        "version": RECENT_RUNS_VERSION,
+        "jobs": list((data or {}).get("jobs") or []),
+    }
+    _write_json_atomic(_recent_runs_path(), payload)
 
 
 def _configured_epochs(folder_path, stage):
@@ -189,38 +303,31 @@ def _resume_artifacts(entry):
 
 
 def _default_history(folder_path):
-    return {
+    result = {
         "version": HISTORY_VERSION,
         "outputRoot": str(output_root_for_folder(folder_path)),
         "jobs": [],
         "runs": [],
     }
+    result.update(_local_metadata(_read_history_index(folder_path)))
+    return result
 
 
 def read_history(folder_path):
-    path = _history_path(folder_path)
-    if not path.exists():
-        return _default_history(folder_path)
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return _default_history(folder_path)
-    if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
-        return _default_history(folder_path)
-    data["outputRoot"] = str(output_root_for_folder(folder_path))
-    if not isinstance(data.get("jobs"), list):
-        data["jobs"] = []
-    if not isinstance(data.get("runs"), list):
-        data["runs"] = []
-    return data
+    folder = Path(folder_path)
+    folder_key = _folder_key(folder)
+    with _history_lock:
+        recent = _read_recent_runs()
+        result = _default_history(folder)
+        result["jobs"] = [
+            dict(job) for job in recent["jobs"]
+            if isinstance(job, dict) and str(job.get("folder") or "") == folder_key
+        ]
+        return result
 
 
 def _write_history(folder_path, data):
-    path = _history_path(folder_path)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
-    normalize_path_permissions(path)
+    _write_json_atomic(_history_path(folder_path), _local_metadata(data))
 
 
 def _read_history_index(folder_path):
@@ -229,14 +336,10 @@ def _read_history_index(folder_path):
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {"version": HISTORY_VERSION, "jobs": [], "runs": []}
+        return {"version": HISTORY_VERSION}
     if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
-        return {"version": HISTORY_VERSION, "jobs": [], "runs": []}
-    if not isinstance(data.get("jobs"), list):
-        data["jobs"] = []
-    if not isinstance(data.get("runs"), list):
-        data["runs"] = []
-    return data
+        return {"version": HISTORY_VERSION}
+    return _local_metadata(data)
 
 
 def _recorded_output_group(folder_path):
@@ -463,7 +566,11 @@ def resume_point_from_directory(folder_path, stage, run_path):
 def summarize_history(folder_path):
     history = read_history(folder_path)
     jobs = history.get("jobs") or []
-    latest = jobs[-1] if jobs else None
+    latest = max(
+        jobs,
+        key=lambda job: float(job.get("updatedAt") or job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0),
+        default=None,
+    )
     return {
         "status": str((latest or {}).get("status") or "never"),
         "updatedAt": (latest or {}).get("updatedAt") or (latest or {}).get("finishedAt") or (latest or {}).get("createdAt") or 0,
@@ -471,14 +578,16 @@ def summarize_history(folder_path):
 
 
 def record_job(folder_path, job):
-    history = read_history(folder_path)
-    runs = discover_runs(folder_path, str(job.get("stages") or ""))
+    folder = Path(folder_path)
+    folder_key = _folder_key(folder)
+    runs = discover_runs(folder, str(job.get("stages") or ""))
     record_fields = (
         "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId",
         "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
     )
     record = {field: job.get(field) for field in record_fields if field in job}
+    record["folder"] = folder_key
     for field in ("error", "completionNote"):
         if isinstance(record.get(field), str):
             record[field] = record[field][:1000]
@@ -495,16 +604,24 @@ def record_job(folder_path, job):
         "checkpointAvailable": bool(latest_run.get("checkpointAvailable")),
         "epoch": latest_run.get("epoch"), "steps": latest_run.get("steps"),
     }
-    existing = history["jobs"]
-    for index, item in enumerate(existing):
-        if str(item.get("id") or "") == str(record.get("id") or ""):
-            existing[index] = record
-            break
-    else:
-        existing.append(record)
-    # Discovery data can be large. It is response-only, never persisted in the index.
-    history["runs"] = []
-    _write_history(folder_path, history)
+    with _history_lock:
+        recent = _read_recent_runs()
+        existing = recent["jobs"]
+        for index, item in enumerate(existing):
+            if (
+                str(item.get("id") or "") == str(record.get("id") or "")
+                and str(item.get("folder") or "") == folder_key
+            ):
+                existing[index] = record
+                break
+        else:
+            existing.append(record)
+        existing.sort(
+            key=lambda item: float(item.get("finishedAt") or item.get("startedAt") or item.get("createdAt") or 0),
+            reverse=True,
+        )
+        _write_recent_runs(recent)
+    history = read_history(folder)
     history["runs"] = runs
     return history
 
@@ -516,28 +633,40 @@ def history_payload(folder_path):
     return history
 
 
+def _history_job_view(job):
+    item = dict(job)
+    raw_output = str(item.get("outputRunPath") or item.get("effectiveOutputDir") or item.get("outputRoot") or "").strip()
+    try:
+        item["outputAvailable"] = bool(raw_output) and host_path_for_training_path(raw_output).is_dir()
+    except (OSError, ValueError):
+        item["outputAvailable"] = False
+    raw_log = str(item.get("logPath") or "").strip()
+    if raw_log:
+        log_path = Path(raw_log)
+    else:
+        artifact_dir = str(item.get("artifactDir") or "").strip()
+        log_path = Path(artifact_dir) / "run.log" if artifact_dir else None
+    item["logAvailable"] = bool(log_path) and log_path.is_file()
+    folder = str(item.get("folder") or "").strip()
+    try:
+        item["sourceAvailable"] = bool(folder) and app_config.safe_join_fs_root(folder).is_dir()
+    except ValueError:
+        item["sourceAvailable"] = False
+    return item
+
+
 def all_history_payload(query="", folder=""):
     """Return persisted history rows; presentation filtering happens in the browser."""
-    root = Path(app_config.FS_ROOT)
-    jobs = []
-    for path in root.rglob(HISTORY_FILE_NAME):
-        if ".webcap_training" in path.parts or "auto_dataset" in path.parts:
-            continue
-        set_folder = path.parent
-        try:
-            relative = str(set_folder.relative_to(root)).replace("\\", "/")
-        except ValueError:
-            continue
-        history = read_history(set_folder)
-        for job in history.get("jobs") or []:
-            if not isinstance(job, dict):
-                continue
-            if job.get("status") == "cancelled":
-                continue
-            item = dict(job)
-            item["folder"] = relative
-            jobs.append(item)
-    jobs.sort(key=lambda job: float(job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0), reverse=True)
+    del query
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    with _history_lock:
+        recent = _read_recent_runs()
+        jobs = [
+            _history_job_view(job) for job in recent["jobs"]
+            if isinstance(job, dict)
+            and job.get("status") != "cancelled"
+            and (not folder_text or str(job.get("folder") or "") == folder_text)
+        ]
     return {"version": HISTORY_VERSION, "jobs": jobs}
 
 
@@ -551,32 +680,41 @@ def history_job_output_path(folder_path, job_id):
 
 def clear_history(folder_path=None):
     """Clear indexes only; job bundles and trainer artifacts are deliberately untouched."""
-    root = Path(app_config.FS_ROOT)
-    paths = [_history_path(folder_path)] if folder_path else list(root.rglob(HISTORY_FILE_NAME))
-    cleared = 0
-    for path in paths:
-        try:
-            if path.exists():
-                path.unlink()
-                cleared += 1
-        except OSError:
-            continue
-    return cleared
+    folder_key = _folder_key(folder_path) if folder_path else ""
+    with _history_lock:
+        recent = _read_recent_runs()
+        original = recent["jobs"]
+        retained = [
+            job for job in original
+            if folder_key and str(job.get("folder") or "") != folder_key
+        ]
+        cleared = len(original) - len(retained)
+        recent["jobs"] = retained
+        _write_recent_runs(recent)
+        return cleared
 
 
 def clear_history_job(folder_path, job_id):
     """Remove one history index entry without touching its logs or training artifacts."""
-    history = read_history(folder_path)
+    folder_key = _folder_key(folder_path)
     wanted_id = str(job_id or "").strip()
     if not wanted_id:
         return False
-    original = history.get("jobs") or []
-    retained = [job for job in original if str(job.get("id") or "") != wanted_id]
-    if len(retained) == len(original):
-        return False
-    history["jobs"] = retained
-    _write_history(folder_path, history)
-    return True
+    with _history_lock:
+        recent = _read_recent_runs()
+        original = recent["jobs"]
+        retained = [
+            job for job in original
+            if not (
+                str(job.get("id") or "") == wanted_id
+                and str(job.get("folder") or "") == folder_key
+            )
+        ]
+        if len(retained) == len(original):
+            return False
+        recent["jobs"] = retained
+        _write_recent_runs(recent)
+        return True
 
 
 def completed_stages(folder_path, include_discovered_runs=True):

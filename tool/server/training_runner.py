@@ -60,7 +60,6 @@ _lock = threading.Lock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
 _startup_reconciled = False
-_history_signatures = {}
 _state_file_seen = None
 _persisted_managed_job_ids = set()
 _logger = logging.getLogger(__name__)
@@ -209,71 +208,47 @@ def recover_state_response():
 
 def _sync_job_history(job):
     if job.get("historyHidden") or job.get("status") not in HISTORY_STATUSES:
-        return True
+        return ""
     folder = str(job.get("folder") or "").strip()
     if not folder:
-        return False
+        return "Training outcome has no set folder."
     try:
         folder_path = app_config.safe_join_fs_root(folder)
-    except ValueError:
-        return False
-    if not folder_path.is_dir():
-        return False
-    signature = json.dumps({
-        "status": job.get("status"), "stage": job.get("stage"), "updatedAt": job.get("updatedAt"),
-        "finishedAt": job.get("finishedAt"), "error": job.get("error"), "exitCode": job.get("exitCode"),
-    }, sort_keys=True)
-    if _history_signatures.get(job.get("id")) == signature:
-        return True
-    try:
         record_job(folder_path, job)
-    except OSError:
-        _logger.warning("Skipped training history sync because its folder is unavailable: %s", folder_path)
-        return False
-    _history_signatures[job.get("id")] = signature
-    return True
+    except Exception as exc:
+        return "Could not add training outcome to Recent Runs: " + str(exc)
+    return ""
 
 
 def _sync_histories(state):
-    return {
-        str(job.get("id") or "")
-        for job in state.get("jobs", [])
-        if _sync_job_history(job)
-    }
+    errors = []
+    for job in state.get("jobs", []):
+        error = _sync_job_history(job)
+        if error:
+            errors.append(error)
+    return errors
 
 
-def _retire_terminal_jobs(state, projected_job_ids):
-    """Keep only scheduler work after terminal outcomes are durably indexed."""
-    projected_job_ids = set(projected_job_ids or ())
+def _retire_terminal_jobs(state):
+    """Keep only scheduler work; Recent Runs never gates queue retirement."""
     retained = []
     retired_job_ids = set()
-    unprojected_count = 0
     for job in state.get("jobs", []):
         status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
-        if status == "cancelled" or (status in HISTORY_STATUSES and job_id in projected_job_ids):
-            _history_signatures.pop(job_id, None)
+        if status == "cancelled" or status in HISTORY_STATUSES:
             retired_job_ids.add(job_id)
             continue
-        if status in HISTORY_STATUSES:
-            unprojected_count += 1
         retained.append(job)
     state["jobs"] = retained
-    if unprojected_count:
-        notice = (
-            str(unprojected_count) + " terminal training outcome"
-            + ("" if unprojected_count == 1 else "s")
-            + " cannot be added to Recent Runs while the set folder is unavailable."
-        )
-        prior_notice = str(state.get("runnerNotice") or "").strip()
-        if notice not in prior_notice:
-            state["runnerNotice"] = (prior_notice + " " + notice).strip()
     return retired_job_ids
 
 
 def _persist_reconciled_state(state):
-    projected_job_ids = _sync_histories(state)
-    retired_job_ids = _retire_terminal_jobs(state, projected_job_ids)
+    history_errors = _sync_histories(state) or []
+    for error in history_errors:
+        _logger.error(error)
+    retired_job_ids = _retire_terminal_jobs(state)
     if retired_job_ids:
         _write_state(state, retired_job_ids=retired_job_ids)
     else:
@@ -448,7 +423,10 @@ def _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir
     for key, filename in config_files:
         source = artifacts[key + "Config"]
         target = job_dir / filename
-        shutil.copy2(source, target)
+        target.write_text(
+            with_output_dir(source.read_text(encoding="utf-8"), effective_output_dir),
+            encoding="utf-8",
+        )
         normalize_path_permissions(target)
         snapshot[key] = str(target)
     dataset_files = ("dataset.train.toml", "auto_dataset/training_plan.json") if stages in ("krea2", "wan21") else (
@@ -530,7 +508,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         "RESULT_FILE=" + shlex.quote(result_wsl),
         "ACTION_FILE=" + shlex.quote(action_wsl),
         "echo $$ > \"$PID_FILE\"",
-        "write_result() { printf '{\\\"status\\\":\\\"%s\\\",\\\"exitCode\\\":%s,\\\"finishedAt\\\":%s}\\n' \"$1\" \"$2\" \"$(date +%s)\" > \"$RESULT_FILE\"; }",
+        "write_result() { local tmp=\"${RESULT_FILE}.tmp.$$\"; printf '{\\\"status\\\":\\\"%s\\\",\\\"exitCode\\\":%s,\\\"finishedAt\\\":%s}\\n' \"$1\" \"$2\" \"$(date +%s)\" > \"$tmp\" && mv -f \"$tmp\" \"$RESULT_FILE\"; }",
         "finish_requested_stop() { case \"$(cat \"$ACTION_FILE\" 2>/dev/null || true)\" in finish|stop) echo '[webcap] requested stop'; write_result stopped 130; exit 130 ;; esac; }",
         "trap 'echo [webcap] stopped; write_result stopped 130; exit 130' INT TERM",
         "cd " + shlex.quote(settings["cwd"]) + " || { echo '[webcap] training working directory is unavailable'; write_result failed 1; exit 1; }",
@@ -585,8 +563,36 @@ def _write_runner_script(job, settings, artifacts):
     path.write_text(script, encoding="utf-8", newline="\n")
     normalize_path_permissions(path)
     job["runnerScript"] = str(path)
-    job["resolvedConfigs"] = resolved
+    job["resolvedConfigs"] = dict(resolved, usedSnapshot=True)
     return path
+
+
+def _launch_artifacts(job, artifacts):
+    """Refresh the launch-owned config from the current set config at launch time."""
+    stages = str(job.get("stages") or "both")
+    config_files = (
+        (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2"
+        else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21"
+        else ((stages, HI_CONFIG_NAME if stages == "hi" else LO_CONFIG_NAME),) if stages in ("hi", "lo")
+        else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
+    )
+    launch_artifacts = dict(artifacts)
+    snapshot = dict(job.get("snapshot") or {})
+    for stage, filename in config_files:
+        source = Path(artifacts[stage + "Config"])
+        target = _job_dir(job) / filename
+        target.write_text(
+            with_output_dir(
+                source.read_text(encoding="utf-8"),
+                str(job.get("effectiveOutputDir") or ""),
+            ),
+            encoding="utf-8",
+        )
+        normalize_path_permissions(target)
+        snapshot[stage] = str(target)
+        launch_artifacts[stage + "Config"] = target
+    job["snapshot"] = snapshot
+    return launch_artifacts
 
 
 def _launch_job(job, folder_path):
@@ -636,7 +642,16 @@ def _launch_job(job, folder_path):
     action_path = _job_action_path(job)
     if action_path.exists():
         action_path.unlink()
-    script_path = _write_runner_script(job, settings, artifacts)
+    try:
+        launch_artifacts = _launch_artifacts(job, artifacts)
+        script_path = _write_runner_script(job, settings, launch_artifacts)
+    except Exception as exc:
+        job["status"] = "failed"
+        job["stage"] = "launch"
+        job["failureScope"] = "job"
+        job["error"] = "Could not prepare the launch bundle: " + str(exc)
+        job["finishedAt"] = time.time()
+        return False
     script_wsl = _to_wsl_path(script_path, settings["wslDistribution"])
     log_path = job_dir / "run.log"
     log_wsl = _to_wsl_path(log_path, settings["wslDistribution"])
@@ -869,7 +884,6 @@ def _remove_stale_terminal_history(job):
         clear_history_job(app_config.safe_join_fs_root(folder), job.get("id"))
     except (OSError, ValueError):
         _logger.warning("Could not remove stale terminal training history for recovered job %s", job.get("id"))
-    _history_signatures.pop(job.get("id"), None)
 
 
 def _clear_terminal_projection(job):
@@ -1077,6 +1091,11 @@ def _ensure_monitor_started():
         _monitor_thread.start()
 
 
+def start_observer():
+    """Start queue observation independently of whether the Training workspace is open."""
+    _ensure_monitor_started()
+
+
 def _public_job(job):
     fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch")
     payload = {field: job.get(field) for field in fields if field in job}
@@ -1166,12 +1185,6 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         output_root.mkdir(parents=True, exist_ok=True)
         normalize_path_permissions(output_root)
         effective_output_dir = _to_wsl_path(output_root, distribution)
-        source_config = artifacts[stages + "Config"]
-        source_config.write_text(
-            with_output_dir(source_config.read_text(encoding="utf-8"), effective_output_dir),
-            encoding="utf-8",
-        )
-        normalize_path_permissions(source_config)
     job_dir = group_root / ".webcap" / "jobs" / job_id
     job_dir.mkdir(parents=True, exist_ok=False)
     normalize_path_permissions(job_dir)

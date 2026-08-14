@@ -1,0 +1,34 @@
+# MiniMax H3 Prompt Template
+
+**STYLE / GLOBAL LOOK**
+[medium, genre, realism/stylization, lighting, color, atmosphere, lens/look]
+
+**CHARACTERS / SUBJECTS**
+[who/what is present, appearance, wardrobe, important persistent details]
+
+**ENVIRONMENT**
+[location, time of day, weather, background, spatial relationships]
+
+**SHOT TIMELINE / ACTION**
+[Shot 1] [opening composition, subject state, action, camera movement]
+[Shot 2] At [timestamp], [next action/change, framing, camera behavior]
+[Shot 3] At [timestamp], [continuation/reaction/transformation/cut]
+
+**CAMERA / CINEMATOGRAPHY**
+[shot size, angle, lens character, camera path, speed, stabilization, focus behavior]
+
+**PHYSICAL MOTION / PERFORMANCE**
+[body movement, facial expression, object motion, timing, interaction, secondary motion]
+
+**DIALOGUE / VOCALS**
+[Speaker]: <d>[English] dialogue here</d>
+[delivery, emotion, volume, timing if important]
+
+**OVERALL SOUNDSCAPE**
+[environmental sound, Foley, impacts, ambience, voices, spatial/audio character]
+
+**NON-DIEGETIC MUSIC**
+[music style, instrumentation, intensity, progression, or “no music”]
+
+**CONTINUITY / CONSTRAINTS**
+[details that must remain consistent; things that should not change or appear]

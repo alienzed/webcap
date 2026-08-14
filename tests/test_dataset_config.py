@@ -18,7 +18,7 @@ from tool.server.dataset_config import (
     repeat_targets_for_mode,
     video_resolution_cap,
 )
-from tool.server.training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID
+from tool.server.training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID
 
 
 def write_image(path: Path, size):
@@ -134,6 +134,121 @@ def test_generate_dataset_configs_fails_without_prep_manifest(tmp_path):
         assert "prep_manifest.json" in str(exc)
     else:
         raise AssertionError("generate_dataset_configs should fail without prep_manifest.json")
+
+
+def _write_h3_video_manifest(set_folder, frames, include_image=False):
+    auto_dataset = set_folder / "auto_dataset"
+    video_dir = auto_dataset / "square"
+    video_dir.mkdir(parents=True)
+    (video_dir / "clip.mp4").write_bytes(b"video")
+    videos = [{
+        "file": "clip.mp4", "ar": "square", "width": 768, "height": 768,
+        "fps": 24, "frames": frames, "prepared_path": "square/clip.mp4", "caption": True,
+    }]
+    images = []
+    selected = ["clip.mp4"]
+    if include_image:
+        image_dir = auto_dataset / "square_img"
+        write_image(image_dir / "still.png", (768, 768))
+        images.append({
+            "file": "still.png", "ar": "square", "width": 768, "height": 768,
+            "prepared_path": "square_img/still.png", "caption": True,
+        })
+        selected.append("still.png")
+    (auto_dataset / "prep_manifest.json").write_text(json.dumps({
+        "version": 1,
+        "videos": videos,
+        "images": images,
+        "skipped": [],
+        "selection": {
+            "mode": "all", "selected_files": selected, "selected_count": len(selected),
+            "total_count": len(selected), "criteria": {"source_folder": "set"},
+        },
+    }), encoding="utf-8")
+
+
+def test_h3_dataset_uses_its_frame_grid_for_mixed_media_and_poc(tmp_path):
+    set_folder = tmp_path / "set"
+    _write_h3_video_manifest(set_folder, 136, include_image=True)
+    (set_folder / "config.h3.toml").write_text("epochs = 100\n", encoding="utf-8")
+
+    report = generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+    assert "[512, 512, 136]" in text
+    assert "[512, 512, 1]" in text
+    assert ", 13]" not in text
+    assert text.count('group = "videos"') == 1
+    assert "MiniMax H3 normal video resolution cap 512x512" in report
+    plan = json.loads((set_folder / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))
+    assert set(plan["stages"]) == {"h3"}
+    assert plan["stages"]["h3"]["estimatedSteps"] > 0
+
+    generate_dataset_configs(set_folder, mode="poc", profile_id=MINIMAX_H3_PROFILE_ID)
+    poc_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    assert "[384, 384, 34]" in poc_text
+    assert ", 13]" not in poc_text
+
+
+def test_h3_dataset_rejects_a_video_only_set_with_no_34_frame_clip(tmp_path):
+    set_folder = tmp_path / "set"
+    _write_h3_video_manifest(set_folder, 33)
+
+    try:
+        generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    except ValueError as exc:
+        assert "at least 34 frames" in str(exc)
+    else:
+        raise AssertionError("MiniMax H3 generation should reject a set with no usable media.")
+
+
+def test_h3_dataset_warns_when_a_short_clip_is_excluded_from_a_usable_set(tmp_path):
+    set_folder = tmp_path / "set"
+    _write_h3_video_manifest(set_folder, 33, include_image=True)
+
+    report = generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+    assert "excluded 1 MiniMax H3 clip(s) shorter than 34 frames" in report
+    assert 'group = "videos"' not in text
+    assert ", 1]" in text
+
+
+def test_h3_dataset_accepts_an_image_only_set(tmp_path):
+    set_folder = tmp_path / "set"
+    auto_dataset = set_folder / "auto_dataset"
+    image_dir = auto_dataset / "square_img"
+    write_image(image_dir / "still.png", (1024, 1024))
+    (auto_dataset / "prep_manifest.json").write_text(json.dumps({
+        "version": 1,
+        "videos": [],
+        "images": [{
+            "file": "still.png", "ar": "square", "width": 1024, "height": 1024,
+            "prepared_path": "square_img/still.png", "caption": True,
+        }],
+        "skipped": [],
+        "selection": {
+            "mode": "all", "selected_files": ["still.png"], "selected_count": 1,
+            "total_count": 1, "criteria": {},
+        },
+    }), encoding="utf-8")
+
+    generate_dataset_configs(set_folder, mode="quality", profile_id=MINIMAX_H3_PROFILE_ID)
+    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+    assert ", 1]" in text
+    assert 'group = "videos"' not in text
+
+
+def test_h3_quality_video_uses_only_native_frame_candidates(tmp_path):
+    set_folder = tmp_path / "set"
+    _write_h3_video_manifest(set_folder, 136)
+
+    generate_dataset_configs(set_folder, mode="quality", profile_id=MINIMAX_H3_PROFILE_ID)
+    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+    assert any(f", {frames}]" in text for frames in (136, 102, 68, 34))
+    assert all(f", {frames}]" not in text for frames in (13, 17, 21, 25, 29, 33, 37, 41, 45, 49))
 
 
 def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_path):

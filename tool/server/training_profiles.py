@@ -11,6 +11,7 @@ from copy import deepcopy
 WAN22_PROFILE_ID = "wan22_t2v"
 KREA2_PROFILE_ID = "krea2_raw"
 WAN21_PROFILE_ID = "wan21_t2v_14b"
+MINIMAX_H3_PROFILE_ID = "minimax_h3"
 
 
 _PROFILES = {
@@ -54,6 +55,19 @@ _PROFILES = {
         ),
         "runs": (
             {"id": "train", "label": "Train", "stages": ("wan21",)},
+        ),
+    },
+    MINIMAX_H3_PROFILE_ID: {
+        "id": MINIMAX_H3_PROFILE_ID,
+        "label": "MiniMax H3",
+        "command": {"launcher": "standard_deepspeed"},
+        "mediaKinds": ("image", "video"),
+        "datasetFiles": ("dataset.train.toml",),
+        "configs": (
+            {"id": "h3", "file": "config.h3.toml", "dataset": "dataset.train.toml", "label": "MiniMax H3", "outputSlug": "minimax-h3", "modelIdentityKeys": ("type", "diffusion_model")},
+        ),
+        "runs": (
+            {"id": "train", "label": "Train", "stages": ("h3",)},
         ),
     },
 }

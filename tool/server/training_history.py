@@ -36,7 +36,7 @@ def output_root_for_folder(folder_path, stage=""):
 
 def output_root_path_for_folder(folder_path, stage=""):
     folder = Path(folder_path)
-    stages = (stage,) if stage in ("hi", "lo", "krea2", "wan21") else ("hi", "lo", "krea2", "wan21")
+    stages = (stage,) if stage in ("hi", "lo", "krea2", "wan21", "h3") else ("hi", "lo", "krea2", "wan21", "h3")
     for candidate_stage in stages:
         configured = output_dir_from_config(folder, candidate_stage)
         if configured:
@@ -417,9 +417,9 @@ def discover_runs(folder_path, stage=""):
     folder = Path(folder_path)
     if not folder.is_dir():
         return []
-    if stage not in ("hi", "lo", "krea2", "wan21"):
+    if stage not in ("hi", "lo", "krea2", "wan21", "h3"):
         combined = []
-        for item in ("hi", "lo", "krea2", "wan21"):
+        for item in ("hi", "lo", "krea2", "wan21", "h3"):
             if training_config_path(folder, item).is_file():
                 combined.extend(discover_runs(folder, item))
         return sorted(combined, key=lambda run: run["modifiedAt"], reverse=True)
@@ -720,7 +720,7 @@ def clear_history_job(folder_path, job_id):
 def completed_stages(folder_path, include_discovered_runs=True):
     """Return completed stages, optionally avoiding an expensive output-tree scan."""
     folder = Path(folder_path)
-    stages = [stage for stage in ("hi", "lo", "krea2", "wan21") if (folder / ("config." + stage + ".toml")).is_file()]
+    stages = [stage for stage in ("hi", "lo", "krea2", "wan21", "h3") if (folder / ("config." + stage + ".toml")).is_file()]
     history = read_history(folder)
     completed = set()
     for job in history.get("jobs") or []:

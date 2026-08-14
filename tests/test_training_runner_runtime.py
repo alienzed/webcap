@@ -265,6 +265,45 @@ def test_wan21_runner_script_uses_only_the_wan21_config(tmp_path, monkeypatch):
     assert resolved["wan21"] == "/mnt/w/config.wan21.toml"
 
 
+def test_h3_runner_script_uses_only_the_h3_config(tmp_path, monkeypatch):
+    h3_path = tmp_path / "config.h3.toml"
+    h3_path.write_text("h3", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + path.name)
+    settings = training_runtime_settings({"diffusion_pipe_wsl": "/home/user/diffusion-pipe"})
+
+    script, resolved = training_runner._build_runner_script(
+        {"snapshot": {}, "stages": "h3"}, settings, {"h3Config": h3_path}, tmp_path / "job"
+    )
+
+    assert "[webcap] stage=h3" in script
+    assert "[webcap] command h3:" in script
+    assert "/mnt/w/config.h3.toml" in script
+    assert "[webcap] stage=hi" not in script
+    assert "[webcap] stage=lo" not in script
+    assert resolved["h3"] == "/mnt/w/config.h3.toml"
+
+
+def test_h3_progress_plan_accounts_for_the_separate_image_batch_size(tmp_path):
+    config = tmp_path / "config.h3.toml"
+    config.write_text(
+        "micro_batch_size_per_gpu = 1\nimage_micro_batch_size_per_gpu = 8\n",
+        encoding="utf-8",
+    )
+
+    planned = training_runner._plan_run_steps({
+        "h3": {
+            "epochs": 100,
+            "estimatedSteps": 20000,
+            "estimatedImageExposures": 12000,
+            "estimatedVideoExposures": 8000,
+        },
+    }, {"h3": str(config)})
+
+    assert planned["h3"]["estimatedSteps"] == 9500
+    assert planned["h3"]["sampleExposures"] == 20000
+    assert planned["h3"]["imageMicroBatchSize"] == 8
+
+
 def test_discovered_resume_path_is_the_run_directory_not_its_latest_marker(tmp_path, monkeypatch):
     folder = tmp_path / "set"
     output_root = tmp_path / "output"

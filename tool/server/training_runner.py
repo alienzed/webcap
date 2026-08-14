@@ -14,8 +14,8 @@ from pathlib import Path
 from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, output_dir_from_config, with_output_dir
-from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_run
+from .training_config_files import H3_CONFIG_NAME, HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, output_dir_from_config, with_output_dir
+from .training_profiles import config_for_stage, profile_run
 from .dataset_config import repeat_targets_for_mode
 from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, training_output_group_for_folder
 from .training_preflight import (
@@ -287,7 +287,7 @@ def _job_action_path(job):
 
 
 def _artifact_root(folder_path, stage):
-    root = output_root_for_folder(folder_path, stage if stage in ("hi", "lo", "krea2", "wan21") else "hi")
+    root = output_root_for_folder(folder_path, stage if stage in ("hi", "lo", "krea2", "wan21", "h3") else "hi")
     return root / ".webcap" / "jobs"
 
 
@@ -343,7 +343,7 @@ def _input_evidence(folder_path, stages="both"):
             digest.update(caption.read_bytes())
         except OSError:
             digest.update(b"<missing-caption>")
-    config_names = (KREA2_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (WAN21_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "wan21" else (
+    config_names = (KREA2_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (WAN21_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "wan21" else (H3_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "h3" else (
         HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
     )
     config_paths = [folder / name for name in config_names]
@@ -404,16 +404,23 @@ def _plan_run_steps(progress_plan, snapshot):
         has_generated_shape = exposures > 0 and int(stage.get("epochs") or 0) > 0
         if has_generated_shape:
             micro_batch = _read_config_positive_int(snapshot.get(stage_name), "micro_batch_size_per_gpu", 1)
+            image_micro_batch = _read_config_positive_int(snapshot.get(stage_name), "image_micro_batch_size_per_gpu", micro_batch)
+            image_exposures = int(stage.get("estimatedImageExposures") or 0)
+            video_exposures = int(stage.get("estimatedVideoExposures") or 0)
             stage["sampleExposures"] = exposures
             stage["microBatchSize"] = micro_batch
-            stage["estimatedSteps"] = int(math.ceil(float(exposures) / float(micro_batch)))
+            stage["imageMicroBatchSize"] = image_micro_batch
+            if image_exposures or video_exposures:
+                stage["estimatedSteps"] = int(math.ceil(float(image_exposures) / float(image_micro_batch))) + int(math.ceil(float(video_exposures) / float(micro_batch)))
+            else:
+                stage["estimatedSteps"] = int(math.ceil(float(exposures) / float(micro_batch)))
         planned[stage_name] = stage
     return planned
 
 
 def _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir):
     snapshot = {}
-    config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21" else ((stages, HI_CONFIG_NAME if stages == "hi" else LO_CONFIG_NAME),) if stages in ("hi", "lo") else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
+    config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21" else (("h3", H3_CONFIG_NAME),) if stages == "h3" else ((stages, HI_CONFIG_NAME if stages == "hi" else LO_CONFIG_NAME),) if stages in ("hi", "lo") else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
     for key, filename in config_files:
         source = artifacts[key + "Config"]
         target = job_dir / filename
@@ -423,7 +430,7 @@ def _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir
         )
         normalize_path_permissions(target)
         snapshot[key] = str(target)
-    dataset_files = ("dataset.train.toml", "auto_dataset/training_plan.json") if stages in ("krea2", "wan21") else (
+    dataset_files = ("dataset.train.toml", "auto_dataset/training_plan.json") if stages in ("krea2", "wan21", "h3") else (
         ("dataset." + stages + ".toml", "auto_dataset/training_plan.json") if stages in ("hi", "lo") else
         ("dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json")
     )
@@ -459,7 +466,7 @@ def _default_progress_plan():
 def _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage):
     if not str(resume_from_checkpoint or "").strip():
         return ""
-    if stages in ("hi", "lo", "krea2", "wan21"):
+    if stages in ("hi", "lo", "krea2", "wan21", "h3"):
         return stages
     value = str(resume_stage or "lo").strip().lower()
     if value not in ("hi", "lo"):
@@ -469,8 +476,8 @@ def _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage):
 
 def _build_runner_script(job, settings, artifacts, job_dir):
     stages = _normalize_training_stages(job.get("stages"))
-    if stages in ("krea2", "wan21"):
-        config_key = "krea2" if stages == "krea2" else "wan21"
+    if stages in ("krea2", "wan21", "h3"):
+        config_key = stages
         artifact_key = config_key + "Config"
         config_path = artifacts[artifact_key]
         hi_path = config_path
@@ -533,9 +540,9 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "if [ \"$LO_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
             "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
         ])
-    if stages in ("krea2", "wan21"):
-        stage_title = "Krea2" if stages == "krea2" else "Wan2.1"
-        stage_code = "KREA2" if stages == "krea2" else "WAN21"
+    if stages in ("krea2", "wan21", "h3"):
+        stage_title = "Krea2" if stages == "krea2" else "Wan2.1" if stages == "wan21" else "MiniMax H3"
+        stage_code = "KREA2" if stages == "krea2" else "WAN21" if stages == "wan21" else "H3"
         lines.extend([
             "echo '[webcap] stage=" + stages + "'",
             "printf '%s\\n' " + shlex.quote("[webcap] command " + stages + ": " + command_plan["loCommand"]),
@@ -547,7 +554,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         ])
     lines.extend(["echo '[webcap] completed'", "write_result completed 0"])
     script = "\n".join(lines) + "\n"
-    return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "wan21": lo_wsl if stages == "wan21" else "", "usedSnapshot": False}
+    return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "wan21": lo_wsl if stages == "wan21" else "", "h3": lo_wsl if stages == "h3" else "", "usedSnapshot": False}
 
 
 def _write_runner_script(job, settings, artifacts):
@@ -567,6 +574,7 @@ def _launch_artifacts(job, artifacts):
     config_files = (
         (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2"
         else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21"
+        else (("h3", H3_CONFIG_NAME),) if stages == "h3"
         else ((stages, HI_CONFIG_NAME if stages == "hi" else LO_CONFIG_NAME),) if stages in ("hi", "lo")
         else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
     )
@@ -810,7 +818,9 @@ def _sync_job_log_evidence(job):
         tail = _read_log_tail(log_path)
     except OSError:
         return "", None
-    if "[webcap] stage=wan21" in tail:
+    if "[webcap] stage=h3" in tail:
+        job["stage"] = "h3"
+    elif "[webcap] stage=wan21" in tail:
         job["stage"] = "wan21"
     elif "[webcap] stage=krea2" in tail:
         job["stage"] = "krea2"
@@ -1126,7 +1136,7 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
             return payload, 200
         diagnostic_job = {
             "id": "diagnostic",
-            "snapshot": ({"krea2": str(artifacts["krea2Config"])} if stages == "krea2" else {"wan21": str(artifacts["wan21Config"])} if stages == "wan21" else {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])}),
+            "snapshot": ({"krea2": str(artifacts["krea2Config"])} if stages == "krea2" else {"wan21": str(artifacts["wan21Config"])} if stages == "wan21" else {"h3": str(artifacts["h3Config"])} if stages == "h3" else {"hi": str(artifacts["hiConfig"]), "lo": str(artifacts["loConfig"])}),
             "stages": stages,
             "resumeFromCheckpoint": str(resume_from_checkpoint or "").strip(),
             "resumeStage": resume_stage,
@@ -1510,7 +1520,7 @@ def finish_schedule_response(job_id, epoch=None, cancel=False):
         current_epoch = int(progress.get("epoch") or 0)
         planned_epochs = int(progress.get("epochs") or 0)
         stage = str(progress.get("stage") or "")
-        if current_epoch <= 0 or planned_epochs <= 0 or stage not in ("hi", "lo", "krea2", "wan21"):
+        if current_epoch <= 0 or planned_epochs <= 0 or stage not in ("hi", "lo", "krea2", "wan21", "h3"):
             return {"ok": False, "error": "Wait until the runner reports its current epoch before scheduling Finish."}, 409
         if target_epoch < current_epoch:
             return {"ok": False, "error": "Finish epoch must be the current epoch or a future epoch."}, 400

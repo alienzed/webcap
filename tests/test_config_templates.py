@@ -115,6 +115,32 @@ def test_wan21_config_shares_the_set_output_root(tmp_path, monkeypatch):
     assert training_config_files_module.output_dir_from_config(folder, "wan21") == training_config_files_module.output_dir_from_config(folder, "hi")
 
 
+def test_h3_config_uses_the_recommended_components_and_shared_output_root(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    folder = root / "lilly"
+    folder.mkdir(parents=True)
+    (folder / "clip.mp4").write_bytes(b"media")
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+
+    training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3")
+
+    path = folder / "config.h3.toml"
+    text = path.read_text(encoding="utf-8")
+    assert 'type = "minimax_h3"' in text
+    assert "minimax_h3_fl2va_pruned_int8_convrot.safetensors" in text
+    assert "minimax_h3_video_vae_fp16.safetensors" in text
+    assert "minimax_h3_audio_vae_fp32.safetensors" in text
+    assert "qwen3vl_32b_minimax_h3_int8_convrot.safetensors" in text
+    assert "cfg = 4" in text
+    assert training_config_files_module.output_dir_from_config(folder, "h3").name == "lilly"
+
+    path.write_text("edited = true\n", encoding="utf-8")
+    training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3")
+    assert path.read_text(encoding="utf-8") == "edited = true\n"
+    training_config_files_module.reset_training_config_file(folder, "config.h3.toml")
+    assert 'type = "minimax_h3"' in path.read_text(encoding="utf-8")
+
+
 def test_launch_group_sequence_advances_in_decimal(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "lilly"

@@ -143,8 +143,10 @@ function ensurePrepManifestForCurrentFolder() {
 }
 
 function ensureGeneratedTrainingArtifactsForCurrentFolder(stages, profileId) {
-  var requiredFiles = stages === 'krea2' || stages === 'wan21'
-    ? [stages === 'krea2' ? 'config.krea2.toml' : 'config.wan21.toml', 'dataset.train.toml']
+  var profiles = trainingWorkspaceState.profiles || [];
+  var profile = profiles.filter(function (item) { return item.id === profileId; })[0] || getSelectedTrainingModelProfile();
+  var requiredFiles = profile
+    ? (profile.configs || []).map(function (config) { return config.file; }).concat(profile.datasetFiles || [])
     : ['config.hi.toml', 'config.lo.toml', 'dataset.hi.toml', 'dataset.lo.toml'];
   return Promise.all(requiredFiles.map(fetchPathExistsForCurrentFolder)).then(function (results) {
     var ready = results.every(function (value) { return !!value; });

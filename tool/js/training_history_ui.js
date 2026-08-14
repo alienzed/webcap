@@ -61,7 +61,7 @@ function renderTrainingHistory() {
     if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
     var resumePath = String(job.outputRunPath || job.resumeCheckpoint || '');
     var resumeStage = String(job.resumeStage || job.stages || '');
-    var canResume = job.status !== 'cancelled' && job.outputAvailable !== false && !!resumePath && ['hi', 'lo', 'krea2', 'wan21'].indexOf(resumeStage) !== -1;
+    var canResume = job.status !== 'cancelled' && job.outputAvailable !== false && !!resumePath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(resumeStage) !== -1;
     var unavailable = [];
     if (job.sourceAvailable === false) unavailable.push('set');
     if (job.outputAvailable === false) unavailable.push('output');
@@ -168,7 +168,7 @@ function resumeTrainingHistoryJob(jobId) {
   var job = jobs.filter(function (item) { return item.id === jobId; })[0];
   var resumePath = String(job && (job.outputRunPath || job.resumeCheckpoint) || '');
   var resumeStage = String(job && (job.resumeStage || job.stages) || '');
-  if (!job || !job.folder || !resumePath || ['hi', 'lo', 'krea2', 'wan21'].indexOf(resumeStage) === -1) {
+  if (!job || !job.folder || !resumePath || ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(resumeStage) === -1) {
     throw new Error('This historical run no longer has a resumable checkpoint.');
   }
   trainingRunnerRequest('/fs/training_runner/start', {

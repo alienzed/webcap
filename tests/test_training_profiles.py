@@ -1,4 +1,4 @@
-from tool.server.training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, profile, profile_run
+from tool.server.training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, profile, profile_run
 
 
 def test_training_profiles_expose_only_their_valid_runs_and_artifacts():
@@ -17,3 +17,10 @@ def test_training_profiles_expose_only_their_valid_runs_and_artifacts():
     assert wan21["configs"][0]["file"] == "config.wan21.toml"
     assert tuple(profile_run(WAN21_PROFILE_ID, "train")[1]["stages"]) == ("wan21",)
     assert tuple(wan21["configs"][0]["modelIdentityKeys"]) == ("type", "ckpt_path")
+
+    h3 = profile(MINIMAX_H3_PROFILE_ID)
+    assert tuple(h3["mediaKinds"]) == ("image", "video")
+    assert h3["configs"][0]["file"] == "config.h3.toml"
+    assert tuple(h3["datasetFiles"]) == ("dataset.train.toml",)
+    assert tuple(profile_run(MINIMAX_H3_PROFILE_ID, "train")[1]["stages"]) == ("h3",)
+    assert tuple(h3["configs"][0]["modelIdentityKeys"]) == ("type", "diffusion_model")

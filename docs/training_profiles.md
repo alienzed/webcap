@@ -9,8 +9,9 @@ WebCap has a small, app-owned registry of supported Diffusion Pipe training prof
 | Wan2.2 T2V | Images and videos | `config.hi.toml`, `config.lo.toml`, `dataset.hi.toml`, `dataset.lo.toml` | HI -> LO, HI only, LO only |
 | Krea2 Raw | Images only | `config.krea2.toml`, `dataset.train.toml` | Train |
 | Wan2.1 T2V 14B | Images and videos | `config.wan21.toml`, `dataset.train.toml` | Train |
+| MiniMax H3 | Images and videos | `config.h3.toml`, `dataset.train.toml` | Train |
 
-Krea2 Raw rejects prepared video data. Wan2.1 and Wan2.2 accept the normal prepared image/video mix.
+Krea2 Raw rejects prepared video data. Wan2.1, Wan2.2, and MiniMax H3 accept the normal prepared image/video mix. MiniMax H3 uses its native video frame grid: POC uses 34 frames, while Normal and Quality select from 136, 102, 68, and 34 frames according to clip coverage. Clips shorter than 34 frames are excluded, and H3 does not generate the Wan-specific 13-frame detail stanza.
 
 ## Launch output identity
 
@@ -29,7 +30,7 @@ Managed and manual launches execute job-owned snapshots whose `output_dir` is re
 `Prepare Dataset` builds `auto_dataset/` from the currently visible media. `Generate Configs` writes the selected profile's dataset TOML and `auto_dataset/training_plan.json`.
 
 - Wan2.2 writes separate high-noise and low-noise dataset files.
-- Krea2 and Wan2.1 write the neutral `dataset.train.toml`, using the generic image-bucket policy.
+- Krea2, Wan2.1, and MiniMax H3 write the neutral `dataset.train.toml`; H3 applies its model-specific video frame grid while retaining WebCap's image buckets and target-step planning.
 - The POC, Normal, and Quality dataset targets affect generated buckets. Repeat targeting is based on each individual run's configured epochs and the generated dataset shape.
 - Managed jobs use the profile's own plan entry for per-run progress, completion ETA, and next-checkpoint ETA when the trainer logs sufficient timing information.
 

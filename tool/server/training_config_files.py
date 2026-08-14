@@ -12,7 +12,8 @@ HI_CONFIG_NAME = "config.hi.toml"
 LO_CONFIG_NAME = "config.lo.toml"
 KREA2_CONFIG_NAME = "config.krea2.toml"
 WAN21_CONFIG_NAME = "config.wan21.toml"
-TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME)
+H3_CONFIG_NAME = "config.h3.toml"
+TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, H3_CONFIG_NAME)
 
 _EPOCHS_TEXT_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?$', re.MULTILINE)
@@ -27,7 +28,7 @@ _FALLBACK_LO_EPOCHS = 90
 def _fallback_epochs_for_template(name: str):
     if name == HI_CONFIG_NAME:
         return _FALLBACK_HI_EPOCHS
-    if name in (LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME):
+    if name in (LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, H3_CONFIG_NAME):
         return _FALLBACK_LO_EPOCHS
     raise ValueError(f"Unknown training config template: {name}")
 
@@ -83,6 +84,8 @@ def training_config_path(folder_path: Path, stage: str):
         return Path(folder_path) / KREA2_CONFIG_NAME
     if stage == "wan21":
         return Path(folder_path) / WAN21_CONFIG_NAME
+    if stage == "h3":
+        return Path(folder_path) / H3_CONFIG_NAME
     raise ValueError("Unknown training configuration stage: " + stage)
 
 

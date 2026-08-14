@@ -33,6 +33,18 @@ def _krea_config(output, set_name="set"):
     )
 
 
+def _h3_config(output, set_name="set"):
+    output = str(output).replace("\\", "/")
+    return (
+        f'output_dir = "{output}"\n'
+        f'dataset = "/training/{set_name}/dataset.train.toml"\n'
+        'epochs = 100\n\n'
+        '[model]\n'
+        'type = "minimax_h3"\n'
+        'diffusion_model = "/models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"\n'
+    )
+
+
 def _checkpoint(run, config_text, config_name="config.lo.toml", step=42, epoch=0):
     run.mkdir(parents=True)
     (run / config_name).write_text(config_text, encoding="utf-8")
@@ -131,6 +143,22 @@ def test_krea_history_discovers_a_checkpoint_under_a_prefixed_output_root(tmp_pa
 
     assert [run["name"] for run in runs] == ["20260719_13-29-01"]
     assert runs[0]["path"] == str(output / "20260719_13-29-01")
+
+
+def test_h3_history_discovers_a_compatible_checkpoint(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "char" / "lilly"
+    output = root / "output" / "runs" / "007-lilly" / "minimax-h3"
+    config = _h3_config(output, "lilly")
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    (set_folder / "config.h3.toml").write_text(config, encoding="utf-8")
+    _checkpoint(output / "20260814_09-00-00", config, "config.h3.toml", step=9500)
+
+    runs = training_history.discover_runs(set_folder, "h3")
+
+    assert [run["name"] for run in runs] == ["20260814_09-00-00"]
+    assert runs[0]["path"] == str(output / "20260814_09-00-00")
 
 
 def test_training_history_summary_uses_the_latest_managed_job(tmp_path, monkeypatch):

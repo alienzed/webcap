@@ -21,7 +21,7 @@ def build_training_command_plan(hi_config_path, lo_config_path, launcher=DEEPSPE
         + resolved_launcher
         + " --num_gpus=1 train.py --deepspeed --config "
         + shlex.quote(str(lo_config_path))
-        + (resume_option if resume_stage in ("lo", "krea2", "wan21") else "")
+        + (resume_option if resume_stage in ("lo", "krea2", "wan21", "h3") else "")
     )
     return {
         "launcher": resolved_launcher,

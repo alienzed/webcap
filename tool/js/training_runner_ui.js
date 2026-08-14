@@ -357,7 +357,7 @@ function getManagedTrainingOptions() {
   var resumeStageEl = document.getElementById('training-run-resume-stage-select');
   var customResumePath = resumeEl ? String(resumeEl.value || '').trim() : '';
   var stages = String(trainingWorkspaceState.runStages || 'both');
-  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21') stages = 'both';
+  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21' && stages !== 'h3') stages = 'both';
   var selectedProfile = getSelectedTrainingModelProfile();
   var selectedRun = getTrainingProfileRunForStage(selectedProfile, stages);
   return {
@@ -371,7 +371,7 @@ function getManagedTrainingOptions() {
 }
 
 function setManagedTrainingStages(stages) {
-  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21') stages = 'both';
+  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21' && stages !== 'h3') stages = 'both';
   var selectedProfile = getSelectedTrainingModelProfile();
   if (selectedProfile && !getTrainingProfileRunForStage(selectedProfile, stages)) {
     stages = String(selectedProfile.runs[0].stages[0] || 'both');
@@ -401,7 +401,7 @@ function syncManagedTrainingResumeUi() {
 }
 
 function trainingStageLabel(stages) {
-  return stages === 'hi' ? 'High Noise' : stages === 'lo' ? 'Low Noise' : stages === 'krea2' ? 'Krea2 Raw' : stages === 'wan21' ? 'Wan2.1 T2V' : 'High Noise to Low Noise';
+  return stages === 'hi' ? 'High Noise' : stages === 'lo' ? 'Low Noise' : stages === 'krea2' ? 'Krea2 Raw' : stages === 'wan21' ? 'Wan2.1 T2V' : stages === 'h3' ? 'MiniMax H3' : 'High Noise to Low Noise';
 }
 
 function trainingModelLabel(job) {

@@ -69,6 +69,27 @@ def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_pa
         "etaScope": "completion",
     }
 
+
+def test_h3_progress_uses_the_single_stage_snapshot_and_plan(tmp_path):
+    h3_path = tmp_path / "config.h3.toml"
+    h3_path.write_text("epochs = 100\ncheckpoint_every_n_epochs = 5\n", encoding="utf-8")
+    job = {
+        "stage": "h3",
+        "stages": "h3",
+        "snapshot": {"h3": str(h3_path)},
+        "progressPlan": {"h3": {"estimatedSteps": 9500}},
+    }
+
+    training_progress.sync_job_progress(
+        job,
+        "[webcap] stage=h3\n[INFO] [Rank 0] step=4750, skipped=0\n",
+    )
+
+    assert job["progress"]["stage"] == "h3"
+    assert job["progress"]["stagePercent"] == 50.0
+    assert job["progress"]["overallPercent"] == 50.0
+    assert job["progress"]["plannedSteps"] == 9500
+
 def test_runner_progress_uses_epoch_progress_and_a_rolling_step_eta(tmp_path):
     lo_path = tmp_path / "config.lo.toml"
     lo_path.write_text("epochs = 90\n", encoding="utf-8")

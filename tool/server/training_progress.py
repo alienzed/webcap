@@ -15,8 +15,8 @@ ETA_SAMPLE_WINDOW = 8
 
 def normalize_training_stages(stages):
     value = str(stages or "both").strip().lower()
-    if value not in ("hi", "lo", "both", "krea2", "wan21"):
-        raise ValueError("Training stage must be hi, lo, both, krea2, or wan21.")
+    if value not in ("hi", "lo", "both", "krea2", "wan21", "h3"):
+        raise ValueError("Training stage must be hi, lo, both, krea2, wan21, or h3.")
     return value
 
 
@@ -77,7 +77,7 @@ def log_has_progress(log_text):
 
 def sync_job_progress(job, log_text):
     stage = str(job.get("stage") or "").lower()
-    if stage not in ("hi", "lo", "krea2", "wan21"):
+    if stage not in ("hi", "lo", "krea2", "wan21", "h3"):
         job.pop("progress", None)
         return
 

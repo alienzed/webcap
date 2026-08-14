@@ -14,7 +14,7 @@ from . import config as app_config
 from .dataset_config import generate_dataset_configs
 from .dataset_prep import prepare_dataset
 from .permissions import normalize_path_permissions
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, ensure_training_config_files, with_output_dir
+from .training_config_files import H3_CONFIG_NAME, HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, ensure_training_config_files, with_output_dir
 from .training_history import training_output_group_for_folder
 from .training_profiles import config_for_stage
 from .training_commands import build_training_command_plan
@@ -211,6 +211,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
     lo_name = LO_CONFIG_NAME
     krea2_name = KREA2_CONFIG_NAME
     wan21_name = "config.wan21.toml"
+    h3_name = H3_CONFIG_NAME
     mode = "normal"
     write_snapshot_comments = bool(training_cfg.get("write_selection_snapshot_comments"))
 
@@ -229,9 +230,10 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
         dataset_lo_path = folder_path / "dataset.lo.toml"
         dataset_train_path = folder_path / "dataset.train.toml"
         wan21_path = folder_path / wan21_name
+        h3_path = folder_path / h3_name
 
-        selected_config = krea2_path if stages == "krea2" else wan21_path if stages == "wan21" else None
-        selected_dataset = dataset_train_path if stages in ("krea2", "wan21") else None
+        selected_config = krea2_path if stages == "krea2" else wan21_path if stages == "wan21" else h3_path if stages == "h3" else None
+        selected_dataset = dataset_train_path if stages in ("krea2", "wan21", "h3") else None
         required_paths = (selected_config, selected_dataset) if selected_config else (
             hi_path, lo_path, dataset_hi_path, dataset_lo_path
         )
@@ -266,7 +268,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
         snapshot_paths = {}
         output_dirs = {}
         for stage in stage_names:
-            source = hi_path if stage == "hi" else lo_path if stage == "lo" else krea2_path if stage == "krea2" else wan21_path
+            source = hi_path if stage == "hi" else lo_path if stage == "lo" else krea2_path if stage == "krea2" else wan21_path if stage == "wan21" else h3_path
             meta = config_for_stage(selected_profile["id"], stage)
             if resume_from_checkpoint and resume_stage == stage:
                 output_dir = str(Path(resume_from_checkpoint).parent) if not str(resume_from_checkpoint).startswith("/") else str(PurePosixPath(resume_from_checkpoint).parent)
@@ -310,7 +312,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
         )
         if stages == "hi":
             handoff_cmd = command_plan["hiCommand"]
-        elif stages in ("lo", "krea2", "wan21"):
+        elif stages in ("lo", "krea2", "wan21", "h3"):
             handoff_cmd = command_plan["loCommand"]
         else:
             handoff_cmd = command_plan["handoffCommand"]
@@ -324,7 +326,7 @@ def train_run_response(folder: str, stages="both", resume_from_checkpoint="", re
                     yield f"[INFO] Effective output {stage.upper()}: {output_dirs[stage]}\n"
                 if resume_from_checkpoint:
                     yield f"[INFO] Resume {resume_stage.upper()} checkpoint: {resume_from_checkpoint}\n"
-                if stages in ("krea2", "wan21"):
+                if stages in ("krea2", "wan21", "h3"):
                     yield f"[INFO] Config {selected_profile['label']}: {lo_wsl}\n"
                 else:
                     yield f"[INFO] Config HI: {hi_wsl}\n"

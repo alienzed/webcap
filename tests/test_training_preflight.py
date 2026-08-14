@@ -93,3 +93,18 @@ def test_krea_preflight_accepts_mixed_manifest_when_generated_dataset_is_image_o
 
     assert not [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     assert "krea2_image_only" not in [item["id"] for item in checks]
+
+
+def test_h3_preflight_requires_h3_config_and_shared_dataset(tmp_path):
+    folder = tmp_path / "set"
+    auto_dataset = folder / "auto_dataset"
+    auto_dataset.mkdir(parents=True)
+    (folder / "config.h3.toml").write_text("[model]\ntype = 'minimax_h3'\n", encoding="utf-8")
+    (folder / "dataset.train.toml").write_text("[[directory]]\npath = '/data'\n", encoding="utf-8")
+    (auto_dataset / "prep_manifest.json").write_text("{}", encoding="utf-8")
+
+    artifacts, missing = training_preflight.resolve_artifacts("set", folder, "h3")
+
+    assert missing == []
+    assert artifacts["h3Config"].name == "config.h3.toml"
+    assert artifacts["trainDataset"].name == "dataset.train.toml"

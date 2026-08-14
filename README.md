@@ -11,7 +11,7 @@ It is built around explicit, reversible mutations, visible subset prep, and fast
 - Build focused work queues from review output, filters, or recursive SuperSet searches, then materialize filtered results into new sets.
 - Make reversible media edits including crop, clip, rotation, flip, blur/remove background, deface, duplicate, prune, and reset from preserved originals.
 - Prepare visible media subsets into a dataset, then generate profile-specific Diffusion Pipe TOML and a training plan.
-- Run managed Wan2.2 T2V, Krea2 Raw, and Wan2.1 T2V 14B jobs with launch-scoped base36 output identities, model/stage output folders, a queue, per-run progress and checkpoint ETA, output logs, resume paths, diagnostics, history, GPU status, and optional TensorBoard; a manual WSL command remains available when preferred.
+- Run managed Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, and MiniMax H3 jobs with launch-scoped base36 output identities, model/stage output folders, a queue, per-run progress and checkpoint ETA, output logs, resume paths, diagnostics, history, GPU status, and optional TensorBoard; a manual WSL command remains available when preferred.
 - Keep app state and per-set artifacts on disk. WebCap uses Python and the browser only—no database or hosted service is required.
 
 ## Requirements
@@ -85,7 +85,7 @@ Notes:
 - `filesystem.root` is required.
 - Dataset target supports `POC`, `Normal`, and `Quality` in the Training workspace.
 - `training.write_selection_snapshot_comments` controls whether Generate writes the prep snapshot header into generated dataset TOML.
-- Supported profiles generate fixed TOML names: Wan2.2 uses `config.hi.toml`, `config.lo.toml`, `dataset.hi.toml`, and `dataset.lo.toml`; Krea2 Raw uses `config.krea2.toml` and `dataset.train.toml`; Wan2.1 T2V 14B uses `config.wan21.toml` and `dataset.train.toml`.
+- Supported profiles generate fixed TOML names: Wan2.2 uses `config.hi.toml`, `config.lo.toml`, `dataset.hi.toml`, and `dataset.lo.toml`; Krea2 Raw uses `config.krea2.toml` and `dataset.train.toml`; Wan2.1 T2V 14B uses `config.wan21.toml` and `dataset.train.toml`; MiniMax H3 uses `config.h3.toml` and `dataset.train.toml`.
 - `analysis.enableFaceAnalysis` enables Face Focus metadata available in `Review Set` analysis details.
 - `analysis.enableMediaPipeAnalysis` enables selection-pose metadata and tag suggestions.
 - `set_destinations.presets` powers destination shortcuts in `Create Set`.
@@ -351,7 +351,7 @@ Video clip flow:
 ### 13. Train tab and dataset generation
 
 Train tab includes:
-- model/profile selection: Wan2.2 T2V, Krea2 Raw, or Wan2.1 T2V 14B
+- model/profile selection: Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, or MiniMax H3
 - profile-grouped configuration files
 - `Prepare Dataset`
 - `Generate Configs` with POC, Normal, or Quality dataset targets
@@ -367,7 +367,8 @@ Behavior:
 - `Generate Configs` reads `prep_manifest.json`, writes the selected profile's dataset TOML, and records its training plan
 - if the prep manifest is missing, Generate auto-runs Prepare once and retries
 - Generate creates only missing configuration TOML; **Reset** is the explicit replacement action for one config
-- Krea2 Raw requires image-only prepared media; Wan2.1 and Wan2.2 accept prepared images and videos
+- Krea2 Raw requires image-only prepared media; Wan2.1, Wan2.2, and MiniMax H3 accept prepared images and videos
+- MiniMax H3 video config uses a 34-frame POC bucket or selects from 136, 102, 68, and 34 frames for Normal and Quality; shorter clips are excluded
 - the folder badge shows `Ready to train` only when prepared artifacts exist, prepared captions are present, and the set has no material tagged-but-uncaptioned backlog; otherwise it can show `Caption review needed`
 - `Train this set` starts immediately when idle or adds the selected run behind current work; Wan2.2 HI -> LO queues independent HI and LO jobs
 - active jobs expose per-run progress, completion ETA, next-checkpoint ETA, effective output identity/folder, logs, queue-pause/finish controls, explicit queue start/resume, and resume-from-checkpoint controls; queued resumes show checkpoint-derived progress

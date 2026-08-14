@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
-from .training_profiles import KREA2_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID
+from .training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
@@ -83,9 +83,12 @@ IMAGE_MODE_CAPS = {
 PREP_MANIFEST_NAME = "prep_manifest.json"
 VIDEO_FRAME_CANDIDATES = [37, 49, 45, 41, 33]
 VIDEO_FRAME_CANDIDATES_POC = [33, 29, 25, 21, 17]
+H3_VIDEO_FRAME_CANDIDATES = [136, 102, 68, 34]
+H3_VIDEO_FRAME_CANDIDATES_POC = [34]
 MIN_VIDEO_FRAMES_FOR_STATS = 16
 VIDEO_COVERAGE = 0.85
 VIDEO_MFP_LIMIT = 11000
+H3_VIDEO_MFP_LIMIT = 40000
 VIDEO_DETAIL_FRAMES = 13
 VIDEO_DETAIL_MIN_COVERAGE = 0.35
 VIDEO_DETAIL_MIN_SUPPORT = 2
@@ -100,7 +103,7 @@ TRAINING_PLAN_FILE_NAME = "training_plan.json"
 VIDEO_DETAIL_REPEAT_WEIGHT = 0.25
 VIDEO_MOTION_REPEAT_WEIGHT = 1.0
 IMAGE_REPEAT_WEIGHT = 1.0
-WAN_VIDEO_PROFILE_IDS = {WAN22_PROFILE_ID, WAN21_PROFILE_ID}
+VIDEO_PROFILE_IDS = {WAN22_PROFILE_ID, WAN21_PROFILE_ID, MINIMAX_H3_PROFILE_ID}
 
 
 def normalize_training_generate_mode(mode):
@@ -118,7 +121,7 @@ def repeat_targets_for_mode(mode: str):
 
 def video_resolution_cap(profile_id: str, mode: str, ar_label: str):
     selected_profile = str(profile_id or WAN22_PROFILE_ID).strip().lower()
-    if selected_profile not in WAN_VIDEO_PROFILE_IDS:
+    if selected_profile not in VIDEO_PROFILE_IDS:
         return None
     generate_mode = normalize_training_generate_mode(mode)
     return TRAINING_MODE_TARGETS[generate_mode][ar_label]
@@ -164,6 +167,16 @@ def estimate_steps(entries, repeats, epochs: int):
     for idx, entry in enumerate(entries):
         per_epoch += int(entry["sample_count"]) * int(repeats[idx])
     return int(epochs) * int(per_epoch)
+
+
+def estimate_kind_exposures(entries, repeats, epochs: int, kind: str):
+    selected_entries = []
+    selected_repeats = []
+    for idx, entry in enumerate(entries):
+        if entry.get("kind") == kind:
+            selected_entries.append(entry)
+            selected_repeats.append(repeats[idx])
+    return estimate_steps(selected_entries, selected_repeats, epochs)
 
 
 def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False, profile_id: str = ""):
@@ -259,16 +272,24 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lo_entries.extend(video_entries)
     lo_entries.extend(lo_image_entries)
 
-    single_stage = str(profile_id or "") in (KREA2_PROFILE_ID, WAN21_PROFILE_ID)
+    single_stage_profiles = {
+        KREA2_PROFILE_ID: ("krea2", "config.krea2.toml"),
+        WAN21_PROFILE_ID: ("wan21", "config.wan21.toml"),
+        MINIMAX_H3_PROFILE_ID: ("h3", "config.h3.toml"),
+    }
+    single_stage = str(profile_id or "") in single_stage_profiles
     krea2_profile = str(profile_id or "") == KREA2_PROFILE_ID
-    single_stage_name = "krea2" if profile_id == KREA2_PROFILE_ID else "wan21"
-    single_config_name = "config.krea2.toml" if profile_id == KREA2_PROFILE_ID else "config.wan21.toml"
+    single_stage_name, single_config_name = single_stage_profiles.get(
+        str(profile_id or ""), ("wan21", "config.wan21.toml")
+    )
     lo_run_entries = lo_image_entries if krea2_profile else lo_entries
     if krea2_profile and not lo_run_entries:
         raise ValueError("Krea2 Raw requires at least one prepared image.")
     if krea2_profile and video_entries:
         excluded_videos = sum(int(entry["sample_count"]) for entry in video_entries)
         lines.append(f"[INFO] Krea2 Raw: excluded {excluded_videos} prepared video(s).")
+    if profile_id == MINIMAX_H3_PROFILE_ID and not lo_run_entries:
+        raise ValueError("MiniMax H3 requires at least one prepared image or one video with at least 34 frames.")
     hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
     default_hi_epochs, default_lo_epochs = default_training_config_epochs()
     hi_epochs = read_epochs_from_training_config(folder / HI_CONFIG_NAME, default_hi_epochs)
@@ -279,13 +300,17 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lo_repeats = build_repeats(lo_run_entries, lo_scalar)
     hi_est = estimate_steps(hi_entries, hi_repeats, hi_epochs)
     lo_est = estimate_steps(lo_run_entries, lo_repeats, lo_epochs)
+    hi_image_exposures = estimate_kind_exposures(hi_entries, hi_repeats, hi_epochs, "image")
+    hi_video_exposures = estimate_kind_exposures(hi_entries, hi_repeats, hi_epochs, "video")
+    lo_image_exposures = estimate_kind_exposures(lo_run_entries, lo_repeats, lo_epochs, "image")
+    lo_video_exposures = estimate_kind_exposures(lo_run_entries, lo_repeats, lo_epochs, "video")
     training_stages = {
-        "hi": {"epochs": hi_epochs, "targetSteps": hi_target_steps, "estimatedSteps": hi_est},
-        "lo": {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est},
+        "hi": {"epochs": hi_epochs, "targetSteps": hi_target_steps, "estimatedSteps": hi_est, "estimatedImageExposures": hi_image_exposures, "estimatedVideoExposures": hi_video_exposures},
+        "lo": {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est, "estimatedImageExposures": lo_image_exposures, "estimatedVideoExposures": lo_video_exposures},
     }
     if single_stage:
         training_stages = {
-            single_stage_name: {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est},
+            single_stage_name: {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est, "estimatedImageExposures": lo_image_exposures, "estimatedVideoExposures": lo_video_exposures},
         }
     training_plan = {
         "version": 1,
@@ -346,6 +371,7 @@ def load_prep_manifest(manifest_path: Path):
 
 def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", profile_id: str = ""):
     generate_mode = normalize_training_generate_mode(mode)
+    h3_profile = str(profile_id or "") == MINIMAX_H3_PROFILE_ID
     grouped = {key: [] for key in AR_CLASSES}
     for row in videos:
         if not isinstance(row, dict):
@@ -374,13 +400,20 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
         clips = grouped.get(ar_label, [])
         if not clips:
             continue
-        usable_for_frames = [c for c in clips if c["frames"] is not None and c["frames"] >= MIN_VIDEO_FRAMES_FOR_STATS]
+        minimum_frames = 34 if h3_profile else MIN_VIDEO_FRAMES_FOR_STATS
+        too_short = [c for c in clips if c["frames"] is not None and c["frames"] < minimum_frames]
+        if too_short and h3_profile:
+            lines.append(f"[WARN] {ar_label}: excluded {len(too_short)} MiniMax H3 clip(s) shorter than 34 frames.")
+        usable_for_frames = [c for c in clips if c["frames"] is not None and c["frames"] >= minimum_frames]
         if not usable_for_frames:
             lines.append(f"[WARN] {ar_label}: no clips with usable frame metadata.")
             continue
 
         frame_counts = [c["frames"] for c in usable_for_frames]
-        frame_candidates = VIDEO_FRAME_CANDIDATES_POC if generate_mode == "poc" else VIDEO_FRAME_CANDIDATES
+        if h3_profile:
+            frame_candidates = H3_VIDEO_FRAME_CANDIDATES_POC if generate_mode == "poc" else H3_VIDEO_FRAME_CANDIDATES
+        else:
+            frame_candidates = VIDEO_FRAME_CANDIDATES_POC if generate_mode == "poc" else VIDEO_FRAME_CANDIDATES
         motion_frames = select_frames_with_fallback(frame_counts, frame_candidates, VIDEO_COVERAGE)
         if not motion_frames:
             lines.append(f"[WARN] {ar_label}: unable to choose motion frame count.")
@@ -389,7 +422,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
         resolution_cap = video_resolution_cap(profile_id, generate_mode, ar_label)
         if resolution_cap:
             lines.append(
-                f"[INFO] {ar_label}: WAN {generate_mode} video resolution cap "
+                f"[INFO] {ar_label}: {'MiniMax H3' if h3_profile else 'WAN'} {generate_mode} video resolution cap "
                 f"{resolution_cap[0]}x{resolution_cap[1]}"
             )
         if resolution_cap or generate_mode == "poc":
@@ -399,7 +432,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
                 usable_for_frames,
                 motion_frames,
                 VIDEO_COVERAGE,
-                VIDEO_MFP_LIMIT,
+                H3_VIDEO_MFP_LIMIT if h3_profile else VIDEO_MFP_LIMIT,
                 target_w,
                 target_h,
             )
@@ -409,7 +442,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
                 usable_for_frames,
                 motion_frames,
                 VIDEO_COVERAGE,
-                VIDEO_MFP_LIMIT,
+                H3_VIDEO_MFP_LIMIT if h3_profile else VIDEO_MFP_LIMIT,
             )
         if not motion:
             lines.append(f"[WARN] {ar_label}: unable to choose motion bucket resolution.")
@@ -431,7 +464,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
             "resolution_cap": resolution_cap,
         })
 
-        if generate_mode != "poc" or POC_VIDEO_DETAIL_ENABLED:
+        if not h3_profile and (generate_mode != "poc" or POC_VIDEO_DETAIL_ENABLED):
             detail = choose_video_detail_bucket(
                 ar_label,
                 usable_for_frames,

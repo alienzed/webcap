@@ -1,0 +1,50 @@
+output_dir = "{TRAINING_ROOT}/output/runs/{SET_NAME}"
+dataset    = "{TRAINING_ROOT}/{DATASET}/dataset.train.toml"
+
+epochs = 100
+save_every_n_epochs = 1
+
+micro_batch_size_per_gpu = 1
+image_micro_batch_size_per_gpu = 8
+pipeline_stages = 1
+gradient_accumulation_steps = 1
+gradient_clipping = 1.0
+warmup_steps = 10
+
+checkpoint_every_n_epochs = 5
+activation_checkpointing = "unsloth"
+partition_method = "parameters"
+save_dtype = "bfloat16"
+caching_batch_size = 1
+steps_per_print = 1
+video_clip_mode = "single_beginning"
+
+# Safe 24 GB starting point. Lower this gradually when more VRAM is available.
+blocks_to_swap = 48
+compile = true
+
+[model]
+type = "minimax_h3"
+diffusion_model = "{MODELS_ROOT}/Stable-diffusion/minimax-h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+vae = "{MODELS_ROOT}/vae/minimax_h3_video_vae_fp16.safetensors"
+audio_vae = "{MODELS_ROOT}/vae/minimax_h3_audio_vae_fp32.safetensors"
+text_encoders = [
+  { path = "{MODELS_ROOT}/text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors", type = "minimax" },
+]
+dtype = "bfloat16"
+timestep_sample_method = "uniform"
+shift = 8
+image_shift = 1
+cfg = 4
+
+[adapter]
+type = "lora"
+rank = 32
+dtype = "bfloat16"
+
+[optimizer]
+type = "adamw_optimi"
+lr = 1e-4
+betas = [0.9, 0.99]
+weight_decay = 0.01
+eps = 1e-8

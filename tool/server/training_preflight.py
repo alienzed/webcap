@@ -10,7 +10,7 @@ from . import config as app_config
 from .caption_ops import _caption_name_for_media
 from .originals import MEDIA_ALL_EXTS, is_transient_media_name
 from .training_commands import build_training_launcher_probe
-from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME
+from .training_config_files import H3_CONFIG_NAME, HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME
 from .training_runtime import (
     activation_prefix,
     build_runtime_command,
@@ -44,6 +44,7 @@ def resolve_artifacts(folder, folder_path, stages="both"):
         "loConfig": folder_path / LO_CONFIG_NAME,
         "krea2Config": folder_path / KREA2_CONFIG_NAME,
         "wan21Config": folder_path / WAN21_CONFIG_NAME,
+        "h3Config": folder_path / H3_CONFIG_NAME,
         "hiDataset": folder_path / "dataset.hi.toml",
         "loDataset": folder_path / "dataset.lo.toml",
         "trainDataset": folder_path / "dataset.train.toml",
@@ -53,6 +54,8 @@ def resolve_artifacts(folder, folder_path, stages="both"):
         required = ("krea2Config", "trainDataset", "manifest")
     elif stages == "wan21":
         required = ("wan21Config", "trainDataset", "manifest")
+    elif stages == "h3":
+        required = ("h3Config", "trainDataset", "manifest")
     elif stages == "hi":
         required = ("hiConfig", "hiDataset", "manifest")
     elif stages == "lo":
@@ -271,6 +274,7 @@ def build_launch_preflight(folder, stages="both"):
     toml_keys = (
         ("krea2Config", "trainDataset") if stages == "krea2" else
         ("wan21Config", "trainDataset") if stages == "wan21" else
+        ("h3Config", "trainDataset") if stages == "h3" else
         ("hiConfig", "hiDataset") if stages == "hi" else
         ("loConfig", "loDataset") if stages == "lo" else
         ("hiConfig", "loConfig", "hiDataset", "loDataset")

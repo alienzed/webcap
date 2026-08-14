@@ -29,6 +29,7 @@ Managed and manual launches execute job-owned snapshots whose `output_dir` is re
 
 `Prepare Dataset` builds `auto_dataset/` from the currently visible media. `Generate Configs` writes the selected profile's dataset TOML and `auto_dataset/training_plan.json`.
 
+- Prepared videos retain their source frame rate and audio. Bucket eligibility is calculated at the model's native rate (16 fps for Wan and 24 fps for MiniMax H3), then Diffusion Pipe performs the actual resampling during latent caching.
 - Wan2.2 writes separate high-noise and low-noise dataset files.
 - Krea2, Wan2.1, and MiniMax H3 write the neutral `dataset.train.toml`; H3 applies its model-specific video frame grid while retaining WebCap's image buckets and target-step planning.
 - The POC, Normal, and Quality dataset targets affect generated buckets. Repeat targeting is based on each individual run's configured epochs and the generated dataset shape.

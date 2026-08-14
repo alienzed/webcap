@@ -1,6 +1,5 @@
 import json
 import shutil
-import subprocess
 from pathlib import Path
 
 from .media import update_media_metadata
@@ -120,53 +119,18 @@ def resolve_prepared_caption_text(source_media_path: Path, fallback_caption_by_n
     return "", False
 
 
-def convert_video_to_fps(src_path: Path, dst_path: Path, target_fps: int):
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(src_path),
-        "-vf",
-        f"fps={target_fps}:round=near,format=yuv420p",
-        "-vsync",
-        "cfr",
-        "-c:v",
-        "libx264",
-        "-profile:v",
-        "high",
-        "-level",
-        "4.0",
-        "-pix_fmt",
-        "yuv420p",
-        "-crf",
-        "14",
-        "-preset",
-        "slow",
-        "-movflags",
-        "+faststart",
-        "-g",
-        str(target_fps * 2),
-        "-an",
-        str(dst_path),
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        stderr = (proc.stderr or proc.stdout or "").strip()
-        raise RuntimeError(f"ffmpeg failed for {src_path.name}: {stderr}")
-
-
-def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None):
+def prepare_dataset(folder_path: Path, selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
     lines = []
     lines.append(f"[INFO] Preparing dataset from: {folder}")
-    lines.append(f"[INFO] Target FPS: {target_fps}")
+    lines.append("[INFO] Video FPS policy: preserve source")
 
     metadata = update_media_metadata(folder)
 
     manifest = {
         "version": 1,
-        "target_fps": int(target_fps),
+        "target_fps": None,
         "videos": [],
         "images": [],
         "skipped": [],
@@ -290,18 +254,8 @@ def prepare_dataset(folder_path: Path, target_fps: int = 16, selected_media=None
 
         if is_video:
             fps = info.get("fps")
-            should_convert = fps is None
-            if fps is not None:
-                try:
-                    should_convert = abs(float(fps) - float(target_fps)) > 0.1
-                except Exception:
-                    should_convert = True
-            if should_convert:
-                convert_video_to_fps(src, dest_path, target_fps)
-                action = "converted"
-            else:
-                shutil.copy2(src, dest_path)
-                action = "copied"
+            shutil.copy2(src, dest_path)
+            action = "copied"
             normalize_path_permissions(dest_path)
             write_prepared_caption(src, dest_dir, prepared_caption_by_file[file_name])
             manifest["videos"].append({

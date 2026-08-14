@@ -20,6 +20,7 @@ _PROFILES = {
         "label": "Wan2.2 T2V",
         "command": {"launcher": "standard_deepspeed"},
         "mediaKinds": ("image", "video"),
+        "videoFps": 16,
         "datasetFiles": ("dataset.hi.toml", "dataset.lo.toml"),
         "configs": (
             {"id": "hi", "file": "config.hi.toml", "dataset": "dataset.hi.toml", "label": "Wan2.2 High Noise", "outputSlug": "wan22-hi", "modelIdentityKeys": ("type", "ckpt_path", "transformer_path")},
@@ -36,6 +37,7 @@ _PROFILES = {
         "label": "Krea2 Raw",
         "command": {"launcher": "standard_deepspeed"},
         "mediaKinds": ("image",),
+        "videoFps": None,
         "datasetFiles": ("dataset.train.toml",),
         "configs": (
             {"id": "krea2", "file": "config.krea2.toml", "dataset": "dataset.train.toml", "label": "Krea2 Raw", "outputSlug": "krea2-raw", "modelIdentityKeys": ("type", "diffusion_model")},
@@ -49,6 +51,7 @@ _PROFILES = {
         "label": "Wan2.1 T2V 14B",
         "command": {"launcher": "standard_deepspeed"},
         "mediaKinds": ("image", "video"),
+        "videoFps": 16,
         "datasetFiles": ("dataset.train.toml",),
         "configs": (
             {"id": "wan21", "file": "config.wan21.toml", "dataset": "dataset.train.toml", "label": "Wan2.1 T2V 14B", "outputSlug": "wan21-t2v", "modelIdentityKeys": ("type", "ckpt_path")},
@@ -62,6 +65,7 @@ _PROFILES = {
         "label": "MiniMax H3",
         "command": {"launcher": "standard_deepspeed"},
         "mediaKinds": ("image", "video"),
+        "videoFps": 24,
         "datasetFiles": ("dataset.train.toml",),
         "configs": (
             {"id": "h3", "file": "config.h3.toml", "dataset": "dataset.train.toml", "label": "MiniMax H3", "outputSlug": "minimax-h3", "modelIdentityKeys": ("type", "diffusion_model")},

@@ -76,6 +76,41 @@ def test_prepare_dataset_fails_loudly_on_missing_caption(tmp_path, monkeypatch):
         )
 
 
+def test_prepare_dataset_preserves_source_video_fps_audio_and_bytes(tmp_path, monkeypatch):
+    set_folder = tmp_path / "set"
+    set_folder.mkdir(parents=True)
+    metadata = {}
+    expected = {}
+    for fps in (16, 24, 30, 60):
+        name = f"clip_{fps}.mp4"
+        payload = f"video-and-audio-{fps}".encode("ascii")
+        (set_folder / name).write_bytes(payload)
+        write_text(set_folder / f"clip_{fps}.txt", f"caption {fps}")
+        metadata[name] = {
+            "resolution": "512x512",
+            "fps": fps,
+            "duration": 2.5,
+            "frame_count": int(fps * 2.5),
+        }
+        expected[name] = payload
+    monkeypatch.setattr(dataset_prep_module, "update_media_metadata", lambda _folder: metadata)
+
+    report = dataset_prep_module.prepare_dataset(set_folder)
+
+    manifest = json.loads((set_folder / "auto_dataset" / "prep_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["target_fps"] is None
+    assert "Video FPS policy: preserve source" in report
+    assert not hasattr(dataset_prep_module, "convert_video_to_fps")
+    by_name = {row["file"]: row for row in manifest["videos"]}
+    for name, payload in expected.items():
+        prepared = set_folder / "auto_dataset" / "square" / name
+        assert prepared.read_bytes() == payload
+        assert by_name[name]["fps"] == metadata[name]["fps"]
+        assert by_name[name]["duration"] == metadata[name]["duration"]
+        assert by_name[name]["frames"] == metadata[name]["frame_count"]
+        assert by_name[name]["action"] == "copied"
+
+
 def test_generate_dataset_configs_omits_selection_snapshot_comments_by_default(tmp_path):
     set_folder = tmp_path / "set"
     auto_dataset = set_folder / "auto_dataset"

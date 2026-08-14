@@ -97,7 +97,6 @@ def _run_prepare_dataset(folder_path: Path, output_queue, selected_media=None, s
             writer.write(
                 prepare_dataset(
                     folder_path,
-                    target_fps=16,
                     selected_media=selected_media,
                     selection_criteria=selection_criteria,
                     total_media_count=total_media_count,

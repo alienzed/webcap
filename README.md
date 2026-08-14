@@ -361,13 +361,14 @@ Train tab includes:
 
 Behavior:
 - opening a config file loads it into the center editor; Close saves and returns to Training Items
-- `Prepare Dataset` rebuilds `auto_dataset` from the current visible subset
+- `Prepare Dataset` rebuilds `auto_dataset` from the current visible subset and preserves each video's source frame rate and audio
 - Prepare blocks on zero visible rows
 - Prepare performs missing-caption preflight and reports missing, primer-fallback, and still-empty counts
 - `Generate Configs` reads `prep_manifest.json`, writes the selected profile's dataset TOML, and records its training plan
 - if the prep manifest is missing, Generate auto-runs Prepare once and retries
 - Generate creates only missing configuration TOML; **Reset** is the explicit replacement action for one config
 - Krea2 Raw requires image-only prepared media; Wan2.1, Wan2.2, and MiniMax H3 accept prepared images and videos
+- Video bucket eligibility uses the model's native timebase (16 fps for Wan, 24 fps for MiniMax H3); Diffusion Pipe performs the actual resampling while caching latents
 - MiniMax H3 video config uses a 34-frame POC bucket or selects from 136, 102, 68, and 34 frames for Normal and Quality; shorter clips are excluded
 - the folder badge shows `Ready to train` only when prepared artifacts exist, prepared captions are present, and the set has no material tagged-but-uncaptioned backlog; otherwise it can show `Caption review needed`
 - `Train this set` starts immediately when idle or adds the selected run behind current work; Wan2.2 HI -> LO queues independent HI and LO jobs

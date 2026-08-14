@@ -8,6 +8,7 @@ import tool.server.app as app_module
 import tool.server.run_ops as run_ops_module
 from tool.server.dataset_config import (
     choose_video_detail_bucket,
+    coerce_frames,
     generate_candidates,
     generate_image_candidates,
     generate_dataset_configs,
@@ -62,7 +63,7 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
       "height": 512,
       "fps": 16,
       "frames": 33,
-      "duration": 2.0,
+      "duration": 2.0625,
       "prepared_path": "square/clip.mp4",
       "caption": true,
       "action": "copied"
@@ -136,15 +137,18 @@ def test_generate_dataset_configs_fails_without_prep_manifest(tmp_path):
         raise AssertionError("generate_dataset_configs should fail without prep_manifest.json")
 
 
-def _write_h3_video_manifest(set_folder, frames, include_image=False):
+def _write_h3_video_manifest(set_folder, frames, include_image=False, fps=24, duration=None):
     auto_dataset = set_folder / "auto_dataset"
     video_dir = auto_dataset / "square"
     video_dir.mkdir(parents=True)
     (video_dir / "clip.mp4").write_bytes(b"video")
-    videos = [{
+    video = {
         "file": "clip.mp4", "ar": "square", "width": 768, "height": 768,
-        "fps": 24, "frames": frames, "prepared_path": "square/clip.mp4", "caption": True,
-    }]
+        "fps": fps, "frames": frames, "prepared_path": "square/clip.mp4", "caption": True,
+    }
+    if duration is not None:
+        video["duration"] = duration
+    videos = [video]
     images = []
     selected = ["clip.mp4"]
     if include_image:
@@ -249,6 +253,30 @@ def test_h3_quality_video_uses_only_native_frame_candidates(tmp_path):
 
     assert any(f", {frames}]" in text for frames in (136, 102, 68, 34))
     assert all(f", {frames}]" not in text for frames in (13, 17, 21, 25, 29, 33, 37, 41, 45, 49))
+
+
+def test_model_native_frame_estimates_prefer_duration_then_source_rate_then_raw_frames():
+    assert coerce_frames({"duration": 3.0, "fps": 16, "frames": 48}, 24) == 72
+    assert coerce_frames({"fps": 16, "frames": 48}, 24) == 72
+    assert coerce_frames({"frames": 48}, 24) == 48
+    assert coerce_frames({"duration": 3.0, "fps": 60, "frames": 180}, 16) == 48
+    assert coerce_frames({"duration": 33.99 / 24, "fps": 60, "frames": 85}, 24) == 33
+
+
+def test_h3_bucket_timing_uses_24fps_for_legacy_and_high_fps_sources(tmp_path):
+    legacy_folder = tmp_path / "legacy"
+    _write_h3_video_manifest(legacy_folder, 48, fps=16, duration=3.0)
+    generate_dataset_configs(legacy_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    legacy_text = (legacy_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    assert ", 68]" in legacy_text
+    assert ", 102]" not in legacy_text
+
+    high_fps_folder = tmp_path / "high_fps"
+    _write_h3_video_manifest(high_fps_folder, 120, fps=60, duration=2.0)
+    generate_dataset_configs(high_fps_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    high_fps_text = (high_fps_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    assert ", 34]" in high_fps_text
+    assert all(f", {frames}]" not in high_fps_text for frames in (68, 102, 136))
 
 
 def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_path):

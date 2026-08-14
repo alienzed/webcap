@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
-from .training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID
+from .training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, profile as training_profile
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
@@ -371,7 +371,10 @@ def load_prep_manifest(manifest_path: Path):
 
 def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", profile_id: str = ""):
     generate_mode = normalize_training_generate_mode(mode)
-    h3_profile = str(profile_id or "") == MINIMAX_H3_PROFILE_ID
+    selected_profile_id = str(profile_id or WAN22_PROFILE_ID).strip().lower()
+    selected_profile = training_profile(selected_profile_id)
+    model_fps = selected_profile.get("videoFps")
+    h3_profile = selected_profile_id == MINIMAX_H3_PROFILE_ID
     grouped = {key: [] for key in AR_CLASSES}
     for row in videos:
         if not isinstance(row, dict):
@@ -381,7 +384,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
             continue
         width = to_pos_int(row.get("width"))
         height = to_pos_int(row.get("height"))
-        frames = coerce_frames(row)
+        frames = coerce_frames(row, model_fps)
         prepared_path = str(row.get("prepared_path") or "").strip()
         if not width or not height or not prepared_path:
             continue
@@ -499,19 +502,24 @@ def to_pos_int(value):
     return parsed if parsed > 0 else None
 
 
-def coerce_frames(record):
-    frames = to_pos_int(record.get("frames"))
-    if frames:
-        return frames
-    fps = record.get("fps")
-    duration = record.get("duration")
-    if fps is None or duration is None:
-        return None
+def to_pos_float(value):
     try:
-        estimate = int(round(float(fps) * float(duration)))
+        parsed = float(value)
     except Exception:
         return None
-    return estimate if estimate > 0 else None
+    return parsed if parsed > 0 else None
+
+
+def coerce_frames(record, model_fps=None):
+    frames = to_pos_int(record.get("frames"))
+    source_fps = to_pos_float(record.get("fps"))
+    duration = to_pos_float(record.get("duration"))
+    target_fps = to_pos_float(model_fps)
+    if target_fps and duration:
+        return max(1, int(duration * target_fps))
+    if target_fps and frames and source_fps:
+        return max(1, int((float(frames) / source_fps) * target_fps))
+    return frames
 
 
 def select_frames_with_fallback(frame_counts, candidates, coverage_threshold):

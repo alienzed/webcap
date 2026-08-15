@@ -161,6 +161,8 @@ function syncWorkspaceConfigEditorUi() {
       ? 'Save this config and return to Training Items.'
       : 'Return to the previous workspace.';
   }
+  if (generateBtn) generateBtn.classList.toggle('hidden', isTraining);
+  if (trainBtn) trainBtn.classList.toggle('hidden', isTraining);
   ui.appEl.classList.toggle('training-config-selected', isTraining && hasConfigForSurface && !trainingOutputVisible);
   if (trainingOverview) {
     trainingOverview.classList.toggle('hidden', !isTraining || hasConfigForSurface || trainingOutputVisible);

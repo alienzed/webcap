@@ -228,16 +228,24 @@ function runTrainCommandPreviewForCurrentFolder(options) {
   if (!ensureFolderSelected('No folder selected for training.')) {
     return Promise.reject(new Error('No folder selected for training.'));
   }
-  return ensureGeneratedTrainingArtifactsForCurrentFolder(options && options.stages, options && options.profileId)
+  return Promise.resolve(saveCurrentEditorContent())
     .then(function () {
+      var selectedMedia = getVisibleMediaSelectionForPrepare();
+      if (!selectedMedia.length) throw new Error('No visible media items to train.');
+      var fallbackResult = buildPrepareFallbackCaptions(selectedMedia);
       setStatus('Generating manual training command...');
       return runTrainingActionRequest('/fs/train_run', {
         folder: state.folder,
         stages: options && options.stages ? options.stages : 'both',
         profileId: options && options.profileId ? options.profileId : '',
         runId: options && options.runId ? options.runId : '',
+        mode: options && options.mode ? options.mode : getTrainingWorkspaceSelectedProfile(state.folder),
         resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
-        resumeStage: options && options.resumeStage ? options.resumeStage : ''
+        resumeStage: options && options.resumeStage ? options.resumeStage : '',
+        selected_media: selectedMedia,
+        total_media_count: Array.isArray(state.items) ? state.items.length : 0,
+        selection_criteria: buildPrepareSelectionCriteria(),
+        fallback_captions: fallbackResult.fallbackCaptions
       });
     })
     .then(function (outputText) {

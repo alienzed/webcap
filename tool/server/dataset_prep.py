@@ -119,6 +119,90 @@ def resolve_prepared_caption_text(source_media_path: Path, fallback_caption_by_n
     return "", False
 
 
+def build_dataset_manifest(folder_path: Path, selected_media=None, selection_criteria=None, total_media_count=None):
+    """Describe the selected source media without creating a prepared copy."""
+    folder = Path(folder_path)
+    metadata = update_media_metadata(folder)
+    file_names = sorted([p.name for p in folder.iterdir() if p.is_file()], key=lambda name: name.lower())
+    media_file_names = [
+        name for name in file_names
+        if (folder / name).suffix.lower() in VIDEO_EXTS or (folder / name).suffix.lower() in IMAGE_EXTS
+    ]
+    normalized_selected_media = normalize_selected_media(selected_media)
+    if normalized_selected_media is None:
+        selected_file_names = list(media_file_names)
+    else:
+        media_lookup = {name.lower(): name for name in media_file_names}
+        missing = [name for name in normalized_selected_media if name.lower() not in media_lookup]
+        if missing:
+            raise RuntimeError("Selected media not found in folder: " + ", ".join(missing))
+        selected_file_names = sorted(
+            [media_lookup[name.lower()] for name in normalized_selected_media],
+            key=lambda name: name.lower(),
+        )
+    if not selected_file_names:
+        raise RuntimeError("No visible media items to train.")
+
+    final_total = len(media_file_names)
+    if total_media_count is not None:
+        try:
+            final_total = max(final_total, int(total_media_count))
+        except Exception:
+            pass
+    manifest = {
+        "version": 2,
+        "target_fps": None,
+        "videos": [],
+        "images": [],
+        "skipped": [],
+        "selection": {
+            "mode": "all" if len(selected_file_names) >= len(media_file_names) else "visible_subset",
+            "selected_files": selected_file_names,
+            "selected_count": len(selected_file_names),
+            "total_count": final_total,
+            "criteria": selection_criteria if isinstance(selection_criteria, dict) else {},
+        },
+    }
+    for file_name in selected_file_names:
+        source = folder / file_name
+        info = metadata.get(file_name) or {}
+        dims = parse_resolution(info.get("resolution"))
+        if not dims:
+            manifest["skipped"].append({"file": file_name, "reason": "missing_resolution"})
+            continue
+        width, height = dims
+        ar_label = classify_ar(width, height)
+        if not ar_label:
+            manifest["skipped"].append({
+                "file": file_name,
+                "reason": "unsupported_aspect_ratio",
+                "resolution": f"{width}x{height}",
+            })
+            continue
+        if source.suffix.lower() in VIDEO_EXTS:
+            manifest["videos"].append({
+                "file": file_name,
+                "ar": ar_label,
+                "width": int(width),
+                "height": int(height),
+                "fps": float(info.get("fps")) if info.get("fps") is not None else None,
+                "frames": info.get("frame_count"),
+                "duration": info.get("duration"),
+                "prepared_path": f"{ar_label}/{file_name}",
+            })
+        else:
+            manifest["images"].append({
+                "file": file_name,
+                "ar": ar_label,
+                "width": int(width),
+                "height": int(height),
+                "prepared_path": f"{ar_label}_img/{file_name}",
+            })
+    if not manifest["images"] and not manifest["videos"]:
+        raise RuntimeError("No visible media items have supported training metadata.")
+    return manifest
+
+
 def prepare_dataset(folder_path: Path, selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"

@@ -654,7 +654,7 @@
                             </div>
                             <button id="training-workspace-back-btn" type="button" class="review-captions-btn training-back-btn">Back</button>
                         </div>
-                        <section id="training-set-workflow" class="training-set-workflow training-set-only" aria-label="Prepare this training set">
+                        <section id="training-set-workflow" class="training-set-workflow training-set-only" aria-label="Configure this training set">
                             <div class="training-workflow-step">
                                 <div class="training-workflow-step-number">1</div>
                                 <div class="training-workflow-step-copy">
@@ -662,38 +662,30 @@
                                     <label class="training-profile-control">Training profile
                                         <select id="training-model-profile-select"></select>
                                     </label>
-                                    <div id="training-model-trained-status" class="training-model-trained-status hidden" aria-live="polite"></div>
-                                </div>
-                            </div>
-                            <div class="training-workflow-step">
-                                <div class="training-workflow-step-number">2</div>
-                                <div class="training-workflow-step-copy">
-                                    <div class="training-workspace-section-title">Dataset</div>
-                                    <div id="training-readiness" class="training-readiness">Loading training readiness...</div>
-                                </div>
-                                <button id="training-workspace-prepare-btn" type="button" class="training-btn training-workflow-action">Prepare Dataset</button>
-                            </div>
-                            <div class="training-workflow-step">
-                                <div id="training-workspace-config-step-number" class="training-workflow-step-number">3</div>
-                                <div class="training-workflow-step-copy">
-                                    <div class="training-workspace-section-title">Configuration Files</div>
-                                    <div id="training-workspace-config-list" class="training-config-list">Generate configs to inspect and edit them here.</div>
-                                    <label class="training-profile-control">Dataset target
-                                        <select id="training-workspace-profile-select" title="Dataset repeat target">
+                                    <label class="training-profile-control">Mode
+                                        <select id="training-workspace-profile-select" title="Training mode">
                                             <option value="poc">POC</option>
                                             <option value="normal" selected>Normal</option>
                                             <option value="quality">Quality</option>
                                         </select>
                                     </label>
+                                    <div id="training-model-trained-status" class="training-model-trained-status hidden" aria-live="polite"></div>
                                 </div>
-                                <button id="training-workspace-generate-btn" type="button" class="training-btn training-workflow-action">Generate Configs</button>
+                            </div>
+                            <div class="training-workflow-step">
+                                <div id="training-workspace-config-step-number" class="training-workflow-step-number">2</div>
+                                <div class="training-workflow-step-copy">
+                                    <div class="training-workspace-section-title">Configuration Files</div>
+                                    <div id="training-readiness" class="training-readiness">Loading training readiness...</div>
+                                    <div id="training-workspace-config-list" class="training-config-list">Loading setup files...</div>
+                                </div>
                             </div>
                         </section>
                         <section id="training-run-setup" class="training-run-setup training-set-only" aria-label="Training run setup">
                             <div class="training-run-layout">
                                 <div class="training-run-setup-header">
                                     <div class="training-run-setup-heading">
-                                        <div id="training-run-step-number" class="training-workflow-step-number">4</div>
+                                        <div id="training-run-step-number" class="training-workflow-step-number">3</div>
                                         <div class="training-workspace-section-title">Run Training</div>
                                     </div>
                                 </div>

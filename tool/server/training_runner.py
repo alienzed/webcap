@@ -5,17 +5,16 @@ import os
 import re
 import hashlib
 import shlex
-import shutil
 import threading
 import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_commands import build_training_command_plan
-from .training_config_files import H3_CONFIG_NAME, HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, output_dir_from_config, with_output_dir
-from .training_profiles import config_for_stage, profile_run
+from .training_profiles import config_for_stage, normalize_mode, profile_for_mode, profile_run, profiles as training_profiles
+from .training_bundle import materialize_training_bundle
 from .dataset_config import repeat_targets_for_mode
 from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, training_output_group_for_folder
 from .training_preflight import (
@@ -25,7 +24,6 @@ from .training_preflight import (
     needs_partial_annotation_caption_review as _needs_partial_annotation_caption_review,
     preflight_payload as _preflight_payload,
     prepared_dataset_is_ready as _prepared_dataset_is_ready,
-    resolve_artifacts as _resolve_artifacts,
     resolve_folder as _resolve_folder,
 )
 from .training_progress import (
@@ -320,9 +318,9 @@ def _file_digest(path):
     return digest.hexdigest()
 
 
-def _input_evidence(folder_path, stages="both"):
-    folder = Path(folder_path)
-    manifest_path = folder / "auto_dataset" / "prep_manifest.json"
+def _input_evidence(bundle_path, stages="both"):
+    bundle = Path(bundle_path)
+    manifest_path = bundle / "dataset_manifest.json"
     digest = hashlib.sha256()
     count = 0
     try:
@@ -337,16 +335,14 @@ def _input_evidence(folder_path, stages="both"):
             continue
         count += 1
         digest.update(name.encode("utf-8"))
-        caption = folder / "auto_dataset" / prepared
+        caption = bundle / "media" / prepared
         caption = caption.with_suffix(".txt")
         try:
             digest.update(caption.read_bytes())
         except OSError:
             digest.update(b"<missing-caption>")
-    config_names = (KREA2_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "krea2" else (WAN21_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "wan21" else (H3_CONFIG_NAME, "dataset.train.toml", "auto_dataset/training_plan.json") if stages == "h3" else (
-        HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json"
-    )
-    config_paths = [folder / name for name in config_names]
+    config_paths = sorted((bundle / "configs").glob("*.toml"), key=lambda path: path.name.lower())
+    config_paths.append(bundle / "training_plan.json")
     config_digest = hashlib.sha256()
     for path in config_paths:
         config_digest.update(path.name.encode("utf-8"))
@@ -355,15 +351,6 @@ def _input_evidence(folder_path, stages="both"):
         except OSError:
             config_digest.update(b"<missing>")
     return {"count": count, "fingerprint": "sha256:" + digest.hexdigest(), "configFingerprint": "sha256:" + config_digest.hexdigest()}
-
-
-def _training_profile(folder_path):
-    try:
-        plan = json.loads((Path(folder_path) / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        plan = {}
-    mode = str(plan.get("mode") or "").lower() if isinstance(plan, dict) else ""
-    return mode if mode in ("poc", "normal", "quality") else "unknown"
 
 
 def _model_identity(artifacts, profile_id="wan22_t2v", stage="hi"):
@@ -418,35 +405,8 @@ def _plan_run_steps(progress_plan, snapshot):
     return planned
 
 
-def _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir):
-    snapshot = {}
-    config_files = (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2" else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21" else (("h3", H3_CONFIG_NAME),) if stages == "h3" else ((stages, HI_CONFIG_NAME if stages == "hi" else LO_CONFIG_NAME),) if stages in ("hi", "lo") else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
-    for key, filename in config_files:
-        source = artifacts[key + "Config"]
-        target = job_dir / filename
-        target.write_text(
-            with_output_dir(source.read_text(encoding="utf-8"), effective_output_dir),
-            encoding="utf-8",
-        )
-        normalize_path_permissions(target)
-        snapshot[key] = str(target)
-    dataset_files = ("dataset.train.toml", "auto_dataset/training_plan.json") if stages in ("krea2", "wan21", "h3") else (
-        ("dataset." + stages + ".toml", "auto_dataset/training_plan.json") if stages in ("hi", "lo") else
-        ("dataset.hi.toml", "dataset.lo.toml", "auto_dataset/training_plan.json")
-    )
-    for filename in dataset_files:
-        source = Path(folder_path) / filename
-        if not source.is_file():
-            continue
-        target = job_dir / Path(filename).name
-        shutil.copy2(source, target)
-        normalize_path_permissions(target)
-        snapshot[Path(filename).stem.replace(".", "_")] = str(target)
-    return snapshot
-
-
-def _read_training_plan(folder_path):
-    path = Path(folder_path) / "auto_dataset" / "training_plan.json"
+def _read_training_plan(bundle_path):
+    path = Path(bundle_path) / "training_plan.json"
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -569,32 +529,8 @@ def _write_runner_script(job, settings, artifacts):
 
 
 def _launch_artifacts(job, artifacts):
-    """Refresh the launch-owned config from the current set config at launch time."""
-    stages = str(job.get("stages") or "both")
-    config_files = (
-        (("krea2", KREA2_CONFIG_NAME),) if stages == "krea2"
-        else (("wan21", WAN21_CONFIG_NAME),) if stages == "wan21"
-        else (("h3", H3_CONFIG_NAME),) if stages == "h3"
-        else ((stages, HI_CONFIG_NAME if stages == "hi" else LO_CONFIG_NAME),) if stages in ("hi", "lo")
-        else (("hi", HI_CONFIG_NAME), ("lo", LO_CONFIG_NAME))
-    )
-    launch_artifacts = dict(artifacts)
-    snapshot = dict(job.get("snapshot") or {})
-    for stage, filename in config_files:
-        source = Path(artifacts[stage + "Config"])
-        target = _job_dir(job) / filename
-        target.write_text(
-            with_output_dir(
-                source.read_text(encoding="utf-8"),
-                str(job.get("effectiveOutputDir") or ""),
-            ),
-            encoding="utf-8",
-        )
-        normalize_path_permissions(target)
-        snapshot[stage] = str(target)
-        launch_artifacts[stage + "Config"] = target
-    job["snapshot"] = snapshot
-    return launch_artifacts
+    """Launch only the immutable artifacts captured when the job was queued."""
+    return dict(artifacts)
 
 
 def _launch_job(job, folder_path):
@@ -619,8 +555,18 @@ def _launch_job(job, folder_path):
             job["finishedAt"] = time.time()
             return False
     stages = job.get("stages") or "both"
+    captured_artifacts = {
+        key: Path(value)
+        for key, value in (job.get("bundleArtifacts") or {}).items()
+    }
     _, _, artifacts, settings, checks = (
-        _build_launch_preflight(job["folder"], stages)
+        _build_launch_preflight(
+            job["folder"],
+            stages,
+            profile_id=job.get("profileId") or "",
+            mode=job.get("mode") or "normal",
+            artifacts_override=captured_artifacts,
+        )
     )
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     job["preflight"] = {"checks": checks, "blockers": len(blockers)}
@@ -1104,7 +1050,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch")
+    fields = ("id", "folder", "stages", "profileId", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "bundlePath", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -1117,14 +1063,15 @@ def _public_job(job):
     return payload
 
 
-def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", profile_id="", run_id=""):
+def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", profile_id="", run_id="", mode="normal"):
     try:
         if profile_id or run_id:
             _, selected_run = profile_run(profile_id, run_id, stages)
             stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
         stages = _normalize_training_stages(stages)
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
-        payload = _preflight_payload(folder, stages)
+        selected_mode = normalize_mode(mode)
+        payload = _preflight_payload(folder, stages, profile_id=profile_id, mode=selected_mode)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}
         blockers = [item for item in payload["checks"] if item["severity"] == "blocker" and not item["ok"]]
@@ -1169,35 +1116,38 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
         return {"ok": False, "error": str(exc), "checks": [], "summary": {"blockers": 1, "warnings": 0}}, 400
 
 
-def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id="", launch_group=None):
+def _new_job(
+    folder,
+    preflight,
+    stages,
+    bundle,
+    output_root,
+    effective_output_dir,
+    resume_from_checkpoint="",
+    resume_stage="",
+    parent_job_id="",
+    profile_id="",
+    run_id="",
+    mode="normal",
+    launch_group=None,
+):
     job_id = uuid.uuid4().hex[:12]
     _, folder_path = _resolve_folder(folder)
     stages = _normalize_training_stages(stages)
-    artifacts, _ = _resolve_artifacts(folder, folder_path, stages)
     selected_profile, _ = profile_run(profile_id, run_id, stages)
-    config_meta = config_for_stage(selected_profile["id"], stages)
+    selected_mode = normalize_mode(mode)
+    config_meta = config_for_stage(selected_profile["id"], stages, selected_mode)
     output_slug = config_meta["outputSlug"]
     resume_path = str(resume_from_checkpoint or "").strip()
     distribution = _training_settings()["wslDistribution"]
-    if resume_path:
-        configured_output = output_dir_from_config(folder_path, stages)
-        if configured_output is None:
-            raise ValueError("Current training config is missing output_dir.")
-        effective_output_dir = str(configured_output).replace("\\", "/")
-        output_root = host_path_for_training_path(effective_output_dir)
-        group_root = output_root
-    else:
-        group_root = Path(launch_group) if launch_group else training_output_group_for_folder(folder_path, create=True)
-        output_root = group_root / output_slug
-        output_root.mkdir(parents=True, exist_ok=True)
-        normalize_path_permissions(output_root)
-        effective_output_dir = _to_wsl_path(output_root, distribution)
+    group_root = Path(launch_group)
     job_dir = group_root / ".webcap" / "jobs" / job_id
     job_dir.mkdir(parents=True, exist_ok=False)
     normalize_path_permissions(job_dir)
-    snapshot = _copy_snapshot(job_dir, artifacts, folder_path, stages, effective_output_dir)
-    progress_plan = _plan_run_steps(_read_training_plan(folder_path) or _default_progress_plan(), snapshot)
-    input_evidence = _input_evidence(folder_path, stages)
+    artifacts = {key: Path(value) for key, value in bundle["artifacts"].items()}
+    snapshot = {stages: str(artifacts[stages + "Config"])}
+    progress_plan = _plan_run_steps(_read_training_plan(bundle["path"]) or _default_progress_plan(), snapshot)
+    input_evidence = _input_evidence(bundle["path"], stages)
     model = _model_identity(artifacts, selected_profile["id"], stages)
     sequence_match = re.match(r"^([0-9A-Z]{3})-", group_root.name)
     action_run_id = str(run_id or "")
@@ -1207,11 +1157,12 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "folder": folder,
         "stages": stages,
         "profileId": selected_profile["id"],
+        "mode": selected_mode,
         "runId": job_run_id,
         "actionRunId": action_run_id,
         "modelLabel": model["label"],
         "model": model,
-        "datasetTarget": _training_profile(folder_path),
+        "datasetTarget": selected_mode,
         "input": input_evidence,
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
@@ -1222,6 +1173,9 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
         "createdAt": time.time(),
         "updatedAt": time.time(),
         "snapshot": snapshot,
+        "bundlePath": str(bundle["path"]),
+        "bundleArtifacts": {key: str(value) for key, value in artifacts.items()},
+        "capturedItemCount": int(bundle.get("capturedItemCount") or 0),
         "artifactPath": str(job_dir),
         "artifactDir": str(job_dir),
         "progressPlan": progress_plan,
@@ -1237,11 +1191,51 @@ def _new_job(folder, preflight, stages="both", resume_from_checkpoint="", resume
     }
 
 
-def start_response(folder, queue=False, stages="both", resume_from_checkpoint="", resume_stage="", parent_job_id="", profile_id="", run_id=""):
+def _bundle_from_path(bundle_path, profile_id, mode, stages):
+    path = Path(bundle_path)
+    if not path.is_dir():
+        raise FileNotFoundError("Captured training files are missing: " + str(path))
+    selected = profile_for_mode(profile_id, mode)
+    stage_names = ("hi", "lo") if stages == "both" else (stages,)
+    artifacts = {
+        "manifest": path / "dataset_manifest.json",
+        "plan": path / "training_plan.json",
+    }
+    for stage in stage_names:
+        item = next(item for item in selected["configs"] if item["id"] == stage)
+        artifacts[stage + "Config"] = path / "configs" / item["file"]
+        artifacts[stage + "Dataset"] = path / "configs" / item["dataset"]
+    missing = [str(value) for value in artifacts.values() if not Path(value).is_file()]
+    if missing:
+        raise FileNotFoundError("Captured training files are missing: " + ", ".join(missing))
+    try:
+        manifest = json.loads(artifacts["manifest"].read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        manifest = {}
+    rows = (manifest.get("images") or []) + (manifest.get("videos") or []) if isinstance(manifest, dict) else []
+    return {"path": path, "artifacts": artifacts, "capturedItemCount": len(rows)}
+
+
+def start_response(
+    folder,
+    queue=False,
+    stages="both",
+    resume_from_checkpoint="",
+    resume_stage="",
+    parent_job_id="",
+    profile_id="",
+    run_id="",
+    mode="normal",
+    selected_media=None,
+    fallback_captions=None,
+    selection_criteria=None,
+    total_media_count=None,
+):
     if parent_job_id and not str(resume_from_checkpoint or "").strip():
         return {"ok": False, "error": "Historical resume requires a checkpoint path; refusing to start a new run."}, 400
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id, stages)
+        selected_mode = normalize_mode(mode)
         stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
         stages = _normalize_training_stages(stages)
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage)
@@ -1249,7 +1243,18 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
         return {"ok": False, "error": str(exc)}, 400
     try:
         _, folder_path = _resolve_folder(folder)
-        _, folder_path, _, _, checks = _build_launch_preflight(folder, stages)
+        parent = _find_history_job(folder, parent_job_id) if parent_job_id else None
+        parent_bundle = str((parent or {}).get("bundlePath") or "").strip()
+        if parent_job_id and not parent_bundle:
+            return {"ok": False, "error": "The managed run has no captured training bundle."}, 400
+        bundle = _bundle_from_path(parent_bundle, selected_profile["id"], selected_mode, stages) if parent_bundle else None
+        _, folder_path, _, _, checks = _build_launch_preflight(
+            folder,
+            stages,
+            profile_id=selected_profile["id"],
+            mode=selected_mode,
+            artifacts_override=bundle["artifacts"] if bundle else None,
+        )
     except Exception as exc:
         return {"ok": False, "error": str(exc)}, 400
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
@@ -1272,14 +1277,60 @@ def start_response(folder, queue=False, stages="both", resume_from_checkpoint=""
             state["queuePaused"] = False
             state["queuePauseReason"] = ""
         job_stages = ("hi", "lo") if stages == "both" else (stages,)
-        needs_new_output = any(not (resume_from_checkpoint and resume_stage == job_stage) for job_stage in job_stages)
-        launch_group = training_output_group_for_folder(folder_path, create=True) if needs_new_output else None
+        if parent_bundle:
+            launch_group = Path(bundle["path"]).parents[2]
+        else:
+            launch_group = training_output_group_for_folder(folder_path, create=True)
+
+        output_roots = {}
+        output_dirs = {}
+        distribution = _training_settings()["wslDistribution"]
+        for job_stage in job_stages:
+            meta = config_for_stage(selected_profile["id"], job_stage, selected_mode)
+            if resume_from_checkpoint and resume_stage == job_stage:
+                effective = str(Path(resume_from_checkpoint).parent) if not str(resume_from_checkpoint).startswith("/") else str(PurePosixPath(resume_from_checkpoint).parent)
+                output_dirs[job_stage] = effective.replace("\\", "/")
+                output_roots[job_stage] = host_path_for_training_path(output_dirs[job_stage])
+            else:
+                output_root = launch_group / meta["outputSlug"]
+                output_root.mkdir(parents=True, exist_ok=True)
+                normalize_path_permissions(output_root)
+                output_roots[job_stage] = output_root
+                output_dirs[job_stage] = _to_wsl_path(output_root, distribution)
+        if not parent_bundle:
+            try:
+                bundle = materialize_training_bundle(
+                    folder_path,
+                    launch_group,
+                    selected_profile["id"],
+                    selected_mode,
+                    stages,
+                    selected_media,
+                    fallback_captions=fallback_captions,
+                    selection_criteria=selection_criteria,
+                    total_media_count=total_media_count,
+                    output_dirs=output_dirs,
+                    distribution=distribution,
+                )
+            except Exception as exc:
+                return {"ok": False, "error": "Could not create the run dataset: " + str(exc)}, 400
         jobs = []
         for job_stage in job_stages:
             stage_resume = resume_from_checkpoint if resume_stage == job_stage else ""
             jobs.append(_new_job(
-                str(folder).strip(), preflight, job_stage, stage_resume, job_stage if stage_resume else "", parent_job_id,
-                selected_profile["id"], selected_run["id"], launch_group
+                str(folder).strip(),
+                preflight,
+                job_stage,
+                bundle,
+                output_roots[job_stage],
+                output_dirs[job_stage],
+                stage_resume,
+                job_stage if stage_resume else "",
+                parent_job_id,
+                selected_profile["id"],
+                selected_run["id"],
+                selected_mode,
+                launch_group,
             ))
         state["jobs"].extend(jobs)
         if not active or active.get("status") in TERMINAL_STATUSES:
@@ -1335,7 +1386,16 @@ def folder_statuses_for_folders(folder_paths):
                 result[path] = {"status": "trained", "label": "Trained"}
             elif completed:
                 result[path] = {"status": "partial", "label": "Partially trained"}
-            elif all((path / name).is_file() for name in (HI_CONFIG_NAME, LO_CONFIG_NAME, "dataset.hi.toml", "dataset.lo.toml")) and _prepared_dataset_is_ready(path):
+            elif any(
+                all((path / name).is_file() for name in (
+                    [item["file"] for item in setup["configs"]] + list(setup["datasetFiles"])
+                ))
+                for profile_item in training_profiles()
+                for setup in profile_item["setups"].values()
+            ) or (
+                all((path / name).is_file() for name in ("config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"))
+                and _prepared_dataset_is_ready(path)
+            ):
                 needs_review, partial_count, touched_count = _needs_partial_annotation_caption_review(path)
                 if needs_review:
                     result[path] = {
@@ -1456,6 +1516,19 @@ def output_path_for_job(job_id):
         if not raw_path:
             raise ValueError("Training job has no effective output directory.")
         return Path(raw_path)
+
+
+def bundle_path_for_job(job_id, folder=""):
+    """Return captured inputs for a known job; never accept a caller path."""
+    with _lock:
+        state = _read_state()
+        job = _find_job(state, job_id) or _find_history_job(folder, job_id)
+        if not job:
+            raise ValueError("Training job not found")
+        path = Path(str(job.get("bundlePath") or ""))
+        if not path.is_dir():
+            raise FileNotFoundError("Captured training files are unavailable")
+        return path
 
 
 def stop_response(job_id, cancel=False, pause=False, finish=False):

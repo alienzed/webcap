@@ -8,6 +8,8 @@ import tool.server.config as config_module
 import tool.server.file_ops as file_ops_module
 import tool.server.run_ops as run_ops_module
 import tool.server.smart_set as smart_set_module
+import tool.server.training_bundle as training_bundle_module
+import tool.server.training_setup as training_setup_module
 
 
 def write_text(path: Path, text: str):
@@ -739,45 +741,12 @@ def test_generate_dataset_config_can_write_snapshot_comments_when_enabled(tmp_pa
     assert "enable_ar_bucket = true" in lo_text
 
 
-def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp_path, monkeypatch):
+def test_train_run_captures_a_self_contained_bundle_for_manual_handoff(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_train"
-    auto_dataset = set_dir / "auto_dataset"
     set_dir.mkdir(parents=True)
-    auto_dataset.mkdir(parents=True)
-    write_image(set_dir / "clip.png")
-    prepared_img_dir = auto_dataset / "square_img"
-    prepared_img_dir.mkdir(parents=True)
-    write_image(prepared_img_dir / "clip.png", (512, 512))
-    write_text(prepared_img_dir / "clip.txt", "prepared caption")
-    (auto_dataset / "prep_manifest.json").write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "target_fps": 16,
-                "videos": [],
-                "images": [
-                    {
-                        "file": "clip.png",
-                        "ar": "square",
-                        "width": 512,
-                        "height": 512,
-                        "prepared_path": "square_img/clip.png",
-                        "caption": True,
-                    }
-                ],
-                "skipped": [],
-                "selection": {
-                    "mode": "all",
-                    "selected_files": ["clip.png"],
-                    "selected_count": 1,
-                    "total_count": 1,
-                    "criteria": {},
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
+    write_image(set_dir / "clip.png", (512, 512))
+    write_text(set_dir / "clip.txt", "source caption")
 
     def safe_join(rel_path):
         rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
@@ -788,9 +757,20 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     monkeypatch.setattr(run_ops_module.app_config, "safe_join_fs_root", safe_join)
     monkeypatch.setattr(run_ops_module.app_config, "FS_ROOT", fs_root)
     monkeypatch.setattr(run_ops_module.app_config, "config", {"training": {"mode": "normal"}})
+    monkeypatch.setattr(run_ops_module, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
+    monkeypatch.setattr(training_bundle_module, "to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
+    training_setup_module.ensure_training_setup(
+        set_dir, "wan22_t2v", "normal", selected_media=["clip.png"]
+    )
 
     client = app_module.app.test_client()
-    response = client.post("/fs/train_run", json={"folder": "set_train"})
+    response = client.post("/fs/train_run", json={
+        "folder": "set_train",
+        "profileId": "wan22_t2v",
+        "runId": "both",
+        "mode": "normal",
+        "selected_media": ["clip.png"],
+    })
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
@@ -801,30 +781,12 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     assert " ; " in body
     assert "pkill" not in body
     assert "Manual handoff only" in body
-    assert (set_dir / "config.hi.toml").exists()
-    assert (set_dir / "config.lo.toml").exists()
-    assert (set_dir / "config.krea2.toml").exists()
-    assert (set_dir / "dataset.hi.toml").exists()
-    assert (set_dir / "dataset.lo.toml").exists()
-
-    hi_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "hi"})
-    assert hi_response.status_code == 200
-    hi_body = hi_response.get_data(as_text=True)
-    assert "config.hi.toml" in hi_body
-    assert " ; " not in hi_body
-
-    lo_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "lo"})
-    assert lo_response.status_code == 200
-    lo_body = lo_response.get_data(as_text=True)
-    assert "config.lo.toml" in lo_body
-    assert " ; " not in lo_body
-
-    krea2_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "krea2"})
-    assert krea2_response.status_code == 200, krea2_response.get_data(as_text=True)
-    krea2_body = krea2_response.get_data(as_text=True)
-    assert "config.krea2.toml" in krea2_body
-    assert "Config Krea2 Raw:" in krea2_body
-    assert " ; " not in krea2_body
+    assert "config.wan22.normal.hi.toml" in body
+    assert "config.wan22.normal.lo.toml" in body
+    bundles = list((fs_root / "output" / "runs" / "001-set_train" / ".webcap" / "datasets").iterdir())
+    assert len(bundles) == 1
+    assert (bundles[0] / "media" / "square_img" / "clip.png").is_file()
+    assert not (set_dir / "auto_dataset").exists()
 
 
 def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path, monkeypatch):

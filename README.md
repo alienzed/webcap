@@ -83,9 +83,9 @@ Minimum practical shape:
 
 Notes:
 - `filesystem.root` is required.
-- Dataset target supports `POC`, `Normal`, and `Quality` in the Training workspace.
-- `training.write_selection_snapshot_comments` controls whether Generate writes the prep snapshot header into generated dataset TOML.
-- Supported profiles generate fixed TOML names: Wan2.2 uses `config.hi.toml`, `config.lo.toml`, `dataset.hi.toml`, and `dataset.lo.toml`; Krea2 Raw uses `config.krea2.toml` and `dataset.train.toml`; Wan2.1 T2V 14B uses `config.wan21.toml` and `dataset.train.toml`; MiniMax H3 uses `config.h3.toml` and `dataset.train.toml`.
+- Training modes are `POC`, `Normal`, and `Quality`; each profile/mode owns persistent config and dataset TOMLs.
+- `training.write_selection_snapshot_comments` controls whether generated dataset TOMLs include the selection snapshot header.
+- Wan2.2 uses `config.wan22.{mode}.{hi|lo}.toml`; Krea2 Raw, Wan2.1, and MiniMax H3 use `config.{krea2|wan21|h3}.{mode}.toml`, each with a matching dataset file.
 - `analysis.enableFaceAnalysis` enables Face Focus metadata available in `Review Set` analysis details.
 - `analysis.enableMediaPipeAnalysis` enables selection-pose metadata and tag suggestions.
 - `set_destinations.presets` powers destination shortcuts in `Create Set`.

@@ -564,7 +564,7 @@ def test_normal_and_quality_image_buckets_stay_separated():
     assert quality_lo == [(768, 768)]
 
 
-def test_validate_config_payload_persists_training_mode():
+def test_validate_config_payload_does_not_persist_a_global_training_mode():
     from tool.server.config import validate_config_payload
 
     normalized = validate_config_payload({
@@ -572,14 +572,14 @@ def test_validate_config_payload_persists_training_mode():
         "training": {"mode": "poc"},
         "primer": {"template": "{subject}\n{view}"},
     })
-    assert normalized["training"]["mode"] == "poc"
+    assert "mode" not in normalized["training"]
     assert normalized["primer"]["template"] == "{subject}\n{view}"
 
     normalized_quality = validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},
         "training": {"mode": "quality"},
     })
-    assert normalized_quality["training"]["mode"] == "quality"
+    assert "mode" not in normalized_quality["training"]
 
 
 def test_poc_mode_never_emits_second_image_bucket():

@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
-from .training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, profile as training_profile
+from .training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, config_for_stage, profile as training_profile
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
@@ -179,17 +179,11 @@ def estimate_kind_exposures(entries, repeats, epochs: int, kind: str):
     return estimate_steps(selected_entries, selected_repeats, epochs)
 
 
-def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False, profile_id: str = ""):
+def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Path, mode: str = "normal", profile_id: str = "", config_paths=None, selection_snapshot_lines=None):
     folder = Path(folder_path)
-    dataset_root = folder / "auto_dataset"
-    manifest_path = dataset_root / PREP_MANIFEST_NAME
-    if not manifest_path.exists():
-        raise FileNotFoundError(f"Missing prep manifest: {manifest_path}")
-
-    manifest = load_prep_manifest(manifest_path)
+    dataset_root = Path(dataset_root)
     generate_mode = normalize_training_generate_mode(mode)
     lines = []
-    lines.append(f"[INFO] Reading prep manifest: {manifest_path}")
     lines.append(f"[INFO] Training generate mode: {generate_mode}")
 
     video_entries = build_video_blocks(
@@ -198,24 +192,30 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
         lines,
         mode=generate_mode,
         profile_id=profile_id,
+        require_files=False,
     )
     lines.append(f"[INFO] Built {len(video_entries)} video directory block(s).")
     image_only_set = len(video_entries) == 0
 
-    image_dirs = find_image_dirs(dataset_root)
-    lines.append(f"[INFO] Found {len(image_dirs)} prepared image folder(s).")
+    image_groups = {}
+    for row in manifest.get("images", []):
+        if not isinstance(row, dict):
+            continue
+        prepared_path = str(row.get("prepared_path") or "").strip()
+        ar_label = str(row.get("ar") or "").strip()
+        width = to_pos_int(row.get("width"))
+        height = to_pos_int(row.get("height"))
+        if not prepared_path or ar_label not in AR_CLASSES or not width or not height:
+            continue
+        dir_name = Path(prepared_path).parent.name
+        image_groups.setdefault((dir_name, ar_label), []).append((Path(prepared_path).name, width, height))
+    lines.append(f"[INFO] Found {len(image_groups)} prepared image folder(s).")
 
-    metadata = {}
     hi_image_entries = []
     lo_image_entries = []
-    for image_dir in image_dirs:
-        ar_label = ar_from_image_dir(image_dir.name)
-        images = read_image_metadata(image_dir)
-        metadata[image_dir.name] = [
-            {"name": name, "width": width, "height": height}
-            for (name, width, height) in images
-        ]
-        lines.append(f"[INFO] {image_dir.name}: {len(images)} image(s)")
+    for (dir_name, ar_label), images in sorted(image_groups.items(), key=lambda item: item[0][0].lower()):
+        image_dir = dataset_root / dir_name
+        lines.append(f"[INFO] {dir_name}: {len(images)} image(s)")
         if not images:
             continue
 
@@ -260,11 +260,6 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
                 "repeat_weight": IMAGE_REPEAT_WEIGHT,
             })
 
-    metadata_path = dataset_root / "webcap_dataset_metadata.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    normalize_path_permissions(metadata_path)
-    lines.append(f"[INFO] Wrote metadata cache: {metadata_path}")
-
     hi_entries = []
     hi_entries.extend(video_entries)
     hi_entries.extend(hi_image_entries)
@@ -273,15 +268,13 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     lo_entries.extend(lo_image_entries)
 
     single_stage_profiles = {
-        KREA2_PROFILE_ID: ("krea2", "config.krea2.toml"),
-        WAN21_PROFILE_ID: ("wan21", "config.wan21.toml"),
-        MINIMAX_H3_PROFILE_ID: ("h3", "config.h3.toml"),
+        KREA2_PROFILE_ID: "krea2",
+        WAN21_PROFILE_ID: "wan21",
+        MINIMAX_H3_PROFILE_ID: "h3",
     }
     single_stage = str(profile_id or "") in single_stage_profiles
     krea2_profile = str(profile_id or "") == KREA2_PROFILE_ID
-    single_stage_name, single_config_name = single_stage_profiles.get(
-        str(profile_id or ""), ("wan21", "config.wan21.toml")
-    )
+    single_stage_name = single_stage_profiles.get(str(profile_id or ""), "wan21")
     lo_run_entries = lo_image_entries if krea2_profile else lo_entries
     if krea2_profile and not lo_run_entries:
         raise ValueError("Krea2 Raw requires at least one prepared image.")
@@ -292,8 +285,12 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
         raise ValueError("MiniMax H3 requires at least one prepared image or one video with at least 34 frames.")
     hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
     default_hi_epochs, default_lo_epochs = default_training_config_epochs()
-    hi_epochs = read_epochs_from_training_config(folder / HI_CONFIG_NAME, default_hi_epochs)
-    lo_epochs = read_epochs_from_training_config(folder / (single_config_name if single_stage else LO_CONFIG_NAME), default_lo_epochs)
+    config_paths = dict(config_paths or {})
+    hi_config_path = config_paths.get("hi", folder / HI_CONFIG_NAME)
+    lo_stage = single_stage_name if single_stage else "lo"
+    lo_config_path = config_paths.get(lo_stage, folder / (config_for_stage(profile_id, lo_stage, generate_mode)["file"] if profile_id else LO_CONFIG_NAME))
+    hi_epochs = read_epochs_from_training_config(hi_config_path, default_hi_epochs)
+    lo_epochs = read_epochs_from_training_config(lo_config_path, default_lo_epochs)
     hi_scalar, hi_base = solve_repeat_scalar(hi_entries, hi_target_steps, hi_epochs)
     lo_scalar, lo_base = solve_repeat_scalar(lo_run_entries, lo_target_steps, lo_epochs)
     hi_repeats = build_repeats(hi_entries, hi_scalar)
@@ -318,13 +315,8 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
         "profileId": str(profile_id or "wan22_t2v"),
         "stages": training_stages,
     }
-    training_plan_path = dataset_root / TRAINING_PLAN_FILE_NAME
-    training_plan_path.write_text(json.dumps(training_plan, indent=2), encoding="utf-8")
-    normalize_path_permissions(training_plan_path)
-
     lines.append(f"[INFO] Repeat targeting HI: target={hi_target_steps}, epochs={hi_epochs}, base={hi_base:.2f}, scalar={hi_scalar}, est_steps={hi_est}")
     lines.append(f"[INFO] Repeat targeting LO: target={lo_target_steps}, epochs={lo_epochs}, base={lo_base:.2f}, scalar={lo_scalar}, est_steps={lo_est}")
-    lines.append(f"[INFO] Wrote training plan: {training_plan_path}")
     if image_only_set:
         lines.append("[INFO] Image-only set detected: repeats solved from target steps.")
 
@@ -335,19 +327,63 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
     for idx, entry in enumerate(lo_run_entries):
         lo_blocks.append(render_dataset_entry(entry, lo_repeats[idx]))
 
+    hi_text = render_dataset_toml(hi_blocks, selection_snapshot_lines)
+    lo_text = render_dataset_toml(lo_blocks, selection_snapshot_lines)
+    return {
+        "hiText": hi_text,
+        "loText": lo_text,
+        "plan": training_plan,
+        "log": "\n".join(lines) + "\n",
+    }
+
+
+def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False, profile_id: str = ""):
+    folder = Path(folder_path)
+    dataset_root = folder / "auto_dataset"
+    manifest_path = dataset_root / PREP_MANIFEST_NAME
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing prep manifest: {manifest_path}")
+    manifest = load_prep_manifest(manifest_path)
     snapshot_lines = build_selection_snapshot_comment_lines(folder, dataset_root, manifest) if write_selection_snapshot_comments else None
-    hi_text = render_dataset_toml(hi_blocks, snapshot_lines)
-    lo_text = render_dataset_toml(lo_blocks, snapshot_lines)
+    artifacts = build_dataset_config_artifacts(
+        folder,
+        manifest,
+        dataset_root,
+        mode=mode,
+        profile_id=profile_id,
+        selection_snapshot_lines=snapshot_lines,
+    )
+    lines = [artifacts["log"].rstrip()]
+    metadata = {}
+    for row in manifest.get("images", []):
+        prepared_path = str(row.get("prepared_path") or "")
+        directory = Path(prepared_path).parent.name
+        if not directory:
+            continue
+        metadata.setdefault(directory, []).append({
+            "name": Path(prepared_path).name,
+            "width": to_pos_int(row.get("width")),
+            "height": to_pos_int(row.get("height")),
+        })
+    metadata_path = dataset_root / "webcap_dataset_metadata.json"
+    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    normalize_path_permissions(metadata_path)
+    lines.append(f"[INFO] Wrote metadata cache: {metadata_path}")
+    training_plan_path = dataset_root / TRAINING_PLAN_FILE_NAME
+    training_plan_path.write_text(json.dumps(artifacts["plan"], indent=2), encoding="utf-8")
+    normalize_path_permissions(training_plan_path)
+    lines.append(f"[INFO] Wrote training plan: {training_plan_path}")
+    single_stage = str(profile_id or "") in {KREA2_PROFILE_ID, WAN21_PROFILE_ID, MINIMAX_H3_PROFILE_ID}
     if single_stage:
         train_path = folder / "dataset.train.toml"
-        train_path.write_text(lo_text, encoding="utf-8")
+        train_path.write_text(artifacts["loText"], encoding="utf-8")
         normalize_path_permissions(train_path)
         lines.append(f"[INFO] Wrote {train_path}")
     else:
         hi_path = folder / "dataset.hi.toml"
         lo_path = folder / "dataset.lo.toml"
-        hi_path.write_text(hi_text, encoding="utf-8")
-        lo_path.write_text(lo_text, encoding="utf-8")
+        hi_path.write_text(artifacts["hiText"], encoding="utf-8")
+        lo_path.write_text(artifacts["loText"], encoding="utf-8")
         normalize_path_permissions(hi_path)
         normalize_path_permissions(lo_path)
         lines.append(f"[INFO] Wrote {hi_path}")
@@ -369,7 +405,7 @@ def load_prep_manifest(manifest_path: Path):
     return data
 
 
-def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", profile_id: str = ""):
+def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", profile_id: str = "", require_files=True):
     generate_mode = normalize_training_generate_mode(mode)
     selected_profile_id = str(profile_id or WAN22_PROFILE_ID).strip().lower()
     selected_profile = training_profile(selected_profile_id)
@@ -389,7 +425,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
         if not width or not height or not prepared_path:
             continue
         abs_prepared = dataset_root / prepared_path
-        if not abs_prepared.exists():
+        if require_files and not abs_prepared.exists():
             continue
         grouped[ar_label].append({
             "width": width,

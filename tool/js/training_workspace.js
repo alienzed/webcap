@@ -1,41 +1,16 @@
-function fetchTrainingWorkspaceManifest(folder) {
-  var path = String(folder || '').replace(/[\\/]+$/, '') + '/auto_dataset/prep_manifest.json';
-  return fetch('/fs/read?path=' + encodeURIComponent(path)).then(function (response) {
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error('Could not read the dataset manifest.');
-    return response.text().then(function (text) {
-      return JSON.parse(text);
-    });
-  });
+function normalizeTrainingWorkspaceMode(mode) {
+  var value = String(mode || '').trim().toLowerCase();
+  return ['poc', 'normal', 'quality'].indexOf(value) !== -1 ? value : 'normal';
 }
 
-function fetchTrainingWorkspacePlan(folder) {
-  var path = String(folder || '').replace(/[\\/]+$/, '') + '/auto_dataset/training_plan.json';
-  return fetch('/fs/read?path=' + encodeURIComponent(path)).then(function (response) {
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error('Could not read the training plan.');
-    return response.text().then(function (text) {
-      return JSON.parse(text);
-    });
-  });
-}
-
-function trainingWorkspaceProfileForPlan(plan) {
-  var profile = String(plan && plan.mode || '').trim().toLowerCase();
-  return ['poc', 'normal', 'quality'].indexOf(profile) !== -1 ? profile : 'normal';
-}
-
-function syncTrainingWorkspaceProfile(plan) {
+function syncTrainingWorkspaceProfile() {
   var els = getTrainingWorkspaceEls();
-  if (els.profileSelect) els.profileSelect.value = trainingWorkspaceProfileForPlan(plan);
+  if (els.profileSelect) els.profileSelect.value = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
 }
 
 function getTrainingWorkspaceSelectedProfile(folder) {
-  if (!isTrainingWorkspaceActive() || trainingWorkspaceState.trainingPlanFolder !== String(folder || '')) {
-    return 'normal';
-  }
   var els = getTrainingWorkspaceEls();
-  return trainingWorkspaceProfileForPlan({ mode: els.profileSelect ? els.profileSelect.value : '' });
+  return normalizeTrainingWorkspaceMode(els.profileSelect ? els.profileSelect.value : trainingWorkspaceState.selectedMode);
 }
 
 function fetchTrainingProfiles() {
@@ -53,12 +28,23 @@ function trainingProfileStorageKey(folder) {
   return 'webcap.trainingProfile.' + String(folder || '');
 }
 
+function trainingModeStorageKey(folder) {
+  return 'webcap.trainingMode.' + String(folder || '');
+}
+
 function getSelectedTrainingModelProfile() {
   var profiles = trainingWorkspaceState.profiles || [];
   for (var i = 0; i < profiles.length; i++) {
     if (profiles[i].id === trainingWorkspaceState.selectedProfileId) return profiles[i];
   }
   return profiles[0] || null;
+}
+
+function getSelectedTrainingSetup() {
+  var profile = getSelectedTrainingModelProfile();
+  var mode = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
+  if (!profile || !profile.setups || !profile.setups[mode]) return null;
+  return profile.setups[mode];
 }
 
 function getTrainingProfileRunForStage(profile, stage) {
@@ -76,14 +62,18 @@ function syncTrainingModelProfileSelect(folder) {
   if (!select) return;
   select.disabled = false;
   var stored = '';
+  var storedMode = '';
   try { stored = localStorage.getItem(trainingProfileStorageKey(folder)) || ''; } catch (err) {}
+  try { storedMode = localStorage.getItem(trainingModeStorageKey(folder)) || ''; } catch (err) {}
   if (stored && (trainingWorkspaceState.profiles || []).some(function (profile) { return profile.id === stored; })) {
     trainingWorkspaceState.selectedProfileId = stored;
   }
+  trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(storedMode || trainingWorkspaceState.selectedMode);
   select.innerHTML = (trainingWorkspaceState.profiles || []).map(function (profile) {
     return '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(profile.label) + '</option>';
   }).join('');
   select.value = trainingWorkspaceState.selectedProfileId;
+  syncTrainingWorkspaceProfile();
   setManagedTrainingStages(trainingWorkspaceState.runStages);
 }
 
@@ -91,9 +81,34 @@ function setSelectedTrainingModelProfile(profileId) {
   trainingWorkspaceState.selectedProfileId = String(profileId || 'wan22_t2v');
   try { localStorage.setItem(trainingProfileStorageKey(state.folder), trainingWorkspaceState.selectedProfileId); } catch (err) {}
   setManagedTrainingStages(trainingWorkspaceState.runStages);
-  syncTrainingWorkflowReadiness(trainingWorkspaceState.manifest, trainingWorkspaceState.configFiles);
-  renderTrainingWorkspaceConfigList(trainingWorkspaceState.configFiles);
   renderTrainingModelTrainedStatus();
+}
+
+function buildCurrentTrainingSelectionPayload() {
+  var selectedMedia = getVisibleMediaSelectionForPrepare();
+  return {
+    selected_media: selectedMedia,
+    total_media_count: Array.isArray(state.items) ? state.items.length : 0,
+    selection_criteria: buildPrepareSelectionCriteria()
+  };
+}
+
+function ensureSelectedTrainingSetup(resetFile) {
+  var selection = buildCurrentTrainingSelectionPayload();
+  if (!selection.selected_media.length) return Promise.reject(new Error('No visible media items are available for this training setup.'));
+  return trainingRunnerRequest('/fs/training_setup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder: state.folder,
+      profileId: trainingWorkspaceState.selectedProfileId,
+      mode: normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode),
+      selected_media: selection.selected_media,
+      total_media_count: selection.total_media_count,
+      selection_criteria: selection.selection_criteria,
+      resetFile: resetFile || ''
+    })
+  });
 }
 
 function fetchTrainingWorkspaceConfigFiles(folder) {
@@ -107,31 +122,19 @@ function fetchTrainingWorkspaceConfigFiles(folder) {
   });
 }
 
-function buildTrainingReadinessHtml(manifest, configFiles) {
-  if (!manifest) {
-    return '<div class="training-readiness-state"><strong>Dataset not prepared</strong><span>Prepare the current visible media set to create the dataset manifest.</span></div>';
-  }
-  var selection = manifest.selection && typeof manifest.selection === 'object' ? manifest.selection : {};
-  var preparedCount = (manifest.images || []).length + (manifest.videos || []).length;
-  var selectedCount = Number(selection.selected_count || 0);
-  var totalCount = Number(selection.total_count || selectedCount);
-  var skippedCount = (manifest.skipped || []).length;
-  var configLabel = configFiles.length ? (configFiles.length + ' config files ready') : 'Configs not generated';
-  return '' +
-    '<div class="training-readiness-state"><strong>Dataset prepared</strong><span>' + selectedCount + ' of ' + totalCount + ' selected, ' + preparedCount + ' prepared.</span></div>' +
-    '<div class="training-readiness-metrics">' +
-    '<span>Prepared <b>' + preparedCount + '</b></span>' +
-    '<span>Skipped <b>' + skippedCount + '</b></span>' +
-    '<span>' + configLabel + '</span>' +
-    '</div>';
+function buildTrainingReadinessHtml() {
+  var selectedCount = getVisibleMediaSelectionForPrepare().length;
+  var totalCount = Array.isArray(state.items) ? state.items.length : selectedCount;
+  return '<div class="training-readiness-state"><strong>' + selectedCount + ' visible media item' + (selectedCount === 1 ? '' : 's') +
+    '</strong><span>Train captures this visible selection and the saved TOMLs. ' + selectedCount + ' of ' + totalCount + ' media items are currently visible.</span></div>';
 }
 
 function trainingConfigFilesAreReady(configFiles) {
   var files = Array.isArray(configFiles) ? configFiles : [];
   var available = {};
   files.forEach(function (fileName) { available[String(fileName || '').toLowerCase()] = true; });
-  var profile = getSelectedTrainingModelProfile();
-  var needed = profile && Array.isArray(profile.configs) ? profile.configs.map(function (config) { return config.file; }).concat(profile.datasetFiles || []) : ['config.hi.toml', 'config.lo.toml', 'dataset.hi.toml', 'dataset.lo.toml'];
+  var setup = getSelectedTrainingSetup();
+  var needed = setup && Array.isArray(setup.configs) ? setup.configs.map(function (config) { return config.file; }).concat(setup.datasetFiles || []) : [];
   return needed.every(function (fileName) {
     return !!available[fileName];
   });
@@ -139,40 +142,13 @@ function trainingConfigFilesAreReady(configFiles) {
 
 function syncTrainingWorkflowReadiness(manifest, configFiles) {
   var els = getTrainingWorkspaceEls();
-  var datasetReady = !!manifest;
   var configsReady = trainingConfigFilesAreReady(configFiles);
-  if (els.configStepNumber) els.configStepNumber.classList.toggle('is-waiting', !datasetReady);
-  if (els.runStepNumber) els.runStepNumber.classList.toggle('is-waiting', !datasetReady || !configsReady);
-  if (els.generateBtn) {
-    els.generateBtn.title = datasetReady
-      ? 'Generate configs for the prepared dataset.'
-      : 'Generate configs. The current dataset will be prepared first.';
-  }
+  var hasVisibleMedia = getVisibleMediaSelectionForPrepare().length > 0;
+  if (els.configStepNumber) els.configStepNumber.classList.toggle('is-waiting', !configsReady);
+  if (els.runStepNumber) els.runStepNumber.classList.toggle('is-waiting', !configsReady || !hasVisibleMedia);
   if (els.queueJobBtn) {
-    els.queueJobBtn.title = configsReady
-      ? 'Start this set when the runner is idle, or add it behind active work.'
-      : (datasetReady
-        ? 'Start this set. Configs will be generated first.'
-        : 'Start this set. The dataset will be prepared and configs generated first.');
+    els.queueJobBtn.title = 'Capture the visible media and saved TOMLs, then add this run to the training queue.';
   }
-}
-
-function getTrainingManifestItems(manifest) {
-  if (!manifest || typeof manifest !== 'object') return [];
-  var items = [];
-  ['images', 'videos'].forEach(function (kind) {
-    var rows = Array.isArray(manifest[kind]) ? manifest[kind] : [];
-    rows.forEach(function (row) {
-      var fileName = String(row && row.file || '').trim();
-      if (!fileName) return;
-      items.push({
-        fileName: fileName,
-        kind: kind === 'videos' ? 'video' : 'image',
-        aspect: String(row.ar || '').trim()
-      });
-    });
-  });
-  return items;
 }
 
 function renderTrainingItemOverview(manifest, errorMessage) {
@@ -194,12 +170,19 @@ function renderTrainingItemOverview(manifest, errorMessage) {
     return;
   }
 
-  var items = getTrainingManifestItems(manifest);
-  if (!manifest) {
-    els.itemOverviewSummary.textContent = 'Prepare the dataset to see its training items here.';
-    syncVisibility(false);
-    return;
-  }
+  var visibleNames = getVisibleMediaSelectionForPrepare();
+  var visibleLookup = {};
+  visibleNames.forEach(function (name) { visibleLookup[String(name)] = true; });
+  var items = (state.items || []).filter(function (item) {
+    return item && visibleLookup[String(item.fileName || item.key || '')];
+  }).map(function (item) {
+    var fileName = String(item.fileName || item.key || '');
+    return {
+      fileName: fileName,
+      kind: /\.(mp4|mov|mkv|webm|avi|m4v)$/i.test(fileName) ? 'video' : 'image',
+      aspect: ''
+    };
+  });
 
   var imageCount = 0;
   var videoCount = 0;
@@ -207,12 +190,12 @@ function renderTrainingItemOverview(manifest, errorMessage) {
     if (item.kind === 'video') videoCount++;
     else imageCount++;
   });
-  els.itemOverviewSummary.textContent = items.length + ' prepared item' + (items.length === 1 ? '' : 's') +
+  els.itemOverviewSummary.textContent = items.length + ' visible item' + (items.length === 1 ? '' : 's') +
     ' · ' + imageCount + ' image' + (imageCount === 1 ? '' : 's') +
     ' · ' + videoCount + ' video' + (videoCount === 1 ? '' : 's');
 
   if (!items.length) {
-    els.itemOverviewSummary.textContent = 'The prepared dataset has no displayable media items.';
+    els.itemOverviewSummary.textContent = 'No visible media items will be captured.';
     syncVisibility(false);
     return;
   }
@@ -274,27 +257,24 @@ function renderTrainingItemOverview(manifest, errorMessage) {
 function renderTrainingWorkspaceConfigList(files) {
   var els = getTrainingWorkspaceEls();
   if (!els.configList) return;
-  if (!files.length) {
-    els.configList.textContent = 'Generate configs to inspect and edit them here.';
+  var setup = getSelectedTrainingSetup();
+  var expected = setup && Array.isArray(setup.configs)
+    ? setup.configs.map(function (item) { return item.file; }).concat(setup.datasetFiles || [])
+    : [];
+  var available = {};
+  (files || []).forEach(function (fileName) { available[fileName] = true; });
+  var visibleFiles = expected.filter(function (fileName) { return !!available[fileName]; });
+  if (!visibleFiles.length) {
+    els.configList.textContent = 'No setup files are available.';
     return;
   }
-  var grouped = {};
-  (trainingWorkspaceState.profiles || []).forEach(function (profile) { grouped[profile.id] = []; });
-  files.forEach(function (fileName) {
-    var owner = (trainingWorkspaceState.profiles || []).filter(function (profile) {
-      return (profile.configs || []).some(function (config) { return config.file === fileName; }) || (profile.datasetFiles || []).indexOf(fileName) !== -1;
-    })[0];
-    (grouped[owner ? owner.id : 'other'] || (grouped.other = [])).push(fileName);
-  });
-  els.configList.innerHTML = Object.keys(grouped).filter(function (id) { return grouped[id].length; }).map(function (id) {
-    var profile = (trainingWorkspaceState.profiles || []).filter(function (item) { return item.id === id; })[0];
-    var label = profile ? profile.label : 'Other files';
-    return '<section class="training-config-group"><div class="training-config-group-heading"><strong>' + escapeHtml(label) + '</strong><span>' + grouped[id].length + ' file' + (grouped[id].length === 1 ? '' : 's') + '</span></div><div class="training-config-links">' + grouped[id].map(function (fileName) {
+  var profile = getSelectedTrainingModelProfile();
+  var modeLabel = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode).toUpperCase();
+  els.configList.innerHTML = '<section class="training-config-group"><div class="training-config-group-heading"><strong>' + escapeHtml((profile ? profile.label : 'Training') + ' · ' + modeLabel) + '</strong><span>' + visibleFiles.length + ' files</span></div><div class="training-config-links">' + visibleFiles.map(function (fileName) {
       var active = !!(state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName);
-      var reset = /^config\./.test(fileName) ? '<button type="button" class="training-config-reset" data-training-reset-config="' + encodeURIComponent(fileName) + '">Reset</button>' : '';
+      var reset = '<button type="button" class="training-config-reset" data-training-reset-config="' + encodeURIComponent(fileName) + '">Reset</button>';
       return '<div class="training-config-file"><button type="button" class="training-config-link' + (active ? ' active' : '') + '" data-training-config="' + encodeURIComponent(fileName) + '">' + escapeHtml(fileName) + '</button>' + reset + '</div>';
     }).join('') + '</div></section>';
-  }).join('');
   Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-config]'), function (button) {
     button.onclick = function () {
       loadConfigFileToEditor(decodeURIComponent(button.getAttribute('data-training-config') || ''), {
@@ -305,10 +285,15 @@ function renderTrainingWorkspaceConfigList(files) {
   Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-reset-config]'), function (button) {
     button.onclick = function () {
       var fileName = decodeURIComponent(button.getAttribute('data-training-reset-config') || '');
-      if (!window.confirm('Reset ' + fileName + ' from the app template? Your edits to this file will be replaced.')) return;
-      trainingRunnerRequest('/fs/training_config/reset', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: state.folder, file: fileName })
-      }).then(function () { refreshTrainingWorkspace(); }).catch(function (err) { setStatus('Could not reset config: ' + String(err.message || err)); });
+      var resetSource = /^dataset\./.test(fileName) ? 'the currently visible media' : 'its setup default';
+      if (!window.confirm('Reset ' + fileName + ' from ' + resetSource + '? Your edits to this file will be replaced.')) return;
+      if (state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName) {
+        cancelEditorAutosaveForConfig(state.folder, fileName);
+      }
+      ensureSelectedTrainingSetup(fileName).then(function () {
+        if (state.currentConfigFile && state.currentConfigFile.file === fileName) loadConfigFileToEditor(fileName, { preserveTrainingWorkspace: true });
+        refreshTrainingWorkspace();
+      }).catch(function (err) { setStatus('Could not reset file: ' + String(err.message || err)); });
     };
   });
 }
@@ -356,62 +341,44 @@ function refreshTrainingWorkspace() {
   if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);
   if (els.runSetup) els.runSetup.classList.toggle('hidden', !isSetEntry);
   if (!isSetEntry) {
-    trainingWorkspaceState.manifest = null;
-    trainingWorkspaceState.trainingPlan = null;
-    trainingWorkspaceState.trainingPlanFolder = '';
     trainingWorkspaceState.configFiles = [];
-    syncTrainingWorkspaceProfile(null);
-    if (els.readiness) els.readiness.textContent = 'Select a set folder to prepare a dataset.';
+    if (els.readiness) els.readiness.textContent = 'Select a set folder to configure training.';
     renderTrainingItemOverview(null);
     renderTrainingWorkspaceConfigList([]);
     refreshTrainingHistory();
     renderTrainingCommandHandoff();
     return;
   }
-  if (els.readiness) els.readiness.textContent = 'Loading dataset readiness...';
-  trainingWorkspaceState.trainingPlanFolder = '';
-  syncTrainingWorkspaceProfile(null);
-  fetchTrainingProfiles().then(function () {
-    if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
-    syncTrainingModelProfileSelect(folder);
-  }).catch(function (err) {
-    if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
-    if (els.modelProfileSelect) {
-      els.modelProfileSelect.innerHTML = '<option value="">Profiles unavailable</option>';
-      els.modelProfileSelect.disabled = true;
-    }
-    if (window.console && console.error) console.error('[Training workspace] Could not load profiles:', err);
-  });
-  Promise.all([fetchTrainingWorkspaceManifest(folder), fetchTrainingWorkspaceConfigFiles(folder), fetchTrainingWorkspacePlan(folder), refreshTrainingHistory()])
+  if (els.readiness) els.readiness.textContent = 'Loading training setup...';
+  fetchTrainingProfiles()
+    .then(function () {
+      if (state.folder !== folder || !isTrainingWorkspaceActive()) return null;
+      syncTrainingModelProfileSelect(folder);
+      return ensureSelectedTrainingSetup();
+    })
+    .then(function () {
+      if (state.folder !== folder || !isTrainingWorkspaceActive()) return [];
+      return Promise.all([fetchTrainingWorkspaceConfigFiles(folder), refreshTrainingHistory()]);
+    })
     .then(function (results) {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
-      trainingWorkspaceState.manifest = results[0];
-      trainingWorkspaceState.configFiles = results[1];
-      trainingWorkspaceState.trainingPlan = results[2];
-      trainingWorkspaceState.trainingPlanFolder = folder;
-      syncTrainingWorkspaceProfile(results[2]);
-      syncTrainingModelProfileSelect(folder);
-      syncTrainingWorkflowReadiness(results[0], results[1]);
-      if (els.readiness) els.readiness.innerHTML = buildTrainingReadinessHtml(results[0], results[1]);
-      renderTrainingItemOverview(results[0]);
-      renderTrainingWorkspaceConfigList(results[1]);
+      trainingWorkspaceState.configFiles = results[0];
+      syncTrainingWorkflowReadiness(null, results[0]);
+      if (els.readiness) els.readiness.innerHTML = buildTrainingReadinessHtml();
+      renderTrainingItemOverview(null);
+      renderTrainingWorkspaceConfigList(results[0]);
       renderTrainingCommandHandoff();
       syncWorkspaceConfigEditorUi();
     })
     .catch(function (err) {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
       if (els.readiness) els.readiness.textContent = String(err && err.message ? err.message : err);
-      renderTrainingItemOverview(null, 'Could not load the prepared dataset overview.');
+      renderTrainingItemOverview(null, 'Could not load the visible training items.');
     });
 }
 
-function runTrainingWorkspaceAction(action, options) {
-  var runner = action === 'prepare'
-    ? runPrepareDatasetForCurrentFolder
-    : action === 'generate'
-      ? runGenerateDatasetConfigsForCurrentFolder
-      : runTrainCommandPreviewForCurrentFolder;
-  var request = action === 'train' ? runner(options) : runner();
+function runTrainingWorkspaceAction(options) {
+  var request = runTrainCommandPreviewForCurrentFolder(options);
   syncWorkspaceConfigEditorUi();
   Promise.resolve(request)
     .then(function () {
@@ -419,7 +386,7 @@ function runTrainingWorkspaceAction(action, options) {
       syncWorkspaceConfigEditorUi();
     })
     .catch(function (err) {
-      if (window.console && console.error) console.error('[Training workspace] ' + action + ' failed:', err);
+      if (window.console && console.error) console.error('[Training workspace] Manual command failed:', err);
     });
 }
 
@@ -444,12 +411,28 @@ function openTrainingWorkspaceFolder(folder) {
   refreshCurrentDirectory();
 }
 
+function switchTrainingSetup(profileId, mode) {
+  var priorConfig = state.currentConfigFile;
+  var savePromise = priorConfig && priorConfig.folder === state.folder
+    ? Promise.resolve(saveCurrentEditorContent())
+    : Promise.resolve();
+  savePromise.then(function () {
+    if (profileId) setSelectedTrainingModelProfile(profileId);
+    if (mode) trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(mode);
+    try { localStorage.setItem(trainingModeStorageKey(state.folder), trainingWorkspaceState.selectedMode); } catch (err) {}
+    if (priorConfig && state.currentConfigFile === priorConfig) clearEditorAndPreview();
+    refreshTrainingWorkspace();
+  }).catch(function (err) {
+    setStatus('Could not save the open TOML before switching setup: ' + String(err && err.message ? err.message : err));
+    syncTrainingModelProfileSelect(state.folder);
+  });
+}
+
 function wireTrainingWorkspace() {
   var backBtn = document.getElementById('training-workspace-back-btn');
   var sidebarCollapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
-  var prepareBtn = document.getElementById('training-workspace-prepare-btn');
-  var generateBtn = document.getElementById('training-workspace-generate-btn');
   var modelProfileSelect = document.getElementById('training-model-profile-select');
+  var modeSelect = document.getElementById('training-workspace-profile-select');
   var modelTrainedStatus = document.getElementById('training-model-trained-status');
   var stageButtons = document.querySelectorAll('[data-training-stage]');
   var resumeInput = document.getElementById('training-run-resume-input');
@@ -479,11 +462,10 @@ function wireTrainingWorkspace() {
   sidebarCollapseBtn.onclick = function () { toggleSidebarCollapsed(); };
   itemOverviewToggleBtn.onclick = function () {
     trainingWorkspaceState.itemOverviewHidden = !trainingWorkspaceState.itemOverviewHidden;
-    renderTrainingItemOverview(trainingWorkspaceState.manifest);
+    renderTrainingItemOverview(null);
   };
-  prepareBtn.onclick = function () { runTrainingWorkspaceAction('prepare'); };
-  generateBtn.onclick = function () { runTrainingWorkspaceAction('generate'); };
-  if (modelProfileSelect) modelProfileSelect.onchange = function () { setSelectedTrainingModelProfile(modelProfileSelect.value); };
+  if (modelProfileSelect) modelProfileSelect.onchange = function () { switchTrainingSetup(modelProfileSelect.value, ''); };
+  if (modeSelect) modeSelect.onchange = function () { switchTrainingSetup('', modeSelect.value); };
   if (modelTrainedStatus) modelTrainedStatus.onclick = function (event) {
     var button = event.target.closest('[data-training-trained-output]');
     if (!button) return;
@@ -515,7 +497,7 @@ function wireTrainingWorkspace() {
     syncManagedTrainingResumeUi();
   };
   previewCommandBtn.onclick = function () {
-    runTrainingWorkspaceAction('train', getManagedTrainingOptions());
+    runTrainingWorkspaceAction(getManagedTrainingOptions());
   };
   validateRunnerBtn.onclick = function () {
     validateTrainingRunner(getManagedTrainingOptions()).catch(function (err) {
@@ -559,6 +541,8 @@ function wireTrainingWorkspace() {
     }
     var outputId = event.target.getAttribute('data-training-job-output');
     if (outputId) openTrainingJobOutput(outputId);
+    var bundleId = event.target.getAttribute('data-training-job-bundle');
+    if (bundleId) openTrainingJobBundle(bundleId);
     if (event.target.closest('[data-training-runner-recover]')) recoverManagedTrainingQueue();
   };
   runnerConsoleBtn.onclick = function () {
@@ -582,6 +566,11 @@ function wireTrainingWorkspace() {
     var outputId = event.target.getAttribute('data-training-job-output');
     if (outputId) {
       openTrainingJobOutput(outputId);
+      return;
+    }
+    var bundleId = event.target.getAttribute('data-training-job-bundle');
+    if (bundleId) {
+      openTrainingJobBundle(bundleId);
       return;
     }
     var action = event.target.getAttribute('data-training-queue-action');
@@ -610,10 +599,16 @@ function wireTrainingWorkspace() {
     }
     var logId = event.target.getAttribute('data-training-history-log');
     var outputJobId = event.target.getAttribute('data-training-history-output');
+    var bundleJobId = event.target.getAttribute('data-training-history-bundle');
     var clearId = event.target.getAttribute('data-training-history-clear');
     if (outputJobId) {
       var outputJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === outputJobId; })[0];
       openTrainingHistoryOutput(outputJob && outputJob.folder, outputJobId);
+      return;
+    }
+    if (bundleJobId) {
+      var bundleJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === bundleJobId; })[0];
+      openTrainingJobBundle(bundleJobId, bundleJob && bundleJob.folder);
       return;
     }
     if (clearId) {

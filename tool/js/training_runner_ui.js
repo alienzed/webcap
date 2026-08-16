@@ -208,7 +208,7 @@ function scheduleTrainingRunnerPoll() {
   });
   if (!hasActiveJob) return;
   var transitioning = activeStatus.some(function (status) { return status === 'starting' || status === 'stopping'; });
-  var delay = transitioning ? 5000 : (isTrainingRunnerConsoleVisible() ? 10000 : 20000);
+  var delay = transitioning ? 5000 : (isTrainingRunnerConsoleVisible() ? 3000 : 30000);
   trainingWorkspaceState.runnerPollTimer = setTimeout(function () {
     refreshTrainingRunnerStatus();
   }, delay);

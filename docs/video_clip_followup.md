@@ -17,12 +17,12 @@ The automatic dataset segmentation ideas remain intentionally deferred.
 
 Keep clipping explicit and user-directed. Most source clips are short enough
 that automatic segmentation would usually produce only two or three samples,
-which does not justify integrating segmentation into `auto_dataset`.
+which does not justify integrating segmentation into training capture.
 
 The useful training-side behavior is already available through ordinary media:
 keep the full source clip and create a small number of offset clips when they
 contain useful later motion. Dataset buckets can then choose how many frames to
-read from each prepared file.
+read from each captured source file.
 
 ## Output Name
 
@@ -82,8 +82,8 @@ less dense while retaining every current action.
 
 ## Explicit Non-goals
 
-- No automatic splitting during Prepare Dataset.
-- No provenance or segment statistics in `auto_dataset`.
+- No automatic splitting during training capture.
+- No training-bundle provenance or segment-statistics feature.
 - No batch clip queue UI.
 - No training-specific 16 fps or `4n+1` preset in the Clip modal yet.
 - No automatic generation of every possible temporal window.

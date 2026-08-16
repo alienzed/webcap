@@ -24,7 +24,7 @@ function mediaGridOpenItemInMainWorkspace(mediaKey) {
     return;
   }
   mediaGridCloseActivePresentation();
-  selectByFileName(item.fileName);
+  selectByFileName(item.fileName, null, null, null, { preserveMediaFilters: true });
 }
 
 function mediaGridBuildTile(mediaItem) {

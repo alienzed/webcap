@@ -32,6 +32,7 @@ function activateFocusSet(fileNames, source, reportType) {
 
 function getFocusSetReportLabel(reportType) {
   if (reportType === 'review') return 'Review Set';
+  if (reportType === 'pruneCandidates') return 'Prune Candidates';
   return '';
 }
 
@@ -118,6 +119,8 @@ function rerunFocusSetReport() {
   setTimeout(function () {
     if (reportType === 'review') {
       runReview();
+    } else if (reportType === 'pruneCandidates') {
+      openPruneCandidatesReport();
     }
   }, 0);
 }
@@ -178,7 +181,45 @@ function updateReviewButtonAvailability() {
     ui.reviewSetBtn.classList.toggle('hidden', !availability.enabled);
     ui.reviewSetBtn.title = availability.message;
   }
+  if (ui.captionSheetBtn) {
+    ui.captionSheetBtn.disabled = false;
+    ui.captionSheetBtn.classList.toggle('hidden', !availability.enabled);
+    ui.captionSheetBtn.title = availability.enabled
+      ? 'Show the current visible captions as one spellchecked text sheet'
+      : availability.message;
+  }
+  var pruneAvailable = isSetFolderPath(state.folder) && Array.isArray(state.items) && state.items.length > 0;
+  ui.pruneCandidatesBtn.disabled = false;
+  ui.pruneCandidatesBtn.classList.toggle('hidden', !pruneAvailable);
+  ui.pruneCandidatesBtn.title = pruneAvailable
+    ? 'Review whole-set prune candidates'
+    : 'Prune Candidates requires at least one media file in a set folder';
   refreshReviewOutputSummary();
+}
+
+function showCaptionSheet() {
+  var availability = getReviewAvailability();
+  if (!availability.enabled) {
+    setStatus(availability.message + '.');
+    return;
+  }
+  if (state.currentItem && state.currentItem.fileName) {
+    savePathCaption();
+  }
+  var items = getVisibleReviewItems();
+  if (!items.length) {
+    setStatus('No visible media items to review.');
+    return;
+  }
+  if (ui.captionSheetTextEl) ui.captionSheetTextEl.value = buildCombinedCaptionsText(items);
+  if (ui.captionSheetSummaryEl) {
+    ui.captionSheetSummaryEl.textContent = items.length + ' visible caption' + (items.length === 1 ? '' : 's');
+  }
+  if (ui.captionSheetPane) ui.captionSheetPane.classList.remove('hidden');
+  ui.pruneCandidatesPane.classList.add('hidden');
+  if (ui.captionSheetBtn) ui.captionSheetBtn.setAttribute('aria-pressed', 'true');
+  ui.pruneCandidatesBtn.setAttribute('aria-pressed', 'false');
+  setStatus('Caption sheet ready: ' + items.length + ' files');
 }
 
 function updateSetFolderScopedUi() {
@@ -276,6 +317,10 @@ function runReview() {
   if (typeof setWorkspaceSurface === 'function') {
     setWorkspaceSurface('reviewOutput');
   }
+  var reviewPane = document.getElementById('review-output-review-pane');
+  if (reviewPane) reviewPane.classList.remove('hidden');
+  ui.pruneCandidatesPane.classList.add('hidden');
+  ui.pruneCandidatesBtn.setAttribute('aria-pressed', 'false');
   var availability = getReviewAvailability();
   if (!availability.enabled) {
     setStatus(availability.message + '.');
@@ -323,16 +368,18 @@ function runReview() {
   }
 }
 
-function selectByFileName(fileName, focusFiles, focusSource, reportType) {
+function selectByFileName(fileName, focusFiles, focusSource, reportType, options) {
   if (!fileName) {
     return;
   }
+  var opts = options || {};
   if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen() && typeof closeMediaGridSurface === 'function') {
     closeMediaGridSurface();
   }
 
   function doSelect() {
     var target = null;
+    var clearedTextFilter = false;
     for (var i = 0; i < state.items.length; i += 1) {
       if (state.items[i].fileName === fileName) {
         target = state.items[i];
@@ -344,14 +391,23 @@ function selectByFileName(fileName, focusFiles, focusSource, reportType) {
       return;
     }
 
-    if (ui.filterEl.value) {
+    if (!opts.preserveMediaFilters && ui.filterEl.value && !isMediaItemInCurrentFilteredList(target)) {
+      var currentTextFilter = ui.filterEl.value;
       ui.filterEl.value = '';
-      ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
+      if (isMediaItemInCurrentFilteredList(target)) {
+        clearedTextFilter = true;
+        ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        ui.filterEl.value = currentTextFilter;
+      }
     }
 
     selectPathMedia(target).then(function () {
       if (typeof scrollCurrentMediaRowIntoView === 'function') {
         scrollCurrentMediaRowIntoView();
+      }
+      if (clearedTextFilter) {
+        setStatus('Selected ' + fileName + '; cleared the text filter to reach it.');
       }
     }).catch(function (err) {
       setStatus(String(err && err.message ? err.message : err));

@@ -23,6 +23,13 @@ var MEDIA_GRID_FOCUS_SET_DEFS = [
     bias: 'Not a precision subset. Includes everything currently in scope.'
   },
   {
+    key: 'prune_candidates',
+    label: 'Prune Candidates',
+    why: 'Inspect whole-set technical warnings and severe resolution outliers.',
+    signals: 'Missing or unsupported metadata, unusable video frame counts, and conservative low-resolution rules.',
+    bias: 'Advisory only. Contextual face, pose, and scene metrics do not create candidates.'
+  },
+  {
     key: 'suggested',
     label: 'Suggested',
     why: 'Start with the conservative keepers the app already trusts most.',
@@ -424,6 +431,7 @@ function mediaGridFocusSetMatches(def, mediaItem, context) {
   var isSingleFaceUsable = mediaGridHasUsableSingleFace(mediaItem);
 
   if (def.key === 'all') return true;
+  if (def.key === 'prune_candidates') return isPruneCandidateFile(mediaItem.fileName || mediaItem.key);
   if (def.key === 'suggested') {
     return !!(context && context.suggestedLookup && context.suggestedLookup[String(mediaItem.fileName || '')]);
   }

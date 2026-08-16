@@ -10,7 +10,12 @@
     "conda_environment": "training-env",
     "activate_script": "",
     "tensorboard_port": 6006,
-    "write_selection_snapshot_comments": false
+    "enabled_profiles": [
+      "wan22_t2v",
+      "krea2_raw",
+      "wan21_t2v_14b",
+      "minimax_h3"
+    ]
   },
   "analysis": {
     "enableFaceAnalysis": false,

@@ -26,6 +26,12 @@ pruneMedia = async function (mediaItem, options) {
       return false;
     }
     setStatus('Media pruned: ' + mediaItem.key);
+    removePruneCandidateFile(mediaItem.key);
+    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+      state.focusSet.keys = state.focusSet.keys.filter(function (key) { return key !== mediaItem.key; });
+      if (!state.focusSet.keys.length) state.focusSet = null;
+      updateFocusSetUi();
+    }
     var prunedWasCurrent = !!(state.currentItem && (state.currentItem.key === mediaItem.key || state.currentItem.fileName === mediaItem.key));
     var nextItemToSelect = null;
     // Remove pruned item from state.items instead of refreshing the directory.

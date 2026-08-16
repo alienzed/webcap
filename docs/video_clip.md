@@ -40,7 +40,7 @@ This repo already gives us the primitives we need; the new feature should mostly
 
 - Raw source videos live in a subfolder named `src_videos` inside the set folder.
 - The user populates `src_videos` manually (drag-in from OS). No upload UI is provided.
-- `src_videos` is naturally excluded from Prepare Dataset because the folder scan is non-recursive.
+- `src_videos` is naturally excluded from a parent set's training capture because the media grid is non-recursive.
 - `src_videos` items appear in the media list when the user navigates into that subfolder, exactly like any other subfolder.
 
 ## User Flow
@@ -144,7 +144,7 @@ The crop interaction should stay close to the existing image crop UX if that kee
 - No batch clipping.
 - No codec/output configuration.
 - No timeline mouse dragging as the primary selection mechanism.
-- No audio handling configuration (strip or pass through — backend default; not user-configurable in V1).
+- Clip exports retain a source audio track when present; audio is not separately configurable.
 - No caption copy or caption creation on export.
 - No clip-from-clip chaining (source must be in `src_videos`).
 - No output format/codec selection (always MP4/H.264).

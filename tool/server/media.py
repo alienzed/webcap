@@ -41,7 +41,7 @@ def media_flip_horizontal_response(data):
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
-            "-an",
+            "-c:a", "copy",
             str(tmp_path)
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True)

@@ -177,16 +177,6 @@ function buildCurrentFolderContextActions() {
       }
     },
     {
-      label: 'Generate Dataset Configs',
-      run: function () {
-        runGenerateDatasetConfigsForCurrentFolder().catch(function (err) {
-          if (window.console && console.error) {
-            console.error('[Training] Context generate failed:', err);
-          }
-        });
-      }
-    },
-    {
       label: 'Deface',
       run: function () {
         clearEditorAndPreview();

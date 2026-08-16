@@ -34,11 +34,10 @@ In scope:
 - Carry structural annotation state:
   - carry `caption_requirements`
   - carry `caption_requirements_checked`
+  - merge `caption_requirement_keywords` from every source folder, preserving local tag-to-requirement associations
   - carry `caption_term_wrappers` and legacy mirror `caption_term_affixes`
   - carry `caption_term_descriptor_defaults`
   - carry per-item `caption_term_descriptors_by_media`
-- Do not carry local requirement keyword baselines:
-  - do not carry `caption_requirement_keywords`
 - Carry source `primer` block into destination `.webcap_state.json`:
   - full `primer` object from the first source folder encountered after deterministic input sort
 - Carry available `media_metadata.json` entries for copied items into destination cache
@@ -118,7 +117,7 @@ Write destination `.webcap_state.json` with baseline expected shape plus carried
 - Include baseline top-level fields already used by app (`version`, `stats`, `primer`, etc.).
 - Destination `primer` is cloned from the first encountered source folder in deterministic input order.
 - Carry item-level values for successfully copied destination media keys.
-- Destination does not inherit source `caption_requirement_keywords`; fresh sets should resolve current global requirement-term defaults on load.
+- Destination merges source `caption_requirement_keywords` by requirement label. Terms are deduplicated case-insensitively so copied tags retain their local requirement/group associations alongside current global defaults.
 
 Also write destination `media_metadata.json` when source entries are available for copied media.
 

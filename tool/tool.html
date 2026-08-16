@@ -145,6 +145,10 @@
                                 <input id="advanced-filter-untagged" type="checkbox">
                                 <span>Tag Mismatch</span>
                             </label>
+                            <label class="advanced-filter-check-row" title="Show whole-set prune candidates">
+                                <input id="advanced-filter-prune-candidates" type="checkbox" disabled>
+                                <span>Prune Candidates</span>
+                            </label>
                         </div>
                         <label class="advanced-filter-row">
                             <span>Stars</span>
@@ -356,8 +360,6 @@
                                     <div class="config-editor-toolbar-actions">
                                         <button id="config-editor-back-btn" type="button" class="review-captions-btn">Close</button>
                                         <button id="config-editor-console-btn" type="button" class="review-captions-btn">Console</button>
-                                        <button id="config-editor-generate-btn" type="button" class="review-captions-btn">Generate</button>
-                                        <button id="config-editor-train-btn" type="button" class="review-captions-btn">Train Preview</button>
                                         <button id="config-editor-save-btn" type="button" class="review-captions-btn">Save</button>
                                     </div>
                                 </div>
@@ -367,9 +369,9 @@
                                             <div class="training-overview-title">Training Items</div>
                                             <button id="training-item-overview-toggle-btn" type="button" class="review-captions-btn" aria-expanded="true">Hide items</button>
                                         </div>
-                                        <div id="training-item-overview-summary" class="training-overview-summary">Prepare the dataset to see its training items here.</div>
+                                        <div id="training-item-overview-summary" class="training-overview-summary">Visible media selected for the next training run appears here.</div>
                                     </div>
-                                    <div id="training-item-overview" class="training-item-overview" aria-label="Prepared training items"></div>
+                                    <div id="training-item-overview" class="training-item-overview" aria-label="Visible training items"></div>
                                 </div>
                                 <div id="training-runner-output-view" class="training-runner-output-view hidden">
                                     <section id="training-runner-console" class="training-runner-console hidden" aria-label="Training output">
@@ -564,6 +566,12 @@
                             <span class="btn-glyph" aria-hidden="true">&#9654;</span>
                             <span>Review Set</span>
                         </button>
+                        <button id="caption-sheet-btn" type="button" class="review-captions-btn hidden" title="Show the current visible captions as one spellchecked text sheet" aria-pressed="false">
+                            <span>Caption Sheet</span>
+                        </button>
+                        <button id="prune-candidates-btn" type="button" class="review-captions-btn hidden" title="Review whole-set prune candidates" aria-pressed="false">
+                            <span>Prune Candidates</span>
+                        </button>
                     </div>
                     <div class="review-output-summary" aria-label="Review output summary">
                         <div class="review-output-summary-card">
@@ -634,6 +642,28 @@
                                 </div>
                             </div>
                         </section>
+                        <section id="caption-sheet-pane" class="review-output-column caption-sheet-pane hidden">
+                            <div class="review-output-column-header">
+                                <div class="review-output-column-title">Caption Sheet</div>
+                                <div class="review-output-column-subtitle">Current visible captions for proofreading. This view does not save edits.</div>
+                            </div>
+                            <div class="caption-sheet-actions">
+                                <span id="caption-sheet-summary" class="small"></span>
+                                <button id="caption-sheet-copy-btn" type="button">Copy</button>
+                            </div>
+                            <textarea id="caption-sheet-text" class="caption-sheet-text" readonly spellcheck="true" aria-label="Caption sheet"></textarea>
+                        </section>
+                        <section id="prune-candidates-pane" class="review-output-column prune-candidates-pane hidden">
+                            <div class="review-output-column-header">
+                                <div class="review-output-column-title">Prune Candidates</div>
+                                <div class="review-output-column-subtitle">Whole-set technical warnings and resolution outliers. Nothing is pruned automatically.</div>
+                            </div>
+                            <div class="prune-candidates-toolbar">
+                                <span id="prune-candidates-summary" class="small">Analysis has not run.</span>
+                                <button id="prune-candidates-inspect-btn" type="button" class="review-captions-btn" disabled>Inspect Candidates</button>
+                            </div>
+                            <div id="prune-candidates-list" class="prune-candidates-list"></div>
+                        </section>
                     </div>
                 </section>
             </div>
@@ -654,7 +684,7 @@
                             </div>
                             <button id="training-workspace-back-btn" type="button" class="review-captions-btn training-back-btn">Back</button>
                         </div>
-                        <section id="training-set-workflow" class="training-set-workflow training-set-only" aria-label="Prepare this training set">
+                        <section id="training-set-workflow" class="training-set-workflow training-set-only" aria-label="Configure this training set">
                             <div class="training-workflow-step">
                                 <div class="training-workflow-step-number">1</div>
                                 <div class="training-workflow-step-copy">
@@ -662,38 +692,30 @@
                                     <label class="training-profile-control">Training profile
                                         <select id="training-model-profile-select"></select>
                                     </label>
-                                    <div id="training-model-trained-status" class="training-model-trained-status hidden" aria-live="polite"></div>
-                                </div>
-                            </div>
-                            <div class="training-workflow-step">
-                                <div class="training-workflow-step-number">2</div>
-                                <div class="training-workflow-step-copy">
-                                    <div class="training-workspace-section-title">Dataset</div>
-                                    <div id="training-readiness" class="training-readiness">Loading training readiness...</div>
-                                </div>
-                                <button id="training-workspace-prepare-btn" type="button" class="training-btn training-workflow-action">Prepare Dataset</button>
-                            </div>
-                            <div class="training-workflow-step">
-                                <div id="training-workspace-config-step-number" class="training-workflow-step-number">3</div>
-                                <div class="training-workflow-step-copy">
-                                    <div class="training-workspace-section-title">Configuration Files</div>
-                                    <div id="training-workspace-config-list" class="training-config-list">Generate configs to inspect and edit them here.</div>
-                                    <label class="training-profile-control">Dataset target
-                                        <select id="training-workspace-profile-select" title="Dataset repeat target">
+                                    <label class="training-profile-control">Mode
+                                        <select id="training-workspace-profile-select" title="Training mode">
                                             <option value="poc">POC</option>
                                             <option value="normal" selected>Normal</option>
                                             <option value="quality">Quality</option>
                                         </select>
                                     </label>
+                                    <div id="training-model-trained-status" class="training-model-trained-status hidden" aria-live="polite"></div>
                                 </div>
-                                <button id="training-workspace-generate-btn" type="button" class="training-btn training-workflow-action">Generate Configs</button>
+                            </div>
+                            <div class="training-workflow-step">
+                                <div id="training-workspace-config-step-number" class="training-workflow-step-number">2</div>
+                                <div class="training-workflow-step-copy">
+                                    <div class="training-workspace-section-title">Configuration Files</div>
+                                    <div id="training-readiness" class="training-readiness">Loading training readiness...</div>
+                                    <div id="training-workspace-config-list" class="training-config-list">Loading setup files...</div>
+                                </div>
                             </div>
                         </section>
                         <section id="training-run-setup" class="training-run-setup training-set-only" aria-label="Training run setup">
                             <div class="training-run-layout">
                                 <div class="training-run-setup-header">
                                     <div class="training-run-setup-heading">
-                                        <div id="training-run-step-number" class="training-workflow-step-number">4</div>
+                                        <div id="training-run-step-number" class="training-workflow-step-number">3</div>
                                         <div class="training-workspace-section-title">Run Training</div>
                                     </div>
                                 </div>
@@ -994,13 +1016,39 @@
                     </section>
                     <section class="app-settings-section">
                         <div class="app-settings-section-header">
-                            <div class="app-settings-section-title">Training</div>
-                            <div class="app-settings-section-copy">Training-prep behavior.</div>
+                            <div class="app-settings-section-title">Training Models</div>
+                            <div class="app-settings-section-copy">Choose which models appear when creating new training runs. Existing files and runs are unaffected.</div>
                         </div>
-                        <label class="app-settings-toggle">
-                            <input id="app-settings-training-write-selection-snapshot-comments" type="checkbox">
-                            <span>Write selection snapshot comments into dataset TOMLs</span>
-                        </label>
+                        <div class="app-settings-form-grid">
+                            <div class="app-settings-model-option">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-training-profile-wan22" type="checkbox">
+                                    <span>Wan 2.2 T2V</span>
+                                </label>
+                                <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                            </div>
+                            <div class="app-settings-model-option">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-training-profile-krea2" type="checkbox">
+                                    <span>Krea2 Raw</span>
+                                </label>
+                                <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/Krea-2" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                            </div>
+                            <div class="app-settings-model-option">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-training-profile-wan21" type="checkbox">
+                                    <span>Wan 2.1 T2V 14B</span>
+                                </label>
+                                <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.1-T2V-14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                            </div>
+                            <div class="app-settings-model-option">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-training-profile-h3" type="checkbox">
+                                    <span>MiniMax H3</span>
+                                </label>
+                                <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/MiniMax-H3" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                            </div>
+                        </div>
                     </section>
                     <section class="app-settings-section">
                         <div class="app-settings-section-header">
@@ -1259,6 +1307,7 @@
         <script src="/static/js/caption_helpers_panel.js"></script>
         <script src="/static/js/caption_helpers_ui.js"></script>
         <script src="/static/js/item_details.js"></script>
+        <script src="/static/js/prune_candidates.js"></script>
         <script src="/static/js/media_grid_state.js"></script>
         <script src="/static/js/media_grid_filters.js"></script>
         <script src="/static/js/media_grid_tiles.js"></script>

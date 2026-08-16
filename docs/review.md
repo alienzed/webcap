@@ -7,9 +7,8 @@ This document describes the shipped `Review / Output` workspace.
 ## Surface Layout
 
 - The workspace lives in `tool/tool.html` under `#review-output-surface`.
-- It is split into two side-by-side columns:
-  - `Caption Checks`
-  - `Dataset / Training`
+- `Caption Checks` holds the phrase and rule controls.
+- `Caption Sheet` opens the current visible captions in one read-only, spellchecked text area for proofreading and copying.
 - A compact summary strip shows:
   - current folder
   - visible media count
@@ -26,6 +25,7 @@ The current code is intentionally split by concern:
   - review/output summary updates
   - review availability / button visibility
   - unified Review Set run flow
+  - Caption Sheet rendering from the current visible media scope
   - report click handling (`postMessage` bridge)
   - training config list rendering
 - `tool/js/stats.js`
@@ -49,6 +49,8 @@ The current code is intentionally split by concern:
    - media selection
    - token filter application
    - balance phrase filter application
+
+`Caption Sheet` is a separate review action. It gathers the same visible-media scope without introducing a second caption format or a bulk-save path.
 
 ## Focus Set Contract
 

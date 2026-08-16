@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import tool.server.config as config_module
 import tool.server.training_config_files as training_config_files_module
 
@@ -26,15 +24,6 @@ def test_fill_template_placeholders_normalizes_paths(monkeypatch):
     assert 'model = "/mnt/w/models/Stable-diffusion"' in rendered
     assert "training//set" not in rendered
     assert "models//Stable-diffusion" not in rendered
-
-
-def test_dataset_lo_example_uses_placeholders():
-    template_path = Path(__file__).resolve().parents[1] / "docs" / "examples" / "dataset.lo.toml"
-    text = template_path.read_text(encoding="utf-8")
-
-    assert "/mnt/w/training/massage/v3/" not in text
-    assert text.count('{TRAINING_ROOT}/{DATASET}/auto_dataset/square') >= 2
-    assert text.count('{TRAINING_ROOT}/{DATASET}/auto_dataset/169') >= 2
 
 
 def test_default_training_epochs_follow_canonical_templates():
@@ -133,6 +122,10 @@ def test_h3_config_uses_the_recommended_components_and_shared_output_root(tmp_pa
     assert "qwen3vl_32b_minimax_h3_int8_convrot.safetensors" in text
     assert "cfg = 4" in text
     assert training_config_files_module.output_dir_from_config(folder, "h3").name == "lilly"
+
+    training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3", mode="poc")
+    poc_text = (folder / "config.h3.poc.toml").read_text(encoding="utf-8")
+    assert "/Stable-diffusion/mh3/minimax_h3_fl2va_pruned_int8_convrot.safetensors" in poc_text
 
     path.write_text("edited = true\n", encoding="utf-8")
     training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3")

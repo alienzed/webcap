@@ -4,7 +4,16 @@ from pathlib import Path
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
 from .permissions import normalize_path_permissions
-from .training_profiles import profile_config_files
+from .training_profiles import (
+    KREA2_PROFILE_ID,
+    MINIMAX_H3_PROFILE_ID,
+    TRAINING_MODES,
+    WAN21_PROFILE_ID,
+    WAN22_PROFILE_ID,
+    config_for_stage,
+    normalize_mode,
+    profile,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 TRAINING_TEMPLATES_DIR = ROOT / "tool" / "templates"
@@ -13,11 +22,32 @@ LO_CONFIG_NAME = "config.lo.toml"
 KREA2_CONFIG_NAME = "config.krea2.toml"
 WAN21_CONFIG_NAME = "config.wan21.toml"
 H3_CONFIG_NAME = "config.h3.toml"
-TRAINING_CONFIG_TEMPLATE_NAMES = (HI_CONFIG_NAME, LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, H3_CONFIG_NAME)
+LEGACY_TRAINING_CONFIG_TEMPLATE_NAMES = (
+    HI_CONFIG_NAME,
+    LO_CONFIG_NAME,
+    KREA2_CONFIG_NAME,
+    WAN21_CONFIG_NAME,
+    H3_CONFIG_NAME,
+)
+MODE_TRAINING_CONFIG_TEMPLATE_NAMES = tuple(
+    config_for_stage(profile_id, stage, mode)["file"]
+    for profile_id, stage in (
+        (WAN22_PROFILE_ID, "hi"),
+        (WAN22_PROFILE_ID, "lo"),
+        (KREA2_PROFILE_ID, "krea2"),
+        (WAN21_PROFILE_ID, "wan21"),
+        (MINIMAX_H3_PROFILE_ID, "h3"),
+    )
+    for mode in TRAINING_MODES
+)
+TRAINING_CONFIG_TEMPLATE_NAMES = (
+    LEGACY_TRAINING_CONFIG_TEMPLATE_NAMES + MODE_TRAINING_CONFIG_TEMPLATE_NAMES
+)
 
 _EPOCHS_TEXT_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?$', re.MULTILINE)
-_OUTPUT_DIR_LINE_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\'][^"\']+["\']\s*(?:#.*)?$', re.MULTILINE)
+_OUTPUT_DIR_LINE_PATTERN = re.compile(r'^(\s*output_dir\s*=\s*)["\'][^"\']+["\'](\s*(?:#.*)?)$', re.MULTILINE)
+_DATASET_LINE_PATTERN = re.compile(r'^(\s*dataset\s*=\s*)["\'][^"\']+["\'](\s*(?:#.*)?)$', re.MULTILINE)
 _OUTPUT_PREFIX_PATTERN = re.compile(r"^(\d{3})-")
 
 # Last-resort values only if a canonical template is missing or malformed.
@@ -26,9 +56,9 @@ _FALLBACK_LO_EPOCHS = 90
 
 
 def _fallback_epochs_for_template(name: str):
-    if name == HI_CONFIG_NAME:
+    if name == HI_CONFIG_NAME or name.endswith(".hi.toml"):
         return _FALLBACK_HI_EPOCHS
-    if name in (LO_CONFIG_NAME, KREA2_CONFIG_NAME, WAN21_CONFIG_NAME, H3_CONFIG_NAME):
+    if name in TRAINING_CONFIG_TEMPLATE_NAMES:
         return _FALLBACK_LO_EPOCHS
     raise ValueError(f"Unknown training config template: {name}")
 
@@ -74,23 +104,37 @@ def render_training_config_template(name: str, folder_path: Path):
         return template_text
 
 
-def training_config_path(folder_path: Path, stage: str):
+def _profile_for_stage(stage):
     stage = str(stage or "").strip().lower()
-    if stage == "hi":
-        return Path(folder_path) / HI_CONFIG_NAME
-    if stage == "lo":
-        return Path(folder_path) / LO_CONFIG_NAME
+    if stage in ("hi", "lo"):
+        return WAN22_PROFILE_ID
     if stage == "krea2":
-        return Path(folder_path) / KREA2_CONFIG_NAME
+        return KREA2_PROFILE_ID
     if stage == "wan21":
-        return Path(folder_path) / WAN21_CONFIG_NAME
+        return WAN21_PROFILE_ID
     if stage == "h3":
-        return Path(folder_path) / H3_CONFIG_NAME
+        return MINIMAX_H3_PROFILE_ID
     raise ValueError("Unknown training configuration stage: " + stage)
 
 
-def output_dir_from_config(folder_path: Path, stage: str):
-    config_path = training_config_path(folder_path, stage)
+def training_config_path(folder_path: Path, stage: str, profile_id=None, mode="normal"):
+    if profile_id is None:
+        legacy_name = {
+            "hi": HI_CONFIG_NAME,
+            "lo": LO_CONFIG_NAME,
+            "krea2": KREA2_CONFIG_NAME,
+            "wan21": WAN21_CONFIG_NAME,
+            "h3": H3_CONFIG_NAME,
+        }.get(str(stage or "").strip().lower())
+        legacy_path = Path(folder_path) / str(legacy_name or "")
+        if legacy_name and legacy_path.is_file():
+            return legacy_path
+    selected_profile = profile_id or _profile_for_stage(stage)
+    return Path(folder_path) / config_for_stage(selected_profile, stage, mode)["file"]
+
+
+def output_dir_from_config(folder_path: Path, stage: str, profile_id=None, mode="normal"):
+    config_path = training_config_path(folder_path, stage, profile_id=profile_id, mode=mode)
     try:
         config_text = config_path.read_text(encoding="utf-8")
     except OSError:
@@ -131,14 +175,46 @@ def allocate_training_launch_group(folder_path: Path):
 
 
 def with_output_dir(config_text: str, output_dir):
-    replacement = 'output_dir = "' + str(output_dir).replace("\\", "/") + '"'
+    replacement = r'\g<1>"' + str(output_dir).replace("\\", "/") + r'"\g<2>'
     updated, count = _OUTPUT_DIR_LINE_PATTERN.subn(replacement, config_text, count=1)
     if count != 1:
         raise ValueError("Training config template is missing output_dir.")
     return updated
 
 
-def ensure_training_config_files(folder_path: Path, profile_id=None, reset=False):
+def with_dataset_path(config_text: str, dataset_path):
+    replacement = r'\g<1>"' + str(dataset_path).replace("\\", "/") + r'"\g<2>'
+    updated, count = _DATASET_LINE_PATTERN.subn(replacement, config_text, count=1)
+    if count != 1:
+        raise ValueError("Training config template is missing dataset.")
+    return updated
+
+
+def _render_mode_config(folder, profile_id, stage, mode, reset=False):
+    selected_mode = normalize_mode(mode)
+    config = config_for_stage(profile_id, stage, selected_mode)
+    destination = folder / config["file"]
+    if selected_mode == "normal":
+        legacy = folder / config["legacyFile"]
+        if legacy.is_file() and not reset:
+            text = legacy.read_text(encoding="utf-8")
+        else:
+            text = render_training_config_template(config["file"], folder)
+    else:
+        text = render_training_config_template(config["file"], folder)
+    dataset_value = None
+    match = _DATASET_LINE_PATTERN.search(text)
+    if match:
+        current = match.group(0)
+        quoted = re.search(r'["\']([^"\']+)["\']', current)
+        if quoted:
+            dataset_value = str(Path(quoted.group(1)).with_name(config["dataset"])).replace("\\", "/")
+    if dataset_value is None:
+        dataset_value = config["dataset"]
+    return with_dataset_path(text, dataset_value)
+
+
+def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, reset=False):
     """Create missing per-set configs, or explicitly reset one profile's files."""
     folder = Path(folder_path)
     if folder.name in ("originals", "auto_dataset"):
@@ -147,27 +223,56 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, reset=False
     if not media_files:
         return []
 
-    selected_names = profile_config_files(profile_id) if profile_id else TRAINING_CONFIG_TEMPLATE_NAMES
+    if mode is None:
+        selected_profiles = [profile(profile_id)] if profile_id else [
+            profile(WAN22_PROFILE_ID),
+            profile(KREA2_PROFILE_ID),
+            profile(WAN21_PROFILE_ID),
+            profile(MINIMAX_H3_PROFILE_ID),
+        ]
+        written = []
+        for selected_profile in selected_profiles:
+            for base in selected_profile["configs"]:
+                destination = folder / base["file"]
+                if destination.exists() and not reset:
+                    continue
+                destination.write_text(render_training_config_template(base["file"], folder), encoding="utf-8")
+                normalize_path_permissions(destination)
+                written.append(destination)
+        return written
+
+    selected_profile = profile(profile_id or WAN22_PROFILE_ID)
     written = []
-    for name in selected_names:
-        dest = folder / name
+    for base in selected_profile["configs"]:
+        resolved = config_for_stage(selected_profile["id"], base["id"], mode)
+        dest = folder / resolved["file"]
         if dest.exists() and not reset:
             continue
-        rendered = render_training_config_template(name, folder)
+        rendered = _render_mode_config(folder, selected_profile["id"], base["id"], mode, reset=reset)
         dest.write_text(rendered, encoding="utf-8")
         normalize_path_permissions(dest)
         written.append(dest)
     return written
 
 
-def reset_training_config_file(folder_path: Path, filename: str):
+def reset_training_config_file(folder_path: Path, filename: str, profile_id=None, mode=None):
     """Explicitly restore one config from its resolved template."""
     folder = Path(folder_path)
     name = str(filename or "").strip()
-    if name not in TRAINING_CONFIG_TEMPLATE_NAMES:
+    if mode is None:
+        if name not in TRAINING_CONFIG_TEMPLATE_NAMES:
+            raise ValueError("Unknown training config: " + name)
+        destination = folder / name
+        destination.write_text(render_training_config_template(name, folder), encoding="utf-8")
+        normalize_path_permissions(destination)
+        return destination
+    selected = profile(profile_id or WAN22_PROFILE_ID)
+    matches = [config_for_stage(selected["id"], item["id"], mode) for item in selected["configs"]]
+    resolved = next((item for item in matches if item["file"] == name), None)
+    if resolved is None:
         raise ValueError("Unknown training config: " + name)
     destination = folder / name
-    rendered = render_training_config_template(name, folder)
+    rendered = _render_mode_config(folder, selected["id"], resolved["id"], mode, reset=True)
     destination.write_text(rendered, encoding="utf-8")
     normalize_path_permissions(destination)
     return destination

@@ -22,6 +22,7 @@ from .training_runtime import (
     uses_native_wsl_shell,
     wsl_executable,
 )
+from .training_profiles import WAN22_PROFILE_ID, config_for_stage, profile, profile_for_mode
 
 
 PARTIAL_CAPTION_REVIEW_MIN_ITEMS = 3
@@ -38,30 +39,40 @@ def resolve_folder(folder):
     return value, path
 
 
-def resolve_artifacts(folder, folder_path, stages="both"):
-    paths = {
-        "hiConfig": folder_path / HI_CONFIG_NAME,
-        "loConfig": folder_path / LO_CONFIG_NAME,
-        "krea2Config": folder_path / KREA2_CONFIG_NAME,
-        "wan21Config": folder_path / WAN21_CONFIG_NAME,
-        "h3Config": folder_path / H3_CONFIG_NAME,
-        "hiDataset": folder_path / "dataset.hi.toml",
-        "loDataset": folder_path / "dataset.lo.toml",
-        "trainDataset": folder_path / "dataset.train.toml",
-        "manifest": folder_path / "auto_dataset" / "prep_manifest.json",
-    }
-    if stages == "krea2":
-        required = ("krea2Config", "trainDataset", "manifest")
-    elif stages == "wan21":
-        required = ("wan21Config", "trainDataset", "manifest")
-    elif stages == "h3":
-        required = ("h3Config", "trainDataset", "manifest")
-    elif stages == "hi":
-        required = ("hiConfig", "hiDataset", "manifest")
-    elif stages == "lo":
-        required = ("loConfig", "loDataset", "manifest")
+def resolve_artifacts(folder, folder_path, stages="both", profile_id="", mode="normal", artifacts_override=None):
+    if artifacts_override:
+        paths = {key: Path(value) for key, value in artifacts_override.items()}
     else:
-        required = ("hiConfig", "loConfig", "hiDataset", "loDataset", "manifest")
+        if profile_id:
+            selected_profile = profile_for_mode(profile_id, mode)
+        else:
+            legacy_profile_id = (
+                "krea2_raw" if stages == "krea2" else
+                "wan21_t2v_14b" if stages == "wan21" else
+                "minimax_h3" if stages == "h3" else
+                WAN22_PROFILE_ID
+            )
+            selected_profile = profile(legacy_profile_id)
+        paths = {}
+        for item in selected_profile["configs"]:
+            paths[item["id"] + "Config"] = folder_path / item["file"]
+            paths[item["id"] + "Dataset"] = folder_path / item["dataset"]
+        if not profile_id and stages in ("krea2", "wan21", "h3"):
+            paths["trainDataset"] = paths[stages + "Dataset"]
+    if stages == "krea2":
+        required = ("krea2Config", "krea2Dataset")
+    elif stages == "wan21":
+        required = ("wan21Config", "wan21Dataset")
+    elif stages == "h3":
+        required = ("h3Config", "h3Dataset")
+    elif stages == "hi":
+        required = ("hiConfig", "hiDataset")
+    elif stages == "lo":
+        required = ("loConfig", "loDataset")
+    else:
+        required = ("hiConfig", "loConfig", "hiDataset", "loDataset")
+    if artifacts_override:
+        required = tuple(required) + ("manifest",)
     missing = [name for name in required if not paths[name].exists() or not paths[name].is_file()]
     return paths, missing
 
@@ -192,9 +203,9 @@ def gpu_snapshot():
     }
 
 
-def build_preflight(folder, stages="both"):
+def build_preflight(folder, stages="both", profile_id="", mode="normal", artifacts_override=None):
     folder_value, folder_path = resolve_folder(folder)
-    artifacts, missing = resolve_artifacts(folder_value, folder_path, stages)
+    artifacts, missing = resolve_artifacts(folder_value, folder_path, stages, profile_id, mode, artifacts_override)
     settings = configured_training_settings()
     checks = [
         make_check("set_folder_exists", "blocker", True, "Set folder is available.", str(folder_path)),
@@ -254,9 +265,9 @@ def build_preflight(folder, stages="both"):
     return folder_value, folder_path, artifacts, settings, checks
 
 
-def build_launch_preflight(folder, stages="both"):
+def build_launch_preflight(folder, stages="both", profile_id="", mode="normal", artifacts_override=None):
     folder_value, folder_path = resolve_folder(folder)
-    artifacts, missing = resolve_artifacts(folder_value, folder_path, stages)
+    artifacts, missing = resolve_artifacts(folder_value, folder_path, stages, profile_id, mode, artifacts_override)
     settings = configured_training_settings()
     shell_available = bool(shutil.which("bash")) if uses_native_wsl_shell() else bool(wsl_executable())
     checks = [
@@ -272,9 +283,9 @@ def build_launch_preflight(folder, stages="both"):
         make_check("training_cwd", "blocker", bool(settings["cwd"]), "Diffusion Pipe WSL path is configured." if settings["cwd"] else "Set training.diffusion_pipe_wsl in App Settings."),
     ]
     toml_keys = (
-        ("krea2Config", "trainDataset") if stages == "krea2" else
-        ("wan21Config", "trainDataset") if stages == "wan21" else
-        ("h3Config", "trainDataset") if stages == "h3" else
+        ("krea2Config", "krea2Dataset") if stages == "krea2" else
+        ("wan21Config", "wan21Dataset") if stages == "wan21" else
+        ("h3Config", "h3Dataset") if stages == "h3" else
         ("hiConfig", "hiDataset") if stages == "hi" else
         ("loConfig", "loDataset") if stages == "lo" else
         ("hiConfig", "loConfig", "hiDataset", "loDataset")
@@ -300,8 +311,8 @@ def build_launch_preflight(folder, stages="both"):
     return folder_value, folder_path, artifacts, settings, checks
 
 
-def preflight_payload(folder, stages="both"):
-    folder_value, folder_path, artifacts, settings, checks = build_preflight(folder, stages)
+def preflight_payload(folder, stages="both", profile_id="", mode="normal", artifacts_override=None):
+    folder_value, folder_path, artifacts, settings, checks = build_preflight(folder, stages, profile_id, mode, artifacts_override)
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     warnings = [item for item in checks if item["severity"] == "warning" and not item["ok"]]
     return {

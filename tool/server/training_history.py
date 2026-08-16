@@ -582,7 +582,7 @@ def record_job(folder_path, job):
     folder_key = _folder_key(folder)
     runs = discover_runs(folder, str(job.get("stages") or ""))
     record_fields = (
-        "id", "folder", "stages", "profileId", "runId", "actionRunId", "datasetTarget", "modelLabel", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
+        "id", "folder", "stages", "profileId", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "bundlePath", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId",
         "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
     )
@@ -647,6 +647,8 @@ def _history_job_view(job):
         artifact_dir = str(item.get("artifactDir") or "").strip()
         log_path = Path(artifact_dir) / "run.log" if artifact_dir else None
     item["logAvailable"] = bool(log_path) and log_path.is_file()
+    raw_bundle = str(item.get("bundlePath") or "").strip()
+    item["bundleAvailable"] = bool(raw_bundle) and Path(raw_bundle).is_dir()
     folder = str(item.get("folder") or "").strip()
     try:
         item["sourceAvailable"] = bool(folder) and app_config.safe_join_fs_root(folder).is_dir()

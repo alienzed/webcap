@@ -63,7 +63,7 @@ function isTrainingRunnerConsoleVisible() {
 function appendToTrainingRunnerConsole(text) {
   var els = getTrainingWorkspaceEls();
   if (!els.runnerConsoleLog) return;
-  els.runnerConsoleLog.textContent += String(text || '');
+  els.runnerConsoleLog.textContent += String(text || '').replace(/\r\n?/g, '\n');
   if (els.runnerConsoleLog.textContent.length > 200000) {
     els.runnerConsoleLog.textContent = els.runnerConsoleLog.textContent.slice(-160000);
   }
@@ -208,7 +208,7 @@ function scheduleTrainingRunnerPoll() {
   });
   if (!hasActiveJob) return;
   var transitioning = activeStatus.some(function (status) { return status === 'starting' || status === 'stopping'; });
-  var delay = transitioning ? 5000 : (isTrainingRunnerConsoleVisible() ? 10000 : 20000);
+  var delay = transitioning ? 5000 : (isTrainingRunnerConsoleVisible() ? 3000 : 30000);
   trainingWorkspaceState.runnerPollTimer = setTimeout(function () {
     refreshTrainingRunnerStatus();
   }, delay);
@@ -340,6 +340,7 @@ function validateTrainingRunner(options) {
       stages: options && options.stages ? options.stages : 'both',
       profileId: options && options.profileId ? options.profileId : '',
       runId: options && options.runId ? options.runId : '',
+      mode: options && options.mode ? options.mode : 'normal',
       resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
       resumeStage: options && options.resumeStage ? options.resumeStage : ''
     }),
@@ -364,6 +365,7 @@ function getManagedTrainingOptions() {
     stages: stages,
     profileId: selectedProfile ? selectedProfile.id : '',
     runId: selectedRun ? selectedRun.id : '',
+    mode: normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode),
     resumeFromCheckpoint: customResumePath || (checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : ''),
     resumeStage: stages === 'both' ? (resumeStageEl ? String(resumeStageEl.value || 'lo') : 'lo') : stages,
     parentJobId: String(trainingWorkspaceState.resumeParentJobId || '')
@@ -412,7 +414,8 @@ function trainingModelLabel(job) {
 
 function trainingJobLabel(job) {
   if (job && job.stages === 'krea2') return 'Krea2 Raw';
-  return trainingModelLabel(job) + ' · ' + trainingStageLabel(String(job && job.stages || 'both'));
+  var mode = normalizeTrainingWorkspaceMode(job && job.mode || 'normal').toUpperCase();
+  return trainingModelLabel(job) + ' · ' + mode + ' · ' + trainingStageLabel(String(job && job.stages || 'both'));
 }
 
 function startManagedTraining() {
@@ -421,9 +424,12 @@ function startManagedTraining() {
     return;
   }
   var options = getManagedTrainingOptions();
-  ensureGeneratedTrainingArtifactsForCurrentFolder(options.stages, options.profileId)
+  Promise.resolve(saveCurrentEditorContent())
     .then(function () {
-      setStatus('Adding training job...');
+      var selectedMedia = getVisibleMediaSelectionForTraining();
+      if (!selectedMedia.length) throw new Error('No visible media items to train.');
+      var fallbackResult = buildTrainingFallbackCaptions(selectedMedia);
+      setStatus('Creating run dataset...');
       return trainingRunnerRequest('/fs/training_runner/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -433,9 +439,14 @@ function startManagedTraining() {
           stages: options.stages,
           profileId: options.profileId,
           runId: options.runId,
+          mode: options.mode,
           resumeFromCheckpoint: options.resumeFromCheckpoint,
           resumeStage: options.resumeStage,
-          parentJobId: options.parentJobId
+          parentJobId: options.parentJobId,
+          selected_media: selectedMedia,
+          total_media_count: Array.isArray(state.items) ? state.items.length : 0,
+          selection_criteria: buildTrainingSelectionCriteria(),
+          fallback_captions: fallbackResult.fallbackCaptions
         })
       });
     })
@@ -671,6 +682,7 @@ function buildTrainingQueueHtml(queuedJobs) {
         : '';
       var outputIdentity = trainingOutputIdentity(queuedJob);
       var output = outputIdentity ? '<div class="training-runner-queue-resume" title="' + escapeHtml(queuedJob.effectiveOutputDir || queuedJob.outputRoot || '') + '">Output: ' + escapeHtml(outputIdentity) + '</div>' : '';
+      var captured = Number(queuedJob.capturedItemCount || 0) ? '<div class="training-runner-queue-resume">Captured items: ' + escapeHtml(String(queuedJob.capturedItemCount)) + '</div>' : '';
       var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
       var exceptionalStatus = status !== 'queued'
         ? '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>'
@@ -680,10 +692,11 @@ function buildTrainingQueueHtml(queuedJobs) {
         '<div class="training-runner-queue-copy">' +
           '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(stage) + '</strong>' + workload + '</div>' +
           '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
-          resume + buildQueuedResumePointHtml(queuedJob) + output + sourceUnavailable + error +
+          resume + buildQueuedResumePointHtml(queuedJob) + output + captured + sourceUnavailable + error +
         '</div>' +
         '<div class="training-runner-queue-controls">' +
           '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' +
+          (queuedJob.bundlePath ? '<button type="button" class="training-runner-queue-control" data-training-job-bundle="' + escapeHtml(queuedJob.id) + '" title="Open captured files" aria-label="Open captured files">&#128451;</button>' : '') +
           '<button type="button" class="training-runner-queue-control" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + '>&#8593;</button>' +
           '<button type="button" class="training-runner-queue-control" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move down" aria-label="Move down"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
           '<button type="button" class="training-runner-queue-control training-runner-queue-cancel" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Remove from queue" aria-label="Remove from queue">&#215;</button>' +
@@ -916,9 +929,10 @@ function renderTrainingRunner() {
   var finishScheduleButton = canScheduleFinish
     ? '<button type="button" class="training-runner-output-action training-runner-finish-schedule' + (isFinite(finishAfterEpoch) && finishAfterEpoch > 0 ? ' is-armed' : '') + '" data-training-finish-schedule="' + escapeHtml(job.id || '') + '" title="' + escapeHtml(finishScheduleTitle) + '" aria-label="' + escapeHtml(finishScheduleTitle) + '">&#9201;' + (isFinite(finishAfterEpoch) && finishAfterEpoch > 0 ? '<span>' + Math.round(finishAfterEpoch) + '</span>' : '') + '</button>'
     : '';
-  var rowActions = finishScheduleButton || trainingOutputIdentity(job)
+  var rowActions = finishScheduleButton || trainingOutputIdentity(job) || job.bundlePath
     ? '<span class="training-runner-row-actions">' + finishScheduleButton +
       (trainingOutputIdentity(job) ? '<button type="button" class="training-runner-output-action" data-training-job-output="' + escapeHtml(job.id || '') + '" title="Open ' + (runOutputPath ? 'run output: ' + escapeHtml(runOutputPath) : 'output root: ' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '')) + '" aria-label="Open training output folder">&#128193;</button>' : '') +
+      (job.bundlePath ? '<button type="button" class="training-runner-output-action" data-training-job-bundle="' + escapeHtml(job.id || '') + '" title="Open captured files" aria-label="Open captured files">&#128451;</button>' : '') +
       '</span>'
     : '';
   var queuePosition = selectedQueuePosition
@@ -939,6 +953,7 @@ function renderTrainingRunner() {
     (job.confirmationNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.confirmationNote) + '</div>' : '') +
     (trainingWorkspaceState.runnerNotice ? '<div class="training-runner-detail is-warning">' + escapeHtml(trainingWorkspaceState.runnerNotice) + '</div>' : '') +
     (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
+    (Number(job.capturedItemCount || 0) ? '<div class="training-runner-detail">Captured items: ' + escapeHtml(String(job.capturedItemCount)) + '</div>' : '') +
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
   if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !running);

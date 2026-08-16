@@ -95,7 +95,7 @@ def rename_response(data):
         app_config.debug_print("[fs_rename] Missing required parameters.")
         return jsonify({"error": "Missing required parameters"}), 400
     try:
-        folder_path = app_config.safe_join_fs_root(folder)
+        folder_path = safe_join_fs_root(folder)
         old_path = folder_path / old_name
         new_path = folder_path / new_name
         if not old_path.exists():

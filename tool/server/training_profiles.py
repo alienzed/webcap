@@ -12,6 +12,14 @@ WAN22_PROFILE_ID = "wan22_t2v"
 KREA2_PROFILE_ID = "krea2_raw"
 WAN21_PROFILE_ID = "wan21_t2v_14b"
 MINIMAX_H3_PROFILE_ID = "minimax_h3"
+TRAINING_MODES = ("poc", "normal", "quality")
+
+_PROFILE_SLUGS = {
+    WAN22_PROFILE_ID: "wan22",
+    KREA2_PROFILE_ID: "krea2",
+    WAN21_PROFILE_ID: "wan21",
+    MINIMAX_H3_PROFILE_ID: "h3",
+}
 
 
 _PROFILES = {
@@ -76,6 +84,8 @@ _PROFILES = {
     },
 }
 
+PROFILE_IDS = tuple(_PROFILES)
+
 _LEGACY_STAGES = {
     "both": (WAN22_PROFILE_ID, "both"),
     "hi": (WAN22_PROFILE_ID, "hi"),
@@ -84,9 +94,67 @@ _LEGACY_STAGES = {
 }
 
 
+def normalize_mode(mode):
+    value = str(mode or "normal").strip().lower()
+    if value not in TRAINING_MODES:
+        raise ValueError("Unknown training mode: " + str(mode or ""))
+    return value
+
+
+def profile_slug(profile_id):
+    selected = profile(profile_id)
+    return _PROFILE_SLUGS[selected["id"]]
+
+
+def resolved_config(profile_id, config_id, mode="normal"):
+    selected = profile(profile_id)
+    selected_mode = normalize_mode(mode)
+    base = None
+    for item in selected["configs"]:
+        if item["id"] == str(config_id or "").strip().lower():
+            base = item
+            break
+    if base is None:
+        raise ValueError("Unknown configuration stage for " + selected["label"] + ": " + str(config_id or ""))
+    slug = profile_slug(profile_id)
+    stage_suffix = "." + base["id"] if selected["id"] == WAN22_PROFILE_ID else ""
+    resolved = deepcopy(base)
+    resolved["legacyFile"] = base["file"]
+    resolved["legacyDataset"] = base["dataset"]
+    resolved["file"] = f"config.{slug}.{selected_mode}{stage_suffix}.toml"
+    resolved["dataset"] = f"dataset.{slug}.{selected_mode}{stage_suffix}.toml"
+    resolved["mode"] = selected_mode
+    return resolved
+
+
+def profile_for_mode(profile_id, mode="normal"):
+    selected = deepcopy(profile(profile_id))
+    selected_mode = normalize_mode(mode)
+    selected["mode"] = selected_mode
+    selected["slug"] = profile_slug(profile_id)
+    selected["configs"] = tuple(
+        resolved_config(profile_id, item["id"], selected_mode)
+        for item in selected["configs"]
+    )
+    selected["datasetFiles"] = tuple(item["dataset"] for item in selected["configs"])
+    return selected
+
+
 def profiles():
     """Return JSON-safe profile metadata for the UI."""
-    return [deepcopy(profile) for profile in _PROFILES.values()]
+    out = []
+    for selected in _PROFILES.values():
+        item = deepcopy(selected)
+        item["slug"] = profile_slug(selected["id"])
+        item["setups"] = {
+            mode: {
+                "configs": list(profile_for_mode(selected["id"], mode)["configs"]),
+                "datasetFiles": list(profile_for_mode(selected["id"], mode)["datasetFiles"]),
+            }
+            for mode in TRAINING_MODES
+        }
+        out.append(item)
+    return out
 
 
 def profile(profile_id):
@@ -118,13 +186,8 @@ def profile_run(profile_id=None, run_id=None, stages=None):
     return profile(mapped_profile), run(mapped_profile, mapped_run)
 
 
-def config_for_stage(profile_id, stage):
-    selected = profile(profile_id)
-    key = str(stage or "").strip().lower()
-    for config in selected["configs"]:
-        if config["id"] == key:
-            return config
-    raise ValueError("Unknown configuration stage for " + selected["label"] + ": " + str(stage or ""))
+def config_for_stage(profile_id, stage, mode="normal"):
+    return resolved_config(profile_id, stage, mode)
 
 
 def config_for_id(config_id):
@@ -137,12 +200,12 @@ def config_for_id(config_id):
     raise ValueError("Unknown training configuration: " + str(config_id or ""))
 
 
-def profile_config_files(profile_id):
-    return tuple(config["file"] for config in profile(profile_id)["configs"])
+def profile_config_files(profile_id, mode="normal"):
+    return tuple(config["file"] for config in profile_for_mode(profile_id, mode)["configs"])
 
 
-def profile_dataset_files(profile_id):
-    return tuple(profile(profile_id)["datasetFiles"])
+def profile_dataset_files(profile_id, mode="normal"):
+    return tuple(profile_for_mode(profile_id, mode)["datasetFiles"])
 
 
 def legacy_stage_for(profile_id, run_id):

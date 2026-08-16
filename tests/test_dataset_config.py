@@ -362,7 +362,7 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
     assert "WAN quality video resolution cap 1024x576" in quality_report
 
 
-def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
+def test_removed_generate_dataset_config_route_is_not_available(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_folder = fs_root / "set"
     auto_dataset = set_folder / "auto_dataset"
@@ -423,17 +423,8 @@ def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
     client = app_module.app.test_client()
     response = client.post("/fs/generate_dataset_config", json={"folder": "set"})
 
-    assert response.status_code == 200
-    assert "Wrote" in response.get_data(as_text=True)
-    assert (set_folder / "dataset.hi.toml").exists()
-    assert (set_folder / "dataset.lo.toml").exists()
-
-    krea_response = client.post(
-        "/fs/generate_dataset_config",
-        json={"folder": "set", "profileId": KREA2_PROFILE_ID},
-    )
-    assert krea_response.status_code == 200
-    assert 'group = "videos"' not in (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    assert response.status_code == 404
+    assert not (set_folder / "dataset.hi.toml").exists()
 
 
 def test_choose_video_detail_bucket_respects_mfp_limit():
@@ -564,7 +555,7 @@ def test_normal_and_quality_image_buckets_stay_separated():
     assert quality_lo == [(768, 768)]
 
 
-def test_validate_config_payload_persists_training_mode():
+def test_validate_config_payload_does_not_persist_a_global_training_mode():
     from tool.server.config import validate_config_payload
 
     normalized = validate_config_payload({
@@ -572,14 +563,14 @@ def test_validate_config_payload_persists_training_mode():
         "training": {"mode": "poc"},
         "primer": {"template": "{subject}\n{view}"},
     })
-    assert normalized["training"]["mode"] == "poc"
+    assert "mode" not in normalized["training"]
     assert normalized["primer"]["template"] == "{subject}\n{view}"
 
     normalized_quality = validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},
         "training": {"mode": "quality"},
     })
-    assert normalized_quality["training"]["mode"] == "quality"
+    assert "mode" not in normalized_quality["training"]
 
 
 def test_poc_mode_never_emits_second_image_bucket():

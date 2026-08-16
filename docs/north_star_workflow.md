@@ -1,41 +1,44 @@
 # WebCap North Star Workflow
 
-This document defines the intended workflow and product boundaries at a high level.
-It is intentionally not constrained by legacy implementation details.
+This document defines the intended workflow and product boundaries at a high level. It is intentionally not constrained by legacy implementation details.
 
-## Starting Assumption
+## Starting assumption
 
-From WebCap's perspective, the workflow starts when a set folder already exists and already contains curated media.
-Initial media sourcing/clipping/prep can happen outside the app.
+From WebCap's perspective, the workflow starts when a set folder exists and contains working media. Initial sourcing can happen outside the app.
 
-## End-to-End Workflow
+## End-to-end workflow
 
-1. Open a set folder with media.
-2. Curate set contents (rename, prune, restore, reset, crop/deface where needed).
-3. Caption items and iterate quickly while browsing media.
-4. Review caption quality and distribution coverage.
-5. Run preparation steps for training assets.
-6. Generate training config artifacts from the current set state.
-7. Validate config wiring and preview concrete train commands.
-8. Execute training externally (terminal/runner), then iterate back in WebCap as needed.
+1. Open a set folder.
+2. Curate media with explicit, reversible operations.
+3. Caption and review items while filtering or building focus sets.
+4. Open Training and select a model and `POC`, `Normal`, or `Quality` mode.
+5. Inspect or edit the setup's persistent config and dataset TOMLs.
+6. Leave exactly the desired media visible, then Train, queue, or generate a manual command.
+7. Monitor managed work or run the self-contained command externally, then iterate from the source set as needed.
 
-## What WebCap Should Own
+Each Train action captures visible media, latest captions, exact saved TOMLs, and a run plan into an immutable bundle under its numbered output folder. Later source-set changes affect only future actions.
 
-- Fast curation and caption-review loop.
-- Safe/reversible file operations.
-- Explicit preparation/generation actions for training artifacts.
-- Reliable command generation (paths/config references resolved correctly).
+## What WebCap owns
 
-## What WebCap Should Not Own by Default
+- Fast curation and caption review.
+- Safe and reversible media operations.
+- Persistent model/mode setup TOMLs.
+- Visible-media run capture.
+- Concrete Diffusion Pipe command construction.
+- A disposable managed queue, logs, history, progress, Resume, diagnostics, GPU status, and optional TensorBoard controls.
 
-- Long-running training runtime/process lifecycle.
-- Monitoring daemon lifecycle (e.g., TensorBoard) as a required workflow.
+## What WebCap does not own
 
-WebCap can assist with command generation for these tools without becoming responsible for owning those processes.
+- Downloading or choosing model weights automatically.
+- Protecting manually deleted or moved model/run files.
+- Hidden dataset preparation state, stale-state tracking, revisions, or hashes.
+- Arbitrary user-defined launch commands.
 
-## Product Principles
+## Product principles
 
-- Opening a folder should be primarily read-oriented.
-- Artifact creation and mutations should happen via explicit user actions.
-- Safety and reversibility come first for media operations.
-- Keep orchestration simple and inspectable (show concrete outputs/commands before execution).
+- Opening a folder is primarily read-oriented.
+- Mutations and Train actions are explicit.
+- The media grid is the training-selection source of truth.
+- Inspected TOMLs are the configuration interface.
+- A queued or running job owns everything it needs in its captured bundle.
+- Required failures remain visible rather than being converted into defensive workflow gates.

@@ -15,12 +15,13 @@ from .originals import copy_media_to_originals, media_mutation_status_by_hash, i
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, open_path_in_explorer_response, open_in_vscode_response, rename_response
 from .media import media_blur_background_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
-from .run_ops import prepare_dataset_response, generate_dataset_config_response, train_run_response
+from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, clear_history_response as training_runner_clear_history_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses, start_observer as start_training_runner_observer
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, bundle_path_for_job as training_runner_bundle_path_for_job, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, clear_history_response as training_runner_clear_history_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses, start_observer as start_training_runner_observer
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
-from .training_config_files import ensure_training_config_files
+from .prune_candidates import prune_candidates_response
+from .training_setup import ensure_training_setup
 from .training_runtime import repair_boot_critical_training_permissions, repair_configured_training_root_permissions
 from .permissions import normalize_path_permissions, run_with_directory_repair
 
@@ -347,43 +348,27 @@ def media_video_clip_status():
             app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
 
-@app.route("/fs/prepare_dataset", methods=["POST"])
-def prepare_dataset_route():
-    data = request.get_json(silent=True) or {}
-    folder = data.get("folder", "").strip()
-    selected_media = data.get("selected_media")
-    selection_criteria = data.get("selection_criteria")
-    total_media_count = data.get("total_media_count")
-    fallback_captions = data.get("fallback_captions")
-    return prepare_dataset_response(folder, selected_media, selection_criteria, total_media_count, fallback_captions)
-
-@app.route("/fs/generate_dataset_config", methods=["POST"])
-def generate_dataset_config_route():
-    data = request.get_json(silent=True) or {}
-    folder = data.get("folder", "").strip()
-    try:
-        folder_path = safe_join_fs_root(folder)
-        if folder_path.exists() and folder_path.is_dir():
-            ensure_training_config_files(folder_path, profile_id=data.get("profileId") or "")
-    except Exception:
-        # Let downstream route handler return canonical error responses.
-        pass
-    return generate_dataset_config_response(folder, data.get("mode", ""), data.get("profileId") or "")
-
-
 @app.route("/fs/training_profiles", methods=["GET"])
 def training_profiles_route():
-    return jsonify({"profiles": training_profiles()})
+    enabled = set((app_config.config.get("training") or {}).get("enabled_profiles") or [])
+    return jsonify({"profiles": [item for item in training_profiles() if item["id"] in enabled]})
 
 
-@app.route("/fs/training_config/reset", methods=["POST"])
-def training_config_reset_route():
-    from .training_config_files import reset_training_config_file
+@app.route("/fs/training_setup", methods=["POST"])
+def training_setup_route():
     data = request.get_json(silent=True) or {}
     try:
         folder_path = safe_join_fs_root((data.get("folder") or "").strip())
-        reset_training_config_file(folder_path, data.get("file") or "")
-        return jsonify({"ok": True})
+        payload = ensure_training_setup(
+            folder_path,
+            data.get("profileId") or "wan22_t2v",
+            data.get("mode") or "normal",
+            selected_media=data.get("selected_media"),
+            selection_criteria=data.get("selection_criteria"),
+            total_media_count=data.get("total_media_count"),
+            reset_file=data.get("resetFile") or "",
+        )
+        return jsonify({"ok": True, **payload})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 
@@ -397,7 +382,19 @@ def train_run_route():
     resume_stage = str(data.get("resumeStage") or (stages if stages in ("hi", "lo") else "lo")).strip().lower()
     if resume_from_checkpoint and resume_stage not in ("hi", "lo", "krea2", "wan21", "h3"):
         return Response("[ERROR] Resume stage must be hi, lo, krea2, wan21, or h3.\n", status=400, mimetype="text/plain")
-    return train_run_response(folder, stages, resume_from_checkpoint, resume_stage, data.get("profileId") or "", data.get("runId") or "")
+    return train_run_response(
+        folder,
+        stages,
+        resume_from_checkpoint,
+        resume_stage,
+        data.get("profileId") or "",
+        data.get("runId") or "",
+        data.get("mode") or "normal",
+        data.get("selected_media"),
+        data.get("fallback_captions"),
+        data.get("selection_criteria"),
+        data.get("total_media_count"),
+    )
 
 
 @app.route("/fs/training_runner/validate", methods=["POST"])
@@ -410,6 +407,7 @@ def training_runner_validate_route():
         data.get("resumeStage") or "",
         data.get("profileId") or "",
         data.get("runId") or "",
+        data.get("mode") or "normal",
     )
     return jsonify(payload), status
 
@@ -426,6 +424,11 @@ def training_runner_start_route():
         parent_job_id=data.get("parentJobId") or "",
         profile_id=data.get("profileId") or "",
         run_id=data.get("runId") or "",
+        mode=data.get("mode") or "normal",
+        selected_media=data.get("selected_media"),
+        fallback_captions=data.get("fallback_captions"),
+        selection_criteria=data.get("selection_criteria"),
+        total_media_count=data.get("total_media_count"),
     )
     return jsonify(payload), status
 
@@ -473,6 +476,17 @@ def training_runner_open_output_route():
     data = request.get_json(silent=True) or {}
     try:
         return open_path_in_explorer_response(training_runner_output_path_for_job(data.get("jobId", "")))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_runner/open_bundle", methods=["POST"])
+def training_runner_open_bundle_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        return open_path_in_explorer_response(
+            training_runner_bundle_path_for_job(data.get("jobId", ""), data.get("folder", ""))
+        )
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 
@@ -637,7 +651,10 @@ def deface():
         # Ensure backup by hash
         ensure_original_by_hash(file_path, originals_dir)
         anonymized_path = file_path.with_name(file_path.stem + '_anonymized' + file_path.suffix)
-        deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1', str(file_path)]
+        deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1']
+        if file_path.suffix.lower() in {'.mp4', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.m4v'}:
+            deface_cmd.append('--keep-audio')
+        deface_cmd.append(str(file_path))
         yield f'[DEFACE] Command: {deface_cmd}\n'
         yield f'[DEFACE] CWD: {os.getcwd()}\n'
         yield f'[DEFACE] PATH: {os.environ.get("PATH", "")}\n'
@@ -782,6 +799,21 @@ def fs_media_metadata():
         include_face_focus=include_face_focus,
         include_selection_pose=include_selection_pose,
         scoped_filenames=scoped_filenames,
+    )
+
+
+@app.route("/fs/prune_candidates", methods=["GET"])
+def fs_prune_candidates():
+    rel_path = request.args.get("folder", "").strip()
+    try:
+        disk_config = app_config.load_config_from_disk()
+    except Exception:
+        disk_config = app_config.get_config_snapshot()
+    analysis = disk_config.get("analysis") if isinstance(disk_config.get("analysis"), dict) else {}
+    return prune_candidates_response(
+        rel_path,
+        include_face_focus=bool(analysis.get("enableFaceAnalysis", False)),
+        include_selection_pose=bool(analysis.get("enableMediaPipeAnalysis", False)),
     )
 
 

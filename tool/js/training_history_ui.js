@@ -24,7 +24,7 @@ function renderTrainingHistory() {
     if (!searchText) return true;
     var model = job.model && typeof job.model === 'object' ? job.model : {};
     var haystack = [
-      job.folder, job.datasetTarget, job.profileId, job.stages, job.status, job.modelLabel, model.label, model.source
+      job.folder, job.datasetTarget, job.profileId, job.mode, job.stages, job.status, job.modelLabel, model.label, model.source
     ].join(' ').toLowerCase();
     return haystack.indexOf(searchText) !== -1;
   }).sort(function (a, b) {
@@ -70,7 +70,7 @@ function renderTrainingHistory() {
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</span></div>' +
         '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
-      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml((job.model && job.model.label) || job.modelLabel || 'Training model') + ' · ' + escapeHtml(job.datasetTarget || 'unknown') + '</div>' +
+      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml((job.model && job.model.label) || job.modelLabel || 'Training model') + ' · ' + escapeHtml(normalizeTrainingWorkspaceMode(job.mode || job.datasetTarget || 'normal').toUpperCase()) + ' · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</div>' +
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
         (details.length || duration ? '<div>' +
@@ -79,6 +79,7 @@ function renderTrainingHistory() {
           (duration ? '<span title="Estimated training time from global step and recent average iteration time">' + escapeHtml(duration) + '</span>' : '') +
           '</div>' : '') +
         (trainingOutputIdentity(job) ? '<div title="' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '') + '">Output: ' + escapeHtml(trainingOutputIdentity(job)) + '</div>' : '') +
+        (Number(job.capturedItemCount || 0) ? '<div>Captured items: ' + escapeHtml(String(job.capturedItemCount)) + '</div>' : '') +
         (timingError ? '<div class="training-runner-detail is-error">' + escapeHtml(timingError) + '</div>' : '') +
         (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
         buildTrainingFailureDetailsHtml(job) +
@@ -87,6 +88,7 @@ function renderTrainingHistory() {
       '</div>' +
       '<div class="training-history-actions">' +
        (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-output="' + escapeHtml(job.id || '') + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' : '') +
+       (job.bundleAvailable !== false && job.bundlePath ? '<button type="button" class="training-history-action" data-training-history-bundle="' + escapeHtml(job.id || '') + '" title="Open captured files" aria-label="Open captured files">&#128451;</button>' : '') +
        (job.logAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show log" aria-label="Show log">&#9998;</button>' : '') +
        (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Resume this run" aria-label="Resume this run">&#9654;</button>' : '') +
        '<button type="button" class="training-history-action training-history-action--clear" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove this entry from Recent Runs; logs and artifacts remain." aria-label="Remove from Recent Runs">&#215;</button>' +
@@ -182,7 +184,8 @@ function resumeTrainingHistoryJob(jobId) {
       resumeStage: resumeStage,
       parentJobId: job.id,
       profileId: job.profileId || '',
-      runId: job.runId || ''
+      runId: job.runId || '',
+      mode: job.mode || 'normal'
     })
   }).then(function (payload) {
     trainingWorkspaceState.runnerSelectedJobId = payload.job.id;
@@ -228,6 +231,18 @@ function openTrainingJobOutput(jobId) {
     setStatus('Opened effective training output folder.');
   }).catch(function (err) {
     setStatus('Could not open training output folder: ' + String(err && err.message ? err.message : err));
+  });
+}
+
+function openTrainingJobBundle(jobId, folder) {
+  trainingRunnerRequest('/fs/training_runner/open_bundle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: String(jobId || ''), folder: String(folder || state.folder || '') })
+  }).then(function () {
+    setStatus('Opened captured training files.');
+  }).catch(function (err) {
+    setStatus('Could not open captured training files: ' + String(err && err.message ? err.message : err));
   });
 }
 

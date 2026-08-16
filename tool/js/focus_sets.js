@@ -1,4 +1,5 @@
 var FOCUS_SET_PRESETS = [
+  { key: 'prune_candidates', label: 'Prune Candidates' },
   { key: 'suggested', label: 'Suggested' },
   { key: 'close', label: 'Close' },
   { key: 'medium', label: 'Medium' },
@@ -62,18 +63,21 @@ function getFocusSetPresetFiles() {
   var scopeItems = getFilteredMediaItems(true);
   var byFile = getFocusSetMetadataByFile();
   var rows = [];
+  var analyzedFileNames = [];
   var fileNames = [];
   scopeItems.forEach(function (item) {
     var row = byFile[item.fileName];
+    fileNames.push(item.fileName);
     if (!row) return;
     rows.push(row);
-    fileNames.push(item.fileName);
+    analyzedFileNames.push(item.fileName);
   });
-  var suggestedLookup = getFocusSetSuggestedLookup(rows, fileNames);
+  var suggestedLookup = getFocusSetSuggestedLookup(rows, analyzedFileNames);
   var result = { all: fileNames };
   FOCUS_SET_PRESETS.forEach(function (preset) {
     result[preset.key] = fileNames.filter(function (fileName) {
       var row = byFile[fileName];
+      if (preset.key === 'prune_candidates') return isPruneCandidateFile(fileName);
       if (preset.key === 'suggested') return !!suggestedLookup[fileName];
       return getFocusSetBucket(row) === preset.key;
     });
@@ -84,7 +88,7 @@ function getFocusSetPresetFiles() {
 function getActiveFocusSetPresetKey() {
   var source = String(state.focusSet && state.focusSet.source || '');
   if (source.indexOf('Focus Set: ') !== 0) return 'all';
-  return source.slice('Focus Set: '.length).toLowerCase();
+  return source.slice('Focus Set: '.length).toLowerCase().replace(/\s+/g, '_');
 }
 
 function activateFocusSetPreset(key) {
@@ -97,7 +101,8 @@ function activateFocusSetPreset(key) {
     setStatus('No ' + key + ' items match the current filters.');
     return;
   }
-  activateFocusSet(files, 'Focus Set: ' + key.charAt(0).toUpperCase() + key.slice(1), '');
+  var preset = FOCUS_SET_PRESETS.find(function (entry) { return entry.key === key; });
+  activateFocusSet(files, 'Focus Set: ' + (preset ? preset.label : key), '');
 }
 
 function buildFocusSetPresetOptions(filesByPreset, activeKey) {
@@ -122,14 +127,14 @@ function buildFocusSetGridTabsHtml(filesByPreset, activeKey) {
 
 function buildFocusSetControlsHtml(container, isEnabled, status, filesByPreset) {
   if (!state.folder) return '';
-  if (!isEnabled) {
-    return '<div class="focus-set-controls-status">Selection sets need Face Focus and selection-pose analysis. <button type="button" class="focus-set-settings-btn">Settings</button></div>';
-  }
   if (status === 'loading') {
-    return '<div class="focus-set-controls-status">Analyzing selection sets...</div>';
+    return '<div class="focus-set-controls-status">Analyzing focus sets...</div>';
   }
   if (status === 'error') {
-    return '<div class="focus-set-controls-status">Selection set analysis failed. <button type="button" class="focus-set-retry-btn">Retry</button></div>';
+    return '<div class="focus-set-controls-status">Focus set analysis failed. <button type="button" class="focus-set-retry-btn">Retry</button></div>';
+  }
+  if (!isEnabled) {
+    return '<div class="focus-set-controls-status">Selection sets need Face Focus and selection-pose analysis. <button type="button" class="focus-set-settings-btn">Settings</button></div>';
   }
   var activeKey = getActiveFocusSetPresetKey();
   if (container.classList.contains('focus-set-controls--grid')) {
@@ -156,20 +161,31 @@ function wireFocusSetControls(container) {
     button.onclick = openAppSettingsModal;
   });
   Array.prototype.forEach.call(container.querySelectorAll('.focus-set-retry-btn'), function (button) {
-    button.onclick = function () { ensureFocusSetMetadataForCurrentFolder(true); };
+    button.onclick = function () {
+      ensureFocusSetMetadataForCurrentFolder(true);
+      ensurePruneCandidatesForCurrentFolder(true).catch(function () {});
+    };
   });
 }
 
 function renderFocusSetControls() {
   var containers = [ui.focusSetFilterControlsEl, ui.focusSetGridControlsEl];
   var config = getFocusSetAnalysisConfig();
-  var enabled = config.face && config.pose;
-  var filesByPreset = enabled && state.focusSetMetadataStatus === 'ready'
+  var analysisEnabled = config.face && config.pose;
+  var pruneReady = state.pruneCandidatesStatus === 'ready';
+  var enabled = analysisEnabled || pruneReady;
+  var metadataReady = analysisEnabled && state.focusSetMetadataStatus === 'ready';
+  var filesByPreset = enabled
     ? getFocusSetPresetFiles()
     : { all: [] };
+  var status = metadataReady || pruneReady
+    ? 'ready'
+    : (state.pruneCandidatesStatus === 'loading'
+      ? 'loading'
+      : (state.pruneCandidatesStatus === 'error' ? 'error' : state.focusSetMetadataStatus));
   containers.forEach(function (container) {
     if (!container) return;
-    container.innerHTML = buildFocusSetControlsHtml(container, enabled, state.focusSetMetadataStatus, filesByPreset);
+    container.innerHTML = buildFocusSetControlsHtml(container, enabled, status, filesByPreset);
     container.classList.toggle('hidden', !state.folder);
     wireFocusSetControls(container);
   });

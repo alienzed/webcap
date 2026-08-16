@@ -149,7 +149,8 @@ def _run_clip_ffmpeg(source_path, out_path, start_sec, duration_sec, crop_rect):
         "yuv420p",
         "-movflags",
         "+faststart",
-        "-an",
+        "-c:a",
+        "copy",
         str(out_path),
     ]
 

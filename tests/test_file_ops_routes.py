@@ -8,6 +8,8 @@ import tool.server.config as config_module
 import tool.server.file_ops as file_ops_module
 import tool.server.run_ops as run_ops_module
 import tool.server.smart_set as smart_set_module
+import tool.server.training_bundle as training_bundle_module
+import tool.server.training_setup as training_setup_module
 
 
 def write_text(path: Path, text: str):
@@ -130,7 +132,7 @@ def test_training_root_permission_repair_runs_in_background_and_prints_failure(m
     assert "[webcap] Could not restore training-root permissions: denied (0.0s)" in output
 
 
-def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
+def test_app_config_save_persists_enabled_training_profiles(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
     monkeypatch.setattr(app_module.app_config, "CONFIG_PATH", config_path)
 
@@ -146,8 +148,7 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
                 "conda_executable": "/home/user/miniconda3/bin/conda",
                 "conda_environment": "dp-clean",
                 "activate_script": "dp-clean/bin/activate",
-                "mode": "normal",
-                "write_selection_snapshot_comments": True,
+                "enabled_profiles": ["wan22_t2v", "minimax_h3"],
             },
             "primer": {
                 "template": "{subject}\n{view}\n{lighting}"
@@ -157,12 +158,12 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["config"]["training"]["write_selection_snapshot_comments"] is True
+    assert payload["config"]["training"]["enabled_profiles"] == ["wan22_t2v", "minimax_h3"]
     assert payload["config"]["training"]["wsl_distribution"] == "Ubuntu_W"
     assert payload["config"]["training"]["conda_environment"] == "dp-clean"
     assert payload["config"]["primer"]["template"] == "{subject}\n{view}\n{lighting}"
     saved = json.loads(config_path.read_text(encoding="utf-8"))
-    assert saved["training"]["write_selection_snapshot_comments"] is True
+    assert saved["training"]["enabled_profiles"] == ["wan22_t2v", "minimax_h3"]
     assert saved["training"]["conda_executable"] == "/home/user/miniconda3/bin/conda"
     assert saved["primer"]["template"] == "{subject}\n{view}\n{lighting}"
 
@@ -179,6 +180,49 @@ def test_validate_config_payload_strips_legacy_chmod_training_root_on_load():
         "training": {"chmod_training_root_on_load": False},
     })
     assert "chmod_training_root_on_load" not in disabled["training"]
+
+
+def test_validate_config_payload_defaults_all_training_profiles_and_rejects_none():
+    normalized = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/sets", "models": ""},
+        "training": {},
+    })
+    assert normalized["training"]["enabled_profiles"] == [
+        "wan22_t2v",
+        "krea2_raw",
+        "wan21_t2v_14b",
+        "minimax_h3",
+    ]
+
+    try:
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/sets", "models": ""},
+            "training": {"enabled_profiles": []},
+        })
+    except ValueError as exc:
+        assert "At least one training profile" in str(exc)
+    else:
+        raise AssertionError("An empty enabled training profile list should fail loudly.")
+
+
+def test_training_profiles_route_only_returns_enabled_models(monkeypatch):
+    monkeypatch.setattr(
+        app_module.app_config,
+        "config",
+        {"training": {"enabled_profiles": ["minimax_h3"]}},
+    )
+
+    response = app_module.app.test_client().get("/fs/training_profiles")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.get_json()["profiles"]] == ["minimax_h3"]
+
+
+def test_removed_prepare_and_legacy_reset_routes_are_not_available():
+    client = app_module.app.test_client()
+
+    assert client.post("/fs/prepare_dataset", json={}).status_code == 404
+    assert client.post("/fs/training_config/reset", json={}).status_code == 404
 
 
 def test_app_config_save_bootstraps_missing_requirements(tmp_path, monkeypatch):
@@ -550,7 +594,7 @@ def _run_with_repair_probe(path, callback, repairs):
         return callback()
 
 
-def test_generate_dataset_config_creates_missing_config_templates(tmp_path, monkeypatch):
+def test_removed_generate_dataset_config_route_does_not_create_templates(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_f"
     auto_dataset = set_dir / "auto_dataset"
@@ -602,13 +646,11 @@ def test_generate_dataset_config_creates_missing_config_templates(tmp_path, monk
     client = app_module.app.test_client()
     response = client.post("/fs/generate_dataset_config", json={"folder": "set_f"})
 
-    assert response.status_code == 200
-    assert (set_dir / "config.hi.toml").exists()
-    assert (set_dir / "config.lo.toml").exists()
-    assert (set_dir / "config.krea2.toml").exists()
+    assert response.status_code == 404
+    assert not (set_dir / "config.hi.toml").exists()
 
 
-def test_generate_dataset_config_preserves_existing_config_templates(tmp_path, monkeypatch):
+def test_removed_generate_dataset_config_route_leaves_existing_files_untouched(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_g"
     auto_dataset = set_dir / "auto_dataset"
@@ -662,14 +704,14 @@ def test_generate_dataset_config_preserves_existing_config_templates(tmp_path, m
     client = app_module.app.test_client()
     response = client.post("/fs/generate_dataset_config", json={"folder": "set_g"})
 
-    assert response.status_code == 200
+    assert response.status_code == 404
     hi_text = (set_dir / "config.hi.toml").read_text(encoding="utf-8")
     lo_text = (set_dir / "config.lo.toml").read_text(encoding="utf-8")
     assert hi_text == "corrupted config"
     assert lo_text == "corrupted config"
 
 
-def test_generate_dataset_config_can_write_snapshot_comments_when_enabled(tmp_path, monkeypatch):
+def test_removed_generate_dataset_config_route_does_not_write_dataset_files(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_h"
     auto_dataset = set_dir / "auto_dataset"
@@ -721,63 +763,23 @@ def test_generate_dataset_config_can_write_snapshot_comments_when_enabled(tmp_pa
         app_module.app_config,
         "config",
         {
-            "training": {
-                "mode": "normal",
-                "write_selection_snapshot_comments": True,
-            }
+            "training": {"enabled_profiles": ["wan22_t2v"]}
         },
     )
 
     client = app_module.app.test_client()
     response = client.post("/fs/generate_dataset_config", json={"folder": "set_h"})
 
-    assert response.status_code == 200
-    lo_text = (set_dir / "dataset.lo.toml").read_text(encoding="utf-8")
-    assert "# --- webcap selection snapshot v1 ---" in lo_text
-    assert "# snapshot.prepared_mode: all" in lo_text
-    assert "# file: clip.png" in lo_text
-    assert "enable_ar_bucket = true" in lo_text
+    assert response.status_code == 404
+    assert not (set_dir / "dataset.lo.toml").exists()
 
 
-def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp_path, monkeypatch):
+def test_train_run_captures_a_self_contained_bundle_for_manual_handoff(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_train"
-    auto_dataset = set_dir / "auto_dataset"
     set_dir.mkdir(parents=True)
-    auto_dataset.mkdir(parents=True)
-    write_image(set_dir / "clip.png")
-    prepared_img_dir = auto_dataset / "square_img"
-    prepared_img_dir.mkdir(parents=True)
-    write_image(prepared_img_dir / "clip.png", (512, 512))
-    write_text(prepared_img_dir / "clip.txt", "prepared caption")
-    (auto_dataset / "prep_manifest.json").write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "target_fps": 16,
-                "videos": [],
-                "images": [
-                    {
-                        "file": "clip.png",
-                        "ar": "square",
-                        "width": 512,
-                        "height": 512,
-                        "prepared_path": "square_img/clip.png",
-                        "caption": True,
-                    }
-                ],
-                "skipped": [],
-                "selection": {
-                    "mode": "all",
-                    "selected_files": ["clip.png"],
-                    "selected_count": 1,
-                    "total_count": 1,
-                    "criteria": {},
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
+    write_image(set_dir / "clip.png", (512, 512))
+    write_text(set_dir / "clip.txt", "source caption")
 
     def safe_join(rel_path):
         rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
@@ -788,9 +790,20 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     monkeypatch.setattr(run_ops_module.app_config, "safe_join_fs_root", safe_join)
     monkeypatch.setattr(run_ops_module.app_config, "FS_ROOT", fs_root)
     monkeypatch.setattr(run_ops_module.app_config, "config", {"training": {"mode": "normal"}})
+    monkeypatch.setattr(run_ops_module, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
+    monkeypatch.setattr(training_bundle_module, "to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
+    training_setup_module.ensure_training_setup(
+        set_dir, "wan22_t2v", "normal", selected_media=["clip.png"]
+    )
 
     client = app_module.app.test_client()
-    response = client.post("/fs/train_run", json={"folder": "set_train"})
+    response = client.post("/fs/train_run", json={
+        "folder": "set_train",
+        "profileId": "wan22_t2v",
+        "runId": "both",
+        "mode": "normal",
+        "selected_media": ["clip.png"],
+    })
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
@@ -801,30 +814,12 @@ def test_train_run_auto_generates_missing_configs_and_returns_manual_handoff(tmp
     assert " ; " in body
     assert "pkill" not in body
     assert "Manual handoff only" in body
-    assert (set_dir / "config.hi.toml").exists()
-    assert (set_dir / "config.lo.toml").exists()
-    assert (set_dir / "config.krea2.toml").exists()
-    assert (set_dir / "dataset.hi.toml").exists()
-    assert (set_dir / "dataset.lo.toml").exists()
-
-    hi_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "hi"})
-    assert hi_response.status_code == 200
-    hi_body = hi_response.get_data(as_text=True)
-    assert "config.hi.toml" in hi_body
-    assert " ; " not in hi_body
-
-    lo_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "lo"})
-    assert lo_response.status_code == 200
-    lo_body = lo_response.get_data(as_text=True)
-    assert "config.lo.toml" in lo_body
-    assert " ; " not in lo_body
-
-    krea2_response = client.post("/fs/train_run", json={"folder": "set_train", "stages": "krea2"})
-    assert krea2_response.status_code == 200, krea2_response.get_data(as_text=True)
-    krea2_body = krea2_response.get_data(as_text=True)
-    assert "config.krea2.toml" in krea2_body
-    assert "Config Krea2 Raw:" in krea2_body
-    assert " ; " not in krea2_body
+    assert "config.wan22.normal.hi.toml" in body
+    assert "config.wan22.normal.lo.toml" in body
+    bundles = list((fs_root / "output" / "runs" / "001-set_train" / ".webcap" / "datasets").iterdir())
+    assert len(bundles) == 1
+    assert (bundles[0] / "media" / "square_img" / "clip.png").is_file()
+    assert not (set_dir / "auto_dataset").exists()
 
 
 def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path, monkeypatch):
@@ -1089,6 +1084,8 @@ def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, m
                 "reviewedKeys": ["one.png"],
                 "flags": {"one.png": "blue"},
                 "caption_tags_by_media": {"one.png": ["tag-a", "tag-b"]},
+                "caption_requirements": ["Pose"],
+                "caption_requirement_keywords": {"Pose": "tag-b, tag-a"},
                 "ratings_by_media": {"one.png": 5},
             }
         ),
@@ -1136,6 +1133,8 @@ def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, m
     assert out_state["reviewedKeys"] == ["one.png"]
     assert out_state["flags"] == {"one.png": "blue"}
     assert out_state["caption_tags_by_media"] == {"one.png": ["tag-a", "tag-b"]}
+    assert out_state["caption_requirements"] == ["Pose"]
+    assert out_state["caption_requirement_keywords"] == {"Pose": "tag-a, tag-b"}
     assert out_state["ratings_by_media"] == {"one.png": 5}
     out_metadata = json.loads((out_dir / "media_metadata.json").read_text(encoding="utf-8"))
     assert out_metadata["one.png"]["resolution"] == "128x128"
@@ -1184,6 +1183,8 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
                 "reviewedKeys": ["shared.png"],
                 "flags": {"shared.png": "green"},
                 "caption_tags_by_media": {"shared.png": ["from-a"]},
+                "caption_requirements": ["Source", "Pose"],
+                "caption_requirement_keywords": {"Source": "from-a, Shared", "Pose": "standing"},
                 "ratings_by_media": {"shared.png": 3},
             }
         ),
@@ -1195,6 +1196,8 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
                 "reviewedKeys": ["shared.png"],
                 "flags": {"shared.png": "red"},
                 "caption_tags_by_media": {"shared.png": ["from-b"]},
+                "caption_requirements": ["source", "Lighting"],
+                "caption_requirement_keywords": {"source": "FROM-A, from-b", "Lighting": "rim light"},
                 "ratings_by_media": {"shared.png": 4},
             }
         ),
@@ -1236,6 +1239,12 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
     assert sorted(out_state["reviewedKeys"]) == ["shared.png", "shared_2.png"]
     assert out_state["flags"] == {"shared.png": "green", "shared_2.png": "red"}
     assert out_state["caption_tags_by_media"] == {"shared.png": ["from-a"], "shared_2.png": ["from-b"]}
+    assert out_state["caption_requirements"] == ["Source", "Pose", "Lighting"]
+    assert out_state["caption_requirement_keywords"] == {
+        "Source": "from-a, from-b, Shared",
+        "Pose": "standing",
+        "Lighting": "rim light",
+    }
     assert out_state["ratings_by_media"] == {"shared.png": 3, "shared_2.png": 4}
     out_metadata = json.loads((out_dir / "media_metadata.json").read_text(encoding="utf-8"))
     assert out_metadata["shared.png"]["codec"] == "a"
@@ -1262,3 +1271,31 @@ def test_create_set_from_results_blocks_existing_destination(tmp_path, monkeypat
         },
     )
     assert response.status_code == 409
+
+
+def test_manual_training_path_conversion_uses_resolved_wsl_executable(monkeypatch, tmp_path):
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = "/mnt/w/training/output\n"
+        stderr = ""
+
+    monkeypatch.setattr(run_ops_module, "wsl_executable", lambda: r"C:\Windows\System32\wsl.exe")
+    monkeypatch.setattr(
+        run_ops_module.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append((command, kwargs)) or Result(),
+    )
+
+    converted = run_ops_module._to_wsl_path(tmp_path, "Ubuntu_W")
+
+    assert converted == "/mnt/w/training/output"
+    assert calls == [(
+        [r"C:\Windows\System32\wsl.exe", "--distribution", "Ubuntu_W", "--", "wslpath", "-a", str(tmp_path)],
+        {
+            "capture_output": True,
+            "text": True,
+            "check": False,
+        },
+    )]

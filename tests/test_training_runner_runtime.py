@@ -179,6 +179,25 @@ def test_runner_script_uses_conda_run_without_sourcing_an_activation_script(tmp_
     assert "finish_requested_stop" in script
 
 
+def test_h3_runner_script_relaunches_after_caching(tmp_path, monkeypatch):
+    h3_path = tmp_path / "config.h3.toml"
+    h3_path.write_text("h3", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/c/" + path.name)
+    settings = training_runtime_settings({"diffusion_pipe_wsl": "/home/user/diffusion-pipe"})
+
+    script, _ = training_runner._build_runner_script(
+        {"snapshot": {}, "stages": "h3"},
+        settings,
+        {"h3Config": h3_path},
+        tmp_path / "job",
+    )
+
+    assert "[webcap] stage=h3-cache" in script
+    assert "--trust_cache --cache_only" in script
+    assert "[webcap] stage=h3'" in script
+    assert 'PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"' not in script
+
+
 def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):
     hi_path = tmp_path / "config.hi.toml"
     lo_path = tmp_path / "config.lo.toml"
@@ -362,41 +381,48 @@ def test_paused_queue_does_not_launch_the_next_job(monkeypatch):
     assert state["activeJobId"] == ""
 
 
-def test_new_job_keeps_large_snapshots_under_the_output_sidecar(tmp_path, monkeypatch):
+def test_new_job_references_the_immutable_run_bundle(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "set"
-    dataset = folder / "auto_dataset"
-    dataset.mkdir(parents=True)
-    for name in ("config.hi.toml", "config.lo.toml"):
-        (folder / name).write_text("output_dir = '/output/source'\nmodel_path = 'models/example.safetensors'\n", encoding="utf-8")
-    for name in ("dataset.hi.toml", "dataset.lo.toml"):
-        (folder / name).write_text("ok\n", encoding="utf-8")
-    (dataset / "training_plan.json").write_text('{"mode": "poc", "stages": {}}', encoding="utf-8")
-    (dataset / "prep_manifest.json").write_text('{"images": [], "videos": []}', encoding="utf-8")
+    folder.mkdir(parents=True)
+    group = root / "output" / "runs" / "001-set"
+    bundle_path = group / ".webcap" / "datasets" / "wan22-poc-capture"
+    configs = bundle_path / "configs"
+    configs.mkdir(parents=True)
+    artifacts = {"manifest": bundle_path / "dataset_manifest.json", "plan": bundle_path / "training_plan.json"}
+    for stage in ("hi", "lo"):
+        config = configs / ("config.wan22.poc." + stage + ".toml")
+        dataset = configs / ("dataset.wan22.poc." + stage + ".toml")
+        config.write_text("output_dir = '/output/source'\nmodel_path = 'models/example.safetensors'\n", encoding="utf-8")
+        dataset.write_text("ok\n", encoding="utf-8")
+        artifacts[stage + "Config"] = config
+        artifacts[stage + "Dataset"] = dataset
+    artifacts["plan"].write_text('{"mode": "poc", "stages": {}}', encoding="utf-8")
+    artifacts["manifest"].write_text('{"images": [], "videos": []}', encoding="utf-8")
+    bundle = {"path": bundle_path, "artifacts": artifacts, "capturedItemCount": 0}
     monkeypatch.setattr(config_module, "FS_ROOT", root)
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
     monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
 
-    job = training_runner._new_job("set", {"checks": [], "summary": {"blockers": 0}}, "hi")
-    sibling = training_runner._new_job("set", {"checks": [], "summary": {"blockers": 0}}, "lo")
+    job = training_runner._new_job("set", {"checks": [], "summary": {"blockers": 0}}, "hi", bundle, group / "wan22-hi", "/mnt/w/wan22-hi", mode="poc", launch_group=group)
+    sibling = training_runner._new_job("set", {"checks": [], "summary": {"blockers": 0}}, "lo", bundle, group / "wan22-lo", "/mnt/w/wan22-lo", mode="poc", launch_group=group)
 
     artifact = Path(job["artifactPath"])
     assert artifact.is_dir()
     assert ".webcap" in artifact.parts
-    assert (artifact / "config.hi.toml").is_file()
-    assert (artifact / "dataset.hi.toml").is_file()
+    assert not list(artifact.glob("*.toml"))
+    assert Path(job["snapshot"]["hi"]) == artifacts["hiConfig"]
+    assert Path(job["bundlePath"]) == bundle_path
     assert job["datasetTarget"] == "poc"
     assert job["launchGroupId"] == "001-set"
     assert sibling["launchGroupId"] == "001-set"
     assert Path(sibling["outputRoot"]).parent == Path(job["outputRoot"]).parent
     assert job["outputSlug"] == "wan22-hi"
-    assert "output_dir = \"/mnt/w/wan22-hi\"" in (artifact / "config.hi.toml").read_text(encoding="utf-8")
-    assert "output_dir = '/output/source'" in (folder / "config.hi.toml").read_text(encoding="utf-8")
     assert job["model"]["source"] == "models/example.safetensors"
 
 
-def test_launch_refreshes_snapshot_from_current_config_without_mutating_source(tmp_path):
+def test_launch_uses_captured_artifacts_without_refreshing_from_the_set(tmp_path):
     folder = tmp_path / "set"
     bundle = tmp_path / "output" / ".webcap" / "jobs" / "job"
     folder.mkdir()
@@ -412,11 +438,11 @@ def test_launch_refreshes_snapshot_from_current_config_without_mutating_source(t
         "snapshot": {"lo": str(target)},
     }
 
-    artifacts = training_runner._launch_artifacts(job, {"loConfig": source})
+    artifacts = training_runner._launch_artifacts(job, {"loConfig": target})
 
     assert artifacts["loConfig"] == target
-    assert "output_dir = \"/mnt/w/output/run\"" in target.read_text(encoding="utf-8")
-    assert "learning_rate = 2e-5" in target.read_text(encoding="utf-8")
+    assert "output_dir = '/old'" in target.read_text(encoding="utf-8")
+    assert "learning_rate = 1e-5" in target.read_text(encoding="utf-8")
     assert source.read_text(encoding="utf-8") == "output_dir = '/source'\nlearning_rate = 2e-5\n"
 
 
@@ -440,7 +466,7 @@ def test_launch_failure_records_start_before_terminal_time(tmp_path, monkeypatch
     }
     blocker = training_preflight.make_check("config", "blocker", False, "Missing config.")
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
-    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages: ("set", tmp_path, {}, {}, [blocker]))
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages, **kwargs: ("set", tmp_path, {}, {}, [blocker]))
 
     launched = training_runner._launch_job(job, tmp_path)
 
@@ -1376,13 +1402,25 @@ def test_starting_both_creates_adjacent_hi_and_lo_jobs(tmp_path, monkeypatch):
     }
     state = training_runner._default_state()
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
-    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value, stages="both": ("set", folder, artifacts, {}, []))
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value, stages="both", **kwargs: ("set", folder, artifacts, {}, []))
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_write_state", lambda value, **kwargs: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
     monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
+    captured_root = root / "output" / "runs" / "001-set" / ".webcap" / "datasets" / "wan22-normal-test"
+    captured_configs = captured_root / "configs"
+    captured_configs.mkdir(parents=True)
+    captured_artifacts = {"manifest": captured_root / "dataset_manifest.json", "plan": captured_root / "training_plan.json"}
+    for stage in ("hi", "lo"):
+        captured_artifacts[stage + "Config"] = captured_configs / ("config.wan22.normal." + stage + ".toml")
+        captured_artifacts[stage + "Dataset"] = captured_configs / ("dataset.wan22.normal." + stage + ".toml")
+        captured_artifacts[stage + "Config"].write_text("model_path = 'models/example.safetensors'\n", encoding="utf-8")
+        captured_artifacts[stage + "Dataset"].write_text("ok\n", encoding="utf-8")
+    captured_artifacts["manifest"].write_text('{"images": [], "videos": []}', encoding="utf-8")
+    captured_artifacts["plan"].write_text('{"mode": "normal", "stages": {}}', encoding="utf-8")
+    monkeypatch.setattr(training_runner, "materialize_training_bundle", lambda *args, **kwargs: {"path": captured_root, "artifacts": captured_artifacts, "capturedItemCount": 0})
     monkeypatch.setattr(training_runner, "_launch_job", lambda job, path: job.update(status="running", stage=job["stages"]))
 
     payload, status = training_runner.start_response("set", stages="both")
@@ -1397,7 +1435,7 @@ def test_starting_both_creates_adjacent_hi_and_lo_jobs(tmp_path, monkeypatch):
     assert state["jobs"][1]["status"] == "queued"
 
 
-def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypatch):
+def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(tmp_path, monkeypatch):
     state = {
         "activeJobId": "",
         "queuePaused": True,
@@ -1410,12 +1448,14 @@ def test_starting_with_an_empty_queue_clears_a_stale_hold_and_launches(monkeypat
     monkeypatch.setattr(training_runner, "_write_state", lambda value, **kwargs: None)
     monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda value: None)
-    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value, stages="both": ("set", "folder", {}, {}, []))
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda value, stages="both", **kwargs: ("set", tmp_path, {}, {}, []))
     monkeypatch.setattr(training_runner, "_new_job", lambda *args: job)
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: folder)
-    monkeypatch.setattr(training_runner, "_resolve_folder", lambda folder: ("set", "folder"))
+    monkeypatch.setattr(training_runner, "_resolve_folder", lambda folder: ("set", tmp_path))
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
-    monkeypatch.setattr(training_runner, "training_output_group_for_folder", lambda folder, create=False: Path("launch"))
+    monkeypatch.setattr(training_runner, "training_output_group_for_folder", lambda folder, create=False: tmp_path / "001-set")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
+    monkeypatch.setattr(training_runner, "materialize_training_bundle", lambda *args, **kwargs: {"path": tmp_path / "bundle", "artifacts": {}, "capturedItemCount": 0})
     monkeypatch.setattr(training_runner, "_launch_job", lambda candidate, folder: candidate.update(status="starting"))
 
     payload, status = training_runner.start_response("set", queue=True, stages="lo")
@@ -1436,6 +1476,67 @@ def test_historical_resume_without_a_checkpoint_is_rejected_before_a_new_job_is_
     assert payload["error"] == "Historical resume requires a checkpoint path; refusing to start a new run."
 
 
+def test_managed_resume_reuses_the_original_bundle(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    group = tmp_path / "output" / "runs" / "001-set"
+    bundle_path = group / ".webcap" / "datasets" / "h3-normal-captured"
+    bundle = {"path": bundle_path, "artifacts": {"manifest": bundle_path / "dataset_manifest.json"}, "capturedItemCount": 3}
+    state = training_runner._default_state()
+    created = []
+    monkeypatch.setattr(training_runner, "_resolve_folder", lambda value: ("set", folder))
+    monkeypatch.setattr(training_runner, "_find_history_job", lambda value, job_id: {
+        "id": job_id, "bundlePath": str(bundle_path), "profileId": "minimax_h3", "mode": "normal"
+    })
+    monkeypatch.setattr(training_runner, "_bundle_from_path", lambda *args: bundle)
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda *args, **kwargs: ("set", folder, bundle["artifacts"], {}, []))
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_write_state", lambda value, **kwargs: None)
+    monkeypatch.setattr(training_runner, "_sync_histories", lambda value: None)
+    monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
+    monkeypatch.setattr(training_runner, "host_path_for_training_path", lambda value: tmp_path / "resume-output")
+    monkeypatch.setattr(training_runner, "materialize_training_bundle", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("resume must not recapture")))
+    monkeypatch.setattr(training_runner, "_new_job", lambda *args, **kwargs: created.append(args[3]) or {"id": "resume", "folder": "set", "stages": "h3", "status": "queued"})
+    monkeypatch.setattr(training_runner, "_launch_job", lambda job, path: job.update(status="starting"))
+
+    payload, status = training_runner.start_response(
+        "set",
+        queue=True,
+        stages="h3",
+        resume_from_checkpoint="/mnt/w/output/run",
+        resume_stage="h3",
+        parent_job_id="original",
+        profile_id="minimax_h3",
+        run_id="train",
+        mode="normal",
+    )
+
+    assert status == 200
+    assert payload["job"]["id"] == "resume"
+    assert created == [bundle]
+
+
+def test_managed_resume_fails_when_its_bundle_metadata_is_missing(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    monkeypatch.setattr(training_runner, "_resolve_folder", lambda value: ("set", folder))
+    monkeypatch.setattr(training_runner, "_find_history_job", lambda value, job_id: {"id": job_id})
+
+    payload, status = training_runner.start_response(
+        "set",
+        stages="h3",
+        resume_from_checkpoint="/mnt/w/output/run",
+        resume_stage="h3",
+        parent_job_id="original",
+        profile_id="minimax_h3",
+        run_id="train",
+    )
+
+    assert status == 400
+    assert payload["error"] == "The managed run has no captured training bundle."
+
+
 def test_starting_krea2_creates_one_krea2_job(tmp_path, monkeypatch):
     state = training_runner._default_state()
     job = {"id": "krea2", "folder": "set", "stages": "krea2", "status": "queued"}
@@ -1447,8 +1548,10 @@ def test_starting_krea2_creates_one_krea2_job(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_refresh_state", lambda value: None)
     monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda folder: tmp_path)
     monkeypatch.setattr(training_runner, "_training_settings", lambda: {"wslDistribution": ""})
-    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages: ("set", tmp_path, {}, {}, []))
+    monkeypatch.setattr(training_runner, "_build_launch_preflight", lambda folder, stages, **kwargs: ("set", tmp_path, {}, {}, []))
     monkeypatch.setattr(training_runner, "training_output_group_for_folder", lambda folder, create=False: tmp_path / "001-set")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
+    monkeypatch.setattr(training_runner, "materialize_training_bundle", lambda *args, **kwargs: {"path": tmp_path / "bundle", "artifacts": {}, "capturedItemCount": 0})
     monkeypatch.setattr(
         training_runner,
         "_new_job",

@@ -72,7 +72,7 @@ The feature is good; its placement is the questionable part.
 
 ### Explicit Training Flow
 
-The current `Prepare Dataset` / `Generate` / `Train` split is clearer than legacy one-shot autoset behavior.
+The current model/mode → inspect TOMLs → Train flow keeps dataset selection visible and gives each run an immutable capture.
 
 ### Review / Selection Reports
 
@@ -195,7 +195,7 @@ The app should make these roles explicit:
 4. **Set Operations**
    - Review Captions
    - Review Selections
-   - Prepare / Generate / Train
+   - Training setup and Train
    - Config and review settings
 
 The current panes roughly match the first three roles, but set operations are folded into the navigator and item inspector is folded into the workbench.
@@ -267,8 +267,6 @@ Consider a clearer set-operations strip:
 
 - `Review Captions`
 - `Review Selections`
-- `Prepare`
-- `Generate`
 - `Train`
 
 This could be:
@@ -300,9 +298,10 @@ Recommended modes:
    - Sample curation and set composition.
    - Focus-set links.
 
-4. **Train Prep**
-   - Prepare / Generate / Train command preview.
-   - Config files.
+4. **Training**
+   - Select model and mode.
+   - Inspect config and dataset TOMLs.
+   - Capture visible media and Train, or generate a manual command.
 
 The current UI has these modes, but they are not visually distinct enough.
 

@@ -215,6 +215,7 @@ function openAdvancedFilterHelpInPreview() {
     '<li style="margin:0 0 6px 0;"><strong>Incomplete</strong>: requirement groups not fully satisfied.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Invalid AR</strong>: items with unsupported aspect buckets.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Tag Mismatch</strong>: items with no tags, or with item tags not found in the caption.</li>' +
+    '<li style="margin:0 0 6px 0;"><strong>Prune Candidates</strong>: whole-set technical warnings and conservative resolution outliers.</li>' +
     '</ul>' +
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">Stars + Flag</h4>' +
     '<ul style="margin:0 0 8px 18px;padding:0;">' +
@@ -253,6 +254,7 @@ function clearCaptionFilterInputs() {
   if (ui.advancedFilterUnreviewedEl) ui.advancedFilterUnreviewedEl.checked = false;
   if (ui.advancedFilterUntaggedEl) ui.advancedFilterUntaggedEl.checked = false;
   if (ui.advancedFilterIncompleteEl) ui.advancedFilterIncompleteEl.checked = false;
+  ui.advancedFilterPruneCandidatesEl.checked = false;
   if (ui.advancedFilterStarsEl) {
     Array.prototype.forEach.call(ui.advancedFilterStarsEl.querySelectorAll('input[type="checkbox"]'), function (input) {
       input.checked = false;
@@ -316,6 +318,7 @@ function navigateIntoFolder(name) {
 // Directory listing now uses backend /fs/list
 function refreshCurrentDirectory() {
   var path = state.folder || '';
+  invalidatePruneCandidates();
   if (state && state.supersetActive) {
     state.supersetActive = false;
     state.supersetResults = [];
@@ -476,6 +479,7 @@ if (ui.advancedFilterUntaggedEl) {
 if (ui.advancedFilterIncompleteEl) {
   ui.advancedFilterIncompleteEl.addEventListener('change', handleMediaFilterChanged);
 }
+ui.advancedFilterPruneCandidatesEl.addEventListener('change', handleMediaFilterChanged);
 if (ui.advancedFilterStarsEl) {
   ui.advancedFilterStarsEl.addEventListener('change', handleMediaFilterChanged);
 }

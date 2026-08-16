@@ -63,7 +63,7 @@ function isTrainingRunnerConsoleVisible() {
 function appendToTrainingRunnerConsole(text) {
   var els = getTrainingWorkspaceEls();
   if (!els.runnerConsoleLog) return;
-  els.runnerConsoleLog.textContent += String(text || '');
+  els.runnerConsoleLog.textContent += String(text || '').replace(/\r\n?/g, '\n');
   if (els.runnerConsoleLog.textContent.length > 200000) {
     els.runnerConsoleLog.textContent = els.runnerConsoleLog.textContent.slice(-160000);
   }

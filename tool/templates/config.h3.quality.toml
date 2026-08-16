@@ -26,7 +26,7 @@ compile = true
 
 [model]
 type = "minimax_h3"
-diffusion_model = "{MODELS_ROOT}/Stable-diffusion/minimax-h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+diffusion_model = "{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
 vae = "{MODELS_ROOT}/vae/minimax_h3_video_vae_fp16.safetensors"
 audio_vae = "{MODELS_ROOT}/vae/minimax_h3_audio_vae_fp32.safetensors"
 text_encoders = [

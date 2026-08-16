@@ -650,7 +650,10 @@ def deface():
         # Ensure backup by hash
         ensure_original_by_hash(file_path, originals_dir)
         anonymized_path = file_path.with_name(file_path.stem + '_anonymized' + file_path.suffix)
-        deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1', str(file_path)]
+        deface_cmd = [deface_path, '-t', thresh, '--mask-scale', '1']
+        if file_path.suffix.lower() in {'.mp4', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.m4v'}:
+            deface_cmd.append('--keep-audio')
+        deface_cmd.append(str(file_path))
         yield f'[DEFACE] Command: {deface_cmd}\n'
         yield f'[DEFACE] CWD: {os.getcwd()}\n'
         yield f'[DEFACE] PATH: {os.environ.get("PATH", "")}\n'

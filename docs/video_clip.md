@@ -144,7 +144,7 @@ The crop interaction should stay close to the existing image crop UX if that kee
 - No batch clipping.
 - No codec/output configuration.
 - No timeline mouse dragging as the primary selection mechanism.
-- No audio handling configuration (strip or pass through — backend default; not user-configurable in V1).
+- Clip exports retain a source audio track when present; audio is not separately configurable.
 - No caption copy or caption creation on export.
 - No clip-from-clip chaining (source must be in `src_videos`).
 - No output format/codec selection (always MP4/H.264).

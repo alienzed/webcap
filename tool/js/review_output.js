@@ -207,6 +207,7 @@ function showCaptionSheet() {
     ui.captionSheetSummaryEl.textContent = items.length + ' visible caption' + (items.length === 1 ? '' : 's');
   }
   if (ui.captionSheetPane) ui.captionSheetPane.classList.remove('hidden');
+  if (ui.captionSheetBtn) ui.captionSheetBtn.setAttribute('aria-pressed', 'true');
   setStatus('Caption sheet ready: ' + items.length + ' files');
 }
 

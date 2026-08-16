@@ -1,4 +1,4 @@
-from tool.server.training_commands import build_training_command_plan, build_training_launcher_probe
+from tool.server.training_commands import build_h3_command_plan, build_training_command_plan, build_training_launcher_probe
 from tool.server.training_runtime import build_runtime_command, build_training_launcher, training_runtime_settings
 
 
@@ -25,6 +25,21 @@ def test_training_command_plan_appends_a_quoted_resume_checkpoint_only_to_its_se
 
     assert "--resume_from_checkpoint" not in plan["hiCommand"]
     assert plan["loCommand"].endswith(" --resume_from_checkpoint /mnt/w/training/output/runs/20260710_23-57-51")
+
+
+def test_h3_command_plan_runs_cache_and_training_in_separate_processes():
+    plan = build_h3_command_plan("/mnt/w/sets/one/config.h3.toml")
+
+    assert plan["cacheCommand"] == (
+        'PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" '
+        'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed '
+        '--config /mnt/w/sets/one/config.h3.toml --trust_cache --cache_only'
+    )
+    assert plan["trainCommand"] == (
+        'PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" '
+        'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed '
+        '--config /mnt/w/sets/one/config.h3.toml --trust_cache'
+    )
 
 
 def test_conda_runtime_wraps_child_commands_without_shell_activation():

@@ -31,5 +31,21 @@ def build_training_command_plan(hi_config_path, lo_config_path, launcher=DEEPSPE
     }
 
 
+def build_h3_command_plan(config_path, launcher=DEEPSPEED_LAUNCHER, resume_from_checkpoint=""):
+    base_plan = build_training_command_plan(config_path, config_path, launcher)
+    train_plan = build_training_command_plan(
+        config_path,
+        config_path,
+        launcher,
+        resume_from_checkpoint=resume_from_checkpoint,
+        resume_stage="h3",
+    )
+    allocator = 'PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" '
+    return {
+        "cacheCommand": allocator + base_plan["loCommand"] + " --trust_cache --cache_only",
+        "trainCommand": allocator + train_plan["loCommand"] + " --trust_cache",
+    }
+
+
 def build_training_launcher_probe(launcher=DEEPSPEED_LAUNCHER):
     return (str(launcher or DEEPSPEED_LAUNCHER).strip() or DEEPSPEED_LAUNCHER) + " --help >/dev/null"

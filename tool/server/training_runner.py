@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
-from .training_commands import build_training_command_plan
+from .training_commands import build_h3_command_plan, build_training_command_plan
 from .training_profiles import config_for_stage, normalize_mode, profile_for_mode, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
 from .dataset_config import repeat_targets_for_mode
@@ -459,6 +459,11 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         resume_path,
         resume_stage,
     )
+    h3_command_plan = build_h3_command_plan(
+        lo_wsl,
+        build_training_launcher(settings),
+        resume_path if resume_stage == "h3" else "",
+    ) if stages == "h3" else None
     result_wsl = _to_wsl_path(job_dir / "result.json", distribution)
     pid_wsl = _to_wsl_path(job_dir / "pid", distribution)
     action_wsl = _to_wsl_path(_job_action_path(job), distribution)
@@ -500,9 +505,9 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "if [ \"$LO_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
             "if [ \"$LO_CODE\" -ne 0 ]; then echo '[webcap] LO failed'; write_result failed \"$LO_CODE\"; exit \"$LO_CODE\"; fi",
         ])
-    if stages in ("krea2", "wan21", "h3"):
-        stage_title = "Krea2" if stages == "krea2" else "Wan2.1" if stages == "wan21" else "MiniMax H3"
-        stage_code = "KREA2" if stages == "krea2" else "WAN21" if stages == "wan21" else "H3"
+    if stages in ("krea2", "wan21"):
+        stage_title = "Krea2" if stages == "krea2" else "Wan2.1"
+        stage_code = "KREA2" if stages == "krea2" else "WAN21"
         lines.extend([
             "echo '[webcap] stage=" + stages + "'",
             "printf '%s\\n' " + shlex.quote("[webcap] command " + stages + ": " + command_plan["loCommand"]),
@@ -511,6 +516,26 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "finish_requested_stop",
             "if [ \"$" + stage_code + "_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$" + stage_code + "_CODE\"; exit \"$" + stage_code + "_CODE\"; fi",
             "if [ \"$" + stage_code + "_CODE\" -ne 0 ]; then echo '[webcap] " + stage_title + " failed'; write_result failed \"$" + stage_code + "_CODE\"; exit \"$" + stage_code + "_CODE\"; fi",
+        ])
+    if stages == "h3":
+        if not resume_stage:
+            lines.extend([
+                "echo '[webcap] stage=h3-cache'",
+                "printf '%s\\n' " + shlex.quote("[webcap] command h3 cache: " + h3_command_plan["cacheCommand"]),
+                h3_command_plan["cacheCommand"],
+                "H3_CACHE_CODE=$?",
+                "finish_requested_stop",
+                "if [ \"$H3_CACHE_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$H3_CACHE_CODE\"; exit \"$H3_CACHE_CODE\"; fi",
+                "if [ \"$H3_CACHE_CODE\" -ne 0 ]; then echo '[webcap] MiniMax H3 cache failed'; write_result failed \"$H3_CACHE_CODE\"; exit \"$H3_CACHE_CODE\"; fi",
+            ])
+        lines.extend([
+            "echo '[webcap] stage=h3'",
+            "printf '%s\\n' " + shlex.quote("[webcap] command h3: " + h3_command_plan["trainCommand"]),
+            h3_command_plan["trainCommand"],
+            "H3_CODE=$?",
+            "finish_requested_stop",
+            "if [ \"$H3_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$H3_CODE\"; exit \"$H3_CODE\"; fi",
+            "if [ \"$H3_CODE\" -ne 0 ]; then echo '[webcap] MiniMax H3 failed'; write_result failed \"$H3_CODE\"; exit \"$H3_CODE\"; fi",
         ])
     lines.extend(["echo '[webcap] completed'", "write_result completed 0"])
     script = "\n".join(lines) + "\n"
@@ -764,7 +789,9 @@ def _sync_job_log_evidence(job):
         tail = _read_log_tail(log_path)
     except OSError:
         return "", None
-    if "[webcap] stage=h3" in tail:
+    if tail.rfind("[webcap] stage=h3-cache") > tail.rfind("[webcap] stage=h3\n"):
+        job["stage"] = "caching"
+    elif "[webcap] stage=h3" in tail:
         job["stage"] = "h3"
     elif "[webcap] stage=wan21" in tail:
         job["stage"] = "wan21"

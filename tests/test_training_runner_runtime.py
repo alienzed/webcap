@@ -179,6 +179,25 @@ def test_runner_script_uses_conda_run_without_sourcing_an_activation_script(tmp_
     assert "finish_requested_stop" in script
 
 
+def test_h3_runner_script_relaunches_after_caching(tmp_path, monkeypatch):
+    h3_path = tmp_path / "config.h3.toml"
+    h3_path.write_text("h3", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, distribution="": "/mnt/c/" + path.name)
+    settings = training_runtime_settings({"diffusion_pipe_wsl": "/home/user/diffusion-pipe"})
+
+    script, _ = training_runner._build_runner_script(
+        {"snapshot": {}, "stages": "h3"},
+        settings,
+        {"h3Config": h3_path},
+        tmp_path / "job",
+    )
+
+    assert "[webcap] stage=h3-cache" in script
+    assert "--trust_cache --cache_only" in script
+    assert "[webcap] stage=h3'" in script
+    assert script.count('PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"') == 2
+
+
 def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):
     hi_path = tmp_path / "config.hi.toml"
     lo_path = tmp_path / "config.lo.toml"

@@ -1084,6 +1084,8 @@ def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, m
                 "reviewedKeys": ["one.png"],
                 "flags": {"one.png": "blue"},
                 "caption_tags_by_media": {"one.png": ["tag-a", "tag-b"]},
+                "caption_requirements": ["Pose"],
+                "caption_requirement_keywords": {"Pose": "tag-b, tag-a"},
                 "ratings_by_media": {"one.png": 5},
             }
         ),
@@ -1131,6 +1133,8 @@ def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, m
     assert out_state["reviewedKeys"] == ["one.png"]
     assert out_state["flags"] == {"one.png": "blue"}
     assert out_state["caption_tags_by_media"] == {"one.png": ["tag-a", "tag-b"]}
+    assert out_state["caption_requirements"] == ["Pose"]
+    assert out_state["caption_requirement_keywords"] == {"Pose": "tag-a, tag-b"}
     assert out_state["ratings_by_media"] == {"one.png": 5}
     out_metadata = json.loads((out_dir / "media_metadata.json").read_text(encoding="utf-8"))
     assert out_metadata["one.png"]["resolution"] == "128x128"
@@ -1179,6 +1183,8 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
                 "reviewedKeys": ["shared.png"],
                 "flags": {"shared.png": "green"},
                 "caption_tags_by_media": {"shared.png": ["from-a"]},
+                "caption_requirements": ["Source", "Pose"],
+                "caption_requirement_keywords": {"Source": "from-a, Shared", "Pose": "standing"},
                 "ratings_by_media": {"shared.png": 3},
             }
         ),
@@ -1190,6 +1196,8 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
                 "reviewedKeys": ["shared.png"],
                 "flags": {"shared.png": "red"},
                 "caption_tags_by_media": {"shared.png": ["from-b"]},
+                "caption_requirements": ["source", "Lighting"],
+                "caption_requirement_keywords": {"source": "FROM-A, from-b", "Lighting": "rim light"},
                 "ratings_by_media": {"shared.png": 4},
             }
         ),
@@ -1231,6 +1239,12 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
     assert sorted(out_state["reviewedKeys"]) == ["shared.png", "shared_2.png"]
     assert out_state["flags"] == {"shared.png": "green", "shared_2.png": "red"}
     assert out_state["caption_tags_by_media"] == {"shared.png": ["from-a"], "shared_2.png": ["from-b"]}
+    assert out_state["caption_requirements"] == ["Source", "Pose", "Lighting"]
+    assert out_state["caption_requirement_keywords"] == {
+        "Source": "from-a, from-b, Shared",
+        "Pose": "standing",
+        "Lighting": "rim light",
+    }
     assert out_state["ratings_by_media"] == {"shared.png": 3, "shared_2.png": 4}
     out_metadata = json.loads((out_dir / "media_metadata.json").read_text(encoding="utf-8"))
     assert out_metadata["shared.png"]["codec"] == "a"

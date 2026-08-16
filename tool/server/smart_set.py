@@ -760,6 +760,45 @@ def _clone_primer_block(state_obj: dict) -> dict:
     return {"template": "", "defaults": "", "mappings": ""}
 
 
+def _merge_requirement_labels(existing: list[str], raw_labels) -> list[str]:
+    if not isinstance(raw_labels, list):
+        return existing
+    seen = {str(label).strip().casefold() for label in existing if str(label).strip()}
+    for raw_label in raw_labels:
+        label = str(raw_label or "").strip()
+        key = label.casefold()
+        if not label or key in seen:
+            continue
+        seen.add(key)
+        existing.append(label)
+    return existing
+
+
+def _merge_requirement_keywords(existing: dict[str, str], raw_keywords) -> dict[str, str]:
+    if not isinstance(raw_keywords, dict):
+        return existing
+
+    group_names = {str(group).strip().casefold(): group for group in existing}
+    for raw_group, raw_terms in raw_keywords.items():
+        group = str(raw_group or "").strip()
+        if not group:
+            continue
+        group_key = group.casefold()
+        dest_group = group_names.get(group_key, group)
+        group_names[group_key] = dest_group
+
+        merged_terms = {}
+        for source in (existing.get(dest_group, ""), raw_terms):
+            values = source if isinstance(source, list) else str(source or "").split(",")
+            for raw_term in values:
+                term = re.sub(r"\s+", " ", str(raw_term or "").strip())
+                if term:
+                    merged_terms.setdefault(term.casefold(), term)
+        if merged_terms:
+            existing[dest_group] = ", ".join(sorted(merged_terms.values(), key=str.casefold))
+    return existing
+
+
 def create_set_from_results_response(data: dict):
     payload = data or {}
     try:
@@ -800,7 +839,8 @@ def create_set_from_results_response(data: dict):
         flags = {}
         tags_by_media = {}
         ratings_by_media = {}
-        caption_requirements = None
+        caption_requirements = []
+        caption_requirement_keywords = {}
         caption_term_wrappers = None
         caption_term_descriptor_defaults = None
         caption_term_descriptors_by_media = {}
@@ -826,10 +866,8 @@ def create_set_from_results_response(data: dict):
             src_state = state_by_folder[source_folder_key]
             src_media_metadata = metadata_by_folder[source_folder_key]
 
-            if caption_requirements is None:
-                src_requirements = src_state.get("caption_requirements")
-                if isinstance(src_requirements, list):
-                    caption_requirements = json.loads(json.dumps(src_requirements))
+            _merge_requirement_labels(caption_requirements, src_state.get("caption_requirements"))
+            _merge_requirement_keywords(caption_requirement_keywords, src_state.get("caption_requirement_keywords"))
             if caption_term_wrappers is None:
                 src_term_wrappers = src_state.get("caption_term_wrappers")
                 if not isinstance(src_term_wrappers, dict):
@@ -914,8 +952,10 @@ def create_set_from_results_response(data: dict):
             "caption_tags_by_media": tags_by_media,
             "ratings_by_media": ratings_by_media,
         }
-        if isinstance(caption_requirements, list):
+        if caption_requirements:
             dest_state["caption_requirements"] = caption_requirements
+        if caption_requirement_keywords:
+            dest_state["caption_requirement_keywords"] = caption_requirement_keywords
         if isinstance(caption_term_wrappers, dict):
             dest_state["caption_term_wrappers"] = caption_term_wrappers
             dest_state["caption_term_affixes"] = json.loads(json.dumps(caption_term_wrappers))

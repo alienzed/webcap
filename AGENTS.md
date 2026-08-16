@@ -120,3 +120,14 @@ A good change in this repo usually looks like this:
 - measured twice, cut once
 
 If the structure feels unusual, assume it is that way on purpose and work with it rather than against it.
+
+
+## Machine Role
+
+This repository is running on the development machine, not the training machine.
+
+- This machine has no authoritative live training queue, training logs, GPU state, or overnight run state.
+- Never interpret local WebCap configuration, test data, or processes as evidence about actual training runs.
+- When the user discusses real training activity, assume it occurred on the separate training machine.
+- Diagnose real runs only from information explicitly retrieved from or supplied from the training machine.
+- If that machine is inaccessible, say so immediately and request the relevant logs or connection details.

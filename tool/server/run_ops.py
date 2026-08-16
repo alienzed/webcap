@@ -8,7 +8,7 @@ from .permissions import normalize_path_permissions
 from .training_history import training_output_group_for_folder
 from .training_profiles import config_for_stage, normalize_mode, profile_run
 from .training_bundle import materialize_training_bundle
-from .training_commands import build_training_command_plan
+from .training_commands import build_h3_command_plan, build_training_command_plan
 from .training_runtime import build_training_launcher, training_runtime_settings
 
 
@@ -97,10 +97,19 @@ def train_run_response(
             resume_from_checkpoint,
             resume_stage,
         )
+        h3_command_plan = build_h3_command_plan(
+            lo_wsl,
+            build_training_launcher(runtime_settings),
+            resume_from_checkpoint if stages == "h3" and resume_stage == "h3" else "",
+        ) if stages == "h3" else None
         if stages == "hi":
             handoff_cmd = command_plan["hiCommand"]
-        elif stages in ("lo", "krea2", "wan21", "h3"):
+        elif stages in ("lo", "krea2", "wan21"):
             handoff_cmd = command_plan["loCommand"]
+        elif stages == "h3":
+            handoff_cmd = h3_command_plan["trainCommand"] if resume_from_checkpoint else (
+                h3_command_plan["cacheCommand"] + " && " + h3_command_plan["trainCommand"]
+            )
         else:
             handoff_cmd = command_plan["handoffCommand"]
         def generate():

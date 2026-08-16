@@ -40,6 +40,12 @@ def test_h3_command_plan_runs_cache_and_training_in_separate_processes():
         'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed '
         '--config /mnt/w/sets/one/config.h3.toml --trust_cache'
     )
+    resumed = build_h3_command_plan(
+        "/mnt/w/sets/one/config.h3.toml",
+        resume_from_checkpoint="/mnt/w/output/run-1",
+    )
+    assert "--resume_from_checkpoint" not in resumed["cacheCommand"]
+    assert resumed["trainCommand"].endswith("--resume_from_checkpoint /mnt/w/output/run-1 --trust_cache")
 
 
 def test_conda_runtime_wraps_child_commands_without_shell_activation():

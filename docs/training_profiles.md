@@ -39,6 +39,6 @@ Selecting a profile and mode creates missing TOMLs. Dataset creation and Reset c
 
 ## Launching
 
-The selected profile and mode control setup inspection, manual-command preview, direct start, and queueing. A launch runs the standard DeepSpeed command from its captured bundle. WebCap keeps queue, output console, pause, finish, cancellation, history, resume, GPU status, diagnostics, and TensorBoard behavior shared across profiles.
+The selected profile and mode control setup inspection, manual-command preview, direct start, and queueing. A launch runs the standard DeepSpeed command from its captured bundle. MiniMax H3 runs its cache-only pass in one process, then relaunches a fresh process with `--trust_cache` for training; this avoids retaining the large text-encoder allocation across the cache/training boundary. Resume reuses the original bundle cache and starts directly in the training phase. WebCap keeps queue, output console, pause, finish, cancellation, history, resume, GPU status, diagnostics, and TensorBoard behavior shared across profiles.
 
 Manual command preview never starts a process. `Train this set` starts immediately when idle or queues the job behind active work.

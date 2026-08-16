@@ -195,7 +195,7 @@ def test_h3_runner_script_relaunches_after_caching(tmp_path, monkeypatch):
     assert "[webcap] stage=h3-cache" in script
     assert "--trust_cache --cache_only" in script
     assert "[webcap] stage=h3'" in script
-    assert script.count('PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"') == 4
+    assert 'PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"' not in script
 
 
 def test_runner_script_can_run_only_the_lo_stage(tmp_path, monkeypatch):

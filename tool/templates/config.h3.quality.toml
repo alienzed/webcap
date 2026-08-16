@@ -6,14 +6,14 @@ epochs = 100
 save_every_n_epochs = 1
 
 micro_batch_size_per_gpu = 1
-image_micro_batch_size_per_gpu = 1
+image_micro_batch_size_per_gpu = 2
 pipeline_stages = 1
 gradient_accumulation_steps = 1
 gradient_clipping = 1.0
 warmup_steps = 10
 
 checkpoint_every_n_epochs = 5
-activation_checkpointing = "unsloth"
+activation_checkpointing = true
 partition_method = "parameters"
 save_dtype = "bfloat16"
 caching_batch_size = 1
@@ -21,7 +21,7 @@ steps_per_print = 1
 video_clip_mode = "single_beginning"
 
 # Safe 24 GB starting point. Lower this gradually when more VRAM is available.
-blocks_to_swap = 48
+#blocks_to_swap = 48
 compile = true
 
 [model]

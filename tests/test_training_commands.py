@@ -31,12 +31,10 @@ def test_h3_command_plan_runs_cache_and_training_in_separate_processes():
     plan = build_h3_command_plan("/mnt/w/sets/one/config.h3.toml")
 
     assert plan["cacheCommand"] == (
-        'PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" '
         'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed '
         '--config /mnt/w/sets/one/config.h3.toml --trust_cache --cache_only'
     )
     assert plan["trainCommand"] == (
-        'PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" '
         'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed '
         '--config /mnt/w/sets/one/config.h3.toml --trust_cache'
     )

@@ -113,7 +113,7 @@ See: `docs/create_set_from_results.md`
 
 ### Needs Eyes
 
-- Set-scoped actions should hide naturally because `state.items = []`; if any remain visible, Train/Prepare/Review may run against no rows or the wrong context.
+- Set-scoped actions should hide naturally because `state.items = []`; if any remain visible, Train or Review may run against no rows or the wrong context.
 - The path utility may navigate while results are active; the minimal safe behavior is to clear SuperSet state during the resulting folder refresh.
 - Filter changes must clearly mark results stale; stale result display is mostly UX confusion, but stale Copy Set inputs would be a real materialization bug.
 - Detail panels may retain stale media-facing values unless result clicks overwrite or clear them; this is visual confusion unless it creates a save target.
@@ -123,7 +123,7 @@ See: `docs/create_set_from_results.md`
 ### Probably Fine
 
 - Review Set should be hidden or disabled by the empty-item non-set context; direct invocation should only report that no media is available.
-- Train/Prepare/Generate controls should disappear with the set workspace; if directly invoked with empty items, they should no-op or fail without mutation.
+- Training controls should disappear with the set workspace; if directly invoked with empty items, capture should fail visibly without mutation.
 - Wheel navigation and media movement shortcuts already depend on `state.currentItem`; with no active item they should fail inertly.
 - Rating, flag, delete, rename, and F2 shortcuts should no-op because there is no active item or filename.
 - Old report links or `selectByFileName()` calls can fail to find a file while `state.items = []`; this is harmless unless surfaced as primary UI.

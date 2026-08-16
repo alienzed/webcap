@@ -11,6 +11,7 @@ import re
 import traceback
 
 from .permissions import normalize_path_permissions
+from .training_profiles import PROFILE_IDS
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / 'config.json'
 CONFIG_EXAMPLE_PATH = Path(__file__).resolve().parents[1] / 'config.example.json'
@@ -107,8 +108,19 @@ def validate_config_payload(payload):
     for key in ("diffusion_pipe_wsl", "activate_script", "wsl_distribution", "conda_executable", "conda_environment"):
         if key in training:
             normalized_training[key] = str(training.get(key) or "").strip()
-    if "write_selection_snapshot_comments" in training:
-        normalized_training["write_selection_snapshot_comments"] = bool(training.get("write_selection_snapshot_comments"))
+    enabled_profiles = training.get("enabled_profiles", list(PROFILE_IDS))
+    if not isinstance(enabled_profiles, list):
+        raise ValueError("Config.training.enabled_profiles must be an array.")
+    normalized_enabled_profiles = []
+    for raw_profile_id in enabled_profiles:
+        profile_id = str(raw_profile_id or "").strip().lower()
+        if profile_id not in PROFILE_IDS:
+            raise ValueError("Unknown training profile in Config.training.enabled_profiles: " + profile_id)
+        if profile_id not in normalized_enabled_profiles:
+            normalized_enabled_profiles.append(profile_id)
+    if not normalized_enabled_profiles:
+        raise ValueError("At least one training profile must be enabled.")
+    normalized_training["enabled_profiles"] = normalized_enabled_profiles
     if normalized_training:
         out["training"] = normalized_training
     elif "training" in out:

@@ -84,6 +84,8 @@ _PROFILES = {
     },
 }
 
+PROFILE_IDS = tuple(_PROFILES)
+
 _LEGACY_STAGES = {
     "both": (WAN22_PROFILE_ID, "both"),
     "hi": (WAN22_PROFILE_ID, "hi"),

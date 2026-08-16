@@ -20,6 +20,9 @@ function fetchTrainingProfiles() {
     return response.json();
   }).then(function (payload) {
     trainingWorkspaceState.profiles = Array.isArray(payload.profiles) ? payload.profiles : [];
+    if (!trainingWorkspaceState.profiles.length) {
+      throw new Error('No training models are enabled. Choose at least one in App Settings.');
+    }
     return trainingWorkspaceState.profiles;
   });
 }
@@ -65,14 +68,17 @@ function syncTrainingModelProfileSelect(folder) {
   var storedMode = '';
   try { stored = localStorage.getItem(trainingProfileStorageKey(folder)) || ''; } catch (err) {}
   try { storedMode = localStorage.getItem(trainingModeStorageKey(folder)) || ''; } catch (err) {}
-  if (stored && (trainingWorkspaceState.profiles || []).some(function (profile) { return profile.id === stored; })) {
-    trainingWorkspaceState.selectedProfileId = stored;
-  }
+  var profiles = trainingWorkspaceState.profiles || [];
+  var storedIsAvailable = stored && profiles.some(function (profile) { return profile.id === stored; });
+  var selectedIsAvailable = profiles.some(function (profile) { return profile.id === trainingWorkspaceState.selectedProfileId; });
+  if (storedIsAvailable) trainingWorkspaceState.selectedProfileId = stored;
+  else if (!selectedIsAvailable) trainingWorkspaceState.selectedProfileId = profiles[0].id;
   trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(storedMode || trainingWorkspaceState.selectedMode);
-  select.innerHTML = (trainingWorkspaceState.profiles || []).map(function (profile) {
+  select.innerHTML = profiles.map(function (profile) {
     return '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(profile.label) + '</option>';
   }).join('');
   select.value = trainingWorkspaceState.selectedProfileId;
+  try { localStorage.setItem(trainingProfileStorageKey(folder), trainingWorkspaceState.selectedProfileId); } catch (err) {}
   syncTrainingWorkspaceProfile();
   setManagedTrainingStages(trainingWorkspaceState.runStages);
 }
@@ -85,11 +91,11 @@ function setSelectedTrainingModelProfile(profileId) {
 }
 
 function buildCurrentTrainingSelectionPayload() {
-  var selectedMedia = getVisibleMediaSelectionForPrepare();
+  var selectedMedia = getVisibleMediaSelectionForTraining();
   return {
     selected_media: selectedMedia,
     total_media_count: Array.isArray(state.items) ? state.items.length : 0,
-    selection_criteria: buildPrepareSelectionCriteria()
+    selection_criteria: buildTrainingSelectionCriteria()
   };
 }
 
@@ -123,7 +129,7 @@ function fetchTrainingWorkspaceConfigFiles(folder) {
 }
 
 function buildTrainingReadinessHtml() {
-  var selectedCount = getVisibleMediaSelectionForPrepare().length;
+  var selectedCount = getVisibleMediaSelectionForTraining().length;
   var totalCount = Array.isArray(state.items) ? state.items.length : selectedCount;
   return '<div class="training-readiness-state"><strong>' + selectedCount + ' visible media item' + (selectedCount === 1 ? '' : 's') +
     '</strong><span>Train captures this visible selection and the saved TOMLs. ' + selectedCount + ' of ' + totalCount + ' media items are currently visible.</span></div>';
@@ -143,7 +149,7 @@ function trainingConfigFilesAreReady(configFiles) {
 function syncTrainingWorkflowReadiness(manifest, configFiles) {
   var els = getTrainingWorkspaceEls();
   var configsReady = trainingConfigFilesAreReady(configFiles);
-  var hasVisibleMedia = getVisibleMediaSelectionForPrepare().length > 0;
+  var hasVisibleMedia = getVisibleMediaSelectionForTraining().length > 0;
   if (els.configStepNumber) els.configStepNumber.classList.toggle('is-waiting', !configsReady);
   if (els.runStepNumber) els.runStepNumber.classList.toggle('is-waiting', !configsReady || !hasVisibleMedia);
   if (els.queueJobBtn) {
@@ -170,7 +176,7 @@ function renderTrainingItemOverview(manifest, errorMessage) {
     return;
   }
 
-  var visibleNames = getVisibleMediaSelectionForPrepare();
+  var visibleNames = getVisibleMediaSelectionForTraining();
   var visibleLookup = {};
   visibleNames.forEach(function (name) { visibleLookup[String(name)] = true; });
   var items = (state.items || []).filter(function (item) {

@@ -282,6 +282,31 @@
   margin-top: 2px;
 }
 
+.app-settings-model-option {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app-settings-model-option .app-settings-toggle {
+  flex: 1;
+}
+
+.app-settings-model-link,
+.app-settings-model-link:visited {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.app-settings-model-link:hover {
+  text-decoration: underline;
+}
+
 .app-settings-radio-group {
   display: flex;
   flex-wrap: wrap;

@@ -132,7 +132,7 @@ def test_training_root_permission_repair_runs_in_background_and_prints_failure(m
     assert "[webcap] Could not restore training-root permissions: denied (0.0s)" in output
 
 
-def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
+def test_app_config_save_persists_enabled_training_profiles(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
     monkeypatch.setattr(app_module.app_config, "CONFIG_PATH", config_path)
 
@@ -148,8 +148,7 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
                 "conda_executable": "/home/user/miniconda3/bin/conda",
                 "conda_environment": "dp-clean",
                 "activate_script": "dp-clean/bin/activate",
-                "mode": "normal",
-                "write_selection_snapshot_comments": True,
+                "enabled_profiles": ["wan22_t2v", "minimax_h3"],
             },
             "primer": {
                 "template": "{subject}\n{view}\n{lighting}"
@@ -159,12 +158,12 @@ def test_app_config_save_persists_snapshot_comment_flag(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["config"]["training"]["write_selection_snapshot_comments"] is True
+    assert payload["config"]["training"]["enabled_profiles"] == ["wan22_t2v", "minimax_h3"]
     assert payload["config"]["training"]["wsl_distribution"] == "Ubuntu_W"
     assert payload["config"]["training"]["conda_environment"] == "dp-clean"
     assert payload["config"]["primer"]["template"] == "{subject}\n{view}\n{lighting}"
     saved = json.loads(config_path.read_text(encoding="utf-8"))
-    assert saved["training"]["write_selection_snapshot_comments"] is True
+    assert saved["training"]["enabled_profiles"] == ["wan22_t2v", "minimax_h3"]
     assert saved["training"]["conda_executable"] == "/home/user/miniconda3/bin/conda"
     assert saved["primer"]["template"] == "{subject}\n{view}\n{lighting}"
 
@@ -181,6 +180,49 @@ def test_validate_config_payload_strips_legacy_chmod_training_root_on_load():
         "training": {"chmod_training_root_on_load": False},
     })
     assert "chmod_training_root_on_load" not in disabled["training"]
+
+
+def test_validate_config_payload_defaults_all_training_profiles_and_rejects_none():
+    normalized = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/sets", "models": ""},
+        "training": {},
+    })
+    assert normalized["training"]["enabled_profiles"] == [
+        "wan22_t2v",
+        "krea2_raw",
+        "wan21_t2v_14b",
+        "minimax_h3",
+    ]
+
+    try:
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/sets", "models": ""},
+            "training": {"enabled_profiles": []},
+        })
+    except ValueError as exc:
+        assert "At least one training profile" in str(exc)
+    else:
+        raise AssertionError("An empty enabled training profile list should fail loudly.")
+
+
+def test_training_profiles_route_only_returns_enabled_models(monkeypatch):
+    monkeypatch.setattr(
+        app_module.app_config,
+        "config",
+        {"training": {"enabled_profiles": ["minimax_h3"]}},
+    )
+
+    response = app_module.app.test_client().get("/fs/training_profiles")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.get_json()["profiles"]] == ["minimax_h3"]
+
+
+def test_removed_prepare_and_legacy_reset_routes_are_not_available():
+    client = app_module.app.test_client()
+
+    assert client.post("/fs/prepare_dataset", json={}).status_code == 404
+    assert client.post("/fs/training_config/reset", json={}).status_code == 404
 
 
 def test_app_config_save_bootstraps_missing_requirements(tmp_path, monkeypatch):
@@ -552,7 +594,7 @@ def _run_with_repair_probe(path, callback, repairs):
         return callback()
 
 
-def test_generate_dataset_config_creates_missing_config_templates(tmp_path, monkeypatch):
+def test_removed_generate_dataset_config_route_does_not_create_templates(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_f"
     auto_dataset = set_dir / "auto_dataset"
@@ -604,13 +646,11 @@ def test_generate_dataset_config_creates_missing_config_templates(tmp_path, monk
     client = app_module.app.test_client()
     response = client.post("/fs/generate_dataset_config", json={"folder": "set_f"})
 
-    assert response.status_code == 200
-    assert (set_dir / "config.hi.toml").exists()
-    assert (set_dir / "config.lo.toml").exists()
-    assert (set_dir / "config.krea2.toml").exists()
+    assert response.status_code == 404
+    assert not (set_dir / "config.hi.toml").exists()
 
 
-def test_generate_dataset_config_preserves_existing_config_templates(tmp_path, monkeypatch):
+def test_removed_generate_dataset_config_route_leaves_existing_files_untouched(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_g"
     auto_dataset = set_dir / "auto_dataset"
@@ -664,14 +704,14 @@ def test_generate_dataset_config_preserves_existing_config_templates(tmp_path, m
     client = app_module.app.test_client()
     response = client.post("/fs/generate_dataset_config", json={"folder": "set_g"})
 
-    assert response.status_code == 200
+    assert response.status_code == 404
     hi_text = (set_dir / "config.hi.toml").read_text(encoding="utf-8")
     lo_text = (set_dir / "config.lo.toml").read_text(encoding="utf-8")
     assert hi_text == "corrupted config"
     assert lo_text == "corrupted config"
 
 
-def test_generate_dataset_config_can_write_snapshot_comments_when_enabled(tmp_path, monkeypatch):
+def test_removed_generate_dataset_config_route_does_not_write_dataset_files(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_h"
     auto_dataset = set_dir / "auto_dataset"
@@ -723,22 +763,15 @@ def test_generate_dataset_config_can_write_snapshot_comments_when_enabled(tmp_pa
         app_module.app_config,
         "config",
         {
-            "training": {
-                "mode": "normal",
-                "write_selection_snapshot_comments": True,
-            }
+            "training": {"enabled_profiles": ["wan22_t2v"]}
         },
     )
 
     client = app_module.app.test_client()
     response = client.post("/fs/generate_dataset_config", json={"folder": "set_h"})
 
-    assert response.status_code == 200
-    lo_text = (set_dir / "dataset.lo.toml").read_text(encoding="utf-8")
-    assert "# --- webcap selection snapshot v1 ---" in lo_text
-    assert "# snapshot.prepared_mode: all" in lo_text
-    assert "# file: clip.png" in lo_text
-    assert "enable_ar_bucket = true" in lo_text
+    assert response.status_code == 404
+    assert not (set_dir / "dataset.lo.toml").exists()
 
 
 def test_train_run_captures_a_self_contained_bundle_for_manual_handoff(tmp_path, monkeypatch):

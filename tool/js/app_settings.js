@@ -1,4 +1,10 @@
 var appSettingsLoadedConfig = null;
+var appSettingsTrainingProfiles = [
+  { id: 'wan22_t2v', uiKey: 'appSettingsTrainingProfileWan22El' },
+  { id: 'krea2_raw', uiKey: 'appSettingsTrainingProfileKrea2El' },
+  { id: 'wan21_t2v_14b', uiKey: 'appSettingsTrainingProfileWan21El' },
+  { id: 'minimax_h3', uiKey: 'appSettingsTrainingProfileH3El' }
+];
 
 function setAppSettingsStatus(text, isError) {
   if (!ui.appSettingsStatusEl) return;
@@ -21,7 +27,14 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.conda_environment) out.training.conda_environment = '';
   if (!out.training.activate_script) out.training.activate_script = '';
   delete out.training.mode;
-  if (typeof out.training.write_selection_snapshot_comments !== 'boolean') out.training.write_selection_snapshot_comments = false;
+  delete out.training.write_selection_snapshot_comments;
+  if (!Array.isArray(out.training.enabled_profiles)) {
+    out.training.enabled_profiles = appSettingsTrainingProfiles.map(function (profile) { return profile.id; });
+  } else {
+    out.training.enabled_profiles = out.training.enabled_profiles.map(function (profileId) {
+      return String(profileId || '').trim().toLowerCase();
+    });
+  }
   if (typeof out.primer.template !== 'string') out.primer.template = '';
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
   if (typeof out.analysis.enableFaceAnalysis !== 'boolean') out.analysis.enableFaceAnalysis = false;
@@ -57,7 +70,10 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingCondaExecutableEl) ui.appSettingsTrainingCondaExecutableEl.value = c.training.conda_executable || '';
   if (ui.appSettingsTrainingCondaEnvironmentEl) ui.appSettingsTrainingCondaEnvironmentEl.value = c.training.conda_environment || '';
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
-  if (ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl) ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked = !!c.training.write_selection_snapshot_comments;
+  appSettingsTrainingProfiles.forEach(function (profile) {
+    var el = ui[profile.uiKey];
+    if (el) el.checked = c.training.enabled_profiles.indexOf(profile.id) !== -1;
+  });
   if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
   if (ui.appSettingsDebugEl) ui.appSettingsDebugEl.checked = !!c.debug;
   if (ui.appSettingsEnableFaceAnalysisEl) ui.appSettingsEnableFaceAnalysisEl.checked = !!c.analysis.enableFaceAnalysis;
@@ -75,7 +91,10 @@ function collectAppSettingsFormConfig() {
   base.training.conda_executable = ui.appSettingsTrainingCondaExecutableEl ? ui.appSettingsTrainingCondaExecutableEl.value : '';
   base.training.conda_environment = ui.appSettingsTrainingCondaEnvironmentEl ? ui.appSettingsTrainingCondaEnvironmentEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
-  base.training.write_selection_snapshot_comments = !!(ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl && ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl.checked);
+  base.training.enabled_profiles = appSettingsTrainingProfiles.filter(function (profile) {
+    var el = ui[profile.uiKey];
+    return !!(el && el.checked);
+  }).map(function (profile) { return profile.id; });
   base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
   base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);
@@ -333,13 +352,13 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingWslDistributionEl,
     ui.appSettingsTrainingCondaExecutableEl,
     ui.appSettingsTrainingCondaEnvironmentEl,
-    ui.appSettingsTrainingWriteSelectionSnapshotCommentsEl,
+    ui.appSettingsTrainingProfileWan22El,
+    ui.appSettingsTrainingProfileKrea2El,
+    ui.appSettingsTrainingProfileWan21El,
+    ui.appSettingsTrainingProfileH3El,
     ui.appSettingsPrimerTemplateEl,
     ui.appSettingsEnableFaceAnalysisEl,
     ui.appSettingsEnableMediaPipeAnalysisEl,
-    ui.appSettingsTrainingModePocEl,
-    ui.appSettingsTrainingModeNormalEl,
-    ui.appSettingsTrainingModeQualityEl,
     ui.appSettingsDebugEl,
   ];
   syncFields.forEach(function (el) {

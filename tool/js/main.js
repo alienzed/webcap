@@ -15,14 +15,6 @@ function ensureFolderSelected(missingStatus) {
   return false;
 }
 
-function resetSelectionForFolderAction() {
-  state.currentConfigFile = null;
-  state.currentItem = null;
-  clearEditorAndPreview();
-  renderChecklistPanel();
-  renderFileList(ui.filterEl.value);
-}
-
 function runTrainingActionRequest(url, body) {
   function getOutputErrorMessage(outputText) {
     var lines = String(outputText || '').split(/\r?\n/);
@@ -80,7 +72,7 @@ function fetchPathExistsForCurrentFolder(pathSuffix) {
     });
 }
 
-function getVisibleMediaSelectionForPrepare() {
+function getVisibleMediaSelectionForTraining() {
   var visibleRows = Array.prototype.slice.call(
     ui.mediaListEl ? ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]') : []
   );
@@ -89,7 +81,7 @@ function getVisibleMediaSelectionForPrepare() {
     .filter(Boolean);
 }
 
-function buildPrepareFallbackCaptions(selectedMedia) {
+function buildTrainingFallbackCaptions(selectedMedia) {
   var selectedKeys = Array.isArray(selectedMedia) ? selectedMedia : [];
   var byKey = {};
   var fallbackCaptions = {};
@@ -113,7 +105,7 @@ function buildPrepareFallbackCaptions(selectedMedia) {
   };
 }
 
-function buildPrepareSelectionCriteria() {
+function buildTrainingSelectionCriteria() {
   var starsValue = (typeof getAdvancedStarFilterValue === 'function') ? getAdvancedStarFilterValue() : '';
   var flagValue = (typeof getAdvancedFlagFilterValue === 'function') ? getAdvancedFlagFilterValue() : '';
   return {
@@ -134,105 +126,15 @@ function buildPrepareSelectionCriteria() {
   };
 }
 
-function ensurePrepManifestForCurrentFolder() {
-  return fetchPathExistsForCurrentFolder('auto_dataset/prep_manifest.json')
-    .then(function (exists) {
-      if (exists) return '';
-      return runPrepareDatasetForCurrentFolder();
-    });
-}
-
-function ensureGeneratedTrainingArtifactsForCurrentFolder(stages, profileId) {
-  var profiles = trainingWorkspaceState.profiles || [];
-  var profile = profiles.filter(function (item) { return item.id === profileId; })[0] || getSelectedTrainingModelProfile();
-  var requiredFiles = profile
-    ? (profile.configs || []).map(function (config) { return config.file; }).concat(profile.datasetFiles || [])
-    : ['config.hi.toml', 'config.lo.toml', 'dataset.hi.toml', 'dataset.lo.toml'];
-  return Promise.all(requiredFiles.map(fetchPathExistsForCurrentFolder)).then(function (results) {
-    var ready = results.every(function (value) { return !!value; });
-    if (ready) return '';
-    return runGenerateDatasetConfigsForCurrentFolder(null, profileId);
-  });
-}
-
-function runGenerateDatasetConfigsForCurrentFolder(onSuccess, profileId) {
-  if (!ensureFolderSelected('No folder selected for config generation.')) {
-    return Promise.reject(new Error('No folder selected for config generation.'));
-  }
-  return ensurePrepManifestForCurrentFolder()
-    .then(function () {
-      resetSelectionForFolderAction();
-      setStatus('Generating dataset configs...');
-       return runTrainingActionRequest('/fs/generate_dataset_config', {
-         folder: state.folder,
-          mode: getTrainingWorkspaceSelectedProfile(state.folder),
-          profileId: profileId || (typeof getSelectedTrainingModelProfile === 'function' && getSelectedTrainingModelProfile() ? getSelectedTrainingModelProfile().id : '')
-       });
-    })
-    .then(function (outputText) {
-      if (typeof onSuccess === 'function') {
-        onSuccess(outputText);
-      } else {
-        setStatus('Dataset configs generated.');
-      }
-      return outputText;
-    })
-    .catch(function (err) {
-      var message = formatTrainingActionErrorMessage(err);
-      setStatus('Dataset config generation failed: ' + message);
-      throw err;
-    });
-}
-
-function runPrepareDatasetForCurrentFolder() {
-  if (!ensureFolderSelected('No folder selected for dataset preparation.')) {
-    return Promise.reject(new Error('No folder selected for dataset preparation.'));
-  }
-  var selectedMedia = getVisibleMediaSelectionForPrepare();
-  var totalMediaCount = Array.isArray(state.items) ? state.items.length : 0;
-  if (!selectedMedia.length) {
-    setStatus('No visible media items to prepare.');
-    return Promise.reject(new Error('No visible media items to prepare.'));
-  }
-  var criteria = buildPrepareSelectionCriteria();
-  var fallbackResult = buildPrepareFallbackCaptions(selectedMedia);
-  resetSelectionForFolderAction();
-  if (totalMediaCount > 0 && selectedMedia.length < totalMediaCount) {
-    setStatus('Preparing visible subset: ' + selectedMedia.length + ' of ' + totalMediaCount + ' media items...');
-  } else {
-    setStatus('Preparing dataset...');
-  }
-  return runTrainingActionRequest('/fs/prepare_dataset', {
-    folder: state.folder,
-    selected_media: selectedMedia,
-    total_media_count: totalMediaCount,
-    selection_criteria: criteria,
-    fallback_captions: fallbackResult.fallbackCaptions
-  }).then(function (outputText) {
-      if (fallbackResult.fallbackCount > 0) {
-        setStatus('Dataset preparation finished. Primer fallbacks used: ' + fallbackResult.fallbackCount + '.');
-      } else {
-        setStatus('Dataset preparation finished.');
-      }
-      refreshTrainingWorkspace();
-      return outputText;
-    })
-    .catch(function (err) {
-      var message = formatTrainingActionErrorMessage(err);
-      setStatus('Dataset preparation failed: ' + message);
-      throw err;
-    });
-}
-
 function runTrainCommandPreviewForCurrentFolder(options) {
   if (!ensureFolderSelected('No folder selected for training.')) {
     return Promise.reject(new Error('No folder selected for training.'));
   }
   return Promise.resolve(saveCurrentEditorContent())
     .then(function () {
-      var selectedMedia = getVisibleMediaSelectionForPrepare();
+      var selectedMedia = getVisibleMediaSelectionForTraining();
       if (!selectedMedia.length) throw new Error('No visible media items to train.');
-      var fallbackResult = buildPrepareFallbackCaptions(selectedMedia);
+      var fallbackResult = buildTrainingFallbackCaptions(selectedMedia);
       setStatus('Generating manual training command...');
       return runTrainingActionRequest('/fs/train_run', {
         folder: state.folder,
@@ -244,7 +146,7 @@ function runTrainCommandPreviewForCurrentFolder(options) {
         resumeStage: options && options.resumeStage ? options.resumeStage : '',
         selected_media: selectedMedia,
         total_media_count: Array.isArray(state.items) ? state.items.length : 0,
-        selection_criteria: buildPrepareSelectionCriteria(),
+        selection_criteria: buildTrainingSelectionCriteria(),
         fallback_captions: fallbackResult.fallbackCaptions
       });
     })

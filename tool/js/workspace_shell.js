@@ -137,8 +137,6 @@ function syncWorkspaceConfigEditorUi() {
   var backBtn = document.getElementById('config-editor-back-btn');
   var fileLabel = document.getElementById('config-editor-current-file');
   var saveBtn = document.getElementById('config-editor-save-btn');
-  var generateBtn = document.getElementById('config-editor-generate-btn');
-  var trainBtn = document.getElementById('config-editor-train-btn');
   var consoleBtn = document.getElementById('config-editor-console-btn');
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var isConfigEditor = surface === 'configEditor';
@@ -161,8 +159,6 @@ function syncWorkspaceConfigEditorUi() {
       ? 'Save this config and return to Training Items.'
       : 'Return to the previous workspace.';
   }
-  if (generateBtn) generateBtn.classList.toggle('hidden', isTraining);
-  if (trainBtn) trainBtn.classList.toggle('hidden', isTraining);
   ui.appEl.classList.toggle('training-config-selected', isTraining && hasConfigForSurface && !trainingOutputVisible);
   if (trainingOverview) {
     trainingOverview.classList.toggle('hidden', !isTraining || hasConfigForSurface || trainingOutputVisible);
@@ -180,12 +176,6 @@ function syncWorkspaceConfigEditorUi() {
   }
   if (saveBtn) {
     saveBtn.disabled = !isConfigWorkspace || !hasConfigForSurface;
-  }
-  if (generateBtn) {
-    generateBtn.disabled = !isConfigEditor || !hasConfigForSurface;
-  }
-  if (trainBtn) {
-    trainBtn.disabled = !isConfigEditor || !hasConfigForSurface;
   }
   if (consoleBtn) {
     consoleBtn.disabled = !isConfigWorkspace;
@@ -446,53 +436,6 @@ function wireWorkspaceHeaderUi() {
     configEditorConsoleBtn.onclick = function () {
       toggleConsolePanel();
       syncWorkspaceConfigEditorUi();
-    };
-  }
-  var configEditorGenerateBtn = document.getElementById('config-editor-generate-btn');
-  if (configEditorGenerateBtn && !configEditorGenerateBtn.__workspaceWired) {
-    configEditorGenerateBtn.__workspaceWired = true;
-    configEditorGenerateBtn.onclick = function () {
-      if (!(state && state.currentConfigFile && state.currentConfigFile.file)) {
-        setStatus('No config selected.');
-        return;
-      }
-      var currentFile = state.currentConfigFile.file;
-      Promise.resolve(saveCurrentEditorContent())
-        .then(function () {
-          return runGenerateDatasetConfigsForCurrentFolder(function () {
-            refreshTrainingWorkspace();
-            setStatus('Dataset configs generated. Reloading ' + currentFile + '...');
-          });
-        })
-        .then(function () {
-          if (typeof loadConfigFileToEditor === 'function') {
-            loadConfigFileToEditor(currentFile);
-          }
-        })
-        .catch(function (err) {
-          if (window.console && console.error) {
-            console.error('[Config Editor] Generate failed:', err);
-          }
-        });
-    };
-  }
-  var configEditorTrainBtn = document.getElementById('config-editor-train-btn');
-  if (configEditorTrainBtn && !configEditorTrainBtn.__workspaceWired) {
-    configEditorTrainBtn.__workspaceWired = true;
-    configEditorTrainBtn.onclick = function () {
-      if (!(state && state.currentConfigFile && state.currentConfigFile.file)) {
-        setStatus('No config selected.');
-        return;
-      }
-      Promise.resolve(saveCurrentEditorContent())
-        .then(function () {
-          return runTrainCommandPreviewForCurrentFolder();
-        })
-        .catch(function (err) {
-          if (window.console && console.error) {
-            console.error('[Config Editor] Train preview failed:', err);
-          }
-        });
     };
   }
   syncWorkspaceHeaderUi();

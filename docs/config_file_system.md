@@ -7,7 +7,7 @@
 - Open a file to edit it in the central editor. The editor has **Save** and **Close**; Close saves then returns to Training Items.
 - `/fs/list_config` lists the set's TOML files, `/fs/read_config` reads one, and `/fs/save_config` saves one in place.
 
-## Templates and generated files
+## Templates and setup files
 
 Canonical templates live in `tool/templates/`:
 
@@ -20,4 +20,4 @@ Selecting a profile and mode creates only its missing set-owned config and datas
 
 The per-file **Reset** action is the explicit way to restore that mode's training template. Dataset Reset recalculates only the selected dataset TOML from the currently visible media.
 
-Train saves the open TOML, then captures the selected setup TOMLs and currently visible media in a run-owned bundle. Generated dataset TOML comes from `tool/server/dataset_config.py`, not static template files. See [training_profiles.md](training_profiles.md) for the file each profile uses.
+Train saves the open TOML, then captures the selected setup TOMLs and currently visible media in a run-owned bundle. Dataset TOML content is calculated by `tool/server/dataset_config.py`, not copied from static templates. See [training_profiles.md](training_profiles.md) for the files each profile uses.

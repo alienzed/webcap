@@ -1,7 +1,7 @@
 # src_videos Semantics (Decision Note)
 
 ## Status
-`IMPLEMENTED` (updated May 19, 2026)
+`IMPLEMENTED` (updated August 15, 2026)
 
 This note defines how `src_videos` behaves relative to set-folder workflows.
 
@@ -25,4 +25,4 @@ This note defines how `src_videos` behaves relative to set-folder workflows.
 ## Validation Checklist
 1. Navigating into `<set>/src_videos` does not create `<set>/src_videos/originals`.
 2. Selecting media in `src_videos` still shows metadata fields.
-3. Existing behavior for `originals` and `auto_dataset` exclusions remains unchanged.
+3. `originals` and legacy `auto_dataset` directories remain excluded from normal media-grid behavior.

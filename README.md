@@ -1,7 +1,7 @@
 # WebCap
 
-WebCap is a local-first media curation, captioning, and dataset-prep app for training-set workflows.
-It is built around explicit, reversible mutations, visible subset prep, and fast iteration on modest working sets.
+WebCap is a local-first media curation, captioning, dataset-configuration, and managed-training app.
+It is built around explicit, reversible mutations, visible training selection, and fast iteration on modest working sets.
 
 ## What WebCap Does
 
@@ -10,7 +10,7 @@ It is built around explicit, reversible mutations, visible subset prep, and fast
 - Review a visible subset for caption coverage, required phrases, balance, validation rules, duplicates, near-duplicates, and caption outliers.
 - Build focused work queues from review output, filters, or recursive SuperSet searches, then materialize filtered results into new sets.
 - Make reversible media edits including crop, clip, rotation, flip, blur/remove background, deface, duplicate, prune, and reset from preserved originals.
-- Prepare visible media subsets into a dataset, then generate profile-specific Diffusion Pipe TOML and a training plan.
+- Inspect profile/mode-specific Diffusion Pipe TOMLs, then capture the visible media and saved configuration into an immutable run bundle.
 - Run managed Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, and MiniMax H3 jobs with launch-scoped base36 output identities, model/stage output folders, a queue, per-run progress and checkpoint ETA, output logs, resume paths, diagnostics, history, GPU status, and optional TensorBoard; a manual WSL command remains available when preferred.
 - Keep app state and per-set artifacts on disk. WebCap uses Python and the browser only—no database or hosted service is required.
 
@@ -58,7 +58,7 @@ Minimum practical shape:
     "conda_executable": "/home/user/miniconda3/bin/conda",
     "conda_environment": "training-env",
     "activate_script": "",
-    "write_selection_snapshot_comments": false
+    "enabled_profiles": ["wan22_t2v", "krea2_raw", "wan21_t2v_14b", "minimax_h3"]
   },
   "analysis": {
     "enableFaceAnalysis": false,
@@ -84,7 +84,7 @@ Minimum practical shape:
 Notes:
 - `filesystem.root` is required.
 - Training modes are `POC`, `Normal`, and `Quality`; each profile/mode owns persistent config and dataset TOMLs.
-- `training.write_selection_snapshot_comments` controls whether generated dataset TOMLs include the selection snapshot header.
+- `training.enabled_profiles` controls which models appear for new training runs. At least one must be enabled.
 - Wan2.2 uses `config.wan22.{mode}.{hi|lo}.toml`; Krea2 Raw, Wan2.1, and MiniMax H3 use `config.{krea2|wan21|h3}.{mode}.toml`, each with a matching dataset file.
 - `analysis.enableFaceAnalysis` enables Face Focus metadata available in `Review Set` analysis details.
 - `analysis.enableMediaPipeAnalysis` enables selection-pose metadata and tag suggestions.
@@ -129,14 +129,13 @@ Open:
 4. Curate files with rename, prune, reset, restore, duplicate, crop, blur background, remove background, rotate, flip, deface, and clip.
 5. Build captions with requirements, tags, primer mappings, and set notes.
 6. Use `QA` and `Review Set` to tighten consistency and coverage.
-7. Run `Prepare Dataset` on the current visible subset.
-8. Run `Generate`.
-9. Open `Train`, choose a model profile and its run option, then run or queue the set; use the manual command only when you want an external handoff.
+7. Open `Train`, choose a model and mode, then inspect or edit their config and dataset TOMLs.
+8. Train or queue the currently visible subset; use the manual command only when you want an external handoff.
 
 Practical loop:
 - Use `Captionless`, `Incomplete`, ratings, and flags to focus work.
 - Use `Review Set` for text QA; optional analysis details retain the lower-level curation signals.
-- Keep Prepare scoped with filters when you want a partial batch.
+- Filter or focus the grid when you want to train a partial batch.
 - Use `Create Set` when filtered or recursive search results should become a new working set.
 
 ## Feature Guide
@@ -156,7 +155,6 @@ Practical loop:
 - The current-folder row has a context menu for:
   - Open in Explorer
   - Open Folder in VS Code
-  - Generate Dataset Configs
   - Deface the whole folder
   - Reset Reviewed
 - Folder rows also support:
@@ -196,8 +194,8 @@ Advanced filters:
 Subset behavior:
 - `Clear All` resets text and advanced filters.
 - The filter summary also shows folder-level rating progress as `Rated A/B`.
-- `Prepare Dataset` always uses the currently visible media rows.
-- If the visible subset is smaller than the full folder, Prepare asks for confirmation and records the subset snapshot in `auto_dataset/prep_manifest.json`.
+- Train always captures the currently visible media rows.
+- The captured run bundle is independent of later filtering, caption edits, or set-file changes.
 
 SuperSet search:
 - `Include subfolders` arms recursive search.
@@ -348,33 +346,30 @@ Video clip flow:
 - supports `Crop This Frame` before export
 - exports the clip into the set and refreshes list and metadata state
 
-### 13. Train tab and dataset generation
+### 13. Train tab and run capture
 
 Train tab includes:
 - model/profile selection: Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, or MiniMax H3
-- profile-grouped configuration files
-- `Prepare Dataset`
-- `Generate Configs` with POC, Normal, or Quality dataset targets
+- POC, Normal, or Quality mode selection
+- profile/mode-specific config and dataset TOMLs
 - managed runs for the selected profile's available run option
 - optional checkpoint resume, a manual command preview, and full diagnostics
 - training queue, GPU status, output console, recent-run history, and TensorBoard controls
 
 Behavior:
 - opening a config file loads it into the center editor; Close saves and returns to Training Items
-- `Prepare Dataset` rebuilds `auto_dataset` from the current visible subset and preserves each video's source frame rate and audio
-- Prepare blocks on zero visible rows
-- Prepare performs missing-caption preflight and reports missing, primer-fallback, and still-empty counts
-- `Generate Configs` reads `prep_manifest.json`, writes the selected profile's dataset TOML, and records its training plan
-- if the prep manifest is missing, Generate auto-runs Prepare once and retries
-- Generate creates only missing configuration TOML; **Reset** is the explicit replacement action for one config
-- Krea2 Raw requires image-only prepared media; Wan2.1, Wan2.2, and MiniMax H3 accept prepared images and videos
+- selecting a model/mode creates only its missing TOMLs; existing edited files are preserved
+- **Reset** intentionally replaces one training config from its template/Normal source or recalculates one dataset TOML from the visible media
+- Train saves the open TOML and captures the visible media, latest captions, exact inspected TOMLs, and run plan under the numbered output folder
+- each Train action owns a separate bundle and cache; Wan2.2 HI and LO from one action share that bundle
+- Krea2 Raw requires image-only media; Wan2.1, Wan2.2, and MiniMax H3 accept images and videos
 - Video bucket eligibility uses the model's native timebase (16 fps for Wan, 24 fps for MiniMax H3); Diffusion Pipe performs the actual resampling while caching latents
 - MiniMax H3 video config uses a 34-frame POC bucket or selects from 136, 102, 68, and 34 frames for Normal and Quality; shorter clips are excluded
-- the folder badge shows `Ready to train` only when prepared artifacts exist, prepared captions are present, and the set has no material tagged-but-uncaptioned backlog; otherwise it can show `Caption review needed`
+- zero visible media and missing required captions or TOML paths fail visibly
 - `Train this set` starts immediately when idle or adds the selected run behind current work; Wan2.2 HI -> LO queues independent HI and LO jobs
 - active jobs expose per-run progress, completion ETA, next-checkpoint ETA, effective output identity/folder, logs, queue-pause/finish controls, explicit queue start/resume, and resume-from-checkpoint controls; queued resumes show checkpoint-derived progress
 - the output view starts at the recent log tail; `Reveal log file` selects the complete managed log in Explorer
-- `Generate & Copy Manual Command` reserves a launch output and snapshot but remains a non-process-launching WSL handoff, while `Run Diagnostics` runs the fuller environment check
+- `Generate & Copy Manual Command` reserves a launch output and captured bundle but remains a non-process-launching WSL handoff, while `Run Diagnostics` runs the fuller environment check
 - TensorBoard can be started, stopped, and opened from the training workspace when available
 
 See [docs/train.md](docs/train.md) and [docs/training_profiles.md](docs/training_profiles.md) for the operational reference.
@@ -384,7 +379,7 @@ See [docs/train.md](docs/train.md) and [docs/training_profiles.md](docs/training
 Settings support:
 - filesystem root and models paths
 - training paths
-- selection snapshot comment toggle
+- enabled training models
 - TensorBoard port
 - Face Focus analysis toggle
 - MediaPipe selection analysis toggle
@@ -413,8 +408,10 @@ Per set folder:
 - folder state: `.webcap_state.json`
 - metadata cache: `media_metadata.json`
 - originals backup: `originals/`
-- prepared dataset outputs: `auto_dataset/`
-- prep manifest: `auto_dataset/prep_manifest.json`
+- persistent profile/mode config and dataset TOMLs
+
+Per numbered run folder:
+- immutable captured media, captions, TOMLs, plan, and Diffusion Pipe cache under `.webcap/datasets/`
 
 ## API Endpoints
 
@@ -463,10 +460,8 @@ Selection, review, and dataset flow:
 - `/fs/superset_search`
 - `/fs/create_set_from_results`
 - `/fs/smart_set_materialize`
-- `/fs/prepare_dataset`
-- `/fs/generate_dataset_config`
 - `/fs/training_profiles`
-- `/fs/training_config/reset`
+- `/fs/training_setup`
 - `/fs/train_run`
 - `/fs/training_runner/validate`
 - `/fs/training_runner/start`
@@ -523,11 +518,11 @@ python -m pytest tests/test_prune_restore.py
 - For Face Focus, verify `deface` is installed and in `PATH`.
 - For MediaPipe selection analysis, verify the vendored model files exist under `tool/vendor/mediapipe/models/`.
 
-### Generate fails quickly
+### Training capture fails quickly
 
-- Ensure the folder has media and captions.
-- Run Prepare first, or let Generate auto-prepare if the manifest is missing.
-- Inspect console output for prep or generate errors.
+- Ensure the visible grid contains supported media and that captions or primer fallbacks are available.
+- Inspect the selected config and dataset TOMLs for required model, dataset, media, and output paths.
+- Inspect the visible failure or console output for the exact capture/preflight error.
 
 ### Config edits do not seem to apply
 
@@ -544,7 +539,7 @@ python -m pytest tests/test_prune_restore.py
 - `tool/js/`: frontend logic
 - `tool/css/`: styles
 - `tool/server/`: Flask routes and backend operations
-- `tool/templates/`: generated config templates
+- `tool/templates/`: model/mode training config templates
 - `tool/vendor/`: vendored frontend and model assets
 - `docs/`: design notes and specs
 - `tests/`: regression tests

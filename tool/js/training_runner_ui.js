@@ -426,9 +426,9 @@ function startManagedTraining() {
   var options = getManagedTrainingOptions();
   Promise.resolve(saveCurrentEditorContent())
     .then(function () {
-      var selectedMedia = getVisibleMediaSelectionForPrepare();
+      var selectedMedia = getVisibleMediaSelectionForTraining();
       if (!selectedMedia.length) throw new Error('No visible media items to train.');
-      var fallbackResult = buildPrepareFallbackCaptions(selectedMedia);
+      var fallbackResult = buildTrainingFallbackCaptions(selectedMedia);
       setStatus('Creating run dataset...');
       return trainingRunnerRequest('/fs/training_runner/start', {
         method: 'POST',
@@ -445,7 +445,7 @@ function startManagedTraining() {
           parentJobId: options.parentJobId,
           selected_media: selectedMedia,
           total_media_count: Array.isArray(state.items) ? state.items.length : 0,
-          selection_criteria: buildPrepareSelectionCriteria(),
+          selection_criteria: buildTrainingSelectionCriteria(),
           fallback_captions: fallbackResult.fallbackCaptions
         })
       });

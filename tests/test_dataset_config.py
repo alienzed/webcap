@@ -362,7 +362,7 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
     assert "WAN quality video resolution cap 1024x576" in quality_report
 
 
-def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
+def test_removed_generate_dataset_config_route_is_not_available(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_folder = fs_root / "set"
     auto_dataset = set_folder / "auto_dataset"
@@ -423,17 +423,8 @@ def test_generate_dataset_config_route_writes_hi_lo(tmp_path, monkeypatch):
     client = app_module.app.test_client()
     response = client.post("/fs/generate_dataset_config", json={"folder": "set"})
 
-    assert response.status_code == 200
-    assert "Wrote" in response.get_data(as_text=True)
-    assert (set_folder / "dataset.hi.toml").exists()
-    assert (set_folder / "dataset.lo.toml").exists()
-
-    krea_response = client.post(
-        "/fs/generate_dataset_config",
-        json={"folder": "set", "profileId": KREA2_PROFILE_ID},
-    )
-    assert krea_response.status_code == 200
-    assert 'group = "videos"' not in (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    assert response.status_code == 404
+    assert not (set_folder / "dataset.hi.toml").exists()
 
 
 def test_choose_video_detail_bucket_respects_mfp_limit():

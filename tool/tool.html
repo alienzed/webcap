@@ -356,8 +356,6 @@
                                     <div class="config-editor-toolbar-actions">
                                         <button id="config-editor-back-btn" type="button" class="review-captions-btn">Close</button>
                                         <button id="config-editor-console-btn" type="button" class="review-captions-btn">Console</button>
-                                        <button id="config-editor-generate-btn" type="button" class="review-captions-btn">Generate</button>
-                                        <button id="config-editor-train-btn" type="button" class="review-captions-btn">Train Preview</button>
                                         <button id="config-editor-save-btn" type="button" class="review-captions-btn">Save</button>
                                     </div>
                                 </div>
@@ -367,9 +365,9 @@
                                             <div class="training-overview-title">Training Items</div>
                                             <button id="training-item-overview-toggle-btn" type="button" class="review-captions-btn" aria-expanded="true">Hide items</button>
                                         </div>
-                                        <div id="training-item-overview-summary" class="training-overview-summary">Prepare the dataset to see its training items here.</div>
+                                        <div id="training-item-overview-summary" class="training-overview-summary">Visible media selected for the next training run appears here.</div>
                                     </div>
-                                    <div id="training-item-overview" class="training-item-overview" aria-label="Prepared training items"></div>
+                                    <div id="training-item-overview" class="training-item-overview" aria-label="Visible training items"></div>
                                 </div>
                                 <div id="training-runner-output-view" class="training-runner-output-view hidden">
                                     <section id="training-runner-console" class="training-runner-console hidden" aria-label="Training output">
@@ -986,13 +984,39 @@
                     </section>
                     <section class="app-settings-section">
                         <div class="app-settings-section-header">
-                            <div class="app-settings-section-title">Training</div>
-                            <div class="app-settings-section-copy">Training-prep behavior.</div>
+                            <div class="app-settings-section-title">Training Models</div>
+                            <div class="app-settings-section-copy">Choose which models appear when creating new training runs. Existing files and runs are unaffected.</div>
                         </div>
-                        <label class="app-settings-toggle">
-                            <input id="app-settings-training-write-selection-snapshot-comments" type="checkbox">
-                            <span>Write selection snapshot comments into dataset TOMLs</span>
-                        </label>
+                        <div class="app-settings-form-grid">
+                            <div class="app-settings-model-option">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-training-profile-wan22" type="checkbox">
+                                    <span>Wan 2.2 T2V</span>
+                                </label>
+                                <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                            </div>
+                            <div class="app-settings-model-option">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-training-profile-krea2" type="checkbox">
+                                    <span>Krea2 Raw</span>
+                                </label>
+                                <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/Krea-2" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                            </div>
+                            <div class="app-settings-model-option">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-training-profile-wan21" type="checkbox">
+                                    <span>Wan 2.1 T2V 14B</span>
+                                </label>
+                                <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.1-T2V-14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                            </div>
+                            <div class="app-settings-model-option">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-training-profile-h3" type="checkbox">
+                                    <span>MiniMax H3</span>
+                                </label>
+                                <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/MiniMax-H3" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                            </div>
+                        </div>
                     </section>
                     <section class="app-settings-section">
                         <div class="app-settings-section-header">

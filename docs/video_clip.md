@@ -40,7 +40,7 @@ This repo already gives us the primitives we need; the new feature should mostly
 
 - Raw source videos live in a subfolder named `src_videos` inside the set folder.
 - The user populates `src_videos` manually (drag-in from OS). No upload UI is provided.
-- `src_videos` is naturally excluded from Prepare Dataset because the folder scan is non-recursive.
+- `src_videos` is naturally excluded from a parent set's training capture because the media grid is non-recursive.
 - `src_videos` items appear in the media list when the user navigates into that subfolder, exactly like any other subfolder.
 
 ## User Flow

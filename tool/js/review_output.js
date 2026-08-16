@@ -323,16 +323,18 @@ function runReview() {
   }
 }
 
-function selectByFileName(fileName, focusFiles, focusSource, reportType) {
+function selectByFileName(fileName, focusFiles, focusSource, reportType, options) {
   if (!fileName) {
     return;
   }
+  var opts = options || {};
   if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen() && typeof closeMediaGridSurface === 'function') {
     closeMediaGridSurface();
   }
 
   function doSelect() {
     var target = null;
+    var clearedTextFilter = false;
     for (var i = 0; i < state.items.length; i += 1) {
       if (state.items[i].fileName === fileName) {
         target = state.items[i];
@@ -344,14 +346,23 @@ function selectByFileName(fileName, focusFiles, focusSource, reportType) {
       return;
     }
 
-    if (ui.filterEl.value) {
+    if (!opts.preserveMediaFilters && ui.filterEl.value && !isMediaItemInCurrentFilteredList(target)) {
+      var currentTextFilter = ui.filterEl.value;
       ui.filterEl.value = '';
-      ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
+      if (isMediaItemInCurrentFilteredList(target)) {
+        clearedTextFilter = true;
+        ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        ui.filterEl.value = currentTextFilter;
+      }
     }
 
     selectPathMedia(target).then(function () {
       if (typeof scrollCurrentMediaRowIntoView === 'function') {
         scrollCurrentMediaRowIntoView();
+      }
+      if (clearedTextFilter) {
+        setStatus('Selected ' + fileName + '; cleared the text filter to reach it.');
       }
     }).catch(function (err) {
       setStatus(String(err && err.message ? err.message : err));

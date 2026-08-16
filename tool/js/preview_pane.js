@@ -448,12 +448,12 @@ function loadConfigFileToEditor(fileName, options) {
 
 // Save logic for config files (overrides caption save if editing config)
 function saveCurrentEditorContent() {
-  if (state.currentItem && state.currentItem.fileName) {
+  var configFile = state.currentConfigFile;
+  if (configFile && configFile.file) {
+    return saveConfigDirect(configFile.folder || state.folder || '', configFile.file, ui.editorEl.value || '');
+  }
+  if (state.currentItem && state.currentItem.fileName && !ui.editorEl.getAttribute('readonly')) {
     return saveCurrentCaption();
   }
-  if (state.currentConfigFile) {
-    return saveCurrentCaption();
-  }
-  // Otherwise, save caption as usual
-  return saveCurrentCaption();
+  return Promise.resolve();
 }

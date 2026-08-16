@@ -20,6 +20,7 @@ from .training_profiles import profiles as training_profiles
 from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, bundle_path_for_job as training_runner_bundle_path_for_job, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, clear_history_response as training_runner_clear_history_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses, start_observer as start_training_runner_observer
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
+from .prune_candidates import prune_candidates_response
 from .training_setup import ensure_training_setup
 from .training_runtime import repair_boot_critical_training_permissions, repair_configured_training_root_permissions
 from .permissions import normalize_path_permissions, run_with_directory_repair
@@ -798,6 +799,21 @@ def fs_media_metadata():
         include_face_focus=include_face_focus,
         include_selection_pose=include_selection_pose,
         scoped_filenames=scoped_filenames,
+    )
+
+
+@app.route("/fs/prune_candidates", methods=["GET"])
+def fs_prune_candidates():
+    rel_path = request.args.get("folder", "").strip()
+    try:
+        disk_config = app_config.load_config_from_disk()
+    except Exception:
+        disk_config = app_config.get_config_snapshot()
+    analysis = disk_config.get("analysis") if isinstance(disk_config.get("analysis"), dict) else {}
+    return prune_candidates_response(
+        rel_path,
+        include_face_focus=bool(analysis.get("enableFaceAnalysis", False)),
+        include_selection_pose=bool(analysis.get("enableMediaPipeAnalysis", False)),
     )
 
 

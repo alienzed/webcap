@@ -145,6 +145,10 @@
                                 <input id="advanced-filter-untagged" type="checkbox">
                                 <span>Tag Mismatch</span>
                             </label>
+                            <label class="advanced-filter-check-row" title="Show whole-set prune candidates">
+                                <input id="advanced-filter-prune-candidates" type="checkbox" disabled>
+                                <span>Prune Candidates</span>
+                            </label>
                         </div>
                         <label class="advanced-filter-row">
                             <span>Stars</span>
@@ -565,6 +569,9 @@
                         <button id="caption-sheet-btn" type="button" class="review-captions-btn hidden" title="Show the current visible captions as one spellchecked text sheet" aria-pressed="false">
                             <span>Caption Sheet</span>
                         </button>
+                        <button id="prune-candidates-btn" type="button" class="review-captions-btn hidden" title="Review whole-set prune candidates" aria-pressed="false">
+                            <span>Prune Candidates</span>
+                        </button>
                     </div>
                     <div class="review-output-summary" aria-label="Review output summary">
                         <div class="review-output-summary-card">
@@ -645,6 +652,17 @@
                                 <button id="caption-sheet-copy-btn" type="button">Copy</button>
                             </div>
                             <textarea id="caption-sheet-text" class="caption-sheet-text" readonly spellcheck="true" aria-label="Caption sheet"></textarea>
+                        </section>
+                        <section id="prune-candidates-pane" class="review-output-column prune-candidates-pane hidden">
+                            <div class="review-output-column-header">
+                                <div class="review-output-column-title">Prune Candidates</div>
+                                <div class="review-output-column-subtitle">Whole-set technical warnings and resolution outliers. Nothing is pruned automatically.</div>
+                            </div>
+                            <div class="prune-candidates-toolbar">
+                                <span id="prune-candidates-summary" class="small">Analysis has not run.</span>
+                                <button id="prune-candidates-inspect-btn" type="button" class="review-captions-btn" disabled>Inspect Candidates</button>
+                            </div>
+                            <div id="prune-candidates-list" class="prune-candidates-list"></div>
                         </section>
                     </div>
                 </section>
@@ -1289,6 +1307,7 @@
         <script src="/static/js/caption_helpers_panel.js"></script>
         <script src="/static/js/caption_helpers_ui.js"></script>
         <script src="/static/js/item_details.js"></script>
+        <script src="/static/js/prune_candidates.js"></script>
         <script src="/static/js/media_grid_state.js"></script>
         <script src="/static/js/media_grid_filters.js"></script>
         <script src="/static/js/media_grid_tiles.js"></script>

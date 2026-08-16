@@ -291,6 +291,7 @@ function wireAllUi() {
 
   // Wire up review actions (if stats.js is loaded)
   wireReviewActions();
+  wirePruneCandidatesUi();
   
   // Wire up CTRL+S/CMD+S to new save logic
   ui.editorEl.addEventListener('keydown', function(e) {

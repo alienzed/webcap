@@ -153,6 +153,7 @@ function mediaGridSyncFilterControls() {
     ui.advancedFilterReviewedEl.checked ||
     ui.advancedFilterIncompleteEl.checked ||
     ui.advancedFilterUntaggedEl.checked ||
+    ui.advancedFilterPruneCandidatesEl.checked ||
     ui.advancedFilterSupersetEl.checked
   );
   var otherFiltersHint = document.getElementById('media-grid-other-filters');

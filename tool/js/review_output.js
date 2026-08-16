@@ -32,6 +32,7 @@ function activateFocusSet(fileNames, source, reportType) {
 
 function getFocusSetReportLabel(reportType) {
   if (reportType === 'review') return 'Review Set';
+  if (reportType === 'pruneCandidates') return 'Prune Candidates';
   return '';
 }
 
@@ -118,6 +119,8 @@ function rerunFocusSetReport() {
   setTimeout(function () {
     if (reportType === 'review') {
       runReview();
+    } else if (reportType === 'pruneCandidates') {
+      openPruneCandidatesReport();
     }
   }, 0);
 }
@@ -185,6 +188,12 @@ function updateReviewButtonAvailability() {
       ? 'Show the current visible captions as one spellchecked text sheet'
       : availability.message;
   }
+  var pruneAvailable = isSetFolderPath(state.folder) && Array.isArray(state.items) && state.items.length > 0;
+  ui.pruneCandidatesBtn.disabled = false;
+  ui.pruneCandidatesBtn.classList.toggle('hidden', !pruneAvailable);
+  ui.pruneCandidatesBtn.title = pruneAvailable
+    ? 'Review whole-set prune candidates'
+    : 'Prune Candidates requires at least one media file in a set folder';
   refreshReviewOutputSummary();
 }
 
@@ -207,7 +216,9 @@ function showCaptionSheet() {
     ui.captionSheetSummaryEl.textContent = items.length + ' visible caption' + (items.length === 1 ? '' : 's');
   }
   if (ui.captionSheetPane) ui.captionSheetPane.classList.remove('hidden');
+  ui.pruneCandidatesPane.classList.add('hidden');
   if (ui.captionSheetBtn) ui.captionSheetBtn.setAttribute('aria-pressed', 'true');
+  ui.pruneCandidatesBtn.setAttribute('aria-pressed', 'false');
   setStatus('Caption sheet ready: ' + items.length + ' files');
 }
 
@@ -306,6 +317,10 @@ function runReview() {
   if (typeof setWorkspaceSurface === 'function') {
     setWorkspaceSurface('reviewOutput');
   }
+  var reviewPane = document.getElementById('review-output-review-pane');
+  if (reviewPane) reviewPane.classList.remove('hidden');
+  ui.pruneCandidatesPane.classList.add('hidden');
+  ui.pruneCandidatesBtn.setAttribute('aria-pressed', 'false');
   var availability = getReviewAvailability();
   if (!availability.enabled) {
     setStatus(availability.message + '.');

@@ -178,7 +178,37 @@ function updateReviewButtonAvailability() {
     ui.reviewSetBtn.classList.toggle('hidden', !availability.enabled);
     ui.reviewSetBtn.title = availability.message;
   }
+  if (ui.captionSheetBtn) {
+    ui.captionSheetBtn.disabled = false;
+    ui.captionSheetBtn.classList.toggle('hidden', !availability.enabled);
+    ui.captionSheetBtn.title = availability.enabled
+      ? 'Show the current visible captions as one spellchecked text sheet'
+      : availability.message;
+  }
   refreshReviewOutputSummary();
+}
+
+function showCaptionSheet() {
+  var availability = getReviewAvailability();
+  if (!availability.enabled) {
+    setStatus(availability.message + '.');
+    return;
+  }
+  if (state.currentItem && state.currentItem.fileName) {
+    savePathCaption();
+  }
+  var items = getVisibleReviewItems();
+  if (!items.length) {
+    setStatus('No visible media items to review.');
+    return;
+  }
+  if (ui.captionSheetTextEl) ui.captionSheetTextEl.value = buildCombinedCaptionsText(items);
+  if (ui.captionSheetSummaryEl) {
+    ui.captionSheetSummaryEl.textContent = items.length + ' visible caption' + (items.length === 1 ? '' : 's');
+  }
+  if (ui.captionSheetPane) ui.captionSheetPane.classList.remove('hidden');
+  if (ui.captionSheetBtn) ui.captionSheetBtn.setAttribute('aria-pressed', 'true');
+  setStatus('Caption sheet ready: ' + items.length + ' files');
 }
 
 function updateSetFolderScopedUi() {

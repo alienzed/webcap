@@ -138,6 +138,31 @@
   gap: 14px;
 }
 
+.app.shell-revamp .caption-sheet-pane.hidden {
+  display: none;
+}
+
+.app.shell-revamp .caption-sheet-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app.shell-revamp .caption-sheet-text {
+  width: 100%;
+  min-height: 420px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
 .app.shell-revamp.workspace-surface-review-output .workbench-top,
 .app.shell-revamp.workspace-surface-config-editor .workbench-top,
 .app.shell-revamp.workspace-surface-config-editor .tags-card,

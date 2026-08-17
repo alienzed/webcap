@@ -251,7 +251,8 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
     to_remove = [k for k in metadata if not (folder_path / k).exists() or is_transient_media_name(k)]
     for k in to_remove:
         del metadata[k]
-    write_media_metadata_file(metadata_path, metadata)
+    if pending_entries or to_remove or not metadata_path.exists():
+        write_media_metadata_file(metadata_path, metadata)
     return metadata
 
 

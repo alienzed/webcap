@@ -442,6 +442,12 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         config_path = artifacts[artifact_key]
         hi_path = config_path
         lo_path = config_path
+    elif stages == "hi":
+        hi_path = artifacts["hiConfig"]
+        lo_path = hi_path
+    elif stages == "lo":
+        lo_path = artifacts["loConfig"]
+        hi_path = lo_path
     else:
         hi_path = artifacts["hiConfig"]
         lo_path = artifacts["loConfig"]

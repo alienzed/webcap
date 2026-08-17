@@ -640,12 +640,7 @@ def _launch_job(job, folder_path):
     if code != 0 or not pid.isdigit():
         job["status"] = "failed"
         job["stage"] = "launch"
-        job["error"] = (
-            "Could not prepare the launch bundle: "
-            + repr(exc)
-            + " | stages=" + str(stages)
-            + " | artifacts=" + ",".join(sorted(artifacts))
-        )
+        job["error"] = (stderr or stdout).strip() or "Could not launch the managed training runner (exit " + str(code) + ")."
         job["finishedAt"] = time.time()
         return False
     job.update({

@@ -1178,6 +1178,13 @@ def _new_job(
     job_dir.mkdir(parents=True, exist_ok=False)
     normalize_path_permissions(job_dir)
     artifacts = {key: Path(value) for key, value in bundle["artifacts"].items()}
+    if selected_profile["id"] == "wan22_t2v":
+        if stages == "hi":
+            artifacts.setdefault("loConfig", artifacts["hiConfig"])
+            artifacts.setdefault("loDataset", artifacts["hiDataset"])
+        elif stages == "lo":
+            artifacts.setdefault("hiConfig", artifacts["loConfig"])
+            artifacts.setdefault("hiDataset", artifacts["loDataset"])
     snapshot = {stages: str(artifacts[stages + "Config"])}
     progress_plan = _plan_run_steps(_read_training_plan(bundle["path"]) or _default_progress_plan(), snapshot)
     input_evidence = _input_evidence(bundle["path"], stages)

@@ -807,7 +807,7 @@ function trainingQueueStartLabel(nextJob) {
   return trainingWorkspaceState.runnerQueuePauseReason === 'Queue waiting for manual start after WebCap restarted.'
     ? 'Start Queue'
     : /^Queue held:/i.test(trainingWorkspaceState.runnerQueuePauseReason || '') ? 'Continue with next job'
-    : nextJob && !nextJob.resumeFromCheckpoint ? 'Restart' : 'Resume';
+    : nextJob && !nextJob.resumeFromCheckpoint ? 'Resume' : 'Resume';
 }
 
 function syncTrainingQueueResumeButton(els, queuedJobs) {

@@ -41,6 +41,7 @@ cfg = 4
 type = "lora"
 rank = 32
 dtype = "bfloat16"
+dropout = 0.05
 
 [optimizer]
 type = "adamw_optimi"

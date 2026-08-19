@@ -12,6 +12,9 @@ Last reviewed: 2026-08-15.
 - Quality mode is probably untrainable, I also want to consider whether we're purposefully skipping lower resolution clips for Quality mode, this makes it different from Normal and POC in ways that deviate from the spirit, I think.
 - If I am resuming, and I've changed the LR, we need force_constant_lr added, but... maybe that's on me.
 - After Pause, the button says Restart... not Resume? Queue held? are these useful distinctions? It's a Queue, why not just 'Resume'
+- For the [dataset] config editor, we only have so many buckets that are applicable to stanzas, I'm dreaming of a friendly system where, say I want to manipulate frames, or resolutions, or directories, I can do so with assistance... choose higher/lower resolutions, compatible bucket sizes, informed by the model, estimated fit in VRAM, etc... I think we already have the correct data points, we'd just need to implement the UI for managing this. A fallback text editor is still desirable.
+- The Review / Train screens are getting a bit busy. I feel like these screens were initially tacked on, maybe not given the respsect they deserve, I wouldn't go crazy with a revamp, the train stuff in the center pane is solid, it's more the right pane and how the center and right pane kind of swap responsibilities that seems off.
+- The metadata info should probably be shown as soon as we hit Review in the left sidebar, that information is valid and doesn't really require "assessment" from my perspstive.
 
 ## Enhancements / Ideas
 - Provide the ability to resume from existing weights (resume from LORA, not from saved checkpoint, which we already support).

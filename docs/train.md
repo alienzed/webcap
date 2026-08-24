@@ -12,7 +12,7 @@ The runner's ownership and recovery rules are defined in [training_runner_contra
 4. Filter or focus the media grid to the exact items to train.
 5. Choose the run option and select **Train this set**, or generate a manual command.
 
-Train saves the open TOML before capture. It then creates a run-owned bundle containing the visible media, latest captions, exact saved TOMLs, and training plan. The job enters the queue only after the bundle is complete.
+Train saves the open TOML before capture. It then creates a run-owned bundle containing the visible media, latest captions, exact saved TOMLs, and training plan. For video-capable profiles, off-target video FPS is normalized only in that bundle; a failed conversion logs a warning and keeps an unchanged copy. The job enters the queue only after the bundle is complete.
 
 Wan2.2 `HI -> LO` creates two jobs sharing one captured bundle. Every separate Train action creates a separate bundle.
 

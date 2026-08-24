@@ -213,7 +213,7 @@ The user selects a real source clip from the current set. WebCap validates that 
 
 The source does not need to match every candidate aspect ratio. Each probe has exactly one configured bucket, so Diffusion Pipe produces the target tensor shape through its normal resize/crop path. Content quality is irrelevant; the objective is allocation behavior.
 
-For every candidate, create a fresh one-item immutable probe bundle. Hardlink/copy the source clip and caption using existing bundle conventions. Never reuse a latent cache between different shapes.
+For every candidate, create a fresh one-item immutable probe bundle. Capture the source clip and caption using the normal profile-FPS bundle policy, so the probe uses the same normalized video input as a training run. Never reuse a latent cache between different shapes.
 
 Each probe dataset contains one video stanza and one bucket:
 

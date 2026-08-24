@@ -25,13 +25,13 @@ Persistent set TOML stays editable and uses the neutral template output path. Wh
 
 For example: `001-Estel`. Each model/stage writes beneath that group using a registry-owned slug: `wan22-hi`, `wan22-lo`, `krea2-raw`, `wan21-t2v`, or `minimax-h3`. A Wan2.2 HI → LO action shares one launch group for its two independent jobs; every other new launch gets its own group. Resume continues the selected existing output, and canceled reservations are never recycled.
 
-Managed and manual launches capture a bundle under `<launch-group>/.webcap/datasets/`. The bundle owns its media, captions, exact inspected TOMLs, and cache. Only runtime paths are rewritten in the captured TOMLs. Editable source files are not rewritten, and **Reset** is the explicit per-file replacement action.
+Managed and manual launches capture a bundle under `<launch-group>/.webcap/datasets/`. The bundle owns its media, captions, exact inspected TOMLs, and cache. Runtime paths are rewritten in the captured TOMLs, and off-target videos may be normalized inside the bundle. Editable source files are not rewritten, and **Reset** is the explicit per-file replacement action.
 
 ## Dataset calculation and progress
 
 Selecting a profile and mode creates missing TOMLs. Dataset creation and Reset calculate the selected dataset TOML directly from the currently visible media without copying it. Train captures the visible media and latest captions in the run bundle.
 
-- Captured videos retain their source frame rate and audio. Bucket eligibility is calculated at the model's native rate (16 fps for Wan and 24 fps for MiniMax H3), then Diffusion Pipe performs the actual resampling during latent caching.
+- For video-capable profiles, captured videos already within 0.1 FPS of the model rate are copied unchanged. Other videos are converted inside the fresh bundle to constant 16 FPS for Wan or 24 FPS for MiniMax H3, using high-quality H.264 settings while retaining audio and metadata where the container supports them. If conversion is unavailable or fails, WebCap logs a warning and copies the original unchanged rather than blocking the run.
 - Wan2.2 writes separate high-noise and low-noise dataset files.
 - Krea2, Wan2.1, and MiniMax H3 write mode-specific dataset files; H3 applies its model-specific video frame grid while retaining WebCap's image buckets and target-step planning.
 - POC, Normal, and Quality modes affect calculated buckets and template learning rates. Repeat targeting is based on configured epochs and the dataset shape.

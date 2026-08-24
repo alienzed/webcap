@@ -7,14 +7,11 @@ This document describes the shipped `Review / Output` workspace.
 ## Surface Layout
 
 - The center workspace lives under `#review-output-surface`; the right-side artifacts live under `#review-detail-surface`.
-- `Caption Checks` holds the phrase and rule controls, and **Run Caption Review** is the explicit report action.
-- `Caption Sheet` is always visible below the setup. It reflects the current visible scope in one read-only, spellchecked text area for proofreading and copying.
-- A compact summary strip shows:
-  - current folder
-  - visible media count
-  - current scope (`Current folder`, `SuperSet`, or `Focus set`)
+- The center workspace is a `Review Set` header plus a large read-only, spellchecked `Caption Sheet` for the current visible scope.
+- The header shows the current folder and visible media count. Scope only appears when a Focus Set or SuperSet changes the normal folder scope.
+- `Caption Report` owns the optional phrase, balance, and rule controls in a collapsed `Review options` disclosure. Opening that tab builds its report once; **Refresh** reruns it after option changes.
 
-The right artifact tabs are **Media Metadata**, **Caption Report**, and **Prune Candidates**. Metadata loads for the current scope when Review opens. Caption Report stays empty until explicitly run. Annotation's preview iframe remains independent.
+The right artifact tabs are **Media Metadata**, **Caption Report**, and **Prune Candidates**. Metadata loads for the current scope when Review opens and supports sortable columns plus optional aspect-ratio grouping. Annotation's preview iframe remains independent.
 
 ## Frontend File Split
 
@@ -40,7 +37,7 @@ The current code is intentionally split by concern:
 ## Main Flow
 
 1. User opens Review and sees the current Caption Sheet and Media Metadata.
-2. User adjusts caption checks when needed and runs **Run Caption Review**.
+2. User opens Caption Report when caption analysis is needed, adjusts Review options if desired, and uses **Refresh** to rerun it.
 3. `tool/js/review_output.js` gathers the visible media rows from the current filtered list.
 4. `tool/js/stats.js` computes caption QA data.
 5. `tool/js/preview_pane.js` renders caption issues in the dedicated right-side report iframe and loads optional **Curation Signals** only when opened.

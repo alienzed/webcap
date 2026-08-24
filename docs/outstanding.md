@@ -3,7 +3,6 @@ Last reviewed: 2026-08-24.
 
 ## Enhancements / Ideas
 - Validate the H3 Quality optimization preset after the shared safe video-bucket policy has seen real runs.
-- Decide whether queue and history should expose more lifecycle times. Recent Runs already shows the most relevant queued, started, or finished timestamp; the remaining question is whether showing both start and completion, plus resume attempts as distinct child jobs, would add useful information without clutter.
 - Provide the ability to resume from existing LoRA weights, rather than from a saved checkpoint, which is already supported.
 
 ## Backlog (Do Not Implement Yet)

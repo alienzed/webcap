@@ -40,7 +40,7 @@ function refreshReviewOutputSummary() {
   var folderEl = document.getElementById('review-output-summary-folder');
   var visibleEl = document.getElementById('review-output-summary-visible');
   var scopeEl = document.getElementById('review-output-summary-scope');
-  if (!folderEl || !visibleEl || !scopeEl) return;
+  if (!folderEl || !visibleEl) return;
 
   var folder = String(state && state.folder || '').trim();
   var rootLabel = String(ROOT_FOLDER_LABEL || '').trim();
@@ -57,19 +57,18 @@ function refreshReviewOutputSummary() {
 
   folderEl.textContent = folderLabel;
   visibleEl.textContent = totalCount ? (visibleCount + ' of ' + totalCount + ' visible') : 'No media loaded';
-  if (focusSetCount) {
-    scopeEl.textContent = 'Focus set: ' + focusSetCount + ' item' + (focusSetCount === 1 ? '' : 's');
-  } else if (state && state.supersetActive) {
-    scopeEl.textContent = 'SuperSet search results';
-  } else {
-    scopeEl.textContent = 'Current folder scope';
+  if (scopeEl) {
+    var scopeLabel = focusSetCount ? ('Focus set: ' + focusSetCount + ' item' + (focusSetCount === 1 ? '' : 's')) : (state && state.supersetActive ? 'SuperSet results' : '');
+    scopeEl.textContent = scopeLabel;
+    scopeEl.classList.toggle('hidden', !scopeLabel);
   }
   if (typeof refreshReviewWorkspaceBaseline === 'function') refreshReviewWorkspaceBaseline();
 }
 
-var reviewWorkspaceState = { detailTab: 'metadata', metadataScopeKey: '' };
+var reviewWorkspaceState = { detailTab: 'metadata', metadataScopeKey: '', reportReady: false, reportScopeKey: '' };
 
-function setReviewDetailTab(tab) {
+function setReviewDetailTab(tab, options) {
+  var opts = options || {};
   var value = ['metadata', 'report', 'prune'].indexOf(tab) !== -1 ? tab : 'metadata';
   reviewWorkspaceState.detailTab = value;
   Array.prototype.forEach.call(document.querySelectorAll('[data-review-detail-tab]'), function (button) {
@@ -82,6 +81,7 @@ function setReviewDetailTab(tab) {
     if (pane) pane.classList.toggle('hidden', entry[0] !== value);
   });
   if (value === 'metadata') refreshReviewWorkspaceBaseline(true);
+  if (value === 'report' && !opts.skipReportBuild && !reviewWorkspaceState.reportReady) buildReviewReport();
   if (value === 'prune') {
     renderPruneCandidatesReport();
     ensurePruneCandidatesForCurrentFolder(false).then(renderPruneCandidatesReport).catch(renderPruneCandidatesReport);
@@ -95,6 +95,13 @@ function refreshReviewWorkspaceBaseline(forceMetadata) {
   if (ui.captionSheetTextEl) ui.captionSheetTextEl.value = items.length ? buildCombinedCaptionsText(items) : '';
   if (ui.captionSheetSummaryEl) ui.captionSheetSummaryEl.textContent = items.length + ' visible caption' + (items.length === 1 ? '' : 's');
   var key = String(state.folder || '') + '|' + items.map(function (item) { return item.fileName; }).join('\n');
+  if (key !== reviewWorkspaceState.reportScopeKey) {
+    reviewWorkspaceState.reportScopeKey = key;
+    reviewWorkspaceState.reportReady = false;
+    var report = document.getElementById('review-report');
+    if (report) report.srcdoc = '';
+    if (reviewWorkspaceState.detailTab === 'report') buildReviewReport();
+  }
   if (!forceMetadata && key === reviewWorkspaceState.metadataScopeKey) return;
   reviewWorkspaceState.metadataScopeKey = key;
   if (typeof renderReviewWorkspaceMetadata === 'function') {
@@ -218,8 +225,7 @@ function wireReviewActions() {
 function updateReviewButtonAvailability() {
   var availability = getReviewAvailability();
   if (ui.reviewSetBtn) {
-    ui.reviewSetBtn.disabled = false;
-    ui.reviewSetBtn.classList.toggle('hidden', !availability.enabled);
+    ui.reviewSetBtn.disabled = !availability.enabled;
     ui.reviewSetBtn.title = availability.message;
   }
   refreshReviewOutputSummary();
@@ -334,14 +340,7 @@ function buildReviewScopeSummary(items) {
   return summary;
 }
 
-function runReview() {
-  if (typeof setWorkspaceWorkflowMode === 'function') {
-    setWorkspaceWorkflowMode('review');
-  }
-  if (typeof setWorkspaceSurface === 'function') {
-    setWorkspaceSurface('reviewOutput');
-  }
-  setReviewDetailTab('report');
+function buildReviewReport() {
   var availability = getReviewAvailability();
   if (!availability.enabled) {
     setStatus(availability.message + '.');
@@ -352,9 +351,7 @@ function runReview() {
     setStatus('No media files loaded');
     return;
   }
-  if (state.currentItem && state.currentItem.fileName) {
-    savePathCaption();
-  }
+  if (state.currentItem && state.currentItem.fileName) savePathCaption();
   state.currentItem = null;
   renderChecklistPanel();
   ui.editorEl.setAttribute('readonly', 'readonly');
@@ -370,9 +367,7 @@ function runReview() {
     return;
   }
   try {
-    if (state.reviewSeq !== runSeq) {
-      return;
-    }
+    if (state.reviewSeq !== runSeq) return;
     var options = getOptionsFromDom();
     var report = compute(results, {
       requiredPhrase: options.requiredPhrase,
@@ -380,10 +375,22 @@ function runReview() {
       reviewRules: options.reviewRules
     });
     renderReviewSetPreview(report, results.map(function (row) { return row.fileName; }), buildReviewScopeSummary(results));
+    reviewWorkspaceState.reportReady = true;
     setStatus('Review ready: ' + results.length + ' files');
   } catch (err) {
     setStatus(String(err && err.message ? err.message : err));
   }
+}
+
+function runReview() {
+  if (typeof setWorkspaceWorkflowMode === 'function') {
+    setWorkspaceWorkflowMode('review');
+  }
+  if (typeof setWorkspaceSurface === 'function') {
+    setWorkspaceSurface('reviewOutput');
+  }
+  setReviewDetailTab('report', { skipReportBuild: true });
+  buildReviewReport();
 }
 
 function selectByFileName(fileName, focusFiles, focusSource, reportType, options) {

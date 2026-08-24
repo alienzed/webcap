@@ -611,6 +611,17 @@ function wireTrainingWorkspace() {
     }
   };
   historyList.onclick = function (event) {
+    var detailsButton = event.target.closest('[data-training-history-details]');
+    if (detailsButton) {
+      var detailsId = detailsButton.getAttribute('data-training-history-details');
+      trainingWorkspaceState.historyDetailOpen[detailsId] = !trainingWorkspaceState.historyDetailOpen[detailsId];
+      renderTrainingHistory();
+      if (trainingWorkspaceState.historyDetailOpen[detailsId]) {
+        var detailsJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === detailsId; })[0];
+        if (detailsJob) loadTrainingHistoryMetrics(detailsJob);
+      }
+      return;
+    }
     var folderButton = event.target.closest('[data-training-open-folder]');
     var folder = folderButton && folderButton.getAttribute('data-training-open-folder');
     if (folder) {

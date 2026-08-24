@@ -2,7 +2,7 @@
 .app.shell-revamp .review-output-surface {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   min-height: 0;
 }
 
@@ -18,6 +18,26 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+}
+
+.app.shell-revamp .review-output-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app.shell-revamp .review-output-scope {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--panel-soft);
+}
+
+.app.shell-revamp .review-output-scope.hidden {
+  display: none;
 }
 
 .app.shell-revamp .review-output-surface-copy,
@@ -96,10 +116,9 @@
 }
 
 .app.shell-revamp .review-output-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+  display: flex;
   min-height: 0;
+  flex: 1 1 auto;
 }
 
 .app.shell-revamp .review-output-column {
@@ -111,6 +130,11 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.app.shell-revamp .review-output-columns .caption-sheet-pane {
+  width: 100%;
+  flex: 1 1 auto;
 }
 
 .app.shell-revamp .review-output-column-header {
@@ -137,6 +161,40 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.app.shell-revamp .review-artifact-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app.shell-revamp .review-options {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.app.shell-revamp .review-options summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.app.shell-revamp .review-options summary .small {
+  margin-left: 6px;
+  font-weight: 400;
+}
+
+.app.shell-revamp .review-options[open] summary {
+  margin-bottom: 10px;
+}
+
+.app.shell-revamp .review-options .stats-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .app.shell-revamp .prune-candidates-pane {
@@ -244,11 +302,11 @@
   display: none;
 }
 
-.app.shell-revamp .caption-sheet-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.app.shell-revamp .caption-sheet-summary {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .app.shell-revamp .caption-sheet-text {
@@ -348,6 +406,10 @@
 }
 
 .app.shell-revamp #review-media-metadata-panel .metadata-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 8px;
 }
 
@@ -402,6 +464,27 @@
   font-weight: 800;
 }
 
+.app.shell-revamp #review-media-metadata-panel .metadata-sort-button {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.app.shell-revamp #review-media-metadata-panel .metadata-sort-button:hover,
+.app.shell-revamp #review-media-metadata-panel .metadata-sort-button:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+}
+
 .app.shell-revamp #review-media-metadata-panel .metadata-file-link {
   display: inline;
   padding: 0;
@@ -420,8 +503,9 @@
 }
 
 .app.shell-revamp #review-report {
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-height: 0;
   border: 0;
   border-radius: 8px;
@@ -523,6 +607,55 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel-soft);
+}
+
+.app.shell-revamp .training-history-details-toggle {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.app.shell-revamp .training-history-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.app.shell-revamp .training-history-fact-group {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.app.shell-revamp .training-history-fact-heading {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.app.shell-revamp .training-history-fact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 6px;
+  align-items: baseline;
+  font-size: 11px;
+}
+
+.app.shell-revamp .training-history-fact > span {
+  color: var(--muted);
+}
+
+.app.shell-revamp .training-history-fact > strong {
+  min-width: 0;
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .app.shell-revamp .training-context-heading,
@@ -944,6 +1077,15 @@
 
 .app.shell-revamp .training-workflow-step:first-child .training-profile-control {
   margin-top: 0;
+}
+
+.app.shell-revamp .training-workflow-step:first-child .training-model-trained-status {
+  grid-column: 2 / -1;
+  margin-top: 2px;
+}
+
+.app.shell-revamp .training-workflow-step:first-child .training-model-trained-row {
+  width: 100%;
 }
 
 .app.shell-revamp .training-workflow-step .training-readiness {
@@ -2165,6 +2307,10 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 
 @media (max-width: 1180px) {
+  .app.shell-revamp .training-history-facts {
+    grid-template-columns: 1fr;
+  }
+
   .app.shell-revamp.sidebar-hidden {
     grid-template-columns: 1fr;
   }

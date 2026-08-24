@@ -8,6 +8,7 @@ import shlex
 import threading
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
@@ -62,10 +63,12 @@ _state_file_seen = None
 _persisted_managed_job_ids = set()
 _logger = logging.getLogger(__name__)
 _CHECKPOINT_SAVE_PATH_PATTERN = re.compile(r"Saving model checkpoint:\s+(.+?)[/\\]global_step\d+[/\\]")
+_TRAINING_LOG_TIMESTAMP_PATTERN = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\]", re.MULTILINE)
 _DISTRIBUTED_SOCKET_HOLD_REASON = (
     "Queue held: PyTorch distributed could not open its server socket because the address is already in use. "
     "Stop the other training process before continuing."
 )
+_legacy_active_time_cache = {}
 
 
 def _runtime_root():
@@ -309,6 +312,98 @@ def _find_history_job(folder, job_id):
         (job for job in read_history(folder_path).get("jobs", []) if str(job.get("id") or "") == wanted),
         None,
     )
+
+
+def _active_training_metrics_for_job(folder, job_id, seen=None):
+    """Return a complete cumulative active-time total, or None when history cannot prove one."""
+    wanted = str(job_id or "").strip()
+    visited = set(seen or ())
+    if not wanted or wanted in visited:
+        return None
+    visited.add(wanted)
+    job = _find_history_job(folder, wanted)
+    if not job or str(job.get("status") or "") not in {"completed", "finished_early"}:
+        return None
+    if job.get("activeTrainingTimingComplete") is True:
+        try:
+            return max(0, float(job.get("activeTrainingSeconds") or 0))
+        except (TypeError, ValueError):
+            return None
+
+    log_path = Path(str(job.get("logPath") or "") or str(job.get("artifactDir") or "") + "/run.log")
+    try:
+        stat = log_path.stat()
+    except OSError:
+        return None
+    parent_id = str(job.get("parentJobId") or "").strip()
+    cache_key = (str(folder or ""), wanted, str(log_path), stat.st_size, stat.st_mtime_ns, parent_id)
+    cached = _legacy_active_time_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    first_timestamp = None
+    last_timestamp = None
+    saw_resume_before_timestamp = False
+    try:
+        with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if first_timestamp is None and line.startswith("[webcap] resume "):
+                    saw_resume_before_timestamp = True
+                match = _TRAINING_LOG_TIMESTAMP_PATTERN.match(line)
+                if not match:
+                    continue
+                value = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S,%f")
+                if first_timestamp is None:
+                    first_timestamp = value
+                last_timestamp = value
+    except (OSError, ValueError):
+        return None
+    if first_timestamp is None or last_timestamp is None:
+        return None
+    own_seconds = max(0.0, (last_timestamp - first_timestamp).total_seconds())
+    if saw_resume_before_timestamp:
+        parent_seconds = _active_training_metrics_for_job(folder, parent_id, visited)
+        if parent_seconds is None:
+            return None
+        own_seconds += parent_seconds
+    _legacy_active_time_cache[cache_key] = own_seconds
+    return own_seconds
+
+
+def history_metrics_response(folder, job_id):
+    """Lazy timing endpoint; history listing never scans trainer logs."""
+    with _lock:
+        metrics = _active_training_metrics_for_job(folder, job_id)
+    return {
+        "ok": True,
+        "metrics": {"activeTrainingSeconds": round(metrics) if metrics is not None else None},
+    }, 200
+
+
+def _start_active_training_session(job, started_at=None):
+    job.pop("activeTrainingSessionFinalizedAt", None)
+    job["activeTrainingSessionStartedAt"] = float(started_at or time.time())
+    job.setdefault("activeTrainingSeconds", 0)
+    job.setdefault("activeTrainingTimingComplete", True)
+
+
+def _finish_active_training_session(job, finished_at=None):
+    if job.get("activeTrainingSessionFinalizedAt") is not None:
+        return
+    if job.get("activeTrainingTimingComplete") is not True:
+        job.pop("activeTrainingSessionStartedAt", None)
+        job["activeTrainingSessionFinalizedAt"] = float(finished_at or time.time())
+        return
+    started_at = job.pop("activeTrainingSessionStartedAt", None)
+    if started_at is None and "activeTrainingSeconds" not in job:
+        started_at = job.get("startedAt")
+    try:
+        elapsed = max(0.0, float(finished_at or time.time()) - float(started_at))
+        job["activeTrainingSeconds"] = max(0.0, float(job.get("activeTrainingSeconds") or 0)) + elapsed
+    except (TypeError, ValueError):
+        job["activeTrainingTimingComplete"] = False
+        job.pop("activeTrainingSeconds", None)
+    job["activeTrainingSessionFinalizedAt"] = float(finished_at or time.time())
 
 def _file_digest(path):
     digest = hashlib.sha256()
@@ -653,6 +748,7 @@ def _launch_job(job, folder_path):
         "logPath": str(log_path),
         "error": "",
     })
+    _start_active_training_session(job)
     return True
 
 
@@ -917,6 +1013,7 @@ def _refresh_job(job):
         job.pop("confirmationNote", None)
         job.pop("error", None)
         exit_code = int(result.get("exitCode") or 0)
+        _finish_active_training_session(job, result.get("finishedAt"))
         requested_action = _apply_terminal_job_status(job, result_status)
         if job["status"] == "queued":
             return {"holdReason": "", "pauseQueue": requested_action == "pause"}
@@ -975,6 +1072,8 @@ def _refresh_job(job):
     job.pop("confirmationNote", None)
     job.pop("runnerVerified", None)
     requested_action = _apply_terminal_job_status(job)
+    if requested_action in ("pause", "finish"):
+        _finish_active_training_session(job, now)
     if job["status"] == "queued":
         return {"holdReason": "", "pauseQueue": requested_action == "pause"}
     if requested_action not in ("finish", "stop"):
@@ -1083,7 +1182,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "bundlePath", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch")
+    fields = ("id", "folder", "stages", "profileId", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "bundlePath", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -1163,6 +1262,7 @@ def _new_job(
     run_id="",
     mode="normal",
     launch_group=None,
+    parent_active_seconds=None,
 ):
     job_id = uuid.uuid4().hex[:12]
     _, folder_path = _resolve_folder(folder)
@@ -1228,6 +1328,8 @@ def _new_job(
         "sequence": sequence_match.group(1) if sequence_match else "",
         "launchGroupRoot": str(group_root),
         "parentJobId": str(parent_job_id or ""),
+        "activeTrainingSeconds": float(parent_active_seconds or 0),
+        "activeTrainingTimingComplete": parent_active_seconds is not None,
     }
 
 
@@ -1354,6 +1456,7 @@ def start_response(
                 )
             except Exception as exc:
                 return {"ok": False, "error": "Could not create the run dataset: " + str(exc)}, 400
+        parent_active_seconds = _active_training_metrics_for_job(folder, parent_job_id) if parent_job_id else 0
         jobs = []
         for job_stage in job_stages:
             stage_resume = resume_from_checkpoint if resume_stage == job_stage else ""
@@ -1371,6 +1474,7 @@ def start_response(
                 selected_run["id"],
                 selected_mode,
                 launch_group,
+                parent_active_seconds,
             ))
         state["jobs"].extend(jobs)
         if not active or active.get("status") in TERMINAL_STATUSES:

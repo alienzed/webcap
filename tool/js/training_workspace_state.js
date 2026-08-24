@@ -32,6 +32,9 @@ var trainingWorkspaceState = {
   resumeSelectionTouched: false,
   historyExpanded: false,
   historyCollapsed: true,
+  historyDetailOpen: {},
+  historyMetrics: {},
+  historyMetricRequests: {},
   runnerQueueCollapsed: false,
   itemOverviewHidden: false,
   detailTab: 'items'
@@ -123,18 +126,22 @@ function requestTrainingDetailTab(tab) {
   if (getTrainingDetailTab() === 'config' && target !== 'config' && state.currentConfigFile && state.currentConfigFile.folder === state.folder) {
     Promise.resolve(saveCurrentEditorContent()).then(function () {
       setTrainingDetailTab(target);
-      if (target === 'run-log' && trainingWorkspaceState.runnerConsoleJobId) {
-        showTrainingRunnerConsole(getTrainingRunnerJobById(trainingWorkspaceState.runnerConsoleJobId), { configClosed: true });
-      }
+      if (target === 'run-log') openTrainingDetailLog();
     }).catch(function (err) {
       setStatus('Could not save config before changing artifacts: ' + String(err && err.message ? err.message : err));
     });
     return;
   }
   setTrainingDetailTab(target);
-  if (target === 'run-log' && trainingWorkspaceState.runnerConsoleJobId) {
-    showTrainingRunnerConsole(getTrainingRunnerJobById(trainingWorkspaceState.runnerConsoleJobId), { configClosed: true });
-  }
+  if (target === 'run-log') openTrainingDetailLog();
+}
+
+function openTrainingDetailLog() {
+  var job = trainingWorkspaceState.runnerConsoleJobId
+    ? getTrainingRunnerJobById(trainingWorkspaceState.runnerConsoleJobId)
+    : null;
+  if (!job) job = getTrainingRunnerConsoleTargetJob();
+  if (job) showTrainingRunnerConsole(job, { configClosed: true });
 }
 
 function trainingRunnerRequest(path, options) {

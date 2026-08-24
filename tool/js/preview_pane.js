@@ -74,6 +74,8 @@ function fetchPreviewText(url, body, ui, onDone, onError) {
 }
 
 
+var reviewMetadataTableState = { grouped: false, sortColumn: 'file', sortDirection: 'asc' };
+
 // Render media metadata in either the dedicated Review artifact pane or a report document.
 function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus, includeSelectionPose, panelId) {
   var panel = doc.getElementById(panelId || 'media-metadata-panel');
@@ -114,15 +116,14 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
           return;
         }
         var arToggleId = 'ar-group-toggle';
-        // Only render toggle and table inside the panel, never outside
         panel.innerHTML = '' +
           '<div class="metadata-controls">' +
-            '<label>' +
+            '<span id="metadata-row-summary" class="small"></span>' +
+            '<label class="metadata-group-toggle">' +
               '<input type="checkbox" id="' + arToggleId + '">' +
-              'Group by Aspect Ratio' +
+              'Group by ratio' +
             '</label>' +
           '</div>' +
-          '<div id="metadata-row-summary" class="small" style="margin:0 0 6px 0;"></div>' +
           '<div id="ar-group-table"></div>';
         var tableDiv = panel.querySelector('#ar-group-table');
         var summaryEl = panel.querySelector('#metadata-row-summary');
@@ -130,6 +131,8 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
         if (summaryEl) {
           summaryEl.textContent = 'Showing ' + scopedRows.length + ' of ' + allRows.length + ' metadata rows';
         }
+        var arToggle = panel.querySelector('#' + arToggleId);
+        if (arToggle) arToggle.checked = !!reviewMetadataTableState.grouped;
         renderFaceFocusReportPanel(doc, allRows, scopedFileNames);
         renderSelectionPoseReportPanels(doc, allRows, scopedFileNames);
         renderSuggestedSelectionPanel(doc, allRows, scopedFileNames);
@@ -172,33 +175,95 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
           });
         }
 
-        function renderTable(groupByAR) {
+        function numericValue(value) {
+          var match = String(value === undefined ? '' : value).match(/-?\d+(?:\.\d+)?/);
+          return match ? Number(match[0]) : -Infinity;
+        }
+
+        function resolutionValue(value) {
+          var match = String(value || '').match(/(\d+)\s*[x×]\s*(\d+)/i);
+          if (!match) return [-Infinity, -Infinity, -Infinity];
+          var width = Number(match[1]);
+          var height = Number(match[2]);
+          return [width * height, width, height];
+        }
+
+        function sortRows(rows) {
+          var column = reviewMetadataTableState.sortColumn;
+          var direction = reviewMetadataTableState.sortDirection === 'desc' ? -1 : 1;
+          return rows.slice().sort(function (left, right) {
+            var leftValue;
+            var rightValue;
+            if (column === 'resolution') {
+              leftValue = resolutionValue(left[column]);
+              rightValue = resolutionValue(right[column]);
+              for (var index = 0; index < leftValue.length; index += 1) {
+                if (leftValue[index] !== rightValue[index]) return (leftValue[index] < rightValue[index] ? -1 : 1) * direction;
+              }
+              return String(left.file || '').localeCompare(String(right.file || ''));
+            }
+            if (['fps', 'size', 'bitrate', 'duration', 'frames'].indexOf(column) !== -1) {
+              leftValue = numericValue(left[column]);
+              rightValue = numericValue(right[column]);
+              if (leftValue !== rightValue) return (leftValue < rightValue ? -1 : 1) * direction;
+              return String(left.file || '').localeCompare(String(right.file || ''));
+            }
+            leftValue = String(left[column] === undefined ? '' : left[column]).toLowerCase();
+            rightValue = String(right[column] === undefined ? '' : right[column]).toLowerCase();
+            if (leftValue !== rightValue) return leftValue.localeCompare(rightValue) * direction;
+            return String(left.file || '').localeCompare(String(right.file || ''));
+          });
+        }
+
+        function tableHeaderHtml(cols, colLabels) {
+          return '<thead><tr>' + cols.map(function(c) {
+            var active = reviewMetadataTableState.sortColumn === c;
+            var direction = active ? reviewMetadataTableState.sortDirection : 'none';
+            var marker = active ? (direction === 'asc' ? ' ▲' : ' ▼') : '';
+            return '<th aria-sort="' + direction + '"><button type="button" class="metadata-sort-button" data-metadata-sort="' + c + '">' + escapeHtml(colLabels[c]) + marker + '</button></th>';
+          }).join('') + '</tr></thead>';
+        }
+
+        function wireMetadataSortButtons() {
+          Array.prototype.forEach.call(tableDiv.querySelectorAll('[data-metadata-sort]'), function (button) {
+            button.onclick = function () {
+              var column = button.getAttribute('data-metadata-sort');
+              if (reviewMetadataTableState.sortColumn === column) {
+                reviewMetadataTableState.sortDirection = reviewMetadataTableState.sortDirection === 'asc' ? 'desc' : 'asc';
+              } else {
+                reviewMetadataTableState.sortColumn = column;
+                reviewMetadataTableState.sortDirection = 'asc';
+              }
+              renderTable();
+            };
+          });
+        }
+
+        function renderTable() {
           var cols = ['file','resolution','fps','aspect','scene','size','bitrate','codec','duration','frames'];
           var colLabels = {file:'File',resolution:'Resolution',fps:'FPS',aspect:'Aspect',scene:'Scene',size:'Size',bitrate:'Bitrate',codec:'Codec',duration:'Duration',frames:'Frames'};
           var html = '';
-          if (groupByAR) {
-            // Group rows by AR bucket
+          if (reviewMetadataTableState.grouped) {
             var arGroups = {};
             scopedRows.forEach(function(row){
               var ar = mapAspectRatioToBucket(row.aspect);
               if (!arGroups[ar]) arGroups[ar] = [];
               arGroups[ar].push(row);
             });
-            // Only show supported buckets in order
             var bucketOrder = ['square','4:3','3:4','16:9','9:16','Unknown'];
             bucketOrder.forEach(function(ar){
               if (!arGroups[ar] || !arGroups[ar].length) return;
               html += '<div class="metadata-aspect-heading">Aspect Ratio: ' + escapeHtml(ar) + ' (' + arGroups[ar].length + ')</div>';
-              html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
-              arGroups[ar].forEach(function(row){
+              html += '<table class="metadata-table">' + tableHeaderHtml(cols, colLabels) + '<tbody>';
+              sortRows(arGroups[ar]).forEach(function(row){
                 if (row && row.scene_complexity_label && row.scene === undefined) row.scene = row.scene_complexity_label;
                 html += '<tr>' + cols.map(function(c){ return metadataCellHtml(row, c); }).join('') + '</tr>';
               });
               html += '</tbody></table>';
             });
           } else {
-            html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
-            scopedRows.forEach(function(row){
+            html += '<table class="metadata-table">' + tableHeaderHtml(cols, colLabels) + '<tbody>';
+            sortRows(scopedRows).forEach(function(row){
               if (row && row.scene_complexity_label && row.scene === undefined) row.scene = row.scene_complexity_label;
               html += '<tr>' + cols.map(function(c){ return metadataCellHtml(row, c); }).join('') + '</tr>';
             });
@@ -206,15 +271,14 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
           }
           tableDiv.innerHTML = html;
           wireMetadataFileLinks();
+          wireMetadataSortButtons();
         }
 
-        // Initial render (ungrouped)
-        renderTable(false);
-        // Wire up toggle
-        var arToggle = doc.getElementById(arToggleId);
+        renderTable();
         if (arToggle) {
           arToggle.onchange = function() {
-            renderTable(arToggle.checked);
+            reviewMetadataTableState.grouped = arToggle.checked;
+            renderTable();
           };
         }
       } catch(e) {

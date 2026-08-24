@@ -32,7 +32,7 @@ Wan2.2 `HI -> LO` creates two jobs sharing one captured bundle. Every separate T
 - `Pause` interrupts the active job, keeps it first, and holds the queue until `Resume`.
 - `Finish` intentionally ends the active job and allows queue processing to continue.
 - Canceling a queued item removes that item only; it does not delete its captured bundle.
-- Jobs expose captured files, output folders, logs, history, GPU status, diagnostics, and checkpoint resume.
+- Jobs expose captured files, output folders, logs, history, GPU status, diagnostics, and checkpoint resume. Recent Runs keeps compact rows and offers an expandable facts view for timing, progress, dataset, and output details.
 - Managed Resume reuses the original bundle and cache and fails visibly if the bundle is missing.
 - TensorBoard controls use the configured training runtime.
 
@@ -61,3 +61,5 @@ Disabling a profile only hides it from new-run setup. Existing TOMLs, captured b
 - Captured datasets live under `<numbered-run>/.webcap/datasets/<profile>-<mode>-<unique-id>/` and remain until the numbered run folder is deleted.
 
 The persistent set TOMLs remain the editable configuration interface. Only app-owned runtime paths are rewritten in captured copies.
+
+For successful managed runs, WebCap records cumulative active training time: runner process time including startup, compilation, caching, checkpoints, and shutdown, while excluding queued and paused time. Explicit Resume inherits its parent run's total. Older history calculates a total lazily from complete timestamped log lineage when possible; incomplete legacy lineage intentionally has no displayed total.

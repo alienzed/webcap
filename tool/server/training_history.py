@@ -583,7 +583,7 @@ def record_job(folder_path, job):
     runs = discover_runs(folder, str(job.get("stages") or ""))
     record_fields = (
         "id", "folder", "stages", "profileId", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "bundlePath", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
-        "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId",
+        "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId", "activeTrainingSeconds", "activeTrainingTimingComplete",
         "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
     )
     record = {field: job.get(field) for field in record_fields if field in job}

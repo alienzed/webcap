@@ -137,7 +137,6 @@ function syncWorkspaceConfigEditorUi() {
   var backBtn = document.getElementById('config-editor-back-btn');
   var fileLabel = document.getElementById('config-editor-current-file');
   var saveBtn = document.getElementById('config-editor-save-btn');
-  var consoleBtn = document.getElementById('config-editor-console-btn');
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var isConfigEditor = surface === 'configEditor';
   var isTraining = surface === 'training';
@@ -149,8 +148,8 @@ function syncWorkspaceConfigEditorUi() {
   var trainingConfigEmpty = document.getElementById('training-config-empty');
   var trainingDetailTabs = document.getElementById('training-detail-tabs');
   var trainingOutputView = document.getElementById('training-runner-output-view');
+  var trainingRunnerEmpty = document.getElementById('training-runner-empty');
   var editorWrapper = ui.appEl.querySelector('.editor-wrapper');
-  var consoleVisible = !!(ui && ui.consolePanelEl && ui.consolePanelEl.style.display && ui.consolePanelEl.style.display !== 'none');
   var trainingDetailTab = isTraining && typeof getTrainingDetailTab === 'function' ? getTrainingDetailTab() : 'items';
   var trainingOutputVisible = isTraining && trainingDetailTab === 'run-log';
   if (toolbar) {
@@ -173,6 +172,9 @@ function syncWorkspaceConfigEditorUi() {
   if (trainingOutputView) {
     trainingOutputView.classList.toggle('hidden', !trainingOutputVisible);
   }
+  if (trainingRunnerEmpty) {
+    trainingRunnerEmpty.classList.toggle('hidden', !trainingOutputVisible || isTrainingRunnerConsoleVisible());
+  }
   if (editorWrapper) {
     editorWrapper.classList.toggle('hidden', isTraining && (trainingDetailTab !== 'config' || !hasConfigForSurface));
   }
@@ -183,11 +185,6 @@ function syncWorkspaceConfigEditorUi() {
   }
   if (saveBtn) {
     saveBtn.disabled = !isConfigWorkspace || !hasConfigForSurface;
-  }
-  if (consoleBtn) {
-    consoleBtn.disabled = !isConfigWorkspace;
-    consoleBtn.classList.toggle('active', consoleVisible);
-    consoleBtn.setAttribute('aria-pressed', consoleVisible ? 'true' : 'false');
   }
 }
 
@@ -448,14 +445,6 @@ function wireWorkspaceHeaderUi() {
     configEditorSaveBtn.__workspaceWired = true;
     configEditorSaveBtn.onclick = function () {
       saveCurrentEditorContent();
-    };
-  }
-  var configEditorConsoleBtn = document.getElementById('config-editor-console-btn');
-  if (configEditorConsoleBtn && !configEditorConsoleBtn.__workspaceWired) {
-    configEditorConsoleBtn.__workspaceWired = true;
-    configEditorConsoleBtn.onclick = function () {
-      toggleConsolePanel();
-      syncWorkspaceConfigEditorUi();
     };
   }
   syncWorkspaceHeaderUi();

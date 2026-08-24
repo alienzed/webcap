@@ -359,7 +359,6 @@
                                     </div>
                                     <div class="config-editor-toolbar-actions">
                                         <button id="config-editor-back-btn" type="button" class="review-captions-btn">Close</button>
-                                        <button id="config-editor-console-btn" type="button" class="review-captions-btn">App Console</button>
                                         <button id="config-editor-save-btn" type="button" class="review-captions-btn">Save</button>
                                     </div>
                                 </div>
@@ -375,6 +374,7 @@
                                 </div>
                                 <div id="training-config-empty" class="training-editor-empty hidden">Choose a configuration file in Step 2.</div>
                                 <div id="training-runner-output-view" class="training-runner-output-view hidden">
+                                    <div id="training-runner-empty" class="training-editor-empty">No active run log. Select a completed run from Recent Runs to open its log.</div>
                                     <section id="training-runner-console" class="training-runner-console hidden" aria-label="Run log">
                                         <div class="training-runner-console-heading">
                                             <strong id="training-runner-console-title">Run Log</strong>
@@ -568,6 +568,14 @@
                         <div id="review-media-metadata-panel" class="media-metadata-panel">Loading media metadata…</div>
                     </section>
                     <section id="review-report-pane" class="review-detail-pane hidden">
+                        <div class="review-artifact-header">
+                            <div><div class="review-output-column-title">Caption Report</div><div class="review-output-column-subtitle">Caption coverage, balance, and curation signals for the current visible set.</div></div>
+                            <button id="review-set-btn" type="button" class="review-captions-btn" title="Refresh the current visible set"><span>Refresh</span></button>
+                        </div>
+                        <details id="review-options" class="review-options">
+                            <summary>Review options <span id="review-options-summary" class="small">Optional phrase, balance, and rule checks</span></summary>
+                            <div id="cation-review" aria-hidden="false"><div class="stats-controls"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"><div class="section-label-inline"><label>Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea><div class="section-label-inline"><label>Rules</label><button id="review-rules-info-btn" type="button" class="mini-info-btn" title="Rules help" aria-label="Rules help">i</button></div><div class="stats-advanced-inline-row"><button id="review-rules-edit-btn" type="button">Edit Rules</button><span id="review-rules-summary" class="small">No review rules configured.</span></div></div></div>
+                        </details>
                         <iframe id="review-report" title="Caption review report"></iframe>
                     </section>
                     <section id="prune-candidates-pane" class="review-detail-pane prune-candidates-pane hidden">
@@ -585,11 +593,9 @@
             </div>
             <div class="panel preview-panel">
                 <section id="review-output-surface" class="review-output-surface hidden" aria-label="Review workspace">
-                    <div class="review-output-surface-header"><div class="review-output-surface-copy"><div class="review-output-surface-title">Review</div><div class="review-output-surface-subtitle">Check the current set for caption issues and inspect supporting analysis when needed.</div></div><button id="review-output-back-btn" type="button" class="review-captions-btn">Back</button></div>
-                    <div class="review-output-summary" aria-label="Review output summary"><div class="review-output-summary-card"><div class="review-output-summary-label">Folder</div><div id="review-output-summary-folder" class="review-output-summary-value">No folder selected</div></div><div class="review-output-summary-card"><div class="review-output-summary-label">Visible</div><div id="review-output-summary-visible" class="review-output-summary-value">No media loaded</div></div><div class="review-output-summary-card"><div class="review-output-summary-label">Scope</div><div id="review-output-summary-scope" class="review-output-summary-value">Current folder scope</div></div></div>
+                    <div class="review-output-surface-header"><div class="review-output-surface-copy"><div class="review-output-surface-title">Review Set</div><div class="review-output-context"><span id="review-output-summary-folder">No folder selected</span><span aria-hidden="true">·</span><span id="review-output-summary-visible">No media loaded</span><span id="review-output-summary-scope" class="review-output-scope hidden"></span></div></div><button id="review-output-back-btn" type="button" class="review-captions-btn">Back</button></div>
                     <div class="review-output-columns">
-                        <section id="review-output-review-pane" class="review-output-column"><div class="review-output-column-header"><div class="review-output-column-title">Caption Checks</div><div class="review-output-column-subtitle">Tune phrase coverage, balance targets, and rules before running a report.</div></div><div id="cation-review" aria-hidden="false"><div class="stats-controls"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"><div class="section-label-inline"><label>Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea><div class="section-label-inline"><label>Rules</label><button id="review-rules-info-btn" type="button" class="mini-info-btn" title="Rules help" aria-label="Rules help">i</button></div><div class="stats-advanced-inline-row"><button id="review-rules-edit-btn" type="button">Edit Rules</button><span id="review-rules-summary" class="small">No review rules configured.</span></div><button id="review-set-btn" type="button" class="review-captions-btn hidden" title="Review the current filtered set"><span class="btn-glyph" aria-hidden="true">&#9654;</span><span>Run Caption Review</span></button></div></div></section>
-                        <section id="caption-sheet-pane" class="review-output-column caption-sheet-pane"><div class="review-output-column-header"><div class="review-output-column-title">Caption Sheet</div><div class="review-output-column-subtitle">Current visible captions for proofreading. This view does not save edits.</div></div><div class="caption-sheet-actions"><span id="caption-sheet-summary" class="small"></span></div><textarea id="caption-sheet-text" class="caption-sheet-text" readonly spellcheck="true" aria-label="Caption sheet"></textarea></section>
+                        <section id="caption-sheet-pane" class="review-output-column caption-sheet-pane"><div class="review-output-column-header"><div class="review-output-column-title">Caption Sheet <span id="caption-sheet-summary" class="caption-sheet-summary"></span></div><div class="review-output-column-subtitle">Current visible captions for proofreading. This view does not save edits.</div></div><textarea id="caption-sheet-text" class="caption-sheet-text" readonly spellcheck="true" aria-label="Caption sheet"></textarea></section>
                     </div>
                 </section>
                     <section id="training-navigator" class="training-navigator hidden" aria-label="Training workspace">

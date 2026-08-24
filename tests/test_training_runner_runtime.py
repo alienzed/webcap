@@ -982,6 +982,82 @@ def test_pause_result_becomes_an_ordinary_queued_resume(monkeypatch):
     assert "error" not in job
 
 
+def test_active_training_time_accumulates_across_pause_and_completion(monkeypatch):
+    job = {
+        "id": "paused", "status": "stopping", "actionRequested": "pause",
+        "folder": "set", "stages": "krea2", "outputRunPath": "/output/run",
+        "activeTrainingSeconds": 12, "activeTrainingTimingComplete": True,
+        "activeTrainingSessionStartedAt": 100,
+    }
+    monkeypatch.setattr(
+        training_runner,
+        "_read_result_evidence",
+        lambda candidate: ("result", {"status": "stopped", "exitCode": 130, "finishedAt": 130.0}, ""),
+    )
+
+    training_runner._refresh_job(job)
+
+    assert job["status"] == "queued"
+    assert job["activeTrainingSeconds"] == 42
+    assert "activeTrainingSessionStartedAt" not in job
+
+    job.update({"status": "running", "activeTrainingTimingComplete": True})
+    training_runner._start_active_training_session(job, 200)
+    job.pop("actionRequested", None)
+    monkeypatch.setattr(
+        training_runner,
+        "_read_result_evidence",
+        lambda candidate: ("result", {"status": "completed", "exitCode": 0, "finishedAt": 260.0}, ""),
+    )
+    training_runner._refresh_job(job)
+
+    assert job["status"] == "completed"
+    assert job["activeTrainingSeconds"] == 102
+    training_runner._finish_active_training_session(job, 300)
+    assert job["activeTrainingSeconds"] == 102
+
+
+def test_legacy_active_time_requires_complete_resume_lineage(tmp_path, monkeypatch):
+    parent_log = tmp_path / "parent.log"
+    parent_log.write_text(
+        "[webcap] stage=h3\n[2026-08-23 01:00:00,000] start\n[2026-08-23 02:00:00,000] done\n",
+        encoding="utf-8",
+    )
+    child_log = tmp_path / "child.log"
+    child_log.write_text(
+        "[webcap] resume stage=h3 checkpoint=/run\n[2026-08-23 03:00:00,000] start\n[2026-08-23 05:30:00,000] done\n",
+        encoding="utf-8",
+    )
+    jobs = {
+        "parent": {"id": "parent", "status": "finished_early", "artifactDir": str(tmp_path), "logPath": str(parent_log)},
+        "child": {"id": "child", "status": "completed", "artifactDir": str(tmp_path), "logPath": str(child_log), "parentJobId": "parent"},
+        "orphan": {"id": "orphan", "status": "completed", "artifactDir": str(tmp_path), "logPath": str(child_log)},
+    }
+    monkeypatch.setattr(training_runner, "_find_history_job", lambda folder, job_id: jobs.get(job_id))
+    training_runner._legacy_active_time_cache.clear()
+
+    assert training_runner._active_training_metrics_for_job("set", "child") == 12600
+    assert training_runner._active_training_metrics_for_job("set", "orphan") is None
+
+
+def test_history_metrics_prefers_recorded_cumulative_time(monkeypatch):
+    monkeypatch.setattr(
+        training_runner,
+        "_find_history_job",
+        lambda folder, job_id: {
+            "id": job_id,
+            "status": "completed",
+            "activeTrainingSeconds": 321,
+            "activeTrainingTimingComplete": True,
+        },
+    )
+
+    payload, status = training_runner.history_metrics_response("set", "job")
+
+    assert status == 200
+    assert payload["metrics"]["activeTrainingSeconds"] == 321
+
+
 def test_pause_result_holds_the_global_queue(monkeypatch):
     active = {
         "id": "paused", "status": "stopping", "actionRequested": "pause",

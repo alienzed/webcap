@@ -146,16 +146,6 @@ function wireMiscActionButtons() {
   }
 
 
-  if (ui.captionSheetCopyBtn) {
-    ui.captionSheetCopyBtn.onclick = function () {
-      copyTextToClipboard(ui.captionSheetTextEl.value, function () {
-        setStatus('Caption sheet copied.');
-      }, function (err) {
-        setStatus('Could not copy caption sheet: ' + String(err && err.message ? err.message : err));
-      });
-    };
-  }
-
   if (ui.sidebarFocusBtnEl) {
     ui.sidebarFocusBtnEl.onclick = function () {
       if (typeof openFocusedAnnotationModal === 'function') {

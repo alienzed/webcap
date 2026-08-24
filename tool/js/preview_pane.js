@@ -116,9 +116,9 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
         var arToggleId = 'ar-group-toggle';
         // Only render toggle and table inside the panel, never outside
         panel.innerHTML = '' +
-          '<div style="margin-bottom:6px;">' +
-            '<label style="font-size:13px;display:inline-flex;align-items:center;gap:4px;">' +
-              '<input type="checkbox" id="' + arToggleId + '" style="vertical-align:middle;">' +
+          '<div class="metadata-controls">' +
+            '<label>' +
+              '<input type="checkbox" id="' + arToggleId + '">' +
               'Group by Aspect Ratio' +
             '</label>' +
           '</div>' +
@@ -188,7 +188,7 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
             var bucketOrder = ['square','4:3','3:4','16:9','9:16','Unknown'];
             bucketOrder.forEach(function(ar){
               if (!arGroups[ar] || !arGroups[ar].length) return;
-              html += '<div style="margin:8px 0 2px 0;font-weight:bold;">Aspect Ratio: ' + escapeHtml(ar) + ' (' + arGroups[ar].length + ')</div>';
+              html += '<div class="metadata-aspect-heading">Aspect Ratio: ' + escapeHtml(ar) + ' (' + arGroups[ar].length + ')</div>';
               html += '<table class="metadata-table"><thead><tr>' + cols.map(function(c){return '<th>' + escapeHtml(colLabels[c]) + '</th>';}).join('') + '</tr></thead><tbody>';
               arGroups[ar].forEach(function(row){
                 if (row && row.scene_complexity_label && row.scene === undefined) row.scene = row.scene_complexity_label;

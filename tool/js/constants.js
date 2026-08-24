@@ -110,7 +110,6 @@ ui = {
   captionSheetPane: document.getElementById('caption-sheet-pane'),
   captionSheetTextEl: document.getElementById('caption-sheet-text'),
   captionSheetSummaryEl: document.getElementById('caption-sheet-summary'),
-  captionSheetCopyBtn: document.getElementById('caption-sheet-copy-btn'),
   focusSetExitBtn: document.getElementById('focus-set-exit-btn'),
   currentFolderRow: document.getElementById('current-folder-row'),
   consolePanelEl: document.getElementById('console-panel'),

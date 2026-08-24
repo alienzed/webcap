@@ -254,7 +254,6 @@ function clearCaptionFilterInputs() {
   if (ui.advancedFilterUnreviewedEl) ui.advancedFilterUnreviewedEl.checked = false;
   if (ui.advancedFilterUntaggedEl) ui.advancedFilterUntaggedEl.checked = false;
   if (ui.advancedFilterIncompleteEl) ui.advancedFilterIncompleteEl.checked = false;
-  ui.advancedFilterPruneCandidatesEl.checked = false;
   if (ui.advancedFilterStarsEl) {
     Array.prototype.forEach.call(ui.advancedFilterStarsEl.querySelectorAll('input[type="checkbox"]'), function (input) {
       input.checked = false;
@@ -479,7 +478,6 @@ if (ui.advancedFilterUntaggedEl) {
 if (ui.advancedFilterIncompleteEl) {
   ui.advancedFilterIncompleteEl.addEventListener('change', handleMediaFilterChanged);
 }
-ui.advancedFilterPruneCandidatesEl.addEventListener('change', handleMediaFilterChanged);
 if (ui.advancedFilterStarsEl) {
   ui.advancedFilterStarsEl.addEventListener('change', handleMediaFilterChanged);
 }

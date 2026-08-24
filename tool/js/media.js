@@ -331,14 +331,6 @@ function getFilteredMediaItems(ignoreFocusSet) {
   if (tagMismatchOnly) {
     mediaItems = mediaItems.filter(mediaItemHasTagMismatch);
   }
-  if (
-    ui.advancedFilterPruneCandidatesEl.checked &&
-    state.pruneCandidatesStatus === 'ready'
-  ) {
-    mediaItems = mediaItems.filter(function (item) {
-      return isPruneCandidateFile(item.fileName || item.key);
-    });
-  }
   var showInvalidArOnly = !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked);
   if (showInvalidArOnly) {
     mediaItems = mediaItems.filter(function (item) {
@@ -366,7 +358,6 @@ function hasAnyActiveMediaFilter() {
   if (ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked) return true;
   if (ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked) return true;
   if (ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked) return true;
-  if (ui.advancedFilterPruneCandidatesEl.checked) return true;
   if (ui.advancedFilterSupersetEl && ui.advancedFilterSupersetEl.checked) return true;
   if (ui.advancedFilterStarsEl && ui.advancedFilterStarsEl.querySelector('input[type="checkbox"]:checked')) return true;
   if (ui.advancedFilterFlagEl && ui.advancedFilterFlagEl.querySelector('input[type="checkbox"]:checked')) return true;

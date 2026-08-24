@@ -1300,65 +1300,6 @@ iframe {
   margin: 0 auto;
 }
 
-.utility-path-flyout {
-  position: absolute;
-  left: 36px;
-  top: 0;
-  height: 30px;
-  width: max-content;
-  border: 1px solid #b8c3d1;
-  border-radius: 5px;
-  background: #ffffff;
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 7px;
-  opacity: 0;
-  transform: translateX(-8px);
-  pointer-events: none;
-  transition: opacity 0.14s ease, transform 0.14s ease;
-  z-index: 30;
-  overflow: visible;
-  white-space: nowrap;
-}
-
-.utility-path-flyout.open {
-  opacity: 1;
-  transform: translateX(0);
-  pointer-events: auto;
-}
-
-.utility-path-segment {
-  border: none;
-  background: transparent;
-  color: #334155;
-  padding: 0 2px;
-  font-size: 12px;
-  line-height: 1;
-  max-width: none;
-  overflow: visible;
-  text-overflow: clip;
-  white-space: nowrap;
-}
-
-.utility-path-segment:hover {
-  color: #0f172a;
-  text-decoration: underline;
-}
-
-.utility-path-segment.current {
-  color: #0f172a;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.utility-path-separator {
-  color: #94a3b8;
-  font-size: 12px;
-  user-select: none;
-}
-
 /* Small text */
 .small {
   font-size: 12px;
@@ -2977,7 +2918,6 @@ html[data-theme="dark"] .item-metadata-row strong {
 }
 
 html[data-theme="dark"] .utility-bar,
-html[data-theme="dark"] .utility-path-flyout,
 html[data-theme="dark"] .media-item,
 html[data-theme="dark"] .media-item.folder-item,
 html[data-theme="dark"] .media-item.folder-item.header-item {

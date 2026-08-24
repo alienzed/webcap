@@ -18,14 +18,6 @@ function getPruneCandidateFiles(scopeItems) {
 }
 
 function syncPruneCandidateConsumers() {
-  var ready = state.pruneCandidatesStatus === 'ready';
-  var loading = state.pruneCandidatesStatus === 'loading';
-  ui.advancedFilterPruneCandidatesEl.disabled = !ready;
-  ui.advancedFilterPruneCandidatesEl.title = loading
-    ? 'Prune candidate analysis is loading.'
-    : (state.pruneCandidatesStatus === 'error'
-      ? 'Prune candidate analysis failed: ' + String(state.pruneCandidatesError || 'unknown error')
-      : 'Show whole-set prune candidates.');
   renderFocusSetControls();
   if (mediaGridState && mediaGridState.open) {
     if (mediaGridIsSurfaceMode()) renderMediaGridSurface();
@@ -64,9 +56,6 @@ function applyPruneCandidatePayload(folder, payload) {
   state.pruneCandidatesError = '';
   state.pruneCandidatesDirty = false;
   syncPruneCandidateConsumers();
-  if (ui.advancedFilterPruneCandidatesEl.checked) {
-    renderFileList();
-  }
 }
 
 function ensurePruneCandidatesForCurrentFolder(force) {

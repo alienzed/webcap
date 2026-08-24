@@ -208,7 +208,6 @@ function snapshotFolderStateFromDom() {
     tag_mismatch_only: !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked),
     incomplete_only: !!(ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked),
     invalid_ar_only: !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked),
-    prune_candidates_only: !!ui.advancedFilterPruneCandidatesEl.checked,
     stars: (typeof getAdvancedStarFilterValues === 'function') ? getAdvancedStarFilterValues() : [],
     flags: (typeof getAdvancedFlagFilterValues === 'function') ? getAdvancedFlagFilterValues() : []
   };
@@ -310,7 +309,6 @@ function applyFolderStateToDom(folderState) {
   if (ui.advancedFilterInvalidArEl) {
     ui.advancedFilterInvalidArEl.checked = !!(clean.media_filters && clean.media_filters.invalid_ar_only);
   }
-  ui.advancedFilterPruneCandidatesEl.checked = !!(clean.media_filters && clean.media_filters.prune_candidates_only);
   if (ui.advancedFilterSupersetEl) {
     ui.advancedFilterSupersetEl.checked = false;
   }

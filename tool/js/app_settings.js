@@ -260,13 +260,13 @@ function updateUtilityPathLabel(pathText) {
   if (rootLabel) {
     tooltipPath = tooltipPath ? (rootLabel + '/' + tooltipPath) : rootLabel;
   }
-  ui.utilityCurrentPathBtn.title = tooltipPath ? ('Current folder: ' + tooltipPath) : 'Current folder';
+  ui.utilityCurrentPathBtn.title = tooltipPath
+    ? ('Go to root folder. Current folder: ' + tooltipPath)
+    : 'Go to root folder';
   var labelEl = document.getElementById('utility-path-label');
   if (labelEl) {
     labelEl.textContent = tooltipPath || 'Workspace';
   }
-  refreshUtilityPathFlyout();
-
 }
 
 function openHelpReadmeInPreview() {
@@ -312,7 +312,7 @@ function wireAppSettingsUi() {
   if (ui.utilityHelpBtn) ui.utilityHelpBtn.onclick = openHelpReadmeInPreview;
   if (ui.utilityCurrentPathBtn) {
     ui.utilityCurrentPathBtn.onclick = function () {
-      toggleUtilityPathFlyout();
+      navigateToDirStackIndex(0);
     };
   }
 

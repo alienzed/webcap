@@ -146,12 +146,15 @@ function syncWorkspaceConfigEditorUi() {
   var hasTrainingConfigFile = hasConfigFile && state.currentConfigFile.folder === state.folder;
   var hasConfigForSurface = isTraining ? hasTrainingConfigFile : hasConfigFile;
   var trainingOverview = document.getElementById('training-editor-empty');
+  var trainingConfigEmpty = document.getElementById('training-config-empty');
+  var trainingDetailTabs = document.getElementById('training-detail-tabs');
   var trainingOutputView = document.getElementById('training-runner-output-view');
   var editorWrapper = ui.appEl.querySelector('.editor-wrapper');
   var consoleVisible = !!(ui && ui.consolePanelEl && ui.consolePanelEl.style.display && ui.consolePanelEl.style.display !== 'none');
-  var trainingOutputVisible = isTraining && isTrainingRunnerConsoleVisible();
+  var trainingDetailTab = isTraining && typeof getTrainingDetailTab === 'function' ? getTrainingDetailTab() : 'items';
+  var trainingOutputVisible = isTraining && trainingDetailTab === 'run-log';
   if (toolbar) {
-    toolbar.classList.toggle('hidden', !isConfigWorkspace || !hasConfigForSurface || trainingOutputVisible);
+    toolbar.classList.toggle('hidden', !isConfigWorkspace || (isTraining && (trainingDetailTab !== 'config' || !hasConfigForSurface)) || (!isTraining && !hasConfigForSurface));
   }
   if (backBtn) {
     backBtn.textContent = isTraining && hasConfigForSurface ? 'Close' : 'Back';
@@ -159,15 +162,19 @@ function syncWorkspaceConfigEditorUi() {
       ? 'Save this config and return to Training Items.'
       : 'Return to the previous workspace.';
   }
-  ui.appEl.classList.toggle('training-config-selected', isTraining && hasConfigForSurface && !trainingOutputVisible);
+  ui.appEl.classList.toggle('training-config-selected', isTraining && trainingDetailTab === 'config' && hasConfigForSurface);
+  if (trainingDetailTabs) trainingDetailTabs.classList.toggle('hidden', !isTraining);
   if (trainingOverview) {
-    trainingOverview.classList.toggle('hidden', !isTraining || hasConfigForSurface || trainingOutputVisible);
+    trainingOverview.classList.toggle('hidden', !isTraining || trainingDetailTab !== 'items');
+  }
+  if (trainingConfigEmpty) {
+    trainingConfigEmpty.classList.toggle('hidden', !isTraining || trainingDetailTab !== 'config' || hasConfigForSurface);
   }
   if (trainingOutputView) {
     trainingOutputView.classList.toggle('hidden', !trainingOutputVisible);
   }
   if (editorWrapper) {
-    editorWrapper.classList.toggle('hidden', isTraining && (!hasConfigForSurface || trainingOutputVisible));
+    editorWrapper.classList.toggle('hidden', isTraining && (trainingDetailTab !== 'config' || !hasConfigForSurface));
   }
   if (fileLabel) {
     fileLabel.textContent = hasConfigFile
@@ -199,6 +206,7 @@ function syncWorkspaceSurfaceUi() {
   if (!ui || !ui.appEl) return;
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var reviewOutputSurface = document.getElementById('review-output-surface');
+  var reviewDetailSurface = document.getElementById('review-detail-surface');
   var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
   var trainingBtn = document.getElementById('sidebar-open-training-btn');
   var utilityTrainingBtn = document.getElementById('utility-training-btn');
@@ -221,6 +229,9 @@ function syncWorkspaceSurfaceUi() {
 
   if (reviewOutputSurface) {
     reviewOutputSurface.classList.toggle('hidden', surface !== 'reviewOutput');
+  }
+  if (reviewDetailSurface) {
+    reviewDetailSurface.classList.toggle('hidden', surface !== 'reviewOutput');
   }
   if (trainingNavigator) {
     trainingNavigator.classList.toggle('hidden', surface !== 'training');
@@ -257,6 +268,9 @@ function syncWorkspaceSurfaceUi() {
   if (reviewOutputBackBtn) {
     reviewOutputBackBtn.classList.toggle('hidden', surface !== 'reviewOutput');
   }
+  if (surface === 'reviewOutput' && typeof refreshReviewWorkspaceBaseline === 'function') {
+    refreshReviewWorkspaceBaseline();
+  }
   if (typeof updateSidebarCollapseUi === 'function') {
     updateSidebarCollapseUi(ui.appEl.classList.contains('left-rail-collapsed'));
   }
@@ -291,6 +305,12 @@ function setWorkspaceSurface(surface, options) {
   }
   workspaceState.surface = nextSurface;
   workspaceState.sidebarHidden = !!opts.sidebarHidden || nextSurface === 'focus';
+  if (nextSurface === 'reviewOutput' && currentSurface !== 'reviewOutput' && typeof setReviewDetailTab === 'function') {
+    setReviewDetailTab('metadata');
+  }
+  if (nextSurface === 'training' && currentSurface !== 'training' && typeof setTrainingDetailTab === 'function') {
+    setTrainingDetailTab('items');
+  }
   if (nextSurface === 'grid') {
     setWorkspaceViewMode('grid');
   } else if (nextSurface === 'focus') {

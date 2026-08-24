@@ -64,6 +64,42 @@ function refreshReviewOutputSummary() {
   } else {
     scopeEl.textContent = 'Current folder scope';
   }
+  if (typeof refreshReviewWorkspaceBaseline === 'function') refreshReviewWorkspaceBaseline();
+}
+
+var reviewWorkspaceState = { detailTab: 'metadata', metadataScopeKey: '' };
+
+function setReviewDetailTab(tab) {
+  var value = ['metadata', 'report', 'prune'].indexOf(tab) !== -1 ? tab : 'metadata';
+  reviewWorkspaceState.detailTab = value;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-review-detail-tab]'), function (button) {
+    var active = button.getAttribute('data-review-detail-tab') === value;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  [['metadata', 'review-metadata-pane'], ['report', 'review-report-pane'], ['prune', 'prune-candidates-pane']].forEach(function (entry) {
+    var pane = document.getElementById(entry[1]);
+    if (pane) pane.classList.toggle('hidden', entry[0] !== value);
+  });
+  if (value === 'metadata') refreshReviewWorkspaceBaseline(true);
+  if (value === 'prune') {
+    renderPruneCandidatesReport();
+    ensurePruneCandidatesForCurrentFolder(false).then(renderPruneCandidatesReport).catch(renderPruneCandidatesReport);
+  }
+}
+
+function refreshReviewWorkspaceBaseline(forceMetadata) {
+  if (!state || normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput') return;
+  var availability = getReviewAvailability();
+  var items = availability.enabled ? getVisibleReviewItems() : [];
+  if (ui.captionSheetTextEl) ui.captionSheetTextEl.value = items.length ? buildCombinedCaptionsText(items) : '';
+  if (ui.captionSheetSummaryEl) ui.captionSheetSummaryEl.textContent = items.length + ' visible caption' + (items.length === 1 ? '' : 's');
+  var key = String(state.folder || '') + '|' + items.map(function (item) { return item.fileName; }).join('\n');
+  if (!forceMetadata && key === reviewWorkspaceState.metadataScopeKey) return;
+  reviewWorkspaceState.metadataScopeKey = key;
+  if (typeof renderReviewWorkspaceMetadata === 'function') {
+    renderReviewWorkspaceMetadata(state.folder, items.map(function (item) { return item.fileName; }));
+  }
 }
 
 function updateFocusSetUi() {
@@ -134,6 +170,11 @@ function exitFocusSetToBrowsing() {
 }
 
 function wireReviewActions() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-review-detail-tab]'), function (button) {
+    button.onclick = function () {
+      setReviewDetailTab(button.getAttribute('data-review-detail-tab'));
+    };
+  });
   addEventListener('message', function (event) {
     var data = event.data;
     if (!data) {
@@ -181,19 +222,6 @@ function updateReviewButtonAvailability() {
     ui.reviewSetBtn.classList.toggle('hidden', !availability.enabled);
     ui.reviewSetBtn.title = availability.message;
   }
-  if (ui.captionSheetBtn) {
-    ui.captionSheetBtn.disabled = false;
-    ui.captionSheetBtn.classList.toggle('hidden', !availability.enabled);
-    ui.captionSheetBtn.title = availability.enabled
-      ? 'Show the current visible captions as one spellchecked text sheet'
-      : availability.message;
-  }
-  var pruneAvailable = isSetFolderPath(state.folder) && Array.isArray(state.items) && state.items.length > 0;
-  ui.pruneCandidatesBtn.disabled = false;
-  ui.pruneCandidatesBtn.classList.toggle('hidden', !pruneAvailable);
-  ui.pruneCandidatesBtn.title = pruneAvailable
-    ? 'Review whole-set prune candidates'
-    : 'Prune Candidates requires at least one media file in a set folder';
   refreshReviewOutputSummary();
 }
 
@@ -215,10 +243,6 @@ function showCaptionSheet() {
   if (ui.captionSheetSummaryEl) {
     ui.captionSheetSummaryEl.textContent = items.length + ' visible caption' + (items.length === 1 ? '' : 's');
   }
-  if (ui.captionSheetPane) ui.captionSheetPane.classList.remove('hidden');
-  ui.pruneCandidatesPane.classList.add('hidden');
-  if (ui.captionSheetBtn) ui.captionSheetBtn.setAttribute('aria-pressed', 'true');
-  ui.pruneCandidatesBtn.setAttribute('aria-pressed', 'false');
   setStatus('Caption sheet ready: ' + items.length + ' files');
 }
 
@@ -317,10 +341,7 @@ function runReview() {
   if (typeof setWorkspaceSurface === 'function') {
     setWorkspaceSurface('reviewOutput');
   }
-  var reviewPane = document.getElementById('review-output-review-pane');
-  if (reviewPane) reviewPane.classList.remove('hidden');
-  ui.pruneCandidatesPane.classList.add('hidden');
-  ui.pruneCandidatesBtn.setAttribute('aria-pressed', 'false');
+  setReviewDetailTab('report');
   var availability = getReviewAvailability();
   if (!availability.enabled) {
     setStatus(availability.message + '.');

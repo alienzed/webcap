@@ -145,11 +145,6 @@ function wireMiscActionButtons() {
     };
   }
 
-  if (ui.captionSheetBtn) {
-    ui.captionSheetBtn.onclick = function () {
-      showCaptionSheet();
-    };
-  }
 
   if (ui.captionSheetCopyBtn) {
     ui.captionSheetCopyBtn.onclick = function () {

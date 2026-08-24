@@ -308,7 +308,7 @@
                     </div>
                     <div class="stats-panel sidebar-drawer-zone">
                         <details id="sidebar-set-actions-drawer" class="sidebar-drawer sidebar-set-actions-drawer" open>
-                            <summary class="sidebar-drawer-summary">Set Actions</summary>
+                            <summary class="sidebar-drawer-summary">Set Workspace</summary>
                             <div class="sidebar-drawer-body">
                                 <button id="create-set-from-results-btn" type="button" class="review-captions-btn sidebar-create-set-btn hidden" title="Create a new set with the current filter results">
                                     <span class="btn-glyph" aria-hidden="true">&#8627;</span>
@@ -347,6 +347,11 @@
                         </div>
                         <div class="workbench-bottom">
                             <div class="workbench-card editor-surface">
+                                <div id="training-detail-tabs" class="workspace-artifact-tabs hidden" role="tablist" aria-label="Training artifacts">
+                                    <button type="button" class="workspace-artifact-tab active" data-training-detail-tab="items" role="tab" aria-selected="true">Items</button>
+                                    <button type="button" class="workspace-artifact-tab" data-training-detail-tab="config" role="tab" aria-selected="false">Config</button>
+                                    <button type="button" class="workspace-artifact-tab" data-training-detail-tab="run-log" role="tab" aria-selected="false">Run Log</button>
+                                </div>
                                 <div id="config-editor-toolbar" class="config-editor-toolbar hidden">
                                     <div class="config-editor-title-copy">
                                         <div class="config-editor-title">Config Editor</div>
@@ -354,7 +359,7 @@
                                     </div>
                                     <div class="config-editor-toolbar-actions">
                                         <button id="config-editor-back-btn" type="button" class="review-captions-btn">Close</button>
-                                        <button id="config-editor-console-btn" type="button" class="review-captions-btn">Console</button>
+                                        <button id="config-editor-console-btn" type="button" class="review-captions-btn">App Console</button>
                                         <button id="config-editor-save-btn" type="button" class="review-captions-btn">Save</button>
                                     </div>
                                 </div>
@@ -362,19 +367,20 @@
                                     <div class="training-overview-header">
                                         <div class="training-overview-title-row">
                                             <div class="training-overview-title">Training Items</div>
-                                            <button id="training-item-overview-toggle-btn" type="button" class="review-captions-btn" aria-expanded="true">Hide items</button>
+                                            <button id="training-item-overview-toggle-btn" type="button" class="training-overview-toggle" aria-expanded="true" title="Collapse training items" aria-label="Collapse training items">&#9660;</button>
                                         </div>
                                         <div id="training-item-overview-summary" class="training-overview-summary">Visible media selected for the next training run appears here.</div>
                                     </div>
                                     <div id="training-item-overview" class="training-item-overview" aria-label="Visible training items"></div>
                                 </div>
+                                <div id="training-config-empty" class="training-editor-empty hidden">Choose a configuration file in Step 2.</div>
                                 <div id="training-runner-output-view" class="training-runner-output-view hidden">
-                                    <section id="training-runner-console" class="training-runner-console hidden" aria-label="Training output">
+                                    <section id="training-runner-console" class="training-runner-console hidden" aria-label="Run log">
                                         <div class="training-runner-console-heading">
-                                            <strong id="training-runner-console-title">Training output</strong>
+                                            <strong id="training-runner-console-title">Run Log</strong>
                                             <div class="training-runner-console-heading-actions">
                                                 <button id="training-runner-console-reveal-btn" type="button" class="training-runner-console-close-btn" title="Select this job's run.log in Explorer">Reveal log file</button>
-                                                <button id="training-runner-console-close-btn" type="button" class="training-runner-console-close-btn" aria-label="Return to Training" title="Return to Training">Back to Training</button>
+                                                <button id="training-runner-console-close-btn" type="button" class="training-runner-console-close-btn" aria-label="Show training items" title="Show training items">Items</button>
                                             </div>
                                         </div>
                                         <pre id="training-runner-console-log" class="training-runner-console-log"></pre>
@@ -548,121 +554,44 @@
                         </div>
                     </aside>
                 </div>
-                <section id="review-output-surface" class="workbench-card review-output-surface hidden">
-                    <div class="review-output-surface-header">
-                        <div class="review-output-surface-copy">
-                            <div class="review-output-surface-title">Review</div>
-                            <div class="review-output-surface-subtitle">Check the current set for caption issues and inspect supporting analysis when needed.</div>
-                        </div>
-                        <button id="review-output-back-btn" type="button" class="review-captions-btn">Back</button>
+                <section id="review-detail-surface" class="workbench-card review-detail-surface hidden" aria-label="Review artifacts">
+                    <div class="workspace-artifact-tabs" role="tablist" aria-label="Review artifacts">
+                        <button type="button" class="workspace-artifact-tab active" data-review-detail-tab="metadata" role="tab" aria-selected="true">Media Metadata</button>
+                        <button type="button" class="workspace-artifact-tab" data-review-detail-tab="report" role="tab" aria-selected="false">Caption Report</button>
+                        <button type="button" class="workspace-artifact-tab" data-review-detail-tab="prune" role="tab" aria-selected="false">Prune Candidates</button>
                     </div>
-                    <div id="review-output-actions" class="review-output-actions">
-                        <button id="review-set-btn" type="button" class="review-captions-btn hidden" title="Review the current filtered set">
-                            <span class="btn-glyph" aria-hidden="true">&#9654;</span>
-                            <span>Review Set</span>
-                        </button>
-                        <button id="caption-sheet-btn" type="button" class="review-captions-btn hidden" title="Show the current visible captions as one spellchecked text sheet" aria-pressed="false">
-                            <span>Caption Sheet</span>
-                        </button>
-                        <button id="prune-candidates-btn" type="button" class="review-captions-btn hidden" title="Review whole-set prune candidates" aria-pressed="false">
-                            <span>Prune Candidates</span>
-                        </button>
-                    </div>
-                    <div class="review-output-summary" aria-label="Review output summary">
-                        <div class="review-output-summary-card">
-                            <div class="review-output-summary-label">Folder</div>
-                            <div id="review-output-summary-folder" class="review-output-summary-value">No folder selected</div>
+                    <section id="review-metadata-pane" class="review-detail-pane">
+                        <div class="review-output-column-header">
+                            <div class="review-output-column-title">Media Metadata</div>
+                            <div class="review-output-column-subtitle">Current-scope media dimensions, duration, and aspect-ratio groups.</div>
                         </div>
-                        <div class="review-output-summary-card">
-                            <div class="review-output-summary-label">Visible</div>
-                            <div id="review-output-summary-visible" class="review-output-summary-value">No media loaded</div>
+                        <div id="review-media-metadata-panel" class="media-metadata-panel">Loading media metadata…</div>
+                    </section>
+                    <section id="review-report-pane" class="review-detail-pane hidden">
+                        <iframe id="review-report" title="Caption review report"></iframe>
+                    </section>
+                    <section id="prune-candidates-pane" class="review-detail-pane prune-candidates-pane hidden">
+                        <div class="review-output-column-header">
+                            <div class="review-output-column-title">Prune Candidates</div>
+                            <div class="review-output-column-subtitle">Whole-set technical warnings and resolution outliers. Nothing is pruned automatically.</div>
                         </div>
-                        <div class="review-output-summary-card">
-                            <div class="review-output-summary-label">Scope</div>
-                            <div id="review-output-summary-scope" class="review-output-summary-value">Current folder scope</div>
+                        <div class="prune-candidates-toolbar">
+                            <span id="prune-candidates-summary" class="small">Analysis has not run.</span>
+                            <button id="prune-candidates-inspect-btn" type="button" class="review-captions-btn" disabled>Inspect Candidates</button>
                         </div>
-                    </div>
-                    <div class="review-output-columns">
-                        <section id="review-output-review-pane" class="review-output-column">
-                            <div class="review-output-column-header">
-                                <div class="review-output-column-title">Caption Checks</div>
-                                <div class="review-output-column-subtitle">Tune phrase coverage, balance targets, and rules before running a report.</div>
-                            </div>
-                            <div
-                                id="cation-review"
-                                aria-hidden="false"
-                            >
-                                <div class="stats-controls">
-                                    <label>Required key phrase</label>
-                                    <input id="stats-required-phrase" type="text" placeholder="e.g. subject name">
-                                    <div class="section-label-inline">
-                                        <label>Balance Phrases</label>
-                                        <button
-                                            id="stats-balance-info-btn"
-                                            type="button"
-                                            class="mini-info-btn"
-                                            title="Balance phrases help"
-                                            aria-label="Balance phrases help"
-                                        >i</button>
-                                    </div>
-                                    <div class="checklist-input-row term-input-row">
-                                        <input
-                                            id="stats-phrases-add-input"
-                                            type="text"
-                                            class="form-control"
-                                            placeholder="Add balance phrase..."
-                                        >
-                                        <button id="stats-phrases-add-btn" type="button">+</button>
-                                        <div id="stats-phrases-add-results" class="caption-term-results hidden"></div>
-                                    </div>
-                                    <div id="stats-phrases-items"></div>
-                                    <textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down
-                                face up
-                                front view
-                                back view"></textarea>
-                                    <div class="section-label-inline">
-                                        <label>Rules</label>
-                                        <button
-                                            id="review-rules-info-btn"
-                                            type="button"
-                                            class="mini-info-btn"
-                                            title="Rules help"
-                                            aria-label="Rules help"
-                                        >i</button>
-                                    </div>
-                                    <div class="stats-advanced-inline-row">
-                                        <button id="review-rules-edit-btn" type="button">Edit Rules</button>
-                                        <span id="review-rules-summary" class="small">No review rules configured.</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-                        <section id="caption-sheet-pane" class="review-output-column caption-sheet-pane hidden">
-                            <div class="review-output-column-header">
-                                <div class="review-output-column-title">Caption Sheet</div>
-                                <div class="review-output-column-subtitle">Current visible captions for proofreading. This view does not save edits.</div>
-                            </div>
-                            <div class="caption-sheet-actions">
-                                <span id="caption-sheet-summary" class="small"></span>
-                                <button id="caption-sheet-copy-btn" type="button">Copy</button>
-                            </div>
-                            <textarea id="caption-sheet-text" class="caption-sheet-text" readonly spellcheck="true" aria-label="Caption sheet"></textarea>
-                        </section>
-                        <section id="prune-candidates-pane" class="review-output-column prune-candidates-pane hidden">
-                            <div class="review-output-column-header">
-                                <div class="review-output-column-title">Prune Candidates</div>
-                                <div class="review-output-column-subtitle">Whole-set technical warnings and resolution outliers. Nothing is pruned automatically.</div>
-                            </div>
-                            <div class="prune-candidates-toolbar">
-                                <span id="prune-candidates-summary" class="small">Analysis has not run.</span>
-                                <button id="prune-candidates-inspect-btn" type="button" class="review-captions-btn" disabled>Inspect Candidates</button>
-                            </div>
-                            <div id="prune-candidates-list" class="prune-candidates-list"></div>
-                        </section>
-                    </div>
+                        <div id="prune-candidates-list" class="prune-candidates-list"></div>
+                    </section>
                 </section>
             </div>
             <div class="panel preview-panel">
+                <section id="review-output-surface" class="review-output-surface hidden" aria-label="Review workspace">
+                    <div class="review-output-surface-header"><div class="review-output-surface-copy"><div class="review-output-surface-title">Review</div><div class="review-output-surface-subtitle">Check the current set for caption issues and inspect supporting analysis when needed.</div></div><button id="review-output-back-btn" type="button" class="review-captions-btn">Back</button></div>
+                    <div class="review-output-summary" aria-label="Review output summary"><div class="review-output-summary-card"><div class="review-output-summary-label">Folder</div><div id="review-output-summary-folder" class="review-output-summary-value">No folder selected</div></div><div class="review-output-summary-card"><div class="review-output-summary-label">Visible</div><div id="review-output-summary-visible" class="review-output-summary-value">No media loaded</div></div><div class="review-output-summary-card"><div class="review-output-summary-label">Scope</div><div id="review-output-summary-scope" class="review-output-summary-value">Current folder scope</div></div></div>
+                    <div class="review-output-columns">
+                        <section id="review-output-review-pane" class="review-output-column"><div class="review-output-column-header"><div class="review-output-column-title">Caption Checks</div><div class="review-output-column-subtitle">Tune phrase coverage, balance targets, and rules before running a report.</div></div><div id="cation-review" aria-hidden="false"><div class="stats-controls"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"><div class="section-label-inline"><label>Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea><div class="section-label-inline"><label>Rules</label><button id="review-rules-info-btn" type="button" class="mini-info-btn" title="Rules help" aria-label="Rules help">i</button></div><div class="stats-advanced-inline-row"><button id="review-rules-edit-btn" type="button">Edit Rules</button><span id="review-rules-summary" class="small">No review rules configured.</span></div><button id="review-set-btn" type="button" class="review-captions-btn hidden" title="Review the current filtered set"><span class="btn-glyph" aria-hidden="true">&#9654;</span><span>Run Caption Review</span></button></div></div></section>
+                        <section id="caption-sheet-pane" class="review-output-column caption-sheet-pane"><div class="review-output-column-header"><div class="review-output-column-title">Caption Sheet</div><div class="review-output-column-subtitle">Current visible captions for proofreading. This view does not save edits.</div></div><div class="caption-sheet-actions"><span id="caption-sheet-summary" class="small"></span><button id="caption-sheet-copy-btn" type="button">Copy</button></div><textarea id="caption-sheet-text" class="caption-sheet-text" readonly spellcheck="true" aria-label="Caption sheet"></textarea></section>
+                    </div>
+                </section>
                     <section id="training-navigator" class="training-navigator hidden" aria-label="Training workspace">
                         <div class="training-navigator-header">
                             <button
@@ -757,7 +686,7 @@
                                         <button id="training-preview-command-btn" type="button" class="review-captions-btn" title="Generate the manual WSL command, show it here, and copy it to the clipboard.">Generate &amp; Copy Manual Command</button>
                                         <button id="training-validate-runner-btn" type="button" class="review-captions-btn" title="Run the full environment diagnostic. This is not required for normal launches.">Run Diagnostics</button>
                                         <button id="training-copy-command-btn" type="button" class="training-btn hidden">Copy Manual Command</button>
-                                        <button id="training-console-btn" type="button" class="review-captions-btn" title="Show output from the active training run.">View Output</button>
+                                        <button id="training-console-btn" type="button" class="review-captions-btn" title="Show the active training run log.">Show Run Log</button>
                                     </div>
                                 </div>
                             </details>
@@ -775,7 +704,7 @@
                                     <button id="training-runner-pause-btn" type="button" class="review-captions-btn" title="Pause the active run and keep it first in the queue for Resume.">Pause</button>
                                     <button id="training-runner-cancel-btn" type="button" class="review-captions-btn hidden" title="Remove this queued job from the queue.">Cancel</button>
                                     <button id="training-runner-resume-queue-btn" type="button" class="training-btn hidden">Resume</button>
-                                    <button id="training-runner-console-btn" type="button" class="review-captions-btn">Show Output</button>
+                                    <button id="training-runner-console-btn" type="button" class="review-captions-btn">Show Run Log</button>
                                 </div>
                                 <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued training jobs"></div>
                                 <div id="training-runner-preflight" class="training-runner-preflight hidden"></div>

@@ -33,7 +33,8 @@ var trainingWorkspaceState = {
   historyExpanded: false,
   historyCollapsed: true,
   runnerQueueCollapsed: false,
-  itemOverviewHidden: false
+  itemOverviewHidden: false,
+  detailTab: 'items'
 };
 var utilityTrainingTurtleTimer = 0;
 var utilityTrainingTurtleAtLeft = true;
@@ -93,6 +94,47 @@ function getTrainingWorkspaceEls() {
     historyClearBtn: document.getElementById('training-history-clear-btn'),
     checkpointSelect: document.getElementById('training-run-checkpoint-select')
   };
+}
+
+function getTrainingDetailTab() {
+  return ['items', 'config', 'run-log'].indexOf(trainingWorkspaceState.detailTab) !== -1
+    ? trainingWorkspaceState.detailTab
+    : 'items';
+}
+
+function setTrainingDetailTab(tab, options) {
+  var value = ['items', 'config', 'run-log'].indexOf(tab) !== -1 ? tab : 'items';
+  var previous = getTrainingDetailTab();
+  trainingWorkspaceState.detailTab = value;
+  if (previous === 'run-log' && value !== 'run-log' && !(options && options.keepLogVisible)) {
+    var els = getTrainingWorkspaceEls();
+    if (els.runnerConsole) els.runnerConsole.classList.add('hidden');
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-training-detail-tab]'), function (button) {
+    var active = button.getAttribute('data-training-detail-tab') === value;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  syncWorkspaceConfigEditorUi();
+}
+
+function requestTrainingDetailTab(tab) {
+  var target = ['items', 'config', 'run-log'].indexOf(tab) !== -1 ? tab : 'items';
+  if (getTrainingDetailTab() === 'config' && target !== 'config' && state.currentConfigFile && state.currentConfigFile.folder === state.folder) {
+    Promise.resolve(saveCurrentEditorContent()).then(function () {
+      setTrainingDetailTab(target);
+      if (target === 'run-log' && trainingWorkspaceState.runnerConsoleJobId) {
+        showTrainingRunnerConsole(getTrainingRunnerJobById(trainingWorkspaceState.runnerConsoleJobId), { configClosed: true });
+      }
+    }).catch(function (err) {
+      setStatus('Could not save config before changing artifacts: ' + String(err && err.message ? err.message : err));
+    });
+    return;
+  }
+  setTrainingDetailTab(target);
+  if (target === 'run-log' && trainingWorkspaceState.runnerConsoleJobId) {
+    showTrainingRunnerConsole(getTrainingRunnerJobById(trainingWorkspaceState.runnerConsoleJobId), { configClosed: true });
+  }
 }
 
 function trainingRunnerRequest(path, options) {

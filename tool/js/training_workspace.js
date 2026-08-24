@@ -166,7 +166,9 @@ function renderTrainingItemOverview(manifest, errorMessage) {
     var hidden = !!trainingWorkspaceState.itemOverviewHidden;
     els.itemOverview.classList.toggle('hidden', hidden);
     els.itemOverviewToggleBtn.classList.toggle('hidden', !hasItems);
-    els.itemOverviewToggleBtn.textContent = hidden ? 'Show items' : 'Hide items';
+    els.itemOverviewToggleBtn.innerHTML = hidden ? '&#9654;' : '&#9660;';
+    els.itemOverviewToggleBtn.title = hidden ? 'Show training items' : 'Collapse training items';
+    els.itemOverviewToggleBtn.setAttribute('aria-label', hidden ? 'Show training items' : 'Collapse training items');
     els.itemOverviewToggleBtn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
   }
 
@@ -212,9 +214,15 @@ function renderTrainingItemOverview(manifest, errorMessage) {
   var grid = document.createElement('div');
   grid.className = 'training-item-grid';
   items.forEach(function (item) {
-    var tile = document.createElement('div');
+    var tile = document.createElement('button');
+    tile.type = 'button';
     tile.className = 'training-item-tile';
     tile.title = item.fileName;
+    tile.setAttribute('aria-label', 'Open ' + item.fileName + ' in Annotation');
+    tile.onclick = function () {
+      setWorkspaceSurface('default');
+      selectByFileName(item.fileName);
+    };
 
     var thumb = document.createElement('div');
     thumb.className = 'training-item-thumb';
@@ -283,6 +291,7 @@ function renderTrainingWorkspaceConfigList(files) {
     }).join('') + '</div></section>';
   Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-config]'), function (button) {
     button.onclick = function () {
+      setTrainingDetailTab('config');
       loadConfigFileToEditor(decodeURIComponent(button.getAttribute('data-training-config') || ''), {
         preserveTrainingWorkspace: true
       });
@@ -458,6 +467,11 @@ function wireTrainingWorkspace() {
   var runnerConsoleBtn = document.getElementById('training-runner-console-btn');
   var runnerConsoleRevealBtn = document.getElementById('training-runner-console-reveal-btn');
   var runnerConsoleCloseBtn = document.getElementById('training-runner-console-close-btn');
+  Array.prototype.forEach.call(document.querySelectorAll('[data-training-detail-tab]'), function (button) {
+    button.onclick = function () {
+      requestTrainingDetailTab(button.getAttribute('data-training-detail-tab'));
+    };
+  });
   var runnerQueue = document.getElementById('training-runner-queue');
   var historyList = document.getElementById('training-history-list');
   var historyCollapseBtn = document.getElementById('training-history-collapse-btn');
@@ -650,8 +664,8 @@ function syncTrainingConsoleUi() {
     if (!button) return;
     button.classList.toggle('active', visible);
     button.setAttribute('aria-pressed', visible ? 'true' : 'false');
-    button.textContent = visible ? 'Hide Output' : 'Show Output';
-    button.title = visible ? 'Hide output from the active training run.' : 'Show output from the active training run.';
+    button.textContent = visible ? 'Hide Run Log' : 'Show Run Log';
+    button.title = visible ? 'Hide the active training run log.' : 'Show the active training run log.';
   });
   syncWorkspaceConfigEditorUi();
 }

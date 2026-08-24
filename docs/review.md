@@ -1,20 +1,20 @@
 # Review / Output Workspace
 
-Last reviewed against code: 2026-07-13
+Last reviewed against code: 2026-08-24
 
 This document describes the shipped `Review / Output` workspace.
 
 ## Surface Layout
 
-- The workspace lives in `tool/tool.html` under `#review-output-surface`.
-- `Caption Checks` holds the phrase and rule controls.
-- `Caption Sheet` opens the current visible captions in one read-only, spellchecked text area for proofreading and copying.
+- The center workspace lives under `#review-output-surface`; the right-side artifacts live under `#review-detail-surface`.
+- `Caption Checks` holds the phrase and rule controls, and **Run Caption Review** is the explicit report action.
+- `Caption Sheet` is always visible below the setup. It reflects the current visible scope in one read-only, spellchecked text area for proofreading and copying.
 - A compact summary strip shows:
   - current folder
   - visible media count
   - current scope (`Current folder`, `SuperSet`, or `Focus set`)
 
-The preview iframe remains the single report/media surface. `Review Set` renders one focused report there.
+The right artifact tabs are **Media Metadata**, **Caption Report**, and **Prune Candidates**. Metadata loads for the current scope when Review opens. Caption Report stays empty until explicitly run. Annotation's preview iframe remains independent.
 
 ## Frontend File Split
 
@@ -39,18 +39,18 @@ The current code is intentionally split by concern:
 
 ## Main Flow
 
-1. User opens `Review / Output`.
-2. User runs `Review Set`.
+1. User opens Review and sees the current Caption Sheet and Media Metadata.
+2. User adjusts caption checks when needed and runs **Run Caption Review**.
 3. `tool/js/review_output.js` gathers the visible media rows from the current filtered list.
 4. `tool/js/stats.js` computes caption QA data.
-5. `tool/js/preview_pane.js` renders caption issues first and loads the optional Analysis details only when opened.
+5. `tool/js/preview_pane.js` renders caption issues in the dedicated right-side report iframe and loads optional **Curation Signals** only when opened.
 6. Clicking report links posts a message back to the parent app.
 7. `tool/js/review_output.js` routes those events to:
    - media selection
    - token filter application
    - balance phrase filter application
 
-`Caption Sheet` is a separate review action. It gathers the same visible-media scope without introducing a second caption format or a bulk-save path.
+`Caption Sheet` gathers the same visible-media scope without introducing a second caption format or a bulk-save path.
 
 ## Focus Set Contract
 

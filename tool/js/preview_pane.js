@@ -74,11 +74,10 @@ function fetchPreviewText(url, body, ui, onDone, onError) {
 }
 
 
-// Render media metadata panel into the report iframe
-function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus, includeSelectionPose) {
-  var panel = doc.getElementById('media-metadata-panel');
-  if (!panel) return;
-  panel.textContent = 'Loading...';
+// Render media metadata in either the dedicated Review artifact pane or a report document.
+function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus, includeSelectionPose, panelId) {
+  var panel = doc.getElementById(panelId || 'media-metadata-panel');
+  if (panel) panel.textContent = 'Loading...';
   var url = '/fs/media_metadata?folder=' + encodeURIComponent(folder) +
     (includeFaceFocus ? '&face_focus=1' : '') +
     (includeSelectionPose ? '&selection_pose=1' : '');
@@ -108,6 +107,12 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
         }
 
         // UI: AR grouping toggle
+        if (!panel) {
+          renderFaceFocusReportPanel(doc, allRows, scopedFileNames);
+          renderSelectionPoseReportPanels(doc, allRows, scopedFileNames);
+          renderSuggestedSelectionPanel(doc, allRows, scopedFileNames);
+          return;
+        }
         var arToggleId = 'ar-group-toggle';
         // Only render toggle and table inside the panel, never outside
         panel.innerHTML = '' +
@@ -152,7 +157,9 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
             btn.onclick = function () {
               var fileName = decodeURIComponent(btn.getAttribute('data-file') || '');
               if (!fileName) return;
-              if (window.parent && window.parent.postMessage) {
+              if (doc === document) {
+                selectByFileName(fileName, [fileName], 'Media Metadata', 'review');
+              } else if (window.parent && window.parent.postMessage) {
                 window.parent.postMessage({
                   type: 'caption-review-select',
                   fileName: fileName,
@@ -218,6 +225,10 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
     }
   };
   xhr.send();
+}
+
+function renderReviewWorkspaceMetadata(folder, scopedFileNames) {
+  renderMediaMetadataPanel(folder, document, scopedFileNames, false, false, 'review-media-metadata-panel');
 }
 
 function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
@@ -342,23 +353,24 @@ function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
     (findingsCards ? '<div class="row">' + findingsCards + '</div>' : '') +
     outlierCard +
     '<details id="review-analysis-details" class="card">' +
-    '<summary><strong>Analysis details</strong> <span class="small">Optional curation signals and media metadata</span></summary>' +
-    '<div class="row"><div class="card"><h3>Suggested Candidates</h3><div id="selection-suggested-candidates-panel">Open Analysis details to load.</div></div></div>' +
-    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Open Analysis details to load.</div></div></div>' +
+    '<summary><strong>Curation Signals</strong> <span class="small">Optional candidate and pose analysis</span></summary>' +
+    '<div class="row"><div class="card"><h3>Suggested Candidates</h3><div id="selection-suggested-candidates-panel">Open Curation Signals to load.</div></div></div>' +
+    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Open Curation Signals to load.</div></div></div>' +
     '<div class="row">' +
-    '<div class="card"><h3>Face Direction</h3><div id="selection-face-direction-panel">Open Analysis details to load.</div></div>' +
-    '<div class="card"><h3>Expression</h3><div id="selection-expression-panel">Open Analysis details to load.</div></div>' +
-    '<div class="card"><h3>Body Orientation</h3><div id="selection-body-orientation-panel">Open Analysis details to load.</div></div>' +
+    '<div class="card"><h3>Face Direction</h3><div id="selection-face-direction-panel">Open Curation Signals to load.</div></div>' +
+    '<div class="card"><h3>Expression</h3><div id="selection-expression-panel">Open Curation Signals to load.</div></div>' +
+    '<div class="card"><h3>Body Orientation</h3><div id="selection-body-orientation-panel">Open Curation Signals to load.</div></div>' +
     '</div>' +
     '<div class="row">' +
-    '<div class="card"><h3>Pose Class</h3><div id="selection-pose-class-panel">Open Analysis details to load.</div></div>' +
-    '<div class="card"><h3>Arm Placement</h3><div id="selection-arm-position-panel">Open Analysis details to load.</div></div>' +
+    '<div class="card"><h3>Pose Class</h3><div id="selection-pose-class-panel">Open Curation Signals to load.</div></div>' +
+    '<div class="card"><h3>Arm Placement</h3><div id="selection-arm-position-panel">Open Curation Signals to load.</div></div>' +
     '</div>' +
-    '<div class="row"><div class="card"><h3>Media Metadata</h3><div id="media-metadata-panel">Open Analysis details to load.</div></div></div>' +
     '</details>' +
     '</body></html>';
 
-  var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
+  var reviewReport = ui.reviewReportEl || document.getElementById('review-report');
+  if (!reviewReport) return;
+  var doc = reviewReport.contentDocument || reviewReport.contentdocument;
   doc.open();
   doc.write(html);
   doc.close();

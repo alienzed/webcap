@@ -216,18 +216,10 @@ function renderPruneCandidatesReport() {
 function openPruneCandidatesReport() {
   setWorkspaceWorkflowMode('review');
   setWorkspaceSurface('reviewOutput');
-  var reviewPane = document.getElementById('review-output-review-pane');
-  if (reviewPane) reviewPane.classList.add('hidden');
-  if (ui.captionSheetPane) ui.captionSheetPane.classList.add('hidden');
-  ui.pruneCandidatesPane.classList.remove('hidden');
-  ui.captionSheetBtn.setAttribute('aria-pressed', 'false');
-  ui.pruneCandidatesBtn.setAttribute('aria-pressed', 'true');
-  renderPruneCandidatesReport();
-  ensurePruneCandidatesForCurrentFolder(false).then(renderPruneCandidatesReport).catch(renderPruneCandidatesReport);
+  setReviewDetailTab('prune');
 }
 
 function wirePruneCandidatesUi() {
-  ui.pruneCandidatesBtn.onclick = openPruneCandidatesReport;
   ui.pruneCandidatesInspectBtn.onclick = function () { inspectPruneCandidates(''); };
   syncPruneCandidateConsumers();
 }

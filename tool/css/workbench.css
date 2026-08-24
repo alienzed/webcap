@@ -7,6 +7,7 @@
 }
 
 .app.shell-revamp .review-output-surface.hidden,
+.app.shell-revamp .review-detail-surface.hidden,
 .app.shell-revamp .config-editor-toolbar.hidden {
   display: none !important;
 }
@@ -262,6 +263,97 @@
   color: #0f172a;
   font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: pre-wrap;
+}
+
+.app.shell-revamp.workspace-surface-review-output .preview-shell {
+  display: none !important;
+}
+
+.app.shell-revamp.workspace-surface-review-output .preview-panel,
+.app.shell-revamp.workspace-surface-review-output .workbench-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.app.shell-revamp.workspace-surface-review-output .review-output-surface {
+  flex: 1 1 auto;
+  padding: 16px;
+  overflow: auto;
+}
+
+.app.shell-revamp.workspace-surface-review-output .review-output-columns {
+  flex: 1 1 auto;
+}
+
+.app.shell-revamp.workspace-surface-review-output .caption-sheet-pane {
+  flex: 1 1 auto;
+}
+
+.app.shell-revamp.workspace-surface-review-output .caption-sheet-text {
+  flex: 1 1 auto;
+  min-height: 260px;
+  resize: none;
+}
+
+.app.shell-revamp .review-detail-surface {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.app.shell-revamp .workspace-artifact-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.app.shell-revamp .workspace-artifact-tab {
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.app.shell-revamp .workspace-artifact-tab.active {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+.app.shell-revamp .review-detail-pane {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app.shell-revamp .review-detail-pane.hidden {
+  display: none !important;
+}
+
+.app.shell-revamp #review-media-metadata-panel {
+  min-height: 0;
+  overflow: auto;
+}
+
+.app.shell-revamp #review-report {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--panel-soft);
 }
 
 .app.shell-revamp.workspace-surface-review-output .workbench-top,
@@ -768,6 +860,20 @@
   gap: 4px;
 }
 
+.app.shell-revamp .training-workflow-step:first-child .training-workflow-step-copy {
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+}
+
+.app.shell-revamp .training-workflow-step:first-child .training-workspace-section-title {
+  grid-row: 1 / span 2;
+}
+
+.app.shell-revamp .training-workflow-step:first-child .training-profile-control {
+  margin-top: 0;
+}
+
 .app.shell-revamp .training-workflow-step .training-readiness {
   display: block;
   padding: 0;
@@ -1085,6 +1191,21 @@
   min-height: calc(100vh - 180px);
 }
 
+.app.shell-revamp.workspace-surface-training .workspace-artifact-tabs {
+  margin: 0 0 10px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-overview-toggle {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+
 .app.shell-revamp.workspace-surface-training:not(.training-config-selected) .editor-surface {
   padding: 12px;
 }
@@ -1247,6 +1368,13 @@
   border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.68);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.app.shell-revamp.workspace-surface-training .training-item-tile:hover {
+  border-color: var(--accent);
 }
 
 .app.shell-revamp.workspace-surface-training .training-item-thumb {

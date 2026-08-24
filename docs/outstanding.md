@@ -1,12 +1,8 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-08-23.
-
-## Active UX Work
-- Explore a small Review / Train navigation pass: make Training Items open the corresponding media back in captioning mode, replace the full-width Hide Items control with the app’s compact chevron pattern, and surface existing media metadata on entering Review without requiring a caption-assessment run.
+Last reviewed: 2026-08-24.
 
 ## Enhancements / Ideas
 - Validate the H3 Quality optimization preset after the shared safe video-bucket policy has seen real runs.
-- The Review / Train screens are getting a bit busy. These screens were initially tacked on and may not have received the respect they deserve. Keep any revision modest: the training material in the center pane is solid, but the right pane and the way the two panes swap responsibilities need review.
 - Decide whether queue and history should expose more lifecycle times. Recent Runs already shows the most relevant queued, started, or finished timestamp; the remaining question is whether showing both start and completion, plus resume attempts as distinct child jobs, would add useful information without clutter.
 - Provide the ability to resume from existing LoRA weights, rather than from a saved checkpoint, which is already supported.
 

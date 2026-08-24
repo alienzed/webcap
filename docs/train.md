@@ -12,6 +12,16 @@ The runner's ownership and recovery rules are defined in [training_runner_contra
 4. Filter or focus the media grid to the exact items to train.
 5. Choose the run option and select **Train this set**, or generate a manual command.
 
+## Workspace layout
+
+Training keeps its numbered setup, queue, GPU status, and recent runs in the center workspace. The right-side artifact area has explicit **Items**, **Config**, and **Run Log** tabs:
+
+- Items is the default set-level view. Its tiles open the selected media back in Annotation.
+- Config opens the existing editable TOML surface. Switching away saves through the normal save path.
+- Run Log shows an active or historical log without clearing the selected config. Polling is active only while that tab is visible.
+
+The compact chevron in Items only collapses the tile overview; it does not alter the visible-media selection that will be captured.
+
 Train saves the open TOML before capture. It then creates a run-owned bundle containing the visible media, latest captions, exact saved TOMLs, and training plan. For video-capable profiles, off-target video FPS is normalized only in that bundle; a failed conversion logs a warning and keeps an unchanged copy. The job enters the queue only after the bundle is complete.
 
 Wan2.2 `HI -> LO` creates two jobs sharing one captured bundle. Every separate Train action creates a separate bundle.

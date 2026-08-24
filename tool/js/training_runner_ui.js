@@ -74,6 +74,7 @@ function hideTrainingRunnerConsole() {
   var els = getTrainingWorkspaceEls();
   trainingWorkspaceState.runnerConsoleRequestVersion++;
   if (els.runnerConsole) els.runnerConsole.classList.add('hidden');
+  if (isTrainingWorkspaceActive()) setTrainingDetailTab('items', { keepLogVisible: true });
   syncTrainingConsoleUi();
 }
 
@@ -100,11 +101,7 @@ function showTrainingRunnerConsole(job, options) {
     cancelEditorAutosaveForConfig(configFile.folder, configFile.file);
     Promise.resolve(saveCurrentEditorContent())
       .then(function () {
-        if (state.currentConfigFile && state.currentConfigFile.folder === configFile.folder && state.currentConfigFile.file === configFile.file) {
-          clearEditorAndPreview();
-          syncTrainingWorkspaceConfigSelection();
-        }
-        syncWorkspaceConfigEditorUi();
+        setTrainingDetailTab('run-log', { keepLogVisible: true });
         showTrainingRunnerConsole(target, { followActiveJob: followsActiveJob, configClosed: true });
       })
       .catch(function (err) {
@@ -125,7 +122,8 @@ function showTrainingRunnerConsole(job, options) {
     trainingWorkspaceState.runnerLogOffsets[target.id] = 0;
   }
   if (els.runnerConsoleRevealBtn) els.runnerConsoleRevealBtn.disabled = false;
-  els.runnerConsoleTitle.textContent = 'Training output · ' + trainingFolderName(target.folder);
+  setTrainingDetailTab('run-log', { keepLogVisible: true });
+  els.runnerConsoleTitle.textContent = 'Run Log · ' + trainingFolderName(target.folder);
   els.runnerConsole.classList.remove('hidden');
   syncTrainingConsoleUi();
   fetchTrainingRunnerLog(target, resetLog);
@@ -273,7 +271,7 @@ function refreshTrainingRunnerStatus() {
           trainingWorkspaceState.runnerConsoleRequestVersion++;
           trainingWorkspaceState.runnerConsoleJobId = '';
           if (consoleEls.runnerConsoleLog) consoleEls.runnerConsoleLog.textContent = '';
-          if (consoleEls.runnerConsoleTitle) consoleEls.runnerConsoleTitle.textContent = 'Training output · waiting for the next run';
+          if (consoleEls.runnerConsoleTitle) consoleEls.runnerConsoleTitle.textContent = 'Run Log · waiting for the next run';
         } else {
           var consoleJob = getTrainingRunnerJobById(trainingWorkspaceState.runnerConsoleJobId);
           if (consoleJob) fetchTrainingRunnerLog(consoleJob);

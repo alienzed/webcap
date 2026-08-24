@@ -666,13 +666,23 @@ function wireTrainingWorkspace() {
       openTrainingWorkspaceFolder(folder);
       return;
     }
+    var historyMoreMenu = event.target.closest('.training-history-more');
+    if (historyMoreMenu && event.target.closest('[data-training-history-output], [data-training-history-bundle], [data-training-history-clear]')) {
+      historyMoreMenu.removeAttribute('open');
+    }
     var logId = event.target.getAttribute('data-training-history-log');
     var outputJobId = event.target.getAttribute('data-training-history-output');
+    var runJobId = event.target.getAttribute('data-training-history-run');
     var bundleJobId = event.target.getAttribute('data-training-history-bundle');
     var clearId = event.target.getAttribute('data-training-history-clear');
     if (outputJobId) {
       var outputJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === outputJobId; })[0];
       openTrainingHistoryOutput(outputJob && outputJob.folder, outputJobId);
+      return;
+    }
+    if (runJobId) {
+      var runJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === runJobId; })[0];
+      openTrainingHistoryRun(runJob && runJob.folder, runJob && (runJob.stage || runJob.stages), runJob && runJob.outputRunPath);
       return;
     }
     if (bundleJobId) {

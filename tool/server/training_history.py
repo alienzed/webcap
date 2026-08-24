@@ -602,6 +602,7 @@ def record_job(folder_path, job):
     record["artifactSummary"] = {
         "runCount": len(runs), "latestName": latest_run.get("name", ""),
         "checkpointAvailable": bool(latest_run.get("checkpointAvailable")),
+        "checkpointTag": latest_run.get("checkpointTag", ""),
         "epoch": latest_run.get("epoch"), "steps": latest_run.get("steps"),
     }
     with _history_lock:
@@ -637,9 +638,21 @@ def _history_job_view(job):
     item = dict(job)
     raw_output = str(item.get("outputRunPath") or item.get("effectiveOutputDir") or item.get("outputRoot") or "").strip()
     try:
-        item["outputAvailable"] = bool(raw_output) and host_path_for_training_path(raw_output).is_dir()
+        output_path = host_path_for_training_path(raw_output) if raw_output else None
+        item["outputAvailable"] = bool(output_path) and output_path.is_dir()
     except (OSError, ValueError):
+        output_path = None
         item["outputAvailable"] = False
+    summary = item.get("artifactSummary") if isinstance(item.get("artifactSummary"), dict) else {}
+    if output_path and not str(summary.get("checkpointTag") or "").strip():
+        try:
+            checkpoint_tag = (output_path / "latest").read_text(encoding="utf-8").strip().splitlines()[0].strip()
+        except (OSError, IndexError):
+            checkpoint_tag = ""
+        if checkpoint_tag:
+            summary = dict(summary)
+            summary["checkpointTag"] = checkpoint_tag
+            item["artifactSummary"] = summary
     raw_log = str(item.get("logPath") or "").strip()
     if raw_log:
         log_path = Path(raw_log)

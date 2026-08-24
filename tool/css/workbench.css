@@ -651,6 +651,23 @@
   overflow-wrap: anywhere;
 }
 
+.app.shell-revamp .training-history-fact-link {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.app.shell-revamp .training-history-fact-link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
 .app.shell-revamp .training-context-heading,
 .app.shell-revamp .training-set-artifacts-header {
   display: flex;

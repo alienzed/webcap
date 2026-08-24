@@ -288,6 +288,24 @@ def test_finished_early_history_keeps_the_exact_persisted_run_path(tmp_path, mon
     assert training_history.all_history_payload()["jobs"][0]["outputRunPath"] == str(output)
 
 
+def test_global_history_enriches_legacy_checkpoint_summary_from_the_run_marker(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    output = root / "output" / "runs" / "set" / "run-one"
+    set_folder.mkdir(parents=True)
+    output.mkdir(parents=True)
+    (output / "latest").write_text("global_step42000\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    training_history.record_job(set_folder, {
+        "id": "early", "folder": "set", "status": "finished_early", "stages": "lo",
+        "outputRunPath": str(output), "artifactSummary": {"epoch": 52, "steps": 42000},
+    })
+
+    summary = training_history.all_history_payload()["jobs"][0]["artifactSummary"]
+
+    assert summary["checkpointTag"] == "global_step42000"
+
+
 def test_discovery_keeps_exact_and_compatible_resume_choices(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "set"

@@ -17,7 +17,7 @@ The runner's ownership and recovery rules are defined in [training_runner_contra
 Training keeps its numbered setup, queue, GPU status, and recent runs in the center workspace. The right-side artifact area has explicit **Items**, **Config**, and **Run Log** tabs:
 
 - Items is the default set-level view. Its tiles open the selected media back in Annotation.
-- Config opens the existing editable TOML surface. Switching away saves through the normal save path.
+- Config opens the existing editable TOML surface, with compact file tabs for the setup's detected TOMLs. Switching files or away saves through the normal save path.
 - Run Log shows an active or historical log without clearing the selected config. Polling is active only while that tab is visible.
 
 The compact chevron in Items only collapses the tile overview; it does not alter the visible-media selection that will be captured.

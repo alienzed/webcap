@@ -268,18 +268,64 @@ function renderTrainingItemOverview(manifest, errorMessage) {
   els.itemOverview.appendChild(grid);
 }
 
-function renderTrainingWorkspaceConfigList(files) {
-  var els = getTrainingWorkspaceEls();
-  if (!els.configList) return;
+function getTrainingWorkspaceVisibleConfigFiles(files) {
   var setup = getSelectedTrainingSetup();
   var expected = setup && Array.isArray(setup.configs)
     ? setup.configs.map(function (item) { return item.file; }).concat(setup.datasetFiles || [])
     : [];
   var available = {};
   (files || []).forEach(function (fileName) { available[fileName] = true; });
-  var visibleFiles = expected.filter(function (fileName) { return !!available[fileName]; });
+  return expected.filter(function (fileName) { return !!available[fileName]; });
+}
+
+function selectTrainingWorkspaceConfigFile(fileName) {
+  var currentFile = state.currentConfigFile && state.currentConfigFile.folder === state.folder
+    ? state.currentConfigFile.file
+    : '';
+  if (fileName === currentFile) {
+    setTrainingDetailTab('config');
+    return;
+  }
+  var loadSelectedFile = function () {
+    setTrainingDetailTab('config');
+    loadConfigFileToEditor(fileName, { preserveTrainingWorkspace: true });
+  };
+  if (!currentFile) {
+    loadSelectedFile();
+    return;
+  }
+  setStatus('Saving config: ' + currentFile);
+  saveCurrentEditorContent().then(loadSelectedFile).catch(function (err) {
+    setStatus('Could not save config: ' + String(err && err.message ? err.message : err));
+  });
+}
+
+function renderTrainingConfigEditorFileTabs() {
+  var tabs = document.getElementById('config-editor-file-tabs');
+  if (!tabs) return;
+  var files = getTrainingWorkspaceVisibleConfigFiles(trainingWorkspaceState.configFiles);
+  var currentFile = state.currentConfigFile && state.currentConfigFile.folder === state.folder
+    ? state.currentConfigFile.file
+    : '';
+  tabs.innerHTML = files.map(function (fileName) {
+    var active = fileName === currentFile;
+    return '<button type="button" class="config-editor-file-tab' + (active ? ' active' : '') + '" data-training-editor-config="' + encodeURIComponent(fileName) + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '">' + escapeHtml(fileName) + '</button>';
+  }).join('');
+  tabs.classList.toggle('hidden', !files.length);
+  Array.prototype.forEach.call(tabs.querySelectorAll('[data-training-editor-config]'), function (button) {
+    button.onclick = function () {
+      selectTrainingWorkspaceConfigFile(decodeURIComponent(button.getAttribute('data-training-editor-config') || ''));
+    };
+  });
+}
+
+function renderTrainingWorkspaceConfigList(files) {
+  var els = getTrainingWorkspaceEls();
+  if (!els.configList) return;
+  var visibleFiles = getTrainingWorkspaceVisibleConfigFiles(files);
   if (!visibleFiles.length) {
     els.configList.textContent = 'No setup files are available.';
+    renderTrainingConfigEditorFileTabs();
     return;
   }
   var profile = getSelectedTrainingModelProfile();
@@ -291,10 +337,7 @@ function renderTrainingWorkspaceConfigList(files) {
     }).join('') + '</div></section>';
   Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-config]'), function (button) {
     button.onclick = function () {
-      setTrainingDetailTab('config');
-      loadConfigFileToEditor(decodeURIComponent(button.getAttribute('data-training-config') || ''), {
-        preserveTrainingWorkspace: true
-      });
+      selectTrainingWorkspaceConfigFile(decodeURIComponent(button.getAttribute('data-training-config') || ''));
     };
   });
   Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-reset-config]'), function (button) {
@@ -311,19 +354,22 @@ function renderTrainingWorkspaceConfigList(files) {
       }).catch(function (err) { setStatus('Could not reset file: ' + String(err.message || err)); });
     };
   });
+  renderTrainingConfigEditorFileTabs();
 }
 
 function syncTrainingWorkspaceConfigSelection() {
   if (!isTrainingWorkspaceActive()) return;
   var els = getTrainingWorkspaceEls();
-  if (!els.configList) return;
   var currentFile = state.currentConfigFile && state.currentConfigFile.folder === state.folder
     ? state.currentConfigFile.file
     : '';
-  Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-config]'), function (button) {
-    var fileName = decodeURIComponent(button.getAttribute('data-training-config') || '');
-    button.classList.toggle('active', fileName === currentFile);
-  });
+  if (els.configList) {
+    Array.prototype.forEach.call(els.configList.querySelectorAll('[data-training-config]'), function (button) {
+      var fileName = decodeURIComponent(button.getAttribute('data-training-config') || '');
+      button.classList.toggle('active', fileName === currentFile);
+    });
+  }
+  renderTrainingConfigEditorFileTabs();
 }
 
 function renderTrainingCommandHandoff() {
@@ -456,10 +502,8 @@ function wireTrainingWorkspace() {
   var itemOverviewToggleBtn = document.getElementById('training-item-overview-toggle-btn');
   var previewCommandBtn = document.getElementById('training-preview-command-btn');
   var validateRunnerBtn = document.getElementById('training-validate-runner-btn');
-  var runInAppBtn = document.getElementById('training-run-in-app-btn');
   var queueJobBtn = document.getElementById('training-queue-job-btn');
   var copyCommandBtn = document.getElementById('training-copy-command-btn');
-  var consoleBtn = document.getElementById('training-console-btn');
   var runnerFinishBtn = document.getElementById('training-runner-finish-btn');
   var runnerPauseBtn = document.getElementById('training-runner-pause-btn');
   var runnerCancelBtn = document.getElementById('training-runner-cancel-btn');
@@ -524,9 +568,6 @@ function wireTrainingWorkspace() {
       setStatus('Training runner validation failed: ' + String(err && err.message ? err.message : err));
     });
   };
-  if (runInAppBtn) runInAppBtn.onclick = function () {
-    startManagedTraining();
-  };
   queueJobBtn.onclick = function () {
     startManagedTraining();
   };
@@ -539,9 +580,6 @@ function wireTrainingWorkspace() {
     }, function () {
       setStatus('Could not copy the training command.');
     });
-  };
-  consoleBtn.onclick = function () {
-    toggleTrainingRunnerConsole();
   };
   runnerFinishBtn.onclick = function () { stopManagedTraining(false, false, true); };
   runnerPauseBtn.onclick = function () { stopManagedTraining(false, true); };
@@ -668,10 +706,9 @@ function wireTrainingWorkspace() {
 }
 
 function syncTrainingConsoleUi() {
-  var consoleBtn = document.getElementById('training-console-btn');
   var runnerConsoleBtn = document.getElementById('training-runner-console-btn');
   var visible = isTrainingRunnerConsoleVisible();
-  [consoleBtn, runnerConsoleBtn].forEach(function (button) {
+  [runnerConsoleBtn].forEach(function (button) {
     if (!button) return;
     button.classList.toggle('active', visible);
     button.setAttribute('aria-pressed', visible ? 'true' : 'false');

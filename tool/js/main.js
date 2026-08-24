@@ -233,52 +233,6 @@ function moveSelectedMediaByOffset(offset) {
   return true;
 }
 
-var sidebarActiveTab = 'review';
-
-function setSidebarTab(tabName) {
-  var sidebarWorkspace = document.getElementById('sidebar-workspace');
-  if (sidebarWorkspace && sidebarWorkspace.getAttribute('data-legacy-tabs-disabled') === 'true') {
-    return;
-  }
-  var tabs = {
-    review: { buttonId: 'sidebar-tab-review-btn', paneId: 'cation-review' },
-    train: { buttonId: 'sidebar-tab-train-btn', paneId: 'training-details' }
-  };
-  var activeName = tabs[tabName] ? tabName : 'review';
-  sidebarActiveTab = activeName;
-
-  Object.keys(tabs).forEach(function (name) {
-    var tab = tabs[name];
-    var btn = document.getElementById(tab.buttonId);
-    var pane = document.getElementById(tab.paneId);
-    var active = name === activeName;
-    if (btn) {
-      btn.classList.toggle('active', active);
-      btn.setAttribute('aria-selected', active ? 'true' : 'false');
-      btn.tabIndex = active ? 0 : -1;
-    }
-    if (pane) {
-      pane.classList.toggle('hidden', !active);
-      pane.setAttribute('aria-hidden', active ? 'false' : 'true');
-    }
-  });
-}
-
-function wireSidebarTabs() {
-  var sidebarWorkspace = document.getElementById('sidebar-workspace');
-  if (sidebarWorkspace && sidebarWorkspace.getAttribute('data-legacy-tabs-disabled') === 'true') {
-    return;
-  }
-  var buttons = document.querySelectorAll('[data-sidebar-tab]');
-  if (!buttons.length) return;
-  Array.prototype.forEach.call(buttons, function (btn) {
-    btn.onclick = function () {
-      setSidebarTab(btn.getAttribute('data-sidebar-tab'));
-    };
-  });
-  setSidebarTab(sidebarActiveTab);
-}
-
 function wireAllUi() {
   // Autosaving of primer/stats changes (debounced)
   wireStatsPrimerAutoSave();
@@ -311,7 +265,6 @@ function wireAllUi() {
   if (typeof updatePreviewActionControls === 'function') {
     updatePreviewActionControls();
   }
-  wireSidebarTabs();
   if (typeof wireAppSettingsUi === 'function') {
     wireAppSettingsUi();
   }

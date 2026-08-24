@@ -24,7 +24,6 @@ The current code is intentionally split by concern:
   - unified Review Set run flow
   - Caption Sheet rendering from the current visible media scope
   - report click handling (`postMessage` bridge)
-  - training config list rendering
 - `tool/js/stats.js`
   - review computation
   - phrase parsing / token analysis

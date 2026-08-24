@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path, PurePosixPath
 
 from flask import Response, stream_with_context
@@ -9,24 +8,11 @@ from .training_history import training_output_group_for_folder
 from .training_profiles import config_for_stage, normalize_mode, profile_run
 from .training_bundle import materialize_training_bundle
 from .training_commands import build_h3_command_plan, build_training_command_plan
-from .training_runtime import build_training_launcher, training_runtime_settings, wsl_executable
+from .training_runtime import build_training_launcher, to_wsl_path, training_runtime_settings
 
 
 def _to_wsl_path(path_obj: Path, distribution=""):
-    executable = wsl_executable()
-    if not executable:
-        raise RuntimeError("wsl.exe was not found on PATH.")
-    cmd = [executable]
-    if distribution:
-        cmd.extend(["--distribution", distribution])
-    cmd.extend(["--", "wslpath", "-a", str(path_obj)])
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    if result.returncode != 0:
-        raise RuntimeError((result.stderr or result.stdout or "wslpath failed").strip())
-    out = (result.stdout or "").strip()
-    if not out:
-        raise RuntimeError("wslpath returned empty output")
-    return out
+    return to_wsl_path(path_obj, distribution)
 
 
 def train_run_response(

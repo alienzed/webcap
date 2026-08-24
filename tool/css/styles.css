@@ -1468,12 +1468,6 @@ iframe {
   color: #111827;
 }
 
-.sidebar-workspace {
-  margin: 0;
-  border-top: 1px solid var(--border-soft);
-  padding: 7px 0 0;
-}
-
 .stats-advanced-inline-row {
   display: flex;
   align-items: center;
@@ -1679,32 +1673,6 @@ iframe {
 .training-config-list {
   display: block;
   font-size: 12px;
-}
-
-.training-config-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.training-config-col {
-  border: 1px solid var(--border-soft);
-  border-radius: 2px;
-  padding: 6px;
-  background: #fff;
-  min-width: 0;
-}
-
-.training-config-col-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #6b7280;
-  letter-spacing: 0.4px;
-  margin-bottom: 4px;
-}
-
-.training-config-col .training-config-link {
-  width: 100%;
 }
 
 .training-config-empty {
@@ -2887,7 +2855,6 @@ html[data-theme="dark"] .media-list-wrapper,
 html[data-theme="dark"] .media-list,
 html[data-theme="dark"] .caption-context-menu,
 html[data-theme="dark"] .advanced-filter-panel,
-html[data-theme="dark"] .sidebar-workspace,
 html[data-theme="dark"] .review-captions-btn,
 html[data-theme="dark"] #caption-checklist-panel.checklist-panel,
 html[data-theme="dark"] .annotate-strip,

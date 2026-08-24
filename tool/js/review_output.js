@@ -255,9 +255,6 @@ function showCaptionSheet() {
 function updateSetFolderScopedUi() {
   var inSetFolder = isSetFolderPath(state.folder);
   var reviewAvailable = getReviewAvailability().enabled;
-  var workspace = document.getElementById('sidebar-workspace');
-  if (!workspace) return;
-  workspace.classList.toggle('hidden', !inSetFolder);
   var reviewBtn = document.getElementById('sidebar-open-review-output-btn');
   var trainingBtn = document.getElementById('sidebar-open-training-btn');
   var drawer = document.getElementById('sidebar-set-actions-drawer');
@@ -356,7 +353,6 @@ function buildReviewReport() {
   renderChecklistPanel();
   ui.editorEl.setAttribute('readonly', 'readonly');
   renderFileList(ui.filterEl.value);
-  setSidebarTab('review');
   var runSeq = (state.reviewSeq || 0) + 1;
   state.reviewSeq = runSeq;
   setStatus('Building combined captions and stats...');

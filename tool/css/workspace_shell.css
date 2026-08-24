@@ -268,12 +268,6 @@
   width: 100%;
 }
 
-.app.shell-revamp .sidebar-drawer-body .sidebar-workspace {
-  margin: 0;
-  padding-top: 0;
-  border-top: 0;
-}
-
 .app.shell-revamp.workspace-view-single .groups-card .annotate-strip-groups {
   display: flex;
   flex-direction: column;

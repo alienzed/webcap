@@ -1273,29 +1273,5 @@ def test_create_set_from_results_blocks_existing_destination(tmp_path, monkeypat
     assert response.status_code == 409
 
 
-def test_manual_training_path_conversion_uses_resolved_wsl_executable(monkeypatch, tmp_path):
-    calls = []
-
-    class Result:
-        returncode = 0
-        stdout = "/mnt/w/training/output\n"
-        stderr = ""
-
-    monkeypatch.setattr(run_ops_module, "wsl_executable", lambda: r"C:\Windows\System32\wsl.exe")
-    monkeypatch.setattr(
-        run_ops_module.subprocess,
-        "run",
-        lambda command, **kwargs: calls.append((command, kwargs)) or Result(),
-    )
-
-    converted = run_ops_module._to_wsl_path(tmp_path, "Ubuntu_W")
-
-    assert converted == "/mnt/w/training/output"
-    assert calls == [(
-        [r"C:\Windows\System32\wsl.exe", "--distribution", "Ubuntu_W", "--", "wslpath", "-a", str(tmp_path)],
-        {
-            "capture_output": True,
-            "text": True,
-            "check": False,
-        },
-    )]
+def test_manual_training_path_conversion_preserves_existing_wsl_path():
+    assert run_ops_module._to_wsl_path("/mnt/w/training/output/runs/035-wan/minimax-h3", "Ubuntu_W") == "/mnt/w/training/output/runs/035-wan/minimax-h3"

@@ -177,12 +177,6 @@ function wireMiscActionButtons() {
       rerunFocusSetReport();
     };
   }
-
-  if (ui.statsRunBtn) {
-    ui.statsRunBtn.onclick = function () {
-      runReview();
-    };
-  }
 }
 
 function wireReportLinks() {

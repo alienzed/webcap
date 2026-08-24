@@ -147,6 +147,7 @@ function syncWorkspaceConfigEditorUi() {
   var trainingOverview = document.getElementById('training-editor-empty');
   var trainingConfigEmpty = document.getElementById('training-config-empty');
   var trainingDetailTabs = document.getElementById('training-detail-tabs');
+  var configFileTabs = document.getElementById('config-editor-file-tabs');
   var trainingOutputView = document.getElementById('training-runner-output-view');
   var trainingRunnerEmpty = document.getElementById('training-runner-empty');
   var editorWrapper = ui.appEl.querySelector('.editor-wrapper');
@@ -163,6 +164,9 @@ function syncWorkspaceConfigEditorUi() {
   }
   ui.appEl.classList.toggle('training-config-selected', isTraining && trainingDetailTab === 'config' && hasConfigForSurface);
   if (trainingDetailTabs) trainingDetailTabs.classList.toggle('hidden', !isTraining);
+  if (configFileTabs) {
+    configFileTabs.classList.toggle('hidden', !isTraining || trainingDetailTab !== 'config' || !hasConfigForSurface);
+  }
   if (trainingOverview) {
     trainingOverview.classList.toggle('hidden', !isTraining || trainingDetailTab !== 'items');
   }
@@ -211,7 +215,6 @@ function syncWorkspaceSurfaceUi() {
   var reviewOutputBackBtn = document.getElementById('review-output-back-btn');
   var workbenchTop = ui.appEl.querySelector('.workbench-top');
   var workbenchBottom = ui.appEl.querySelector('.workbench-bottom');
-  var sidebarWorkspace = document.getElementById('sidebar-workspace');
 
   ui.appEl.classList.remove(
     'workspace-surface-default',
@@ -238,10 +241,6 @@ function syncWorkspaceSurfaceUi() {
   }
   if (workbenchBottom) {
     workbenchBottom.classList.toggle('workspace-bottom-config-editor', surface === 'configEditor' || surface === 'training');
-  }
-  if (sidebarWorkspace) {
-    sidebarWorkspace.classList.toggle('hidden', true);
-    sidebarWorkspace.setAttribute('aria-hidden', 'true');
   }
   if (reviewOutputBtn) {
     var reviewOutputActive = surface === 'reviewOutput';

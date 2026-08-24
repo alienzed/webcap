@@ -117,7 +117,6 @@ function sanitizeFolderState(data) {
       tag_mismatch_only: !!mediaFilters.tag_mismatch_only,
       incomplete_only: !!mediaFilters.incomplete_only,
       invalid_ar_only: !!mediaFilters.invalid_ar_only,
-      prune_candidates_only: !!mediaFilters.prune_candidates_only,
       stars: mediaFilterStars,
       flags: mediaFilterFlags
     },

@@ -2,7 +2,7 @@
 
 Last reviewed against code: 2026-08-17
 
-Status: **Planning / direction document.** This describes intended future behavior and is not current WebCap behavior.
+Status: **Implemented.** Resolution classes are selected in the shared dataset-config policy and materialized only inside immutable run bundles.
 
 ## Purpose
 
@@ -297,21 +297,21 @@ The source prepared AR directory remains useful as the canonical prepared copy:
 auto_dataset/916_img/
 ```
 
-Resolution classes should be derived from it.
+Resolution classes are derived from it during run-bundle capture. Persistent dataset TOMLs remain compact and editable: they may list several image buckets for one prepared source directory, while the run bundle expands each non-empty class into its own physical directory and one-bucket runtime stanza.
 
-The implementation may choose the safest existing WebCap-compatible mechanism for materializing the subsets, but the contract is:
+The implementation materializes the subsets in the run bundle under `media/image_classes/<stage>/`. The contract is:
 
 - one derived directory per final image resolution class;
 - each derived directory contains the image and matching caption for only its assigned sources;
 - each derived directory is referenced by one `[[directory]]` block;
 - each block contains exactly one image `size_bucket`;
-- no source image is duplicated across multiple image resolution classes for the same stage unless a future feature explicitly requests multi-resolution duplication.
+- every source image is assigned once, to its highest configured bucket that is compatible within the per-axis 15% allowance.
 
 Prefer correctness and compatibility with immutable run bundles over storage optimization.
 
 Do not rely on symlink behavior unless the current run-bundle copy/rewrite path is verified to preserve it correctly. Hardlink/copy details are implementation choices, not product behavior.
 
-Derived class paths must be deterministic so regenerated TOMLs and run capture remain reproducible.
+Derived class paths are deterministic within a captured bundle. Reset/regenerate changes only default TOML intent; ordinary setup preserves manual TOML edits, and bundle capture uses those exact saved buckets.
 
 ## Stage and mode behavior
 

@@ -9,10 +9,12 @@ import tool.server.run_ops as run_ops_module
 from tool.server.dataset_config import (
     choose_video_detail_bucket,
     coerce_frames,
+    choose_image_resolution_classes,
     generate_candidates,
     generate_image_candidates,
     generate_dataset_configs,
     image_alternatives,
+    assign_images_to_resolution_classes,
     normalize_training_generate_mode,
     pick_image_buckets,
     read_epochs_from_training_config,
@@ -98,17 +100,17 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert 'group = "videos"' in hi_text
     assert "  [512, 512, 33]," in hi_text
     assert hi_text.count('group = "images"') == 1
-    assert "  [256, 256, 1]," in hi_text
-    assert "  [512, 512, 1]," not in hi_text
-    assert "  [256, 256, 1]," in lo_text
+    assert "  [288, 288, 1]," in hi_text
+    assert "  [480, 480, 1]," in hi_text
+    assert "  [288, 288, 1]," in lo_text
     assert "  [512, 512, 1]," in lo_text
     assert "  [768, 768, 1]," not in hi_text
     assert "num_repeats = 17" in hi_text
     assert "num_repeats = 38" in lo_text
     assert "[INFO] Built 1 video directory block(s)." in report
     assert "[INFO] Training generate mode: normal" in report
-    assert "[INFO] square_img: selected HI image bucket(s): 256x256" in report
-    assert "[INFO] square_img: selected LO image bucket(s): 256x256, 512x512" in report
+    assert "[INFO] square_img: selected HI image bucket(s): 288x288, 480x480" in report
+    assert "[INFO] square_img: selected LO image bucket(s): 288x288, 512x512" in report
     assert "[INFO] Repeat targeting HI: target=5000" in report
     assert "[INFO] Repeat targeting LO: target=20000" in report
     assert (auto_dataset / "webcap_dataset_metadata.json").exists()
@@ -137,14 +139,14 @@ def test_generate_dataset_configs_fails_without_prep_manifest(tmp_path):
         raise AssertionError("generate_dataset_configs should fail without prep_manifest.json")
 
 
-def _write_h3_video_manifest(set_folder, frames, include_image=False, fps=24, duration=None):
+def _write_h3_video_manifest(set_folder, frames, include_image=False, fps=24, duration=None, ar="square", size=(768, 768)):
     auto_dataset = set_folder / "auto_dataset"
-    video_dir = auto_dataset / "square"
+    video_dir = auto_dataset / ar
     video_dir.mkdir(parents=True)
     (video_dir / "clip.mp4").write_bytes(b"video")
     video = {
-        "file": "clip.mp4", "ar": "square", "width": 768, "height": 768,
-        "fps": fps, "frames": frames, "prepared_path": "square/clip.mp4", "caption": True,
+        "file": "clip.mp4", "ar": ar, "width": size[0], "height": size[1],
+        "fps": fps, "frames": frames, "prepared_path": ar + "/clip.mp4", "caption": True,
     }
     if duration is not None:
         video["duration"] = duration
@@ -179,11 +181,16 @@ def test_h3_dataset_uses_its_frame_grid_for_mixed_media_and_poc(tmp_path):
     report = generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
-    assert "[512, 512, 136]" in text
+    assert "[352, 352, 68]" in text
+    assert "[512, 512, 34]" in text
     assert "[512, 512, 1]" in text
-    assert ", 13]" not in text
-    assert text.count('group = "videos"') == 1
-    assert "MiniMax H3 normal video resolution cap 512x512" in report
+    assert all(f", {frames}]" not in text for frames in (13, 17, 102, 136))
+    assert text.count('group = "videos"') == 2
+    video_blocks = [block for block in text.split("[[directory]]") if 'group = "videos"' in block]
+    video_repeats = [int(block.split("num_repeats = ", 1)[1].splitlines()[0]) for block in video_blocks]
+    assert video_repeats[0] == video_repeats[1] * 2
+    assert "MiniMax H3 motion bucket 352x352 @ 68" in report
+    assert "MiniMax H3 detail bucket 512x512 @ 34" in report
     plan = json.loads((set_folder / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))
     assert set(plan["stages"]) == {"h3"}
     assert plan["stages"]["h3"]["estimatedSteps"] > 0
@@ -191,7 +198,7 @@ def test_h3_dataset_uses_its_frame_grid_for_mixed_media_and_poc(tmp_path):
     generate_dataset_configs(set_folder, mode="poc", profile_id=MINIMAX_H3_PROFILE_ID)
     poc_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
     assert "[384, 384, 34]" in poc_text
-    assert ", 13]" not in poc_text
+    assert ", 68]" not in poc_text
 
 
 def test_h3_dataset_rejects_a_video_only_set_with_no_34_frame_clip(tmp_path):
@@ -244,15 +251,16 @@ def test_h3_dataset_accepts_an_image_only_set(tmp_path):
     assert 'group = "videos"' not in text
 
 
-def test_h3_quality_video_uses_only_native_frame_candidates(tmp_path):
+def test_h3_quality_video_uses_the_normal_safe_bucket_table(tmp_path):
     set_folder = tmp_path / "set"
     _write_h3_video_manifest(set_folder, 136)
 
     generate_dataset_configs(set_folder, mode="quality", profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
-    assert any(f", {frames}]" in text for frames in (136, 102, 68, 34))
-    assert all(f", {frames}]" not in text for frames in (13, 17, 21, 25, 29, 33, 37, 41, 45, 49))
+    assert "[352, 352, 68]" in text
+    assert "[512, 512, 34]" in text
+    assert all(f", {frames}]" not in text for frames in (13, 17, 102, 136))
 
 
 def test_model_native_frame_estimates_prefer_duration_then_source_rate_then_raw_frames():
@@ -269,14 +277,51 @@ def test_h3_bucket_timing_uses_24fps_for_legacy_and_high_fps_sources(tmp_path):
     generate_dataset_configs(legacy_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     legacy_text = (legacy_folder / "dataset.train.toml").read_text(encoding="utf-8")
     assert ", 68]" in legacy_text
-    assert ", 102]" not in legacy_text
+    assert ", 34]" in legacy_text
+    assert all(f", {frames}]" not in legacy_text for frames in (17, 102, 136))
 
     high_fps_folder = tmp_path / "high_fps"
     _write_h3_video_manifest(high_fps_folder, 120, fps=60, duration=2.0)
     generate_dataset_configs(high_fps_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     high_fps_text = (high_fps_folder / "dataset.train.toml").read_text(encoding="utf-8")
     assert ", 34]" in high_fps_text
-    assert all(f", {frames}]" not in high_fps_text for frames in (68, 102, 136))
+    assert all(f", {frames}]" not in high_fps_text for frames in (17, 68, 102, 136))
+
+
+def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
+    expected = {
+        "square": ((352, 352, 68), (512, 512, 34)),
+        "43": ((416, 320, 68), (608, 448, 34)),
+        "34": ((320, 416, 68), (448, 608, 34)),
+        "169": ((448, 256, 68), (672, 384, 34)),
+        "916": ((256, 448, 68), (384, 672, 34)),
+    }
+    for ar, buckets in expected.items():
+        set_folder = tmp_path / ar
+        _write_h3_video_manifest(set_folder, 136, ar=ar, size=(1024, 1024))
+
+        generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+        text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+        for width, height, frames in buckets:
+            assert f"[{width}, {height}, {frames}]" in text
+            assert width * height * frames < 10_000_000
+        assert all(f", {frames}]" not in text for frames in (17, 102, 136))
+
+
+def test_h3_bucket_selection_tolerates_small_upscale_and_falls_back_for_smaller_sources(tmp_path):
+    tolerated = tmp_path / "tolerated"
+    _write_h3_video_manifest(tolerated, 34, ar="169", size=(585, 334))
+    generate_dataset_configs(tolerated, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    tolerated_text = (tolerated / "dataset.train.toml").read_text(encoding="utf-8")
+    assert "[672, 384, 34]" in tolerated_text
+
+    fallback = tmp_path / "fallback"
+    _write_h3_video_manifest(fallback, 34, ar="169", size=(500, 280))
+    generate_dataset_configs(fallback, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    fallback_text = (fallback / "dataset.train.toml").read_text(encoding="utf-8")
+    assert "[512, 288, 34]" in fallback_text
+    assert "\n  [672, 384, 34]" not in fallback_text
 
 
 def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_path):
@@ -484,7 +529,7 @@ def test_selected_image_buckets_respect_image_mfp_limit():
     buckets, unsupported = pick_image_buckets("916", images, mode="normal")
 
     assert unsupported == []
-    assert buckets == [(416, 736), (576, 1024)]
+    assert buckets == [(416, 736)]
 
 
 def test_pick_image_buckets_prefers_full_coverage_then_detail():
@@ -506,7 +551,7 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
     ]
     buckets_916, unsupported_916 = pick_image_buckets("916", images_916, mode="normal")
     assert unsupported_916 == []
-    assert buckets_916 == [(416, 736), (576, 1024)]
+    assert buckets_916 == [(416, 736)]
 
     images_square = [
         ("003c.jpg", 544, 544),
@@ -523,6 +568,49 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
 
     buckets_square_poc, _ = pick_image_buckets("square", images_square, mode="poc")
     assert buckets_square_poc == [(384, 384)]
+
+
+def test_image_resolution_classes_keep_a_healthy_high_minority_and_unique_membership():
+    images = [
+        *( (f"mid_{index}.png", 512, 512) for index in range(10) ),
+        *( (f"high_{index}.png", 768, 768) for index in range(3) ),
+        ("slight_upscale.png", 448, 448),
+    ]
+
+    classes, unsupported = choose_image_resolution_classes("square", images, mode="normal", noise_profile="lo")
+
+    assert unsupported == []
+    assert [item["bucket"] for item in classes] == [(512, 512), (768, 768)]
+    assert [image[0] for image in classes[0]["images"]] == [
+        *(f"mid_{index}.png" for index in range(10)),
+        "slight_upscale.png",
+    ]
+    assert [image[0] for image in classes[1]["images"]] == [f"high_{index}.png" for index in range(3)]
+    assert classes[0]["native_count"] == 10
+    assert classes[0]["upscaled_count"] == 1
+
+
+def test_image_resolution_classes_do_not_create_a_high_class_for_a_sparse_outlier():
+    images = [
+        *( (f"mid_{index}.png", 512, 512) for index in range(10) ),
+        ("high.png", 768, 768),
+    ]
+
+    classes, unsupported = choose_image_resolution_classes("square", images, mode="normal", noise_profile="lo")
+
+    assert unsupported == []
+    assert [item["bucket"] for item in classes] == [(512, 512)]
+    assert len(classes[0]["images"]) == 11
+
+
+def test_image_assignment_never_promotes_the_known_916_upscale_regression():
+    classes, unsupported = assign_images_to_resolution_classes(
+        [("small.png", 438, 779)],
+        [(352, 640), (576, 1024)],
+    )
+
+    assert unsupported == []
+    assert [item["bucket"] for item in classes] == [(352, 640)]
 
 
 def test_normalize_training_generate_mode_keeps_quality_mode():
@@ -581,7 +669,7 @@ def test_poc_mode_never_emits_second_image_bucket():
     ]
     buckets, unsupported = pick_image_buckets("square", images, mode="poc")
     assert unsupported == []
-    assert buckets == [(256, 256)]
+    assert buckets == [(288, 288)]
 
 
 def test_repeat_targets_vary_by_mode():

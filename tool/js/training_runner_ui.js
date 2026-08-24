@@ -803,20 +803,12 @@ function trainingFolderName(folder) {
   return parts.length ? parts[parts.length - 1] : String(folder || 'this set');
 }
 
-function trainingQueueStartLabel(nextJob) {
-  return trainingWorkspaceState.runnerQueuePauseReason === 'Queue waiting for manual start after WebCap restarted.'
-    ? 'Start Queue'
-    : /^Queue held:/i.test(trainingWorkspaceState.runnerQueuePauseReason || '') ? 'Continue with next job'
-    : nextJob && !nextJob.resumeFromCheckpoint ? 'Resume' : 'Resume';
-}
-
 function syncTrainingQueueResumeButton(els, queuedJobs) {
   if (!els.runnerResumeQueueBtn) return;
-  var nextJob = queuedJobs[0];
-  els.runnerResumeQueueBtn.textContent = trainingQueueStartLabel(nextJob);
-  els.runnerResumeQueueBtn.title = nextJob
-    ? (nextJob.resumeFromCheckpoint ? 'Resume the first item from its saved checkpoint.' : 'Restart the first item from the beginning.')
-    : 'Allow queued training jobs to run.';
+  els.runnerResumeQueueBtn.textContent = 'Resume';
+  els.runnerResumeQueueBtn.title = queuedJobs.length
+    ? 'Resume the queue and start the first queued item.'
+    : 'Resume the queue.';
 }
 
 function renderTrainingRunnerPreflight(payload) {

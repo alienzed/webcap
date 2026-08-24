@@ -358,9 +358,6 @@ function runReview() {
       phrases: options.phrases,
       reviewRules: options.reviewRules
     });
-    state.suppressInput = true;
-    ui.editorEl.value = buildCombinedCaptionsText(results);
-    state.suppressInput = false;
     renderReviewSetPreview(report, results.map(function (row) { return row.fileName; }), buildReviewScopeSummary(results));
     setStatus('Review ready: ' + results.length + ' files');
   } catch (err) {

@@ -27,10 +27,11 @@ IMAGE_MAX_SQUARE_DIM = 768
 IMAGE_MAX_NON_SQUARE_LONG = 768
 IMAGE_MAX_NON_SQUARE_SHORT = 768
 MAX_IMAGE_MFP = 600
+IMAGE_CLASS_MIN_UNIQUE = 3
+IMAGE_CLASS_MAX_PER_AR = 3
+IMAGE_CLASS_MAX_UPSCALE_RATIO = 1.15
 ALT_MIN_IMAGE_SIDE = 256
-NORMAL_SECOND_BUCKET_MIN_COVERAGE = 0.50
 NORMAL_SECOND_BUCKET_MIN_SCALE = 1.25
-NORMAL_SECOND_BUCKET_PRIMARY_SHORT_CAP = 512
 ALT_MAX_SQUARE_DIM = 1024
 ALT_MAX_NON_SQUARE_LONG = 1280
 ALT_MAX_NON_SQUARE_SHORT = 1024
@@ -83,12 +84,36 @@ IMAGE_MODE_CAPS = {
 PREP_MANIFEST_NAME = "prep_manifest.json"
 VIDEO_FRAME_CANDIDATES = [37, 49, 45, 41, 33]
 VIDEO_FRAME_CANDIDATES_POC = [33, 29, 25, 21, 17]
-H3_VIDEO_FRAME_CANDIDATES = [136, 102, 68, 34]
 H3_VIDEO_FRAME_CANDIDATES_POC = [34]
 MIN_VIDEO_FRAMES_FOR_STATS = 16
 VIDEO_COVERAGE = 0.85
 VIDEO_MFP_LIMIT = 11000
-H3_VIDEO_MFP_LIMIT = 40000
+# H3 buckets use 32x32 latent cells. 9,500 cells is 9.73 raw MegaFramePixels
+# for dimensions aligned to 32, leaving headroom below the 10M safety ceiling.
+H3_VIDEO_MFP_LIMIT = 9500
+H3_VIDEO_MAX_UPSCALE = 1.15
+H3_VIDEO_BUCKET_TARGETS = {
+    "square": {
+        "motion": (352, 352, 68, 2.0),
+        "detail": (512, 512, 34, 1.0),
+    },
+    "43": {
+        "motion": (416, 320, 68, 2.0),
+        "detail": (608, 448, 34, 1.0),
+    },
+    "34": {
+        "motion": (320, 416, 68, 2.0),
+        "detail": (448, 608, 34, 1.0),
+    },
+    "169": {
+        "motion": (448, 256, 68, 2.0),
+        "detail": (672, 384, 34, 1.0),
+    },
+    "916": {
+        "motion": (256, 448, 68, 2.0),
+        "detail": (384, 672, 34, 1.0),
+    },
+}
 VIDEO_DETAIL_FRAMES = 13
 VIDEO_DETAIL_MIN_COVERAGE = 0.35
 VIDEO_DETAIL_MIN_SUPPORT = 2
@@ -219,8 +244,14 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
         if not images:
             continue
 
-        hi_buckets, hi_unsupported = pick_image_buckets(ar_label, images, mode=generate_mode, noise_profile="hi")
-        lo_buckets, lo_unsupported = pick_image_buckets(ar_label, images, mode=generate_mode, noise_profile="lo")
+        hi_classes, hi_unsupported = choose_image_resolution_classes(
+            ar_label, images, mode=generate_mode, noise_profile="hi"
+        )
+        lo_classes, lo_unsupported = choose_image_resolution_classes(
+            ar_label, images, mode=generate_mode, noise_profile="lo"
+        )
+        hi_buckets = [item["bucket"] for item in hi_classes]
+        lo_buckets = [item["bucket"] for item in lo_classes]
         if hi_unsupported:
             lines.append(f"[WARN] {image_dir.name} (HI): {len(hi_unsupported)} image(s) smaller than every valid bucket:")
             for name in hi_unsupported:
@@ -236,12 +267,19 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
                 f"[INFO] {image_dir.name}: selected HI image bucket(s): "
                 + ", ".join(f"{w}x{h}" for (w, h) in hi_buckets)
             )
+            for item in hi_classes:
+                w, h = item["bucket"]
+                lines.append(
+                    f"[INFO] {image_dir.name} (HI) class {w}x{h}: "
+                    f"{len(item['images'])} image(s), {item['native_count']} native, "
+                    f"{item['upscaled_count']} slight-upscale"
+                )
             hi_image_entries.append({
                 "kind": "image",
                 "path": image_dir,
                 "ar_label": ar_label,
                 "buckets": hi_buckets,
-                "sample_count": max(1, len(images) - len(hi_unsupported)),
+                "sample_count": max(1, sum(len(item["images"]) for item in hi_classes)),
                 "repeat_weight": IMAGE_REPEAT_WEIGHT,
             })
         if not lo_buckets:
@@ -251,12 +289,19 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
                 f"[INFO] {image_dir.name}: selected LO image bucket(s): "
                 + ", ".join(f"{w}x{h}" for (w, h) in lo_buckets)
             )
+            for item in lo_classes:
+                w, h = item["bucket"]
+                lines.append(
+                    f"[INFO] {image_dir.name} (LO) class {w}x{h}: "
+                    f"{len(item['images'])} image(s), {item['native_count']} native, "
+                    f"{item['upscaled_count']} slight-upscale"
+                )
             lo_image_entries.append({
                 "kind": "image",
                 "path": image_dir,
                 "ar_label": ar_label,
                 "buckets": lo_buckets,
-                "sample_count": max(1, len(images) - len(lo_unsupported)),
+                "sample_count": max(1, sum(len(item["images"]) for item in lo_classes)),
                 "repeat_weight": IMAGE_REPEAT_WEIGHT,
             })
 
@@ -448,9 +493,43 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
             lines.append(f"[WARN] {ar_label}: no clips with usable frame metadata.")
             continue
 
+        if h3_profile and generate_mode != "poc":
+            dir_path = (dataset_root / ar_label).as_posix()
+            for role, (target_w, target_h, role_frames, repeat_weight) in H3_VIDEO_BUCKET_TARGETS[ar_label].items():
+                selected = choose_video_bucket_resolution_capped(
+                    ar_label,
+                    usable_for_frames,
+                    role_frames,
+                    VIDEO_COVERAGE,
+                    H3_VIDEO_MFP_LIMIT,
+                    target_w,
+                    target_h,
+                    max_upscale=H3_VIDEO_MAX_UPSCALE,
+                )
+                if not selected:
+                    lines.append(
+                        f"[WARN] {ar_label}: no clips support MiniMax H3 {role} bucket @ {role_frames} frames."
+                    )
+                    continue
+                bucket = (selected["width"], selected["height"], role_frames)
+                lines.append(
+                    f"[INFO] {ar_label}: MiniMax H3 {role} bucket {selected['width']}x{selected['height']} @ {role_frames} "
+                    f"(support {selected['support']}/{selected['total']})"
+                )
+                entries.append({
+                    "kind": "video",
+                    "role": role,
+                    "dir_path": dir_path,
+                    "buckets": [bucket],
+                    "sample_count": selected["support"],
+                    "repeat_weight": repeat_weight,
+                    "resolution_cap": (target_w, target_h),
+                })
+            continue
+
         frame_counts = [c["frames"] for c in usable_for_frames]
         if h3_profile:
-            frame_candidates = H3_VIDEO_FRAME_CANDIDATES_POC if generate_mode == "poc" else H3_VIDEO_FRAME_CANDIDATES
+            frame_candidates = H3_VIDEO_FRAME_CANDIDATES_POC
         else:
             frame_candidates = VIDEO_FRAME_CANDIDATES_POC if generate_mode == "poc" else VIDEO_FRAME_CANDIDATES
         motion_frames = select_frames_with_fallback(frame_counts, frame_candidates, VIDEO_COVERAGE)
@@ -615,6 +694,7 @@ def choose_video_bucket_resolution_capped(
     mfp_limit: int,
     max_w: int,
     max_h: int,
+    max_upscale: float = 1.0,
 ):
     candidates = [
         (w, h, area)
@@ -633,7 +713,7 @@ def choose_video_bucket_resolution_capped(
             continue
         support = 0
         for clip in usable:
-            if clip["width"] >= w and clip["height"] >= h:
+            if clip["width"] * max_upscale >= w and clip["height"] * max_upscale >= h:
                 support += 1
         if support <= 0:
             continue
@@ -907,6 +987,61 @@ def add_candidate(candidates, seen, target_ar, w, h, max_long, max_short):
 
 
 def pick_image_buckets(ar_label: str, images, mode: str = "normal", noise_profile: str = "lo"):
+    classes, unsupported = choose_image_resolution_classes(ar_label, images, mode=mode, noise_profile=noise_profile)
+    return [item["bucket"] for item in classes], unsupported
+
+
+def image_bucket_compatibility(image, bucket, max_upscale: float = IMAGE_CLASS_MAX_UPSCALE_RATIO):
+    _, image_w, image_h = image
+    bucket_w, bucket_h = bucket
+    if image_w >= bucket_w and image_h >= bucket_h:
+        return "native"
+    if image_w * float(max_upscale) >= bucket_w and image_h * float(max_upscale) >= bucket_h:
+        return "slight_upscale"
+    return ""
+
+
+def assign_images_to_resolution_classes(images, buckets, max_upscale: float = IMAGE_CLASS_MAX_UPSCALE_RATIO):
+    """Assign every image once, at its largest compatible configured bucket."""
+    normalized_buckets = []
+    seen = set()
+    for raw_bucket in buckets:
+        try:
+            bucket = (int(raw_bucket[0]), int(raw_bucket[1]))
+        except (IndexError, TypeError, ValueError):
+            raise ValueError("Image bucket must contain positive width and height.")
+        if bucket[0] <= 0 or bucket[1] <= 0:
+            raise ValueError("Image bucket must contain positive width and height.")
+        if bucket not in seen:
+            seen.add(bucket)
+            normalized_buckets.append(bucket)
+    normalized_buckets.sort(key=lambda item: (item[0] * item[1], item[0], item[1]), reverse=True)
+    classes = {
+        bucket: {"bucket": bucket, "images": [], "native_count": 0, "upscaled_count": 0}
+        for bucket in normalized_buckets
+    }
+    unsupported = []
+    for image in images:
+        match = ""
+        selected_bucket = None
+        for bucket in normalized_buckets:
+            match = image_bucket_compatibility(image, bucket, max_upscale=max_upscale)
+            if match:
+                selected_bucket = bucket
+                break
+        if selected_bucket is None:
+            unsupported.append(image[0])
+            continue
+        selected = classes[selected_bucket]
+        selected["images"].append(image)
+        if match == "native":
+            selected["native_count"] += 1
+        else:
+            selected["upscaled_count"] += 1
+    return [classes[bucket] for bucket in normalized_buckets if classes[bucket]["images"]], unsupported
+
+
+def choose_image_resolution_classes(ar_label: str, images, mode: str = "normal", noise_profile: str = "lo"):
     generate_mode = normalize_training_generate_mode(mode)
     candidates = generate_image_candidates(ar_label, mode=generate_mode)
     if not candidates:
@@ -921,104 +1056,88 @@ def pick_image_buckets(ar_label: str, images, mode: str = "normal", noise_profil
     if not images:
         return [], []
 
-    supported_images = []
-    unsupported = []
-    support = {}
-    for row in images:
-        name, iw, ih = row
-        if any(iw >= w and ih >= h for (w, h, _) in candidates):
-            supported_images.append(row)
-        else:
-            unsupported.append(name)
-
-    total = len(supported_images)
-    if total == 0:
+    candidate_buckets = [(w, h) for (w, h, _) in candidates]
+    supported_images = [
+        image for image in images
+        if any(image_bucket_compatibility(image, bucket) for bucket in candidate_buckets)
+    ]
+    unsupported = [image[0] for image in images if image not in supported_images]
+    if not supported_images:
         return [], unsupported
-
-    for (w, h, _) in candidates:
-        support[(w, h)] = sum(1 for (_, iw, ih) in supported_images if iw >= w and ih >= h)
 
     target_w, target_h = resolve_image_target(ar_label, mode=generate_mode, noise_profile=noise_profile)
-    primary = pick_primary_image_bucket(candidates, support, total, target_w, target_h, generate_mode)
-    if not primary:
-        return [], unsupported
+    minimum_healthy = min(IMAGE_CLASS_MIN_UNIQUE, len(supported_images))
+    below_target = [
+        bucket for bucket in candidate_buckets
+        if bucket[0] <= target_w and bucket[1] <= target_h
+    ]
+
+    def compatible_count(bucket, source_images=supported_images, native_only=False):
+        if native_only:
+            return sum(1 for image in source_images if image_bucket_compatibility(image, bucket) == "native")
+        return sum(1 for image in source_images if image_bucket_compatibility(image, bucket))
+
+    healthy_primary = [
+        bucket for bucket in below_target
+        if compatible_count(bucket) >= minimum_healthy
+    ]
+    if healthy_primary:
+        primary = max(healthy_primary, key=lambda item: (item[0] * item[1], item[0], item[1]))
+    else:
+        primary = max(
+            candidate_buckets,
+            key=lambda item: (
+                compatible_count(item),
+                int(item[0] <= target_w and item[1] <= target_h),
+                item[0] * item[1],
+                item[0],
+                item[1],
+            ),
+        )
 
     selected = [primary]
-    if generate_mode == "normal" and str(noise_profile or "lo").strip().lower() != "hi":
-        second = pick_secondary_image_bucket(candidates, support, total, primary)
-        if second:
-            selected.append(second)
-    return selected, unsupported
+    allow_high_class = generate_mode == "normal" and str(noise_profile or "lo").strip().lower() != "hi"
+    if allow_high_class:
+        primary_short = min(primary)
+        scale_min = NORMAL_SECOND_BUCKET_MIN_SCALE if primary[0] == primary[1] else NORMAL_SECOND_BUCKET_MIN_SCALE_NON_SQUARE
+        high_candidates = []
+        for bucket in candidate_buckets:
+            if bucket[0] <= primary[0] or bucket[1] <= primary[1]:
+                continue
+            if min(bucket) < int(math.ceil(primary_short * scale_min)):
+                continue
+            if compatible_count(bucket, native_only=True) < IMAGE_CLASS_MIN_UNIQUE:
+                continue
+            prospective, _ = assign_images_to_resolution_classes(supported_images, [primary, bucket])
+            primary_class = next((item for item in prospective if item["bucket"] == primary), None)
+            if primary_class is None or len(primary_class["images"]) < IMAGE_CLASS_MIN_UNIQUE:
+                continue
+            high_candidates.append(bucket)
+        if high_candidates:
+            selected.append(max(high_candidates, key=lambda item: (item[0] * item[1], item[0], item[1])))
 
-
-def pick_primary_image_bucket(candidates, support, total, target_w, target_h, mode):
-    full_coverage = [(w, h, area) for (w, h, area) in candidates if support[(w, h)] == total]
-    if not full_coverage:
-        # Fallback path for constrained datasets: maximize coverage first, then area.
-        best = None
-        for (w, h, area) in candidates:
-            cov = support[(w, h)] / float(total)
-            # Soft target tie-breaker to preserve expected mode behavior.
-            in_target = 1 if (w <= target_w and h <= target_h) else 0
-            entry = (cov, in_target, area, w, h)
-            if best is None or entry > best:
-                best = entry
-        if best is None:
-            return None
-        return (best[3], best[4])
-
-    # POC prioritizes lower compute: stay near target even with full coverage.
-    if mode == "poc":
-        at_or_below = [
-            (w, h, area)
-            for (w, h, area) in full_coverage
-            if w <= target_w and h <= target_h
+    assigned, _ = assign_images_to_resolution_classes(supported_images, selected)
+    unassigned = []
+    assigned_names = {image[0] for item in assigned for image in item["images"]}
+    low_orphans = [image for image in supported_images if image[0] not in assigned_names]
+    if low_orphans:
+        lower_candidates = [
+            bucket for bucket in candidate_buckets
+            if bucket[0] < primary[0] and bucket[1] < primary[1]
+            and all(image_bucket_compatibility(image, bucket) for image in low_orphans)
         ]
-        if at_or_below:
-            best = max(at_or_below, key=lambda item: item[2])
-            return (best[0], best[1])
+        if lower_candidates:
+            selected.append(max(lower_candidates, key=lambda item: (item[0] * item[1], item[0], item[1])))
+        else:
+            unassigned.extend(image[0] for image in low_orphans)
 
-    at_or_above = [
-        (w, h, area)
-        for (w, h, area) in full_coverage
-        if w >= target_w and h >= target_h
-    ]
-    if at_or_above:
-        best = min(at_or_above, key=lambda item: item[2])
-        return (best[0], best[1])
-
-    # When the ideal target is not fully supported, take the strongest bucket just below it.
-    best = max(full_coverage, key=lambda item: item[2])
-    return (best[0], best[1])
-
-
-def pick_secondary_image_bucket(candidates, support, total, primary):
-    p_w, p_h = primary
-    primary_short = min(p_w, p_h)
-    if primary_short >= NORMAL_SECOND_BUCKET_PRIMARY_SHORT_CAP:
-        return None
-
-    scale_min = NORMAL_SECOND_BUCKET_MIN_SCALE
-    if p_w != p_h:
-        scale_min = NORMAL_SECOND_BUCKET_MIN_SCALE_NON_SQUARE
-
-    best_second = None
-    for (w, h, area) in candidates:
-        if (w, h) == primary:
-            continue
-        if w <= p_w or h <= p_h:
-            continue
-        if min(w, h) < int(math.ceil(primary_short * scale_min)):
-            continue
-        frac = support[(w, h)] / float(total)
-        if frac < NORMAL_SECOND_BUCKET_MIN_COVERAGE:
-            continue
-        if best_second is None or area > best_second[0]:
-            best_second = (area, w, h)
-
-    if not best_second:
-        return None
-    return (best_second[1], best_second[2])
+    selected = list(dict.fromkeys(selected))[:IMAGE_CLASS_MAX_PER_AR]
+    classes, remaining_unsupported = assign_images_to_resolution_classes(supported_images, selected)
+    unsupported.extend(unassigned)
+    unsupported.extend(remaining_unsupported)
+    unsupported = list(dict.fromkeys(unsupported))
+    classes.sort(key=lambda item: (item["bucket"][0] * item["bucket"][1], item["bucket"][0], item["bucket"][1]))
+    return classes, unsupported
 
 
 def mfp(w: int, h: int, frames: int):

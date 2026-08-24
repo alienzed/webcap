@@ -49,6 +49,7 @@ These are useful product notes, not authoritative implementation references:
 - `docs/scene_complexity.md`
 - `docs/selection_pose_stack.md`
 - `docs/video_clip.md`
+- `docs/vram_bucket_calibration.md` - app-owned H3 shape calibration and safe-shape feedback design
 
 ## Historical / Superseded
 

@@ -2254,13 +2254,6 @@ iframe {
   line-height: 1;
 }
 
-.workspace-surface-training .training-history-actions .training-history-action--label {
-  width: auto;
-  min-width: 0;
-  padding: 0 7px;
-  font-size: 11px;
-}
-
 .workspace-surface-training .training-history-more {
   position: relative;
 }
@@ -2314,7 +2307,19 @@ iframe {
 }
 
 .workspace-surface-training .training-history-actions .training-history-action--clear {
-  color: #d36a6a;
+  position: relative;
+  margin-left: 5px;
+  color: var(--muted);
+}
+
+.workspace-surface-training .training-history-actions .training-history-action--clear::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: -5px;
+  width: 1px;
+  background: var(--border);
 }
 
 .workspace-surface-training .training-history-actions .training-history-action--clear:hover {
@@ -2630,13 +2635,31 @@ iframe {
   grid-column: 1 / -1;
 }
 
+.workspace-surface-training .training-history-details-toggle {
+  justify-self: end;
+  width: 23px;
+  min-width: 23px;
+  height: 18px;
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.workspace-surface-training .training-history-details-toggle:hover {
+  color: var(--text);
+}
+
 .workspace-surface-training .training-history-item > .training-runner-detail {
   grid-column: 1 / -1;
 }
 
 .workspace-surface-training .training-history-actions {
   grid-column: 3;
-  grid-row: 1 / span 2;
+  grid-row: 1;
   align-self: start;
   flex-wrap: wrap;
   justify-content: flex-end;

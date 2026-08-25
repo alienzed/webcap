@@ -164,16 +164,16 @@ function renderTrainingHistory() {
         (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
         (unavailable.length ? '<div class="training-runner-detail is-warning">Unavailable: ' + escapeHtml(unavailable.join(', ')) + '</div>' : '') +
         expandedFacts +
+        '<button type="button" class="training-history-details-toggle" data-training-history-details="' + escapeHtml(job.id || '') + '" title="' + (detailsOpen ? 'Hide run details' : 'Show run details') + '" aria-label="' + (detailsOpen ? 'Hide run details' : 'Show run details') + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '">' + (detailsOpen ? '&#9652;' : '&#9662;') + '</button>' +
       '</div>' +
       '<div class="training-history-actions">' +
-       '<button type="button" class="training-history-action training-history-action--label training-history-details-toggle" data-training-history-details="' + escapeHtml(job.id || '') + '" title="' + (detailsOpen ? 'Hide run details' : 'Show run details') + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '">Details ' + (detailsOpen ? '&#9652;' : '&#9662;') + '</button>' +
-       (job.logAvailable !== false ? '<button type="button" class="training-history-action training-history-action--label" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show run log">Log</button>' : '') +
-       (canResume ? '<button type="button" class="training-history-action training-history-action--label" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Resume this run">Resume</button>' : '') +
-       '<details class="training-history-more"><summary class="training-history-action training-history-action--label">More</summary><div class="training-history-more-menu">' +
-         (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">Open output</button>' : '') +
-         (job.bundleAvailable !== false && job.bundlePath ? '<button type="button" data-training-history-bundle="' + escapeHtml(job.id || '') + '">Open captured files</button>' : '') +
-         '<button type="button" class="training-history-action--clear" data-training-history-clear="' + escapeHtml(job.id || '') + '">Remove from Recent Runs</button>' +
+       (job.logAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show run log" aria-label="Show run log">&#128196;</button>' : '') +
+       (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Resume this run" aria-label="Resume this run">&#8635;</button>' : '') +
+       '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
+         (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
+         (job.bundleAvailable !== false && job.bundlePath ? '<button type="button" data-training-history-bundle="' + escapeHtml(job.id || '') + '">&#128451; Open captured files</button>' : '') +
        '</div></details>' +
+       '<button type="button" class="training-history-action training-history-action--clear" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove from Recent Runs — keeps files and output" aria-label="Remove from Recent Runs — keeps files and output">&#215;</button>' +
        '</div></div>';
   }).join('');
   if (els.historyShowAllBtn) {

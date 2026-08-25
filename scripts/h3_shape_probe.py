@@ -366,12 +366,12 @@ def candidate_name(frames, aspect, width, height):
     return str(frames) + "f/" + str(aspect) + "-" + str(width) + "x" + str(height)
 
 
-def prepare_candidate(seed, ladder, width, height, media_dir):
+def prepare_candidate(seed, ladder, width, height, media_dir, work_root):
     frames = int(ladder["frames"])
     aspect = str(ladder["aspect"])
     probe_dir = seed["results"] / candidate_name(frames, aspect, width, height)
     media_dir = Path(media_dir)
-    output_dir = probe_dir / "output"
+    output_dir = Path(work_root) / "outputs" / candidate_name(frames, aspect, width, height)
     config_path = probe_dir / "config.toml"
     dataset_path = probe_dir / "dataset.toml"
     probe_dir.mkdir(parents=True, exist_ok=False)
@@ -419,10 +419,10 @@ def write_precache_dataset(path, media_dir, candidates):
     Path(path).write_text("\n".join(lines), encoding="utf-8")
 
 
-def precache_candidates(seed, candidates):
+def precache_candidates(seed, candidates, work_root):
     precache_dir = seed["results"] / "precache"
     precache_dir.mkdir(parents=True, exist_ok=False)
-    output_dir = precache_dir / "output"
+    output_dir = Path(work_root) / "outputs" / "precache"
     output_dir.mkdir(parents=True, exist_ok=True)
     dataset_path = precache_dir / "dataset.toml"
     config_path = precache_dir / "config.toml"
@@ -564,7 +564,9 @@ def run_campaign(seed):
     plan = read_json(seed["plan"])
     ladders = _validate_plan(plan)
     results_root = seed["results"]
+    work_root = results_root.parent / "work"
     results_root.mkdir(parents=True, exist_ok=False)
+    work_root.mkdir(parents=True, exist_ok=False)
     write_json(results_root / "environment.json", {
         "createdAt": utc_now(),
         "python": sys.version,
@@ -580,16 +582,16 @@ def run_campaign(seed):
     ceilings = []
     cache_result = None
     try:
-        media_dir = results_root / "media"
+        media_dir = work_root / "media"
         materialize_probe_media(seed["video"], seed["caption"], media_dir)
         for ladder in ladders:
             ladder_candidates = []
             for shape in ladder["shapes"]:
-                candidate = prepare_candidate(seed, ladder, int(shape[0]), int(shape[1]), media_dir)
+                candidate = prepare_candidate(seed, ladder, int(shape[0]), int(shape[1]), media_dir, work_root)
                 ladder_candidates.append(candidate)
                 candidates.append(candidate)
             candidates_by_ladder.append((ladder, ladder_candidates))
-        cache_result = precache_candidates(seed, candidates)
+        cache_result = precache_candidates(seed, candidates, work_root)
         if cache_result["status"] != "completed":
             campaign_status = cache_result["status"]
             return campaign_status

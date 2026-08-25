@@ -6,9 +6,25 @@ The H3 probe is an external, fixed 90-shape experiment that measures the largest
 
 Right-click a representative video in WebCap and select **Prepare H3 envelope probe…**. WebCap captures that exact video, its saved sidecar caption, base config, and the immutable campaign plan under `.webcap_training/h3-probes/`, then copies a command to the clipboard. It uses the set's `config.h3.normal.toml` when present; otherwise it creates a probe-local config from WebCap's canonical H3 Normal template.
 
-Run the command in the configured training WSL environment with the GPU idle. The runner materializes the captured video and caption once under `results/media/`. It then performs exactly one `--cache_only --trust_cache` process over a master dataset with that shared media path and all 90 buckets. Bucket-specific cache artifacts live beside the shared clip; the master config, dataset, cache log, telemetry, and result are retained in `results/precache/`.
+Run the command in the configured training WSL environment with the GPU idle. The runner creates two sibling directories: `work/` holds the captured media, bucket-specific cache artifacts, and trainer outputs; `results/` holds portable diagnostic evidence. It performs exactly one `--cache_only --trust_cache` process over the shared `work/media/` path and all 90 buckets.
 
-After a successful cache pass, every candidate starts in a fresh training process with `--trust_cache`, using the same media path with its one selected bucket; candidates never launch cache-only themselves. Each candidate retains separate config, output, log, telemetry, and result files. A cache failure is fatal preparation failure. An OOM or unsafe slowdown stops only that ladder; all other ladders continue.
+After a successful cache pass, every candidate starts in a fresh training process with `--trust_cache`, using the same media path with its one selected bucket; candidates never launch cache-only themselves. Candidate configs, datasets, logs, telemetry, and results remain under `results/`, while trainer outputs remain under `work/outputs/`. A cache failure is fatal preparation failure. An OOM or unsafe slowdown stops only that ladder; all other ladders continue.
+
+Copy `results/` when inspecting or sharing a campaign. `source/` and `work/` are intentionally retained, potentially large runtime material.
+
+```text
+h3-<campaign-id>/
+  source/                 captured input video and caption
+  base/                   captured config and plan
+  work/                   media cache and trainer outputs
+    media/
+    outputs/
+  results/                portable evidence to inspect or share
+    precache/
+    <frames>f/<shape>/
+    summary.csv
+    campaign_result.json
+```
 
 ## Fixed campaign
 
@@ -29,7 +45,7 @@ Each training candidate runs six optimizer steps: two warm-up steps followed by 
 
 `unsafe_slow` requires a measured median of at least `max(20 seconds, 2.5 × baseline)` and at least three of the four measured steps at or above that threshold. The runner records every GPU from `nvidia-smi`, selects the active GPU from its movement over idle, and records host available RAM and swap-free space. It marks VRAM-to-RAM spill as confirmed only when a slowdown coincides with a ≥2 GiB available-RAM decline or ≥1 GiB swap-free decline; otherwise the slowdown remains practical but spill is unproven.
 
-Each candidate retains its config, dataset, media directory, training log, telemetry, and result. `summary.csv` and `campaign_result.json` record each ladder's baseline, last-safe rung, first unsafe/sentinel rung, terminal reason, and spill evidence.
+Each candidate retains its config, dataset, training log, telemetry, and result under `results/`; its shared media/cache and output remain under `work/`. `summary.csv` and `campaign_result.json` record each ladder's baseline, last-safe rung, first unsafe/sentinel rung, terminal reason, and spill evidence.
 
 Terminal reasons are:
 

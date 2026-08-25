@@ -203,6 +203,36 @@ def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkey
     assert "--seed" in payload["command"]
 
 
+def test_prepare_route_uses_canonical_config_when_set_has_none(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs"
+    folder = fs_root / "set"
+    folder.mkdir(parents=True)
+    source = folder / "probe.mp4"
+    source.write_bytes(b"video")
+    source.with_suffix(".txt").write_text("probe caption", encoding="utf-8")
+    monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
+    monkeypatch.setattr(h3_probe_module, "update_media_metadata", lambda _folder: {"probe.mp4": {"fps": 24}})
+
+    def copy_capture(src, dest, _fps, _source_fps):
+        shutil.copy2(src, dest)
+        return {"action": "copied"}
+
+    monkeypatch.setattr(h3_probe_module, "_copy_or_convert_bundle_video", copy_capture)
+    monkeypatch.setattr(h3_probe_module, "render_training_config_template", lambda name, _folder: h3_config_text() + "# " + name + "\n")
+    monkeypatch.setattr(h3_probe_module, "configured_training_settings", lambda: {
+        "cwd": "/opt/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
+    })
+    monkeypatch.setattr(h3_probe_module, "to_wsl_path", lambda value, _distribution: "/mnt/probe/" + Path(value).name)
+
+    response = app_module.app.test_client().post("/fs/h3_probe/prepare", json={"folder": "set", "fileName": "probe.mp4"})
+    assert response.status_code == 200
+    payload = response.get_json()
+    seed_path = Path(payload["seedPath"])
+    seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    assert seed["baseConfigSource"] == "template"
+    assert (seed_path.parent / seed["baseConfig"]).read_text(encoding="utf-8") == h3_config_text() + "# config.h3.normal.toml\n"
+
+
 def test_prepare_route_fails_visibly_without_saved_caption(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs"
     folder = fs_root / "set"

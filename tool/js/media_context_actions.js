@@ -320,7 +320,16 @@ function prepareH3EnvelopeProbe(mediaItem) {
     body: JSON.stringify({ folder: state.folder, fileName: mediaItem.fileName })
   })
     .then(function (response) {
-      return response.json().then(function (payload) {
+      return response.text().then(function (responseText) {
+        var payload = null;
+        try {
+          payload = JSON.parse(responseText);
+        } catch (error) {
+          if (response.status === 404) {
+            throw new Error('The running WebCap server does not include the H3 probe endpoint. Restart WebCap, then try again.');
+          }
+          throw new Error('H3 probe request returned HTTP ' + response.status + ' instead of a server response. Check the WebCap server terminal.');
+        }
         if (!response.ok || !payload || !payload.ok) {
           throw new Error((payload && payload.error) || 'Could not prepare H3 envelope probe.');
         }

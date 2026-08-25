@@ -67,7 +67,3 @@ The rename feature allows users to rename files and folders within a dataset usi
 - All state is managed in `.webcap_state.json`.
 - UI and backend both enforce validation and safety rules.
 
-## Open Issues / TODO
-- [ ] Add tests for edge cases (e.g., renaming to existing name, reserved names).
-- [ ] Ensure all UI entry points use the same validation logic.
-- [ ] Document error messages for user reference.

@@ -2,7 +2,6 @@ This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-08-24.
 
 ## Enhancements / Ideas
-- Validate the H3 Quality optimization preset after the shared safe video-bucket policy has seen real runs.
 - Provide the ability to resume from existing LoRA weights, rather than from a saved checkpoint, which is already supported.
 
 ## Backlog (Do Not Implement Yet)

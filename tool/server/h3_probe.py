@@ -12,6 +12,7 @@ from .dataset_prep import VIDEO_EXTS, resolve_prepared_caption_text, write_prepa
 from .media import update_media_metadata
 from .permissions import normalize_path_permissions
 from .training_bundle import _copy_or_convert_bundle_video
+from .training_config_files import render_training_config_template, training_config_template_path
 from .training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage
 from .training_runtime import activation_prefix, build_runtime_command, configured_training_settings, to_wsl_path
 
@@ -68,7 +69,7 @@ def prepare_h3_probe(folder, file_name):
     config_name = config_for_stage(MINIMAX_H3_PROFILE_ID, "h3", "normal")["file"]
     source_config = folder_path / config_name
     if not source_config.is_file():
-        raise FileNotFoundError("H3 Normal config is required: " + config_name)
+        training_config_template_path(config_name)
     caption, _ = resolve_prepared_caption_text(source, {})
     if not caption:
         raise ValueError("H3 envelope probe requires a saved non-empty caption: " + source.with_suffix(".txt").name)
@@ -96,7 +97,12 @@ def prepare_h3_probe(folder, file_name):
         raise RuntimeError("Could not capture selected probe video: " + str(capture.get("error") or "unknown error"))
     write_prepared_caption(source, source_root, caption)
     captured_config = base_root / config_name
-    shutil.copy2(source_config, captured_config)
+    if source_config.is_file():
+        shutil.copy2(source_config, captured_config)
+        config_source = "set"
+    else:
+        captured_config.write_text(render_training_config_template(config_name, folder_path), encoding="utf-8")
+        config_source = "template"
     normalize_path_permissions(captured_config)
     captured_plan = probe_root / "plan.json"
     shutil.copy2(PLAN_PATH, captured_plan)
@@ -114,6 +120,7 @@ def prepare_h3_probe(folder, file_name):
             "captureAction": capture["action"],
         },
         "baseConfig": _seed_relative(captured_config, probe_root),
+        "baseConfigSource": config_source,
         "plan": _seed_relative(captured_plan, probe_root),
         "results": "results",
     }

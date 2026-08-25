@@ -4,7 +4,7 @@ The H3 envelope probe measures the largest practical resolution for the fixed 17
 
 ## Prepare and run
 
-Right-click an appropriate video in WebCap and select **Prepare H3 envelope probe…**. WebCap captures that exact video, its saved sidecar caption, the set's `config.h3.normal.toml`, and the fixed probe plan under `.webcap_training/h3-probes/`, then copies a command to the clipboard.
+Right-click an appropriate video in WebCap and select **Prepare H3 envelope probe…**. WebCap captures that exact video, its saved sidecar caption, and the fixed probe plan under `.webcap_training/h3-probes/`, then copies a command to the clipboard. It uses the set's `config.h3.normal.toml` when present; otherwise it creates a probe-local config from WebCap's canonical H3 Normal template.
 
 Paste the command into the configured training WSL environment. The script performs the cache and training pass for every candidate, stopping an individual ladder after an OOM or a tenfold post-warm-up timing limit. It keeps running the remaining ladders unless caching or trainer startup fails for another reason.
 
@@ -12,7 +12,7 @@ Paste the command into the configured training WSL environment. The script perfo
 
 - Select a high-resolution video that you have chosen to represent the H3 workload. WebCap does not enforce duration or resolution thresholds.
 - Save a non-empty `.txt` caption for that video.
-- Ensure the set already has the intended `config.h3.normal.toml`.
+- Optionally create and tune the set's `config.h3.normal.toml` first when the probe should use custom H3 settings. Without one, the probe uses WebCap's canonical H3 Normal template.
 - Ensure the configured training runtime points at the training machine and the GPU is idle before pasting the command.
 
 The preparation step may make one 24-fps bundle-local copy of the video. Each candidate then has its own media directory and cache. Logs, copied configs, datasets, telemetry, commands, and result records remain under the probe directory for later inspection.

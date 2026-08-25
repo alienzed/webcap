@@ -293,8 +293,8 @@ def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
         "square": ((352, 352, 68), (512, 512, 34)),
         "43": ((416, 320, 68), (608, 448, 34)),
         "34": ((320, 416, 68), (448, 608, 34)),
-        "169": ((448, 256, 68), (672, 384, 34)),
-        "916": ((256, 448, 68), (384, 672, 34)),
+        "169": ((448, 256, 68), (800, 448, 34)),
+        "916": ((256, 448, 68), (448, 800, 34)),
     }
     for ar, buckets in expected.items():
         set_folder = tmp_path / ar
@@ -305,7 +305,7 @@ def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
 
         for width, height, frames in buckets:
             assert f"[{width}, {height}, {frames}]" in text
-            assert width * height * frames < 10_000_000
+            assert (width // 32) * (height // 32) * frames <= 11_900
         assert all(f", {frames}]" not in text for frames in (17, 102, 136))
 
 

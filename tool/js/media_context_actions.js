@@ -312,6 +312,33 @@ function runDefaceMediaItem(mediaItem, threshold) {
   );
 }
 
+function prepareH3EnvelopeProbe(mediaItem) {
+  setStatus('Preparing H3 envelope probe...');
+  fetch('/fs/h3_probe/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder: state.folder, fileName: mediaItem.fileName })
+  })
+    .then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || !payload.ok) {
+          throw new Error((payload && payload.error) || 'Could not prepare H3 envelope probe.');
+        }
+        return payload;
+      });
+    })
+    .then(function (payload) {
+      copyTextToClipboard(payload.command, function () {
+        setStatus('H3 envelope probe command copied. Seed: ' + payload.seedPath);
+      }, function (error) {
+        setStatus('H3 envelope probe prepared. Copy this command manually: ' + payload.command + ' (' + error.message + ')');
+      });
+    })
+    .catch(function (error) {
+      setStatus('H3 envelope probe preparation failed: ' + String(error && error.message ? error.message : error));
+    });
+}
+
 function buildMediaContextMenuActions(mediaItem, key) {
   var actions = [];
   var isInOriginals = (state.folder && state.folder.split(/[\/]/).pop() === 'originals');
@@ -478,6 +505,12 @@ function buildMediaContextMenuActions(mediaItem, key) {
       label: 'Clip...',
       run: function () {
         openVideoClipModal(mediaItem);
+      }
+    });
+    actions.push({
+      label: 'Prepare H3 envelope probe...',
+      run: function () {
+        prepareH3EnvelopeProbe(mediaItem);
       }
     });
   }

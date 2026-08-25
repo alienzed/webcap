@@ -397,6 +397,30 @@ function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
     outlierCard = '<div class="row"><div class="card"><h3>Caption Length Outliers</h3><h4>Shorter than usual</h4><ul>' + shortOutlierRows + '</ul><h4>Longer than usual</h4><ul>' + longOutlierRows + '</ul></div></div>';
   }
 
+  var imageCount = Number(scope.images || 0);
+  var videoCount = Number(scope.videos || 0);
+  var curationSignalsBody = '';
+  if (!imageCount) {
+    curationSignalsBody = '<div class="small">Curation Signals apply to images only. This review set contains ' + videoCount +
+      (videoCount === 1 ? ' video' : ' videos') + ' and no images, so face, expression, and pose signals are unavailable.</div>';
+  } else {
+    if (videoCount) {
+      curationSignalsBody += '<div class="small">Analyzing ' + imageCount + (imageCount === 1 ? ' image. ' : ' images. ') +
+        videoCount + (videoCount === 1 ? ' video is' : ' videos are') + ' excluded from these signals.</div>';
+    }
+    curationSignalsBody +=
+      '<div class="row"><div class="card"><h3>Suggested Candidates</h3><div id="selection-suggested-candidates-panel">Open Curation Signals to load.</div></div></div>' +
+      '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Open Curation Signals to load.</div></div></div>' +
+      '<div class="row">' +
+      '<div class="card"><h3>Face Direction</h3><div id="selection-face-direction-panel">Open Curation Signals to load.</div></div>' +
+      '<div class="card"><h3>Expression</h3><div id="selection-expression-panel">Open Curation Signals to load.</div></div>' +
+      '<div class="card"><h3>Body Orientation</h3><div id="selection-body-orientation-panel">Open Curation Signals to load.</div></div>' +
+      '</div>' +
+      '<div class="row">' +
+      '<div class="card"><h3>Pose Class</h3><div id="selection-pose-class-panel">Open Curation Signals to load.</div></div>' +
+      '<div class="card"><h3>Arm Placement</h3><div id="selection-arm-position-panel">Open Curation Signals to load.</div></div>' +
+      '</div>';
+  }
 
   var html = '' +
     '<!DOCTYPE html><html data-theme="' + theme + '"><head><meta charset="UTF-8">' +
@@ -418,17 +442,7 @@ function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
     outlierCard +
     '<details id="review-analysis-details" class="card">' +
     '<summary><strong>Curation Signals</strong> <span class="small">Optional candidate and pose analysis</span></summary>' +
-    '<div class="row"><div class="card"><h3>Suggested Candidates</h3><div id="selection-suggested-candidates-panel">Open Curation Signals to load.</div></div></div>' +
-    '<div class="row"><div class="card"><h3>Face Focus</h3><div id="face-focus-panel">Open Curation Signals to load.</div></div></div>' +
-    '<div class="row">' +
-    '<div class="card"><h3>Face Direction</h3><div id="selection-face-direction-panel">Open Curation Signals to load.</div></div>' +
-    '<div class="card"><h3>Expression</h3><div id="selection-expression-panel">Open Curation Signals to load.</div></div>' +
-    '<div class="card"><h3>Body Orientation</h3><div id="selection-body-orientation-panel">Open Curation Signals to load.</div></div>' +
-    '</div>' +
-    '<div class="row">' +
-    '<div class="card"><h3>Pose Class</h3><div id="selection-pose-class-panel">Open Curation Signals to load.</div></div>' +
-    '<div class="card"><h3>Arm Placement</h3><div id="selection-arm-position-panel">Open Curation Signals to load.</div></div>' +
-    '</div>' +
+    curationSignalsBody +
     '</details>' +
     '</body></html>';
 
@@ -471,7 +485,7 @@ function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
     });
     var analysisDetails = doc.getElementById('review-analysis-details');
     var analysisLoaded = false;
-    if (analysisDetails) {
+    if (analysisDetails && imageCount) {
       analysisDetails.addEventListener('toggle', function () {
         if (!analysisDetails.open || analysisLoaded) return;
         analysisLoaded = true;

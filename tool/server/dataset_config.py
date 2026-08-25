@@ -88,9 +88,10 @@ H3_VIDEO_FRAME_CANDIDATES_POC = [34]
 MIN_VIDEO_FRAMES_FOR_STATS = 16
 VIDEO_COVERAGE = 0.85
 VIDEO_MFP_LIMIT = 11000
-# H3 buckets use 32x32 latent cells. 9,500 cells is 9.73 raw MegaFramePixels
-# for dimensions aligned to 32, leaving headroom below the 10M safety ceiling.
-H3_VIDEO_MFP_LIMIT = 9500
+# H3 buckets use 32x32 latent cells. 11,900 cells is 12.19 raw MegaFramePixels
+# for aligned dimensions; 800x448 at 34 frames has been verified trainable and
+# is near the practical ceiling.
+H3_VIDEO_MFP_LIMIT = 11900
 H3_VIDEO_MAX_UPSCALE = 1.15
 H3_VIDEO_BUCKET_TARGETS = {
     "square": {
@@ -107,11 +108,11 @@ H3_VIDEO_BUCKET_TARGETS = {
     },
     "169": {
         "motion": (448, 256, 68, 2.0),
-        "detail": (672, 384, 34, 1.0),
+        "detail": (800, 448, 34, 1.0),
     },
     "916": {
         "motion": (256, 448, 68, 2.0),
-        "detail": (384, 672, 34, 1.0),
+        "detail": (448, 800, 34, 1.0),
     },
 }
 VIDEO_DETAIL_FRAMES = 13

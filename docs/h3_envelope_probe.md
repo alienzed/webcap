@@ -6,9 +6,9 @@ The H3 probe is an external, fixed 90-shape experiment that measures the largest
 
 Right-click a representative video in WebCap and select **Prepare H3 envelope probe…**. WebCap captures that exact video, its saved sidecar caption, base config, and the immutable campaign plan under `.webcap_training/h3-probes/`, then copies a command to the clipboard. It uses the set's `config.h3.normal.toml` when present; otherwise it creates a probe-local config from WebCap's canonical H3 Normal template.
 
-Run the command in the configured training WSL environment with the GPU idle. The runner first materializes 90 isolated candidate media directories, hardlinking the captured video when the filesystem permits. It then performs exactly one `--cache_only --trust_cache` process over a master dataset containing all 90 buckets. The master config, dataset, cache log, telemetry, and result are retained in `results/precache/`.
+Run the command in the configured training WSL environment with the GPU idle. The runner materializes the captured video and caption once under `results/media/`. It then performs exactly one `--cache_only --trust_cache` process over a master dataset with that shared media path and all 90 buckets. Bucket-specific cache artifacts live beside the shared clip; the master config, dataset, cache log, telemetry, and result are retained in `results/precache/`.
 
-After a successful cache pass, every candidate starts in a fresh training process with `--trust_cache`; candidates never launch cache-only themselves. A cache failure is fatal preparation failure. An OOM or unsafe slowdown stops only that ladder; all other ladders continue.
+After a successful cache pass, every candidate starts in a fresh training process with `--trust_cache`, using the same media path with its one selected bucket; candidates never launch cache-only themselves. Each candidate retains separate config, output, log, telemetry, and result files. A cache failure is fatal preparation failure. An OOM or unsafe slowdown stops only that ladder; all other ladders continue.
 
 ## Fixed campaign
 

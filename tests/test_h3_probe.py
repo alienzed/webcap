@@ -2,6 +2,7 @@ import csv
 import importlib.util
 import json
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -88,7 +89,7 @@ def test_probe_config_changes_only_probe_owned_values():
     assert "micro_batch_size_per_gpu = 1" in rendered
 
 
-def test_one_shared_precache_pass_has_all_candidate_stanzas(tmp_path, monkeypatch):
+def test_one_shared_precache_pass_uses_one_media_path_for_all_buckets(tmp_path, monkeypatch):
     probe = load_probe_script()
     config = tmp_path / "config.toml"
     config.write_text(h3_config_text(), encoding="utf-8")
@@ -99,9 +100,11 @@ def test_one_shared_precache_pass_has_all_candidate_stanzas(tmp_path, monkeypatc
     results = tmp_path / "results"
     results.mkdir()
     seed = {"video": video, "caption": caption, "config": config, "results": results}
+    media_dir = results / "media"
+    probe.materialize_probe_media(video, caption, media_dir)
     plan = json.loads((SCRIPTS_DIR / "h3_shape_probe_plan.json").read_text(encoding="utf-8"))
     candidates = [
-        probe.prepare_candidate(seed, ladder, width, height)
+        probe.prepare_candidate(seed, ladder, width, height, media_dir)
         for ladder in plan["ladders"]
         for width, height in ladder["shapes"]
     ]
@@ -127,9 +130,27 @@ def test_one_shared_precache_pass_has_all_candidate_stanzas(tmp_path, monkeypatc
     assert probe.precache_candidates(seed, candidates)["status"] == "completed"
     assert len(calls) == 1
     assert "--cache_only" in calls[0][0]
-    dataset = (results / "precache" / "dataset.toml").read_text(encoding="utf-8")
-    assert dataset.count("[[directory]]") == 90
-    assert dataset.count("size_buckets") == 90
+    precache_dataset = tomllib.loads((results / "precache" / "dataset.toml").read_text(encoding="utf-8"))
+    assert precache_dataset["directory"] == [{
+        "path": str(media_dir).replace("\\", "/"),
+        "num_repeats": 1,
+        "group": "videos",
+        "size_buckets": [candidate["shape"] for candidate in candidates],
+    }]
+    assert (media_dir / video.name).is_file()
+    assert (media_dir / caption.name).is_file()
+    assert list(results.rglob("media")) == [media_dir]
+    assert len({candidate["probeDir"] for candidate in candidates}) == 90
+    assert len({candidate["trainLog"] for candidate in candidates}) == 90
+    assert len({tomllib.loads(candidate["configPath"].read_text(encoding="utf-8"))["output_dir"] for candidate in candidates}) == 90
+    for candidate in candidates:
+        dataset = tomllib.loads(candidate["datasetPath"].read_text(encoding="utf-8"))
+        assert dataset["directory"] == [{
+            "path": str(media_dir).replace("\\", "/"),
+            "num_repeats": 1,
+            "group": "videos",
+            "size_buckets": [candidate["shape"]],
+        }]
 
 
 def test_candidate_training_reuses_cache_and_classifies_severe_slowdown(tmp_path, monkeypatch):
@@ -142,9 +163,11 @@ def test_candidate_training_reuses_cache_and_classifies_severe_slowdown(tmp_path
     caption.write_text("caption", encoding="utf-8")
     results = tmp_path / "results"
     results.mkdir()
+    media_dir = results / "media"
+    probe.materialize_probe_media(video, caption, media_dir)
     candidate = probe.prepare_candidate(
         {"video": video, "caption": caption, "config": config, "results": results},
-        {"frames": 34, "aspect": "169"}, 736, 416,
+        {"frames": 34, "aspect": "169"}, 736, 416, media_dir,
     )
     calls = []
 
@@ -206,10 +229,10 @@ def test_campaign_stops_only_affected_ladder_and_marks_safe_sentinels_inconclusi
     results = tmp_path / "results"
     seed_path = tmp_path / "seed.json"
     seed_path.write_text("{}", encoding="utf-8")
-    seed = {"plan": plan_path, "results": results, "seedPath": seed_path, "video": tmp_path / "source.mp4", "config": tmp_path / "config.toml"}
+    seed = {"plan": plan_path, "results": results, "seedPath": seed_path, "video": tmp_path / "source.mp4", "caption": tmp_path / "source.txt", "config": tmp_path / "config.toml"}
     calls = []
 
-    def fake_prepare(_seed, ladder, width, height):
+    def fake_prepare(_seed, ladder, width, height, _media_dir):
         probe_dir = results / (str(ladder["frames"]) + "f") / (ladder["aspect"] + "-" + str(width) + "x" + str(height))
         return {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": probe_dir, "resultPath": probe_dir / "result.json"}
 
@@ -222,6 +245,7 @@ def test_campaign_stops_only_affected_ladder_and_marks_safe_sentinels_inconclusi
         status = "oom" if (candidate["frames"], candidate["shape"][:2]) == (34, [800, 448]) else "completed"
         return {"status": status, "medianStepSeconds": 2.0 if status == "completed" else None, "baselineSeconds": baseline, "trainExitCode": 1 if status == "oom" else 0, "timedOut": False, "telemetry": {"spillEvidence": False}}
 
+    monkeypatch.setattr(probe, "materialize_probe_media", lambda *_args: None)
     monkeypatch.setattr(probe, "prepare_candidate", fake_prepare)
     monkeypatch.setattr(probe, "precache_candidates", fake_precache)
     monkeypatch.setattr(probe, "execute_probe", fake_execute)
@@ -240,12 +264,13 @@ def test_cache_failure_is_fatal_before_any_training(tmp_path, monkeypatch):
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
     results = tmp_path / "results"
-    seed = {"plan": plan_path, "results": results, "seedPath": tmp_path / "seed.json", "video": tmp_path / "source.mp4", "config": tmp_path / "config.toml"}
+    seed = {"plan": plan_path, "results": results, "seedPath": tmp_path / "seed.json", "video": tmp_path / "source.mp4", "caption": tmp_path / "source.txt", "config": tmp_path / "config.toml"}
 
-    def fake_prepare(_seed, ladder, width, height):
+    def fake_prepare(_seed, ladder, width, height, _media_dir):
         probe_dir = results / "34f" / ("x-" + str(width) + "x" + str(height))
         return {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": probe_dir, "resultPath": probe_dir / "result.json"}
 
+    monkeypatch.setattr(probe, "materialize_probe_media", lambda *_args: None)
     monkeypatch.setattr(probe, "prepare_candidate", fake_prepare)
     monkeypatch.setattr(probe, "precache_candidates", lambda _seed, _candidates: {"status": "cache_failed"})
     monkeypatch.setattr(probe, "execute_probe", lambda *_args: pytest.fail("training must not start after cache failure"))
@@ -258,10 +283,11 @@ def test_campaign_records_cancellation(tmp_path, monkeypatch):
     probe = load_probe_script()
     plan = {"version": 2, "rungStep": 32, "ladders": [{"frames": 34, "aspect": "169", "terminal": "model_cap", "shapes": [[736, 416]]}]}
     results = tmp_path / "results"
-    seed = {"plan": tmp_path / "plan.json", "results": results, "seedPath": tmp_path / "seed.json", "video": tmp_path / "source.mp4", "config": tmp_path / "config.toml"}
+    seed = {"plan": tmp_path / "plan.json", "results": results, "seedPath": tmp_path / "seed.json", "video": tmp_path / "source.mp4", "caption": tmp_path / "source.txt", "config": tmp_path / "config.toml"}
     seed["plan"].write_text(json.dumps(plan), encoding="utf-8")
     monkeypatch.setattr(probe, "_validate_plan", lambda value: value["ladders"])
-    monkeypatch.setattr(probe, "prepare_candidate", lambda _seed, ladder, width, height: {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": results / "34f" / "shape"})
+    monkeypatch.setattr(probe, "materialize_probe_media", lambda *_args: None)
+    monkeypatch.setattr(probe, "prepare_candidate", lambda _seed, ladder, width, height, _media_dir: {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": results / "34f" / "shape"})
     monkeypatch.setattr(probe, "precache_candidates", lambda _seed, _candidates: {"status": "completed"})
     monkeypatch.setattr(probe, "execute_probe", lambda *_args: (_ for _ in ()).throw(KeyboardInterrupt()))
     with pytest.raises(KeyboardInterrupt):

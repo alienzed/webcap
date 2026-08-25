@@ -366,23 +366,17 @@ def candidate_name(frames, aspect, width, height):
     return str(frames) + "f/" + str(aspect) + "-" + str(width) + "x" + str(height)
 
 
-def candidate_group(frames, aspect, width, height):
-    return "probe-" + str(frames) + "f-" + str(aspect) + "-" + str(width) + "x" + str(height)
-
-
-def prepare_candidate(seed, ladder, width, height):
+def prepare_candidate(seed, ladder, width, height, media_dir):
     frames = int(ladder["frames"])
     aspect = str(ladder["aspect"])
     probe_dir = seed["results"] / candidate_name(frames, aspect, width, height)
-    media_dir = probe_dir / "media"
+    media_dir = Path(media_dir)
     output_dir = probe_dir / "output"
     config_path = probe_dir / "config.toml"
     dataset_path = probe_dir / "dataset.toml"
-    group = candidate_group(frames, aspect, width, height)
     probe_dir.mkdir(parents=True, exist_ok=False)
     output_dir.mkdir(parents=True, exist_ok=True)
-    materialize_probe_media(seed["video"], seed["caption"], media_dir)
-    write_probe_dataset(dataset_path, media_dir, width, height, frames, group)
+    write_probe_dataset(dataset_path, media_dir, width, height, frames)
     config_text = seed["config"].read_text(encoding="utf-8")
     config_path.write_text(build_probe_config(config_text, dataset_path, output_dir), encoding="utf-8")
     candidate = {
@@ -390,7 +384,6 @@ def prepare_candidate(seed, ladder, width, height):
         "aspect": aspect,
         "shape": [width, height, frames],
         "mfp": mfp(width, height, frames),
-        "group": group,
         "probeDir": probe_dir,
         "mediaDir": media_dir,
         "configPath": config_path,
@@ -411,18 +404,18 @@ def prepare_candidate(seed, ladder, width, height):
     return candidate
 
 
-def write_precache_dataset(path, candidates):
-    lines = []
+def write_precache_dataset(path, media_dir, candidates):
+    lines = [
+        "[[directory]]",
+        "path = \"" + str(Path(media_dir)).replace("\\", "/") + "\"",
+        "num_repeats = 1",
+        "group = \"videos\"",
+        "size_buckets = [",
+    ]
     for candidate in candidates:
         width, height, frames = candidate["shape"]
-        lines.extend([
-            "[[directory]]",
-            "path = \"" + str(candidate["mediaDir"]).replace("\\", "/") + "\"",
-            "num_repeats = 1",
-            "group = \"" + candidate["group"] + "\"",
-            "size_buckets = [[" + str(width) + ", " + str(height) + ", " + str(frames) + "]]",
-            "",
-        ])
+        lines.append("  [" + str(width) + ", " + str(height) + ", " + str(frames) + "],")
+    lines.append("]")
     Path(path).write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -436,7 +429,7 @@ def precache_candidates(seed, candidates):
     cache_log = precache_dir / "cache.log"
     telemetry_path = precache_dir / "telemetry.csv"
     result_path = precache_dir / "result.json"
-    write_precache_dataset(dataset_path, candidates)
+    write_precache_dataset(dataset_path, candidates[0]["mediaDir"], candidates)
     config_text = seed["config"].read_text(encoding="utf-8")
     config_path.write_text(build_probe_config(config_text, dataset_path, output_dir), encoding="utf-8")
     command = probe_command(config_path, cache_only=True)
@@ -587,10 +580,12 @@ def run_campaign(seed):
     ceilings = []
     cache_result = None
     try:
+        media_dir = results_root / "media"
+        materialize_probe_media(seed["video"], seed["caption"], media_dir)
         for ladder in ladders:
             ladder_candidates = []
             for shape in ladder["shapes"]:
-                candidate = prepare_candidate(seed, ladder, int(shape[0]), int(shape[1]))
+                candidate = prepare_candidate(seed, ladder, int(shape[0]), int(shape[1]), media_dir)
                 ladder_candidates.append(candidate)
                 candidates.append(candidate)
             candidates_by_ladder.append((ladder, ladder_candidates))

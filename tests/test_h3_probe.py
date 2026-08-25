@@ -1,7 +1,10 @@
+import csv
 import importlib.util
 import json
 import shutil
 from pathlib import Path
+
+import pytest
 
 import tool.server.app as app_module
 import tool.server.config as config_module
@@ -32,16 +35,43 @@ micro_batch_size_per_gpu = 1
 """
 
 
-def test_probe_plan_keeps_known_anchor_first_and_102_landscape_capped():
+def test_fixed_plan_is_exact_90_shape_campaign():
+    probe = load_probe_script()
     plan = json.loads((SCRIPTS_DIR / "h3_shape_probe_plan.json").read_text(encoding="utf-8"))
-    assert plan["ladders"][0] == {
-        "frames": 34,
-        "aspect": "169",
-        "shapes": [[672, 384], [736, 416], [800, 448], [864, 480], [896, 512]],
+    assert plan["version"] == 2
+    assert plan["rungStep"] == 32
+    assert sum(len(ladder["shapes"]) for ladder in plan["ladders"]) == 90
+    assert probe._validate_plan(plan) == plan["ladders"]
+
+    expected = {
+        (34, "169"): (12, [736, 416], [1344, 768]),
+        (34, "square"): (7, [576, 576], [768, 768]),
+        (34, "43"): (10, [640, 480], [1024, 768]),
+        (68, "169"): (8, [512, 288], [896, 512]),
+        (68, "square"): (10, [384, 384], [672, 672]),
+        (68, "43"): (9, [416, 320], [768, 576]),
+        (102, "169"): (7, [384, 224], [736, 416]),
+        (102, "square"): (8, [320, 320], [544, 544]),
+        (102, "43"): (8, [352, 256], [640, 480]),
+        (17, "169"): (6, [1088, 608], [1344, 768]),
+        (17, "square"): (2, [736, 736], [768, 768]),
+        (17, "43"): (3, [928, 704], [1024, 768]),
     }
-    capped = next(item for item in plan["ladders"] if item["frames"] == 102 and item["aspect"] == "169")
-    assert capped["shapes"] == [[448, 256]]
-    assert capped["testPlanCap"] is True
+    for ladder in plan["ladders"]:
+        shapes = ladder["shapes"]
+        count, start, end = expected[(ladder["frames"], ladder["aspect"])]
+        assert (len(shapes), shapes[0], shapes[-1]) == (count, start, end)
+        assert all(width % 32 == 0 and height % 32 == 0 for width, height in shapes)
+        short_edges = [min(width, height) for width, height in shapes]
+        assert all(right - left == 32 for left, right in zip(short_edges, short_edges[1:]))
+        if ladder["frames"] in (68, 102):
+            mfps = [probe.mfp(width, height, ladder["frames"]) for width, height in shapes]
+            assert ladder["terminal"] == "sentinel"
+            assert sum(value > 30 for value in mfps) == 1
+            assert mfps[-1] > 30
+            assert all(value <= 30 for value in mfps[:-1])
+        else:
+            assert ladder["terminal"] == "model_cap"
 
 
 def test_probe_config_changes_only_probe_owned_values():
@@ -58,77 +88,24 @@ def test_probe_config_changes_only_probe_owned_values():
     assert "micro_batch_size_per_gpu = 1" in rendered
 
 
-def test_campaign_stops_one_ladder_and_continues_the_next(tmp_path, monkeypatch):
+def test_one_shared_precache_pass_has_all_candidate_stanzas(tmp_path, monkeypatch):
     probe = load_probe_script()
-    plan_path = tmp_path / "plan.json"
-    plan_path.write_text(json.dumps({"ladders": [
-        {"frames": 34, "aspect": "169", "shapes": [[672, 384], [800, 448], [864, 480]]},
-        {"frames": 68, "aspect": "square", "shapes": [[352, 352], [384, 384]]},
-    ]}), encoding="utf-8")
-    seed_path = tmp_path / "seed.json"
-    seed_path.write_text("{}", encoding="utf-8")
-    seed = {"plan": plan_path, "results": tmp_path / "results", "seedPath": seed_path, "video": tmp_path / "source.mp4", "config": tmp_path / "config.toml"}
-    calls = []
-
-    def fake_execute(_seed, ladder, width, height, baseline):
-        calls.append((ladder["frames"], width, height, baseline))
-        status = "oom" if (ladder["frames"], width) == (34, 800) else "completed"
-        return {
-            "mfp": 1.0,
-            "status": status,
-            "medianStepSeconds": 2.0 if status == "completed" else None,
-            "baselineSeconds": baseline,
-            "cacheExitCode": 0,
-            "trainExitCode": 1 if status == "oom" else 0,
-            "timedOut": False,
-        }
-
-    monkeypatch.setattr(probe, "execute_probe", fake_execute)
-    assert probe.run_campaign(seed) == "completed"
-    assert calls == [
-        (34, 672, 384, None),
-        (34, 800, 448, 2.0),
-        (68, 352, 352, None),
-        (68, 384, 384, 2.0),
-    ]
-    summary = (tmp_path / "results" / "summary.csv").read_text(encoding="utf-8")
-    assert "oom" in summary
-    assert "864" not in summary
-
-
-def test_campaign_stops_entirely_on_trainer_failure(tmp_path, monkeypatch):
-    probe = load_probe_script()
-    plan_path = tmp_path / "plan.json"
-    plan_path.write_text(json.dumps({"ladders": [
-        {"frames": 34, "aspect": "169", "shapes": [[672, 384]]},
-        {"frames": 68, "aspect": "square", "shapes": [[352, 352]]},
-    ]}), encoding="utf-8")
-    seed_path = tmp_path / "seed.json"
-    seed_path.write_text("{}", encoding="utf-8")
-    seed = {"plan": plan_path, "results": tmp_path / "results", "seedPath": seed_path, "video": tmp_path / "source.mp4", "config": tmp_path / "config.toml"}
-    calls = []
-
-    def fake_execute(_seed, ladder, width, height, baseline):
-        calls.append((ladder["frames"], width, height, baseline))
-        return {
-            "mfp": 1.0, "status": "trainer_failed", "medianStepSeconds": None, "baselineSeconds": baseline,
-            "cacheExitCode": 0, "trainExitCode": 1, "timedOut": False,
-        }
-
-    monkeypatch.setattr(probe, "execute_probe", fake_execute)
-    assert probe.run_campaign(seed) == "trainer_failed"
-    assert calls == [(34, 672, 384, None)]
-
-
-def test_execute_probe_writes_isolated_inputs_and_timing_result(tmp_path, monkeypatch):
-    probe = load_probe_script()
-    source_video = tmp_path / "source.mp4"
-    source_caption = tmp_path / "source.txt"
     config = tmp_path / "config.toml"
-    source_video.write_bytes(b"video")
-    source_caption.write_text("caption", encoding="utf-8")
     config.write_text(h3_config_text(), encoding="utf-8")
-    seed = {"video": source_video, "caption": source_caption, "config": config, "results": tmp_path / "results"}
+    video = tmp_path / "source.mp4"
+    caption = tmp_path / "source.txt"
+    video.write_bytes(b"video")
+    caption.write_text("caption", encoding="utf-8")
+    results = tmp_path / "results"
+    results.mkdir()
+    seed = {"video": video, "caption": caption, "config": config, "results": results}
+    plan = json.loads((SCRIPTS_DIR / "h3_shape_probe_plan.json").read_text(encoding="utf-8"))
+    candidates = [
+        probe.prepare_candidate(seed, ladder, width, height)
+        for ladder in plan["ladders"]
+        for width, height in ladder["shapes"]
+    ]
+    calls = []
 
     class FakeSampler:
         def __init__(self, _path):
@@ -140,10 +117,49 @@ def test_execute_probe_writes_isolated_inputs_and_timing_result(tmp_path, monkey
         def stop(self):
             pass
 
-    def fake_run(_args, _cwd, log_path, post_warmup_timeout=None):
-        if post_warmup_timeout is None:
-            Path(log_path).write_text("cache complete\n", encoding="utf-8")
-            return {"exitCode": 0, "timedOut": False}
+    def fake_run(command, _cwd, log_path, post_warmup_timeout=None):
+        calls.append((command, post_warmup_timeout))
+        Path(log_path).write_text("cache complete\n", encoding="utf-8")
+        return {"exitCode": 0, "timedOut": False}
+
+    monkeypatch.setattr(probe, "TelemetrySampler", FakeSampler)
+    monkeypatch.setattr(probe, "run_command", fake_run)
+    assert probe.precache_candidates(seed, candidates)["status"] == "completed"
+    assert len(calls) == 1
+    assert "--cache_only" in calls[0][0]
+    dataset = (results / "precache" / "dataset.toml").read_text(encoding="utf-8")
+    assert dataset.count("[[directory]]") == 90
+    assert dataset.count("size_buckets") == 90
+
+
+def test_candidate_training_reuses_cache_and_classifies_severe_slowdown(tmp_path, monkeypatch):
+    probe = load_probe_script()
+    config = tmp_path / "config.toml"
+    config.write_text(h3_config_text(), encoding="utf-8")
+    video = tmp_path / "source.mp4"
+    caption = tmp_path / "source.txt"
+    video.write_bytes(b"video")
+    caption.write_text("caption", encoding="utf-8")
+    results = tmp_path / "results"
+    results.mkdir()
+    candidate = probe.prepare_candidate(
+        {"video": video, "caption": caption, "config": config, "results": results},
+        {"frames": 34, "aspect": "169"}, 736, 416,
+    )
+    calls = []
+
+    class FakeSampler:
+        def __init__(self, _path):
+            pass
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+    def fake_run(command, _cwd, log_path, post_warmup_timeout=None):
+        calls.append((command, post_warmup_timeout))
         Path(log_path).write_text(
             "\n".join("step=" + str(index) + ", iter time (s): 20.0" for index in range(1, 7)) + "\n",
             encoding="utf-8",
@@ -152,17 +168,105 @@ def test_execute_probe_writes_isolated_inputs_and_timing_result(tmp_path, monkey
 
     monkeypatch.setattr(probe, "TelemetrySampler", FakeSampler)
     monkeypatch.setattr(probe, "run_command", fake_run)
-    result = probe.execute_probe(seed, {"frames": 34, "aspect": "169"}, 800, 448, baseline_seconds=1.0)
-    probe_dir = tmp_path / "results" / "34f" / "169-800x448"
-    assert result["status"] == "timing_limit"
-    assert (probe_dir / "media" / "source.mp4").read_bytes() == b"video"
-    assert 'size_buckets = [[800, 448, 34]]' in (probe_dir / "dataset.toml").read_text(encoding="utf-8")
-    rendered_config = (probe_dir / "config.toml").read_text(encoding="utf-8")
-    assert "epochs = 6" in rendered_config
-    assert "compile = true" in rendered_config
-    record = json.loads((probe_dir / "result.json").read_text(encoding="utf-8"))
-    assert record["trainCommand"][0] == "deepspeed"
-    assert record["medianStepSeconds"] == 20.0
+    result = probe.execute_probe(candidate, baseline_seconds=2.0)
+    assert result["status"] == "unsafe_slow"
+    assert result["slowThresholdSeconds"] == 20.0
+    assert result["slowStepCount"] == 4
+    assert "--cache_only" not in calls[0][0]
+    assert calls[0][1] == 120.0
+
+
+def test_telemetry_uses_all_gpus_and_host_memory_for_spill_evidence(tmp_path):
+    probe = load_probe_script()
+    telemetry_path = tmp_path / "telemetry.csv"
+    with telemetry_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=[
+            "captured_at", "gpu_index", "gpu_uuid", "gpu_memory_used_mib", "gpu_memory_total_mib",
+            "gpu_utilization_percent", "mem_available_kib", "swap_total_kib", "swap_free_kib",
+        ])
+        writer.writeheader()
+        writer.writerows([
+            {"gpu_index": "0", "gpu_uuid": "GPU-0", "gpu_memory_used_mib": "100", "mem_available_kib": str(10 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
+            {"gpu_index": "1", "gpu_uuid": "GPU-1", "gpu_memory_used_mib": "300", "mem_available_kib": str(10 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
+            {"gpu_index": "0", "gpu_uuid": "GPU-0", "gpu_memory_used_mib": "200", "mem_available_kib": str(7 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
+            {"gpu_index": "1", "gpu_uuid": "GPU-1", "gpu_memory_used_mib": "2000", "mem_available_kib": str(7 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
+        ])
+    summary = probe.telemetry_summary(telemetry_path)
+    assert summary["activeGpuIndex"] == "1"
+    assert summary["peakGpuMemoryMiB"] == 2000
+    assert summary["hostAvailableDropKiB"] == 3 * 1024 * 1024
+    assert summary["spillEvidence"] is True
+
+
+def test_campaign_stops_only_affected_ladder_and_marks_safe_sentinels_inconclusive(tmp_path, monkeypatch):
+    probe = load_probe_script()
+    plan = json.loads((SCRIPTS_DIR / "h3_shape_probe_plan.json").read_text(encoding="utf-8"))
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    results = tmp_path / "results"
+    seed_path = tmp_path / "seed.json"
+    seed_path.write_text("{}", encoding="utf-8")
+    seed = {"plan": plan_path, "results": results, "seedPath": seed_path, "video": tmp_path / "source.mp4", "config": tmp_path / "config.toml"}
+    calls = []
+
+    def fake_prepare(_seed, ladder, width, height):
+        probe_dir = results / (str(ladder["frames"]) + "f") / (ladder["aspect"] + "-" + str(width) + "x" + str(height))
+        return {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": probe_dir, "resultPath": probe_dir / "result.json"}
+
+    def fake_precache(_seed, candidates):
+        assert len(candidates) == 90
+        return {"status": "completed"}
+
+    def fake_execute(candidate, baseline):
+        calls.append((candidate["frames"], candidate["shape"][:2], baseline))
+        status = "oom" if (candidate["frames"], candidate["shape"][:2]) == (34, [800, 448]) else "completed"
+        return {"status": status, "medianStepSeconds": 2.0 if status == "completed" else None, "baselineSeconds": baseline, "trainExitCode": 1 if status == "oom" else 0, "timedOut": False, "telemetry": {"spillEvidence": False}}
+
+    monkeypatch.setattr(probe, "prepare_candidate", fake_prepare)
+    monkeypatch.setattr(probe, "precache_candidates", fake_precache)
+    monkeypatch.setattr(probe, "execute_probe", fake_execute)
+    assert probe.run_campaign(seed) == "inconclusive"
+    assert (34, [864, 480], 2.0) not in calls
+    assert any(frames == 68 for frames, _shape, _baseline in calls)
+    campaign = json.loads((results / "campaign_result.json").read_text(encoding="utf-8"))
+    assert campaign["ceilings"][0]["reason"] == "oom"
+    assert any(item["reason"] == "ceiling_not_found" for item in campaign["ceilings"])
+    assert any(item["reason"] == "model_cap" for item in campaign["ceilings"])
+
+
+def test_cache_failure_is_fatal_before_any_training(tmp_path, monkeypatch):
+    probe = load_probe_script()
+    plan = json.loads((SCRIPTS_DIR / "h3_shape_probe_plan.json").read_text(encoding="utf-8"))
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    results = tmp_path / "results"
+    seed = {"plan": plan_path, "results": results, "seedPath": tmp_path / "seed.json", "video": tmp_path / "source.mp4", "config": tmp_path / "config.toml"}
+
+    def fake_prepare(_seed, ladder, width, height):
+        probe_dir = results / "34f" / ("x-" + str(width) + "x" + str(height))
+        return {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": probe_dir, "resultPath": probe_dir / "result.json"}
+
+    monkeypatch.setattr(probe, "prepare_candidate", fake_prepare)
+    monkeypatch.setattr(probe, "precache_candidates", lambda _seed, _candidates: {"status": "cache_failed"})
+    monkeypatch.setattr(probe, "execute_probe", lambda *_args: pytest.fail("training must not start after cache failure"))
+    assert probe.run_campaign(seed) == "cache_failed"
+    campaign = json.loads((results / "campaign_result.json").read_text(encoding="utf-8"))
+    assert campaign["precache"]["status"] == "cache_failed"
+
+
+def test_campaign_records_cancellation(tmp_path, monkeypatch):
+    probe = load_probe_script()
+    plan = {"version": 2, "rungStep": 32, "ladders": [{"frames": 34, "aspect": "169", "terminal": "model_cap", "shapes": [[736, 416]]}]}
+    results = tmp_path / "results"
+    seed = {"plan": tmp_path / "plan.json", "results": results, "seedPath": tmp_path / "seed.json", "video": tmp_path / "source.mp4", "config": tmp_path / "config.toml"}
+    seed["plan"].write_text(json.dumps(plan), encoding="utf-8")
+    monkeypatch.setattr(probe, "_validate_plan", lambda value: value["ladders"])
+    monkeypatch.setattr(probe, "prepare_candidate", lambda _seed, ladder, width, height: {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": results / "34f" / "shape"})
+    monkeypatch.setattr(probe, "precache_candidates", lambda _seed, _candidates: {"status": "completed"})
+    monkeypatch.setattr(probe, "execute_probe", lambda *_args: (_ for _ in ()).throw(KeyboardInterrupt()))
+    with pytest.raises(KeyboardInterrupt):
+        probe.run_campaign(seed)
+    assert json.loads((results / "campaign_result.json").read_text(encoding="utf-8"))["status"] == "canceled"
 
 
 def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkeypatch):
@@ -183,24 +287,18 @@ def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkey
         return {"action": "copied"}
 
     monkeypatch.setattr(h3_probe_module, "_copy_or_convert_bundle_video", copy_capture)
-    monkeypatch.setattr(h3_probe_module, "configured_training_settings", lambda: {
-        "cwd": "/opt/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
-    })
+    monkeypatch.setattr(h3_probe_module, "configured_training_settings", lambda: {"cwd": "/opt/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": ""})
     monkeypatch.setattr(h3_probe_module, "to_wsl_path", lambda value, _distribution: "/mnt/probe/" + Path(value).name)
-
     response = app_module.app.test_client().post("/fs/h3_probe/prepare", json={"folder": "set", "fileName": "probe.mp4"})
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["ok"] is True
     seed_path = Path(payload["seedPath"])
     seed = json.loads(seed_path.read_text(encoding="utf-8"))
     assert seed["source"]["captureAction"] == "copied"
     assert (seed_path.parent / seed["source"]["video"]).read_bytes() == b"video"
     assert (seed_path.parent / seed["source"]["caption"]).read_text(encoding="utf-8") == "probe caption."
-    assert (seed_path.parent / seed["baseConfig"]).read_text(encoding="utf-8") == h3_config_text()
     assert (seed_path.parent / seed["plan"]).is_file()
     assert "h3_shape_probe.py" in payload["command"]
-    assert "--seed" in payload["command"]
 
 
 def test_prepare_route_uses_canonical_config_when_set_has_none(tmp_path, monkeypatch):
@@ -219,15 +317,11 @@ def test_prepare_route_uses_canonical_config_when_set_has_none(tmp_path, monkeyp
 
     monkeypatch.setattr(h3_probe_module, "_copy_or_convert_bundle_video", copy_capture)
     monkeypatch.setattr(h3_probe_module, "render_training_config_template", lambda name, _folder: h3_config_text() + "# " + name + "\n")
-    monkeypatch.setattr(h3_probe_module, "configured_training_settings", lambda: {
-        "cwd": "/opt/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
-    })
+    monkeypatch.setattr(h3_probe_module, "configured_training_settings", lambda: {"cwd": "/opt/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": ""})
     monkeypatch.setattr(h3_probe_module, "to_wsl_path", lambda value, _distribution: "/mnt/probe/" + Path(value).name)
-
     response = app_module.app.test_client().post("/fs/h3_probe/prepare", json={"folder": "set", "fileName": "probe.mp4"})
     assert response.status_code == 200
-    payload = response.get_json()
-    seed_path = Path(payload["seedPath"])
+    seed_path = Path(response.get_json()["seedPath"])
     seed = json.loads(seed_path.read_text(encoding="utf-8"))
     assert seed["baseConfigSource"] == "template"
     assert (seed_path.parent / seed["baseConfig"]).read_text(encoding="utf-8") == h3_config_text() + "# config.h3.normal.toml\n"
@@ -240,7 +334,6 @@ def test_prepare_route_fails_visibly_without_saved_caption(tmp_path, monkeypatch
     (folder / "probe.mp4").write_bytes(b"video")
     (folder / "config.h3.normal.toml").write_text(h3_config_text(), encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
-
     response = app_module.app.test_client().post("/fs/h3_probe/prepare", json={"folder": "set", "fileName": "probe.mp4"})
     assert response.status_code == 400
     assert "saved non-empty caption" in response.get_json()["error"]

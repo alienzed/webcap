@@ -213,7 +213,7 @@ The user selects a real source clip from the current set. WebCap validates that 
 
 The source does not need to match every candidate aspect ratio. Each probe has exactly one configured bucket, so Diffusion Pipe produces the target tensor shape through its normal resize/crop path. Content quality is irrelevant; the objective is allocation behavior.
 
-For every candidate, create a fresh one-item immutable probe bundle. Capture the source clip and caption using the normal profile-FPS bundle policy, so the probe uses the same normalized video input as a training run. Never reuse a latent cache between different shapes.
+For every candidate, create a fresh one-item immutable probe bundle. Capture the source clip and caption using the normal profile-FPS bundle policy, so the probe uses the same normalized video input as a training run. The H3 practical-ceiling probe materializes all candidates before training, then uses one master cache-only pass with one distinct dataset stanza and bucket per candidate. Candidate training processes reuse that prepared cache; no candidate starts another cache-only pass.
 
 Each probe dataset contains one video stanza and one bucket:
 
@@ -236,16 +236,16 @@ Do not alter compile, dtype, micro-batch, activation checkpointing, optimizer, o
 
 ## Probe Execution
 
-Run candidates cheapest-to-most-expensive within each role/aspect ladder. Use a completely fresh trainer process for every candidate so OOM or allocator fragmentation cannot contaminate the next result.
+Run candidates cheapest-to-most-expensive within each role/aspect ladder. Use a completely fresh trainer process for every candidate so OOM or allocator fragmentation cannot contaminate the next result. The H3 campaign is a fixed 90-shape plan: 17f and 34f stop at their useful 768p-class model caps, while 68f and 102f stop at one >30 MFP sentinel. A safe sentinel is `ceiling_not_found`, never a discovered ceiling.
 
 For each candidate:
 
 1. Verify the managed training runner is idle and no conflicting GPU process is present.
 2. Create the one-shape probe bundle.
-3. Populate that probe's cache using the same H3 cache behavior required by the selected runtime.
-4. Start a fresh training process with the probe config.
+3. Run the single master cache pass before any candidate training.
+4. Start a fresh training process with the candidate config and prepared cache.
 5. Ignore the first two optimizer-step timings as compile/warm-up.
-6. Measure steps three and four.
+6. Measure steps three through six.
 7. Capture exit status, stdout/stderr, peak GPU memory, GPU utilization, host available memory, and WSL swap-free samples.
 8. Terminate the process group and wait for GPU memory to return near its pre-probe baseline.
 9. Classify the result and either continue or stop that ladder.
@@ -278,13 +278,9 @@ Do not label a run as “swapping” from step time alone. Step slowdown is a sa
 
 The first completed safe candidate in each role establishes the role baseline. It is not rejected merely for exceeding an absolute duration.
 
-For later candidates, classify as `unsafe_slow` only when:
+For later candidates, classify as `unsafe_slow` only when the median of the four measured steps is at least `max(20 seconds, 2.5 × role baseline)` and at least three measured steps cross that threshold. A post-warm-up stall timeout is `max(120 seconds, 20 × role baseline)`.
 
-- both measured steps exceed 20 seconds;
-- their median exceeds 2.5 times the role baseline; and
-- swap-free, available-memory, or sustained utilization telemetry supports memory pressure.
-
-Without corroborating telemetry, mark the candidate `inconclusive`, not unsafe.
+Query every GPU and identify the active device from its movement over idle. Record host available memory and swap-free space. A slowdown is still practical without memory corroboration; only call VRAM-to-RAM spill confirmed when it coincides with a ≥2 GiB available-memory decline or ≥1 GiB swap-free decline.
 
 Stop a role/aspect ladder after the first `unsafe_oom` or `unsafe_slow`. Stop the entire calibration on `failed`, because subsequent results would not be trustworthy. An `inconclusive` candidate pauses and asks the user whether to retry or end calibration.
 

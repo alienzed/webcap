@@ -2,7 +2,7 @@ This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-08-24.
 
 ## Enhancements / Ideas
-- Provide the ability to resume from existing LoRA weights, rather than from a saved checkpoint, which is already supported.
+- [LoRA initializer runs](lora_initializer.md): start a new run from an existing LoRA directory without resuming checkpoint state.
 
 ## Backlog (Do Not Implement Yet)
 - Verify on the training machine whether direct H3 training safely performs required caching and how cache freshness should be determined before removing the separate WebCap `--cache_only` phase.

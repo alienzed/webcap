@@ -119,6 +119,7 @@ function setTrainingDetailTab(tab, options) {
     button.setAttribute('aria-selected', active ? 'true' : 'false');
   });
   syncWorkspaceConfigEditorUi();
+  syncTrainingConsoleUi();
 }
 
 function requestTrainingDetailTab(tab) {

@@ -258,6 +258,8 @@ def telemetry_summary(path):
     swap_free = [value for value in swap_free if value is not None]
     active_group = active[3] if active else []
     peak_memory = max([_telemetry_int(row, "gpu_memory_used_mib") for row in active_group], default=None)
+    memory_totals = [_telemetry_int(row, "gpu_memory_total_mib") for row in active_group]
+    memory_totals = [value for value in memory_totals if value is not None]
     first_available = host_available[0] if host_available else None
     first_swap_free = swap_free[0] if swap_free else None
     min_available = min(host_available) if host_available else None
@@ -268,11 +270,12 @@ def telemetry_summary(path):
         "activeGpuIndex": active[2] if active else "",
         "activeGpuUuid": active_group[0].get("gpu_uuid") if active_group else "",
         "peakGpuMemoryMiB": peak_memory,
+        "gpuMemoryTotalMiB": memory_totals[0] if memory_totals else None,
         "minHostAvailableKiB": min_available,
         "minSwapFreeKiB": min_swap_free,
         "hostAvailableDropKiB": available_drop,
         "swapFreeDropKiB": swap_drop,
-        "spillEvidence": bool((available_drop or 0) >= 2 * 1024 * 1024 or (swap_drop or 0) >= 1024 * 1024),
+        "memoryPressureEvidence": bool((available_drop or 0) >= 2 * 1024 * 1024 or (swap_drop or 0) >= 1024 * 1024),
     }
 
 
@@ -332,8 +335,10 @@ def run_command(args, cwd, log_path, post_warmup_timeout=None):
     return {"exitCode": process.returncode, "timedOut": timed_out}
 
 
-def probe_command(config_path, cache_only=False):
-    command = ["deepspeed", "--num_gpus=1", "train.py", "--deepspeed", "--config", str(config_path), "--trust_cache"]
+def probe_command(config_path, cache_only=False, trust_cache=False):
+    command = ["deepspeed", "--num_gpus=1", "train.py", "--deepspeed", "--config", str(config_path)]
+    if trust_cache:
+        command.append("--trust_cache")
     if cache_only:
         command.append("--cache_only")
     return command
@@ -349,7 +354,7 @@ def append_summary(path, row):
     with target.open("a", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=[
             "frames", "aspect", "width", "height", "mfp", "status", "baseline_seconds", "slow_threshold_seconds",
-            "median_seconds", "slow_step_count", "train_exit_code", "timed_out", "terminal_reason", "cache_wave",
+            "median_seconds", "slow_step_count", "train_exit_code", "timed_out", "terminal_reason",
             "active_gpu_index", "peak_gpu_memory_mib", "min_host_available_kib", "min_swap_free_kib", "spill_evidence", "probe_dir",
         ])
         if not exists:
@@ -366,16 +371,17 @@ def candidate_name(frames, aspect, width, height):
     return str(frames) + "f/" + str(aspect) + "-" + str(width) + "x" + str(height)
 
 
-def prepare_candidate(seed, ladder, width, height, media_dir, work_root):
+def prepare_candidate(seed, ladder, width, height, work_root):
     frames = int(ladder["frames"])
     aspect = str(ladder["aspect"])
     probe_dir = seed["results"] / candidate_name(frames, aspect, width, height)
-    media_dir = Path(media_dir)
+    media_dir = Path(work_root) / "media" / candidate_name(frames, aspect, width, height)
     output_dir = Path(work_root) / "outputs" / candidate_name(frames, aspect, width, height)
     config_path = probe_dir / "config.toml"
     dataset_path = probe_dir / "dataset.toml"
     probe_dir.mkdir(parents=True, exist_ok=False)
     output_dir.mkdir(parents=True, exist_ok=True)
+    materialize_probe_media(seed["video"], seed["caption"], media_dir)
     write_probe_dataset(dataset_path, media_dir, width, height, frames)
     config_text = seed["config"].read_text(encoding="utf-8")
     config_path.write_text(build_probe_config(config_text, dataset_path, output_dir), encoding="utf-8")
@@ -389,7 +395,9 @@ def prepare_candidate(seed, ladder, width, height, media_dir, work_root):
         "configPath": config_path,
         "datasetPath": dataset_path,
         "trainLog": probe_dir / "train.log",
+        "cacheLog": probe_dir / "cache.log",
         "telemetryPath": probe_dir / "telemetry.csv",
+        "cacheTelemetryPath": probe_dir / "cache_telemetry.csv",
         "resultPath": probe_dir / "result.json",
     }
     write_json(probe_dir / "request.json", {
@@ -397,69 +405,51 @@ def prepare_candidate(seed, ladder, width, height, media_dir, work_root):
         "aspect": aspect,
         "shape": candidate["shape"],
         "mfp": candidate["mfp"],
-        "cacheWave": 1,
-        "precache": "../../precache",
-        "trainCommand": probe_command(config_path),
+        "cacheCommand": probe_command(config_path, cache_only=True),
+        "trainCommand": probe_command(config_path, trust_cache=True),
     })
     return candidate
 
 
-def write_precache_dataset(path, media_dir, candidates):
-    lines = []
-    for candidate in candidates:
-        width, height, frames = candidate["shape"]
-        lines.extend([
-            "[[directory]]",
-            "path = \"" + str(Path(media_dir)).replace("\\", "/") + "\"",
-            "num_repeats = 1",
-            "group = \"videos\"",
-            "size_buckets = [[" + str(width) + ", " + str(height) + ", " + str(frames) + "]]",
-            "",
-        ])
-    Path(path).write_text("\n".join(lines), encoding="utf-8")
-
-
-def precache_candidates(seed, candidates, work_root):
-    precache_dir = seed["results"] / "precache"
-    precache_dir.mkdir(parents=True, exist_ok=False)
-    output_dir = Path(work_root) / "outputs" / "precache"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    dataset_path = precache_dir / "dataset.toml"
-    config_path = precache_dir / "config.toml"
-    cache_log = precache_dir / "cache.log"
-    telemetry_path = precache_dir / "telemetry.csv"
-    result_path = precache_dir / "result.json"
-    write_precache_dataset(dataset_path, candidates[0]["mediaDir"], candidates)
-    config_text = seed["config"].read_text(encoding="utf-8")
-    config_path.write_text(build_probe_config(config_text, dataset_path, output_dir), encoding="utf-8")
-    command = probe_command(config_path, cache_only=True)
-    write_json(precache_dir / "request.json", {
-        "candidateCount": len(candidates),
-        "cacheCommand": command,
-        "candidates": [{"shape": candidate["shape"], "probeDir": str(candidate["probeDir"].relative_to(seed["results"]))} for candidate in candidates],
-    })
-    sampler = TelemetrySampler(telemetry_path)
-    sampler.start()
-    try:
-        command_result = run_command(command, Path.cwd(), cache_log)
-    finally:
-        sampler.stop()
-    cache_text = read_log(cache_log)
-    status = "completed" if command_result["exitCode"] == 0 else "cache_oom" if log_has_oom(cache_text) else "cache_failed"
-    result = {
-        "status": status,
-        "candidateCount": len(candidates),
-        "cacheCommand": command,
-        "cacheExitCode": command_result["exitCode"],
-        "telemetry": telemetry_summary(telemetry_path),
-    }
-    write_result(result_path, **result)
-    return result
-
-
-def execute_probe(candidate, baseline_seconds):
+def execute_probe(candidate, baseline_seconds, on_train_start=None):
     width, height, frames = candidate["shape"]
-    train_command = probe_command(candidate["configPath"])
+    cache_command = probe_command(candidate["configPath"], cache_only=True)
+    cache_sampler = TelemetrySampler(candidate["cacheTelemetryPath"])
+    cache_sampler.start()
+    try:
+        cache_result = run_command(cache_command, Path.cwd(), candidate["cacheLog"])
+    finally:
+        cache_sampler.stop()
+    cache_text = read_log(candidate["cacheLog"])
+    cache_telemetry = telemetry_summary(candidate["cacheTelemetryPath"])
+    if cache_result["exitCode"] != 0:
+        status = "oom" if log_has_oom(cache_text) else "cache_failed"
+        result = {
+            "frames": candidate["frames"],
+            "aspect": candidate["aspect"],
+            "shape": [width, height, frames],
+            "mfp": candidate["mfp"],
+            "status": status,
+            "terminalReason": "cache_oom" if status == "oom" else "cache_failed",
+            "cacheCommand": cache_command,
+            "cacheExitCode": cache_result["exitCode"],
+            "cacheTelemetry": cache_telemetry,
+            "trainCommand": None,
+            "trainExitCode": None,
+            "timedOut": False,
+            "measuredStepSeconds": [],
+            "medianStepSeconds": None,
+            "baselineSeconds": baseline_seconds,
+            "slowThresholdSeconds": None,
+            "slowStepCount": 0,
+            "telemetry": {},
+        }
+        write_result(candidate["resultPath"], **result)
+        return result
+
+    train_command = probe_command(candidate["configPath"], trust_cache=True)
+    if on_train_start is not None:
+        on_train_start()
     sampler = TelemetrySampler(candidate["telemetryPath"])
     sampler.start()
     try:
@@ -482,12 +472,17 @@ def execute_probe(candidate, baseline_seconds):
         status = "unsafe_slow"
     else:
         status = "completed"
+    telemetry = telemetry_summary(candidate["telemetryPath"])
+    telemetry["spillEvidence"] = bool(status == "unsafe_slow" and telemetry.get("memoryPressureEvidence"))
     result = {
         "frames": candidate["frames"],
         "aspect": candidate["aspect"],
         "shape": [width, height, frames],
         "mfp": candidate["mfp"],
         "status": status,
+        "cacheCommand": cache_command,
+        "cacheExitCode": cache_result["exitCode"],
+        "cacheTelemetry": cache_telemetry,
         "trainCommand": train_command,
         "trainExitCode": train_result["exitCode"],
         "timedOut": train_result["timedOut"],
@@ -496,7 +491,7 @@ def execute_probe(candidate, baseline_seconds):
         "baselineSeconds": baseline_seconds,
         "slowThresholdSeconds": slow_threshold,
         "slowStepCount": slow_step_count,
-        "telemetry": telemetry_summary(candidate["telemetryPath"]),
+        "telemetry": telemetry,
     }
     if status in ("oom", "unsafe_slow"):
         result["terminalReason"] = status
@@ -550,7 +545,6 @@ def _summary_row(candidate, result, terminal_reason=""):
         "train_exit_code": result.get("trainExitCode") if result.get("trainExitCode") is not None else "",
         "timed_out": result.get("timedOut", False),
         "terminal_reason": terminal_reason,
-        "cache_wave": 1,
         "active_gpu_index": telemetry.get("activeGpuIndex") or "",
         "peak_gpu_memory_mib": telemetry.get("peakGpuMemoryMiB") or "",
         "min_host_available_kib": telemetry.get("minHostAvailableKiB") or "",
@@ -576,39 +570,34 @@ def run_campaign(seed):
         "baseConfig": str(seed["config"]),
         "plan": plan,
     })
-    candidates_by_ladder = []
-    candidates = []
     campaign_status = "completed"
     ceilings = []
-    cache_result = None
     try:
-        media_dir = work_root / "media"
-        materialize_probe_media(seed["video"], seed["caption"], media_dir)
         for ladder in ladders:
-            ladder_candidates = []
-            for shape in ladder["shapes"]:
-                candidate = prepare_candidate(seed, ladder, int(shape[0]), int(shape[1]), media_dir, work_root)
-                ladder_candidates.append(candidate)
-                candidates.append(candidate)
-            candidates_by_ladder.append((ladder, ladder_candidates))
-        cache_result = precache_candidates(seed, candidates, work_root)
-        if cache_result["status"] != "completed":
-            campaign_status = cache_result["status"]
-            return campaign_status
-        for ladder, ladder_candidates in candidates_by_ladder:
             baseline = None
             last_safe = None
             first_unsafe = None
             terminal_reason = ""
-            for candidate_index, candidate in enumerate(ladder_candidates):
+            result = None
+            for candidate_index, shape in enumerate(ladder["shapes"]):
+                candidate = prepare_candidate(seed, ladder, int(shape[0]), int(shape[1]), work_root)
                 width, height, _frames = candidate["shape"]
-                print("[h3-probe] " + str(candidate["frames"]) + "f " + candidate["aspect"] + " " + str(width) + "x" + str(height), flush=True)
-                result = execute_probe(candidate, baseline)
+                label = str(candidate["frames"]) + "f " + candidate["aspect"] + " " + str(width) + "x" + str(height)
+                print("[h3-probe] " + label + " cache", flush=True)
+                result = execute_probe(candidate, baseline, on_train_start=lambda: print("[h3-probe] " + label + " train", flush=True))
+                peak_mib = (result.get("telemetry") or {}).get("peakGpuMemoryMiB")
+                median_seconds = result.get("medianStepSeconds")
+                details = []
+                if median_seconds is not None:
+                    details.append("median=" + format(float(median_seconds), ".3f") + "s")
+                if peak_mib is not None:
+                    details.append("peak_vram=" + format(float(peak_mib) / 1024.0, ".1f") + "GiB")
+                print("[h3-probe] " + label + " " + result["status"] + (" · " + " · ".join(details) if details else ""), flush=True)
                 if result["status"] == "completed":
                     last_safe = candidate["shape"]
                     if baseline is None:
                         baseline = result.get("medianStepSeconds")
-                    if candidate_index == len(ladder_candidates) - 1:
+                    if candidate_index == len(ladder["shapes"]) - 1:
                         terminal_reason = "ceiling_not_found" if ladder["terminal"] == "sentinel" else "model_cap"
                         result["terminalReason"] = terminal_reason
                         write_result(candidate["resultPath"], **result)
@@ -653,7 +642,6 @@ def run_campaign(seed):
         write_json(results_root / "campaign_result.json", {
             "status": campaign_status,
             "completedAt": utc_now(),
-            "precache": cache_result,
             "ceilings": ceilings,
         })
     return campaign_status

@@ -6,9 +6,9 @@ The H3 probe is an external, fixed 90-shape experiment that measures the largest
 
 Right-click a representative video in WebCap and select **Prepare H3 envelope probe…**. WebCap captures that exact video, its saved sidecar caption, base config, and the immutable campaign plan under `.webcap_training/h3-probes/`, then copies a command to the clipboard. It uses the set's `config.h3.normal.toml` when present; otherwise it creates a probe-local config from WebCap's canonical H3 Normal template.
 
-Run the command in the configured training WSL environment with the GPU idle. The runner creates two sibling directories: `work/` holds the captured media, bucket-specific cache artifacts, and trainer outputs; `results/` holds portable diagnostic evidence. It performs exactly one `--cache_only --trust_cache` process. Its dataset has 90 one-bucket directory entries, all pointing to the same `work/media/` path, so Diffusion Pipe materializes a cache for every probe shape.
+Run the command in the configured training WSL environment with the GPU idle. The runner creates two sibling directories: `work/` holds per-candidate media/cache artifacts and trainer outputs; `results/` holds portable diagnostic evidence. It runs one candidate at a time: a fresh cache-only process creates the cache for that candidate's one bucket, then a fresh training process reuses that exact cache.
 
-After a successful cache pass, every candidate starts in a fresh training process with `--trust_cache`, using the same media path with its one selected bucket; candidates never launch cache-only themselves. Candidate configs, datasets, logs, telemetry, and results remain under `results/`, while trainer outputs remain under `work/outputs/`. A cache failure is fatal preparation failure. An OOM or unsafe slowdown stops only that ladder; all other ladders continue.
+Each candidate has its own `work/media/<frames>f/<shape>/` directory, so its Diffusion Pipe cache cannot be shared with another bucket. The cache-only process does not use `--trust_cache`; the following training process does, because it reuses the unchanged cache just created for that exact candidate. Candidate configs, datasets, cache logs, cache telemetry, training logs, training telemetry, and results remain under `results/`, while media/cache and trainer outputs remain under `work/`. A cache failure other than OOM stops the campaign. A cache OOM, training OOM, or unsafe slowdown stops only that ladder; all other ladders continue.
 
 Copy `results/` when inspecting or sharing a campaign. `source/` and `work/` are intentionally retained, potentially large runtime material.
 
@@ -17,11 +17,14 @@ h3-<campaign-id>/
   source/                 captured input video and caption
   base/                   captured config and plan
   work/                   media cache and trainer outputs
-    media/
+    media/<frames>f/<shape>/
     outputs/
   results/                portable evidence to inspect or share
-    precache/
     <frames>f/<shape>/
+      cache.log
+      cache_telemetry.csv
+      train.log
+      telemetry.csv
     summary.csv
     campaign_result.json
 ```

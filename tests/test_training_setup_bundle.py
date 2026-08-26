@@ -244,9 +244,9 @@ def test_mode_templates_use_the_approved_learning_rate_ladder(tmp_path):
         "config.krea2.poc.toml": 8e-5,
         "config.krea2.normal.toml": 6e-5,
         "config.krea2.quality.toml": 4e-5,
-        "config.h3.poc.toml": 1e-4,
-        "config.h3.normal.toml": 7e-5,
-        "config.h3.quality.toml": 5e-5,
+        "config.h3.poc.toml": 8e-5,
+        "config.h3.normal.toml": 6e-5,
+        "config.h3.quality.toml": 4e-5,
     }
     for name, learning_rate in expected.items():
         parsed = tomllib.loads(render_training_config_template(name, tmp_path))

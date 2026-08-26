@@ -213,7 +213,7 @@ The user selects a real source clip from the current set. WebCap validates that 
 
 The source does not need to match every candidate aspect ratio. Each probe has exactly one configured bucket, so Diffusion Pipe produces the target tensor shape through its normal resize/crop path. Content quality is irrelevant; the objective is allocation behavior.
 
-For every candidate, create a fresh one-item immutable probe bundle. Capture the source clip and caption using the normal profile-FPS bundle policy, so the probe uses the same normalized video input as a training run. The H3 practical-ceiling probe materializes all candidates before training, then uses one master cache-only pass with one distinct dataset stanza and bucket per candidate. Candidate training processes reuse that prepared cache; no candidate starts another cache-only pass.
+For every candidate, create a fresh one-item immutable probe bundle. Capture the source clip and caption using the normal profile-FPS bundle policy, so the probe uses the same normalized video input as a training run. The H3 practical-ceiling probe creates, caches, and trains one candidate at a time. Each candidate has its own media directory and Diffusion Pipe cache namespace; its fresh training process reuses only the cache created for that same candidate.
 
 Each probe dataset contains one video stanza and one bucket:
 
@@ -242,8 +242,8 @@ For each candidate:
 
 1. Verify the managed training runner is idle and no conflicting GPU process is present.
 2. Create the one-shape probe bundle.
-3. Run the single master cache pass before any candidate training.
-4. Start a fresh training process with the candidate config and prepared cache.
+3. Run a fresh cache-only process for that candidate and wait for it to exit.
+4. Start a fresh training process with the candidate config and its prepared cache.
 5. Ignore the first two optimizer-step timings as compile/warm-up.
 6. Measure steps three through six.
 7. Capture exit status, stdout/stderr, peak GPU memory, GPU utilization, host available memory, and WSL swap-free samples.

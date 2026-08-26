@@ -405,17 +405,17 @@ def prepare_candidate(seed, ladder, width, height, media_dir, work_root):
 
 
 def write_precache_dataset(path, media_dir, candidates):
-    lines = [
-        "[[directory]]",
-        "path = \"" + str(Path(media_dir)).replace("\\", "/") + "\"",
-        "num_repeats = 1",
-        "group = \"videos\"",
-        "size_buckets = [",
-    ]
+    lines = []
     for candidate in candidates:
         width, height, frames = candidate["shape"]
-        lines.append("  [" + str(width) + ", " + str(height) + ", " + str(frames) + "],")
-    lines.append("]")
+        lines.extend([
+            "[[directory]]",
+            "path = \"" + str(Path(media_dir)).replace("\\", "/") + "\"",
+            "num_repeats = 1",
+            "group = \"videos\"",
+            "size_buckets = [[" + str(width) + ", " + str(height) + ", " + str(frames) + "]]",
+            "",
+        ])
     Path(path).write_text("\n".join(lines), encoding="utf-8")
 
 

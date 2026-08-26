@@ -137,8 +137,8 @@ def test_one_shared_precache_pass_uses_one_media_path_for_all_buckets(tmp_path, 
         "path": str(media_dir).replace("\\", "/"),
         "num_repeats": 1,
         "group": "videos",
-        "size_buckets": [candidate["shape"] for candidate in candidates],
-    }]
+        "size_buckets": [candidate["shape"]],
+    } for candidate in candidates]
     assert (media_dir / video.name).is_file()
     assert (media_dir / caption.name).is_file()
     assert not list(results.rglob("media"))

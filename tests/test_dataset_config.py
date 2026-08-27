@@ -7,6 +7,8 @@ from PIL import Image
 import tool.server.app as app_module
 import tool.server.run_ops as run_ops_module
 from tool.server.dataset_config import (
+    H3_VIDEO_MODE_CEILINGS,
+    H3_VIDEO_MFP_LIMIT,
     choose_video_detail_bucket,
     coerce_frames,
     choose_image_resolution_classes,
@@ -20,6 +22,7 @@ from tool.server.dataset_config import (
     read_epochs_from_training_config,
     repeat_targets_for_mode,
     video_resolution_cap,
+    mfp,
 )
 from tool.server.training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID
 
@@ -189,8 +192,8 @@ def test_h3_dataset_uses_its_frame_grid_for_mixed_media_and_poc(tmp_path):
     video_blocks = [block for block in text.split("[[directory]]") if 'group = "videos"' in block]
     video_repeats = [int(block.split("num_repeats = ", 1)[1].splitlines()[0]) for block in video_blocks]
     assert video_repeats[0] == video_repeats[1] * 2
-    assert "MiniMax H3 motion bucket 352x352 @ 68" in report
-    assert "MiniMax H3 detail bucket 512x512 @ 34" in report
+    assert "MiniMax H3 temporal bucket 352x352 @ 68" in report
+    assert "MiniMax H3 hybrid bucket 512x512 @ 34" in report
     plan = json.loads((set_folder / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))
     assert set(plan["stages"]) == {"h3"}
     assert plan["stages"]["h3"]["estimatedSteps"] > 0
@@ -208,7 +211,7 @@ def test_h3_dataset_rejects_a_video_only_set_with_no_34_frame_clip(tmp_path):
     try:
         generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     except ValueError as exc:
-        assert "at least 34 frames" in str(exc)
+        assert "at least 17 frames" in str(exc)
     else:
         raise AssertionError("MiniMax H3 generation should reject a set with no usable media.")
 
@@ -220,7 +223,7 @@ def test_h3_dataset_warns_when_a_short_clip_is_excluded_from_a_usable_set(tmp_pa
     report = generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
-    assert "excluded 1 MiniMax H3 clip(s) shorter than 34 frames" in report
+    assert "spatial tier omitted; requires 3 native clips" in report
     assert 'group = "videos"' not in text
     assert ", 1]" in text
 
@@ -261,6 +264,74 @@ def test_h3_quality_video_uses_the_normal_safe_bucket_table(tmp_path):
     assert "[352, 352, 68]" in text
     assert "[512, 512, 34]" in text
     assert all(f", {frames}]" not in text for frames in (13, 17, 102, 136))
+
+
+def test_h3_normal_adds_spatial_tier_for_three_native_high_resolution_clips(tmp_path):
+    set_folder = tmp_path / "set"
+    auto_dataset = set_folder / "auto_dataset"
+    video_dir = auto_dataset / "square"
+    video_dir.mkdir(parents=True)
+    videos = []
+    for index in range(3):
+        name = f"clip_{index}.mp4"
+        (video_dir / name).write_bytes(b"video")
+        videos.append({
+            "file": name, "ar": "square", "width": 1024, "height": 1024,
+            "fps": 24, "frames": 136, "prepared_path": "square/" + name, "caption": True,
+        })
+    (auto_dataset / "prep_manifest.json").write_text(json.dumps({
+        "version": 1, "videos": videos, "images": [], "skipped": [],
+        "selection": {"mode": "all", "selected_files": [row["file"] for row in videos], "selected_count": 3, "total_count": 3, "criteria": {}},
+    }), encoding="utf-8")
+    (set_folder / "config.h3.normal.toml").write_text("epochs = 100\n", encoding="utf-8")
+
+    report = generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+    assert "[352, 352, 68]" in text
+    assert "[512, 512, 34]" in text
+    assert "[768, 768, 17]" in text
+    assert text.count('group = "videos"') == 3
+    video_blocks = [block for block in text.split("[[directory]]") if 'group = "videos"' in block]
+    repeats = [int(block.split("num_repeats = ", 1)[1].splitlines()[0]) for block in video_blocks]
+    assert repeats == [40, 20, 10]
+    assert "MiniMax H3 spatial bucket 768x768 @ 17" in report
+
+
+def test_h3_allows_three_short_native_spatial_clips_without_hybrid_or_temporal(tmp_path):
+    set_folder = tmp_path / "set"
+    auto_dataset = set_folder / "auto_dataset"
+    video_dir = auto_dataset / "square"
+    video_dir.mkdir(parents=True)
+    videos = []
+    for index in range(3):
+        name = f"clip_{index}.mp4"
+        (video_dir / name).write_bytes(b"video")
+        videos.append({
+            "file": name, "ar": "square", "width": 768, "height": 768,
+            "fps": 24, "frames": 20, "prepared_path": "square/" + name, "caption": True,
+        })
+    (auto_dataset / "prep_manifest.json").write_text(json.dumps({
+        "version": 1, "videos": videos, "images": [], "skipped": [],
+        "selection": {"mode": "all", "selected_files": [row["file"] for row in videos], "selected_count": 3, "total_count": 3, "criteria": {}},
+    }), encoding="utf-8")
+
+    report = generate_dataset_configs(set_folder, mode="quality", profile_id=MINIMAX_H3_PROFILE_ID)
+    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+    assert text.count('group = "videos"') == 1
+    assert "[768, 768, 17]" in text
+    assert ", 34]" not in text
+    assert ", 68]" not in text
+    assert "spatial bucket 768x768 @ 17" in report
+
+
+def test_h3_initial_mode_ceilings_stay_inside_the_conservative_cell_limit():
+    frames_by_role = {"temporal": 68, "hybrid": 34, "spatial": 17}
+    for by_aspect in H3_VIDEO_MODE_CEILINGS.values():
+        for ceilings in by_aspect.values():
+            for role, (width, height) in ceilings.items():
+                assert mfp(width, height, frames_by_role[role]) <= H3_VIDEO_MFP_LIMIT
 
 
 def test_model_native_frame_estimates_prefer_duration_then_source_rate_then_raw_frames():
@@ -314,14 +385,14 @@ def test_h3_bucket_selection_tolerates_small_upscale_and_falls_back_for_smaller_
     _write_h3_video_manifest(tolerated, 34, ar="169", size=(585, 334))
     generate_dataset_configs(tolerated, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     tolerated_text = (tolerated / "dataset.train.toml").read_text(encoding="utf-8")
-    assert "[672, 384, 34]" in tolerated_text
+    assert "[576, 320, 34]" in tolerated_text
 
     fallback = tmp_path / "fallback"
     _write_h3_video_manifest(fallback, 34, ar="169", size=(500, 280))
     generate_dataset_configs(fallback, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     fallback_text = (fallback / "dataset.train.toml").read_text(encoding="utf-8")
-    assert "[512, 288, 34]" in fallback_text
-    assert "\n  [672, 384, 34]" not in fallback_text
+    assert "[448, 256, 34]" in fallback_text
+    assert "\n  [576, 320, 34]" not in fallback_text
 
 
 def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_path):

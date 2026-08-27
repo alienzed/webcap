@@ -13,7 +13,7 @@ App Settings can hide profiles that are not used. This affects only new-run sele
 | Wan2.1 T2V 14B | Images and videos | `config.wan21.{mode}.toml`, matching dataset file | Train |
 | MiniMax H3 | Images and videos | `config.h3.{mode}.toml`, matching dataset file | Train |
 
-Krea2 Raw rejects video data. Wan2.1, Wan2.2, and MiniMax H3 accept images and videos. MiniMax H3 uses its native video frame grid: POC uses 34 frames, while Normal and Quality select from 136, 102, 68, and 34 frames according to clip coverage. Clips shorter than 34 frames are excluded, and H3 does not generate the Wan-specific 13-frame detail stanza.
+Krea2 Raw rejects video data. Wan2.1, Wan2.2, and MiniMax H3 accept images and videos. MiniMax H3 POC uses a fixed 34-frame training bucket. Normal and Quality use overlapping 68-frame temporal, 34-frame hybrid, and 17-frame spatial training classes (weighted `2 : 1 : 0.5`): compatible long high-resolution clips may contribute to all three, while a qualifying 17–33-frame high-resolution clip can contribute to spatial detail alone. Temporal permits 10% per-axis upscale; hybrid and spatial are native-resolution-only. These training tiers are not inference-length rules, and H3 does not generate the Wan-specific 13-frame detail stanza.
 
 ## Launch output identity
 
@@ -33,7 +33,7 @@ Selecting a profile and mode creates missing TOMLs. Dataset creation and Reset c
 
 - For video-capable profiles, captured videos already within 0.1 FPS of the model rate are copied unchanged. Other videos are converted inside the fresh bundle to constant 16 FPS for Wan or 24 FPS for MiniMax H3, using high-quality H.264 settings while retaining audio and metadata where the container supports them. If conversion is unavailable or fails, WebCap logs a warning and copies the original unchanged rather than blocking the run.
 - Wan2.2 writes separate high-noise and low-noise dataset files.
-- Krea2, Wan2.1, and MiniMax H3 write mode-specific dataset files; H3 applies its model-specific video frame grid while retaining WebCap's image buckets and target-step planning.
+- Krea2, Wan2.1, and MiniMax H3 write mode-specific dataset files; H3 applies its capability-aware video classes while retaining WebCap's image buckets and target-step planning. Normal and Quality keep separately stored, initially identical conservative shape ceilings so later reviewed calibration can update policy data without changing class or bundle behavior.
 - POC, Normal, and Quality modes affect calculated buckets and template learning rates. Repeat targeting is based on configured epochs and the dataset shape.
 - Managed jobs use the profile's own plan entry for per-run progress, completion ETA, and next-checkpoint ETA when the trainer logs sufficient timing information.
 

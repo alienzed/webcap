@@ -178,7 +178,103 @@ def test_bundle_skips_video_only_after_conversion_and_copy_both_fail(tmp_path, m
     }]
     assert (bundle["path"] / "media" / "square" / "good.mp4").is_file()
     assert not (bundle["path"] / "media" / "square" / "bad.mp4").exists()
-    assert _fake_wsl(bundle["path"] / "media" / "square") in bundle["artifacts"]["h3Dataset"].read_text(encoding="utf-8")
+    captured_dataset = bundle["artifacts"]["h3Dataset"].read_text(encoding="utf-8")
+    class_dir = bundle["path"] / "media" / "video_classes" / "h3" / "square__352x352x68"
+    assert _fake_wsl(class_dir) in captured_dataset
+    assert "size_buckets = [[352, 352, 68]]" in captured_dataset
+    assert (class_dir / "good.mp4").is_file()
+
+
+def test_h3_bundle_materializes_overlapping_video_classes(tmp_path, monkeypatch):
+    media_root = tmp_path / "media"
+    source_dir = media_root / "square"
+    source_dir.mkdir(parents=True)
+    rows = [
+        ("long_high.mp4", 768, 768, 80),
+        ("long_low.mp4", 320, 320, 80),
+        ("short_high.mp4", 768, 768, 20),
+    ]
+    videos = []
+    for name, width, height, frames in rows:
+        (source_dir / name).write_bytes(name.encode("ascii"))
+        (source_dir / Path(name).with_suffix(".txt")).write_text("caption", encoding="utf-8")
+        videos.append({
+            "file": name, "prepared_path": "square/" + name,
+            "width": width, "height": height, "fps": 24,
+            "frames": frames, "duration": frames / 24.0,
+        })
+    text = (
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\nnum_repeats = 2\ngroup = "videos"\nsize_buckets = [[352, 352, 68]]\n\n'
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\nnum_repeats = 1\ngroup = "videos"\nsize_buckets = [[512, 512, 34]]\n\n'
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\nnum_repeats = 1\ngroup = "videos"\nsize_buckets = [[768, 768, 17]]\n'
+    )
+    manifest = {"images": [], "videos": videos}
+    monkeypatch.setattr(training_bundle, "to_wsl_path", _fake_wsl)
+
+    rendered = training_bundle._materialize_dataset_config(
+        text, media_root, "", manifest, "h3", profile_id="minimax_h3", mode="normal",
+    )
+
+    assert "size_buckets = [[352, 352, 68]]" in rendered
+    assert "size_buckets = [[512, 512, 34]]" in rendered
+    assert "size_buckets = [[768, 768, 17]]" in rendered
+    temporal = media_root / "video_classes" / "h3" / "square__352x352x68"
+    hybrid = media_root / "video_classes" / "h3" / "square__512x512x34"
+    spatial = media_root / "video_classes" / "h3" / "square__768x768x17"
+    assert {path.name for path in temporal.glob("*.mp4")} == {"long_high.mp4", "long_low.mp4"}
+    assert {path.name for path in hybrid.glob("*.mp4")} == {"long_high.mp4"}
+    assert {path.name for path in spatial.glob("*.mp4")} == {"long_high.mp4", "short_high.mp4"}
+    assignments = {row["file"]: row["videoClassAssignments"]["h3"] for row in manifest["videos"]}
+    assert len(assignments["long_high.mp4"]) == 3
+    assert assignments["long_low.mp4"] == [{
+        "bucket": [352, 352, 68], "compatibility": "slight_upscale",
+        "directory": "video_classes/h3/square__352x352x68",
+    }]
+    assert assignments["short_high.mp4"] == [{
+        "bucket": [768, 768, 17], "compatibility": "native",
+        "directory": "video_classes/h3/square__768x768x17",
+    }]
+
+
+def test_h3_bundle_rejects_duplicate_video_bucket_declarations(tmp_path):
+    media_root = tmp_path / "media"
+    source_dir = media_root / "square"
+    source_dir.mkdir(parents=True)
+    (source_dir / "clip.mp4").write_bytes(b"video")
+    (source_dir / "clip.txt").write_text("caption", encoding="utf-8")
+    text = (
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\ngroup = "videos"\nsize_buckets = [[352, 352, 68]]\n\n'
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\ngroup = "videos"\nsize_buckets = [[352, 352, 68]]\n'
+    )
+    manifest = {"images": [], "videos": [{
+        "file": "clip.mp4", "prepared_path": "square/clip.mp4", "width": 512, "height": 512,
+        "fps": 24, "frames": 80, "duration": 80 / 24.0,
+    }]}
+
+    with pytest.raises(ValueError, match="Duplicate H3 video bucket"):
+        training_bundle._materialize_dataset_config(
+            text, media_root, _fake_wsl, manifest, "h3", profile_id="minimax_h3", mode="quality",
+        )
+
+
+def test_h3_bundle_rejects_a_video_only_config_when_every_class_is_empty(tmp_path):
+    media_root = tmp_path / "media"
+    source_dir = media_root / "square"
+    source_dir.mkdir(parents=True)
+    (source_dir / "clip.mp4").write_bytes(b"video")
+    (source_dir / "clip.txt").write_text("caption", encoding="utf-8")
+    text = (
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\ngroup = "videos"\nsize_buckets = [[768, 768, 17]]\n'
+    )
+    manifest = {"images": [], "videos": [{
+        "file": "clip.mp4", "prepared_path": "square/clip.mp4", "width": 320, "height": 320,
+        "fps": 24, "frames": 20, "duration": 20 / 24.0,
+    }]}
+
+    with pytest.raises(ValueError, match="No configured image or video class remains"):
+        training_bundle._materialize_dataset_config(
+            text, media_root, _fake_wsl, manifest, "h3", profile_id="minimax_h3", mode="normal",
+        )
 
 
 def test_bundle_fails_when_video_capture_leaves_no_media(tmp_path, monkeypatch):

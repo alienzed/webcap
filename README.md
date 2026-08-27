@@ -364,7 +364,7 @@ Behavior:
 - each Train action owns a separate bundle and cache; Wan2.2 HI and LO from one action share that bundle
 - Krea2 Raw requires image-only media; Wan2.1, Wan2.2, and MiniMax H3 accept images and videos
 - Video bucket eligibility uses the model's native timebase (16 fps for Wan, 24 fps for MiniMax H3); Diffusion Pipe performs the actual resampling while caching latents
-- MiniMax H3 video config uses a 34-frame POC bucket or selects from 136, 102, 68, and 34 frames for Normal and Quality; shorter clips are excluded
+- MiniMax H3 POC uses a fixed 34-frame bucket. Normal and Quality use overlapping temporal (68-frame), hybrid (34-frame), and spatial (17-frame) classes; a long high-resolution clip may enter all compatible classes, while a 17–33-frame high-resolution clip may train spatial detail alone
 - zero visible media and missing required captions or TOML paths fail visibly
 - `Train this set` starts immediately when idle or adds the selected run behind current work; Wan2.2 HI -> LO queues independent HI and LO jobs
 - active jobs expose per-run progress, completion ETA, next-checkpoint ETA, effective output identity/folder, logs, queue-pause/finish controls, explicit queue start/resume, and resume-from-checkpoint controls; queued resumes show checkpoint-derived progress

@@ -903,16 +903,21 @@ function renderTrainingRunner() {
       ? 'The runner is launching training.'
       : status === 'stopping'
         ? 'The runner is stopping after the requested action.'
-        : 'Training runner status: ' + statusLabel + '.';
+      : 'Training runner status: ' + statusLabel + '.';
   var running = status === 'starting' || status === 'running' || status === 'stopping';
-  var canScheduleFinish = status === 'starting' || status === 'running';
+  var finishProgress = job.progress && typeof job.progress === 'object' ? job.progress : {};
+  var finishAfterEpoch = Number(job.finishAfterEpoch);
+  var canScheduleFinish = (isFinite(finishAfterEpoch) && finishAfterEpoch > 0) || ((status === 'starting' || status === 'running') &&
+    Number(finishProgress.epoch) > 0 &&
+    Number(finishProgress.epochs) > 0 &&
+    Number(finishProgress.saveEveryNEpochs) > 0 &&
+    ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(String(finishProgress.stage || '')) !== -1);
   var queued = status === 'queued';
   var queueState = trainingWorkspaceState.runnerQueuePaused
     ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + (activeCount ? ' — waiting for the current run to stop' : ' — Resume will start the first item') + '</span>'
     : '';
   var selectedQueuePosition = queued ? queuedJobs.indexOf(job) + 1 : 0;
   var runOutputPath = String(job.outputRunPath || '').trim();
-  var finishAfterEpoch = Number(job.finishAfterEpoch);
   var finishScheduleTitle = isFinite(finishAfterEpoch) && finishAfterEpoch > 0
     ? 'Finish after epoch ' + Math.round(finishAfterEpoch) + ' saves. Click to change or cancel.'
     : 'Schedule Finish after a saved epoch';

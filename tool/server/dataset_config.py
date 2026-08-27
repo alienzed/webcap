@@ -92,27 +92,28 @@ VIDEO_MFP_LIMIT = 11000
 # for aligned dimensions; 800x448 at 34 frames has been verified trainable and
 # is near the practical ceiling.
 H3_VIDEO_MFP_LIMIT = 11900
-H3_VIDEO_MAX_UPSCALE = 1.15
-H3_VIDEO_BUCKET_TARGETS = {
-    "square": {
-        "motion": (352, 352, 68, 2.0),
-        "detail": (512, 512, 34, 1.0),
+# H3 defaults are deliberately app-owned policy.  The Normal and Quality tables
+# start at the same conservative ceiling; later training-machine calibration can
+# raise a Quality ceiling without changing class selection or bundle handling.
+H3_VIDEO_TIER_POLICY = {
+    "temporal": {"frames": 68, "repeat_weight": 2.0, "max_upscale": 1.10},
+    "hybrid": {"frames": 34, "repeat_weight": 1.0, "max_upscale": 1.0},
+    "spatial": {"frames": 17, "repeat_weight": 0.5, "max_upscale": 1.0, "min_support": 3},
+}
+H3_VIDEO_MODE_CEILINGS = {
+    "normal": {
+        "square": {"temporal": (352, 352), "hybrid": (512, 512), "spatial": (768, 768)},
+        "43": {"temporal": (416, 320), "hybrid": (608, 448), "spatial": (928, 704)},
+        "34": {"temporal": (320, 416), "hybrid": (448, 608), "spatial": (704, 928)},
+        "169": {"temporal": (448, 256), "hybrid": (800, 448), "spatial": (1088, 608)},
+        "916": {"temporal": (256, 448), "hybrid": (448, 800), "spatial": (608, 1088)},
     },
-    "43": {
-        "motion": (416, 320, 68, 2.0),
-        "detail": (608, 448, 34, 1.0),
-    },
-    "34": {
-        "motion": (320, 416, 68, 2.0),
-        "detail": (448, 608, 34, 1.0),
-    },
-    "169": {
-        "motion": (448, 256, 68, 2.0),
-        "detail": (800, 448, 34, 1.0),
-    },
-    "916": {
-        "motion": (256, 448, 68, 2.0),
-        "detail": (448, 800, 34, 1.0),
+    "quality": {
+        "square": {"temporal": (352, 352), "hybrid": (512, 512), "spatial": (768, 768)},
+        "43": {"temporal": (416, 320), "hybrid": (608, 448), "spatial": (928, 704)},
+        "34": {"temporal": (320, 416), "hybrid": (448, 608), "spatial": (704, 928)},
+        "169": {"temporal": (448, 256), "hybrid": (800, 448), "spatial": (1088, 608)},
+        "916": {"temporal": (256, 448), "hybrid": (448, 800), "spatial": (608, 1088)},
     },
 }
 VIDEO_DETAIL_FRAMES = 13
@@ -328,7 +329,8 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
         excluded_videos = sum(int(entry["sample_count"]) for entry in video_entries)
         lines.append(f"[INFO] Krea2 Raw: excluded {excluded_videos} prepared video(s).")
     if profile_id == MINIMAX_H3_PROFILE_ID and not lo_run_entries:
-        raise ValueError("MiniMax H3 requires at least one prepared image or one video with at least 34 frames.")
+        minimum_h3_frames = 34 if generate_mode == "poc" else 17
+        raise ValueError(f"MiniMax H3 requires at least one prepared image or one video with at least {minimum_h3_frames} frames.")
     hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
     default_hi_epochs, default_lo_epochs = default_training_config_epochs()
     config_paths = dict(config_paths or {})
@@ -485,10 +487,10 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
         clips = grouped.get(ar_label, [])
         if not clips:
             continue
-        minimum_frames = 34 if h3_profile else MIN_VIDEO_FRAMES_FOR_STATS
+        minimum_frames = 34 if h3_profile and generate_mode == "poc" else 17 if h3_profile else MIN_VIDEO_FRAMES_FOR_STATS
         too_short = [c for c in clips if c["frames"] is not None and c["frames"] < minimum_frames]
         if too_short and h3_profile:
-            lines.append(f"[WARN] {ar_label}: excluded {len(too_short)} MiniMax H3 clip(s) shorter than 34 frames.")
+            lines.append(f"[WARN] {ar_label}: excluded {len(too_short)} MiniMax H3 clip(s) shorter than {minimum_frames} frames.")
         usable_for_frames = [c for c in clips if c["frames"] is not None and c["frames"] >= minimum_frames]
         if not usable_for_frames:
             lines.append(f"[WARN] {ar_label}: no clips with usable frame metadata.")
@@ -496,18 +498,37 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
 
         if h3_profile and generate_mode != "poc":
             dir_path = (dataset_root / ar_label).as_posix()
-            for role, (target_w, target_h, role_frames, repeat_weight) in H3_VIDEO_BUCKET_TARGETS[ar_label].items():
-                selected = choose_video_bucket_resolution_capped(
-                    ar_label,
-                    usable_for_frames,
-                    role_frames,
-                    VIDEO_COVERAGE,
-                    H3_VIDEO_MFP_LIMIT,
-                    target_w,
-                    target_h,
-                    max_upscale=H3_VIDEO_MAX_UPSCALE,
-                )
+            ceilings = H3_VIDEO_MODE_CEILINGS[generate_mode][ar_label]
+            for role in ("temporal", "hybrid", "spatial"):
+                policy = H3_VIDEO_TIER_POLICY[role]
+                target_w, target_h = ceilings[role]
+                role_frames = policy["frames"]
+                if role == "spatial":
+                    selected = choose_h3_spatial_bucket(
+                        ar_label,
+                        usable_for_frames,
+                        target_w,
+                        target_h,
+                        ceilings["hybrid"],
+                        min_support=policy["min_support"],
+                    )
+                else:
+                    selected = choose_video_bucket_resolution_capped(
+                        ar_label,
+                        usable_for_frames,
+                        role_frames,
+                        VIDEO_COVERAGE,
+                        None,
+                        target_w,
+                        target_h,
+                        max_upscale=policy["max_upscale"],
+                    )
                 if not selected:
+                    if role == "spatial":
+                        lines.append(
+                            f"[INFO] {ar_label}: MiniMax H3 spatial tier omitted; requires {policy['min_support']} native clips above the hybrid target."
+                        )
+                        continue
                     lines.append(
                         f"[WARN] {ar_label}: no clips support MiniMax H3 {role} bucket @ {role_frames} frames."
                     )
@@ -523,7 +544,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
                     "dir_path": dir_path,
                     "buckets": [bucket],
                     "sample_count": selected["support"],
-                    "repeat_weight": repeat_weight,
+                    "repeat_weight": policy["repeat_weight"],
                     "resolution_cap": (target_w, target_h),
                 })
             continue
@@ -692,7 +713,7 @@ def choose_video_bucket_resolution_capped(
     clips,
     frames: int,
     coverage_threshold: float,
-    mfp_limit: int,
+    mfp_limit: int | None,
     max_w: int,
     max_h: int,
     max_upscale: float = 1.0,
@@ -710,7 +731,7 @@ def choose_video_bucket_resolution_capped(
     total = len(usable)
     best = None
     for (w, h, area) in candidates:
-        if mfp(w, h, frames) > mfp_limit:
+        if mfp_limit is not None and mfp(w, h, frames) > mfp_limit:
             continue
         support = 0
         for clip in usable:
@@ -730,6 +751,30 @@ def choose_video_bucket_resolution_capped(
         ):
             best = entry
     return best
+
+
+def choose_h3_spatial_bucket(ar_label: str, clips, max_w: int, max_h: int, hybrid_target, min_support: int = 3):
+    hybrid_area = int(hybrid_target[0]) * int(hybrid_target[1])
+    candidates = [
+        (w, h, area)
+        for (w, h, area) in generate_candidates(ar_label)
+        if w <= max_w and h <= max_h and area > hybrid_area
+    ]
+    usable = [clip for clip in clips if clip["frames"] is not None and clip["frames"] >= H3_VIDEO_TIER_POLICY["spatial"]["frames"]]
+    if not usable:
+        return None
+    for (w, h, area) in candidates:
+        support = sum(1 for clip in usable if clip["width"] >= w and clip["height"] >= h)
+        if support >= min_support:
+            return {
+                "width": w,
+                "height": h,
+                "area": area,
+                "support": support,
+                "total": len(usable),
+                "coverage": support / float(len(usable)),
+            }
+    return None
 
 
 def choose_video_detail_bucket(ar_label: str, clips, motion_w: int, motion_h: int, max_w=None, max_h=None):

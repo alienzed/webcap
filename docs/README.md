@@ -41,6 +41,7 @@ These describe implemented features, but they are narrower than `README.md` / `d
 
 These are useful product notes, not authoritative implementation references:
 
+- `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
 - `docs/ui_gold_master.md`
 - `docs/qa_panel.md`
 - `docs/generate_config_mode.md` - POC, Normal, and Quality mode behavior

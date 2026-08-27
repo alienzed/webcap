@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
+from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
 from .training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, config_for_stage, profile as training_profile
@@ -116,6 +117,7 @@ H3_VIDEO_MODE_CEILINGS = {
         "916": {"temporal": (256, 448), "hybrid": (448, 800), "spatial": (608, 1088)},
     },
 }
+H3_FRAME_TO_ROLE = {17: "spatial", 34: "hybrid", 68: "temporal"}
 VIDEO_DETAIL_FRAMES = 13
 VIDEO_DETAIL_MIN_COVERAGE = 0.35
 VIDEO_DETAIL_MIN_SUPPORT = 2
@@ -138,6 +140,52 @@ def normalize_training_generate_mode(mode):
     if text not in TRAINING_MODE_TARGETS:
         text = "normal"
     return text
+
+
+def h3_calibration_settings():
+    runtime_config = app_config.config if isinstance(app_config.config, dict) else {}
+    training = runtime_config.get("training") if isinstance(runtime_config.get("training"), dict) else {}
+    calibration = training.get("h3_calibration") if isinstance(training.get("h3_calibration"), dict) else None
+    return calibration
+
+
+def h3_video_mode_ceilings(mode: str):
+    """Return H3 ceilings after applying the small, settings-backed calibration layer."""
+    normalized_mode = normalize_training_generate_mode(mode)
+    if normalized_mode == "poc":
+        return {}, ""
+    ceilings = {
+        aspect: {role: tuple(shape) for role, shape in by_role.items()}
+        for aspect, by_role in H3_VIDEO_MODE_CEILINGS[normalized_mode].items()
+    }
+    calibration = h3_calibration_settings()
+    if not calibration:
+        return ceilings, ""
+    safe_shapes = calibration.get("safe_shapes") if isinstance(calibration.get("safe_shapes"), dict) else {}
+    calibrated = {}
+    for frame_key, by_aspect in safe_shapes.items():
+        try:
+            role = H3_FRAME_TO_ROLE.get(int(frame_key))
+        except (TypeError, ValueError):
+            role = None
+        if not role or not isinstance(by_aspect, dict):
+            continue
+        for aspect, shape in by_aspect.items():
+            if aspect not in ("169", "square", "43") or not isinstance(shape, list) or len(shape) != 2:
+                continue
+            calibrated[(aspect, role)] = (int(shape[0]), int(shape[1]))
+            if aspect == "169":
+                calibrated[("916", role)] = (int(shape[1]), int(shape[0]))
+            elif aspect == "43":
+                calibrated[("34", role)] = (int(shape[1]), int(shape[0]))
+    for (aspect, role), shape in calibrated.items():
+        built_in = H3_VIDEO_MODE_CEILINGS[normalized_mode][aspect][role]
+        if normalized_mode == "quality":
+            ceilings[aspect][role] = shape
+        elif shape[0] <= built_in[0] and shape[1] <= built_in[1]:
+            # Normal is allowed to become safer, never larger.
+            ceilings[aspect][role] = shape
+    return ceilings, str(calibration.get("campaign") or "")
 
 
 def repeat_targets_for_mode(mode: str):
@@ -483,6 +531,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
         })
 
     entries = []
+    h3_ceilings, h3_calibration_campaign = h3_video_mode_ceilings(generate_mode) if h3_profile and generate_mode != "poc" else ({}, "")
     for ar_label in AR_CLASSES.keys():
         clips = grouped.get(ar_label, [])
         if not clips:
@@ -498,18 +547,29 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
 
         if h3_profile and generate_mode != "poc":
             dir_path = (dataset_root / ar_label).as_posix()
-            ceilings = H3_VIDEO_MODE_CEILINGS[generate_mode][ar_label]
+            ceilings = h3_ceilings[ar_label]
+            selected_by_role = {}
+            if generate_mode == "quality" and h3_calibration_campaign:
+                lines.append(
+                    f"[INFO] {ar_label}: MiniMax H3 Quality uses calibration {h3_calibration_campaign}; "
+                    "avoid other GPU-heavy applications while training calibrated maximum buckets."
+                )
             for role in ("temporal", "hybrid", "spatial"):
                 policy = H3_VIDEO_TIER_POLICY[role]
                 target_w, target_h = ceilings[role]
                 role_frames = policy["frames"]
                 if role == "spatial":
+                    hybrid_selected = selected_by_role.get("hybrid")
+                    hybrid_floor = (
+                        (hybrid_selected["width"], hybrid_selected["height"])
+                        if hybrid_selected else H3_VIDEO_MODE_CEILINGS["normal"][ar_label]["hybrid"]
+                    )
                     selected = choose_h3_spatial_bucket(
                         ar_label,
                         usable_for_frames,
                         target_w,
                         target_h,
-                        ceilings["hybrid"],
+                        hybrid_floor,
                         min_support=policy["min_support"],
                     )
                 else:
@@ -533,6 +593,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
                         f"[WARN] {ar_label}: no clips support MiniMax H3 {role} bucket @ {role_frames} frames."
                     )
                     continue
+                selected_by_role[role] = selected
                 bucket = (selected["width"], selected["height"], role_frames)
                 lines.append(
                     f"[INFO] {ar_label}: MiniMax H3 {role} bucket {selected['width']}x{selected['height']} @ {role_frames} "

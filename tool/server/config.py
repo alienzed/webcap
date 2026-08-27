@@ -7,6 +7,7 @@ Centralized config and root path logic for the backend.
 from pathlib import Path
 import json
 import copy
+import os
 import re
 import traceback
 
@@ -19,6 +20,9 @@ CONFIG_EXAMPLE_PATH = Path(__file__).resolve().parents[1] / 'config.example.json
 config = {}
 FS_ROOT = Path(".")
 FS_DEBUG = False
+
+H3_CALIBRATION_FRAMES = {"17", "34", "68"}
+H3_CALIBRATION_ASPECTS = {"169", "square", "43"}
 
 
 def debug_print(*args, **kwargs):
@@ -81,6 +85,46 @@ def _normalize_wrapper_affix_value(value):
     return re.sub(r"\s+", " ", str(value or "").replace("\r", " ").replace("\n", " ").strip())
 
 
+def _validate_h3_calibration(value):
+    if not isinstance(value, dict):
+        raise ValueError("Config.training.h3_calibration must be an object.")
+    if int(value.get("version") or 0) != 1:
+        raise ValueError("Config.training.h3_calibration.version must be 1.")
+    campaign = str(value.get("campaign") or "").strip()
+    if not campaign:
+        raise ValueError("Config.training.h3_calibration.campaign is required.")
+    source_shapes = value.get("safe_shapes")
+    if not isinstance(source_shapes, dict):
+        raise ValueError("Config.training.h3_calibration.safe_shapes must be an object.")
+    safe_shapes = {}
+    for raw_frames, by_aspect in source_shapes.items():
+        frames = str(raw_frames)
+        if frames not in H3_CALIBRATION_FRAMES:
+            raise ValueError("Config.training.h3_calibration.safe_shapes has an unsupported frame count: " + frames)
+        if not isinstance(by_aspect, dict):
+            raise ValueError("Each Config.training.h3_calibration.safe_shapes entry must be an object.")
+        normalized_aspects = {}
+        for aspect, raw_shape in by_aspect.items():
+            aspect = str(aspect)
+            if aspect not in H3_CALIBRATION_ASPECTS:
+                raise ValueError("Config.training.h3_calibration.safe_shapes has an unsupported aspect: " + aspect)
+            if not isinstance(raw_shape, list) or len(raw_shape) != 2:
+                raise ValueError("Each calibrated H3 shape must be a two-value array.")
+            try:
+                width, height = (int(raw_shape[0]), int(raw_shape[1]))
+            except (TypeError, ValueError):
+                raise ValueError("Each calibrated H3 shape must contain integer dimensions.")
+            if width <= 0 or height <= 0 or width % 32 or height % 32:
+                raise ValueError("Each calibrated H3 shape must use positive dimensions divisible by 32.")
+            if aspect == "square" and width != height:
+                raise ValueError("A calibrated square H3 shape must have equal dimensions.")
+            if aspect in ("169", "43") and width <= height:
+                raise ValueError("A calibrated landscape H3 shape must be wider than tall.")
+            normalized_aspects[aspect] = [width, height]
+        safe_shapes[frames] = normalized_aspects
+    return {"version": 1, "campaign": campaign, "safe_shapes": safe_shapes}
+
+
 def validate_config_payload(payload):
     if not isinstance(payload, dict):
         raise ValueError("Config must be a JSON object.")
@@ -121,6 +165,8 @@ def validate_config_payload(payload):
     if not normalized_enabled_profiles:
         raise ValueError("At least one training profile must be enabled.")
     normalized_training["enabled_profiles"] = normalized_enabled_profiles
+    if "h3_calibration" in training:
+        normalized_training["h3_calibration"] = _validate_h3_calibration(training["h3_calibration"])
     if normalized_training:
         out["training"] = normalized_training
     elif "training" in out:
@@ -195,9 +241,11 @@ def load_config_from_disk():
 
 def save_config_to_disk(payload):
     normalized = apply_requirement_defaults(validate_config_payload(payload))
-    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+    temporary = CONFIG_PATH.with_suffix(CONFIG_PATH.suffix + ".tmp")
+    with open(temporary, 'w', encoding='utf-8') as f:
         json.dump(normalized, f, indent=2)
         f.write("\n")
+    os.replace(temporary, CONFIG_PATH)
     return normalized
 
 

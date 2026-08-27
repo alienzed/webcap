@@ -468,7 +468,7 @@ def execute_probe(candidate, baseline_seconds, on_train_start=None):
         status = "oom" if log_has_oom(train_text) else "trainer_failed"
     elif len(measured) < TOTAL_STEPS - WARMUP_STEPS:
         status = "trainer_failed"
-    elif slow_threshold is not None and median_seconds >= slow_threshold and slow_step_count >= 3:
+    elif slow_threshold is not None and median_seconds >= slow_threshold:
         status = "unsafe_slow"
     else:
         status = "completed"
@@ -647,12 +647,95 @@ def run_campaign(seed):
     return campaign_status
 
 
+def classify_saved_result(result, baseline_seconds):
+    """Re-evaluate saved evidence with the current safety rule.
+
+    This deliberately does not trust a prior ``completed`` label: older probes
+    required several slow post-warmup samples and could miss a clear CPU spill.
+    """
+    if not isinstance(result, dict):
+        return "trainer_failed", None
+    if result.get("timedOut"):
+        return "unsafe_slow", None
+    status = str(result.get("status") or "")
+    if status == "oom" or int(result.get("cacheExitCode") or 0) != 0 or int(result.get("trainExitCode") or 0) != 0:
+        return ("oom" if status == "oom" else "trainer_failed"), None
+    measured = result.get("measuredStepSeconds") if isinstance(result.get("measuredStepSeconds"), list) else []
+    measured = [float(value) for value in measured if float(value) > 0]
+    if len(measured) < TOTAL_STEPS - WARMUP_STEPS:
+        return "trainer_failed", None
+    median_seconds = statistics.median(measured)
+    threshold = max(20.0, float(baseline_seconds) * 2.5) if baseline_seconds else None
+    if threshold is not None and median_seconds >= threshold:
+        return "unsafe_slow", median_seconds
+    return "completed", median_seconds
+
+
+def calibration_settings_from_results(seed):
+    """Build the compact settings block from raw per-rung evidence."""
+    plan = read_json(seed["plan"])
+    ladders = _validate_plan(plan)
+    safe_shapes = {"17": {}, "34": {}, "68": {}}
+    for ladder in ladders:
+        frames = int(ladder["frames"])
+        if frames not in (17, 34, 68):
+            continue
+        baseline = None
+        last_safe = None
+        for shape in ladder["shapes"]:
+            width, height = int(shape[0]), int(shape[1])
+            result_path = seed["results"] / candidate_name(frames, ladder["aspect"], width, height) / "result.json"
+            if not result_path.is_file():
+                break
+            status, median_seconds = classify_saved_result(read_json(result_path), baseline)
+            if status == "completed":
+                last_safe = [width, height]
+                if baseline is None:
+                    baseline = median_seconds
+                continue
+            if status in ("oom", "unsafe_slow"):
+                break
+            raise ValueError("Calibration has an unusable " + status + " result for " + str(frames) + "f " + str(ladder["aspect"]) + ".")
+        if last_safe is None:
+            raise ValueError("Calibration has no safe shape for " + str(frames) + "f " + str(ladder["aspect"]) + ".")
+        safe_shapes[str(frames)][str(ladder["aspect"])] = last_safe
+    return {
+        "version": 1,
+        "campaign": str(seed["seed"].get("id") or seed["seedPath"].parent.name),
+        "safe_shapes": safe_shapes,
+    }
+
+
+def publish_calibration_settings(config_path, calibration):
+    path = Path(config_path)
+    config = read_json(path)
+    if not config:
+        raise ValueError("Could not read WebCap config for calibration publishing: " + str(path))
+    training = config.get("training")
+    if training is None:
+        training = {}
+        config["training"] = training
+    if not isinstance(training, dict):
+        raise ValueError("WebCap config training section must be an object.")
+    training["h3_calibration"] = calibration
+    write_json(path, config)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Run a prepared MiniMax H3 envelope probe.")
     parser.add_argument("--seed", required=True, help="Path to the WebCap-generated seed.json")
+    parser.add_argument("--summarize-results", action="store_true", help="Print a ready-to-paste H3 calibration settings block from saved results.")
+    parser.add_argument("--publish-config", help="Atomically publish the completed calibration into this WebCap config.json path.")
     args = parser.parse_args(argv)
     seed = load_seed(args.seed)
+    if args.summarize_results:
+        print(json.dumps(calibration_settings_from_results(seed), indent=2, sort_keys=True))
+        return 0
     status = run_campaign(seed)
+    if args.publish_config and status in ("completed", "inconclusive"):
+        calibration = calibration_settings_from_results(seed)
+        publish_calibration_settings(args.publish_config, calibration)
+        print("[h3-probe] published safe shapes to " + str(args.publish_config), flush=True)
     return 0 if status == "completed" else 1
 
 

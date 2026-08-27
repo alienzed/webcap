@@ -5,6 +5,7 @@ import json
 from PIL import Image
 
 import tool.server.app as app_module
+import tool.server.config as config_module
 import tool.server.run_ops as run_ops_module
 from tool.server.dataset_config import (
     H3_VIDEO_MODE_CEILINGS,
@@ -15,6 +16,7 @@ from tool.server.dataset_config import (
     generate_candidates,
     generate_image_candidates,
     generate_dataset_configs,
+    h3_video_mode_ceilings,
     image_alternatives,
     assign_images_to_resolution_classes,
     normalize_training_generate_mode,
@@ -332,6 +334,32 @@ def test_h3_initial_mode_ceilings_stay_inside_the_conservative_cell_limit():
         for ceilings in by_aspect.values():
             for role, (width, height) in ceilings.items():
                 assert mfp(width, height, frames_by_role[role]) <= H3_VIDEO_MFP_LIMIT
+
+
+def test_h3_calibration_overrides_quality_only_and_derives_portrait(monkeypatch):
+    monkeypatch.setattr(config_module, "config", {
+        "training": {
+            "h3_calibration": {
+                "version": 1,
+                "campaign": "h3-calibrated",
+                "safe_shapes": {
+                    "34": {"169": [896, 512]},
+                    "68": {"169": [576, 320]},
+                },
+            },
+        },
+    })
+    normal, _campaign = h3_video_mode_ceilings("normal")
+    quality, campaign = h3_video_mode_ceilings("quality")
+    poc, poc_campaign = h3_video_mode_ceilings("poc")
+
+    assert campaign == "h3-calibrated"
+    assert (poc, poc_campaign) == ({}, "")
+    assert normal["169"]["hybrid"] == (800, 448)
+    assert quality["169"]["hybrid"] == (896, 512)
+    assert quality["916"]["hybrid"] == (512, 896)
+    assert quality["169"]["temporal"] == (576, 320)
+    assert quality["square"]["hybrid"] == H3_VIDEO_MODE_CEILINGS["quality"]["square"]["hybrid"]
 
 
 def test_model_native_frame_estimates_prefer_duration_then_source_rate_then_raw_frames():

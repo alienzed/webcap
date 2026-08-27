@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
 import tool.server.app as app_module
 import tool.server.config as config_module
@@ -203,6 +204,32 @@ def test_validate_config_payload_defaults_all_training_profiles_and_rejects_none
         assert "At least one training profile" in str(exc)
     else:
         raise AssertionError("An empty enabled training profile list should fail loudly.")
+
+
+def test_validate_config_payload_preserves_h3_calibration_shapes():
+    normalized = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/sets", "models": ""},
+        "training": {
+            "h3_calibration": {
+                "version": 1,
+                "campaign": "h3-manual",
+                "safe_shapes": {"34": {"169": [896, 512]}},
+            },
+        },
+    })
+    assert normalized["training"]["h3_calibration"]["safe_shapes"]["34"]["169"] == [896, 512]
+
+    with pytest.raises(ValueError, match="divisible by 32"):
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/sets", "models": ""},
+            "training": {
+                "h3_calibration": {
+                    "version": 1,
+                    "campaign": "h3-manual",
+                    "safe_shapes": {"34": {"169": [895, 512]}},
+                },
+            },
+        })
 
 
 def test_training_profiles_route_only_returns_enabled_models(monkeypatch):

@@ -312,9 +312,65 @@ function runDefaceMediaItem(mediaItem, threshold) {
   );
 }
 
-function prepareH3EnvelopeProbe(mediaItem) {
-  setStatus('Preparing H3 envelope probe...');
-  fetch('/fs/h3_probe/prepare', {
+var h3ProbePollTimer = null;
+var h3ProbeLogOffset = 0;
+var h3ProbeActive = false;
+
+function pollH3CalibrationLog() {
+  if (h3ProbePollTimer) {
+    clearTimeout(h3ProbePollTimer);
+    h3ProbePollTimer = null;
+  }
+  fetch('/fs/h3_probe/log?offset=' + encodeURIComponent(h3ProbeLogOffset))
+    .then(function (response) { return response.json(); })
+    .then(function (payload) {
+      if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'Could not read H3 calibration output.');
+      if (payload.text) appendToConsolePanel(payload.text);
+      h3ProbeLogOffset = Number(payload.offset || h3ProbeLogOffset || 0);
+      h3ProbeActive = !!payload.active;
+      if (h3ProbeActive) {
+        h3ProbePollTimer = setTimeout(pollH3CalibrationLog, 1000);
+        return;
+      }
+      setStatus('H3 calibration ' + String(payload.status || 'finished') + '.');
+    })
+    .catch(function (error) {
+      setStatus('H3 calibration console update failed: ' + String(error && error.message ? error.message : error));
+    });
+}
+
+function refreshH3CalibrationStatus() {
+  fetch('/fs/h3_probe/status')
+    .then(function (response) { return response.json(); })
+    .then(function (payload) {
+      if (!payload || !payload.ok) return;
+      h3ProbeActive = !!payload.active;
+      if (h3ProbeActive) pollH3CalibrationLog();
+    })
+    .catch(function () {});
+}
+
+function stopH3Calibration() {
+  fetch('/fs/h3_probe/stop', { method: 'POST' })
+    .then(function (response) { return response.json(); })
+    .then(function (payload) {
+      if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'Could not stop H3 calibration.');
+      appendToConsolePanel('[h3-probe] Stop requested. Preserving partial results.\n');
+      setStatus('Stopping H3 calibration...');
+      h3ProbeActive = true;
+      pollH3CalibrationLog();
+    })
+    .catch(function (error) {
+      setStatus('H3 calibration stop failed: ' + String(error && error.message ? error.message : error));
+    });
+}
+
+function runH3Calibration(mediaItem) {
+  if (!confirm('Run H3 calibration using this video?\n\nThis is a long, GPU-intensive calibration. Avoid other GPU-heavy applications while it runs. Training remains available, but concurrent GPU work makes the results less reliable.')) return;
+  showConsolePanel();
+  appendToConsolePanel('[h3-probe] Preparing H3 calibration...\n');
+  setStatus('Starting H3 calibration...');
+  fetch('/fs/h3_probe/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ folder: state.folder, fileName: mediaItem.fileName })
@@ -337,14 +393,14 @@ function prepareH3EnvelopeProbe(mediaItem) {
       });
     })
     .then(function (payload) {
-      copyTextToClipboard(payload.command, function () {
-        setStatus('H3 envelope probe command copied. Seed: ' + payload.seedPath);
-      }, function (error) {
-        setStatus('H3 envelope probe prepared. Copy this command manually: ' + payload.command + ' (' + error.message + ')');
-      });
+      h3ProbeActive = true;
+      h3ProbeLogOffset = 0;
+      appendToConsolePanel('[h3-probe] Started ' + payload.probeId + '.\n');
+      setStatus('H3 calibration running. Output is in the console.');
+      pollH3CalibrationLog();
     })
     .catch(function (error) {
-      setStatus('H3 envelope probe preparation failed: ' + String(error && error.message ? error.message : error));
+      setStatus('H3 calibration start failed: ' + String(error && error.message ? error.message : error));
     });
 }
 
@@ -517,9 +573,13 @@ function buildMediaContextMenuActions(mediaItem, key) {
       }
     });
     actions.push({
-      label: 'Prepare H3 envelope probe...',
+      label: h3ProbeActive ? 'Stop H3 calibration' : 'Run H3 calibration using this video...',
       run: function () {
-        prepareH3EnvelopeProbe(mediaItem);
+        if (h3ProbeActive) {
+          stopH3Calibration();
+          return;
+        }
+        runH3Calibration(mediaItem);
       }
     });
   }
@@ -589,3 +649,5 @@ function buildMediaContextMenuActions(mediaItem, key) {
 
   return actions;
 }
+
+setTimeout(refreshH3CalibrationStatus, 0);

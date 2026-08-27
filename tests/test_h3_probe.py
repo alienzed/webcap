@@ -234,6 +234,33 @@ def test_cache_oom_stops_before_training(tmp_path, monkeypatch):
     assert len(calls) == 1
 
 
+def test_saved_result_reclassification_marks_single_clear_spill_unsafe():
+    probe = load_probe_script()
+    status, median = probe.classify_saved_result({
+        "status": "completed",
+        "cacheExitCode": 0,
+        "trainExitCode": 0,
+        "timedOut": False,
+        "measuredStepSeconds": [27.8, 28.1, 28.4, 28.7],
+    }, baseline_seconds=2.298)
+    assert status == "unsafe_slow"
+    assert median == pytest.approx(28.25)
+
+
+def test_publish_calibration_settings_updates_only_the_calibration_block(tmp_path):
+    probe = load_probe_script()
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({
+        "filesystem": {"root": "C:/sets", "models": ""},
+        "training": {"conda_environment": "dp"},
+    }), encoding="utf-8")
+    calibration = {"version": 1, "campaign": "h3-test", "safe_shapes": {"34": {"43": [800, 608]}}}
+    probe.publish_calibration_settings(config_path, calibration)
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["training"]["conda_environment"] == "dp"
+    assert saved["training"]["h3_calibration"] == calibration
+
+
 @pytest.mark.parametrize(("train_log", "expected_status"), [
     ("CUDA out of memory\n", "oom"),
     ("trainer exited unexpectedly\n", "trainer_failed"),
@@ -445,3 +472,39 @@ def test_prepare_route_fails_visibly_without_saved_caption(tmp_path, monkeypatch
     response = app_module.app.test_client().post("/fs/h3_probe/prepare", json={"folder": "set", "fileName": "probe.mp4"})
     assert response.status_code == 400
     assert "saved non-empty caption" in response.get_json()["error"]
+
+
+def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs"
+    probe_root = fs_root / ".webcap_training" / "h3-probes" / "h3-test"
+    probe_root.mkdir(parents=True)
+    seed_path = probe_root / "seed.json"
+    seed_path.write_text("{}", encoding="utf-8")
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
+    monkeypatch.setattr(config_module, "CONFIG_PATH", config_path)
+    monkeypatch.setattr(h3_probe_module, "prepare_h3_probe", lambda _folder, _file: {
+        "ok": True, "probeId": "h3-test", "seedPath": str(seed_path), "command": "ignored",
+    })
+    monkeypatch.setattr(h3_probe_module, "configured_training_settings", lambda: {
+        "cwd": "/pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
+    })
+    monkeypatch.setattr(h3_probe_module, "to_wsl_path", lambda value, _distribution: str(value))
+    launches = []
+
+    def fake_run_wsl(command, timeout, distribution):
+        launches.append(command)
+        return (0, "4242\n", "")
+
+    monkeypatch.setattr(h3_probe_module, "run_wsl", fake_run_wsl)
+    payload = h3_probe_module.start_h3_probe("set", "clip.mp4")
+    assert payload["status"] == "running"
+    assert "--publish-config" in launches[0]
+    runtime_path = probe_root / "runtime.json"
+    assert json.loads(runtime_path.read_text(encoding="utf-8"))["pid"] == 4242
+
+    monkeypatch.setattr(h3_probe_module, "_active_runtime_path", lambda: runtime_path)
+    stopped = h3_probe_module.stop_h3_probe()
+    assert stopped["status"] == "stopping"
+    assert any("kill -INT -- -4242" in command for command in launches)

@@ -22,7 +22,7 @@ from .training_history import history_payload as training_history_payload, all_h
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .prune_candidates import prune_candidates_response
 from .training_setup import ensure_training_setup
-from .h3_probe import prepare_h3_probe
+from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .training_runtime import repair_boot_critical_training_permissions, repair_configured_training_root_permissions
 from .permissions import normalize_path_permissions, run_with_directory_repair
 
@@ -379,6 +379,39 @@ def h3_probe_prepare_route():
     data = request.get_json(silent=True) or {}
     try:
         return jsonify(prepare_h3_probe(data.get("folder"), data.get("fileName")))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/h3_probe/start", methods=["POST"])
+def h3_probe_start_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(start_h3_probe(data.get("folder"), data.get("fileName")))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/h3_probe/status", methods=["GET"])
+def h3_probe_status_route():
+    try:
+        return jsonify(h3_probe_status())
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/h3_probe/log", methods=["GET"])
+def h3_probe_log_route():
+    try:
+        return jsonify(h3_probe_log(request.args.get("offset", 0)))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/h3_probe/stop", methods=["POST"])
+def h3_probe_stop_route():
+    try:
+        return jsonify(stop_h3_probe())
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 

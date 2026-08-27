@@ -1,6 +1,7 @@
 """Prepare isolated MiniMax H3 envelope-probe seeds for external execution."""
 
 import json
+import os
 import shutil
 import shlex
 import uuid
@@ -14,13 +15,14 @@ from .permissions import normalize_path_permissions
 from .training_bundle import _copy_or_convert_bundle_video
 from .training_config_files import render_training_config_template, training_config_template_path
 from .training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage
-from .training_runtime import activation_prefix, build_runtime_command, configured_training_settings, to_wsl_path
+from .training_runtime import activation_prefix, build_runtime_command, configured_training_settings, run_wsl, to_wsl_path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 PLAN_PATH = ROOT / "scripts" / "h3_shape_probe_plan.json"
 SCRIPT_PATH = ROOT / "scripts" / "h3_shape_probe.py"
 PROBE_ROOT_NAME = ".webcap_training"
+RUNTIME_FILE_NAME = "runtime.json"
 
 
 def _utc_now():
@@ -42,7 +44,7 @@ def _seed_relative(path, root):
     return Path(path).relative_to(root).as_posix()
 
 
-def _probe_command(seed_path, settings):
+def _probe_command(seed_path, settings, publish_config_path=None):
     distribution = settings["wslDistribution"]
     cwd = str(settings["cwd"] or "").strip()
     if not cwd:
@@ -50,8 +52,79 @@ def _probe_command(seed_path, settings):
     script_wsl = to_wsl_path(SCRIPT_PATH, distribution)
     seed_wsl = to_wsl_path(seed_path, distribution)
     python_command = "python " + shlex.quote(script_wsl) + " --seed " + shlex.quote(seed_wsl)
+    if publish_config_path:
+        python_command += " --publish-config " + shlex.quote(str(publish_config_path))
     python_command = build_runtime_command(settings, python_command)
     return "cd " + shlex.quote(cwd) + " && " + activation_prefix(settings) + python_command
+
+
+def _write_json(path, payload):
+    path = Path(path)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+    normalize_path_permissions(path)
+
+
+def _read_json(path):
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _runtime_path(probe_root):
+    return Path(probe_root) / RUNTIME_FILE_NAME
+
+
+def _campaign_result(probe_root):
+    return _read_json(Path(probe_root) / "results" / "campaign_result.json")
+
+
+def _runtime_is_live(runtime):
+    pid = int(runtime.get("pid") or 0)
+    distribution = str(runtime.get("wslDistribution") or "")
+    if pid <= 0:
+        return False
+    code, stdout, _stderr = run_wsl(
+        "if test -d /proc/" + str(pid) + "; then tr '\\0' ' ' < /proc/" + str(pid) + "/cmdline; fi",
+        timeout=8,
+        distribution=distribution,
+    )
+    command_line = (stdout or "").strip()
+    return code == 0 and "h3_shape_probe.py" in command_line
+
+
+def _refresh_runtime(runtime_path):
+    runtime = _read_json(runtime_path)
+    if not runtime:
+        raise FileNotFoundError("H3 calibration runtime state is missing.")
+    if runtime.get("status") in ("running", "stopping") and not _runtime_is_live(runtime):
+        campaign = _campaign_result(Path(runtime_path).parent)
+        runtime["status"] = str(campaign.get("status") or "failed")
+        runtime["finishedAt"] = _utc_now()
+        runtime["campaignStatus"] = campaign.get("status") or ""
+        _write_json(runtime_path, runtime)
+        if runtime.get("publishConfig"):
+            app_config.reload_runtime_config()
+    return runtime
+
+
+def _active_runtime_path():
+    root = Path(app_config.FS_ROOT) / PROBE_ROOT_NAME / "h3-probes"
+    if not root.is_dir():
+        return None
+    for path in root.glob("*/" + RUNTIME_FILE_NAME):
+        runtime = _refresh_runtime(path)
+        if runtime.get("status") in ("running", "stopping"):
+            return path
+    return None
+
+
+def _public_runtime(runtime):
+    fields = ("probeId", "status", "startedAt", "finishedAt", "campaignStatus", "pid", "seedPath")
+    return {field: runtime.get(field) for field in fields if field in runtime}
 
 
 def prepare_h3_probe(folder, file_name):
@@ -134,3 +207,77 @@ def prepare_h3_probe(folder, file_name):
         "seedPath": str(seed_path),
         "command": command,
     }
+
+
+def start_h3_probe(folder, file_name):
+    active = _active_runtime_path()
+    if active:
+        raise RuntimeError("An H3 calibration is already running. Stop it before starting another calibration.")
+    prepared = prepare_h3_probe(folder, file_name)
+    seed_path = Path(prepared["seedPath"])
+    probe_root = seed_path.parent
+    settings = configured_training_settings()
+    config_wsl = to_wsl_path(app_config.CONFIG_PATH, settings["wslDistribution"])
+    command = _probe_command(seed_path, settings, publish_config_path=config_wsl)
+    log_path = probe_root / "run.log"
+    log_wsl = to_wsl_path(log_path, settings["wslDistribution"])
+    launch = "setsid bash -lc " + shlex.quote(command) + " > " + shlex.quote(log_wsl) + " 2>&1 < /dev/null & echo $!"
+    code, stdout, stderr = run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])
+    pid = (stdout or "").strip().splitlines()[-1] if (stdout or "").strip() else ""
+    if code != 0 or not pid.isdigit():
+        raise RuntimeError((stderr or stdout or "Could not start H3 calibration.").strip())
+    runtime = {
+        "version": 1,
+        "probeId": prepared["probeId"],
+        "status": "running",
+        "startedAt": _utc_now(),
+        "pid": int(pid),
+        "seedPath": str(seed_path),
+        "logPath": str(log_path),
+        "wslDistribution": settings["wslDistribution"],
+        "publishConfig": True,
+    }
+    _write_json(_runtime_path(probe_root), runtime)
+    return {"ok": True, **_public_runtime(runtime)}
+
+
+def h3_probe_status():
+    path = _active_runtime_path()
+    if path:
+        return {"ok": True, "active": True, **_public_runtime(_read_json(path))}
+    root = Path(app_config.FS_ROOT) / PROBE_ROOT_NAME / "h3-probes"
+    candidates = sorted(root.glob("*/" + RUNTIME_FILE_NAME), key=lambda item: item.stat().st_mtime, reverse=True) if root.is_dir() else []
+    if not candidates:
+        return {"ok": True, "active": False}
+    runtime = _refresh_runtime(candidates[0])
+    return {"ok": True, "active": False, **_public_runtime(runtime)}
+
+
+def h3_probe_log(offset=0):
+    status = h3_probe_status()
+    seed_path = str(status.get("seedPath") or "")
+    if not seed_path:
+        return {"ok": True, "offset": 0, "text": "", "active": False}
+    log_path = Path(seed_path).parent / "run.log"
+    try:
+        payload = log_path.read_bytes()
+    except OSError:
+        payload = b""
+    start = max(0, min(int(offset or 0), len(payload)))
+    return {"ok": True, "offset": len(payload), "text": payload[start:].decode("utf-8", errors="replace"), "active": bool(status.get("active")), "status": status.get("status")}
+
+
+def stop_h3_probe():
+    path = _active_runtime_path()
+    if not path:
+        raise RuntimeError("No H3 calibration is running.")
+    runtime = _read_json(path)
+    pid = int(runtime.get("pid") or 0)
+    code, stdout, stderr = run_wsl(
+        "kill -INT -- -" + str(pid), timeout=8, distribution=str(runtime.get("wslDistribution") or "")
+    )
+    if code != 0:
+        raise RuntimeError((stderr or stdout or "Could not stop H3 calibration.").strip())
+    runtime["status"] = "stopping"
+    _write_json(path, runtime)
+    return {"ok": True, **_public_runtime(runtime)}

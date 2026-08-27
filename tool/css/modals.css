@@ -164,7 +164,7 @@
 .app-settings-dialog {
   width: min(980px, calc(100vw - 30px));
   max-height: calc(100vh - 30px);
-  overflow: auto;
+  overflow: hidden;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -173,6 +173,54 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.app-settings-tabs {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.app-settings-tab {
+  appearance: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.app-settings-tab:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.app-settings-tab.active {
+  color: var(--accent-dark);
+  border-bottom-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.app-settings-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.app-settings-tab-panels {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.app-settings-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
 }
 
 .app-settings-header {
@@ -353,11 +401,15 @@
 }
 
 #app-settings-json {
-  margin-top: 6px;
   width: 100%;
-  min-height: 180px;
+  min-height: 260px;
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 12px;
+}
+
+.app-settings-danger-zone {
+  border-color: #fecaca;
+  background: #fff7f7;
 }
 
 .app-settings-status {
@@ -389,6 +441,15 @@ html[data-theme="dark"] .app-settings-section,
 html[data-theme="dark"] .app-settings-advanced {
   background: #111827;
   border-color: var(--border);
+}
+
+html[data-theme="dark"] .app-settings-danger-zone {
+  background: #1f1518;
+  border-color: #7f1d1d;
+}
+
+html[data-theme="dark"] .app-settings-tab.active {
+  color: var(--accent-soft);
 }
 
 html[data-theme="dark"] .app-settings-section-title {

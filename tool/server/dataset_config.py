@@ -101,6 +101,14 @@ H3_VIDEO_TIER_POLICY = {
     "hybrid": {"frames": 34, "repeat_weight": 1.0, "max_upscale": 1.0},
     "spatial": {"frames": 17, "repeat_weight": 0.5, "max_upscale": 1.0, "min_support": 3},
 }
+H3_LONG_MOTION_FRAMES = 102
+H3_LONG_MOTION_CEILINGS = {
+    "square": (352, 352),
+    "43": (416, 320),
+    "34": (320, 416),
+    "169": (448, 256),
+    "916": (256, 448),
+}
 H3_VIDEO_MODE_CEILINGS = {
     "normal": {
         "square": {"temporal": (352, 352), "hybrid": (512, 512), "spatial": (768, 768)},
@@ -595,6 +603,12 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
                     continue
                 selected_by_role[role] = selected
                 bucket = (selected["width"], selected["height"], role_frames)
+                long_motion_width, long_motion_height = H3_LONG_MOTION_CEILINGS[ar_label]
+                long_motion_bucket = (
+                    min(selected["width"], long_motion_width),
+                    min(selected["height"], long_motion_height),
+                    H3_LONG_MOTION_FRAMES,
+                )
                 lines.append(
                     f"[INFO] {ar_label}: MiniMax H3 {role} bucket {selected['width']}x{selected['height']} @ {role_frames} "
                     f"(support {selected['support']}/{selected['total']})"
@@ -604,6 +618,12 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
                     "role": role,
                     "dir_path": dir_path,
                     "buckets": [bucket],
+                    "manual_alternatives": [long_motion_bucket] if role == "temporal" and any(
+                        clip["frames"] >= H3_LONG_MOTION_FRAMES
+                        and clip["width"] * policy["max_upscale"] >= long_motion_bucket[0]
+                        and clip["height"] * policy["max_upscale"] >= long_motion_bucket[1]
+                        for clip in usable_for_frames
+                    ) else [],
                     "sample_count": selected["support"],
                     "repeat_weight": policy["repeat_weight"],
                     "resolution_cap": (target_w, target_h),
@@ -877,7 +897,7 @@ def choose_video_detail_bucket(ar_label: str, clips, motion_w: int, motion_h: in
     return best
 
 
-def video_alternatives(selected_w: int, selected_h: int, selected_frames: int, max_w=None, max_h=None):
+def video_alternatives(selected_w: int, selected_h: int, selected_frames: int):
     # 2-3 lower and 2-3 higher valid buckets by area, same frame count
     short_side = min(selected_w, selected_h)
     offsets = [-96, -64, -32, 32, 64, 96]
@@ -898,8 +918,6 @@ def video_alternatives(selected_w: int, selected_h: int, selected_frames: int, m
         # Skip invalid or duplicate
         if w < 256 or h < 256:
             continue
-        if (max_w is not None and w > max_w) or (max_h is not None and h > max_h):
-            continue
         if (w, h, selected_frames) == (selected_w, selected_h, selected_frames):
             continue
         if (w, h, selected_frames) in alts:
@@ -912,7 +930,7 @@ def video_alternatives(selected_w: int, selected_h: int, selected_frames: int, m
     higher = sorted(higher, key=lambda x: abs(min(x[:2]) - short_side))[:3]
     return lower + higher
 
-def render_video_block(dir_path: str, buckets, num_repeats: int = 1, resolution_cap=None):
+def render_video_block(dir_path: str, buckets, num_repeats: int = 1, manual_alternatives=None):
     repeats = int(num_repeats) if isinstance(num_repeats, int) else 1
     if repeats < 1:
         repeats = 1
@@ -923,12 +941,16 @@ def render_video_block(dir_path: str, buckets, num_repeats: int = 1, resolution_
         'group = "videos"',
         "size_buckets = [",
     ]
-    max_w, max_h = resolution_cap or (None, None)
+    manual_alternatives = list(manual_alternatives or [])
     for (w, h, frames) in buckets:
-        alts = video_alternatives(w, h, frames, max_w=max_w, max_h=max_h)
+        alts = video_alternatives(w, h, frames)
         mfp_val = (w * h * frames) / 1_000_000
         if alts:
             lines.append("# Alternatives: " + ", ".join(f"[{aw}, {ah}, {af}]" for (aw, ah, af) in alts))
+        if manual_alternatives:
+            lines.append("# Calibrated long-motion alternative: " + ", ".join(
+                f"[{aw}, {ah}, {af}]" for (aw, ah, af) in manual_alternatives
+            ))
         lines.append(f"  [{w}, {h}, {frames}],  # MegaFramePixels: {mfp_val:.2f}M")
     lines.append("]")
     return "\n".join(lines)
@@ -1279,7 +1301,7 @@ def render_dataset_entry(entry, num_repeats: int):
             entry["dir_path"],
             entry["buckets"],
             num_repeats=num_repeats,
-            resolution_cap=entry.get("resolution_cap"),
+            manual_alternatives=entry.get("manual_alternatives"),
         )
     if kind == "image":
         return render_image_block(entry["path"], entry["ar_label"], entry["buckets"], num_repeats=num_repeats)

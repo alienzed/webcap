@@ -1,10 +1,30 @@
 var appSettingsLoadedConfig = null;
+var appSettingsActiveTab = 'general';
 var appSettingsTrainingProfiles = [
   { id: 'wan22_t2v', uiKey: 'appSettingsTrainingProfileWan22El' },
   { id: 'krea2_raw', uiKey: 'appSettingsTrainingProfileKrea2El' },
   { id: 'wan21_t2v_14b', uiKey: 'appSettingsTrainingProfileWan21El' },
   { id: 'minimax_h3', uiKey: 'appSettingsTrainingProfileH3El' }
 ];
+
+function setAppSettingsTab(tabName, focusTab) {
+  var next = ['general', 'training', 'advanced'].indexOf(tabName) !== -1 ? tabName : 'general';
+  appSettingsActiveTab = next;
+  var selectedButton = null;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
+    var active = button.getAttribute('data-app-settings-tab') === next;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+    button.tabIndex = active ? 0 : -1;
+    if (active) selectedButton = button;
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-panel]'), function (panel) {
+    var active = panel.getAttribute('data-app-settings-panel') === next;
+    panel.classList.toggle('hidden', !active);
+    panel.hidden = !active;
+  });
+  if (focusTab && selectedButton) selectedButton.focus();
+}
 
 function setAppSettingsStatus(text, isError) {
   if (!ui.appSettingsStatusEl) return;
@@ -114,6 +134,7 @@ function parseAppSettingsJson() {
 function openAppSettingsModal() {
   if (!ui.appSettingsModalEl) return;
   setAppSettingsStatus('Loading settings...', false);
+  setAppSettingsTab(appSettingsActiveTab, false);
   ui.appSettingsModalEl.classList.remove('hidden');
   ui.appSettingsModalEl.setAttribute('aria-hidden', 'false');
   focusFirstModalTextField(ui.appSettingsModalEl);
@@ -331,6 +352,24 @@ function wireAppSettingsUi() {
   if (ui.appSettingsResetBtn) {
     ui.appSettingsResetBtn.onclick = resetAppSettings;
   }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
+    button.onclick = function () {
+      setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);
+    };
+    button.onkeydown = function (event) {
+      var tabs = ['general', 'training', 'advanced'];
+      var current = tabs.indexOf(button.getAttribute('data-app-settings-tab'));
+      var next = current;
+      if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft') next = (current + tabs.length - 1) % tabs.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = tabs.length - 1;
+      else return;
+      event.preventDefault();
+      setAppSettingsTab(tabs[next], true);
+    };
+  });
+  setAppSettingsTab(appSettingsActiveTab, false);
   if (ui.appSettingsModalEl) {
     ui.appSettingsModalEl.addEventListener('click', function (e) {
       if (e.target === ui.appSettingsModalEl) {

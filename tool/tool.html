@@ -891,131 +891,165 @@
                 <div class="app-settings-header">
                     <div class="app-settings-title-wrap">
                         <strong>App Settings</strong>
-                        <div class="app-settings-subtitle">Global paths, caption defaults, and runtime toggles.</div>
+                        <div class="app-settings-subtitle">General, training, and advanced configuration.</div>
                     </div>
                     <button id="app-settings-close-btn" type="button" title="Close" aria-label="Close app settings">x</button>
                 </div>
-                <div class="app-settings-sections">
-                    <section class="app-settings-section">
-                        <div class="app-settings-section-header">
-                            <div class="app-settings-section-title">Paths</div>
-                            <div class="app-settings-section-copy">Workspace and training locations used by the backend and generated config files.</div>
-                        </div>
-                        <div class="app-settings-form-grid">
-                            <label class="app-settings-field">
+                <div class="app-settings-tabs" role="tablist" aria-label="App settings sections">
+                    <button id="app-settings-tab-general" type="button" class="app-settings-tab active" data-app-settings-tab="general" role="tab" aria-selected="true" aria-controls="app-settings-panel-general">General</button>
+                    <button id="app-settings-tab-training" type="button" class="app-settings-tab" data-app-settings-tab="training" role="tab" aria-selected="false" aria-controls="app-settings-panel-training" tabindex="-1">Training</button>
+                    <button id="app-settings-tab-advanced" type="button" class="app-settings-tab" data-app-settings-tab="advanced" role="tab" aria-selected="false" aria-controls="app-settings-panel-advanced" tabindex="-1">Advanced</button>
+                </div>
+                <div class="app-settings-tab-panels">
+                    <div id="app-settings-panel-general" class="app-settings-panel" data-app-settings-panel="general" role="tabpanel" aria-labelledby="app-settings-tab-general">
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Library</div>
+                                <div class="app-settings-section-copy">The local workspace containing media sets and their WebCap files.</div>
+                            </div>
+                            <label class="app-settings-field app-settings-field-wide">
                                 <span class="app-settings-field-label">Filesystem Root</span>
                                 <input id="app-settings-filesystem-root" type="text" placeholder="C:\path\to\training">
                             </label>
-                            <label class="app-settings-field">
-                                <span class="app-settings-field-label">Models Root</span>
-                                <input id="app-settings-filesystem-models" type="text" placeholder="C:\path\to\models">
-                            </label>
-                            <label class="app-settings-field">
-                                <span class="app-settings-field-label">Diffusion Pipe WSL</span>
-                                <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/home/user/diffusion-pipe">
-                            </label>
-                            <label class="app-settings-field">
-                                <span class="app-settings-field-label">WSL Distribution</span>
-                                <input id="app-settings-training-wsl-distribution" type="text" placeholder="Ubuntu">
-                            </label>
-                            <label class="app-settings-field">
-                                <span class="app-settings-field-label">Conda Executable</span>
-                                <input id="app-settings-training-conda-executable" type="text" placeholder="/home/user/miniconda3/bin/conda">
-                            </label>
-                            <label class="app-settings-field">
-                                <span class="app-settings-field-label">Conda Environment</span>
-                                <input id="app-settings-training-conda-environment" type="text" placeholder="training-env">
-                            </label>
-                            <label class="app-settings-field">
-                                <span class="app-settings-field-label">Venv Activate Script</span>
-                                <input id="app-settings-training-activate-script" type="text" placeholder="/home/user/diffusion-pipe/.venv/bin/activate">
-                            </label>
-                        </div>
-                    </section>
-                    <section class="app-settings-section">
-                        <div class="app-settings-section-header">
-                            <div class="app-settings-section-title">Caption Editor</div>
-                            <div class="app-settings-section-copy">Used when a folder does not have its own saved caption template.</div>
-                        </div>
-                        <label class="app-settings-field app-settings-field-wide">
-                            <span class="app-settings-field-label">Default Caption Template</span>
-                            <textarea id="app-settings-primer-template" rows="6" class="app-settings-caption-template" spellcheck="false" placeholder="{position }{surface, }{setting, }{body, }"></textarea>
-                            <span class="app-settings-note">Leave blank to fall back to the built-in starter template.</span>
-                        </label>
-                    </section>
-                    <section class="app-settings-section">
-                        <div class="app-settings-section-header">
-                            <div class="app-settings-section-title">Training Models</div>
-                            <div class="app-settings-section-copy">Choose which models appear when creating new training runs. Existing files and runs are unaffected.</div>
-                        </div>
-                        <div class="app-settings-form-grid">
-                            <div class="app-settings-model-option">
-                                <label class="app-settings-toggle">
-                                    <input id="app-settings-training-profile-wan22" type="checkbox">
-                                    <span>Wan 2.2 T2V</span>
-                                </label>
-                                <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                        </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Caption Editor</div>
+                                <div class="app-settings-section-copy">Used when a folder does not have its own saved caption template.</div>
                             </div>
-                            <div class="app-settings-model-option">
-                                <label class="app-settings-toggle">
-                                    <input id="app-settings-training-profile-krea2" type="checkbox">
-                                    <span>Krea2 Raw</span>
-                                </label>
-                                <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/Krea-2" target="_blank" rel="noopener noreferrer">HF files ↗</a>
-                            </div>
-                            <div class="app-settings-model-option">
-                                <label class="app-settings-toggle">
-                                    <input id="app-settings-training-profile-wan21" type="checkbox">
-                                    <span>Wan 2.1 T2V 14B</span>
-                                </label>
-                                <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.1-T2V-14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
-                            </div>
-                            <div class="app-settings-model-option">
-                                <label class="app-settings-toggle">
-                                    <input id="app-settings-training-profile-h3" type="checkbox">
-                                    <span>MiniMax H3</span>
-                                </label>
-                                <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/MiniMax-H3" target="_blank" rel="noopener noreferrer">HF files ↗</a>
-                            </div>
-                        </div>
-                    </section>
-                    <section class="app-settings-section">
-                        <div class="app-settings-section-header">
-                            <div class="app-settings-section-title">Analysis & Appearance</div>
-                            <div class="app-settings-section-copy">Optional local analyzers plus browser-scoped display state.</div>
-                        </div>
-                        <div class="app-settings-form-grid">
-                            <label class="app-settings-toggle">
-                                <input id="app-settings-enable-face-analysis" type="checkbox">
-                                <span>Enable Face Focus analysis</span>
+                            <label class="app-settings-field app-settings-field-wide">
+                                <span class="app-settings-field-label">Default Caption Template</span>
+                                <textarea id="app-settings-primer-template" rows="6" class="app-settings-caption-template" spellcheck="false" placeholder="{position }{surface, }{setting, }{body, }"></textarea>
+                                <span class="app-settings-note">Leave blank to fall back to the built-in starter template.</span>
                             </label>
-                            <label class="app-settings-toggle">
-                                <input id="app-settings-enable-mediapipe-analysis" type="checkbox">
-                                <span>Enable MediaPipe selection pose analysis</span>
-                            </label>
-                            <div class="app-settings-field">
-                                <span class="app-settings-field-label">Theme</span>
-                                <div class="app-settings-theme-row">
-                                    <button id="app-settings-theme-btn" type="button" class="app-settings-theme-btn">Dark</button>
-                                    <span class="app-settings-theme-note">Stored in this browser.</span>
+                        </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Analysis &amp; Appearance</div>
+                                <div class="app-settings-section-copy">Optional local analyzers plus browser-scoped display state.</div>
+                            </div>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-enable-face-analysis" type="checkbox">
+                                    <span>Enable Face Focus analysis</span>
+                                </label>
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-enable-mediapipe-analysis" type="checkbox">
+                                    <span>Enable MediaPipe selection pose analysis</span>
+                                </label>
+                                <div class="app-settings-field">
+                                    <span class="app-settings-field-label">Theme</span>
+                                    <div class="app-settings-theme-row">
+                                        <button id="app-settings-theme-btn" type="button" class="app-settings-theme-btn">Dark</button>
+                                        <span class="app-settings-theme-note">Stored in this browser.</span>
+                                    </div>
                                 </div>
+                            </div>
+                        </section>
+                    </div>
+                    <div id="app-settings-panel-training" class="app-settings-panel hidden" data-app-settings-panel="training" role="tabpanel" aria-labelledby="app-settings-tab-training">
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Training Runtime</div>
+                                <div class="app-settings-section-copy">Model storage and the Diffusion Pipe environment used to build and launch training commands.</div>
+                            </div>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field">
+                                    <span class="app-settings-field-label">Models Root</span>
+                                    <input id="app-settings-filesystem-models" type="text" placeholder="C:\path\to\models">
+                                </label>
+                                <label class="app-settings-field">
+                                    <span class="app-settings-field-label">Diffusion Pipe WSL</span>
+                                    <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/home/user/diffusion-pipe">
+                                </label>
+                                <label class="app-settings-field">
+                                    <span class="app-settings-field-label">WSL Distribution</span>
+                                    <input id="app-settings-training-wsl-distribution" type="text" placeholder="Ubuntu">
+                                </label>
+                                <label class="app-settings-field">
+                                    <span class="app-settings-field-label">Conda Executable</span>
+                                    <input id="app-settings-training-conda-executable" type="text" placeholder="/home/user/miniconda3/bin/conda">
+                                </label>
+                                <label class="app-settings-field">
+                                    <span class="app-settings-field-label">Conda Environment</span>
+                                    <input id="app-settings-training-conda-environment" type="text" placeholder="training-env">
+                                </label>
+                                <label class="app-settings-field">
+                                    <span class="app-settings-field-label">Venv Activate Script</span>
+                                    <input id="app-settings-training-activate-script" type="text" placeholder="/home/user/diffusion-pipe/.venv/bin/activate">
+                                </label>
+                            </div>
+                        </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Training Models</div>
+                                <div class="app-settings-section-copy">Choose which models appear when creating new training runs. Existing files and runs are unaffected.</div>
+                            </div>
+                            <div class="app-settings-form-grid">
+                                <div class="app-settings-model-option">
+                                    <label class="app-settings-toggle">
+                                        <input id="app-settings-training-profile-wan22" type="checkbox">
+                                        <span>Wan 2.2 T2V</span>
+                                    </label>
+                                    <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                                </div>
+                                <div class="app-settings-model-option">
+                                    <label class="app-settings-toggle">
+                                        <input id="app-settings-training-profile-krea2" type="checkbox">
+                                        <span>Krea2 Raw</span>
+                                    </label>
+                                    <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/Krea-2" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                                </div>
+                                <div class="app-settings-model-option">
+                                    <label class="app-settings-toggle">
+                                        <input id="app-settings-training-profile-wan21" type="checkbox">
+                                        <span>Wan 2.1 T2V 14B</span>
+                                    </label>
+                                    <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.1-T2V-14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                                </div>
+                                <div class="app-settings-model-option">
+                                    <label class="app-settings-toggle">
+                                        <input id="app-settings-training-profile-h3" type="checkbox">
+                                        <span>MiniMax H3</span>
+                                    </label>
+                                    <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/MiniMax-H3" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                    <div id="app-settings-panel-advanced" class="app-settings-panel hidden" data-app-settings-panel="advanced" role="tabpanel" aria-labelledby="app-settings-tab-advanced">
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Diagnostics</div>
+                                <div class="app-settings-section-copy">Additional application logging for development and troubleshooting.</div>
                             </div>
                             <label class="app-settings-toggle">
                                 <input id="app-settings-debug" type="checkbox">
                                 <span>Debug mode</span>
                             </label>
-                        </div>
-                    </section>
+                        </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Raw Configuration</div>
+                                <div class="app-settings-section-copy">Edit the complete config JSON directly. Leaving this field replaces values shown on the other tabs.</div>
+                            </div>
+                            <textarea id="app-settings-json" rows="12" spellcheck="false" aria-label="Advanced configuration JSON"></textarea>
+                        </section>
+                        <section class="app-settings-section app-settings-danger-zone">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Reset App</div>
+                                <div class="app-settings-section-copy">Restore stock requirement terms and remove custom global requirement terms.</div>
+                            </div>
+                            <div>
+                                <button id="app-settings-reset-btn" type="button" class="app-settings-reset-btn">Reset App</button>
+                            </div>
+                        </section>
+                    </div>
                 </div>
-                <details class="app-settings-advanced">
-                    <summary>Advanced JSON</summary>
-                    <textarea id="app-settings-json" rows="10" spellcheck="false"></textarea>
-                </details>
                 <div id="app-settings-status" class="app-settings-status"></div>
                 <div class="app-settings-actions">
                     <button id="app-settings-save-btn" type="button">Save</button>
                     <button id="app-settings-save-reload-btn" type="button">Save + Reboot</button>
-                    <button id="app-settings-reset-btn" type="button" class="app-settings-reset-btn">Reset App</button>
                     <button id="app-settings-cancel-btn" type="button">Cancel</button>
                 </div>
             </div>

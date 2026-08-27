@@ -23,6 +23,7 @@ from tool.server.dataset_config import (
     pick_image_buckets,
     read_epochs_from_training_config,
     repeat_targets_for_mode,
+    video_alternatives,
     video_resolution_cap,
     mfp,
 )
@@ -189,7 +190,9 @@ def test_h3_dataset_uses_its_frame_grid_for_mixed_media_and_poc(tmp_path):
     assert "[352, 352, 68]" in text
     assert "[512, 512, 34]" in text
     assert "[512, 512, 1]" in text
-    assert all(f", {frames}]" not in text for frames in (13, 17, 102, 136))
+    assert all(f", {frames}]" not in text for frames in (13, 17, 136))
+    assert "# Calibrated long-motion alternative: [352, 352, 102]" in text
+    assert "\n  [352, 352, 102]," not in text
     assert text.count('group = "videos"') == 2
     video_blocks = [block for block in text.split("[[directory]]") if 'group = "videos"' in block]
     video_repeats = [int(block.split("num_repeats = ", 1)[1].splitlines()[0]) for block in video_blocks]
@@ -265,7 +268,9 @@ def test_h3_quality_video_uses_the_normal_safe_bucket_table(tmp_path):
 
     assert "[352, 352, 68]" in text
     assert "[512, 512, 34]" in text
-    assert all(f", {frames}]" not in text for frames in (13, 17, 102, 136))
+    assert all(f", {frames}]" not in text for frames in (13, 17, 136))
+    assert "# Calibrated long-motion alternative: [352, 352, 102]" in text
+    assert "\n  [352, 352, 102]," not in text
 
 
 def test_h3_normal_adds_spatial_tier_for_three_native_high_resolution_clips(tmp_path):
@@ -336,6 +341,10 @@ def test_h3_initial_mode_ceilings_stay_inside_the_conservative_cell_limit():
                 assert mfp(width, height, frames_by_role[role]) <= H3_VIDEO_MFP_LIMIT
 
 
+def test_video_alternatives_include_manual_choices_above_automatic_ceiling():
+    assert (512, 288, 68) in video_alternatives(448, 256, 68)
+
+
 def test_h3_calibration_overrides_quality_only_and_derives_portrait(monkeypatch):
     monkeypatch.setattr(config_module, "config", {
         "training": {
@@ -360,6 +369,27 @@ def test_h3_calibration_overrides_quality_only_and_derives_portrait(monkeypatch)
     assert quality["916"]["hybrid"] == (512, 896)
     assert quality["169"]["temporal"] == (576, 320)
     assert quality["square"]["hybrid"] == H3_VIDEO_MODE_CEILINGS["quality"]["square"]["hybrid"]
+
+
+def test_h3_long_motion_suggestion_keeps_its_102f_ceiling_when_quality_68f_is_larger(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_module, "config", {
+        "training": {
+            "h3_calibration": {
+                "version": 1,
+                "campaign": "h3-calibrated",
+                "safe_shapes": {"68": {"169": [576, 320]}},
+            },
+        },
+    })
+    set_folder = tmp_path / "set"
+    _write_h3_video_manifest(set_folder, 136, ar="169", size=(1024, 576))
+
+    generate_dataset_configs(set_folder, mode="quality", profile_id=MINIMAX_H3_PROFILE_ID)
+    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+    assert "  [576, 320, 68]," in text
+    assert "# Calibrated long-motion alternative: [448, 256, 102]" in text
+    assert "[576, 320, 102]" not in text
 
 
 def test_model_native_frame_estimates_prefer_duration_then_source_rate_then_raw_frames():
@@ -405,7 +435,10 @@ def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
         for width, height, frames in buckets:
             assert f"[{width}, {height}, {frames}]" in text
             assert (width // 32) * (height // 32) * frames <= 11_900
-        assert all(f", {frames}]" not in text for frames in (17, 102, 136))
+        temporal_width, temporal_height, _frames = buckets[0]
+        assert f"# Calibrated long-motion alternative: [{temporal_width}, {temporal_height}, 102]" in text
+        assert f"\n  [{temporal_width}, {temporal_height}, 102]," not in text
+        assert all(f", {frames}]" not in text for frames in (17, 136))
 
 
 def test_h3_bucket_selection_tolerates_small_upscale_and_falls_back_for_smaller_sources(tmp_path):
@@ -487,8 +520,9 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
     assert lo_text.count('group = "videos"') == 2
     assert "  [672, 384, 37]," in hi_text
     assert "  [736, 416, 13]," in hi_text
-    assert "[800, 448, 13]" not in hi_text
-    assert "[1184, 672, 13]" not in hi_text
+    assert "[800, 448, 13]" in hi_text
+    assert "\n  [800, 448, 13]," not in hi_text
+    assert "\n  [1184, 672, 13]," not in hi_text
     assert "num_repeats = 40" in hi_text
     assert "num_repeats = 10" in hi_text
     assert "num_repeats = 89" in lo_text
@@ -500,8 +534,9 @@ def test_generate_dataset_configs_splits_video_motion_and_detail_stanzas(tmp_pat
     quality_text = (set_folder / "dataset.hi.toml").read_text(encoding="utf-8")
 
     assert "  [1024, 576, 13]," in quality_text
-    assert "[1088, 608, 13]" not in quality_text
-    assert "[1184, 672, 13]" not in quality_text
+    assert "[1088, 608, 13]" in quality_text
+    assert "\n  [1088, 608, 13]," not in quality_text
+    assert "\n  [1184, 672, 13]," not in quality_text
     assert "detail bucket 1024x576 @ 13" in quality_report
     assert "WAN quality video resolution cap 1024x576" in quality_report
 

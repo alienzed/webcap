@@ -69,6 +69,7 @@ _DISTRIBUTED_SOCKET_HOLD_REASON = (
     "Stop the other training process before continuing."
 )
 _legacy_active_time_cache = {}
+_SAVE_PAUSE_TRAINING_STAGES = {"hi", "lo", "krea2", "wan21", "h3"}
 
 
 def _runtime_root():
@@ -849,6 +850,118 @@ def _request_job_action(job, action, confirmation_note=""):
     return ""
 
 
+def _save_pause_run_directory(job):
+    """Find the one Diffusion-Pipe run belonging to this managed job."""
+    raw_run_path = str(job.get("outputRunPath") or "").strip()
+    if raw_run_path:
+        run_dir = host_path_for_training_path(raw_run_path)
+        if not run_dir.is_dir():
+            raise ValueError("Recorded training run directory is unavailable: " + raw_run_path)
+        return run_dir
+    root = Path(str(job.get("outputRoot") or "").strip())
+    if not root.is_dir():
+        raise ValueError("The training output directory is not ready yet.")
+    stage = str(job.get("stage") or job.get("stages") or "").strip()
+    snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
+    source_config = Path(str(snapshot.get(stage) or ""))
+    if not source_config.is_file():
+        raise ValueError("The captured training config is unavailable, so WebCap cannot identify this run safely.")
+    source_hash = hashlib.sha256(source_config.read_bytes()).hexdigest()
+    started_at = float(job.get("startedAt") or 0)
+    matches = []
+    for candidate in root.iterdir():
+        if not candidate.is_dir() or candidate.name == ".webcap":
+            continue
+        try:
+            if candidate.stat().st_mtime + 1 < started_at:
+                continue
+            copied_config = candidate / source_config.name
+            if copied_config.is_file() and hashlib.sha256(copied_config.read_bytes()).hexdigest() == source_hash:
+                matches.append(candidate)
+        except OSError:
+            continue
+    if len(matches) != 1:
+        detail = "none" if not matches else str(len(matches))
+        raise ValueError("WebCap could not identify exactly one active training run (found " + detail + ").")
+    job["outputRunPath"] = str(matches[0])
+    return matches[0]
+
+
+def _latest_checkpoint_mtime(run_dir):
+    try:
+        return (Path(run_dir) / "latest").stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _recorded_runner_action(job):
+    action = str(job.get("actionRequested") or "").strip()
+    if action:
+        return action
+    try:
+        action = _job_action_path(job).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    return action if action in ("pause", "finish", "stop") else ""
+
+
+def _request_save_and_pause(job):
+    """Ask Diffusion-Pipe to save its current state and exit without signalling it."""
+    if str(job.get("actionRequested") or "") == "pause":
+        return ""
+    if job.get("actionRequested"):
+        return "Another runner action is already pending."
+    if str(job.get("stage") or "") not in _SAVE_PAUSE_TRAINING_STAGES:
+        return "Save & Pause is available once training has started; caching and setup do not have a resumable checkpoint."
+    pid = _job_runner_pid(job)
+    if pid <= 0:
+        return "WebCap has no recorded runner PID, so it cannot request Save & Pause safely."
+    if not job.get("runnerVerified"):
+        return "WebCap has not verified the recorded runner process, so it cannot request Save & Pause safely."
+    try:
+        run_dir = _save_pause_run_directory(job)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return str(exc)
+    action_path = _job_action_path(job)
+    try:
+        action_path.write_text("pause", encoding="utf-8")
+        normalize_path_permissions(action_path)
+        (run_dir / "save_quit").touch(exist_ok=True)
+        normalize_path_permissions(run_dir / "save_quit")
+    except OSError as exc:
+        try:
+            if action_path.read_text(encoding="utf-8").strip() == "pause":
+                action_path.unlink()
+        except OSError:
+            pass
+        return "Could not request the Diffusion-Pipe checkpoint save: " + str(exc)
+    job["actionRequested"] = "pause"
+    job["actionRequestedAt"] = time.time()
+    job["savePauseLatestMtime"] = _latest_checkpoint_mtime(run_dir)
+    job["status"] = "stopping"
+    job["stage"] = "saving"
+    job["confirmationNote"] = "Save & Pause requested. Waiting for the current step and checkpoint save."
+    job["updatedAt"] = time.time()
+    return ""
+
+
+def _save_pause_checkpoint_error(job):
+    raw_run_path = str(job.get("outputRunPath") or "").strip()
+    if not raw_run_path:
+        return "Save & Pause ended without a recorded training run."
+    try:
+        run_dir = host_path_for_training_path(raw_run_path)
+        latest_mtime = _latest_checkpoint_mtime(run_dir)
+        baseline_mtime = float(job.get("savePauseLatestMtime") or 0)
+        if latest_mtime <= baseline_mtime:
+            return "Save & Pause ended without a newly written checkpoint."
+        folder_path = app_config.safe_join_fs_root(job["folder"])
+        validate_resumable_run_for_path(folder_path, str(job.get("stages") or ""), raw_run_path)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return "Save & Pause checkpoint could not be verified: " + str(exc)
+    return ""
+
+
 def _trigger_scheduled_finish(job):
     target_epoch = int(job.get("finishAfterEpoch") or 0)
     progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
@@ -909,9 +1022,15 @@ def _sync_job_log_evidence(job):
 
 
 def _apply_terminal_job_status(job, result_status=""):
-    requested_action = str(job.get("actionRequested") or "")
+    requested_action = _recorded_runner_action(job)
     if requested_action == "pause":
-        _queue_paused_job(job)
+        checkpoint_error = _save_pause_checkpoint_error(job)
+        if checkpoint_error:
+            job["status"] = "interrupted"
+            job["stage"] = "pause_failed"
+            job["error"] = checkpoint_error
+        else:
+            _queue_paused_job(job)
     elif requested_action == "finish" and result_status != "completed":
         job["status"] = "finished_early"
     elif requested_action == "stop":
@@ -937,7 +1056,7 @@ def _queue_paused_job(job):
     for field in (
         "pid", "runnerVerified", "actionRequested", "actionRequestedAt", "startedAt", "finishedAt",
         "lastLogAt", "exitCode", "failureScope", "failureExcerpt", "completionNote", "confirmationNote",
-        "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "progress", "error",
+        "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "progress", "error", "savePauseLatestMtime",
     ):
         job.pop(field, None)
     job["status"] = "queued"
@@ -1017,7 +1136,8 @@ def _refresh_job(job):
         requested_action = _apply_terminal_job_status(job, result_status)
         if job["status"] == "queued":
             return {"holdReason": "", "pauseQueue": requested_action == "pause"}
-        if job["status"] == "interrupted" and result_status == "stopped" and requested_action not in ("finish", "stop"):
+        pause_failed = requested_action == "pause" and job["status"] != "queued"
+        if job["status"] == "interrupted" and result_status == "stopped" and requested_action not in ("finish", "stop", "pause"):
             job["error"] = "Runner stopped without a WebCap stop action."
         job["exitCode"] = exit_code
         if job["status"] == "failed":
@@ -1035,7 +1155,9 @@ def _refresh_job(job):
             job["updatedAt"] = prior_updated_at
         else:
             job.pop("updatedAt", None)
-        hold_reason = _distributed_socket_hold_reason(failure_excerpt) if job["status"] == "failed" and prior_status != "failed" else ""
+        hold_reason = "Save & Pause could not verify a new checkpoint. Queue held for manual recovery." if pause_failed else (
+            _distributed_socket_hold_reason(failure_excerpt) if job["status"] == "failed" and prior_status != "failed" else ""
+        )
         return {"holdReason": hold_reason}
     now = time.time()
     tail, log_mtime = _sync_job_log_evidence(job)
@@ -1088,7 +1210,10 @@ def _refresh_job(job):
         job["updatedAt"] = prior_updated_at
     else:
         job.pop("updatedAt", None)
-    return {"holdReason": ""}
+    return {
+        "holdReason": "Save & Pause could not verify a new checkpoint. Queue held for manual recovery."
+        if requested_action == "pause" else ""
+    }
 
 
 def _launch_next_queued_job(state):
@@ -1694,16 +1819,18 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if cancel:
-            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Pause, Stop, or Finish for the active job."}, 400
+            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Save & Pause or Finish for the active job."}, 400
         if job.get("status") not in ACTIVE_STATUSES:
             return {"ok": False, "error": "Training job is not running."}, 400
         action = "pause" if pause else "finish" if finish else "stop"
-        message = _request_job_action(job, action)
+        message = _request_save_and_pause(job) if pause else _request_job_action(job, action)
         if message:
             job["error"] = message
             job["updatedAt"] = time.time()
             _write_state(state)
-            status = 409 if "no recorded runner PID" in message or "not verified" in message else 502
+            status = 502 if message.startswith("Could not request the Diffusion-Pipe checkpoint save:") else 409 if (
+                pause or "no recorded runner PID" in message or "not verified" in message
+            ) else 502
             return {"ok": False, "error": message, "job": _public_job(job)}, status
         if pause:
             state["queuePaused"] = True

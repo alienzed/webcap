@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 
 from PIL import Image
+import pytest
 
 import tool.server.app as app_module
 import tool.server.config as config_module
@@ -16,6 +17,7 @@ from tool.server.dataset_config import (
     generate_candidates,
     generate_image_candidates,
     generate_dataset_configs,
+    h3_calibration_bucket_comment,
     h3_video_mode_ceilings,
     image_alternatives,
     assign_images_to_resolution_classes,
@@ -369,6 +371,57 @@ def test_h3_calibration_overrides_quality_only_and_derives_portrait(monkeypatch)
     assert quality["916"]["hybrid"] == (512, 896)
     assert quality["169"]["temporal"] == (576, 320)
     assert quality["square"]["hybrid"] == H3_VIDEO_MODE_CEILINGS["quality"]["square"]["hybrid"]
+
+
+def test_h3_calibration_comment_distinguishes_cap_from_source_limit(monkeypatch):
+    monkeypatch.setattr(config_module, "config", {
+        "training": {"h3_calibration": {"campaign": "h3-test", "safe_shapes": {"68": {"square": [416, 416]}}}}
+    })
+    at_cap = h3_calibration_bucket_comment(
+        "quality", "h3-test", "square", "temporal",
+        {"width": 416, "height": 416, "support": 4, "total": 4}, (416, 416),
+    )
+    source_limited = h3_calibration_bucket_comment(
+        "quality", "h3-test", "square", "temporal",
+        {"width": 384, "height": 384, "support": 3, "total": 4}, (416, 416),
+    )
+    assert "at calibrated cap 416x416" in at_cap
+    assert "avoid other GPU-heavy" in at_cap
+    assert "Source-limited" in source_limited
+    assert "3/4 supporting clips" in source_limited
+
+
+def test_h3_calibration_comment_uses_explicit_shape_even_when_it_matches_default(monkeypatch):
+    monkeypatch.setattr(config_module, "config", {
+        "training": {"h3_calibration": {"campaign": "h3-test", "safe_shapes": {"68": {"square": [352, 352]}}}}
+    })
+    assert "at calibrated cap 352x352" in h3_calibration_bucket_comment(
+        "quality", "h3-test", "square", "temporal",
+        {"width": 352, "height": 352, "support": 4, "total": 4}, (352, 352),
+    )
+    assert not h3_calibration_bucket_comment(
+        "quality", "h3-test", "169", "temporal",
+        {"width": 448, "height": 256, "support": 4, "total": 4}, (448, 256),
+    )
+
+
+def test_h3_calibration_comment_derives_portrait_and_skips_poc(monkeypatch):
+    monkeypatch.setattr(config_module, "config", {
+        "training": {"h3_calibration": {"campaign": "h3-test", "safe_shapes": {"34": {"43": [640, 480]}}}}
+    })
+    selected = {"width": 480, "height": 640, "support": 2, "total": 2}
+    assert "at calibrated cap 480x640" in h3_calibration_bucket_comment(
+        "quality", "h3-test", "34", "hybrid", selected, (480, 640),
+    )
+    assert not h3_calibration_bucket_comment("poc", "h3-test", "34", "hybrid", selected, (480, 640))
+
+
+def test_h3_calibration_rejects_a_malformed_explicit_shape(monkeypatch):
+    monkeypatch.setattr(config_module, "config", {
+        "training": {"h3_calibration": {"campaign": "h3-test", "safe_shapes": {"68": {"square": [352]}}}}
+    })
+    with pytest.raises(ValueError, match="two-item positive-integer"):
+        h3_video_mode_ceilings("quality")
 
 
 def test_h3_long_motion_suggestion_keeps_its_102f_ceiling_when_quality_68f_is_larger(tmp_path, monkeypatch):

@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from pathlib import Path
 
@@ -918,8 +919,18 @@ def test_scheduled_finish_waits_for_the_epoch_after_the_target_save(tmp_path, mo
     assert "Epoch 35 saved" in job["confirmationNote"]
 
 
-def test_pause_interrupts_the_running_job_and_holds_the_queue(tmp_path, monkeypatch):
-    active = {"id": "active", "status": "running", "pid": 42, "runnerVerified": True}
+def test_save_pause_requests_checkpoint_without_interrupting_runner(tmp_path, monkeypatch):
+    output_root = tmp_path / "output"
+    run_dir = output_root / "20260828_12-00-00"
+    run_dir.mkdir(parents=True)
+    source_config = tmp_path / "config.h3.toml"
+    source_config.write_text("[model]\nname = 'test'\n", encoding="utf-8")
+    (run_dir / source_config.name).write_bytes(source_config.read_bytes())
+    active = {
+        "id": "active", "status": "running", "stage": "h3", "stages": "h3", "pid": 42,
+        "runnerVerified": True, "snapshot": {"h3": str(source_config)}, "outputRoot": str(output_root),
+        "startedAt": time.time(),
+    }
     state = {
         "activeJobId": "active",
         "queuePaused": False,
@@ -928,7 +939,7 @@ def test_pause_interrupts_the_running_job_and_holds_the_queue(tmp_path, monkeypa
     }
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Save & Pause must not interrupt the runner")))
     action_path = tmp_path / "action"
     monkeypatch.setattr(training_runner, "_job_action_path", lambda candidate: action_path)
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
@@ -939,6 +950,8 @@ def test_pause_interrupts_the_running_job_and_holds_the_queue(tmp_path, monkeypa
     assert payload["job"]["status"] == "stopping"
     assert payload["job"]["actionRequested"] == "pause"
     assert action_path.read_text(encoding="utf-8") == "pause"
+    assert (run_dir / "save_quit").is_file()
+    assert payload["job"]["outputRunPath"] == str(run_dir)
     assert state["activeJobId"] == "active"
     assert state["queuePaused"] is True
     assert state["queuePauseReason"] == "Queue paused by the user."
@@ -973,6 +986,7 @@ def test_pause_result_becomes_an_ordinary_queued_resume(monkeypatch):
         "_read_result_evidence",
         lambda candidate: ("result", {"status": "failed", "exitCode": 1, "finishedAt": 123.0}, ""),
     )
+    monkeypatch.setattr(training_runner, "_save_pause_checkpoint_error", lambda candidate: "")
 
     training_runner._refresh_job(job)
 
@@ -994,6 +1008,7 @@ def test_active_training_time_accumulates_across_pause_and_completion(monkeypatc
         "_read_result_evidence",
         lambda candidate: ("result", {"status": "stopped", "exitCode": 130, "finishedAt": 130.0}, ""),
     )
+    monkeypatch.setattr(training_runner, "_save_pause_checkpoint_error", lambda candidate: "")
 
     training_runner._refresh_job(job)
 
@@ -1065,6 +1080,7 @@ def test_pause_result_holds_the_global_queue(monkeypatch):
     }
     state = {"activeJobId": "paused", "queuePaused": False, "queuePauseReason": "", "jobs": [active]}
     monkeypatch.setattr(training_runner, "_read_result_evidence", lambda candidate: ("result", {"status": "stopped", "exitCode": 130, "finishedAt": 123.0}, ""))
+    monkeypatch.setattr(training_runner, "_save_pause_checkpoint_error", lambda candidate: "")
     monkeypatch.setattr(training_runner, "_launch_next_queued_job", lambda candidate: None)
 
     training_runner._refresh_state(state)
@@ -1078,7 +1094,7 @@ def test_pause_result_holds_the_global_queue(monkeypatch):
 
 
 def test_pause_without_a_runner_pid_fails_without_holding_the_queue(monkeypatch):
-    active = {"id": "active", "status": "running"}
+    active = {"id": "active", "status": "running", "stage": "h3"}
     state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
@@ -1091,6 +1107,71 @@ def test_pause_without_a_runner_pid_fails_without_holding_the_queue(monkeypatch)
     assert active["status"] == "running"
     assert state["queuePaused"] is False
     assert "no recorded runner PID" in payload["error"]
+
+
+def test_save_pause_refuses_to_guess_a_training_run(tmp_path, monkeypatch):
+    (tmp_path / "output").mkdir()
+    active = {
+        "id": "active", "status": "running", "stage": "h3", "stages": "h3", "pid": 42,
+        "runnerVerified": True, "snapshot": {"h3": str(tmp_path / "missing.toml")}, "outputRoot": str(tmp_path / "output"),
+    }
+    state = {"activeJobId": "active", "queuePaused": False, "jobs": [active]}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
+    monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
+
+    payload, status = training_runner.stop_response("active", pause=True)
+
+    assert status == 409
+    assert active["status"] == "running"
+    assert state["queuePaused"] is False
+    assert "captured training config is unavailable" in payload["error"]
+
+
+def test_save_pause_requires_a_fresh_valid_checkpoint(monkeypatch):
+    job = {
+        "id": "paused", "status": "stopping", "actionRequested": "pause",
+        "folder": "set", "stages": "h3", "outputRunPath": "/output/run",
+    }
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda candidate: ("result", {"status": "stopped", "exitCode": 130, "finishedAt": 123.0}, ""))
+    monkeypatch.setattr(training_runner, "_save_pause_checkpoint_error", lambda candidate: "Save & Pause ended without a newly written checkpoint.")
+
+    outcome = training_runner._refresh_job(job)
+
+    assert job["status"] == "interrupted"
+    assert "newly written checkpoint" in job["error"]
+    assert outcome["holdReason"].startswith("Save & Pause could not verify")
+    assert "resumeFromCheckpoint" not in job
+
+
+def test_save_pause_checkpoint_verification_requires_a_newer_latest_marker(tmp_path, monkeypatch):
+    run_dir = tmp_path / "run"
+    checkpoint = run_dir / "global_step12"
+    checkpoint.mkdir(parents=True)
+    latest = run_dir / "latest"
+    latest.write_text("global_step12\n", encoding="utf-8")
+    baseline = latest.stat().st_mtime
+    job = {"folder": "set", "stages": "h3", "outputRunPath": str(run_dir), "savePauseLatestMtime": baseline}
+    monkeypatch.setattr(training_runner, "validate_resumable_run_for_path", lambda *args: {"checkpointTag": "global_step12"})
+
+    assert "newly written checkpoint" in training_runner._save_pause_checkpoint_error(job)
+    os.utime(latest, (baseline + 2, baseline + 2))
+    assert training_runner._save_pause_checkpoint_error(job) == ""
+
+
+def test_pause_result_recovers_from_the_runner_action_file(tmp_path, monkeypatch):
+    job = {
+        "id": "paused", "status": "stopping", "folder": "set", "stages": "h3",
+        "outputRunPath": "/output/run", "artifactDir": str(tmp_path),
+    }
+    (tmp_path / "action").write_text("pause", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "_read_result_evidence", lambda candidate: ("result", {"status": "stopped", "exitCode": 130, "finishedAt": 123.0}, ""))
+    monkeypatch.setattr(training_runner, "_save_pause_checkpoint_error", lambda candidate: "")
+
+    training_runner._refresh_job(job)
+
+    assert job["status"] == "queued"
+    assert job["resumeFromCheckpoint"] == "/output/run"
 
 
 def test_log_response_restarts_from_zero_when_the_log_was_truncated(tmp_path, monkeypatch):

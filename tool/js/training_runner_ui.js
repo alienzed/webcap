@@ -466,7 +466,7 @@ function stopManagedTraining(cancel, pause, finish) {
   var job = getTrainingRunnerSelectedJob();
   if (!job || !job.id) return;
   var label = cancel ? 'Cancel this queued training job?' : pause
-    ? 'Pause this run? Training will stop, this item will remain at the front, and the queue will wait until you resume it.'
+    ? 'Save & Pause this run? Training will finish its current step, save a resumable checkpoint, then exit. This item will remain first and the queue will wait for Resume.'
     : finish
       ? 'Finish this run early? Its current output will be kept, the run will be marked finished early, and the queue will continue.'
       : 'Stop this job and continue to the next queued set?';
@@ -476,7 +476,7 @@ function stopManagedTraining(cancel, pause, finish) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jobId: job.id, cancel: !!cancel, pause: !!pause, finish: !!finish })
   }).then(function () {
-    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Pause requested; this item will remain at the front of the paused queue.' : finish ? 'Finish requested; waiting for the runner result.' : 'Stop requested; waiting for the runner result.'));
+    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Save & Pause requested; waiting for the current step and checkpoint save.' : finish ? 'Finish requested; waiting for the runner result.' : 'Stop requested; waiting for the runner result.'));
     refreshTrainingRunnerStatus();
     refreshTrainingHistory(true);
   }).catch(function (err) {
@@ -952,7 +952,8 @@ function renderTrainingRunner() {
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
   if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !running);
-  if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !running || trainingWorkspaceState.runnerQueuePaused);
+  var savePauseReady = running && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(String(job.stage || '')) !== -1 && !job.actionRequested;
+  if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !savePauseReady || trainingWorkspaceState.runnerQueuePaused);
   if (els.runnerCancelBtn) els.runnerCancelBtn.classList.toggle('hidden', !queued);
   if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused || !!activeCount);
   if (!activeCount && !queuedCount && !trainingWorkspaceState.runnerQueuePaused && status !== 'failed' && status !== 'completed' && status !== 'finished_early' && status !== 'stopped') {

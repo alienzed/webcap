@@ -157,18 +157,11 @@ def h3_calibration_settings():
     return calibration
 
 
-def h3_video_mode_ceilings(mode: str):
-    """Return H3 ceilings after applying the small, settings-backed calibration layer."""
-    normalized_mode = normalize_training_generate_mode(mode)
-    if normalized_mode == "poc":
-        return {}, ""
-    ceilings = {
-        aspect: {role: tuple(shape) for role, shape in by_role.items()}
-        for aspect, by_role in H3_VIDEO_MODE_CEILINGS[normalized_mode].items()
-    }
+def h3_calibrated_shapes():
+    """Return the explicitly configured H3 shapes, including portrait transposes."""
     calibration = h3_calibration_settings()
     if not calibration:
-        return ceilings, ""
+        return {}, ""
     safe_shapes = calibration.get("safe_shapes") if isinstance(calibration.get("safe_shapes"), dict) else {}
     calibrated = {}
     for frame_key, by_aspect in safe_shapes.items():
@@ -179,13 +172,35 @@ def h3_video_mode_ceilings(mode: str):
         if not role or not isinstance(by_aspect, dict):
             continue
         for aspect, shape in by_aspect.items():
-            if aspect not in ("169", "square", "43") or not isinstance(shape, list) or len(shape) != 2:
+            if aspect not in ("169", "square", "43"):
                 continue
-            calibrated[(aspect, role)] = (int(shape[0]), int(shape[1]))
+            if not isinstance(shape, list) or len(shape) != 2 or not all(
+                isinstance(value, int) and not isinstance(value, bool) and value > 0 for value in shape
+            ):
+                raise ValueError(
+                    "training.h3_calibration.safe_shapes." + str(frame_key) + "." + aspect
+                    + " must be a two-item positive-integer shape."
+                )
+            calibrated[(aspect, role)] = (shape[0], shape[1])
             if aspect == "169":
-                calibrated[("916", role)] = (int(shape[1]), int(shape[0]))
+                calibrated[("916", role)] = (shape[1], shape[0])
             elif aspect == "43":
-                calibrated[("34", role)] = (int(shape[1]), int(shape[0]))
+                calibrated[("34", role)] = (shape[1], shape[0])
+    return calibrated, str(calibration.get("campaign") or "")
+
+
+def h3_video_mode_ceilings(mode: str):
+    """Return H3 ceilings after applying the small, settings-backed calibration layer."""
+    normalized_mode = normalize_training_generate_mode(mode)
+    if normalized_mode == "poc":
+        return {}, ""
+    ceilings = {
+        aspect: {role: tuple(shape) for role, shape in by_role.items()}
+        for aspect, by_role in H3_VIDEO_MODE_CEILINGS[normalized_mode].items()
+    }
+    calibrated, campaign = h3_calibrated_shapes()
+    if not calibrated:
+        return ceilings, ""
     for (aspect, role), shape in calibrated.items():
         built_in = H3_VIDEO_MODE_CEILINGS[normalized_mode][aspect][role]
         if normalized_mode == "quality":
@@ -193,7 +208,36 @@ def h3_video_mode_ceilings(mode: str):
         elif shape[0] <= built_in[0] and shape[1] <= built_in[1]:
             # Normal is allowed to become safer, never larger.
             ceilings[aspect][role] = shape
-    return ceilings, str(calibration.get("campaign") or "")
+    return ceilings, campaign
+
+
+def h3_calibration_bucket_comment(mode, campaign, ar_label, role, selected, ceiling):
+    """Explain whether a rendered H3 bucket is at a calibrated cap or source-limited."""
+    normalized_mode = normalize_training_generate_mode(mode)
+    calibrated, configured_campaign = h3_calibrated_shapes()
+    if normalized_mode == "poc" or not campaign or campaign != configured_campaign:
+        return ""
+    configured_shape = calibrated.get((ar_label, role))
+    if configured_shape is None:
+        return ""
+    if normalized_mode == "normal":
+        built_in = H3_VIDEO_MODE_CEILINGS[normalized_mode][ar_label][role]
+        if configured_shape[0] > built_in[0] or configured_shape[1] > built_in[1]:
+            return ""
+    if tuple(ceiling) != tuple(configured_shape):
+        return ""
+    cap_label = str(ceiling[0]) + "x" + str(ceiling[1])
+    selected_shape = (selected["width"], selected["height"])
+    if selected_shape == tuple(ceiling):
+        return (
+            "H3 calibration " + campaign + ": at calibrated cap " + cap_label
+            + "; avoid other GPU-heavy applications."
+        )
+    return (
+        "Source-limited: H3 calibration " + campaign + " permits up to " + cap_label
+        + "; selected " + str(selected["width"]) + "x" + str(selected["height"])
+        + " from " + str(selected["support"]) + "/" + str(selected["total"]) + " supporting clips."
+    )
 
 
 def repeat_targets_for_mode(mode: str):
@@ -627,6 +671,14 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
                     "sample_count": selected["support"],
                     "repeat_weight": policy["repeat_weight"],
                     "resolution_cap": (target_w, target_h),
+                    "calibration_comment": h3_calibration_bucket_comment(
+                        generate_mode,
+                        h3_calibration_campaign,
+                        ar_label,
+                        role,
+                        selected,
+                        (target_w, target_h),
+                    ),
                 })
             continue
 
@@ -930,7 +982,7 @@ def video_alternatives(selected_w: int, selected_h: int, selected_frames: int):
     higher = sorted(higher, key=lambda x: abs(min(x[:2]) - short_side))[:3]
     return lower + higher
 
-def render_video_block(dir_path: str, buckets, num_repeats: int = 1, manual_alternatives=None):
+def render_video_block(dir_path: str, buckets, num_repeats: int = 1, manual_alternatives=None, calibration_comment=""):
     repeats = int(num_repeats) if isinstance(num_repeats, int) else 1
     if repeats < 1:
         repeats = 1
@@ -951,6 +1003,8 @@ def render_video_block(dir_path: str, buckets, num_repeats: int = 1, manual_alte
             lines.append("# Calibrated long-motion alternative: " + ", ".join(
                 f"[{aw}, {ah}, {af}]" for (aw, ah, af) in manual_alternatives
             ))
+        if calibration_comment:
+            lines.append("# " + str(calibration_comment))
         lines.append(f"  [{w}, {h}, {frames}],  # MegaFramePixels: {mfp_val:.2f}M")
     lines.append("]")
     return "\n".join(lines)
@@ -1302,6 +1356,7 @@ def render_dataset_entry(entry, num_repeats: int):
             entry["buckets"],
             num_repeats=num_repeats,
             manual_alternatives=entry.get("manual_alternatives"),
+            calibration_comment=entry.get("calibration_comment"),
         )
     if kind == "image":
         return render_image_block(entry["path"], entry["ar_label"], entry["buckets"], num_repeats=num_repeats)

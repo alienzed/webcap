@@ -705,8 +705,8 @@
                                 </div>
                                 <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
                                 <div id="training-runner-actions" class="training-runner-actions hidden">
-                                    <button id="training-runner-finish-btn" type="button" class="training-btn" title="End this run intentionally, keep its output, and continue the queue.">Finish</button>
-                                    <button id="training-runner-pause-btn" type="button" class="review-captions-btn" title="Pause the active run and keep it first in the queue for Resume.">Pause</button>
+                                    <button id="training-runner-finish-btn" type="button" class="training-btn" title="End this run now, keep already-saved output, and continue the queue. This does not create a fresh checkpoint.">Finish</button>
+                                    <button id="training-runner-pause-btn" type="button" class="review-captions-btn" title="Finish the current step, save a resumable checkpoint, then keep this job first for Resume.">Save &amp; Pause</button>
                                     <button id="training-runner-cancel-btn" type="button" class="review-captions-btn hidden" title="Remove this queued job from the queue.">Cancel</button>
                                     <button id="training-runner-resume-queue-btn" type="button" class="training-btn hidden">Resume</button>
                                     <button id="training-runner-console-btn" type="button" class="review-captions-btn">Show Run Log</button>

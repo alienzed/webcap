@@ -12,6 +12,7 @@ var videoClipCropEditActive = false;
 var videoClipLoopPreviewActive = false;
 var videoClipPlaybackRate = 1;
 var videoClipRangeDrag = null;
+var videoClipFrameSeekPending = false;
 
 function clearVideoClipStatusPoll() {
   if (videoClipStatusPollTimer) {
@@ -29,6 +30,12 @@ function formatVideoClipSeconds(value) {
   var n = Number(value || 0);
   if (!isFinite(n) || n < 0) n = 0;
   return n.toFixed(3);
+}
+
+function formatVideoClipSeekSeconds(value) {
+  var n = Number(value || 0);
+  if (!isFinite(n) || n < 0) n = 0;
+  return n.toFixed(6);
 }
 
 function getVideoClipSourceDuration() {
@@ -128,6 +135,12 @@ function seekVideoClipPlayhead(time) {
   var nextTime = Number(time || 0);
   if (!isFinite(nextTime) || nextTime < 0) nextTime = 0;
   if (sourceDuration > 0 && nextTime > sourceDuration) nextTime = sourceDuration;
+  var currentTime = Number(videoEl.currentTime || 0);
+  if (!isFinite(currentTime) || currentTime < 0) currentTime = 0;
+  if (Math.abs(currentTime - nextTime) > 0.000001) {
+    videoClipFrameSeekPending = true;
+    updateVideoClipCropFrameAvailability();
+  }
   try { videoEl.currentTime = nextTime; } catch (e) {}
   updateVideoClipTimelineUi();
 }
@@ -138,6 +151,71 @@ function stepVideoClipPlayhead(delta) {
   var currentTime = Number(videoEl.currentTime || 0);
   if (!isFinite(currentTime) || currentTime < 0) currentTime = 0;
   seekVideoClipPlayhead(currentTime + Number(delta || 0));
+}
+
+function getVideoClipReportedFps() {
+  if (!videoClipTargetItem || !videoClipTargetItem.fileName) return 0;
+  var metadata = getMetadataForMedia(videoClipTargetItem.fileName);
+  var fps = Number(metadata && metadata.fps);
+  return isFinite(fps) && fps > 0 ? fps : 0;
+}
+
+function getVideoClipReportedFrameCount() {
+  if (!videoClipTargetItem || !videoClipTargetItem.fileName) return 0;
+  var metadata = getMetadataForMedia(videoClipTargetItem.fileName);
+  var frames = Number(metadata && metadata.frames);
+  return isFinite(frames) && frames > 0 ? Math.round(frames) : 0;
+}
+
+function updateVideoClipFrameStepUi() {
+  var fps = getVideoClipReportedFps();
+  var noteEl = getVideoClipEl('video-clip-frame-step-note');
+  var buttons = [
+    getVideoClipEl('video-clip-frame-back-btn'),
+    getVideoClipEl('video-clip-frame-forward-btn')
+  ];
+  buttons.forEach(function (button) {
+    if (!button) return;
+    button.disabled = !fps;
+    button.title = fps
+      ? ('Step by one frame-sized interval at the reported ' + fps.toFixed(2) + ' FPS')
+      : 'Frame-sized stepping is unavailable because FPS metadata is missing';
+  });
+  if (noteEl) {
+    noteEl.textContent = fps
+      ? ('Frame step uses the reported ' + fps.toFixed(2) + ' FPS and browser timestamp seeking.')
+      : 'FPS unavailable; Left/Right fall back to 0.05-second steps.';
+  }
+}
+
+function updateVideoClipCropFrameAvailability() {
+  var btn = getVideoClipEl('video-clip-crop-frame-btn');
+  var videoEl = getVideoClipEl('video-clip-video');
+  if (!btn || !videoEl) return;
+  btn.disabled = videoClipFrameSeekPending || videoEl.readyState < 1;
+}
+
+function stepVideoClipFrame(direction) {
+  var videoEl = getVideoClipEl('video-clip-video');
+  if (!videoEl) return;
+  var stepDirection = Number(direction || 0) < 0 ? -1 : 1;
+  var fps = getVideoClipReportedFps();
+  if (!fps) {
+    stepVideoClipPlayhead(stepDirection * 0.05);
+    return;
+  }
+  stopVideoClipLoopPreview();
+  try { videoEl.pause(); } catch (e) {}
+  var currentTime = Number(videoEl.currentTime || 0);
+  if (!isFinite(currentTime) || currentTime < 0) currentTime = 0;
+  var sourceDuration = getVideoClipSourceDuration();
+  var reportedFrames = getVideoClipReportedFrameCount();
+  var maxFrame = reportedFrames > 0
+    ? reportedFrames - 1
+    : Math.max(0, Math.ceil(sourceDuration * fps) - 1);
+  var currentFrame = Math.max(0, Math.min(maxFrame, Math.round(currentTime * fps)));
+  var nextFrame = Math.max(0, Math.min(maxFrame, currentFrame + stepDirection));
+  seekVideoClipPlayhead(nextFrame / fps);
 }
 
 function setVideoClipPlaybackRate(rate) {
@@ -537,7 +615,7 @@ function endVideoClipRangeDrag(event) {
   if (event && event.pointerId !== undefined && event.pointerId !== drag.pointerId) return;
   var selectionEl = getVideoClipEl('video-clip-selection-range');
   if (selectionEl) {
-    selectionEl.classList.remove('is-dragging');
+    selectionEl.classList.remove('is-dragging', 'is-resizing');
     try {
       if (selectionEl.hasPointerCapture && selectionEl.hasPointerCapture(drag.pointerId)) {
         selectionEl.releasePointerCapture(drag.pointerId);
@@ -555,16 +633,23 @@ function beginVideoClipRangeDrag(event) {
   if (!selectionEl || !trackEl || !range || range.sourceDuration <= 0 || range.duration <= 0) return;
   var rect = trackEl.getBoundingClientRect();
   if (!rect || rect.width <= 0) return;
+  var handleEl = event.target && event.target.closest
+    ? event.target.closest('[data-video-clip-range-handle]')
+    : null;
+  var dragMode = handleEl ? String(handleEl.getAttribute('data-video-clip-range-handle') || '') : 'move';
+  if (dragMode !== 'start' && dragMode !== 'end') dragMode = 'move';
 
   videoClipRangeDrag = {
     pointerId: event.pointerId,
+    mode: dragMode,
     originClientX: Number(event.clientX || 0),
     originStart: range.start,
+    originEnd: range.end,
     duration: range.duration,
     sourceDuration: range.sourceDuration,
     trackWidth: rect.width
   };
-  selectionEl.classList.add('is-dragging');
+  selectionEl.classList.add(dragMode === 'move' ? 'is-dragging' : 'is-resizing');
   selectionEl.setPointerCapture(event.pointerId);
   event.preventDefault();
 }
@@ -573,11 +658,21 @@ function moveVideoClipRangeDrag(event) {
   var drag = videoClipRangeDrag;
   if (!drag || event.pointerId !== drag.pointerId) return;
   var deltaSeconds = ((Number(event.clientX || 0) - drag.originClientX) / drag.trackWidth) * drag.sourceDuration;
-  var maxStart = Math.max(0, drag.sourceDuration - drag.duration);
-  var nextStart = Math.max(0, Math.min(maxStart, drag.originStart + deltaSeconds));
-  var range = clampVideoClipRange(nextStart, nextStart + drag.duration, drag.sourceDuration);
+  var minimumDuration = Math.min(0.1, drag.sourceDuration);
+  var range;
+  if (drag.mode === 'start') {
+    var resizeStart = Math.max(0, Math.min(drag.originEnd - minimumDuration, drag.originStart + deltaSeconds));
+    range = clampVideoClipRange(resizeStart, drag.originEnd, drag.sourceDuration);
+  } else if (drag.mode === 'end') {
+    var resizeEnd = Math.max(drag.originStart + minimumDuration, Math.min(drag.sourceDuration, drag.originEnd + deltaSeconds));
+    range = clampVideoClipRange(drag.originStart, resizeEnd, drag.sourceDuration);
+  } else {
+    var maxStart = Math.max(0, drag.sourceDuration - drag.duration);
+    var nextStart = Math.max(0, Math.min(maxStart, drag.originStart + deltaSeconds));
+    range = clampVideoClipRange(nextStart, nextStart + drag.duration, drag.sourceDuration);
+  }
   writeVideoClipTrimInputs(range);
-  seekVideoClipPlayhead(range.start);
+  seekVideoClipPlayhead(drag.mode === 'end' ? range.end : range.start);
   event.preventDefault();
 }
 
@@ -633,6 +728,7 @@ function closeVideoClipModal() {
   videoClipOverwriteSourceMode = false;
   videoClipLastExportSignature = '';
   videoClipPlaybackRate = 1;
+  videoClipFrameSeekPending = false;
   destroyVideoClipInlineCropper();
   setVideoClipPendingCrop(null);
   setVideoClipBusy(false);
@@ -698,6 +794,7 @@ function openVideoClipModal(mediaItem) {
   videoClipSourceResolution = null;
   videoClipLastExportSignature = '';
   videoClipLoopPreviewActive = false;
+  videoClipFrameSeekPending = false;
   setVideoClipBusy(false);
   setVideoClipStatus('');
   setStatus('');
@@ -706,6 +803,7 @@ function openVideoClipModal(mediaItem) {
   setVideoClipPlaybackRate(1);
   updateVideoClipLoopPreviewButton();
   updateVideoClipCropButtons();
+  updateVideoClipFrameStepUi();
 
   var stem = mediaItem.fileName.replace(/\.[^.]+$/, '');
   outputEl.value = isVideoClipInSrcVideosFolder() ? (stem + '_clip') : mediaItem.fileName;
@@ -737,7 +835,9 @@ function openVideoClipModal(mediaItem) {
       videoClipSourceResolution = { width: Math.round(vw), height: Math.round(vh) };
     }
     updateVideoClipStageLayout();
-    if (cropFrameBtn) cropFrameBtn.disabled = false;
+    videoClipFrameSeekPending = false;
+    updateVideoClipCropFrameAvailability();
+    updateVideoClipFrameStepUi();
     syncVideoClipTrimInputs('end');
     setVideoClipPlaybackRate(1);
     updateVideoClipCropOverlay();
@@ -1125,11 +1225,22 @@ function wireCropThisFrameButton() {
   var videoEl = getVideoClipEl('video-clip-video');
   if (!videoEl) throw new Error('Missing required element: video-clip-video');
   videoEl.addEventListener('loadedmetadata', function() {
-    btn.disabled = false;
+    videoClipFrameSeekPending = false;
+    updateVideoClipCropFrameAvailability();
+    updateVideoClipCropOverlay();
+  });
+  videoEl.addEventListener('seeking', function() {
+    videoClipFrameSeekPending = true;
+    updateVideoClipCropFrameAvailability();
+  });
+  videoEl.addEventListener('seeked', function() {
+    videoClipFrameSeekPending = false;
+    updateVideoClipCropFrameAvailability();
+    updateVideoClipTimelineUi();
     updateVideoClipCropOverlay();
   });
   if (videoEl.readyState >= 1) {
-    btn.disabled = false;
+    updateVideoClipCropFrameAvailability();
   }
 }
 
@@ -1140,6 +1251,8 @@ function wireVideoClipModal() {
   var cropApplyBtn = getVideoClipEl('video-clip-crop-apply-btn');
   var cropCancelBtn = getVideoClipEl('video-clip-crop-cancel-btn');
   var cropClearBtn = getVideoClipEl('video-clip-crop-clear-btn');
+  var frameBackBtn = getVideoClipEl('video-clip-frame-back-btn');
+  var frameForwardBtn = getVideoClipEl('video-clip-frame-forward-btn');
   var skipBackBtn = getVideoClipEl('video-clip-skip-back-btn');
   var skipForwardBtn = getVideoClipEl('video-clip-skip-forward-btn');
   var skipForward15Btn = getVideoClipEl('video-clip-skip-forward-15-btn');
@@ -1160,6 +1273,8 @@ function wireVideoClipModal() {
   if (cropApplyBtn) cropApplyBtn.onclick = applyVideoClipCropEdit;
   if (cropCancelBtn) cropCancelBtn.onclick = function () { cancelVideoClipCropEdit(true); };
   if (cropClearBtn) cropClearBtn.onclick = clearVideoClipCrop;
+  if (frameBackBtn) frameBackBtn.onclick = function () { stepVideoClipFrame(-1); };
+  if (frameForwardBtn) frameForwardBtn.onclick = function () { stepVideoClipFrame(1); };
   if (skipBackBtn) skipBackBtn.onclick = function () { stepVideoClipPlayhead(-5); };
   if (skipForwardBtn) skipForwardBtn.onclick = function () { stepVideoClipPlayhead(5); };
   if (skipForward15Btn) skipForward15Btn.onclick = function () { stepVideoClipPlayhead(15); };
@@ -1167,13 +1282,13 @@ function wireVideoClipModal() {
   if (loopPreviewBtn) loopPreviewBtn.onclick = toggleVideoClipLoopPreview;
   if (markStartBtn && startEl && videoEl) {
     markStartBtn.onclick = function () {
-      startEl.value = formatVideoClipSeconds(videoEl.currentTime || 0);
+      startEl.value = formatVideoClipSeekSeconds(videoEl.currentTime || 0);
       syncVideoClipTrimInputs('start');
     };
   }
   if (markEndBtn && endEl && videoEl) {
     markEndBtn.onclick = function () {
-      endEl.value = formatVideoClipSeconds(videoEl.currentTime || 0);
+      endEl.value = formatVideoClipSeekSeconds(videoEl.currentTime || 0);
       syncVideoClipTrimInputs('end');
     };
   }
@@ -1256,10 +1371,7 @@ function wireVideoClipModal() {
       if (!videoEl) return;
 
       e.preventDefault();
-      var currentVal = isFinite(Number(videoEl.currentTime)) ? Number(videoEl.currentTime) : 0;
-      var step = 0.05;
-      var newVal = e.key === 'ArrowRight' ? currentVal + step : currentVal - step;
-      seekVideoClipPlayhead(newVal);
+      stepVideoClipFrame(e.key === 'ArrowRight' ? 1 : -1);
     }
   });
 }

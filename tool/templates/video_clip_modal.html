@@ -38,7 +38,10 @@
                 </div>
                 <div class="video-clip-timeline" aria-hidden="true">
                     <div class="video-clip-timeline-track">
-                        <div id="video-clip-selection-range" class="video-clip-selection-range"></div>
+                        <div id="video-clip-selection-range" class="video-clip-selection-range">
+                            <span class="video-clip-range-handle video-clip-range-handle--start" data-video-clip-range-handle="start"></span>
+                            <span class="video-clip-range-handle video-clip-range-handle--end" data-video-clip-range-handle="end"></span>
+                        </div>
                         <div id="video-clip-playhead" class="video-clip-playhead"></div>
                     </div>
                     <div class="video-clip-timeline-ticks">
@@ -55,11 +58,14 @@
                 <div class="video-clip-setting-group">
                     <div class="video-clip-form-label">Navigation</div>
                     <div class="video-clip-nav-grid">
+                        <button id="video-clip-frame-back-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn" title="Step backward by one frame-sized interval using reported FPS">-1f</button>
+                        <button id="video-clip-frame-forward-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn" title="Step forward by one frame-sized interval using reported FPS">+1f</button>
                         <button id="video-clip-skip-back-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">-5s</button>
                         <button id="video-clip-skip-forward-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">+5s</button>
                         <button id="video-clip-skip-forward-15-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">+15s</button>
                         <button id="video-clip-skip-forward-30-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">+30s</button>
                     </div>
+                    <div id="video-clip-frame-step-note" class="video-clip-section-note"></div>
                     <div class="video-clip-nav-row">
                         <span class="video-clip-field-label">Scan Speed</span>
                         <div class="video-clip-rate-row" role="group" aria-label="Playback rate">
@@ -80,7 +86,7 @@
                             <input
                                 id="video-clip-start-input"
                                 type="number"
-                                step="0.1"
+                                step="0.001"
                                 min="0"
                                 value="0"
                             >
@@ -90,7 +96,7 @@
                             <input
                                 id="video-clip-end-input"
                                 type="number"
-                                step="0.1"
+                                step="0.001"
                                 min="0"
                                 value="2.0"
                             >
@@ -100,7 +106,7 @@
                             <input
                                 id="video-clip-duration-input"
                                 type="number"
-                                step="0.1"
+                                step="0.001"
                                 min="0.1"
                                 value="2.0"
                             >

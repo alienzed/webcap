@@ -1616,6 +1616,30 @@ body.focused-annotation-open .caption-context-menu {
   background: rgba(14, 165, 233, 0.48);
 }
 
+.video-clip-selection-range.is-resizing {
+  background: rgba(14, 165, 233, 0.48);
+}
+
+.video-clip-range-handle {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 10px;
+  border: 1px solid rgba(186, 230, 253, 0.9);
+  background: #0284c7;
+  cursor: ew-resize;
+}
+
+.video-clip-range-handle--start {
+  left: -1px;
+  border-radius: 2px 0 0 2px;
+}
+
+.video-clip-range-handle--end {
+  right: -1px;
+  border-radius: 0 2px 2px 0;
+}
+
 .video-clip-playhead {
   position: absolute;
   top: 0;
@@ -1661,7 +1685,7 @@ body.focused-annotation-open .caption-context-menu {
 
 .video-clip-nav-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 

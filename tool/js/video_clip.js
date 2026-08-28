@@ -867,6 +867,10 @@ function finalizeVideoClipJob(payload, status, message) {
       refreshCurrentDirectory();
     }
     setVideoClipStatus(payload && payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.', { kind: 'success' });
+    if (payload && payload.overwriteSource) {
+      closeVideoClipModal();
+      setStatus('In-place clip exported.');
+    }
     return;
   }
   if (status === 'failed') {
@@ -1080,6 +1084,10 @@ function applyVideoClip(overwrite, skipRepeatConfirm) {
         ? (payload.overwriteSource ? 'In-place clip queued.' : 'Clip queued.')
         : (payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.'));
       refreshCurrentDirectory();
+      if (status === 200 && payload.overwriteSource) {
+        closeVideoClipModal();
+        setStatus('In-place clip exported.');
+      }
       return;
     }
 

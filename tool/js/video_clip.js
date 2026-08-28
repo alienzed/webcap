@@ -728,7 +728,8 @@ function openVideoClipModal(mediaItem) {
   videoEl.onloadedmetadata = function () {
     var d = Number(videoEl.duration);
     if (isFinite(d) && d > 0) {
-      trimEndEl.value = String(Math.max(0.1, Math.min(2.0, d)).toFixed(3));
+      var defaultEnd = videoClipOverwriteSourceMode ? d : Math.min(2.0, d);
+      trimEndEl.value = String(Math.max(0.1, defaultEnd).toFixed(3));
     }
     var vw = Number(videoEl.videoWidth || 0);
     var vh = Number(videoEl.videoHeight || 0);

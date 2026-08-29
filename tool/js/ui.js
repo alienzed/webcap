@@ -317,6 +317,7 @@ function navigateIntoFolder(name) {
 // Directory listing now uses backend /fs/list
 function refreshCurrentDirectory() {
   var path = state.folder || '';
+  state.folderStateWritable = false;
   invalidatePruneCandidates();
   if (state && state.supersetActive) {
     state.supersetActive = false;
@@ -358,6 +359,9 @@ function refreshCurrentDirectory() {
   xhr.open('GET', url);
   xhr.onreadystatechange = function () {
     if (xhr.readyState === 4) {
+      if (String(state.folder || '') !== String(path || '')) {
+        return;
+      }
       if (xhr.status === 200) {
         try {
           var resp = JSON.parse(xhr.responseText);
@@ -385,11 +389,16 @@ function refreshCurrentDirectory() {
             };
           });
           // --- Load and apply folder state fields ---
-          var folderState = resp.folder_state || {};
-          applyFolderStateToDom(folderState);
-          loadChecklistFromFolderState(folderState);
-          loadCaptionHelpersFromFolderState(folderState);
-          loadItemTagsFromFolderState(folderState);
+           var folderState = resp.folder_state || {};
+           applyFolderStateToDom(folderState);
+           loadChecklistFromFolderState(folderState);
+           loadCaptionHelpersFromFolderState(folderState);
+           loadItemTagsFromFolderState(folderState);
+           state.folderStateWritable = true;
+           var captionErrors = Array.isArray(resp.caption_errors) ? resp.caption_errors : [];
+           if (captionErrors.length) {
+             console.error('[webcap] Caption read failures:', captionErrors);
+           }
           refreshMediaResolutionCache();
            state.reviewedSet = state.reviewedSet || new Set();
            renderFileList(ui.filterEl.value);
@@ -412,7 +421,11 @@ function refreshCurrentDirectory() {
           if (typeof updateUtilityPathLabel === 'function') {
             updateUtilityPathLabel(state.folder || '');
           }
-           setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
+           if (captionErrors.length) {
+             setStatus('Loaded folder with ' + captionErrors.length + ' caption read error' + (captionErrors.length === 1 ? '' : 's') + '. Check the browser and server consoles.');
+           } else {
+             setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
+           }
            refreshTrainingWorkspace();
           // If a file was just renamed, reselect it
           if (window.state && state.pendingSelectFileName) {
@@ -421,6 +434,8 @@ function refreshCurrentDirectory() {
             setTimeout(function() { selectByFileName(fname); }, 0);
           }
         } catch (e) {
+          state.folderStateWritable = false;
+          console.error('[webcap] Folder load failed:', e);
           setStatus('Error parsing folder list: ' + (e && e.message ? e.message : e));
           state.childFolders = [];
           state.items = [];
@@ -429,6 +444,7 @@ function refreshCurrentDirectory() {
            refreshTrainingWorkspace();
         }
       } else {
+        state.folderStateWritable = false;
         var loadError = 'Error loading folder: ' + xhr.status;
         try {
           var errorPayload = JSON.parse(xhr.responseText || '{}');
@@ -436,6 +452,7 @@ function refreshCurrentDirectory() {
         } catch (errorParseFailure) {
           // The HTTP status remains useful when an intermediary returned non-JSON.
         }
+        console.error('[webcap] Folder load failed:', loadError);
         setStatus(loadError);
         state.childFolders = [];
         state.items = [];
@@ -455,8 +472,9 @@ var debouncedSaveMediaFilters = debounceCreate(250);
 function handleMediaFilterChanged() {
   markSuperSetSearchDirty();
   renderFileList();
+  var capturedSave = captureCurrentFolderStateSave();
   debouncedSaveMediaFilters(function () {
-    saveFolderStateForCurrentRoot();
+    writeCapturedFolderState(capturedSave);
   });
 }
 

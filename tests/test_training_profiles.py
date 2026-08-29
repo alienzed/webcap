@@ -1,4 +1,11 @@
-from tool.server.training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, profile, profile_run
+from tool.server.training_profiles import (
+    KREA2_PROFILE_ID,
+    MINIMAX_H3_PROFILE_ID,
+    WAN21_PROFILE_ID,
+    WAN22_PROFILE_ID,
+    profile,
+    profile_run,
+)
 
 
 def test_training_profiles_expose_only_their_valid_runs_and_artifacts():

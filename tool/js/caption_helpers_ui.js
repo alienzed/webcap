@@ -210,7 +210,10 @@ function wireCaptionHelpersUi() {
   if (notesEditor) {
     notesEditor.addEventListener('input', function () {
       captionHelperNotes = notesEditor.value;
-      debouncedSetNotesSave(saveCaptionHelpersToFolderState);
+      var capturedSave = captureCaptionHelpersFolderStateSave();
+      debouncedSetNotesSave(function () {
+        saveCaptionHelpersToFolderState(capturedSave);
+      });
     });
 
     notesEditor.addEventListener('keydown', function (e) {

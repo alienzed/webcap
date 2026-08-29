@@ -153,7 +153,7 @@ def test_candidate_caches_then_trains_with_separate_telemetry(tmp_path, monkeypa
         def stop(self):
             pass
 
-    def fake_run(command, _cwd, log_path, post_warmup_timeout=None):
+    def fake_run(command, _cwd, log_path, post_warmup_timeout=None, **_kwargs):
         calls.append((command, post_warmup_timeout))
         if "--cache_only" in command:
             Path(log_path).write_text("cache complete\n", encoding="utf-8")
@@ -168,6 +168,7 @@ def test_candidate_caches_then_trains_with_separate_telemetry(tmp_path, monkeypa
     monkeypatch.setattr(probe, "run_command", fake_run)
     monkeypatch.setattr(probe, "telemetry_summary", lambda path: {
         "peakGpuMemoryMiB": 999 if Path(path) == candidate["cacheTelemetryPath"] else 100,
+        "gpuMemoryTotalMiB": 1000,
         "memoryPressureEvidence": True,
     })
     result = probe.execute_probe(candidate, baseline_seconds=2.0)
@@ -242,6 +243,7 @@ def test_saved_result_reclassification_marks_single_clear_spill_unsafe():
         "trainExitCode": 0,
         "timedOut": False,
         "measuredStepSeconds": [27.8, 28.1, 28.4, 28.7],
+        "telemetry": {"peakGpuMemoryMiB": 1000, "gpuMemoryTotalMiB": 2000},
     }, baseline_seconds=2.298)
     assert status == "unsafe_slow"
     assert median == pytest.approx(28.25)
@@ -293,7 +295,7 @@ def test_training_failures_are_classified_after_successful_cache(tmp_path, monke
         def stop(self):
             pass
 
-    def fake_run(command, _cwd, log_path, post_warmup_timeout=None):
+    def fake_run(command, _cwd, log_path, post_warmup_timeout=None, **_kwargs):
         calls.append(command)
         is_cache = "--cache_only" in command
         Path(log_path).write_text("cache complete\n" if is_cache else train_log, encoding="utf-8")
@@ -320,16 +322,165 @@ def test_telemetry_uses_all_gpus_and_reports_memory_pressure(tmp_path):
         ])
         writer.writeheader()
         writer.writerows([
-            {"gpu_index": "0", "gpu_uuid": "GPU-0", "gpu_memory_used_mib": "100", "mem_available_kib": str(10 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
-            {"gpu_index": "1", "gpu_uuid": "GPU-1", "gpu_memory_used_mib": "300", "mem_available_kib": str(10 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
-            {"gpu_index": "0", "gpu_uuid": "GPU-0", "gpu_memory_used_mib": "200", "mem_available_kib": str(7 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
-            {"gpu_index": "1", "gpu_uuid": "GPU-1", "gpu_memory_used_mib": "2000", "mem_available_kib": str(7 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
+            {"gpu_index": "0", "gpu_uuid": "GPU-0", "gpu_memory_used_mib": "100", "gpu_memory_total_mib": "4000", "mem_available_kib": str(10 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
+            {"gpu_index": "1", "gpu_uuid": "GPU-1", "gpu_memory_used_mib": "300", "gpu_memory_total_mib": "4000", "mem_available_kib": str(10 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
+            {"gpu_index": "0", "gpu_uuid": "GPU-0", "gpu_memory_used_mib": "200", "gpu_memory_total_mib": "4000", "mem_available_kib": str(7 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
+            {"gpu_index": "1", "gpu_uuid": "GPU-1", "gpu_memory_used_mib": "2000", "gpu_memory_total_mib": "4000", "mem_available_kib": str(7 * 1024 * 1024), "swap_free_kib": str(4 * 1024 * 1024)},
         ])
     summary = probe.telemetry_summary(telemetry_path)
     assert summary["activeGpuIndex"] == "1"
     assert summary["peakGpuMemoryMiB"] == 2000
+    assert summary["minimumGpuFreeMiB"] == 2000
     assert summary["hostAvailableDropKiB"] == 3 * 1024 * 1024
     assert summary["memoryPressureEvidence"] is True
+
+
+def test_saved_result_reclassification_enforces_exact_vram_headroom():
+    probe = load_probe_script()
+    base = {
+        "status": "completed",
+        "cacheExitCode": 0,
+        "trainExitCode": 0,
+        "timedOut": False,
+        "measuredStepSeconds": [2.0, 2.1, 2.0, 2.1],
+        "telemetry": {"peakGpuMemoryMiB": 32000, "gpuMemoryTotalMiB": 32680},
+    }
+    assert probe.classify_saved_result(base, baseline_seconds=2.0)[0] == "completed"
+    base["telemetry"]["gpuMemoryTotalMiB"] = 32679
+    assert probe.classify_saved_result(base, baseline_seconds=2.0)[0] == "unsafe_vram"
+    base["telemetry"] = {"peakGpuMemoryMiB": 32000}
+    assert probe.classify_saved_result(base, baseline_seconds=2.0)[0] == "telemetry_failed"
+
+
+def _mixed_record(probe, tmp_path, frames, aspect, width, height, free, ladder_order, shape_order):
+    media_dir = tmp_path / "media" / probe.candidate_name(frames, aspect, width, height)
+    media_dir.mkdir(parents=True, exist_ok=True)
+    return {
+        "frames": frames,
+        "aspect": aspect,
+        "shape": [width, height, frames],
+        "mfp": probe.mfp(width, height, frames),
+        "medianSeconds": 2.0,
+        "minimumGpuFreeMiB": free,
+        "mediaDir": media_dir,
+        "ladderOrder": ladder_order,
+        "shapeOrder": shape_order,
+    }
+
+
+def test_mixed_dataset_uses_nine_cached_candidates_and_real_weights(tmp_path):
+    probe = load_probe_script()
+    selected = {}
+    for ladder_order, (frames, _repeats) in enumerate(probe.MIXED_ROLE_SPECS):
+        for shape_order, aspect in enumerate(probe.MIXED_ASPECTS):
+            selected[(frames, aspect)] = _mixed_record(
+                probe, tmp_path, frames, aspect, 320 + frames, 256 + shape_order * 32, 1000, ladder_order, shape_order,
+            )
+    dataset_path = tmp_path / "mixed.toml"
+    probe.write_mixed_dataset(dataset_path, selected)
+    dataset = tomllib.loads(dataset_path.read_text(encoding="utf-8"))
+    assert len(dataset["directory"]) == 9
+    assert [entry["num_repeats"] for entry in dataset["directory"]] == [4, 4, 4, 2, 2, 2, 1, 1, 1]
+    assert all(entry["path"].startswith(str(tmp_path / "media").replace("\\", "/")) for entry in dataset["directory"])
+
+
+def test_mixed_attempt_ignores_first_epoch_and_rejects_two_slow_second_epoch(tmp_path, monkeypatch):
+    probe = load_probe_script()
+    candidate = {
+        "configPath": tmp_path / "mixed.toml",
+        "trainLog": tmp_path / "mixed.log",
+        "telemetryPath": tmp_path / "mixed.csv",
+        "resultPath": tmp_path / "mixed.json",
+    }
+    candidate["configPath"].write_text(h3_config_text(), encoding="utf-8")
+
+    class FakeSampler:
+        def __init__(self, _path):
+            pass
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+    def fake_run(_command, _cwd, log_path, **_kwargs):
+        first_epoch = [80.0] * probe.MIXED_STEPS_PER_EPOCH
+        second_epoch = [2.0] * (probe.MIXED_STEPS_PER_EPOCH - 2) + [20.0, 21.0]
+        Path(log_path).write_text(
+            "\n".join(
+                "step=" + str(index + 1) + ", iter time (s): " + str(value)
+                for index, value in enumerate(first_epoch + second_epoch)
+            ),
+            encoding="utf-8",
+        )
+        return {"exitCode": 0, "timedOut": False, "stoppedFor": ""}
+
+    monkeypatch.setattr(probe, "TelemetrySampler", FakeSampler)
+    monkeypatch.setattr(probe, "run_command", fake_run)
+    monkeypatch.setattr(probe, "telemetry_summary", lambda _path: {"peakGpuMemoryMiB": 32000, "gpuMemoryTotalMiB": 32680})
+    result = probe.execute_mixed_attempt(candidate, baseline_seconds=2.0)
+    assert result["status"] == "unsafe_slow"
+    assert result["slowStepCount"] == 2
+    assert len(result["measuredStepSeconds"]) == probe.MIXED_STEPS_PER_EPOCH
+
+
+def test_mixed_backoff_is_deterministic_and_bounded(tmp_path, monkeypatch):
+    probe = load_probe_script()
+    seed = {"results": tmp_path / "results", "config": tmp_path / "base.toml"}
+    seed["results"].mkdir()
+    seed["config"].write_text(h3_config_text(), encoding="utf-8")
+    safe_by_key = {}
+    provisional = {}
+    for ladder_order, (frames, _repeats) in enumerate(probe.MIXED_ROLE_SPECS):
+        for shape_order, aspect in enumerate(probe.MIXED_ASPECTS):
+            low = _mixed_record(probe, tmp_path, frames, aspect, 320, 256, 1400, ladder_order, 0)
+            high_free = 700 if (frames, aspect) == (68, "square") else 1000
+            high = _mixed_record(probe, tmp_path, frames, aspect, 352, 288, high_free, ladder_order, 1)
+            safe_by_key[(frames, aspect)] = [low, high]
+            provisional[(frames, aspect)] = high
+
+    attempts = []
+    monkeypatch.setattr(probe, "prepare_mixed_attempt", lambda _seed, _selected, index, _work: {"probeDir": _seed["results"] / "mixed" / str(index)})
+
+    def fake_execute(_candidate, _baseline):
+        attempts.append(1)
+        return {
+            "status": "unsafe_vram" if len(attempts) == 1 else "completed",
+            "slowThresholdSeconds": 20.0,
+            "slowStepCount": 0,
+            "medianStepSeconds": 2.0,
+            "telemetry": {"minimumGpuFreeMiB": 600},
+        }
+
+    monkeypatch.setattr(probe, "execute_mixed_attempt", fake_execute)
+    result = probe.run_mixed_validation(seed, safe_by_key, provisional, tmp_path / "work")
+    assert result["status"] == "completed"
+    assert len(result["attempts"]) == 2
+    assert result["attempts"][0]["backoff"] == {"frames": 68, "aspect": "square", "from": [352, 288], "to": [320, 256]}
+
+
+def test_completed_mixed_validation_is_required_for_automatic_publish(tmp_path):
+    probe = load_probe_script()
+    plan_path = tmp_path / "plan.json"
+    shutil.copy2(SCRIPTS_DIR / "h3_shape_probe_plan.json", plan_path)
+    results = tmp_path / "results"
+    results.mkdir()
+    seed_path = tmp_path / "seed.json"
+    seed_path.write_text(json.dumps({"id": "h3-test"}), encoding="utf-8")
+    seed = {"plan": plan_path, "results": results, "seed": {"id": "h3-test"}, "seedPath": seed_path}
+    final_shapes = {
+        "17": {"169": [1088, 608], "square": [736, 736], "43": [928, 704]},
+        "34": {"169": [800, 448], "square": [672, 672], "43": [768, 576]},
+        "68": {"169": [512, 288], "square": [416, 416], "43": [416, 320]},
+    }
+    (results / "campaign_result.json").write_text(json.dumps({
+        "mixedValidation": {"status": "completed", "finalSafeShapes": final_shapes},
+    }), encoding="utf-8")
+    assert probe.calibration_settings_from_results(seed, require_mixed_validation=True)["safe_shapes"] == final_shapes
+    (results / "campaign_result.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="mixed Quality validation"):
+        probe.calibration_settings_from_results(seed, require_mixed_validation=True)
 
 
 def test_campaign_stops_only_affected_ladder_and_marks_safe_sentinels_inconclusive(tmp_path, monkeypatch):
@@ -352,11 +503,23 @@ def test_campaign_stops_only_affected_ladder_and_marks_safe_sentinels_inconclusi
         if on_train_start is not None:
             on_train_start()
         status = "oom" if (candidate["frames"], candidate["shape"][:2]) == (34, [800, 448]) else "completed"
-        return {"status": status, "medianStepSeconds": 2.0 if status == "completed" else None, "baselineSeconds": baseline, "trainExitCode": 1 if status == "oom" else 0, "timedOut": False, "telemetry": {"spillEvidence": False}}
+        result = {
+            "status": status,
+            "medianStepSeconds": 2.0 if status == "completed" else None,
+            "baselineSeconds": baseline,
+            "cacheExitCode": 0,
+            "trainExitCode": 1 if status == "oom" else 0,
+            "timedOut": False,
+            "measuredStepSeconds": [2.0, 2.0, 2.0, 2.0],
+            "telemetry": {"peakGpuMemoryMiB": 1000, "gpuMemoryTotalMiB": 4000, "spillEvidence": False},
+        }
+        probe.write_result(candidate["resultPath"], **result)
+        return result
 
     monkeypatch.setattr(probe, "prepare_candidate", fake_prepare)
     monkeypatch.setattr(probe, "execute_probe", fake_execute)
-    assert probe.run_campaign(seed) == "inconclusive"
+    monkeypatch.setattr(probe, "run_mixed_validation", lambda *_args: {"status": "completed", "attempts": [], "finalSafeShapes": {"17": {"169": [1088, 608], "square": [736, 736], "43": [928, 704]}, "34": {"169": [736, 416], "square": [768, 768], "43": [1024, 768]}, "68": {"169": [896, 512], "square": [672, 672], "43": [768, 576]}}})
+    assert probe.run_campaign(seed) == "completed"
     assert (34, [864, 480], 2.0) not in calls
     assert any(frames == 68 for frames, _shape, _baseline in calls)
     campaign = json.loads((results / "campaign_result.json").read_text(encoding="utf-8"))

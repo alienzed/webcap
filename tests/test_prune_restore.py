@@ -131,7 +131,17 @@ def test_rename_file_renames_sidecar_and_updates_reviewed_keys(client, isolated_
     write_bytes(set_folder / "target.mp4", b"other")
     write_text(
         set_folder / ".webcap_state.json",
-        json.dumps({"reviewedKeys": ["old.mp4", "other.mp4"]}, indent=2),
+        json.dumps({
+            "reviewedKeys": ["old.mp4", "other.mp4"],
+            "mutated_media_keys": ["old.mp4"],
+            "flags": {"old.mp4": "yellow", "other.mp4": "green"},
+            "ratings_by_media": {"old.mp4": 5, "other.mp4": 2},
+            "caption_tags_by_media": {"old.mp4": ["front", "detail"]},
+            "caption_requirements_checked": {"old.mp4": {"Pose": True}},
+            "caption_term_descriptors_by_media": {
+                "old.mp4": {"front": {"prefix": "close", "suffix": ""}},
+            },
+        }, indent=2),
     )
 
     r = client.post(
@@ -147,6 +157,14 @@ def test_rename_file_renames_sidecar_and_updates_reviewed_keys(client, isolated_
     state = json.loads((set_folder / ".webcap_state.json").read_text(encoding="utf-8"))
     assert "new.mp4" in state["reviewedKeys"]
     assert "old.mp4" not in state["reviewedKeys"]
+    assert state["mutated_media_keys"] == ["new.mp4"]
+    assert state["flags"] == {"new.mp4": "yellow", "other.mp4": "green"}
+    assert state["ratings_by_media"] == {"new.mp4": 5, "other.mp4": 2}
+    assert state["caption_tags_by_media"] == {"new.mp4": ["front", "detail"]}
+    assert state["caption_requirements_checked"] == {"new.mp4": {"Pose": True}}
+    assert state["caption_term_descriptors_by_media"] == {
+        "new.mp4": {"front": {"prefix": "close", "suffix": ""}},
+    }
 
     r = client.post(
         "/fs/rename",
@@ -159,6 +177,26 @@ def test_rename_file_renames_sidecar_and_updates_reviewed_keys(client, isolated_
         json={"folder": set_folder_rel, "oldFile": "missing.mp4", "newFile": "another.mp4"},
     )
     assert r.status_code == 404
+
+
+def test_rename_file_is_blocked_when_folder_state_cannot_be_read(client, isolated_fs_root):
+    set_folder_rel = "set_bad_rename_state"
+    set_folder = isolated_fs_root / set_folder_rel
+    set_folder.mkdir(parents=True)
+    write_bytes(set_folder / "old.mp4", b"media")
+    state_path = set_folder / ".webcap_state.json"
+    state_path.write_text('{"ratings_by_media": ', encoding="utf-8")
+    original_state = state_path.read_bytes()
+
+    response = client.post(
+        "/fs/rename",
+        json={"folder": set_folder_rel, "oldFile": "old.mp4", "newFile": "new.mp4"},
+    )
+
+    assert response.status_code == 400
+    assert (set_folder / "old.mp4").exists()
+    assert not (set_folder / "new.mp4").exists()
+    assert state_path.read_bytes() == original_state
 
 
 def test_rename_folder_and_reserved_name_guard(client, isolated_fs_root):

@@ -125,12 +125,19 @@ function renderTrainingHistory() {
     var checkpointLabel = trainingHistoryCheckpointLabel(artifact);
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
     var canOpenCheckpointRun = !!(checkpointLabel && job.folder && job.outputRunPath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(checkpointStage) !== -1);
+    var runDirectory = String(job.outputRunPath || '').trim();
+    var runDirectoryLabel = runDirectory ? trainingOutputIdentity(job) : '';
     var outputFact = job.folder && job.outputRoot && job.outputAvailable !== false
       ? '<div class="training-history-fact"><span>Output</span><button type="button" class="training-history-fact-link" data-training-history-output="' + escapeHtml(job.id || '') + '" title="Open effective output folder">' + escapeHtml(trainingOutputIdentity(job)) + '</button></div>'
       : trainingHistoryFact('Output', trainingOutputIdentity(job));
     var checkpointFact = canOpenCheckpointRun
       ? '<div class="training-history-fact"><span>Latest checkpoint</span><button type="button" class="training-history-fact-link" data-training-history-run="' + escapeHtml(job.id || '') + '" title="Open the run directory containing this checkpoint">' + escapeHtml(checkpointLabel) + '</button></div>'
       : trainingHistoryFact('Latest checkpoint', checkpointLabel);
+    var runDirectoryFact = runDirectory
+      ? (canOpenCheckpointRun
+        ? '<div class="training-history-fact"><span>Run directory</span><button type="button" class="training-history-fact-link" data-training-history-run="' + escapeHtml(job.id || '') + '" title="Open Diffusion-Pipe run: ' + escapeHtml(runDirectory) + '">' + escapeHtml(runDirectoryLabel) + '</button></div>'
+        : trainingHistoryFact('Run directory', runDirectoryLabel, runDirectory))
+      : '';
     var expandedFacts = detailsOpen ? '<div class="training-history-facts">' +
       '<div class="training-history-fact-group"><div class="training-history-fact-heading">Timing</div>' +
         trainingHistoryFact('Active time', activeTime || (metricPending ? 'Loading…' : 'Unavailable')) +
@@ -146,6 +153,7 @@ function renderTrainingHistory() {
       '<div class="training-history-fact-group"><div class="training-history-fact-heading">Dataset and output</div>' +
         trainingHistoryFact('Captured items', Number(job.capturedItemCount || 0) ? String(job.capturedItemCount) : '') +
         outputFact +
+        runDirectoryFact +
         checkpointFact +
         trainingHistoryFact('Continues', job.parentJobId ? 'run ' + job.parentJobId : '') +
       '</div></div>' : '';

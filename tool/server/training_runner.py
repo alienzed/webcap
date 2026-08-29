@@ -1307,7 +1307,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "bundlePath", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
+    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "bundlePath", "bundleSummary", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -1422,6 +1422,7 @@ def _new_job(
         "folder": folder,
         "stages": stages,
         "profileId": selected_profile["id"],
+        "profileLabel": selected_profile["label"],
         "mode": selected_mode,
         "runId": job_run_id,
         "actionRunId": action_run_id,
@@ -1440,6 +1441,7 @@ def _new_job(
         "snapshot": snapshot,
         "bundlePath": str(bundle["path"]),
         "bundleArtifacts": {key: str(value) for key, value in artifacts.items()},
+        "bundleSummary": bundle.get("summary") or {},
         "capturedItemCount": int(bundle.get("capturedItemCount") or 0),
         "artifactPath": str(job_dir),
         "artifactDir": str(job_dir),
@@ -1468,6 +1470,9 @@ def _bundle_from_path(bundle_path, profile_id, mode, stages):
         "manifest": path / "dataset_manifest.json",
         "plan": path / "training_plan.json",
     }
+    summary_path = path / "bundle_summary.json"
+    if summary_path.is_file():
+        artifacts["summary"] = summary_path
     for stage in stage_names:
         item = next(item for item in selected["configs"] if item["id"] == stage)
         artifacts[stage + "Config"] = path / "configs" / item["file"]
@@ -1479,8 +1484,12 @@ def _bundle_from_path(bundle_path, profile_id, mode, stages):
         manifest = json.loads(artifacts["manifest"].read_text(encoding="utf-8"))
     except (OSError, ValueError):
         manifest = {}
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.is_file() else {}
+    except (OSError, ValueError):
+        summary = {}
     rows = (manifest.get("images") or []) + (manifest.get("videos") or []) if isinstance(manifest, dict) else []
-    return {"path": path, "artifacts": artifacts, "capturedItemCount": len(rows)}
+    return {"path": path, "artifacts": artifacts, "summary": summary, "capturedItemCount": len(rows)}
 
 
 def start_response(

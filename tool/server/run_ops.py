@@ -108,6 +108,18 @@ def train_run_response(
                 yield f"[INFO] Launch group: {launch_group.name}\n"
                 yield f"[INFO] Captured files: {bundle['path']}\n"
                 yield f"[INFO] Captured media items: {bundle['capturedItemCount']}\n"
+                summary = bundle.get("summary") or {}
+                policies = summary.get("policies") or {}
+                yield (
+                    "[INFO] Bundle policy: bucket_policy=" + str(policies.get("bucketPolicy") or "default")
+                    + "; video_capture=" + str(policies.get("videoCapture") or "normalize_fps")
+                    + "; detail_subsets=" + str(bool(policies.get("detailSubsets", False))).lower() + "\n"
+                )
+                actions = summary.get("captureActions") or {}
+                if actions:
+                    yield "[INFO] Capture actions: " + ", ".join(
+                        str(name) + "=" + str(count) for name, count in sorted(actions.items())
+                    ) + "\n"
                 for stage in stage_names:
                     yield f"[INFO] Effective output {stage.upper()}: {output_dirs[stage]}\n"
                 if resume_from_checkpoint:

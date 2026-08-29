@@ -25,6 +25,7 @@ from .training_setup import ensure_training_setup
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .training_runtime import repair_boot_critical_training_permissions, repair_configured_training_root_permissions
 from .permissions import normalize_path_permissions, run_with_directory_repair
+from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, write_folder_state_atomic
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -90,6 +91,9 @@ def folder_state_save():
         # Use the same folder resolution as captions
         folder_path = _resolve_folder(rel_path)
         state_path = folder_path / ".webcap_state.json"
+        # Existing state must be readable before it can be replaced. A permission,
+        # encoding, or JSON failure is never equivalent to an empty state.
+        existing_state = read_folder_state(state_path)
         # print(f"[folder_state_save] Writing to: {state_path}")
         # Minimal patch: always include 'stats' and 'primer' fields
         state = dict(data.get("state", {}))
@@ -98,10 +102,9 @@ def folder_state_save():
             state["stats"] = {"requiredPhrase": "", "phrases": "", "tokenRules": ""}
         if "primer" not in state:
             state["primer"] = {"template": "", "defaults": "", "mappings": ""}
+        reject_wholesale_state_map_clear(existing_state, state)
         # print("[folder_state_save] State to be written:", state)
-        with open(state_path, "w", encoding="utf-8") as f:
-            json.dump(state, f, indent=2)
-        normalize_path_permissions(state_path)
+        write_folder_state_atomic(state_path, state)
         # print("[folder_state_save] State written to file.")
         # Optionally, read back and print for verification
         try:
@@ -111,10 +114,11 @@ def folder_state_save():
         except Exception as e:
             app_config.debug_print("[folder_state_save] Could not read back file:", e)
         return jsonify({"ok": True})
+    except FolderStateUnsafeWriteError as e:
+        app.logger.error("FOLDER STATE SAVE REFUSED for %r: %s", rel_path, e)
+        return jsonify({"error": str(e)}), 409
     except Exception as e:
-        if app_config.FS_DEBUG:
-            # print("[folder_state_save] ERROR:", e)
-            app_config.debug_traceback()
+        app.logger.exception("FOLDER STATE SAVE BLOCKED for %r: %s", rel_path, e)
         return jsonify({"error": str(e)}), 400
 
 # Read file contents (for captions, config, etc.)
@@ -254,6 +258,7 @@ def caption_load_route():
     try:
         return jsonify(load_caption_text(folder, media))
     except Exception as exc:
+        app.logger.exception("CAPTION LOAD FAILED for folder=%r media=%r: %s", folder, media, exc)
         return jsonify({"error": str(exc)}), 400
 
 @app.route("/caption/save", methods=["POST"])
@@ -759,6 +764,9 @@ def fs_describe():
             return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
         payload = run_with_directory_repair(dir_path, lambda: _build_fs_describe_payload(dir_path))
         return jsonify(payload)
+    except FolderStateReadError as e:
+        app.logger.exception("FOLDER STATE LOAD FAILED for %r: %s", rel_path, e)
+        return jsonify({"error": str(e), "folderStateReadFailed": True}), 500
     except Exception as e:
         if app_config.FS_DEBUG:
             app_config.debug_print("[fs_describe] ERROR:", e)
@@ -767,6 +775,11 @@ def fs_describe():
 
 
 def _build_fs_describe_payload(dir_path):
+    # State is user-authored set data. Validate it before any directory-load
+    # side effects so a failed read cannot be bypassed or normalized away.
+    state_path = dir_path / ".webcap_state.json"
+    folder_state = read_folder_state(state_path)
+
     copy_media_to_originals(dir_path)
 
     entries = []
@@ -786,6 +799,7 @@ def _build_fs_describe_payload(dir_path):
     from .originals import MEDIA_ALL_EXTS
     from .caption_ops import _caption_name_for_media
     captions = {}
+    caption_errors = []
     for meta in entries:
         if meta["type"] == "file" and meta["extension"] in MEDIA_ALL_EXTS:
             caption_name = _caption_name_for_media(meta["name"])
@@ -794,25 +808,16 @@ def _build_fs_describe_payload(dir_path):
                 try:
                     text = caption_path.read_text(encoding="utf-8")
                 except Exception as e:
-                    text = f"[ERROR: {e}]"
+                    text = None
+                    error = f"Could not read caption {caption_path}: {e}"
+                    print(f"[fs_describe] CAPTION READ ERROR: {error}", flush=True)
+                    caption_errors.append({"media": meta["name"], "caption": caption_name, "error": error})
             else:
                 text = None
-            captions[meta["name"]] = {"text": text}
-
-    state_path = dir_path / ".webcap_state.json"
-    folder_state = {}
-    if state_path.exists() and state_path.is_file():
-        try:
-            with open(state_path, "r", encoding="utf-8") as f:
-                folder_state = json.load(f)
-        except Exception as e:
-            folder_state = {"error": str(e)}
-    if not isinstance(folder_state, dict):
-        folder_state = {"error": ".webcap_state.json is not a dict"}
-    elif "reviewedKeys" not in folder_state:
-        folder_state["error"] = "Missing reviewedKeys in .webcap_state.json"
-    elif not isinstance(folder_state["reviewedKeys"], list):
-        folder_state["error"] = "reviewedKeys is not a list in .webcap_state.json"
+            caption_payload = {"text": text}
+            if caption_errors and caption_errors[-1]["media"] == meta["name"]:
+                caption_payload["error"] = caption_errors[-1]["error"]
+            captions[meta["name"]] = caption_payload
 
     folder_paths = [dir_path / entry["name"] for entry in entries if entry["type"] == "dir"]
     training_statuses = training_runner_folder_statuses(folder_paths)
@@ -828,6 +833,7 @@ def _build_fs_describe_payload(dir_path):
         "folders": folders,
         "files": [e for e in entries if e["type"] == "file"],
         "captions": captions,
+        "caption_errors": caption_errors,
         "folder_state": folder_state
     }
 

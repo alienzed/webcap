@@ -1,8 +1,8 @@
 # VRAM Bucket Calibration
 
-Last reviewed against code: 2026-08-23
+Last reviewed against code: 2026-08-28
 
-Status: **Implementation design.** This feature is not yet implemented.
+Status: **Implemented for MiniMax H3.** The historical design notes below are retained for context; the current runtime contract is this document's source of truth.
 
 ## Purpose
 
@@ -24,7 +24,16 @@ Calibration does not edit the model policy. It writes a separate result. Persist
 
 With no active compatible calibration, WebCap continues using its conservative built-in defaults.
 
-## V1 Scope
+## Current H3 Runtime Contract
+
+- Every individual 17f, 34f, 68f, and 102f candidate keeps the real H3 config and is measured in a fresh process.
+- A candidate is safe only when it completes normally **and every active-GPU sample leaves at least 680 MiB free**. This is an app-owned transient-allocation buffer, calculated from exact `nvidia-smi` MiB values, not a percentage or rounded GiB display.
+- 17f, 34f, and 68f provisional ceilings then enter a two-epoch mixed Quality validation. It uses the nine canonical landscape/square buckets with 4:2:1 temporal/hybrid/spatial weighting; the first 21 steps warm/compile and the next 21 validate steady operation.
+- The mixed phase rejects OOM, timeout, trainer failure, insufficient VRAM headroom, or two qualifying slow validation steps. It may lower only the individually least-headroom rung and retry up to three times.
+- Only a passed mixed validation atomically updates `training.h3_calibration.safe_shapes`. Failed, stopped, or canceled calibration leaves Settings unchanged. Portrait bucket ceilings remain transposes of their measured landscape counterparts.
+- 102f continues to be measured for manual long-motion analysis, but is not saved in `safe_shapes` or included in mixed validation.
+
+## Historical Design Notes (Superseded)
 
 - Profile: MiniMax H3 only.
 - Media: one user-selected video with valid metadata and enough duration for the 68-frame probe family.
@@ -288,14 +297,7 @@ Stop a role/aspect ladder after the first `unsafe_oom` or `unsafe_slow`. Stop th
 
 `testedSafeShapes` contains every exact shape that completed according to the safe criteria.
 
-`recommendedSafeShapes` is the subset WebCap may use automatically. A tested-safe shape is recommended only when:
-
-- peak observed GPU memory is no more than 90% of physical VRAM;
-- no swap or host-memory pressure was observed;
-- measured steps remained below the slowdown policy;
-- every cheaper candidate required to provide a fallback also completed safely.
-
-This preserves headroom for allocator variance and background activity. The UI may show the largest tested shape separately from the largest recommended shape.
+`recommendedSafeShapes` in the original design was percentage-based. The implemented H3 runtime instead uses the exact 680 MiB minimum-free-VRAM rule above, followed by mixed Quality validation. The percentage rule is obsolete.
 
 Do not infer untested cross-aspect shapes from MFP alone. MFP remains a display/ordering metric, not the persisted safety decision.
 
@@ -410,7 +412,7 @@ Only one calibration may exist in `running` state. State writes use the same ato
 - Do not call the first slow baseline candidate unsafe solely because it exceeds 20 seconds.
 - Require absolute, relative, and telemetry conditions for `unsafe_slow`.
 - Mark missing/contradictory evidence inconclusive.
-- Exclude shapes above 90% peak VRAM from recommendations while retaining them as tested-safe.
+- Enforce exact 680 MiB minimum free VRAM and require a passed mixed Quality validation before publishing Settings.
 
 ### Generation integration tests
 

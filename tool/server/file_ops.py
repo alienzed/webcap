@@ -9,9 +9,45 @@ from flask import jsonify
 
 from . import config as app_config
 from .permissions import normalize_path_permissions, normalize_tree_permissions
+from .folder_state_store import folder_state_exists, read_folder_state, write_folder_state_atomic
 
 # Alias kept for compatibility with callers and tests that monkeypatch this name.
 safe_join_fs_root = app_config.safe_join_fs_root
+
+
+def _rename_key_in_list(values, old_name, new_name):
+    if not isinstance(values, list) or old_name not in values:
+        return values
+    if new_name in values:
+        raise ValueError(f"Folder state already contains target media key: {new_name}")
+    return [new_name if value == old_name else value for value in values]
+
+
+def _rename_key_in_map(values, old_name, new_name):
+    if not isinstance(values, dict) or old_name not in values:
+        return values
+    if new_name in values:
+        raise ValueError(f"Folder state already contains target media key: {new_name}")
+    renamed = dict(values)
+    renamed[new_name] = renamed.pop(old_name)
+    return renamed
+
+
+def _rename_media_key_in_folder_state(folder_state, old_name, new_name):
+    updated = dict(folder_state)
+    for field in ("reviewedKeys", "mutated_media_keys"):
+        if field in updated:
+            updated[field] = _rename_key_in_list(updated[field], old_name, new_name)
+    for field in (
+        "flags",
+        "caption_requirements_checked",
+        "caption_term_descriptors_by_media",
+        "caption_tags_by_media",
+        "ratings_by_media",
+    ):
+        if field in updated:
+            updated[field] = _rename_key_in_map(updated[field], old_name, new_name)
+    return updated
 
 
 def duplicate_folder_response(src_rel):
@@ -137,6 +173,32 @@ def rename_response(data):
             if old_orig_caption and old_orig_caption.exists() and new_orig_caption and new_orig_caption.exists():
                 return jsonify({"error": f"Rename blocked: unexpected existing originals caption target: {new_orig_caption}"}), 409
 
+            state_path = folder_path / ".webcap_state.json"
+            folder_state = None
+            renamed_folder_state = None
+            try:
+                has_folder_state = folder_state_exists(state_path)
+            except Exception as state_error:
+                print(
+                    f"[fs_rename] FOLDER STATE INSPECTION FAILED; rename blocked: {state_error}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                traceback.print_exc()
+                return jsonify({"error": str(state_error)}), 400
+            if has_folder_state:
+                try:
+                    folder_state = read_folder_state(state_path, missing_ok=False)
+                    renamed_folder_state = _rename_media_key_in_folder_state(folder_state, old_name, new_name)
+                except Exception as state_error:
+                    print(
+                        f"[fs_rename] FOLDER STATE READ/VALIDATION FAILED; rename blocked: {state_error}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    traceback.print_exc()
+                    return jsonify({"error": str(state_error)}), 400
+
             old_path.rename(new_path)
             if old_caption.exists():
                 old_caption.rename(new_caption)
@@ -145,50 +207,13 @@ def rename_response(data):
             if old_orig_caption and old_orig_caption.exists():
                 old_orig_caption.rename(new_orig_caption)
 
-            state_path = folder_path / ".webcap_state.json"
-            if state_path.exists() and state_path.is_file():
+            if renamed_folder_state is not None:
                 try:
-                    import json
-
-                    with open(state_path, "r", encoding="utf-8") as f:
-                        folder_state = json.load(f)
-                    if (
-                        isinstance(folder_state, dict)
-                        and "reviewedKeys" in folder_state
-                        and isinstance(folder_state["reviewedKeys"], list)
-                    ):
-                        changed = False
-                        new_keys = []
-                        for k in folder_state["reviewedKeys"]:
-                            if k == old_name:
-                                new_keys.append(new_name)
-                                changed = True
-                            else:
-                                new_keys.append(k)
-                        if changed:
-                            folder_state["reviewedKeys"] = new_keys
-                            app_config.debug_print("[fs_rename] Updated reviewedKeys.")
-                    if (
-                        isinstance(folder_state, dict)
-                        and "mutated_media_keys" in folder_state
-                        and isinstance(folder_state["mutated_media_keys"], list)
-                    ):
-                        changed_mutation = False
-                        next_mutation_keys = []
-                        for key in folder_state["mutated_media_keys"]:
-                            if key == old_name:
-                                next_mutation_keys.append(new_name)
-                                changed_mutation = True
-                            else:
-                                next_mutation_keys.append(key)
-                        if changed_mutation:
-                            folder_state["mutated_media_keys"] = next_mutation_keys
-                            app_config.debug_print("[fs_rename] Updated mutated_media_keys.")
-                    with open(state_path, "w", encoding="utf-8") as f:
-                        json.dump(folder_state, f, indent=2)
-                    normalize_path_permissions(state_path)
+                    write_folder_state_atomic(state_path, renamed_folder_state)
                 except Exception as e:
-                    app_config.debug_print(f"[fs_rename] Could not update folder state keys: {e}")
+                    print(f"[fs_rename] FOLDER STATE WRITE FAILED after media rename: {e}", file=sys.stderr, flush=True)
+                    traceback.print_exc()
+                    return jsonify({"error": f"Media renamed, but folder state update failed: {e}"}), 500
             return jsonify({"ok": True})
         app_config.debug_print("[fs_rename] Source is neither file nor folder:", old_path)
         return jsonify({"error": "Source is neither file nor folder"}), 400

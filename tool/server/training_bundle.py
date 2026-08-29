@@ -7,7 +7,7 @@ import tomllib
 import uuid
 from pathlib import Path
 
-from .dataset_config import assign_images_to_resolution_classes, build_dataset_config_artifacts, coerce_frames
+from .dataset_config import build_dataset_config_artifacts, coerce_frames, video_roles_for_profile
 from .dataset_prep import (
     build_dataset_manifest,
     normalize_fallback_captions,
@@ -16,7 +16,7 @@ from .dataset_prep import (
 )
 from .permissions import normalize_path_permissions
 from .training_config_files import with_dataset_path, with_output_dir
-from .training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, normalize_mode, profile_for_mode, profile_slug
+from .training_profiles import config_for_stage, normalize_mode, profile_for_mode, profile_slug
 from .training_runtime import to_wsl_path
 
 
@@ -83,65 +83,6 @@ def _rewrite_directory_path(block, target):
     return replaced
 
 
-def _replace_size_buckets(block, bucket):
-    match = re.search(r"^\s*size_buckets\s*=", block, re.MULTILINE)
-    if not match:
-        raise ValueError("Directory stanza is missing size_buckets.")
-    start = block.find("[", match.end())
-    if start < 0:
-        raise ValueError("Directory stanza has invalid size_buckets.")
-    depth = 0
-    quote = ""
-    comment = False
-    end = None
-    for index in range(start, len(block)):
-        char = block[index]
-        if comment:
-            if char == "\n":
-                comment = False
-            continue
-        if quote:
-            if char == quote and block[index - 1] != "\\":
-                quote = ""
-            continue
-        if char in ("'", '"'):
-            quote = char
-            continue
-        if char == "#":
-            comment = True
-            continue
-        if char == "[":
-            depth += 1
-        elif char == "]":
-            depth -= 1
-            if depth == 0:
-                end = index + 1
-                break
-    if end is None:
-        raise ValueError("Directory stanza has unterminated size_buckets.")
-    indent_match = re.search(r"(^|\n)([ \t]*)size_buckets\s*=", block[match.start():])
-    indent = indent_match.group(2) if indent_match else ""
-    frames = bucket[2] if len(bucket) >= 3 else 1
-    replacement = f"{indent}size_buckets = [[{bucket[0]}, {bucket[1]}, {frames}]]"
-    return block[:match.start()] + replacement + block[end:]
-
-
-def _valid_image_buckets(value):
-    if not isinstance(value, list) or not value:
-        return None
-    buckets = []
-    for raw in value:
-        if not isinstance(raw, list) or len(raw) != 3:
-            return None
-        width, height, frames = raw
-        if not all(isinstance(item, int) and not isinstance(item, bool) for item in raw):
-            return None
-        if width <= 0 or height <= 0 or frames != 1:
-            return None
-        buckets.append((width, height))
-    return buckets
-
-
 def _valid_video_buckets(value):
     if not isinstance(value, list) or not value:
         return None
@@ -156,10 +97,6 @@ def _valid_video_buckets(value):
             return None
         buckets.append((width, height, frames))
     return buckets
-
-
-def _h3_video_upscale_ratio(frames):
-    return 1.10 if int(frames) >= 68 else 1.0
 
 
 def _link_or_copy(source, destination):
@@ -242,205 +179,186 @@ def _copy_or_convert_bundle_video(source, destination, target_fps, source_fps):
             return {"action": None, "error": fallback_detail}
 
 
+def _detail_subset_members(rows, bucket, profile_id, mode):
+    roles = video_roles_for_profile(profile_id, mode)
+    if len(roles) < 2:
+        return []
+    temporal_frames = int(roles[0][1])
+    detail_frames = int(roles[1][1])
+    selected_profile = profile_for_mode(profile_id, mode)
+    members = []
+    for row in rows:
+        frames = coerce_frames(row, selected_profile.get("videoFps"))
+        width = row.get("width")
+        height = row.get("height")
+        if not frames or not isinstance(width, int) or not isinstance(height, int) or frames < detail_frames:
+            continue
+        native = width >= bucket[0] and height >= bucket[1]
+        mandatory = frames < temporal_frames
+        if mandatory or native:
+            if mandatory and not native:
+                print(f"[WARN] Detail subset keeps {row.get('file')} at {bucket[0]}x{bucket[1]} despite exceeding native resolution.", flush=True)
+            members.append(row)
+    return members
+
+
+def _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id, mode):
+    """Audit manual/generative direct stanzas without changing their meaning."""
+    group = str(data.get("group") or "").strip().lower()
+    buckets = data.get("size_buckets")
+    if group not in ("images", "videos") or not isinstance(buckets, list):
+        return
+    rows = manifest.get("images" if group == "images" else "videos", [])
+    source_rows = [
+        row for row in rows
+        if isinstance(row, dict) and Path(str(row.get("prepared_path") or "")).parent.name == source_name
+    ]
+    if not source_rows:
+        print(f"[WARN] Direct {group} stanza {source_name} has no captured source rows to audit.", flush=True)
+        return
+    selected_profile = profile_for_mode(profile_id, mode)
+    for bucket in buckets:
+        if not isinstance(bucket, list) or len(bucket) != 3 or not all(isinstance(value, int) for value in bucket):
+            print(f"[WARN] Direct {group} stanza {source_name} has an invalid size bucket; preserving it exactly.", flush=True)
+            continue
+        width, height, frames = bucket
+        unsafe = []
+        for row in source_rows:
+            if group == "videos":
+                actual_frames = coerce_frames(row, selected_profile.get("videoFps"))
+                if not actual_frames or actual_frames < frames:
+                    continue
+            source_width = row.get("width")
+            source_height = row.get("height")
+            if not isinstance(source_width, int) or not isinstance(source_height, int):
+                continue
+            if source_width < width or source_height < height:
+                unsafe.append(str(row.get("file") or "<unknown>"))
+        if unsafe:
+            print(
+                f"[WARN] Direct {group} stanza {source_name} bucket {width}x{height}x{frames} may upscale: "
+                + ", ".join(unsafe) + "; preserving saved TOML.",
+                flush=True,
+            )
+
+
 def _materialize_dataset_config(text, media_root, distribution, manifest, stage, profile_id="", mode=""):
     prefix, blocks = _directory_blocks(text)
     if not blocks:
         return _rewrite_dataset_directories(text, media_root, distribution)
-
-    materialize_h3_videos = (
-        str(profile_id or "").strip() == MINIMAX_H3_PROFILE_ID
-        and str(mode or "").strip().lower() in ("normal", "quality")
-        and str(stage or "").strip() == "h3"
-    )
-
-    image_rows_by_dir = {}
-    for row in manifest.get("images", []):
-        if not isinstance(row, dict):
-            continue
-        prepared_path = str(row.get("prepared_path") or "")
-        name = Path(prepared_path).parent.name
-        if name:
-            image_rows_by_dir.setdefault(name, []).append(row)
-
-    image_blocks_by_dir = {}
-    video_blocks_by_dir = {}
-    for index, block in enumerate(blocks):
-        data = block["data"]
-        group = str(data.get("group") or "").strip().lower()
-        if group == "images":
-            buckets = _valid_image_buckets(data.get("size_buckets"))
-            if buckets is None:
-                raise ValueError("Image directory stanza must contain positive [width, height, 1] size_buckets.")
-            source_name = _directory_name(data.get("path"))
-            image_blocks_by_dir.setdefault(source_name, []).append({"index": index, "buckets": buckets})
-            continue
-        if materialize_h3_videos and group == "videos":
-            buckets = _valid_video_buckets(data.get("size_buckets"))
-            if buckets is None:
-                raise ValueError("H3 video directory stanza must contain positive [width, height, frames] size_buckets.")
-            source_name = _directory_name(data.get("path"))
-            video_blocks_by_dir.setdefault(source_name, []).append({"index": index, "buckets": buckets})
-
-    rendered_classes = {}
-    for source_name, source_blocks in image_blocks_by_dir.items():
-        rows = image_rows_by_dir.get(source_name)
-        if not rows:
-            raise ValueError("Image directory does not match captured media: " + source_name)
-        owners = {}
-        for source_block in source_blocks:
-            for bucket in source_block["buckets"]:
-                if bucket in owners:
-                    raise ValueError(
-                        f"Duplicate image bucket {bucket[0]}x{bucket[1]} for directory: {source_name}"
-                    )
-                owners[bucket] = source_block["index"]
-        images = []
-        rows_by_name = {}
-        for row in rows:
-            name = Path(str(row.get("prepared_path") or "")).name
-            try:
-                width = int(row.get("width"))
-                height = int(row.get("height"))
-            except (TypeError, ValueError):
-                raise ValueError("Captured image is missing dimensions: " + name)
-            images.append((name, width, height))
-            rows_by_name[name] = row
-        classes, unsupported = assign_images_to_resolution_classes(images, owners.keys())
-        if unsupported:
-            raise ValueError(
-                f"Image bucket assignment exceeds the 15% upscale limit for {source_name}: "
-                + ", ".join(sorted(unsupported, key=str.lower))
-            )
-        classes.sort(key=lambda item: (item["bucket"][0] * item["bucket"][1], item["bucket"][0], item["bucket"][1]))
-        for item in classes:
-            bucket = item["bucket"]
-            class_dir = media_root / "image_classes" / str(stage) / f"{source_name}__{bucket[0]}x{bucket[1]}"
-            for image, compatibility in [
-                (image, "native" if image[1] >= bucket[0] and image[2] >= bucket[1] else "slight_upscale")
-                for image in item["images"]
-            ]:
-                base = media_root / source_name / image[0]
-                caption = base.with_suffix(".txt")
-                if not base.is_file() or not caption.is_file():
-                    raise FileNotFoundError("Captured image view source is missing: " + str(base))
-                _link_or_copy(base, class_dir / base.name)
-                _link_or_copy(caption, class_dir / caption.name)
-                row = rows_by_name[image[0]]
-                assignments = row.setdefault("imageClassAssignments", {})
-                assignments[str(stage)] = {
-                    "bucket": [bucket[0], bucket[1]],
-                    "membership": compatibility,
-                    "directory": class_dir.relative_to(media_root).as_posix(),
-                }
-            rendered_classes.setdefault(owners[bucket], []).append((bucket, class_dir))
-
-    video_rows_by_dir = {}
-    if materialize_h3_videos:
-        for row in manifest.get("videos", []):
-            if not isinstance(row, dict):
-                continue
-            prepared_path = str(row.get("prepared_path") or "")
-            name = Path(prepared_path).parent.name
-            if name:
-                video_rows_by_dir.setdefault(name, []).append(row)
-
-    rendered_video_classes = {}
-    for source_name, source_blocks in video_blocks_by_dir.items():
-        rows = video_rows_by_dir.get(source_name)
-        if not rows:
-            raise ValueError("H3 video directory does not match captured media: " + source_name)
-        owners = {}
-        for source_block in source_blocks:
-            for bucket in source_block["buckets"]:
-                if bucket in owners:
-                    raise ValueError(
-                        f"Duplicate H3 video bucket {bucket[0]}x{bucket[1]}x{bucket[2]} for directory: {source_name}"
-                    )
-                owners[bucket] = source_block["index"]
-
-        rows_by_name = {}
-        prepared = []
-        for row in rows:
-            name = Path(str(row.get("prepared_path") or "")).name
-            try:
-                width = int(row.get("width"))
-                height = int(row.get("height"))
-            except (TypeError, ValueError):
-                raise ValueError("Captured H3 video is missing dimensions: " + name)
-            frames = coerce_frames(row, 24)
-            if not name or not width or not height or frames is None:
-                raise ValueError("Captured H3 video is missing usable frame metadata: " + name)
-            prepared.append((row, name, width, height, int(frames)))
-            rows_by_name[name] = row
-
-        for bucket, owner_index in owners.items():
-            width, height, frames = bucket
-            upscale_ratio = _h3_video_upscale_ratio(frames)
-            compatible = []
-            for row, name, source_w, source_h, source_frames in prepared:
-                if source_frames < frames:
-                    continue
-                if source_w * upscale_ratio < width or source_h * upscale_ratio < height:
-                    continue
-                compatibility = "native" if source_w >= width and source_h >= height else "slight_upscale"
-                compatible.append((row, name, compatibility))
-            if not compatible:
-                print(
-                    f"[WARN] H3 video bucket {width}x{height}x{frames} has no compatible captured clips in {source_name}; omitting it.",
-                    flush=True,
-                )
-                continue
-            class_dir = media_root / "video_classes" / str(stage) / f"{source_name}__{width}x{height}x{frames}"
-            for row, name, compatibility in compatible:
-                base = media_root / source_name / name
-                caption = base.with_suffix(".txt")
-                if not base.is_file() or not caption.is_file():
-                    raise FileNotFoundError("Captured H3 video view source is missing: " + str(base))
-                _link_or_copy(base, class_dir / base.name)
-                _link_or_copy(caption, class_dir / caption.name)
-                assignments = row.setdefault("videoClassAssignments", {})
-                stage_assignments = assignments.setdefault(str(stage), [])
-                assignment = {
-                    "bucket": [width, height, frames],
-                    "compatibility": compatibility,
-                    "directory": class_dir.relative_to(media_root).as_posix(),
-                }
-                if assignment not in stage_assignments:
-                    stage_assignments.append(assignment)
-            rendered_video_classes.setdefault(owner_index, []).append((bucket, class_dir))
+    videos_by_dir = {}
+    for row in manifest.get("videos", []):
+        if isinstance(row, dict):
+            videos_by_dir.setdefault(Path(str(row.get("prepared_path") or "")).parent.name, []).append(row)
 
     output = [prefix]
     rendered_count = 0
-    for index, block in enumerate(blocks):
-        if index in rendered_classes:
-            for bucket, class_dir in rendered_classes[index]:
-                target = to_wsl_path(class_dir, distribution)
-                image_block = _rewrite_directory_path(block["raw"], target)
-                output.append(_replace_size_buckets(image_block, bucket))
-                rendered_count += 1
+    for block in blocks:
+        data = block["data"]
+        source_name = _directory_name(data.get("path"))
+        is_detail = str(data.get("group") or "").strip().lower() == "videos" and "webcap_detail_subset = true" in block["raw"]
+        if not is_detail:
+            _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id, mode)
+            output.append(_rewrite_directory_path(block["raw"], to_wsl_path(Path(media_root) / source_name, distribution)))
+            rendered_count += 1
             continue
-        if index in rendered_video_classes:
-            for bucket, class_dir in rendered_video_classes[index]:
-                target = to_wsl_path(class_dir, distribution)
-                video_block = _rewrite_directory_path(block["raw"], target)
-                output.append(_replace_size_buckets(video_block, bucket))
-                rendered_count += 1
+        buckets = _valid_video_buckets(data.get("size_buckets"))
+        if not buckets or len(buckets) != 1:
+            print(f"[WARN] Detail stanza for {source_name} is not one explicit video bucket; using the direct folder.", flush=True)
+            output.append(_rewrite_directory_path(block["raw"], to_wsl_path(Path(media_root) / source_name, distribution)))
+            rendered_count += 1
             continue
-        if any(index == item["index"] for items in image_blocks_by_dir.values() for item in items):
+        bucket = buckets[0]
+        members = _detail_subset_members(videos_by_dir.get(source_name, []), bucket, profile_id, mode)
+        if not members:
+            print(f"[WARN] Detail subset {source_name} {bucket[0]}x{bucket[1]}x{bucket[2]} has no eligible clips; omitting stanza.", flush=True)
             continue
-        if any(index == item["index"] for items in video_blocks_by_dir.values() for item in items):
-            continue
-        source_name = _directory_name(block["data"].get("path"))
-        output.append(_rewrite_directory_path(block["raw"], to_wsl_path(Path(media_root) / source_name, distribution)))
+        subset_dir = media_root / "video_detail" / f"{source_name}__{bucket[0]}x{bucket[1]}x{bucket[2]}"
+        for row in members:
+            name = Path(str(row.get("prepared_path") or "")).name
+            source = media_root / source_name / name
+            caption = source.with_suffix(".txt")
+            if not source.is_file() or not caption.is_file():
+                raise FileNotFoundError("Captured detail source is missing: " + str(source))
+            _link_or_copy(source, subset_dir / source.name)
+            _link_or_copy(caption, subset_dir / caption.name)
+            row.setdefault("videoDetailAssignments", {})[str(stage)] = {
+                "bucket": [bucket[0], bucket[1], bucket[2]],
+                "directory": subset_dir.relative_to(media_root).as_posix(),
+            }
+        output.append(_rewrite_directory_path(block["raw"], to_wsl_path(subset_dir, distribution)))
         rendered_count += 1
-    if rendered_count <= 0:
-        raise ValueError("No configured image or video class remains after bundle materialization.")
     rendered = "".join(output)
     try:
         tomllib.loads(rendered)
     except tomllib.TOMLDecodeError as exc:
         raise ValueError("Generated run dataset TOML is invalid: " + str(exc)) from exc
     return rendered
+
+
+def _build_bundle_summary(selected_profile, selected_mode, manifest, plan, bundle_artifacts):
+    capture_actions = {}
+    media_by_directory = {}
+    for kind in ("images", "videos"):
+        for row in manifest.get(kind, []):
+            action = str(row.get("action") or ("copied" if kind == "images" else "unknown"))
+            capture_actions[action] = capture_actions.get(action, 0) + 1
+            directory = Path(str(row.get("prepared_path") or "")).parent.name
+            if directory:
+                key = kind + ":" + directory
+                media_by_directory[key] = media_by_directory.get(key, 0) + 1
+
+    datasets = []
+    for artifact_key, artifact_path in bundle_artifacts.items():
+        if not artifact_key.endswith("Dataset"):
+            continue
+        _, blocks = _directory_blocks(Path(artifact_path).read_text(encoding="utf-8"))
+        entries = []
+        for block in blocks:
+            data = block["data"]
+            path = str(data.get("path") or "")
+            path_parts = Path(path.replace("\\", "/")).parts
+            directory = Path(path.replace("\\", "/")).name
+            group = str(data.get("group") or "")
+            kind = "videos" if group == "videos" else "images"
+            is_detail = group == "videos" and "video_detail" in path_parts
+            detail_count = sum(
+                1
+                for row in manifest.get("videos", [])
+                if isinstance(row, dict)
+                and any(
+                    str(assignment.get("directory") or "").endswith(directory)
+                    for assignment in (row.get("videoDetailAssignments") or {}).values()
+                    if isinstance(assignment, dict)
+                )
+            )
+            entries.append({
+                "group": group,
+                "directory": directory,
+                "path": path,
+                "role": "detail" if is_detail else ("temporal" if group == "videos" else "image"),
+                "mediaCount": detail_count if is_detail else media_by_directory.get(kind + ":" + directory),
+                "numRepeats": int(data.get("num_repeats") or 1),
+                "sizeBuckets": data.get("size_buckets") or [],
+            })
+        datasets.append({"artifact": artifact_key, "entries": entries})
+
+    return {
+        "version": 2,
+        "profileId": selected_profile["id"],
+        "profileLabel": selected_profile["label"],
+        "mode": selected_mode,
+        "policies": {
+            "videoCapture": selected_profile.get("videoCapturePolicy") or "normalize_fps",
+            "bucketPolicy": "simple_v2",
+            "detailSubsets": any(bool(row.get("videoDetailAssignments")) for row in manifest.get("videos", [])),
+        },
+        "capturedItems": sum(capture_actions.values()),
+        "captureActions": capture_actions,
+        "skipped": list(manifest.get("skipped") or []),
+        "trainingPlan": plan,
+        "datasets": datasets,
+    }
 
 
 def _selected_stages(profile, stages):
@@ -585,12 +503,24 @@ def materialize_training_bundle(
     manifest_path = bundle / "dataset_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     normalize_path_permissions(manifest_path)
+    summary = _build_bundle_summary(
+        selected_profile,
+        selected_mode,
+        manifest,
+        plan_artifacts["plan"],
+        bundle_artifacts,
+    )
+    summary_path = bundle / "bundle_summary.json"
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    normalize_path_permissions(summary_path)
     bundle_artifacts["manifest"] = manifest_path
     bundle_artifacts["plan"] = plan_path
+    bundle_artifacts["summary"] = summary_path
     return {
         "path": bundle,
         "artifacts": bundle_artifacts,
         "manifest": manifest,
         "plan": plan_artifacts["plan"],
+        "summary": summary,
         "capturedItemCount": len(copied_rows),
     }

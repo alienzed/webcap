@@ -34,6 +34,7 @@ state = {
   folderHasSavedPrimerTemplate: false,
   flags: {}, // key: file or folder name, value: color string (red/yellow/orange/green)
   ratings: {}, // key: media file name, value: integer 1..5
+  folderStateWritable: false,
   mutatedSet: new Set(), // key: media file name
   mutatedByMediaSource: {}, // key: media file name, value: 'best_effort' | 'deterministic'
   mediaCacheBustByMedia: {}, // key: media file name, value: local cache-bust token

@@ -582,7 +582,7 @@ def record_job(folder_path, job):
     folder_key = _folder_key(folder)
     runs = discover_runs(folder, str(job.get("stages") or ""))
     record_fields = (
-        "id", "folder", "stages", "profileId", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "bundlePath", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
+        "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "bundlePath", "bundleSummary", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId", "activeTrainingSeconds", "activeTrainingTimingComplete",
         "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
     )

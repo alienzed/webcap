@@ -84,7 +84,6 @@ MODEL = {
     "datasetTemplate": "example/dataset.{mode}.toml",
     "outputSlug": "example-t2v",
     "modelIdentityKeys": ("type", "diffusion_model"),
-    "datasetPolicy": "standard_image_video",
     "launchPolicy": "diffusion_pipe_standard",
     "progressPolicy": "diffusion_pipe_epochs",
 }
@@ -104,7 +103,7 @@ Every model must declare:
 - the config and dataset templates for each mode
 - its output slug
 - the TOML keys that identify the selected base model
-- its dataset, launch, and progress policies
+- its launch and progress policies
 
 The registry must validate these declarations loudly at startup or in a dedicated validation pass. Missing templates, duplicate IDs, unknown policies, invalid modes, and incomplete declarations are implementation errors.
 

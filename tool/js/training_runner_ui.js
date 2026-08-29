@@ -413,7 +413,18 @@ function trainingModelLabel(job) {
 function trainingJobLabel(job) {
   if (job && job.stages === 'krea2') return 'Krea2 Raw';
   var mode = normalizeTrainingWorkspaceMode(job && job.mode || 'normal').toUpperCase();
-  return trainingModelLabel(job) + ' · ' + mode + ' · ' + trainingStageLabel(String(job && job.stages || 'both'));
+  var profileLabel = String(job && job.profileLabel || '').trim();
+  return (profileLabel || trainingModelLabel(job)) + ' · ' + mode + ' · ' + trainingStageLabel(String(job && job.stages || 'both'));
+}
+
+function trainingBundlePolicyLabel(job) {
+  var summary = job && job.bundleSummary && typeof job.bundleSummary === 'object' ? job.bundleSummary : null;
+  var policies = summary && summary.policies && typeof summary.policies === 'object' ? summary.policies : null;
+  if (!policies) return '';
+  var parts = ['Dataset: ' + String(policies.bucketPolicy || 'default')];
+  parts.push(policies.videoCapture === 'copy' ? 'videos copied unchanged' : 'video FPS normalized');
+  parts.push(policies.detailSubsets ? 'detail video subsets' : 'direct media folders');
+  return parts.join(' · ');
 }
 
 function startManagedTraining() {
@@ -948,6 +959,7 @@ function renderTrainingRunner() {
     (job.confirmationNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.confirmationNote) + '</div>' : '') +
     (trainingWorkspaceState.runnerNotice ? '<div class="training-runner-detail is-warning">' + escapeHtml(trainingWorkspaceState.runnerNotice) + '</div>' : '') +
     (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
+    (trainingBundlePolicyLabel(job) ? '<div class="training-runner-detail">' + escapeHtml(trainingBundlePolicyLabel(job)) + '</div>' : '') +
     (Number(job.capturedItemCount || 0) ? '<div class="training-runner-detail">Captured items: ' + escapeHtml(String(job.capturedItemCount)) + '</div>' : '') +
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');

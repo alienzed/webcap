@@ -120,8 +120,9 @@ function parseLegacyReviewRules(multiline) {
 
 function triggerAdvancedRulesAutosave() {
   if (!state || !state.folder) return;
+  var capturedSave = captureCurrentFolderStateSave();
   debouncedSaveFolderState(function () {
-    saveFolderStateForCurrentRoot();
+    writeCapturedFolderState(capturedSave);
   });
 }
 

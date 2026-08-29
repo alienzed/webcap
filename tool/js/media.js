@@ -514,8 +514,19 @@ function selectPathMedia(mediaItem) {
 
     var text = '';
     if (xhr.status !== 200) {
+      var captionLoadError = 'Failed to load caption for ' + mediaItem.fileName;
+      try {
+        var captionErrorPayload = JSON.parse(xhr.responseText || '{}');
+        if (captionErrorPayload && captionErrorPayload.error) {
+          captionLoadError += ': ' + captionErrorPayload.error;
+        }
+      } catch (_captionErrorParseFailure) {
+        // The status and filename still identify the failed read.
+      }
+      console.error('[webcap] ' + captionLoadError);
+      setStatus(captionLoadError);
       renderFileList();
-      reject(new Error('Failed to load caption for ' + mediaItem.fileName));
+      reject(new Error(captionLoadError));
       return;
     }
     try {

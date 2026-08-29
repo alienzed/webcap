@@ -134,24 +134,77 @@ function sanitizeFolderState(data) {
  * 
  * @returns {Promise<boolean>} - Resolves to true if successful, false otherwise
  */
-async function writeFolderStateFile(folderPath, folderState) {
+var folderStateWriteChains = {};
+
+function captureCurrentFolderStateSave() {
+  var folderPath = String((state && state.folder) || '');
+  if (!folderPath || !state.folderStateWritable) {
+    var blockedError = new Error('Folder state save blocked because the current folder state was not loaded successfully.');
+    console.error(blockedError);
+    setStatus('FOLDER STATE SAVE BLOCKED: reload the folder after fixing its state-file error.');
+    return null;
+  }
+  return {
+    folderPath: folderPath,
+    snapshot: snapshotFolderStateFromDom()
+  };
+}
+
+function writeCapturedFolderState(capturedSave) {
+  if (!capturedSave) return Promise.resolve(false);
+  return writeFolderStateFile(capturedSave.folderPath, capturedSave.snapshot, {
+    allowOffCurrentFolder: true
+  });
+}
+
+async function writeFolderStateFile(folderPath, folderState, options) {
   // folderPath: relative path from FS root ('' for root)
+  var opts = options || {};
   debugLog('[writeFolderStateFile] Saving folder state.');
-  try {
-    const payload = { folder: folderPath, state: folderState };
-    debugLog('[writeFolderStateFile] Sending save request.');
-    const resp = await fetch('/fs/folder_state/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    debugLog('[writeFolderStateFile] Response status:', resp.status);
-    if (!resp.ok) throw new Error('Failed to save folder state');
-    return true;
-  } catch (err) {
-    console.warn('Could not write folder state file:', err);
+  if ((!opts.allowOffCurrentFolder && !state.folderStateWritable) ||
+      (!opts.allowOffCurrentFolder && String(folderPath || '') !== String(state.folder || ''))) {
+    var blockedError = new Error('Folder state save blocked because the current folder state was not loaded successfully.');
+    console.error(blockedError);
+    setStatus('FOLDER STATE SAVE BLOCKED: reload the folder after fixing its state-file error.');
     return false;
   }
+  var performWrite = async function () {
+    try {
+      const payload = { folder: folderPath, state: folderState };
+      debugLog('[writeFolderStateFile] Sending save request.');
+      const resp = await fetch('/fs/folder_state/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      debugLog('[writeFolderStateFile] Response status:', resp.status);
+      if (!resp.ok) {
+        var errorPayload = {};
+        try {
+          errorPayload = await resp.json();
+        } catch (_folderStateErrorParseFailure) {
+          // The HTTP status remains useful when the response is not JSON.
+        }
+        throw new Error((errorPayload && errorPayload.error) || ('Failed to save folder state (' + resp.status + ')'));
+      }
+      return true;
+    } catch (err) {
+      console.error('[webcap] FOLDER STATE SAVE BLOCKED:', err);
+      setStatus('FOLDER STATE SAVE BLOCKED: ' + (err && err.message ? err.message : err));
+      return false;
+    }
+  };
+  var previousWrite = folderStateWriteChains[folderPath] || Promise.resolve();
+  var queuedWrite = previousWrite.catch(function () {
+    return false;
+  }).then(performWrite);
+  folderStateWriteChains[folderPath] = queuedWrite;
+  queuedWrite.then(function () {
+    if (folderStateWriteChains[folderPath] === queuedWrite) {
+      delete folderStateWriteChains[folderPath];
+    }
+  });
+  return queuedWrite;
 }
 
 /**
@@ -164,22 +217,20 @@ function snapshotFolderStateFromDom() {
   // so they are persisted. This function must snapshot ALL fields that should be saved.
   var stats = getOptionsFromDom();
   var primer = statsGetPrimerOptionsFromDom();
-  var mediaKeys = new Set((state.items || []).map(function (item) { return item && item.key; }).filter(Boolean));
-  var folderKeys = new Set((state.childFolders || []).map(function (item) { return item && item.name; }).filter(Boolean));
-  var validFlagKeys = new Set(Array.from(mediaKeys));
-  folderKeys.forEach(function (k) { validFlagKeys.add(k); });
-  var reviewedKeys = Array.from(state.reviewedSet || []).filter(function (k) { return mediaKeys.has(k); }).sort();
-  var flags = {};
-  var srcFlags = (typeof state.flags === 'object' && state.flags) ? state.flags : {};
-  Object.keys(srcFlags).forEach(function (k) {
-    if (validFlagKeys.has(k)) flags[k] = srcFlags[k];
-  });
+  // Folder state is authoritative. The visible list can be filtered, empty, or
+  // temporarily replaced by SuperSet results; none of those states authorizes
+  // removing unrelated associations from disk.
+  var reviewedKeys = Array.from(state.reviewedSet || []).map(function (key) {
+    return String(key || '').trim();
+  }).filter(Boolean).sort();
+  var flags = (typeof state.flags === 'object' && state.flags)
+    ? JSON.parse(JSON.stringify(state.flags))
+    : {};
   var tagsByMedia = {};
   var srcTagsByMedia = (typeof window.captionItemTagsByMedia === 'object' && window.captionItemTagsByMedia)
     ? window.captionItemTagsByMedia
     : {};
   Object.keys(srcTagsByMedia).forEach(function (k) {
-    if (!mediaKeys.has(k)) return;
     var list = Array.isArray(srcTagsByMedia[k]) ? srcTagsByMedia[k] : [];
     if (list.length) {
       tagsByMedia[k] = list.slice();
@@ -188,7 +239,6 @@ function snapshotFolderStateFromDom() {
   var ratingsByMedia = {};
   var srcRatingsByMedia = (typeof state.ratings === 'object' && state.ratings) ? state.ratings : {};
   Object.keys(srcRatingsByMedia).forEach(function (k) {
-    if (!mediaKeys.has(k)) return;
     var n = Number(srcRatingsByMedia[k]);
     if (!isFinite(n)) return;
     var rating = Math.max(1, Math.min(5, Math.round(n)));
@@ -196,7 +246,7 @@ function snapshotFolderStateFromDom() {
   });
   var mutatedKeys = Array.from(state.mutatedSet || [])
     .map(function (k) { return String(k || '').trim(); })
-    .filter(function (k) { return mediaKeys.has(k); })
+    .filter(Boolean)
     .sort();
   var mediaFilters = {
     text: String((ui.filterEl && ui.filterEl.value) || ''),
@@ -342,12 +392,9 @@ function applyFolderStateToDom(folderState) {
  * @returns {Promise<void>} - Resolves when the save is complete
  */
 async function saveFolderStateForCurrentRoot() {
-  if (!state.folder) {
-    return;
-  }
-  var folderPath = state.folder;
-  var snapshot = snapshotFolderStateFromDom();
-  await writeFolderStateFile(folderPath, snapshot);
+  var capturedSave = captureCurrentFolderStateSave();
+  if (!capturedSave) return false;
+  return writeCapturedFolderState(capturedSave);
 }
 
 

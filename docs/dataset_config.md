@@ -1,33 +1,36 @@
-# Dataset Configuration
+# Dataset configuration
 
-WebCap creates one persistent dataset TOML per model, mode, and stage directly from currently visible media metadata.
+WebCap generates explicit, auditable Diffusion Pipe directory stanzas. Each generated stanza contains exactly one `size_bucket`, so a source folder never relies on closest-aspect-ratio selection among several bucket candidates.
 
-## Setup files
+## Images
 
-| Profile | Dataset files |
-| --- | --- |
-| Wan2.2 T2V | `dataset.wan22.{mode}.{hi|lo}.toml` |
-| Krea2 Raw | `dataset.krea2.{mode}.toml` |
-| Wan2.1 T2V 14B | `dataset.wan21.{mode}.toml` |
-| MiniMax H3 | `dataset.h3.{mode}.toml` |
+Images use one direct stanza per populated canonical AR and stage. WebCap selects the highest 32-aligned bucket at or below the mode target that keeps every image within a 15% per-axis resize allowance. Wan2.2 HI retains its existing one-step-lower target than LO.
 
-Selecting a setup creates missing files but never replaces an existing dataset TOML. Reset recalculates only the selected dataset file from the visible media.
+No `image_classes` folders are created. The run bundle captures each selected image once and rewrites the stanza to its captured direct folder.
 
-## Buckets and repeats
+## Videos
 
-- Image buckets use supported 32-pixel-aligned resolutions selected for `POC`, `Normal`, or `Quality`. Generated defaults may select low, primary, and high resolution classes; each source image contributes to one class only.
-- Wan2.2 maintains separate high-noise and low-noise policies.
-- Krea2 is image-only.
-- Wan2.1 and Wan2.2 use a 16 fps training timebase; MiniMax H3 uses 24 fps. H3 POC uses a fixed 34-frame bucket. H3 Normal and Quality use overlapping 68-frame temporal, 34-frame hybrid, and 17-frame spatial training classes with exposure weights `2 : 1 : 0.5`.
-- H3 class eligibility is capability-aware: temporal may upscale each axis by up to 10%, while hybrid and spatial require native resolution. A default spatial class also requires three native clips and must exceed the configured hybrid target area. A set with only qualifying 17–33-frame spatial clips is valid and reports its absent temporal/hybrid tiers.
-- H3 Normal and Quality ceilings are app-owned policy tables keyed by mode, role, and aspect ratio. They currently use the same conservative 11,900-cell-safe values; later reviewed calibration changes only those table values and their tests. H3 training buckets are unrelated to inference-length rules.
-- Generated video TOML comments include nearby lower and higher manual alternatives even when a higher shape exceeds the automatic ceiling. A compatible H3 68-frame temporal class also includes a calibrated 102-frame long-motion alternative, capped independently to the proven 102-frame envelope. Suggestions never change the generated active buckets; the ceiling governs automatic selection, while saved TOML edits remain the explicit override.
-- Repeat values are calculated from sample count, configured epochs, and target-step policy. Editing the TOML is the intentional override.
+Video roles are declarative:
 
-## Run capture
+| Profile/mode | Temporal | Detail |
+| --- | ---: | ---: |
+| Wan2.1/2.2 POC | 33f | — |
+| Wan2.1/2.2 Normal/Quality | 37f | 13f |
+| MiniMax H3 POC | 34f | — |
+| MiniMax H3 Normal/Quality | 68f | 17f |
 
-Train uses the exact saved dataset TOML as its intent. For image stanzas, it creates bundle-only resolution-class directories and expands non-empty classes into one-bucket runtime stanzas so Diffusion Pipe cannot choose an oversized bucket by aspect ratio alone. Each image enters its highest configured bucket within WebCap's 15% per-axis allowance. Manual bucket and repeat edits are preserved; the saved source TOML is never rewritten.
+Wan video timing is normalized to 16 fps and H3 timing to 24 fps. A temporal stanza uses all temporal-eligible clips for that AR and the highest common native bucket under the profile/mode ceiling. Its repeat weight is `1.0`.
 
-Fresh run bundles copy videos already at the selected profile FPS and otherwise make a high-quality constant-FPS training copy inside the bundle only. Source media and `auto_dataset` remain untouched. If conversion is unavailable or fails, WebCap logs a warning and captures the original video unchanged instead.
+Detail is an explicit subset role with repeat weight `0.25`. Clips long enough for detail but shorter than temporal are mandatory detail members and establish the highest common native target they support. Long clips join detail only when they natively support the selected bucket. When there are no mandatory clips, an optional detail stanza is created only if at least two clips support a native bucket.
 
-For H3 Normal and Quality, every saved video bucket is split into its own non-empty bundle-local class under `media/video_classes/h3/`; the video and caption are hardlinked when possible and copied otherwise. This filters existing or manually edited TOMLs at capture without rewriting them: buckets of 68 frames or longer use the temporal 10% allowance, and shorter buckets require native resolution. A source may appear in more than one compatible class. Empty classes are omitted with a visible warning, duplicate exact buckets for one source directory are rejected, and capture fails if no configured image or video class remains. POC and non-H3 video stanzas retain their normal bundle rewrite. A run plan is written beside the captured files for runner progress behavior.
+The bundle captures every selected source media item once. It materializes only marked detail stanzas under `media/video_detail/<ar>__<width>x<height>x<frames>`, using hardlinks when possible and copies otherwise. Temporal and image stanzas remain direct paths; there are no general video-class folders.
+
+Clips with unsupported ARs, missing required metadata, or insufficient role frames are skipped with explicit warnings and do not block a managed launch.
+
+## Saved TOML and artifacts
+
+Saved dataset TOML is authoritative. Bundle capture preserves frame/dimension edits and unmarked manually added stanzas, changing only runtime paths. It warns about potential upscale or empty detail selection instead of silently changing the user’s configuration.
+
+`training_plan.json` version 2 records stanza-level roles, buckets, source files, eligibility, native/upscaled counts, limiting files, and repeats. `dataset_manifest.json` records the exact captured selection. `bundle_summary.json` remains a compact view for the existing captured-items UI.
+
+H3 envelope probing remains separate experimental tooling; its results do not add runtime dataset roles.

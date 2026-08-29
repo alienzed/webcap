@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import subprocess
 import tomllib
 
@@ -179,13 +180,13 @@ def test_bundle_skips_video_only_after_conversion_and_copy_both_fail(tmp_path, m
     assert (bundle["path"] / "media" / "square" / "good.mp4").is_file()
     assert not (bundle["path"] / "media" / "square" / "bad.mp4").exists()
     captured_dataset = bundle["artifacts"]["h3Dataset"].read_text(encoding="utf-8")
-    class_dir = bundle["path"] / "media" / "video_classes" / "h3" / "square__352x352x68"
-    assert _fake_wsl(class_dir) in captured_dataset
+    direct_dir = bundle["path"] / "media" / "square"
+    assert _fake_wsl(direct_dir) in captured_dataset
     assert "size_buckets = [[352, 352, 68]]" in captured_dataset
-    assert (class_dir / "good.mp4").is_file()
+    assert (direct_dir / "good.mp4").is_file()
 
 
-def test_h3_bundle_materializes_overlapping_video_classes(tmp_path, monkeypatch):
+def test_h3_bundle_materializes_only_marked_detail_subset(tmp_path, monkeypatch):
     media_root = tmp_path / "media"
     source_dir = media_root / "square"
     source_dir.mkdir(parents=True)
@@ -205,8 +206,7 @@ def test_h3_bundle_materializes_overlapping_video_classes(tmp_path, monkeypatch)
         })
     text = (
         '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\nnum_repeats = 2\ngroup = "videos"\nsize_buckets = [[352, 352, 68]]\n\n'
-        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\nnum_repeats = 1\ngroup = "videos"\nsize_buckets = [[512, 512, 34]]\n\n'
-        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\nnum_repeats = 1\ngroup = "videos"\nsize_buckets = [[768, 768, 17]]\n'
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\nnum_repeats = 1\ngroup = "videos"\n# webcap_detail_subset = true\nsize_buckets = [[768, 768, 17]]\n'
     )
     manifest = {"images": [], "videos": videos}
     monkeypatch.setattr(training_bundle, "to_wsl_path", _fake_wsl)
@@ -216,27 +216,16 @@ def test_h3_bundle_materializes_overlapping_video_classes(tmp_path, monkeypatch)
     )
 
     assert "size_buckets = [[352, 352, 68]]" in rendered
-    assert "size_buckets = [[512, 512, 34]]" in rendered
     assert "size_buckets = [[768, 768, 17]]" in rendered
-    temporal = media_root / "video_classes" / "h3" / "square__352x352x68"
-    hybrid = media_root / "video_classes" / "h3" / "square__512x512x34"
-    spatial = media_root / "video_classes" / "h3" / "square__768x768x17"
-    assert {path.name for path in temporal.glob("*.mp4")} == {"long_high.mp4", "long_low.mp4"}
-    assert {path.name for path in hybrid.glob("*.mp4")} == {"long_high.mp4"}
-    assert {path.name for path in spatial.glob("*.mp4")} == {"long_high.mp4", "short_high.mp4"}
-    assignments = {row["file"]: row["videoClassAssignments"]["h3"] for row in manifest["videos"]}
-    assert len(assignments["long_high.mp4"]) == 3
-    assert assignments["long_low.mp4"] == [{
-        "bucket": [352, 352, 68], "compatibility": "slight_upscale",
-        "directory": "video_classes/h3/square__352x352x68",
-    }]
-    assert assignments["short_high.mp4"] == [{
-        "bucket": [768, 768, 17], "compatibility": "native",
-        "directory": "video_classes/h3/square__768x768x17",
-    }]
+    detail = media_root / "video_detail" / "square__768x768x17"
+    assert {path.name for path in detail.glob("*.mp4")} == {"long_high.mp4", "short_high.mp4"}
+    assignments = {row["file"]: row.get("videoDetailAssignments", {}).get("h3") for row in manifest["videos"]}
+    assert assignments["long_high.mp4"] == {"bucket": [768, 768, 17], "directory": "video_detail/square__768x768x17"}
+    assert assignments["long_low.mp4"] is None
+    assert assignments["short_high.mp4"] == {"bucket": [768, 768, 17], "directory": "video_detail/square__768x768x17"}
 
 
-def test_h3_bundle_rejects_duplicate_video_bucket_declarations(tmp_path):
+def test_unmarked_manual_video_stanzas_remain_direct(tmp_path, monkeypatch):
     media_root = tmp_path / "media"
     source_dir = media_root / "square"
     source_dir.mkdir(parents=True)
@@ -250,31 +239,33 @@ def test_h3_bundle_rejects_duplicate_video_bucket_declarations(tmp_path):
         "file": "clip.mp4", "prepared_path": "square/clip.mp4", "width": 512, "height": 512,
         "fps": 24, "frames": 80, "duration": 80 / 24.0,
     }]}
+    monkeypatch.setattr(training_bundle, "to_wsl_path", _fake_wsl)
 
-    with pytest.raises(ValueError, match="Duplicate H3 video bucket"):
-        training_bundle._materialize_dataset_config(
-            text, media_root, _fake_wsl, manifest, "h3", profile_id="minimax_h3", mode="quality",
-        )
+    rendered = training_bundle._materialize_dataset_config(
+        text, media_root, "", manifest, "h3", profile_id="minimax_h3", mode="quality",
+    )
+    assert rendered.count(_fake_wsl(source_dir)) == 2
 
 
-def test_h3_bundle_rejects_a_video_only_config_when_every_class_is_empty(tmp_path):
+def test_empty_marked_detail_stanza_is_omitted_without_blocking_capture(tmp_path, monkeypatch):
     media_root = tmp_path / "media"
     source_dir = media_root / "square"
     source_dir.mkdir(parents=True)
     (source_dir / "clip.mp4").write_bytes(b"video")
     (source_dir / "clip.txt").write_text("caption", encoding="utf-8")
     text = (
-        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\ngroup = "videos"\nsize_buckets = [[768, 768, 17]]\n'
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/square"\ngroup = "videos"\n# webcap_detail_subset = true\nsize_buckets = [[768, 768, 17]]\n'
     )
     manifest = {"images": [], "videos": [{
         "file": "clip.mp4", "prepared_path": "square/clip.mp4", "width": 320, "height": 320,
-        "fps": 24, "frames": 20, "duration": 20 / 24.0,
+        "fps": 24, "frames": 10, "duration": 10 / 24.0,
     }]}
+    monkeypatch.setattr(training_bundle, "to_wsl_path", _fake_wsl)
 
-    with pytest.raises(ValueError, match="No configured image or video class remains"):
-        training_bundle._materialize_dataset_config(
-            text, media_root, _fake_wsl, manifest, "h3", profile_id="minimax_h3", mode="normal",
-        )
+    rendered = training_bundle._materialize_dataset_config(
+        text, media_root, "", manifest, "h3", profile_id="minimax_h3", mode="normal",
+    )
+    assert rendered.strip() == ""
 
 
 def test_bundle_fails_when_video_capture_leaves_no_media(tmp_path, monkeypatch):
@@ -460,7 +451,7 @@ def test_bundle_captures_exact_selection_captions_and_only_rewrites_runtime_path
     assert "auto_dataset" not in captured_dataset
 
 
-def test_bundle_materializes_exclusive_image_resolution_classes_from_saved_toml(tmp_path, monkeypatch):
+def test_bundle_preserves_manual_image_buckets_as_direct_stanzas(tmp_path, monkeypatch, capsys):
     folder = tmp_path / "set"
     group = tmp_path / "output" / "runs" / "001-set"
     folder.mkdir(parents=True)
@@ -487,25 +478,13 @@ def test_bundle_materializes_exclusive_image_resolution_classes_from_saved_toml(
     )
 
     captured = bundle["artifacts"]["h3Dataset"].read_text(encoding="utf-8")
-    parsed = tomllib.loads(captured)
-    directories = parsed["directory"]
-    assert len(directories) == 2
-    assert [item["size_buckets"] for item in directories] == [[[512, 512, 1]], [[768, 768, 1]]]
-    assert all(item["num_repeats"] == 7 and item["custom_value"] == "keep me" for item in directories)
-    low_view = bundle["path"] / "media" / "image_classes" / "h3" / "square_img__512x512"
-    high_view = bundle["path"] / "media" / "image_classes" / "h3" / "square_img__768x768"
-    assert (low_view / "slight.png").is_file()
-    assert (low_view / "mid.png").is_file()
-    assert not (low_view / "high.png").exists()
-    assert (high_view / "high.png").is_file()
-    assert not (high_view / "mid.png").exists()
-    assignments = {row["file"]: row["imageClassAssignments"]["h3"] for row in bundle["manifest"]["images"]}
-    assert assignments["slight.png"]["bucket"] == [512, 512]
-    assert assignments["slight.png"]["membership"] == "slight_upscale"
-    assert assignments["high.png"]["bucket"] == [768, 768]
+    assert "size_buckets = [[512, 512, 1], [768, 768, 1]]" in captured
+    assert _fake_wsl(bundle["path"] / "media" / "square_img") in captured
+    assert not (bundle["path"] / "media" / "image_classes").exists()
+    assert "bucket 768x768x1 may upscale: mid.png, slight.png" in capsys.readouterr().out
 
 
-def test_bundle_honors_manual_image_resolution_and_rejects_unassignable_images(tmp_path, monkeypatch):
+def test_bundle_honors_unsafe_manual_image_resolution_without_blocking(tmp_path, monkeypatch, capsys):
     folder = tmp_path / "set"
     group = tmp_path / "output" / "runs" / "001-set"
     folder.mkdir(parents=True)
@@ -535,55 +514,12 @@ def test_bundle_honors_manual_image_resolution_and_rejects_unassignable_images(t
         "size_buckets = [[640, 640, 1]]\n",
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="15% upscale limit"):
-        materialize_training_bundle(
-            folder, group, "krea2_raw", "normal", "krea2", ["one.png"], output_dirs={"krea2": "/runs/krea2"},
-        )
-
-
-def test_bundle_rejects_duplicate_image_bucket_declarations(tmp_path, monkeypatch):
-    folder = tmp_path / "set"
-    group = tmp_path / "output" / "runs" / "001-set"
-    folder.mkdir(parents=True)
-    group.mkdir(parents=True)
-    _image(folder, "one.png", size=(512, 512))
-    ensure_training_setup(folder, "krea2_raw", "normal", selected_media=["one.png"])
-    (folder / "dataset.krea2.normal.toml").write_text(
-        "[[directory]]\npath = \"__WEBCAP_DATASET_ROOT__/square_img\"\ngroup = \"images\"\nsize_buckets = [[512, 512, 1]]\n\n"
-        "[[directory]]\npath = \"__WEBCAP_DATASET_ROOT__/square_img\"\ngroup = \"images\"\nsize_buckets = [[512, 512, 1]]\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(training_bundle, "to_wsl_path", _fake_wsl)
-
-    with pytest.raises(ValueError, match="Duplicate image bucket"):
-        materialize_training_bundle(
-            folder, group, "krea2_raw", "normal", "krea2", ["one.png"], output_dirs={"krea2": "/runs/krea2"},
-        )
-
-
-def test_bundle_omits_empty_image_classes_for_a_visible_subset(tmp_path, monkeypatch):
-    folder = tmp_path / "set"
-    group = tmp_path / "output" / "runs" / "001-set"
-    folder.mkdir(parents=True)
-    group.mkdir(parents=True)
-    _image(folder, "mid.png", size=(512, 512))
-    _image(folder, "high.png", size=(768, 768))
-    ensure_training_setup(folder, "krea2_raw", "normal", selected_media=["mid.png", "high.png"])
-    (folder / "dataset.krea2.normal.toml").write_text(
-        "[[directory]]\n"
-        'path = "__WEBCAP_DATASET_ROOT__/square_img"\n'
-        'group = "images"\n'
-        "size_buckets = [[512, 512, 1], [768, 768, 1]]\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(training_bundle, "to_wsl_path", _fake_wsl)
-
     bundle = materialize_training_bundle(
-        folder, group, "krea2_raw", "normal", "krea2", ["mid.png"], output_dirs={"krea2": "/runs/krea2"},
+        folder, group, "krea2_raw", "normal", "krea2", ["one.png"], output_dirs={"krea2": "/runs/krea2"},
     )
-
     captured = tomllib.loads(bundle["artifacts"]["krea2Dataset"].read_text(encoding="utf-8"))
-    assert [item["size_buckets"] for item in captured["directory"]] == [[[512, 512, 1]]]
+    assert captured["directory"][0]["size_buckets"] == [[640, 640, 1]]
+    assert "may upscale: one.png" in capsys.readouterr().out
 
 
 def test_wan_stages_share_one_bundle_and_repeated_actions_are_distinct(tmp_path, monkeypatch):

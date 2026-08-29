@@ -497,6 +497,112 @@ def test_fs_describe_does_not_auto_create_config_files(tmp_path, monkeypatch):
     assert not (set_dir / "dataset.lo.toml").exists()
 
 
+def test_fs_describe_fails_loudly_for_unreadable_folder_state(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_bad_state"
+    set_dir.mkdir(parents=True)
+    state_path = set_dir / ".webcap_state.json"
+    state_path.write_text('{"ratings_by_media": ', encoding="utf-8")
+    original_bytes = state_path.read_bytes()
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    response = app_module.app.test_client().get("/fs/describe?path=set_bad_state")
+
+    assert response.status_code == 500
+    assert response.get_json()["folderStateReadFailed"] is True
+    assert "Could not read folder state" in response.get_json()["error"]
+    assert state_path.read_bytes() == original_bytes
+
+
+def test_folder_state_save_refuses_to_replace_unreadable_existing_state(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_bad_state"
+    set_dir.mkdir(parents=True)
+    state_path = set_dir / ".webcap_state.json"
+    state_path.write_text('{"ratings_by_media": ', encoding="utf-8")
+    original_bytes = state_path.read_bytes()
+
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    response = app_module.app.test_client().post(
+        "/fs/folder_state/save",
+        json={"folder": "set_bad_state", "state": {"reviewedKeys": [], "ratings_by_media": {}}},
+    )
+
+    assert response.status_code == 400
+    assert "Could not read folder state" in response.get_json()["error"]
+    assert state_path.read_bytes() == original_bytes
+
+
+@pytest.mark.parametrize("field", ["ratings_by_media", "caption_tags_by_media", "flags"])
+def test_folder_state_save_refuses_wholesale_protected_map_clear(tmp_path, monkeypatch, field):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_state_guard"
+    set_dir.mkdir(parents=True)
+    state_path = set_dir / ".webcap_state.json"
+    state = {
+        "ratings_by_media": {"one.png": 5, "two.png": 3},
+        "caption_tags_by_media": {"one.png": ["one"], "two.png": ["two"]},
+        "flags": {"one.png": "green", "two.png": "red"},
+    }
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    original_bytes = state_path.read_bytes()
+    next_state = json.loads(json.dumps(state))
+    next_state[field] = {}
+
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    response = app_module.app.test_client().post(
+        "/fs/folder_state/save",
+        json={"folder": "set_state_guard", "state": next_state},
+    )
+
+    assert response.status_code == 409
+    assert "Refusing to clear all" in response.get_json()["error"]
+    assert state_path.read_bytes() == original_bytes
+
+
+def test_folder_state_save_allows_an_explicit_last_rating_clear(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_last_rating"
+    set_dir.mkdir(parents=True)
+    state_path = set_dir / ".webcap_state.json"
+    state_path.write_text(json.dumps({"ratings_by_media": {"one.png": 5}}), encoding="utf-8")
+
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    response = app_module.app.test_client().post(
+        "/fs/folder_state/save",
+        json={"folder": "set_last_rating", "state": {"ratings_by_media": {}}},
+    )
+
+    assert response.status_code == 200
+    assert json.loads(state_path.read_text(encoding="utf-8"))["ratings_by_media"] == {}
+
+
+def test_fs_describe_surfaces_caption_read_errors(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_bad_caption"
+    set_dir.mkdir(parents=True)
+    write_image(set_dir / "clip.png")
+    (set_dir / "clip.txt").write_bytes(b"\xff\xfe")
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    response = app_module.app.test_client().get("/fs/describe?path=set_bad_caption")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert len(payload["caption_errors"]) == 1
+    assert payload["caption_errors"][0]["media"] == "clip.png"
+    assert "Could not read caption" in payload["caption_errors"][0]["error"]
+    assert payload["captions"]["clip.png"]["text"] is None
+    assert "Could not read caption" in payload["captions"]["clip.png"]["error"]
+
+
 def test_fs_describe_hides_internal_and_originals_directories(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_training"

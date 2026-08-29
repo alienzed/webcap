@@ -2,8 +2,6 @@
 var captionItemTagsByMedia = {};
 var itemTagsClipboard = [];
 var mediaMetadataLoading = false;
-var debouncedItemTagsSave = debounceCreate(300);
-var debouncedItemRatingSave = debounceCreate(250);
 
 function isMediaMetadataLoading() {
   return !!mediaMetadataLoading;
@@ -537,8 +535,9 @@ function appendMetadataProgressRow(listEl, label, progress, options) {
 }
 
 function saveItemRatingsToFolderState() {
-  var snapshot = snapshotFolderStateFromDom();
-  writeFolderStateFile(state.folder, snapshot);
+  var capturedSave = captureCurrentFolderStateSave();
+  if (!capturedSave) return Promise.resolve(false);
+  return writeCapturedFolderState(capturedSave);
 }
 
 function setRatingForMediaKey(mediaKey, rating) {
@@ -561,7 +560,7 @@ function setRatingForMediaKey(mediaKey, rating) {
   } else {
     state.ratings[mediaKey] = next;
   }
-  debouncedItemRatingSave(saveItemRatingsToFolderState);
+  saveItemRatingsToFolderState();
   renderPreviewHeaderMeta();
   renderItemMetadataPanel();
   renderFileList();
@@ -981,9 +980,10 @@ function renderItemAnalysisPanel() {
 }
 
 function saveItemTagsToFolderState() {
-  var snapshot = snapshotFolderStateFromDom();
-  snapshot.caption_tags_by_media = JSON.parse(JSON.stringify(captionItemTagsByMedia || {}));
-  writeFolderStateFile(state.folder, snapshot);
+  var capturedSave = captureCurrentFolderStateSave();
+  if (!capturedSave) return Promise.resolve(false);
+  capturedSave.snapshot.caption_tags_by_media = JSON.parse(JSON.stringify(captionItemTagsByMedia || {}));
+  return writeCapturedFolderState(capturedSave);
 }
 
 function shouldLiveSyncEditorToTemplateForMediaKey(mediaKey) {
@@ -1083,7 +1083,7 @@ function addTagToMediaKey(mediaKey, tagText, options) {
     invalidateChecklistReviewedRequirementsForTagChange(key, tag, { skipRender: true });
   }
   ensureCaptionHelperPhraseInCatalog(tag, true);
-  debouncedItemTagsSave(saveItemTagsToFolderState);
+  saveItemTagsToFolderState();
   refreshTagDrivenPanelsForMediaKey(key);
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();

@@ -21,6 +21,16 @@ from pathlib import Path
 WARMUP_STEPS = 2
 TOTAL_STEPS = 6
 POLL_SECONDS = 1.0
+MIN_GPU_FREE_MIB = 680
+MIXED_EPOCHS = 2
+MIXED_STEPS_PER_EPOCH = 21
+MIXED_MAX_RETRIES = 3
+MIXED_ROLE_SPECS = (
+    (68, 4),  # temporal
+    (34, 2),  # hybrid
+    (17, 1),  # spatial
+)
+MIXED_ASPECTS = ("169", "square", "43")
 OOM_PATTERN = re.compile(r"(?:cuda.*out of memory|outofmemoryerror|cublas.*alloc|cuda error: out of memory)", re.IGNORECASE)
 ITER_TIME_PATTERN = re.compile(r"\biter time \(s\):\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
 STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
@@ -113,13 +123,13 @@ def replace_required_path(text, pattern, value, label):
     return updated
 
 
-def build_probe_config(base_text, dataset_path, output_path):
+def build_probe_config(base_text, dataset_path, output_path, epochs=TOTAL_STEPS):
     """Change only probe-owned config values; leave model/runtime settings intact."""
     text = replace_required_path(base_text, DATASET_PATTERN, dataset_path, "dataset path")
     text = replace_required_path(text, OUTPUT_PATTERN, output_path, "output_dir")
-    text = replace_required(text, TOP_LEVEL_NUMBER_PATTERNS["epochs"], TOTAL_STEPS, "epochs")
-    text = replace_required(text, TOP_LEVEL_NUMBER_PATTERNS["save_every_n_epochs"], TOTAL_STEPS + 1, "save_every_n_epochs")
-    text = replace_required(text, TOP_LEVEL_NUMBER_PATTERNS["checkpoint_every_n_epochs"], TOTAL_STEPS + 1, "checkpoint_every_n_epochs")
+    text = replace_required(text, TOP_LEVEL_NUMBER_PATTERNS["epochs"], epochs, "epochs")
+    text = replace_required(text, TOP_LEVEL_NUMBER_PATTERNS["save_every_n_epochs"], epochs + 1, "save_every_n_epochs")
+    text = replace_required(text, TOP_LEVEL_NUMBER_PATTERNS["checkpoint_every_n_epochs"], epochs + 1, "checkpoint_every_n_epochs")
     return replace_required(text, TOP_LEVEL_NUMBER_PATTERNS["steps_per_print"], 1, "steps_per_print")
 
 
@@ -132,6 +142,24 @@ def write_probe_dataset(path, media_dir, width, height, frames, group="videos"):
         + "size_buckets = [[" + str(width) + ", " + str(height) + ", " + str(frames) + "]]\n",
         encoding="utf-8",
     )
+
+
+def write_mixed_dataset(path, selected):
+    """Write the small, weighted Quality envelope from already-cached candidates."""
+    lines = []
+    for frames, repeats in MIXED_ROLE_SPECS:
+        for aspect in MIXED_ASPECTS:
+            candidate = selected[(frames, aspect)]
+            width, height, _ = candidate["shape"]
+            lines.extend([
+                "[[directory]]",
+                "path = \"" + str(candidate["mediaDir"]).replace("\\", "/") + "\"",
+                "num_repeats = " + str(repeats),
+                "group = \"videos\"",
+                "size_buckets = [[" + str(width) + ", " + str(height) + ", " + str(frames) + "]]",
+                "",
+            ])
+    Path(path).write_text("\n".join(lines), encoding="utf-8")
 
 
 def materialize_probe_media(source_video, source_caption, media_dir):
@@ -257,9 +285,17 @@ def telemetry_summary(path):
     host_available = [value for value in host_available if value is not None]
     swap_free = [value for value in swap_free if value is not None]
     active_group = active[3] if active else []
-    peak_memory = max([_telemetry_int(row, "gpu_memory_used_mib") for row in active_group], default=None)
-    memory_totals = [_telemetry_int(row, "gpu_memory_total_mib") for row in active_group]
-    memory_totals = [value for value in memory_totals if value is not None]
+    used_values = [_telemetry_int(row, "gpu_memory_used_mib") for row in active_group]
+    used_values = [value for value in used_values if value is not None]
+    memory_pairs = []
+    for row in active_group:
+        used = _telemetry_int(row, "gpu_memory_used_mib")
+        total = _telemetry_int(row, "gpu_memory_total_mib")
+        if used is not None and total is not None and total >= used:
+            memory_pairs.append((used, total))
+    peak_memory = max(used_values, default=None)
+    memory_totals = [total for _used, total in memory_pairs]
+    minimum_free = min([total - used for used, total in memory_pairs], default=None)
     first_available = host_available[0] if host_available else None
     first_swap_free = swap_free[0] if swap_free else None
     min_available = min(host_available) if host_available else None
@@ -271,12 +307,43 @@ def telemetry_summary(path):
         "activeGpuUuid": active_group[0].get("gpu_uuid") if active_group else "",
         "peakGpuMemoryMiB": peak_memory,
         "gpuMemoryTotalMiB": memory_totals[0] if memory_totals else None,
+        "minimumGpuFreeMiB": minimum_free,
         "minHostAvailableKiB": min_available,
         "minSwapFreeKiB": min_swap_free,
         "hostAvailableDropKiB": available_drop,
         "swapFreeDropKiB": swap_drop,
         "memoryPressureEvidence": bool((available_drop or 0) >= 2 * 1024 * 1024 or (swap_drop or 0) >= 1024 * 1024),
     }
+
+
+def telemetry_minimum_free_mib(telemetry):
+    """Return exact minimum free VRAM, including readable legacy telemetry."""
+    if not isinstance(telemetry, dict):
+        return None
+    minimum = telemetry.get("minimumGpuFreeMiB")
+    if minimum is not None:
+        try:
+            minimum = int(minimum)
+        except (TypeError, ValueError):
+            return None
+        return minimum if minimum >= 0 else None
+    try:
+        peak = int(telemetry.get("peakGpuMemoryMiB"))
+        total = int(telemetry.get("gpuMemoryTotalMiB"))
+    except (TypeError, ValueError):
+        return None
+    free = total - peak
+    return free if free >= 0 else None
+
+
+def telemetry_has_required_vram_headroom(telemetry):
+    minimum_free = telemetry_minimum_free_mib(telemetry)
+    return minimum_free is not None and minimum_free >= MIN_GPU_FREE_MIB
+
+
+def telemetry_is_below_required_vram_headroom(path):
+    minimum_free = telemetry_minimum_free_mib(telemetry_summary(path))
+    return minimum_free is not None and minimum_free < MIN_GPU_FREE_MIB
 
 
 def terminate_process_group(process):
@@ -299,11 +366,12 @@ def terminate_process_group(process):
         process.wait(timeout=15)
 
 
-def run_command(args, cwd, log_path, post_warmup_timeout=None):
+def run_command(args, cwd, log_path, post_warmup_timeout=None, stop_when=None):
     log_path = Path(log_path)
     last_step = None
     last_step_at = time.monotonic()
     timed_out = False
+    stopped_for = ""
     with log_path.open("w", encoding="utf-8") as log_handle:
         try:
             process = subprocess.Popen(
@@ -328,11 +396,15 @@ def run_command(args, cwd, log_path, post_warmup_timeout=None):
                         timed_out = True
                         terminate_process_group(process)
                         break
+                if stop_when is not None and stop_when():
+                    stopped_for = "unsafe_vram"
+                    terminate_process_group(process)
+                    break
                 time.sleep(POLL_SECONDS)
         except KeyboardInterrupt:
             terminate_process_group(process)
             raise
-    return {"exitCode": process.returncode, "timedOut": timed_out}
+    return {"exitCode": process.returncode, "timedOut": timed_out, "stoppedFor": stopped_for}
 
 
 def probe_command(config_path, cache_only=False, trust_cache=False):
@@ -355,7 +427,7 @@ def append_summary(path, row):
         writer = csv.DictWriter(handle, fieldnames=[
             "frames", "aspect", "width", "height", "mfp", "status", "baseline_seconds", "slow_threshold_seconds",
             "median_seconds", "slow_step_count", "train_exit_code", "timed_out", "terminal_reason",
-            "active_gpu_index", "peak_gpu_memory_mib", "min_host_available_kib", "min_swap_free_kib", "spill_evidence", "probe_dir",
+            "active_gpu_index", "peak_gpu_memory_mib", "min_gpu_free_mib", "min_host_available_kib", "min_swap_free_kib", "spill_evidence", "probe_dir",
         ])
         if not exists:
             writer.writeheader()
@@ -411,6 +483,99 @@ def prepare_candidate(seed, ladder, width, height, work_root):
     return candidate
 
 
+def prepare_mixed_attempt(seed, selected, attempt_index, work_root):
+    """Create a train-only envelope check that consumes existing candidate caches."""
+    probe_dir = seed["results"] / "mixed" / ("attempt-" + str(attempt_index + 1))
+    output_dir = Path(work_root) / "outputs" / "mixed" / ("attempt-" + str(attempt_index + 1))
+    dataset_path = probe_dir / "dataset.toml"
+    config_path = probe_dir / "config.toml"
+    probe_dir.mkdir(parents=True, exist_ok=False)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    write_mixed_dataset(dataset_path, selected)
+    config_text = seed["config"].read_text(encoding="utf-8")
+    config_path.write_text(
+        build_probe_config(config_text, dataset_path, output_dir, epochs=MIXED_EPOCHS),
+        encoding="utf-8",
+    )
+    candidate = {
+        "probeDir": probe_dir,
+        "configPath": config_path,
+        "datasetPath": dataset_path,
+        "trainLog": probe_dir / "train.log",
+        "telemetryPath": probe_dir / "telemetry.csv",
+        "resultPath": probe_dir / "result.json",
+    }
+    write_json(probe_dir / "request.json", {
+        "attempt": attempt_index + 1,
+        "epochs": MIXED_EPOCHS,
+        "warmupSteps": MIXED_STEPS_PER_EPOCH,
+        "measuredSteps": MIXED_STEPS_PER_EPOCH,
+        "selected": {
+            str(frames) + "f." + aspect: selected[(frames, aspect)]["shape"]
+            for frames, _repeats in MIXED_ROLE_SPECS
+            for aspect in MIXED_ASPECTS
+        },
+        "trainCommand": probe_command(config_path, trust_cache=True),
+    })
+    return candidate
+
+
+def execute_mixed_attempt(candidate, baseline_seconds):
+    train_command = probe_command(candidate["configPath"], trust_cache=True)
+    sampler = TelemetrySampler(candidate["telemetryPath"])
+    sampler.start()
+    try:
+        stall_timeout = max(120.0, float(baseline_seconds) * 20.0)
+        train_result = run_command(
+            train_command,
+            Path.cwd(),
+            candidate["trainLog"],
+            post_warmup_timeout=stall_timeout,
+            stop_when=lambda: telemetry_is_below_required_vram_headroom(candidate["telemetryPath"]),
+        )
+    finally:
+        sampler.stop()
+    train_text = read_log(candidate["trainLog"])
+    all_times = iter_times(train_text)
+    measured = all_times[MIXED_STEPS_PER_EPOCH:MIXED_STEPS_PER_EPOCH * MIXED_EPOCHS]
+    threshold = max(20.0, float(baseline_seconds) * 2.5)
+    slow_step_count = sum(1 for value in measured if value >= threshold)
+    telemetry = telemetry_summary(candidate["telemetryPath"])
+    if train_result.get("stoppedFor") == "unsafe_vram":
+        status = "unsafe_vram"
+    elif train_result["timedOut"]:
+        status = "unsafe_slow"
+    elif train_result["exitCode"] != 0:
+        status = "oom" if log_has_oom(train_text) else "trainer_failed"
+    elif len(measured) < MIXED_STEPS_PER_EPOCH:
+        status = "trainer_failed"
+    elif telemetry_minimum_free_mib(telemetry) is None:
+        status = "telemetry_failed"
+    elif not telemetry_has_required_vram_headroom(telemetry):
+        status = "unsafe_vram"
+    elif slow_step_count >= 2:
+        status = "unsafe_slow"
+    else:
+        status = "completed"
+    result = {
+        "status": status,
+        "trainCommand": train_command,
+        "trainExitCode": train_result["exitCode"],
+        "timedOut": train_result["timedOut"],
+        "allStepSeconds": all_times,
+        "measuredStepSeconds": measured,
+        "medianStepSeconds": statistics.median(measured) if measured else None,
+        "baselineSeconds": baseline_seconds,
+        "slowThresholdSeconds": threshold,
+        "slowStepCount": slow_step_count,
+        "telemetry": telemetry,
+    }
+    if status != "completed":
+        result["terminalReason"] = status
+    write_result(candidate["resultPath"], **result)
+    return result
+
+
 def execute_probe(candidate, baseline_seconds, on_train_start=None):
     width, height, frames = candidate["shape"]
     cache_command = probe_command(candidate["configPath"], cache_only=True)
@@ -454,7 +619,13 @@ def execute_probe(candidate, baseline_seconds, on_train_start=None):
     sampler.start()
     try:
         stall_timeout = max(120.0, float(baseline_seconds) * 20.0) if baseline_seconds else None
-        train_result = run_command(train_command, Path.cwd(), candidate["trainLog"], post_warmup_timeout=stall_timeout)
+        train_result = run_command(
+            train_command,
+            Path.cwd(),
+            candidate["trainLog"],
+            post_warmup_timeout=stall_timeout,
+            stop_when=lambda: telemetry_is_below_required_vram_headroom(candidate["telemetryPath"]),
+        )
     finally:
         sampler.stop()
     train_text = read_log(candidate["trainLog"])
@@ -462,17 +633,23 @@ def execute_probe(candidate, baseline_seconds, on_train_start=None):
     median_seconds = statistics.median(measured) if measured else None
     slow_threshold = max(20.0, float(baseline_seconds) * 2.5) if baseline_seconds else None
     slow_step_count = sum(1 for value in measured if slow_threshold is not None and value >= slow_threshold)
-    if train_result["timedOut"]:
+    telemetry = telemetry_summary(candidate["telemetryPath"])
+    if train_result.get("stoppedFor") == "unsafe_vram":
+        status = "unsafe_vram"
+    elif train_result["timedOut"]:
         status = "unsafe_slow"
     elif train_result["exitCode"] != 0:
         status = "oom" if log_has_oom(train_text) else "trainer_failed"
     elif len(measured) < TOTAL_STEPS - WARMUP_STEPS:
         status = "trainer_failed"
+    elif telemetry_minimum_free_mib(telemetry) is None:
+        status = "telemetry_failed"
+    elif not telemetry_has_required_vram_headroom(telemetry):
+        status = "unsafe_vram"
     elif slow_threshold is not None and median_seconds >= slow_threshold:
         status = "unsafe_slow"
     else:
         status = "completed"
-    telemetry = telemetry_summary(candidate["telemetryPath"])
     telemetry["spillEvidence"] = bool(status == "unsafe_slow" and telemetry.get("memoryPressureEvidence"))
     result = {
         "frames": candidate["frames"],
@@ -493,7 +670,7 @@ def execute_probe(candidate, baseline_seconds, on_train_start=None):
         "slowStepCount": slow_step_count,
         "telemetry": telemetry,
     }
-    if status in ("oom", "unsafe_slow"):
+    if status in ("oom", "unsafe_slow", "unsafe_vram", "telemetry_failed"):
         result["terminalReason"] = status
     write_result(candidate["resultPath"], **result)
     return result
@@ -547,6 +724,7 @@ def _summary_row(candidate, result, terminal_reason=""):
         "terminal_reason": terminal_reason,
         "active_gpu_index": telemetry.get("activeGpuIndex") or "",
         "peak_gpu_memory_mib": telemetry.get("peakGpuMemoryMiB") or "",
+        "min_gpu_free_mib": telemetry_minimum_free_mib(telemetry) or "",
         "min_host_available_kib": telemetry.get("minHostAvailableKiB") or "",
         "min_swap_free_kib": telemetry.get("minSwapFreeKiB") or "",
         "spill_evidence": telemetry.get("spillEvidence", False),
@@ -572,6 +750,8 @@ def run_campaign(seed):
     })
     campaign_status = "completed"
     ceilings = []
+    provisional_safe_shapes = None
+    mixed_validation = None
     try:
         for ladder in ladders:
             baseline = None
@@ -605,7 +785,7 @@ def run_campaign(seed):
                             campaign_status = "inconclusive"
                     append_summary(results_root / "summary.csv", _summary_row(candidate, result, terminal_reason))
                     continue
-                if result["status"] in ("oom", "unsafe_slow"):
+                if result["status"] in ("oom", "unsafe_slow", "unsafe_vram"):
                     first_unsafe = candidate["shape"]
                     terminal_reason = result["status"]
                     append_summary(results_root / "summary.csv", _summary_row(candidate, result, terminal_reason))
@@ -628,10 +808,18 @@ def run_campaign(seed):
                 "firstUnsafeShape": first_unsafe,
                 "firstUnsafeOrSentinelShape": first_unsafe or (last_safe if terminal_reason == "ceiling_not_found" else None),
                 "reason": terminal_reason,
+                "minimumGpuFreeMiB": telemetry_minimum_free_mib(terminal_telemetry),
                 "spillEvidence": terminal_telemetry.get("spillEvidence", False),
                 "hostAvailableDropKiB": terminal_telemetry.get("hostAvailableDropKiB"),
                 "swapFreeDropKiB": terminal_telemetry.get("swapFreeDropKiB"),
             })
+        safe_by_key, provisional = safe_candidates_from_results(seed, ladders, work_root)
+        provisional_safe_shapes = safe_shapes_from_selected(provisional)
+        mixed_validation = run_mixed_validation(seed, safe_by_key, provisional, work_root)
+        if mixed_validation["status"] == "completed":
+            campaign_status = "completed"
+        else:
+            campaign_status = "mixed_failed"
     except KeyboardInterrupt:
         campaign_status = "canceled"
         raise
@@ -642,7 +830,10 @@ def run_campaign(seed):
         write_json(results_root / "campaign_result.json", {
             "status": campaign_status,
             "completedAt": utc_now(),
+            "minimumGpuFreeMiB": MIN_GPU_FREE_MIB,
             "ceilings": ceilings,
+            "provisionalSafeShapes": provisional_safe_shapes,
+            "mixedValidation": mixed_validation,
         })
     return campaign_status
 
@@ -658,6 +849,8 @@ def classify_saved_result(result, baseline_seconds):
     if result.get("timedOut"):
         return "unsafe_slow", None
     status = str(result.get("status") or "")
+    if status == "unsafe_vram":
+        return "unsafe_vram", None
     if status == "oom" or int(result.get("cacheExitCode") or 0) != 0 or int(result.get("trainExitCode") or 0) != 0:
         return ("oom" if status == "oom" else "trainer_failed"), None
     measured = result.get("measuredStepSeconds") if isinstance(result.get("measuredStepSeconds"), list) else []
@@ -665,40 +858,185 @@ def classify_saved_result(result, baseline_seconds):
     if len(measured) < TOTAL_STEPS - WARMUP_STEPS:
         return "trainer_failed", None
     median_seconds = statistics.median(measured)
+    telemetry = result.get("telemetry") if isinstance(result.get("telemetry"), dict) else {}
+    if telemetry_minimum_free_mib(telemetry) is None:
+        return "telemetry_failed", median_seconds
+    if not telemetry_has_required_vram_headroom(telemetry):
+        return "unsafe_vram", median_seconds
     threshold = max(20.0, float(baseline_seconds) * 2.5) if baseline_seconds else None
     if threshold is not None and median_seconds >= threshold:
         return "unsafe_slow", median_seconds
     return "completed", median_seconds
 
 
-def calibration_settings_from_results(seed):
-    """Build the compact settings block from raw per-rung evidence."""
-    plan = read_json(seed["plan"])
-    ladders = _validate_plan(plan)
-    safe_shapes = {"17": {}, "34": {}, "68": {}}
-    for ladder in ladders:
+def safe_candidates_from_results(seed, ladders, work_root):
+    """Return every individually valid rung and the provisional selected ceilings."""
+    safe_by_key = {}
+    provisional = {}
+    for ladder_order, ladder in enumerate(ladders):
         frames = int(ladder["frames"])
         if frames not in (17, 34, 68):
             continue
+        aspect = str(ladder["aspect"])
         baseline = None
-        last_safe = None
-        for shape in ladder["shapes"]:
+        candidates = []
+        for shape_order, shape in enumerate(ladder["shapes"]):
             width, height = int(shape[0]), int(shape[1])
-            result_path = seed["results"] / candidate_name(frames, ladder["aspect"], width, height) / "result.json"
+            result_path = seed["results"] / candidate_name(frames, aspect, width, height) / "result.json"
             if not result_path.is_file():
                 break
-            status, median_seconds = classify_saved_result(read_json(result_path), baseline)
+            result = read_json(result_path)
+            status, median_seconds = classify_saved_result(result, baseline)
             if status == "completed":
-                last_safe = [width, height]
+                telemetry = result.get("telemetry") if isinstance(result.get("telemetry"), dict) else {}
+                candidate = {
+                    "frames": frames,
+                    "aspect": aspect,
+                    "shape": [width, height, frames],
+                    "mfp": mfp(width, height, frames),
+                    "medianSeconds": median_seconds,
+                    "minimumGpuFreeMiB": telemetry_minimum_free_mib(telemetry),
+                    "mediaDir": Path(work_root) / "media" / candidate_name(frames, aspect, width, height),
+                    "ladderOrder": ladder_order,
+                    "shapeOrder": shape_order,
+                }
+                candidates.append(candidate)
                 if baseline is None:
                     baseline = median_seconds
                 continue
-            if status in ("oom", "unsafe_slow"):
+            if status in ("oom", "unsafe_slow", "unsafe_vram"):
                 break
-            raise ValueError("Calibration has an unusable " + status + " result for " + str(frames) + "f " + str(ladder["aspect"]) + ".")
-        if last_safe is None:
-            raise ValueError("Calibration has no safe shape for " + str(frames) + "f " + str(ladder["aspect"]) + ".")
-        safe_shapes[str(frames)][str(ladder["aspect"])] = last_safe
+            raise ValueError("Calibration has an unusable " + status + " result for " + str(frames) + "f " + aspect + ".")
+        if not candidates:
+            raise ValueError("Calibration has no safe shape for " + str(frames) + "f " + aspect + ".")
+        key = (frames, aspect)
+        safe_by_key[key] = candidates
+        provisional[key] = candidates[-1]
+    return safe_by_key, provisional
+
+
+def safe_shapes_from_selected(selected):
+    return {
+        str(frames): {
+            aspect: selected[(frames, aspect)]["shape"][:2]
+            for aspect in MIXED_ASPECTS
+        }
+        for frames, _repeats in MIXED_ROLE_SPECS
+    }
+
+
+def mixed_shape_labels(selected):
+    return ", ".join(
+        str(frames) + "f " + aspect + " "
+        + str(selected[(frames, aspect)]["shape"][0]) + "x" + str(selected[(frames, aspect)]["shape"][1])
+        for frames, _repeats in MIXED_ROLE_SPECS
+        for aspect in MIXED_ASPECTS
+    )
+
+
+def select_mixed_backoff(selected, safe_by_key):
+    """Lower exactly one pressure-leading rung without searching combinations."""
+    choices = []
+    for key, current in selected.items():
+        candidates = safe_by_key[key]
+        current_index = candidates.index(current)
+        if current_index <= 0:
+            continue
+        choices.append((
+            int(current["minimumGpuFreeMiB"]),
+            -float(current["mfp"]),
+            int(current["ladderOrder"]),
+            int(current["shapeOrder"]),
+            key,
+            candidates[current_index - 1],
+        ))
+    if not choices:
+        return None
+    _free, _mfp, _ladder, _shape, key, lower = min(choices)
+    return key, lower
+
+
+def run_mixed_validation(seed, safe_by_key, provisional, work_root):
+    selected = dict(provisional)
+    attempts = []
+    for attempt_index in range(MIXED_MAX_RETRIES + 1):
+        baseline = max(float(candidate["medianSeconds"]) for candidate in selected.values())
+        attempt = prepare_mixed_attempt(seed, selected, attempt_index, work_root)
+        print(
+            "[h3-probe] mixed Quality envelope attempt " + str(attempt_index + 1)
+            + "/" + str(MIXED_MAX_RETRIES + 1) + " train",
+            flush=True,
+        )
+        result = execute_mixed_attempt(attempt, baseline)
+        attempt_record = {
+            "attempt": attempt_index + 1,
+            "safeShapes": safe_shapes_from_selected(selected),
+            "status": result["status"],
+            "baselineSeconds": baseline,
+            "slowThresholdSeconds": result.get("slowThresholdSeconds"),
+            "slowStepCount": result.get("slowStepCount"),
+            "medianStepSeconds": result.get("medianStepSeconds"),
+            "telemetry": result.get("telemetry"),
+            "probeDir": str(attempt["probeDir"].relative_to(seed["results"])),
+        }
+        attempts.append(attempt_record)
+        details = []
+        if result.get("medianStepSeconds") is not None:
+            details.append("median=" + format(float(result["medianStepSeconds"]), ".3f") + "s")
+        minimum_free = telemetry_minimum_free_mib(result.get("telemetry"))
+        if minimum_free is not None:
+            details.append("min_free=" + str(minimum_free) + "MiB")
+        print(
+            "[h3-probe] mixed Quality envelope " + result["status"]
+            + (" · " + " · ".join(details) if details else ""),
+            flush=True,
+        )
+        if result["status"] == "completed":
+            return {"status": "completed", "attempts": attempts, "finalSafeShapes": safe_shapes_from_selected(selected)}
+        if result["status"] not in ("oom", "unsafe_slow", "unsafe_vram") or attempt_index >= MIXED_MAX_RETRIES:
+            break
+        backoff = select_mixed_backoff(selected, safe_by_key)
+        if backoff is None:
+            break
+        key, lower = backoff
+        previous = selected[key]
+        selected[key] = lower
+        attempt_record["backoff"] = {
+            "frames": key[0],
+            "aspect": key[1],
+            "from": previous["shape"][:2],
+            "to": lower["shape"][:2],
+        }
+        print(
+            "[h3-probe] mixed backoff " + str(key[0]) + "f " + key[1]
+            + " " + str(previous["shape"][0]) + "x" + str(previous["shape"][1])
+            + " -> " + str(lower["shape"][0]) + "x" + str(lower["shape"][1]),
+            flush=True,
+        )
+    print("[h3-probe] mixed Quality envelope failed candidates: " + mixed_shape_labels(selected), flush=True)
+    return {"status": "failed", "attempts": attempts}
+
+
+def calibration_settings_from_results(seed, require_mixed_validation=False):
+    """Build the compact settings block from raw evidence or a passed mixed check."""
+    plan = read_json(seed["plan"])
+    ladders = _validate_plan(plan)
+    campaign = read_json(seed["results"] / "campaign_result.json")
+    mixed = campaign.get("mixedValidation") if isinstance(campaign.get("mixedValidation"), dict) else None
+    if mixed and mixed.get("status") == "completed":
+        safe_shapes = mixed.get("finalSafeShapes")
+        if not isinstance(safe_shapes, dict):
+            raise ValueError("Completed mixed validation is missing final safe shapes.")
+    else:
+        if require_mixed_validation:
+            raise ValueError("Calibration cannot publish without a completed mixed Quality validation.")
+        print(
+            "[h3-probe] warning: saved campaign has no mixed Quality validation; printing provisional shapes only.",
+            file=sys.stderr,
+            flush=True,
+        )
+        _safe_by_key, provisional = safe_candidates_from_results(seed, ladders, seed["results"].parent / "work")
+        safe_shapes = safe_shapes_from_selected(provisional)
     return {
         "version": 1,
         "campaign": str(seed["seed"].get("id") or seed["seedPath"].parent.name),
@@ -733,7 +1071,7 @@ def main(argv=None):
         return 0
     status = run_campaign(seed)
     if args.publish_config and status in ("completed", "inconclusive"):
-        calibration = calibration_settings_from_results(seed)
+        calibration = calibration_settings_from_results(seed, require_mixed_validation=True)
         publish_calibration_settings(args.publish_config, calibration)
         print("[h3-probe] published safe shapes to " + str(args.publish_config), flush=True)
     return 0 if status == "completed" else 1

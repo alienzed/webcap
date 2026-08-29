@@ -123,8 +123,9 @@ function wireStatsPrimerAutoSave() {
           state.folderHasSavedPrimerTemplate = true;
         }
         refreshPrimerPreviewForCurrentItem();
+        var capturedSave = captureCurrentFolderStateSave();
         debouncedSaveFolderState(function () {
-          saveFolderStateForCurrentRoot();
+          writeCapturedFolderState(capturedSave);
         });
         if (typeof updatePrimerCaptionResetUi === 'function') {
           updatePrimerCaptionResetUi();

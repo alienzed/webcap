@@ -5,13 +5,10 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PIL import Image
 from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
 from .training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, config_for_stage, profile as training_profile
-
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
 ASPECT_RATIOS = {
     "square": 1.0,
@@ -24,9 +21,6 @@ AR_TOL = 0.05
 MAX_SQUARE_DIM = 768
 MAX_NON_SQUARE_LONG = 1280
 MAX_NON_SQUARE_SHORT = 768
-IMAGE_MAX_SQUARE_DIM = 768
-IMAGE_MAX_NON_SQUARE_LONG = 768
-IMAGE_MAX_NON_SQUARE_SHORT = 768
 MAX_IMAGE_MFP = 600
 IMAGE_BUCKET_MAX_UPSCALE_RATIO = 1.15
 
@@ -106,8 +100,6 @@ TRAINING_PLAN_FILE_NAME = "training_plan.json"
 VIDEO_TEMPORAL_REPEAT_WEIGHT = 1.0
 VIDEO_DETAIL_REPEAT_WEIGHT = 0.25
 IMAGE_REPEAT_WEIGHT = 1.0
-VIDEO_PROFILE_IDS = {WAN22_PROFILE_ID, WAN21_PROFILE_ID, MINIMAX_H3_PROFILE_ID}
-
 # Roles are data, not model-specific selection branches.  POC keeps one cheaper
 # temporal role; Normal and Quality add a shorter, high-detail role.
 VIDEO_ROLE_TABLE = {
@@ -140,14 +132,6 @@ def repeat_targets_for_mode(mode: str):
     normalized = normalize_training_generate_mode(mode)
     targets = REPEAT_TARGET_STEPS[normalized]
     return int(targets["hi"]), int(targets["lo"])
-
-
-def video_resolution_cap(profile_id: str, mode: str, ar_label: str):
-    selected_profile = str(profile_id or WAN22_PROFILE_ID).strip().lower()
-    if selected_profile not in VIDEO_PROFILE_IDS:
-        return None
-    generate_mode = normalize_training_generate_mode(mode)
-    return TRAINING_MODE_TARGETS[generate_mode][ar_label]
 
 
 _EPOCHS_PATTERN = re.compile(rb"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
@@ -674,44 +658,12 @@ def render_video_block(dir_path: str, bucket, num_repeats: int = 1, detail_inten
     return "\n".join(line for line in lines if line)
 
 
-def find_image_dirs(dataset_root: Path):
-    dirs = []
-    for child in sorted(dataset_root.iterdir(), key=lambda p: p.name.lower()):
-        if child.is_dir() and (child.name.endswith("_img") or child.name.endswith("_img_highres")):
-            dirs.append(child)
-    return dirs
-
-
-def ar_from_image_dir(name: str):
-    if name.endswith("_img_highres"):
-        base = name[:-len("_img_highres")]
-    elif name.endswith("_img"):
-        base = name[:-len("_img")]
-    else:
-        raise ValueError(f"Image directory name does not end with _img: {name}")
-    if base not in ASPECT_RATIOS:
-        raise ValueError(f"Unknown image AR folder: {name}")
-    return base
-
-
-def read_image_metadata(image_dir: Path):
-    images = []
-    for path in sorted(image_dir.iterdir(), key=lambda p: p.name.lower()):
-        if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
-            continue
-        with Image.open(path) as img:
-            width, height = img.size
-        images.append((path.name, int(width), int(height)))
-    return images
-
-
 def generate_candidates(ar_label: str):
     return generate_candidates_with_caps(
         ar_label,
         MAX_SQUARE_DIM,
         MAX_NON_SQUARE_LONG,
         MAX_NON_SQUARE_SHORT,
-        canonical_only=True,
     )
 
 
@@ -723,11 +675,10 @@ def generate_image_candidates(ar_label: str, mode: str = "normal"):
         caps["square_dim"],
         caps["non_square_long"],
         caps["non_square_short"],
-        canonical_only=True,
     )
 
 
-def generate_candidates_with_caps(ar_label: str, max_square_dim: int, max_long: int, max_short: int, canonical_only: bool):
+def generate_candidates_with_caps(ar_label: str, max_square_dim: int, max_long: int, max_short: int):
     target_ar = ASPECT_RATIOS[ar_label]
     candidates = []
     if ar_label == "square":
@@ -736,52 +687,29 @@ def generate_candidates_with_caps(ar_label: str, max_square_dim: int, max_long: 
         candidates.sort(key=lambda item: item[2], reverse=True)
         return candidates
 
-    if canonical_only:
-        seen = set()
-        for short_side in range(256, max_short + 1, 32):
-            if target_ar >= 1:
-                h = short_side
-                w = snap_32_nearest(h * target_ar)
-            else:
-                w = short_side
-                h = snap_32_nearest(w / target_ar)
-            if w < 256 or h < 256:
-                continue
-            if max(w, h) > max_long:
-                continue
-            if min(w, h) > max_short:
-                continue
-            if abs((w / float(h)) - target_ar) > AR_TOL:
-                continue
-            key = (w, h)
-            if key in seen:
-                continue
-            seen.add(key)
-            candidates.append((w, h, w * h))
-        candidates.sort(key=lambda item: item[2], reverse=True)
-        return candidates
-
     seen = set()
-    if target_ar >= 1:
-        for w in range(256, max_long + 1, 32):
-            ideal_h = w / target_ar
-            for h in snap_32_options(ideal_h):
-                add_candidate(candidates, seen, target_ar, w, h, max_long, max_short)
-    else:
-        for h in range(256, max_long + 1, 32):
-            ideal_w = target_ar * h
-            for w in snap_32_options(ideal_w):
-                add_candidate(candidates, seen, target_ar, w, h, max_long, max_short)
+    for short_side in range(256, max_short + 1, 32):
+        if target_ar >= 1:
+            h = short_side
+            w = snap_32_nearest(h * target_ar)
+        else:
+            w = short_side
+            h = snap_32_nearest(w / target_ar)
+        if w < 256 or h < 256:
+            continue
+        if max(w, h) > max_long:
+            continue
+        if min(w, h) > max_short:
+            continue
+        if abs((w / float(h)) - target_ar) > AR_TOL:
+            continue
+        key = (w, h)
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append((w, h, w * h))
     candidates.sort(key=lambda item: item[2], reverse=True)
     return candidates
-
-
-def snap_32_options(value):
-    low = int(math.floor(value / 32.0) * 32)
-    high = int(math.ceil(value / 32.0) * 32)
-    if low == high:
-        return [low]
-    return [low, high]
 
 
 def snap_32_nearest(value):
@@ -815,22 +743,6 @@ def resolve_image_target(ar_label: str, mode: str = "normal", noise_profile: str
         return (target_w, target_h)
     short_side = max(256, min(target_w, target_h) - 32)
     return target_dimensions_for_short_side(ar_label, short_side)
-
-
-def add_candidate(candidates, seen, target_ar, w, h, max_long, max_short):
-    if w < 256 or h < 256:
-        return
-    if max(w, h) > max_long:
-        return
-    if min(w, h) > max_short:
-        return
-    if abs((w / float(h)) - target_ar) > AR_TOL:
-        return
-    key = (w, h)
-    if key in seen:
-        return
-    seen.add(key)
-    candidates.append((w, h, w * h))
 
 
 def choose_image_bucket(ar_label: str, images, mode: str = "normal", noise_profile: str = "lo"):

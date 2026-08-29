@@ -4,8 +4,9 @@ Last reviewed: 2026-08-28.
 ## Enhancements / Ideas
 - [LoRA initializer runs](lora_initializer.md): start a new run from an existing LoRA directory without resuming checkpoint state.
 
-## MAJOR
-Bucketing and folder materialization has gotten too fancy - it's become very obscure in terms of confidence that I am training on what I think I am, we need to simplifiy or possibly roll some things back... the worries about upscaling are one thing, worries about the wrong bucket being selected (based on closest AR match) are valid, but these may be symptoms of overly complex selection anyway, let's find a simpler middle ground, or at least properly distinguish the complexity by profile, and make sure this app handles these efficiently, not 20 logic branches per model/profile.
+## Completed (2026-08-29)
+
+- Bucketing and bundle materialization now use one explicit bucket per generated stanza, direct captured folders for images and temporal video, and a marked subset only for detail video. The prior dynamic class/materialization paths are archived or removed.
 
 ## Folder-State Safety
 

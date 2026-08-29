@@ -23,7 +23,7 @@ Wan video timing is normalized to 16 fps and H3 timing to 24 fps. A temporal sta
 
 Detail is an explicit subset role with repeat weight `0.25`. Clips long enough for detail but shorter than temporal are mandatory detail members and establish the highest common native target they support. Long clips join detail only when they natively support the selected bucket. When there are no mandatory clips, an optional detail stanza is created only if at least two clips support a native bucket.
 
-The bundle captures every selected source media item once. It materializes only marked detail stanzas under `media/video_detail/<ar>__<width>x<height>x<frames>`, using hardlinks when possible and copies otherwise. Temporal and image stanzas remain direct paths; there are no general video-class folders.
+The bundle captures every selected source media item once. It materializes only marked detail stanzas under `media/video_detail/<ar>__<width>x<height>x<frames>`, using hardlinks when possible and copies otherwise. Temporal and image stanzas remain direct paths; there are no general video-class folders. A direct temporal folder may include clips shorter than that stanza's frame count; Diffusion Pipe skips those clips.
 
 Clips with unsupported ARs, missing required metadata, or insufficient role frames are skipped with explicit warnings and do not block a managed launch.
 

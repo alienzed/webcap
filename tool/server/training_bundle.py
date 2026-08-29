@@ -348,11 +348,6 @@ def _build_bundle_summary(selected_profile, selected_mode, manifest, plan, bundl
         "profileId": selected_profile["id"],
         "profileLabel": selected_profile["label"],
         "mode": selected_mode,
-        "policies": {
-            "videoCapture": selected_profile.get("videoCapturePolicy") or "normalize_fps",
-            "bucketPolicy": "simple_v2",
-            "detailSubsets": any(bool(row.get("videoDetailAssignments")) for row in manifest.get("videos", [])),
-        },
         "capturedItems": sum(capture_actions.values()),
         "captureActions": capture_actions,
         "skipped": list(manifest.get("skipped") or []),

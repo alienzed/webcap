@@ -21,6 +21,8 @@ Start here when you need to know what the app does today:
 - `docs/filtered_selection_set.md` - visible-media training capture behavior
 - `docs/train.md` - run capture, managed queue, Resume, and manual-handoff behavior
 - `docs/training_profiles.md` - supported models, persistent files, media requirements, and output roots
+- `docs/dataset_config.md` - generated dataset roles, direct-folder capture, and saved-TOML behavior
+- `docs/image_bucketing.md` - single-bucket image selection and audit behavior
 - `docs/src_videos_semantics.md` - current `src_videos` rules
 - `docs/phrase_copy.md` - helper panel, annotate strip, and tag copy/paste
 - `docs/primer_mappings_v2.md` - structured mappings/rules storage and UI contract
@@ -51,7 +53,7 @@ These are useful product notes, not authoritative implementation references:
 - `docs/selection_pose_stack.md`
 - `docs/video_clip.md`
 - `docs/frame-scrubbing.md` - tabled design for authoritative decoded-frame navigation and export starts
-- `docs/vram_bucket_calibration.md` - app-owned H3 shape calibration and safe-shape feedback design
+- `docs/vram_bucket_calibration.md` - separate H3 shape-calibration tooling whose safe shapes can clamp generated ceilings
 
 ## Historical / Superseded
 

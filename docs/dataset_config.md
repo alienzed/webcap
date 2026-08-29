@@ -33,4 +33,4 @@ Saved dataset TOML is authoritative. Bundle capture preserves frame/dimension ed
 
 `training_plan.json` version 2 records stanza-level roles, buckets, source files, eligibility, native/upscaled counts, limiting files, and repeats. `dataset_manifest.json` records the exact captured selection. `bundle_summary.json` remains a compact view for the existing captured-items UI.
 
-H3 envelope probing remains separate experimental tooling; its results do not add runtime dataset roles.
+H3 envelope probing remains separate experimental tooling. A saved compatible calibration can lower the fixed H3 resolution ceiling for an active frame role, but it never raises a built-in ceiling or adds runtime dataset roles. Because saved dataset TOML is authoritative, calibration affects newly generated or explicitly reset datasets rather than rewriting existing files.

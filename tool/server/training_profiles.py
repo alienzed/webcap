@@ -74,7 +74,6 @@ _PROFILES = {
         "command": {"launcher": "standard_deepspeed"},
         "mediaKinds": ("image", "video"),
         "videoFps": 24,
-        "videoCapturePolicy": "normalize_fps",
         "datasetFiles": ("dataset.train.toml",),
         "configs": (
             {"id": "h3", "file": "config.h3.toml", "dataset": "dataset.train.toml", "label": "MiniMax H3", "outputSlug": "minimax-h3", "modelIdentityKeys": ("type", "diffusion_model")},

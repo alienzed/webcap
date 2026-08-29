@@ -7,7 +7,7 @@ from .permissions import normalize_path_permissions
 
 VIDEO_EXTS = {".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v", ".ogg", ".wmv", ".mpg", ".mpeg"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
-AR_CLASSES = {
+ASPECT_RATIOS = {
     "square": 1.0,
     "43": 4 / 3,
     "34": 3 / 4,
@@ -22,7 +22,7 @@ def classify_ar(width: int, height: int):
     if not width or not height:
         return None
     ar = float(width) / float(height)
-    for label, target in AR_CLASSES.items():
+    for label, target in ASPECT_RATIOS.items():
         if abs(ar - target) <= AR_TOL:
             return label
     return None

@@ -6,13 +6,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
+from . import config as app_config
 from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
 from .training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, config_for_stage, profile as training_profile
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
-AR_CLASSES = {
+ASPECT_RATIOS = {
     "square": 1.0,
     "43": 4 / 3,
     "34": 3 / 4,
@@ -78,8 +79,8 @@ PREP_MANIFEST_NAME = "prep_manifest.json"
 VIDEO_MFP_LIMIT = 11000
 # H3 buckets use 32x32 latent cells. 11,900 cells is 12.19 raw MegaFramePixels.
 H3_VIDEO_MFP_LIMIT = 11900
-# One ceiling per active H3 role.  Experimental envelope probing lives outside
-# generation; it does not create another runtime role or selection path.
+# One built-in ceiling per active H3 role. A saved calibration may only lower
+# these ceilings; it does not create another role or selection path.
 H3_VIDEO_MODE_CEILINGS = {
     "normal": {
         "square": {"temporal": (352, 352), "detail": (768, 768)},
@@ -205,7 +206,7 @@ def training_plan_entries(entries, repeats):
     """Return the auditable, per-stanza view of a generated dataset."""
     output = []
     for index, entry in enumerate(entries):
-        bucket = entry.get("buckets", [None])[0]
+        bucket = entry.get("bucket")
         output.append({
             "kind": entry.get("kind"),
             "ar": entry.get("ar_label"),
@@ -247,7 +248,7 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
         ar_label = str(row.get("ar") or "").strip()
         width = to_pos_int(row.get("width"))
         height = to_pos_int(row.get("height"))
-        if not prepared_path or ar_label not in AR_CLASSES or not width or not height:
+        if not prepared_path or ar_label not in ASPECT_RATIOS or not width or not height:
             continue
         dir_name = Path(prepared_path).parent.name
         image_groups.setdefault((dir_name, ar_label), []).append((Path(prepared_path).name, width, height))
@@ -261,66 +262,60 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
         if not images:
             continue
 
-        hi_classes, hi_unsupported = choose_image_bucket(ar_label, images, mode=generate_mode, noise_profile="hi")
-        lo_classes, lo_unsupported = choose_image_bucket(ar_label, images, mode=generate_mode, noise_profile="lo")
-        hi_buckets = [item["bucket"] for item in hi_classes]
-        lo_buckets = [item["bucket"] for item in lo_classes]
+        hi_selection, hi_unsupported = choose_image_bucket(ar_label, images, mode=generate_mode, noise_profile="hi")
+        lo_selection, lo_unsupported = choose_image_bucket(ar_label, images, mode=generate_mode, noise_profile="lo")
         if hi_unsupported:
             lines.append(f"[WARN] {image_dir.name} (HI): minimum bucket still exceeds the 15% upscale policy: " + ", ".join(hi_unsupported))
         if lo_unsupported:
             lines.append(f"[WARN] {image_dir.name} (LO): minimum bucket still exceeds the 15% upscale policy: " + ", ".join(lo_unsupported))
-        if not hi_buckets:
-            lines.append(f"[WARN] {image_dir.name} (HI): no image buckets selected.")
+        if not hi_selection:
+            lines.append(f"[WARN] {image_dir.name} (HI): no image bucket selected.")
         else:
+            hi_bucket = hi_selection["bucket"]
             lines.append(
-                f"[INFO] {image_dir.name}: selected HI image bucket(s): "
-                + ", ".join(f"{w}x{h}" for (w, h) in hi_buckets)
+                f"[INFO] {image_dir.name}: selected HI image bucket: {hi_bucket[0]}x{hi_bucket[1]}"
             )
-            for item in hi_classes:
-                w, h = item["bucket"]
-                lines.append(
-                    f"[INFO] {image_dir.name} (HI) stanza {w}x{h}: "
-                    f"{len(item['images'])} image(s), {item['native_count']} native, "
-                    f"{item['upscaled_count']} slight-upscale"
-                )
+            lines.append(
+                f"[INFO] {image_dir.name} (HI) stanza {hi_bucket[0]}x{hi_bucket[1]}: "
+                f"{len(hi_selection['images'])} image(s), {hi_selection['native_count']} native, "
+                f"{hi_selection['upscaled_count']} slight-upscale"
+            )
             hi_image_entries.append({
                 "kind": "image",
                 "path": image_dir,
                 "ar_label": ar_label,
-                "buckets": hi_buckets,
+                "bucket": hi_bucket,
                 "role": "image",
-                "files": [image[0] for item in hi_classes for image in item["images"]],
-                "native_count": sum(item["native_count"] for item in hi_classes),
-                "upscaled_count": sum(item["upscaled_count"] for item in hi_classes),
-                "limiting_files": [name for item in hi_classes for name in item.get("limiting_files", [])],
-                "sample_count": max(1, sum(len(item["images"]) for item in hi_classes)),
+                "files": [image[0] for image in hi_selection["images"]],
+                "native_count": hi_selection["native_count"],
+                "upscaled_count": hi_selection["upscaled_count"],
+                "limiting_files": hi_selection.get("limiting_files", []),
+                "sample_count": max(1, len(hi_selection["images"])),
                 "repeat_weight": IMAGE_REPEAT_WEIGHT,
             })
-        if not lo_buckets:
-            lines.append(f"[WARN] {image_dir.name} (LO): no image buckets selected.")
+        if not lo_selection:
+            lines.append(f"[WARN] {image_dir.name} (LO): no image bucket selected.")
         else:
+            lo_bucket = lo_selection["bucket"]
             lines.append(
-                f"[INFO] {image_dir.name}: selected LO image bucket(s): "
-                + ", ".join(f"{w}x{h}" for (w, h) in lo_buckets)
+                f"[INFO] {image_dir.name}: selected LO image bucket: {lo_bucket[0]}x{lo_bucket[1]}"
             )
-            for item in lo_classes:
-                w, h = item["bucket"]
-                lines.append(
-                    f"[INFO] {image_dir.name} (LO) stanza {w}x{h}: "
-                    f"{len(item['images'])} image(s), {item['native_count']} native, "
-                    f"{item['upscaled_count']} slight-upscale"
-                )
+            lines.append(
+                f"[INFO] {image_dir.name} (LO) stanza {lo_bucket[0]}x{lo_bucket[1]}: "
+                f"{len(lo_selection['images'])} image(s), {lo_selection['native_count']} native, "
+                f"{lo_selection['upscaled_count']} slight-upscale"
+            )
             lo_image_entries.append({
                 "kind": "image",
                 "path": image_dir,
                 "ar_label": ar_label,
-                "buckets": lo_buckets,
+                "bucket": lo_bucket,
                 "role": "image",
-                "files": [image[0] for item in lo_classes for image in item["images"]],
-                "native_count": sum(item["native_count"] for item in lo_classes),
-                "upscaled_count": sum(item["upscaled_count"] for item in lo_classes),
-                "limiting_files": [name for item in lo_classes for name in item.get("limiting_files", [])],
-                "sample_count": max(1, sum(len(item["images"]) for item in lo_classes)),
+                "files": [image[0] for image in lo_selection["images"]],
+                "native_count": lo_selection["native_count"],
+                "upscaled_count": lo_selection["upscaled_count"],
+                "limiting_files": lo_selection.get("limiting_files", []),
+                "sample_count": max(1, len(lo_selection["images"])),
                 "repeat_weight": IMAGE_REPEAT_WEIGHT,
             })
 
@@ -476,11 +471,57 @@ def video_roles_for_profile(profile_id: str, mode: str):
     return VIDEO_ROLE_TABLE.get(selected_profile_id, {}).get(generate_mode, ())
 
 
+def _h3_calibrated_ceiling(frames: int, ar_label: str):
+    runtime_config = app_config.config if isinstance(app_config.config, dict) else {}
+    training = runtime_config.get("training") if isinstance(runtime_config.get("training"), dict) else {}
+    calibration = training.get("h3_calibration")
+    if calibration is None:
+        return None
+    if not isinstance(calibration, dict):
+        raise ValueError("training.h3_calibration must be an object.")
+    safe_shapes = calibration.get("safe_shapes")
+    if safe_shapes is None:
+        return None
+    if not isinstance(safe_shapes, dict):
+        raise ValueError("training.h3_calibration.safe_shapes must be an object.")
+    by_aspect = safe_shapes.get(str(frames))
+    if by_aspect is None:
+        return None
+    if not isinstance(by_aspect, dict):
+        raise ValueError("training.h3_calibration.safe_shapes." + str(frames) + " must be an object.")
+    source_aspect = {"916": "169", "34": "43"}.get(ar_label, ar_label)
+    shape = by_aspect.get(source_aspect)
+    if shape is None:
+        return None
+    if not isinstance(shape, list) or len(shape) != 2 or not all(
+        isinstance(value, int) and not isinstance(value, bool) and value > 0 for value in shape
+    ):
+        raise ValueError(
+            "training.h3_calibration.safe_shapes." + str(frames) + "." + source_aspect
+            + " must be a two-item positive-integer shape."
+        )
+    if ar_label in ("916", "34"):
+        return shape[1], shape[0]
+    return shape[0], shape[1]
+
+
 def video_role_ceiling(profile_id: str, mode: str, ar_label: str, role: str):
     generate_mode = normalize_training_generate_mode(mode)
-    if str(profile_id or "").strip().lower() == MINIMAX_H3_PROFILE_ID and generate_mode != "poc":
-        return H3_VIDEO_MODE_CEILINGS[generate_mode][ar_label][role]
-    return TRAINING_MODE_TARGETS[generate_mode][ar_label]
+    selected_profile_id = str(profile_id or "").strip().lower()
+    if selected_profile_id == MINIMAX_H3_PROFILE_ID and generate_mode != "poc":
+        built_in = H3_VIDEO_MODE_CEILINGS[generate_mode][ar_label][role]
+    else:
+        built_in = TRAINING_MODE_TARGETS[generate_mode][ar_label]
+    if selected_profile_id != MINIMAX_H3_PROFILE_ID:
+        return built_in
+    role_frames = next(
+        (frames for name, frames, _weight in video_roles_for_profile(selected_profile_id, generate_mode) if name == role),
+        None,
+    )
+    calibrated = _h3_calibrated_ceiling(role_frames, ar_label) if role_frames else None
+    if not calibrated:
+        return built_in
+    return min(built_in[0], calibrated[0]), min(built_in[1], calibrated[1])
 
 
 def _video_candidates(ar_label, ceiling, frames, profile_id):
@@ -521,7 +562,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
     selected_profile = training_profile(selected_profile_id)
     model_fps = selected_profile.get("videoFps")
     roles = video_roles_for_profile(selected_profile_id, generate_mode)
-    grouped = {key: [] for key in AR_CLASSES}
+    grouped = {key: [] for key in ASPECT_RATIOS}
     for row in videos:
         if not isinstance(row, dict):
             continue
@@ -560,7 +601,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
                 if unsafe:
                     lines.append(f"[WARN] {ar_label} temporal {bucket[0]}x{bucket[1]} @ {temporal_frames} exceeds native support for: " + ", ".join(unsafe))
                 lines.append(f"[INFO] {ar_label}: temporal {bucket[0]}x{bucket[1]} @ {temporal_frames} ({len(temporal_clips)} clip(s))")
-                entries.append({"kind": "video", "role": temporal_name, "ar_label": ar_label, "dir_path": (dataset_root / ar_label).as_posix(), "buckets": [(bucket[0], bucket[1], temporal_frames)], "files": [clip["file"] for clip in temporal_clips], "sample_count": len(temporal_clips), "native_count": len(temporal_clips) - len(unsafe), "upscaled_count": len(unsafe), "limiting_files": unsafe, "repeat_weight": temporal_weight})
+                entries.append({"kind": "video", "role": temporal_name, "ar_label": ar_label, "dir_path": (dataset_root / ar_label).as_posix(), "bucket": (bucket[0], bucket[1], temporal_frames), "files": [clip["file"] for clip in temporal_clips], "sample_count": len(temporal_clips), "native_count": len(temporal_clips) - len(unsafe), "upscaled_count": len(unsafe), "limiting_files": unsafe, "repeat_weight": temporal_weight})
 
         if not detail_role:
             continue
@@ -582,7 +623,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
         if unsafe:
             lines.append(f"[WARN] {ar_label} detail {bucket[0]}x{bucket[1]} @ {detail_frames} exceeds native support for mandatory clips: " + ", ".join(unsafe))
         lines.append(f"[INFO] {ar_label}: detail {bucket[0]}x{bucket[1]} @ {detail_frames} ({len(members)} clip(s), bundle subset)")
-        entries.append({"kind": "video", "role": detail_name, "ar_label": ar_label, "dir_path": (dataset_root / ar_label).as_posix(), "buckets": [(bucket[0], bucket[1], detail_frames)], "files": [clip["file"] for clip in members], "sample_count": len(members), "native_count": len(members) - len(unsafe), "upscaled_count": len(unsafe), "limiting_files": unsafe, "repeat_weight": detail_weight, "detail_intent": True})
+        entries.append({"kind": "video", "role": detail_name, "ar_label": ar_label, "dir_path": (dataset_root / ar_label).as_posix(), "bucket": (bucket[0], bucket[1], detail_frames), "files": [clip["file"] for clip in members], "sample_count": len(members), "native_count": len(members) - len(unsafe), "upscaled_count": len(unsafe), "limiting_files": unsafe, "repeat_weight": detail_weight, "detail_intent": True})
     return entries
 
 
@@ -614,7 +655,7 @@ def coerce_frames(record, model_fps=None):
     return frames
 
 
-def render_video_block(dir_path: str, buckets, num_repeats: int = 1, manual_alternatives=None, calibration_comment="", detail_intent=False):
+def render_video_block(dir_path: str, bucket, num_repeats: int = 1, detail_intent=False):
     repeats = int(num_repeats) if isinstance(num_repeats, int) else 1
     if repeats < 1:
         repeats = 1
@@ -626,11 +667,9 @@ def render_video_block(dir_path: str, buckets, num_repeats: int = 1, manual_alte
         "# webcap_detail_subset = true" if detail_intent else "",
         "size_buckets = [",
     ]
-    for (w, h, frames) in buckets:
-        mfp_val = (w * h * frames) / 1_000_000
-        if calibration_comment:
-            lines.append("# " + str(calibration_comment))
-        lines.append(f"  [{w}, {h}, {frames}],  # MegaFramePixels: {mfp_val:.2f}M")
+    w, h, frames = bucket
+    mfp_val = (w * h * frames) / 1_000_000
+    lines.append(f"  [{w}, {h}, {frames}],  # MegaFramePixels: {mfp_val:.2f}M")
     lines.append("]")
     return "\n".join(line for line in lines if line)
 
@@ -650,7 +689,7 @@ def ar_from_image_dir(name: str):
         base = name[:-len("_img")]
     else:
         raise ValueError(f"Image directory name does not end with _img: {name}")
-    if base not in AR_CLASSES:
+    if base not in ASPECT_RATIOS:
         raise ValueError(f"Unknown image AR folder: {name}")
     return base
 
@@ -689,7 +728,7 @@ def generate_image_candidates(ar_label: str, mode: str = "normal"):
 
 
 def generate_candidates_with_caps(ar_label: str, max_square_dim: int, max_long: int, max_short: int, canonical_only: bool):
-    target_ar = AR_CLASSES[ar_label]
+    target_ar = ASPECT_RATIOS[ar_label]
     candidates = []
     if ar_label == "square":
         for dim in range(256, max_square_dim + 1, 32):
@@ -759,7 +798,7 @@ def target_dimensions_for_short_side(ar_label: str, short_side: int):
     short_side = max(256, snap_32_nearest(short_side))
     if ar_label == "square":
         return (short_side, short_side)
-    target_ar = AR_CLASSES[ar_label]
+    target_ar = ASPECT_RATIOS[ar_label]
     if target_ar >= 1:
         h = short_side
         w = snap_32_nearest(h * target_ar)
@@ -794,11 +833,6 @@ def add_candidate(candidates, seen, target_ar, w, h, max_long, max_short):
     candidates.append((w, h, w * h))
 
 
-def pick_image_buckets(ar_label: str, images, mode: str = "normal", noise_profile: str = "lo"):
-    classes, unsupported = choose_image_bucket(ar_label, images, mode=mode, noise_profile=noise_profile)
-    return [item["bucket"] for item in classes], unsupported
-
-
 def choose_image_bucket(ar_label: str, images, mode: str = "normal", noise_profile: str = "lo"):
     """Choose one direct-folder image bucket for an entire AR cohort."""
     generate_mode = normalize_training_generate_mode(mode)
@@ -810,7 +844,7 @@ def choose_image_bucket(ar_label: str, images, mode: str = "normal", noise_profi
     if not candidates:
         raise ValueError(f"No image bucket candidates under image mfp limit for AR={ar_label}")
     if not images:
-        return [], []
+        return None, []
     for selected in candidates:
         bucket = (selected[0], selected[1])
         if all(image[1] * IMAGE_BUCKET_MAX_UPSCALE_RATIO >= bucket[0] and image[2] * IMAGE_BUCKET_MAX_UPSCALE_RATIO >= bucket[1] for image in images):
@@ -824,14 +858,14 @@ def choose_image_bucket(ar_label: str, images, mode: str = "normal", noise_profi
     over_limit = [image[0] for image in upscaled if image[1] * IMAGE_BUCKET_MAX_UPSCALE_RATIO < bucket[0] or image[2] * IMAGE_BUCKET_MAX_UPSCALE_RATIO < bucket[1]]
     limiting_ratio = max(max(bucket[0] / float(image[1]), bucket[1] / float(image[2])) for image in images)
     limiting_files = [image[0] for image in images if max(bucket[0] / float(image[1]), bucket[1] / float(image[2])) == limiting_ratio]
-    return [{"bucket": bucket, "images": list(images), "native_count": len(native), "upscaled_count": len(upscaled), "limiting_files": limiting_files}], over_limit
+    return {"bucket": bucket, "images": list(images), "native_count": len(native), "upscaled_count": len(upscaled), "limiting_files": limiting_files}, over_limit
 
 
 def mfp(w: int, h: int, frames: int):
     return (w // 32) * (h // 32) * frames
 
 
-def render_image_block(image_dir: Path, ar_label: str, buckets, num_repeats: int = 1):
+def render_image_block(image_dir: Path, ar_label: str, bucket, num_repeats: int = 1):
     repeats = int(num_repeats) if isinstance(num_repeats, int) else 1
     if repeats < 1:
         repeats = 1
@@ -842,9 +876,9 @@ def render_image_block(image_dir: Path, ar_label: str, buckets, num_repeats: int
         'group = "images"',
         "size_buckets = [",
     ]
-    for w, h in buckets:
-        mfp_val = (w * h * 1) / 1_000_000
-        lines.append(f"  [{w}, {h}, 1],  # MegaFramePixels: {mfp_val:.2f}M")
+    w, h = bucket
+    mfp_val = (w * h * 1) / 1_000_000
+    lines.append(f"  [{w}, {h}, 1],  # MegaFramePixels: {mfp_val:.2f}M")
     lines.append("]")
     return "\n".join(lines)
 
@@ -854,14 +888,12 @@ def render_dataset_entry(entry, num_repeats: int):
     if kind == "video":
         return render_video_block(
             entry["dir_path"],
-            entry["buckets"],
+            entry["bucket"],
             num_repeats=num_repeats,
-            manual_alternatives=entry.get("manual_alternatives"),
-            calibration_comment=entry.get("calibration_comment"),
             detail_intent=bool(entry.get("detail_intent")),
         )
     if kind == "image":
-        return render_image_block(entry["path"], entry["ar_label"], entry["buckets"], num_repeats=num_repeats)
+        return render_image_block(entry["path"], entry["ar_label"], entry["bucket"], num_repeats=num_repeats)
     raise ValueError(f"Unknown dataset entry kind: {kind}")
 
 

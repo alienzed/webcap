@@ -1,4 +1,4 @@
-# Image bucket policy
+# Image bucketing
 
 WebCap uses one image bucket for each populated canonical aspect-ratio folder and training stage. It does not split images into resolution classes or make bundle-local image subsets.
 

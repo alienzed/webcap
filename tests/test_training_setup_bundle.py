@@ -173,6 +173,9 @@ def test_bundle_skips_video_only_after_conversion_and_copy_both_fail(tmp_path, m
     )
 
     assert bundle["capturedItemCount"] == 1
+    assert "policies" not in bundle["summary"]
+    saved_summary = json.loads((bundle["path"] / "bundle_summary.json").read_text(encoding="utf-8"))
+    assert "policies" not in saved_summary
     assert [row["file"] for row in bundle["manifest"]["videos"]] == ["good.mp4"]
     assert bundle["manifest"]["skipped"] == [{
         "file": "bad.mp4", "reason": "bundle_video_capture_failed", "error": "copy failed",

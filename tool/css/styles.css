@@ -1816,6 +1816,56 @@ iframe {
   flex: 1 1 auto;
 }
 
+.training-runner-preflight {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.training-preflight-summary {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.training-preflight-check {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+
+.training-preflight-check.ok > span:first-child {
+  color: #5f9f79;
+}
+
+.training-preflight-check.failed > span:first-child {
+  color: #c85d5d;
+  font-weight: 700;
+}
+
+.training-preflight-check strong {
+  color: var(--text);
+}
+
+.training-runner-preflight details {
+  margin-top: 2px;
+}
+
+.training-runner-script {
+  max-height: 260px;
+  margin: 6px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+
 @media (max-width: 760px) {
   .training-run-setup-header {
     display: grid;

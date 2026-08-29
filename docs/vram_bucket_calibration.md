@@ -6,7 +6,7 @@ Status: **Implemented for MiniMax H3.** The historical design notes below are re
 
 ## Purpose
 
-WebCap should be able to empirically determine which `(width, height, frames)` training shapes are safe for a specific model and training runtime, then use those results when generating default dataset buckets.
+WebCap can empirically determine which `(width, height, frames)` training shapes are safe for a specific model and training runtime. This remains separate diagnostic tooling; the simplified dataset generator uses its saved safe shapes only as upper bounds.
 
 The first implementation targets MiniMax H3 video training. H3 is the useful first case because model, optimizer, and runtime allocations consume a large fixed portion of VRAM, making the remaining spatial/temporal ceiling difficult to infer from total card capacity alone.
 
@@ -16,13 +16,11 @@ Calibration is an explicit, advanced Training action. It runs on the training ma
 
 The feature has three distinct layers:
 
-1. **Model bucket policy** — an app-owned, reviewed catalog of valid candidate shapes and their roles.
+1. **Probe candidates** — an app-owned, reviewed catalog of shapes to measure.
 2. **Calibration result** — hardware/runtime-specific evidence describing which candidates completed safely.
-3. **Dataset generation** — the existing bucket selector intersects model-valid candidates with the active safe-shape result.
+3. **Dataset generation** — compatible safe shapes clamp the fixed H3 ceilings without changing the normal selection flow.
 
-Calibration does not edit the model policy. It writes a separate result. Persistent dataset TOMLs remain intentional user-owned overrides; calibration affects newly generated or explicitly reset defaults only.
-
-With no active compatible calibration, WebCap continues using its conservative built-in defaults.
+Calibration writes a separate result for inspection and ceiling clamping. Newly generated or explicitly reset H3 datasets use the lower of the fixed app-owned ceiling and the compatible calibrated safe shape. Calibration never raises a built-in ceiling, changes role membership, or rewrites persistent user-owned dataset TOML.
 
 ## Current H3 Runtime Contract
 

@@ -9,7 +9,7 @@ WebCap keeps a small app-owned registry of supported Diffusion Pipe profiles. A 
 | Wan2.1 T2V 14B | Images and videos | `config.wan21.{mode}.toml`, matching dataset file | Train |
 | MiniMax H3 | Images and videos | `config.h3.{mode}.toml`, matching dataset file | Train |
 
-Krea2 excludes video. Wan profiles normalize bundle videos to 16 fps; H3 normalizes them to 24 fps. The dataset role policy is shared and explicit: Wan POC uses 33f temporal; Wan Normal/Quality uses 37f temporal plus 13f detail; H3 POC uses 34f temporal; H3 Normal/Quality uses 68f temporal plus 17f detail. Detail uses an explicit bundle subset and a `1.0 : 0.25` temporal/detail exposure weight.
+Krea2 excludes video. Wan profiles normalize bundle videos to 16 fps; H3 normalizes them to 24 fps. Dataset roles are shared and explicit: Wan POC uses 33f temporal; Wan Normal/Quality uses 37f temporal plus 13f detail; H3 POC uses 34f temporal; H3 Normal/Quality uses 68f temporal plus 17f detail. Detail uses an explicit bundle subset and a `1.0 : 0.25` temporal/detail exposure weight.
 
 ## Launch output identity
 
@@ -31,4 +31,4 @@ Selecting a profile/mode creates missing TOMLs. Dataset creation and Reset calcu
 - Saved video at the target FPS is copied. Other video is converted inside the fresh bundle to constant 16 fps for Wan or 24 fps for H3; a failed conversion warns and falls back to the source copy.
 - Generated stanzas carry one exact bucket. Direct image and temporal stanzas use captured AR folders; only marked detail video stanzas become `media/video_detail/...` subsets.
 - POC, Normal, and Quality affect calculated buckets and template learning rates. Repeat targeting uses configured epochs and actual role membership.
-- H3 envelope probing remains experimental tooling and does not alter the active profile’s role table.
+- H3 envelope probing remains experimental tooling and does not alter the active profile’s role table. Saved safe shapes clamp matching 17f, 34f, or 68f resolution ceilings for newly generated/reset H3 datasets; they never raise built-in ceilings.

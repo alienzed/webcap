@@ -7,6 +7,7 @@ from PIL import Image
 import pytest
 
 import tool.server.app as app_module
+import tool.server.dataset_config as dataset_config_module
 import tool.server.run_ops as run_ops_module
 from tool.server.dataset_config import (
     H3_VIDEO_MODE_CEILINGS,
@@ -18,9 +19,9 @@ from tool.server.dataset_config import (
     generate_image_candidates,
     generate_dataset_configs,
     normalize_training_generate_mode,
-    pick_image_buckets,
     read_epochs_from_training_config,
     repeat_targets_for_mode,
+    video_role_ceiling,
     video_resolution_cap,
     mfp,
 )
@@ -112,8 +113,8 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert "num_repeats =" in lo_text
     assert "[INFO] Built 1 video directory block(s)." in report
     assert "[INFO] Training generate mode: normal" in report
-    assert "[INFO] square_img: selected HI image bucket(s): 288x288" in report
-    assert "[INFO] square_img: selected LO image bucket(s): 288x288" in report
+    assert "[INFO] square_img: selected HI image bucket: 288x288" in report
+    assert "[INFO] square_img: selected LO image bucket: 288x288" in report
     assert "[INFO] Repeat targeting HI: target=5000" in report
     assert "[INFO] Repeat targeting LO: target=20000" in report
     assert (auto_dataset / "webcap_dataset_metadata.json").exists()
@@ -294,6 +295,61 @@ def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
         assert all(f", {other}]" not in text for other in (17, 34, 136))
 
 
+def test_h3_calibration_clamps_active_role_ceilings(monkeypatch):
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {
+        "training": {
+            "h3_calibration": {
+                "version": 1,
+                "campaign": "test-machine",
+                "safe_shapes": {
+                    "17": {"43": [800, 608]},
+                    "34": {"square": [320, 320]},
+                    "68": {"square": [320, 320], "169": [416, 256]},
+                },
+            },
+        },
+    })
+
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "normal", "square", "temporal") == (320, 320)
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "quality", "916", "temporal") == (256, 416)
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "normal", "34", "detail") == (608, 800)
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "poc", "square", "temporal") == (320, 320)
+
+
+def test_h3_calibration_never_raises_built_in_ceiling(monkeypatch):
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {
+        "training": {
+            "h3_calibration": {
+                "version": 1,
+                "campaign": "large-safe-shapes",
+                "safe_shapes": {"68": {"square": [768, 768]}},
+            },
+        },
+    })
+
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "normal", "square", "temporal") == (352, 352)
+
+
+def test_h3_dataset_generation_applies_calibrated_ceiling(tmp_path, monkeypatch):
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {
+        "training": {
+            "h3_calibration": {
+                "version": 1,
+                "campaign": "small-square",
+                "safe_shapes": {"68": {"square": [320, 320]}},
+            },
+        },
+    })
+    set_folder = tmp_path / "calibrated"
+    _write_h3_video_manifest(set_folder, 136, size=(1024, 1024))
+
+    generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+    assert "[320, 320, 68]" in text
+    assert "[352, 352, 68]" not in text
+
+
 def test_h3_bucket_selection_tolerates_small_upscale_and_falls_back_for_smaller_sources(tmp_path):
     tolerated = tmp_path / "tolerated"
     _write_h3_video_manifest(tolerated, 34, ar="169", size=(585, 334))
@@ -472,20 +528,20 @@ def test_rectangle_image_candidates_allow_long_edge_above_768():
     assert candidates_square[0][:2] == (768, 768)
 
 
-def test_selected_image_buckets_respect_image_mfp_limit():
+def test_selected_image_bucket_respects_image_mfp_limit():
     images = [
         ("portrait_a.png", 736, 1312),
         ("portrait_b.png", 736, 1312),
         ("portrait_c.png", 736, 1312),
     ]
 
-    buckets, unsupported = pick_image_buckets("916", images, mode="normal")
+    selection, unsupported = choose_image_bucket("916", images, mode="normal")
 
     assert unsupported == []
-    assert buckets == [(416, 736)]
+    assert selection["bucket"] == (416, 736)
 
 
-def test_pick_image_buckets_prefers_full_coverage_then_detail():
+def test_choose_image_bucket_prefers_full_coverage_then_detail():
     images_916 = [
         ("001.jpg", 609, 1082),
         ("002.jpg", 610, 1085),
@@ -502,9 +558,9 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
         ("018.jpg", 614, 1091),
         ("020.jpg", 607, 1080),
     ]
-    buckets_916, unsupported_916 = pick_image_buckets("916", images_916, mode="normal")
+    selection_916, unsupported_916 = choose_image_bucket("916", images_916, mode="normal")
     assert unsupported_916 == []
-    assert buckets_916 == [(416, 736)]
+    assert selection_916["bucket"] == (416, 736)
 
     images_square = [
         ("003c.jpg", 544, 544),
@@ -515,16 +571,16 @@ def test_pick_image_buckets_prefers_full_coverage_then_detail():
         ("015.jpg", 648, 648),
         ("019.jpg", 768, 768),
     ]
-    buckets_square, unsupported_square = pick_image_buckets("square", images_square, mode="normal")
+    selection_square, unsupported_square = choose_image_bucket("square", images_square, mode="normal")
     assert unsupported_square == []
-    assert buckets_square == [(512, 512)]
+    assert selection_square["bucket"] == (512, 512)
 
-    buckets_square_poc, _ = pick_image_buckets("square", images_square, mode="poc")
-    assert buckets_square_poc == [(384, 384)]
+    selection_square_poc, _ = choose_image_bucket("square", images_square, mode="poc")
+    assert selection_square_poc["bucket"] == (384, 384)
 
 
 def test_image_cohort_uses_one_bucket_and_allows_448_to_512():
-    classes, unsupported = choose_image_bucket(
+    selection, unsupported = choose_image_bucket(
         "square",
         [("native.png", 768, 768), ("slight_upscale.png", 448, 448)],
         mode="normal",
@@ -532,14 +588,14 @@ def test_image_cohort_uses_one_bucket_and_allows_448_to_512():
     )
 
     assert unsupported == []
-    assert [item["bucket"] for item in classes] == [(512, 512)]
-    assert classes[0]["native_count"] == 1
-    assert classes[0]["upscaled_count"] == 1
-    assert classes[0]["limiting_files"] == ["slight_upscale.png"]
+    assert selection["bucket"] == (512, 512)
+    assert selection["native_count"] == 1
+    assert selection["upscaled_count"] == 1
+    assert selection["limiting_files"] == ["slight_upscale.png"]
 
 
 def test_image_cohort_lowers_bucket_for_a_larger_upscale_violation():
-    classes, unsupported = choose_image_bucket(
+    selection, unsupported = choose_image_bucket(
         "square",
         [("native.png", 768, 768), ("small.png", 400, 400)],
         mode="normal",
@@ -547,7 +603,7 @@ def test_image_cohort_lowers_bucket_for_a_larger_upscale_violation():
     )
 
     assert unsupported == []
-    assert [item["bucket"] for item in classes] == [(448, 448)]
+    assert selection["bucket"] == (448, 448)
 
 
 def test_normalize_training_generate_mode_keeps_quality_mode():
@@ -568,16 +624,16 @@ def test_normal_and_quality_image_buckets_stay_separated():
         ("c.png", 768, 768),
     ]
 
-    normal_hi, unsupported_normal_hi = pick_image_buckets("square", images, mode="normal", noise_profile="hi")
-    normal_lo, unsupported_normal_lo = pick_image_buckets("square", images, mode="normal", noise_profile="lo")
-    quality_lo, unsupported_quality_lo = pick_image_buckets("square", images, mode="quality", noise_profile="lo")
+    normal_hi, unsupported_normal_hi = choose_image_bucket("square", images, mode="normal", noise_profile="hi")
+    normal_lo, unsupported_normal_lo = choose_image_bucket("square", images, mode="normal", noise_profile="lo")
+    quality_lo, unsupported_quality_lo = choose_image_bucket("square", images, mode="quality", noise_profile="lo")
 
     assert unsupported_normal_hi == []
     assert unsupported_normal_lo == []
     assert unsupported_quality_lo == []
-    assert normal_hi == [(480, 480)]
-    assert normal_lo == [(512, 512)]
-    assert quality_lo == [(768, 768)]
+    assert normal_hi["bucket"] == (480, 480)
+    assert normal_lo["bucket"] == (512, 512)
+    assert quality_lo["bucket"] == (768, 768)
 
 
 def test_validate_config_payload_does_not_persist_a_global_training_mode():
@@ -598,15 +654,15 @@ def test_validate_config_payload_does_not_persist_a_global_training_mode():
     assert "mode" not in normalized_quality["training"]
 
 
-def test_poc_mode_never_emits_second_image_bucket():
+def test_poc_mode_selects_one_image_bucket():
     images = [
         ("high_a.png", 768, 768),
         ("high_b.png", 768, 768),
         ("low.png", 256, 256),
     ]
-    buckets, unsupported = pick_image_buckets("square", images, mode="poc")
+    selection, unsupported = choose_image_bucket("square", images, mode="poc")
     assert unsupported == []
-    assert buckets == [(288, 288)]
+    assert selection["bucket"] == (288, 288)
 
 
 def test_repeat_targets_vary_by_mode():

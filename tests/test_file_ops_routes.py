@@ -942,6 +942,8 @@ def test_train_run_captures_a_self_contained_bundle_for_manual_handoff(tmp_path,
     body = response.get_data(as_text=True)
     assert "[INFO] Manual training command (copy/paste):" in body
     assert "[INFO] Launch group: 001-set_train" in body
+    assert "Bundle policy" not in body
+    assert "simple_v2" not in body
     assert "wan22-hi" in body
     assert "wan22-lo" in body
     assert " ; " in body

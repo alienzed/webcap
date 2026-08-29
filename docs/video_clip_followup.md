@@ -87,7 +87,7 @@ less dense while retaining every current action.
 - No batch clip queue UI.
 - No training-specific 16 fps or `4n+1` preset in the Clip modal yet.
 - No automatic generation of every possible temporal window.
-- No change to video bucket policy as part of the Clip enhancement.
+- No change to video bucketing as part of the Clip enhancement.
 
 Video bucket duration, resolution, and OOM behavior remain a separate training
 configuration problem and should be measured independently.

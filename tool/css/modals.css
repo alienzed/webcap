@@ -295,6 +295,17 @@
   width: 100%;
 }
 
+.app-settings-field-small {
+  max-width: 150px;
+}
+
+.app-settings-help {
+  margin: -4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .app-settings-field-label {
   font-size: 12px;
   font-weight: 600;

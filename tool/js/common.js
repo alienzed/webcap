@@ -307,11 +307,18 @@ function refreshPrimerPreviewForCurrentItem() {
   if (state.currentItem.hasCaption) {
     return false;
   }
+  if (typeof state.currentItem.primerPreviewText !== 'string') {
+    return false;
+  }
   var nextPrimer = String(buildAutoPrimer(state.currentItem.fileName, state.currentItem.key) || '');
   var currentEditorText = String(ui.editorEl.value || '');
+  if (currentEditorText !== state.currentItem.primerPreviewText) {
+    return false;
+  }
   if (currentEditorText === nextPrimer) {
     return false;
   }
+  state.currentItem.primerPreviewText = nextPrimer;
   applyEditorTextAndTriggerInput(nextPrimer);
   return true;
 }
@@ -520,17 +527,21 @@ function saveCaptionDirect(folder, media, text, mediaKey, options) {
         setStatus((hasCaption ? 'Saved: ' : 'Cleared: ') + (media || '').replace(/\.[^.]+$/, '.txt'));
         var updatedKey = null;
         var previousHasCaption = false;
+        var updatesCurrentFolder = String((state && state.folder) || '') === String(folder || '');
         // Update state
-        for (var i = 0; i < state.items.length; i++) {
-          if (state.items[i].fileName === media) {
-            previousHasCaption = !!state.items[i].hasCaption;
-            state.items[i].caption = text;
-            updatedKey = state.items[i].key;
-            break;
+        if (updatesCurrentFolder) {
+          for (var i = 0; i < state.items.length; i++) {
+            if (state.items[i].fileName === media) {
+              previousHasCaption = !!state.items[i].hasCaption;
+              state.items[i].caption = text;
+              updatedKey = state.items[i].key;
+              break;
+            }
           }
         }
         updatedKey = updatedKey || mediaKey || '';
         if (
+          updatesCurrentFolder &&
           hasCaption &&
           updatedKey &&
           typeof getTagsForMediaKey === 'function' &&
@@ -538,6 +549,7 @@ function saveCaptionDirect(folder, media, text, mediaKey, options) {
         ) {
           commitChecklistDescriptorSnapshotsForMediaKey(updatedKey, getTagsForMediaKey(updatedKey));
         } else if (
+          updatesCurrentFolder &&
           !hasCaption &&
           updatedKey &&
           previousHasCaption &&
@@ -545,13 +557,22 @@ function saveCaptionDirect(folder, media, text, mediaKey, options) {
         ) {
           clearChecklistDescriptorSnapshotsForMediaKey(updatedKey);
         }
-        for (var j = 0; j < state.items.length; j++) {
-          if (state.items[j].fileName === media) {
-            state.items[j].hasCaption = hasCaption;
-            break;
+        if (updatesCurrentFolder) {
+          for (var j = 0; j < state.items.length; j++) {
+            if (state.items[j].fileName === media) {
+              state.items[j].hasCaption = hasCaption;
+              if (hasCaption) state.items[j].primerPreviewText = null;
+              break;
+            }
+          }
+          if (state.currentItem && state.currentItem.fileName === media) {
+            state.currentItem.caption = text;
+            state.currentItem.hasCaption = hasCaption;
+            if (hasCaption) state.currentItem.primerPreviewText = null;
           }
         }
         if (
+          updatesCurrentFolder &&
           updatedKey &&
           (hasCaption || previousHasCaption) &&
           typeof saveChecklistToFolderState === 'function'
@@ -559,11 +580,13 @@ function saveCaptionDirect(folder, media, text, mediaKey, options) {
           saveChecklistToFolderState();
         }
         // Toggle class on row
-        var row = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + (updatedKey || mediaKey) + '"]');
-        if (row) row.classList.toggle('empty-caption', !hasCaption);
-        updatePrimerCaptionResetUi();
-        if (!opts.skipRenderFileList && typeof renderFileList === 'function') {
-          renderFileList();
+        if (updatesCurrentFolder) {
+          var row = ui.mediaListEl.querySelector('[data-type="media"][data-key="' + (updatedKey || mediaKey) + '"]');
+          if (row) row.classList.toggle('empty-caption', !hasCaption);
+          updatePrimerCaptionResetUi();
+          if (!opts.skipRenderFileList && typeof renderFileList === 'function') {
+            renderFileList();
+          }
         }
         resolve();
         return;
@@ -604,6 +627,13 @@ function savePathCaption() {
     primer = buildAutoPrimer(mediaItem.fileName, mediaItem.key);
   }
   var editorValue = ui.editorEl.value || '';
+  if (
+    typeof mediaItem.primerPreviewText === 'string' &&
+    editorValue === mediaItem.primerPreviewText
+  ) {
+    debugLog('[savePathCaption] Skipped save: editor contains WebCap primer preview');
+    return Promise.resolve();
+  }
   if (primer && editorValue.trim() === primer.trim()) {
     debugLog('[savePathCaption] Skipped save: editor contains only primer caption');
     return Promise.resolve();

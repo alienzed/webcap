@@ -993,9 +993,11 @@ function shouldLiveSyncEditorToTemplateForMediaKey(mediaKey) {
     state.currentItem.key &&
     state.currentItem.key === mediaKey &&
     !state.currentItem.hasCaption &&
+    typeof state.currentItem.primerPreviewText === 'string' &&
     ui &&
     ui.editorEl &&
-    !ui.editorEl.readOnly
+    !ui.editorEl.readOnly &&
+    String(ui.editorEl.value || '') === state.currentItem.primerPreviewText
   );
 }
 

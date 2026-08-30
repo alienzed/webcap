@@ -46,6 +46,10 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.conda_executable) out.training.conda_executable = '';
   if (!out.training.conda_environment) out.training.conda_environment = '';
   if (!out.training.activate_script) out.training.activate_script = '';
+  if (out.training.tensorboard_port === undefined || out.training.tensorboard_port === null || out.training.tensorboard_port === '') {
+    out.training.tensorboard_port = 6006;
+  }
+  if (typeof out.training.tensorboard_bruteforce_control !== 'boolean') out.training.tensorboard_bruteforce_control = false;
   delete out.training.mode;
   delete out.training.write_selection_snapshot_comments;
   if (!Array.isArray(out.training.enabled_profiles)) {
@@ -90,6 +94,8 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingCondaExecutableEl) ui.appSettingsTrainingCondaExecutableEl.value = c.training.conda_executable || '';
   if (ui.appSettingsTrainingCondaEnvironmentEl) ui.appSettingsTrainingCondaEnvironmentEl.value = c.training.conda_environment || '';
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
+  if (ui.appSettingsTrainingTensorboardPortEl) ui.appSettingsTrainingTensorboardPortEl.value = c.training.tensorboard_port;
+  if (ui.appSettingsTrainingTensorboardBruteforceControlEl) ui.appSettingsTrainingTensorboardBruteforceControlEl.checked = !!c.training.tensorboard_bruteforce_control;
   appSettingsTrainingProfiles.forEach(function (profile) {
     var el = ui[profile.uiKey];
     if (el) el.checked = c.training.enabled_profiles.indexOf(profile.id) !== -1;
@@ -111,6 +117,8 @@ function collectAppSettingsFormConfig() {
   base.training.conda_executable = ui.appSettingsTrainingCondaExecutableEl ? ui.appSettingsTrainingCondaExecutableEl.value : '';
   base.training.conda_environment = ui.appSettingsTrainingCondaEnvironmentEl ? ui.appSettingsTrainingCondaEnvironmentEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
+  base.training.tensorboard_port = ui.appSettingsTrainingTensorboardPortEl ? Number(ui.appSettingsTrainingTensorboardPortEl.value) : 6006;
+  base.training.tensorboard_bruteforce_control = !!(ui.appSettingsTrainingTensorboardBruteforceControlEl && ui.appSettingsTrainingTensorboardBruteforceControlEl.checked);
   base.training.enabled_profiles = appSettingsTrainingProfiles.filter(function (profile) {
     var el = ui[profile.uiKey];
     return !!(el && el.checked);
@@ -391,6 +399,8 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingWslDistributionEl,
     ui.appSettingsTrainingCondaExecutableEl,
     ui.appSettingsTrainingCondaEnvironmentEl,
+    ui.appSettingsTrainingTensorboardPortEl,
+    ui.appSettingsTrainingTensorboardBruteforceControlEl,
     ui.appSettingsTrainingProfileWan22El,
     ui.appSettingsTrainingProfileKrea2El,
     ui.appSettingsTrainingProfileWan21El,

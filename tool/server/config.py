@@ -152,6 +152,22 @@ def validate_config_payload(payload):
     for key in ("diffusion_pipe_wsl", "activate_script", "wsl_distribution", "conda_executable", "conda_environment"):
         if key in training:
             normalized_training[key] = str(training.get(key) or "").strip()
+    tensorboard_port = training.get("tensorboard_port", 6006)
+    if isinstance(tensorboard_port, bool) or isinstance(tensorboard_port, float):
+        raise ValueError("Config.training.tensorboard_port must be an integer from 1 to 65535.")
+    if isinstance(tensorboard_port, str) and not re.fullmatch(r"\d+", tensorboard_port.strip()):
+        raise ValueError("Config.training.tensorboard_port must be an integer from 1 to 65535.")
+    try:
+        tensorboard_port = int(tensorboard_port)
+    except (TypeError, ValueError):
+        raise ValueError("Config.training.tensorboard_port must be an integer from 1 to 65535.")
+    if tensorboard_port < 1 or tensorboard_port > 65535:
+        raise ValueError("Config.training.tensorboard_port must be an integer from 1 to 65535.")
+    normalized_training["tensorboard_port"] = tensorboard_port
+    tensorboard_control = training.get("tensorboard_bruteforce_control", False)
+    if not isinstance(tensorboard_control, bool):
+        raise ValueError("Config.training.tensorboard_bruteforce_control must be true or false.")
+    normalized_training["tensorboard_bruteforce_control"] = tensorboard_control
     enabled_profiles = training.get("enabled_profiles", list(PROFILE_IDS))
     if not isinstance(enabled_profiles, list):
         raise ValueError("Config.training.enabled_profiles must be an array.")

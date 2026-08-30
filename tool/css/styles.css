@@ -2197,6 +2197,40 @@ iframe {
   white-space: nowrap;
 }
 
+.workspace-surface-training .training-runner-header-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.workspace-surface-training .training-tensorboard-status {
+  min-height: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.workspace-surface-training .training-tensorboard-status strong {
+  color: var(--text);
+}
+
+.workspace-surface-training .training-tensorboard-status .is-warning {
+  color: #cc7a3f;
+}
+
+.workspace-surface-training .training-tensorboard-status a,
+.workspace-surface-training .training-tensorboard-status button {
+  margin-left: 6px;
+}
+
+.workspace-surface-training .training-tensorboard-status button {
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
 .workspace-surface-training .training-gpu-status strong {
   color: var(--text);
 }

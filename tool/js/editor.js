@@ -29,7 +29,8 @@ function scheduleEditorLiveUiRefresh() {
     }, 150);
 }
 
-function refreshEditorDeferredUi(mediaKey) {
+function refreshEditorDeferredUi(mediaKey, folder) {
+    if (typeof folder === 'string' && String((state && state.folder) || '') !== folder) return;
     if (mediaKey && (!state || !state.currentItem || state.currentItem.key !== mediaKey)) return;
     renderItemTagsPanel();
     renderItemMetadataPanel();
@@ -87,7 +88,13 @@ function handleEditorInputAutosave(e) {
         media: (target.payload && target.payload.media) || '',
         file: (target.payload && target.payload.file) || '',
         text: (target.payload && typeof target.payload.text === 'string' ? target.payload.text : ''),
-        mediaKey: (state.currentItem && state.currentItem.key) || undefined
+        mediaKey: (state.currentItem && state.currentItem.key) || undefined,
+        isPrimerPreview: !!(
+          target.endpoint === '/caption/save' &&
+          state.currentItem &&
+          typeof state.currentItem.primerPreviewText === 'string' &&
+          String(target.payload.text || '') === state.currentItem.primerPreviewText
+        )
     };
     debugLog('[autosave] Input event captured.');
 
@@ -98,10 +105,15 @@ function handleEditorInputAutosave(e) {
     }
     autosaveTimers[target.key] = setTimeout(function() {
         debugLog('[autosave] Debounce fired.');
-        refreshEditorDeferredUi(snapshot.mediaKey);
+        refreshEditorDeferredUi(snapshot.mediaKey, snapshot.folder);
         
         // Caption autosave
         if (snapshot.endpoint === '/caption/save') {
+            if (snapshot.isPrimerPreview) {
+                debugLog('[autosave] Skipped save: captured text is a WebCap primer preview.');
+                delete autosaveTimers[target.key];
+                return;
+            }
             // Prevent saving if editor contains only the primer caption
             var primer = '';
             if (snapshot.media) {
@@ -113,7 +125,12 @@ function handleEditorInputAutosave(e) {
                 debugLog('[autosave] Saving caption.');
                 saveCaptionDirect(snapshot.folder, snapshot.media, snapshot.text, snapshot.mediaKey)
                   .then(function() {
-                    if (state.currentItem && state.currentItem.key === snapshot.mediaKey && String(ui.editorEl.value || '') === snapshot.text) {
+                    if (
+                      String((state && state.folder) || '') === snapshot.folder &&
+                      state.currentItem &&
+                      state.currentItem.key === snapshot.mediaKey &&
+                      String(ui.editorEl.value || '') === snapshot.text
+                    ) {
                       setCaptionApplyConfirmation(snapshot.mediaKey, snapshot.text, 'autosaved');
                     }
                     debugLog('[autosave] Save succeeded');

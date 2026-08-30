@@ -5,8 +5,11 @@ import os
 import re
 import hashlib
 import shlex
+import socket
 import threading
 import time
+import urllib.error
+import urllib.request
 import uuid
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -39,6 +42,7 @@ from .training_progress import (
 from .training_runtime import (
     TRAINING_RUNTIME_DIR_NAME,
     activation_prefix as _activation_prefix,
+    build_runtime_command as _build_runtime_command,
     build_training_launcher,
     configured_training_settings as _training_settings,
     has_conda_runtime,
@@ -71,6 +75,8 @@ _DISTRIBUTED_SOCKET_HOLD_REASON = (
 )
 _legacy_active_time_cache = {}
 _SAVE_PAUSE_TRAINING_STAGES = {"hi", "lo", "krea2", "wan21", "h3"}
+_TENSORBOARD_PROBE_TIMEOUT_SECONDS = 0.75
+_TENSORBOARD_PROBE_BYTES = 8192
 
 
 def _runtime_root():
@@ -1832,6 +1838,183 @@ def clear_history_response(folder, job_id):
 
 def gpu_status_response():
     return {"ok": True, "gpu": _gpu_snapshot()}, 200
+
+
+def _tensorboard_settings():
+    training = app_config.config.get("training") if isinstance(app_config.config, dict) else {}
+    training = training if isinstance(training, dict) else {}
+    port = training.get("tensorboard_port", 6006)
+    if isinstance(port, bool):
+        port = 6006
+    try:
+        port = int(port)
+    except (TypeError, ValueError):
+        port = 6006
+    if port < 1 or port > 65535:
+        port = 6006
+    return {
+        "port": port,
+        "controlEnabled": training.get("tensorboard_bruteforce_control") is True,
+    }
+
+
+def _tensorboard_url(port):
+    return "http://localhost:" + str(port)
+
+
+def _probe_tensorboard(port):
+    url = "http://127.0.0.1:" + str(port) + "/"
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "WebCap TensorBoard status probe"})
+        with urllib.request.urlopen(request, timeout=_TENSORBOARD_PROBE_TIMEOUT_SECONDS) as response:
+            html = response.read(_TENSORBOARD_PROBE_BYTES).decode("utf-8", errors="replace").lower()
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, socket.error) as exc:
+        detail = str(getattr(exc, "reason", "") or exc).strip()
+        return False, detail or "No service responded on the configured local port."
+    if "tensorboard" not in html:
+        return False, "A service responded on the configured port, but it did not identify itself as TensorBoard."
+    return True, ""
+
+
+def _localhost_port_occupied(port):
+    try:
+        connection = socket.create_connection(("127.0.0.1", int(port)), timeout=_TENSORBOARD_PROBE_TIMEOUT_SECONDS)
+    except (OSError, ValueError):
+        return False
+    connection.close()
+    return True
+
+
+def _tensorboard_status_payload():
+    settings = _tensorboard_settings()
+    running, diagnostic = _probe_tensorboard(settings["port"])
+    return {
+        "running": running,
+        "port": settings["port"],
+        "url": _tensorboard_url(settings["port"]),
+        "controlEnabled": settings["controlEnabled"],
+        "diagnostic": diagnostic,
+    }
+
+
+def tensorboard_status_response():
+    return {"ok": True, "tensorboard": _tensorboard_status_payload()}, 200
+
+
+def _tensorboard_runs_root():
+    return Path(app_config.FS_ROOT) / "output" / "runs"
+
+
+def _tensorboard_log_path():
+    return _runtime_root() / "tensorboard.log"
+
+
+def _tensorboard_runtime_command(settings, wsl_logdir, port):
+    command = "tensorboard --logdir " + shlex.quote(wsl_logdir) + " --port " + str(port)
+    return _activation_prefix(settings) + _build_runtime_command(settings, command)
+
+
+def _tensorboard_matching_pids(settings, wsl_logdir):
+    # Read argv entries, rather than process text, so the logdir comparison remains exact.
+    command = """target_logdir=%s
+for proc in /proc/[0-9]*; do
+  [ -r \"$proc/cmdline\" ] || continue
+  pid=${proc##*/}
+  mapfile -d '' -t args < \"$proc/cmdline\" || continue
+  has_tensorboard=0
+  has_logdir=0
+  for i in \"${!args[@]}\"; do
+    arg=${args[$i]}
+    base=${arg##*/}
+    case \"$base\" in
+      tensorboard|tensorboard.exe|tensorboard.main|tensorboard.main.*) has_tensorboard=1 ;;
+    esac
+    if [ \"$arg\" = \"--logdir=$target_logdir\" ]; then has_logdir=1; fi
+    if [ \"$arg\" = \"--logdir\" ] && [ \"${args[$((i + 1))]:-}\" = \"$target_logdir\" ]; then has_logdir=1; fi
+  done
+  if [ \"$has_tensorboard\" = 1 ] && [ \"$has_logdir\" = 1 ]; then printf '%%s\\n' \"$pid\"; fi
+done""" % shlex.quote(wsl_logdir)
+    code, stdout, stderr = _run_wsl(command, timeout=10, distribution=settings["wslDistribution"])
+    if code != 0:
+        detail = (stderr or stdout or "WSL process inspection failed.").strip()
+        raise RuntimeError(detail)
+    return sorted({line.strip() for line in stdout.splitlines() if line.strip().isdigit()}, key=int)
+
+
+def _terminate_tensorboard_pids(settings, pids):
+    safe_pids = [pid for pid in pids if str(pid).isdigit()]
+    if not safe_pids:
+        return
+    joined = " ".join(shlex.quote(str(pid)) for pid in safe_pids)
+    command = (
+        "pids=(" + joined + "); "
+        "kill -TERM -- \"${pids[@]}\" 2>/dev/null || true; "
+        "sleep 1; "
+        "for pid in \"${pids[@]}\"; do kill -0 \"$pid\" 2>/dev/null && kill -KILL -- \"$pid\" 2>/dev/null || true; done"
+    )
+    code, stdout, stderr = _run_wsl(command, timeout=8, distribution=settings["wslDistribution"])
+    if code != 0:
+        detail = (stderr or stdout or "WSL TensorBoard termination failed.").strip()
+        raise RuntimeError(detail)
+
+
+def _wait_for_tensorboard(port, timeout_seconds):
+    deadline = time.monotonic() + timeout_seconds
+    diagnostic = ""
+    while time.monotonic() < deadline:
+        running, diagnostic = _probe_tensorboard(port)
+        if running:
+            return True, diagnostic
+        time.sleep(0.25)
+    return False, diagnostic
+
+
+def tensorboard_control_response(action):
+    action = str(action or "").strip().lower()
+    if action not in {"start", "restart"}:
+        return {"ok": False, "error": "TensorBoard action must be start or restart."}, 400
+    settings = _tensorboard_settings()
+    if not settings["controlEnabled"]:
+        return {"ok": False, "error": "TensorBoard brute-force control is disabled in Training Settings."}, 403
+
+    port = settings["port"]
+    runtime_settings = _training_settings()
+    log_path = _tensorboard_log_path()
+    try:
+        if action == "start":
+            if _localhost_port_occupied(port):
+                return {"ok": False, "error": "The configured TensorBoard port is already in use. Use Restart only for the matching global TensorBoard.", "logPath": str(log_path)}, 409
+        else:
+            runs_wsl_path = _to_wsl_path(_tensorboard_runs_root(), runtime_settings["wslDistribution"])
+            pids = _tensorboard_matching_pids(runtime_settings, runs_wsl_path)
+            if pids:
+                _terminate_tensorboard_pids(runtime_settings, pids)
+                if _localhost_port_occupied(port):
+                    time.sleep(1)
+                if _localhost_port_occupied(port):
+                    return {"ok": False, "error": "The TensorBoard port is still in use after terminating the matching process.", "logPath": str(log_path)}, 409
+            elif _localhost_port_occupied(port):
+                return {"ok": False, "error": "The configured port is in use by a service WebCap could not verify as this global TensorBoard.", "logPath": str(log_path)}, 409
+
+        runs_root = _tensorboard_runs_root()
+        runs_root.mkdir(parents=True, exist_ok=True)
+        _ensure_runtime_dirs()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_wsl_path = _to_wsl_path(log_path, runtime_settings["wslDistribution"])
+        if action == "start":
+            runs_wsl_path = _to_wsl_path(runs_root, runtime_settings["wslDistribution"])
+        launch = "nohup " + _tensorboard_runtime_command(runtime_settings, runs_wsl_path, port) + " >> " + shlex.quote(log_wsl_path) + " 2>&1 < /dev/null &"
+        code, stdout, stderr = _run_wsl(launch, timeout=10, distribution=runtime_settings["wslDistribution"])
+        if code != 0:
+            detail = (stderr or stdout or "WSL TensorBoard launch failed.").strip()
+            return {"ok": False, "error": detail, "logPath": str(log_path)}, 502
+        running, diagnostic = _wait_for_tensorboard(port, 10)
+        if not running:
+            detail = diagnostic or "TensorBoard did not become available within 10 seconds."
+            return {"ok": False, "error": detail, "logPath": str(log_path)}, 502
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "logPath": str(log_path)}, 502
+    return {"ok": True, "tensorboard": _tensorboard_status_payload(), "logPath": str(log_path)}, 200
 
 
 def log_response(job_id, offset=0, tail=False, folder=""):

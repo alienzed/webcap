@@ -34,11 +34,13 @@ Wan2.2 `HI -> LO` creates two jobs sharing one captured bundle. Every separate T
 - Canceling a queued item removes that item only; it does not delete its captured bundle.
 - Jobs expose captured files, output folders, logs, history, GPU status, diagnostics, and checkpoint resume. Recent Runs keeps compact rows and offers an expandable facts view for timing, progress, dataset, and output details.
 - Managed Resume reuses the original bundle and cache and fails visibly if the bundle is missing.
-- TensorBoard controls use the configured training runtime.
+- The Training Queue header checks the configured local TensorBoard port and opens the existing TensorBoard UI in a new tab. It never starts TensorBoard automatically.
 
 ## Manual command handoff
 
 `Generate & Copy Manual Command` uses the same bundle materializer as managed training, so the command is self-contained. It never starts a process.
+
+For MiniMax H3 Quality, still images in one aspect-ratio folder may be divided into as many as three captured resolution folders. Each generated stanza still has one explicit bucket. This preserves useful detail in larger stills without changing the H3 video buckets or the behavior of other profiles and modes.
 
 ## Training settings
 
@@ -48,7 +50,8 @@ Relevant `tool/config.json` fields include:
 - `training.wsl_distribution`: optional explicit WSL distribution.
 - `training.conda_executable` and `training.conda_environment`: optional managed Conda runtime pair.
 - `training.activate_script`: optional activation script when Conda is not configured.
-- `training.tensorboard_port`: local port for TensorBoard controls.
+- `training.tensorboard_port`: local TensorBoard port (default `6006`). TensorBoard always reads the overall `FS_ROOT/output/runs` tree.
+- `training.tensorboard_bruteforce_control`: defaults to `false`. When explicitly enabled in Training Settings, the header offers Start and Restart controls using the configured WSL and Conda/activation runtime. Restart only targets TensorBoard processes with the exact global runs logdir, but may replace a matching manually started instance. WebCap does not retain a PID or manage TensorBoard automatically; launch output goes to `.webcap_training/tensorboard.log`.
 - `training.enabled_profiles`: models shown when creating new training runs. At least one profile must remain enabled.
 
 Disabling a profile only hides it from new-run setup. Existing TOMLs, captured bundles, history, and Resume behavior remain untouched.

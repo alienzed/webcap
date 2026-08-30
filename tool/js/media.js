@@ -544,6 +544,21 @@ function selectPathMedia(mediaItem) {
       var primerText = buildAutoPrimer(mediaItem.fileName, mediaItem.key);
       nextEditorValue = primerText || '';
     }
+    // The directory snapshot can be stale when captions were created or
+    // changed outside WebCap. Reconcile the selected item with the caption we
+    // just read before tag/primer logic decides whether this is captionless.
+    // Remember primer previews explicitly: automatic derived-UI refreshes may
+    // replace only text that WebCap itself placed in the editor as a preview.
+    mediaItem.caption = text;
+    mediaItem.hasCaption = !!String(text || '').trim().length;
+    mediaItem.primerPreviewText = mediaItem.hasCaption ? null : nextEditorValue;
+    (state.items || []).forEach(function (item) {
+      if (item && item.key === mediaItem.key) {
+        item.caption = text;
+        item.hasCaption = mediaItem.hasCaption;
+        item.primerPreviewText = mediaItem.primerPreviewText;
+      }
+    });
     state.currentItem = mediaItem;
     state.currentConfigFile = null;
     var keepSpecialWorkspaceSurface = typeof workspaceState !== 'undefined' &&

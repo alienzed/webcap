@@ -263,6 +263,9 @@ function wirePrimerCaptionResetUi() {
       };
       saveCaptionDirect(state.folder, mediaItem.fileName, '', mediaItem.key)
         .then(function () {
+          if (state.currentItem && state.currentItem.key === mediaItem.key) {
+            state.currentItem.primerPreviewText = String(nextPrimer || '');
+          }
           applyEditorTextAndTriggerInput(nextPrimer);
           refreshCurrentPrimerDerivedUi();
         })

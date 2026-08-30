@@ -6,7 +6,8 @@ Last reviewed: 2026-08-28.
 
 ## Completed (2026-08-29)
 
-- Bucketing and bundle materialization now use one explicit bucket per generated stanza, direct captured folders for images and temporal video, and a marked subset only for detail video. The prior dynamic class/materialization paths are archived or removed.
+- Bucketing uses one explicit bucket per generated stanza. H3 Quality may split one image aspect-ratio cohort into as many as three resolution tiers and materializes those captured views as direct bucket-named folders; other image modes and temporal video remain direct, while only the marked video-detail cohort uses a subset.
+- TensorBoard now has a global Training Queue status/open link, with optional explicit Start/Restart controls guarded by the `training.tensorboard_bruteforce_control` setting. It remains externally usable and is never started automatically; per-action TensorBoard filtering is deferred until TensorBoard has a stable, verified URL contract.
 
 ## Folder-State Safety
 
@@ -43,5 +44,5 @@ No further persistence implementation is planned unless verification exposes a r
 - Add an assisted dataset-config editor for changing directories, frames, and compatible higher/lower resolutions, informed by model profiles and calibrated VRAM shapes, while retaining the raw text editor as a fallback.
 - Consider run-owned overrides for queued settings such as learning rate, epochs, dropout, checkpoint frequency, and state-save frequency. Define how changing them interacts with the queued job’s immutable captured bundle before implementation.
 - Expose the last saved checkpoint on a running job if real usage demonstrates enough value; checkpoint discovery already exists.
-- Add indirect TensorBoard integration for individual jobs: keep TensorBoard externally runnable, but provide a job-level action that opens its run/log directory in TensorBoard. Investigate whether stable URL parameters can scope the view to that run or selected curves; otherwise open the existing TensorBoard window without taking ownership of its process.
+- Add indirect TensorBoard integration for individual jobs once a stable, verified TensorBoard URL contract can scope the view to a selected action or curves. Keep the current global TensorBoard ownership behavior unchanged.
 - Add future compatible models through the app-owned training-profile registry, with one reviewed TOML template and explicit media/run requirements. Do not add arbitrary user-supplied commands.

@@ -703,7 +703,10 @@
                             <section class="training-runner-card" aria-label="Training queue">
                                 <div class="training-runner-card-header">
                                     <div class="training-workspace-section-title">Training Queue</div>
-                                    <div id="training-gpu-status" class="training-gpu-status" aria-label="GPU status"></div>
+                                    <div class="training-runner-header-statuses">
+                                        <div id="training-gpu-status" class="training-gpu-status" aria-label="GPU status"></div>
+                                        <div id="training-tensorboard-status" class="training-tensorboard-status" aria-label="TensorBoard status"></div>
+                                    </div>
                                 </div>
                                 <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
                                 <div id="training-runner-actions" class="training-runner-actions hidden">
@@ -979,6 +982,15 @@
                                     <span class="app-settings-field-label">Venv Activate Script</span>
                                     <input id="app-settings-training-activate-script" type="text" placeholder="/home/user/diffusion-pipe/.venv/bin/activate">
                                 </label>
+                                <label class="app-settings-field app-settings-field-small">
+                                    <span class="app-settings-field-label">TensorBoard Port</span>
+                                    <input id="app-settings-training-tensorboard-port" type="number" min="1" max="65535" step="1" inputmode="numeric">
+                                </label>
+                                <label class="app-settings-toggle app-settings-field-wide">
+                                    <input id="app-settings-training-tensorboard-bruteforce-control" type="checkbox">
+                                    <span>WebCap brute-force controls TensorBoard, where available</span>
+                                </label>
+                                <p class="app-settings-help app-settings-field-wide">When enabled, Restart may terminate a matching TensorBoard instance started manually for this training output root.</p>
                             </div>
                         </section>
                         <section class="app-settings-section">

@@ -228,6 +228,42 @@ def test_h3_bundle_materializes_only_marked_detail_subset(tmp_path, monkeypatch)
     assert assignments["short_high.mp4"] == {"bucket": [768, 768, 17], "directory": "video_detail/square__768x768x17"}
 
 
+def test_h3_quality_bundle_materializes_image_classes_as_direct_folders(tmp_path, monkeypatch):
+    media_root = tmp_path / "media"
+    source_dir = media_root / "169_img"
+    source_dir.mkdir(parents=True)
+    rows = [
+        ("big.png", 2048, 1152),
+        ("medium.png", 1024, 576),
+        ("small.png", 736, 416),
+    ]
+    images = []
+    for name, width, height in rows:
+        (source_dir / name).write_bytes(name.encode("ascii"))
+        (source_dir / Path(name).with_suffix(".txt")).write_text("caption", encoding="utf-8")
+        images.append({
+            "file": name, "prepared_path": "169_img/" + name,
+            "width": width, "height": height, "ar": "169",
+        })
+    text = (
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/169_img"\ngroup = "images"\nsize_buckets = [[800, 448, 1]]\n\n'
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/169_img"\ngroup = "images"\nsize_buckets = [[1152, 640, 1]]\n\n'
+        '[[directory]]\npath = "__WEBCAP_DATASET_ROOT__/169_img"\ngroup = "images"\nsize_buckets = [[1344, 768, 1]]\n'
+    )
+    monkeypatch.setattr(training_bundle, "to_wsl_path", _fake_wsl)
+
+    rendered = training_bundle._materialize_dataset_config(
+        text, media_root, "", {"images": images, "videos": []}, "h3",
+        profile_id="minimax_h3", mode="quality",
+    )
+
+    assert _fake_wsl(media_root / "169_img__1344x768") in rendered
+    assert {path.name for path in (media_root / "169_img__1344x768").glob("*.png")} == {"big.png"}
+    assert {path.name for path in (media_root / "169_img__1152x640").glob("*.png")} == {"medium.png"}
+    assert {path.name for path in (media_root / "169_img__800x448").glob("*.png")} == {"small.png"}
+    assert all(row.get("imageClassAssignments", {}).get("h3") for row in images)
+
+
 def test_unmarked_manual_video_stanzas_remain_direct(tmp_path, monkeypatch):
     media_root = tmp_path / "media"
     source_dir = media_root / "square"

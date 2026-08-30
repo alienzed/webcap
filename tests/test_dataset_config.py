@@ -15,6 +15,7 @@ from tool.server.dataset_config import (
     build_video_blocks,
     coerce_frames,
     choose_image_bucket,
+    choose_image_resolution_classes,
     generate_candidates,
     generate_image_candidates,
     generate_dataset_configs,
@@ -626,6 +627,42 @@ def test_normal_and_quality_image_buckets_stay_separated():
     assert normal_hi["bucket"] == (480, 480)
     assert normal_lo["bucket"] == (512, 512)
     assert quality_lo["bucket"] == (768, 768)
+
+
+def test_h3_quality_images_keep_up_to_three_independent_detail_tiers():
+    images = [
+        ("big.png", 2048, 1152),
+        ("known_good.png", 1024, 576),
+        ("small.png", 736, 416),
+    ]
+
+    classes, unsupported = choose_image_resolution_classes(
+        "169", images, mode="quality", profile_id=MINIMAX_H3_PROFILE_ID,
+    )
+
+    assert unsupported == []
+    assert len(classes) == 3
+    by_name = {
+        image[0]: item["bucket"]
+        for item in classes
+        for image in item["images"]
+    }
+    assert by_name["big.png"] == (1344, 768)
+    assert by_name["known_good.png"][0] >= 1024
+    assert by_name["known_good.png"][1] >= 576
+    assert by_name["small.png"][0] < by_name["known_good.png"][0]
+    assert all(value % 32 == 0 for bucket in by_name.values() for value in bucket)
+
+
+def test_non_h3_quality_keeps_the_existing_single_image_cohort():
+    images = [("big.png", 2048, 1152), ("small.png", 736, 416)]
+
+    classes, unsupported = choose_image_resolution_classes(
+        "169", images, mode="quality", profile_id=KREA2_PROFILE_ID,
+    )
+
+    assert unsupported == []
+    assert len(classes) == 1
 
 
 def test_validate_config_payload_does_not_persist_a_global_training_mode():

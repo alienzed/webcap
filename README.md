@@ -364,7 +364,7 @@ Behavior:
 - each Train action owns a separate bundle and cache; Wan2.2 HI and LO from one action share that bundle
 - Krea2 Raw requires image-only media; Wan2.1, Wan2.2, and MiniMax H3 accept images and videos
 - Video timing uses the model's native timebase (16 fps for Wan, 24 fps for MiniMax H3). Wan Normal/Quality use 37f temporal plus 13f detail; H3 Normal/Quality use 68f temporal plus 17f detail. POC uses one temporal role (33f for Wan, 34f for H3).
-- Every generated image or temporal stanza has one explicit bucket and points directly to its captured AR folder. Only the marked video-detail cohort is materialized under `media/video_detail`; no image or general video classes are made.
+- Every generated image or temporal stanza has one explicit bucket. H3 Quality can split still images into as many as three resolution tiers and materializes direct bucket-named sibling folders so smaller stills do not lower an entire aspect-ratio cohort. Other image modes and temporal video point directly to their captured AR folders; the marked video-detail cohort remains materialized under `media/video_detail`.
 - zero visible media and missing required captions or TOML paths fail visibly
 - `Train this set` starts immediately when idle or adds the selected run behind current work; Wan2.2 HI -> LO queues independent HI and LO jobs
 - active jobs expose per-run progress, completion ETA, next-checkpoint ETA, effective output identity/folder, logs, queue-pause/finish controls, explicit queue start/resume, and resume-from-checkpoint controls; queued resumes show checkpoint-derived progress

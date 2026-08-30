@@ -27,5 +27,5 @@ Queued and running jobs no longer depend on source-set media, captions, TOMLs, o
 - `originals/`: backups for reversible media mutations.
 - `src_videos/`: optional source-media workspace.
 - set-root profile/mode TOMLs: persistent editable setup.
-- `<numbered-run>/.webcap/datasets/`: captured media, captions, TOMLs, plan, and caches owned by that Train action.
+- `<numbered-action>/input/`: captured media, captions, manifest, and rebuildable cache owned by that Train action; `record/` holds its compact TOMLs and plan.
 - legacy `auto_dataset/`: ignored by new training and safe to delete manually when no older external workflow needs it.

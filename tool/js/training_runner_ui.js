@@ -339,8 +339,9 @@ function validateTrainingRunner(options) {
       profileId: options && options.profileId ? options.profileId : '',
       runId: options && options.runId ? options.runId : '',
       mode: options && options.mode ? options.mode : 'normal',
-      resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
-      resumeStage: options && options.resumeStage ? options.resumeStage : ''
+      resumeStage: options && options.resumeStage ? options.resumeStage : '',
+      resumeActionId: options && options.resumeActionId ? options.resumeActionId : '',
+      resumeOutputId: options && options.resumeOutputId ? options.resumeOutputId : ''
     }),
     allowNotOk: true
   }).then(function (payload) {
@@ -351,10 +352,10 @@ function validateTrainingRunner(options) {
 }
 
 function getManagedTrainingOptions() {
-  var resumeEl = document.getElementById('training-run-resume-input');
+  var manualResumeEl = document.getElementById('training-run-resume-input');
   var checkpointEl = document.getElementById('training-run-checkpoint-select');
   var resumeStageEl = document.getElementById('training-run-resume-stage-select');
-  var customResumePath = resumeEl ? String(resumeEl.value || '').trim() : '';
+  var runNameEl = document.getElementById('training-run-name-input');
   var stages = String(trainingWorkspaceState.runStages || 'both');
   if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21' && stages !== 'h3') stages = 'both';
   var selectedProfile = getSelectedTrainingModelProfile();
@@ -364,9 +365,12 @@ function getManagedTrainingOptions() {
     profileId: selectedProfile ? selectedProfile.id : '',
     runId: selectedRun ? selectedRun.id : '',
     mode: normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode),
-    resumeFromCheckpoint: customResumePath || (checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : ''),
+    resumeFromCheckpoint: manualResumeEl ? String(manualResumeEl.value || '').trim() : '',
+    runName: runNameEl ? String(runNameEl.value || '').trim() : '',
+    resumeOutputId: checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : '',
+    resumeActionId: checkpointEl && checkpointEl.selectedOptions && checkpointEl.selectedOptions[0] ? String(checkpointEl.selectedOptions[0].getAttribute('data-action-id') || '') : '',
     resumeStage: stages === 'both' ? (resumeStageEl ? String(resumeStageEl.value || 'lo') : 'lo') : stages,
-    parentJobId: String(trainingWorkspaceState.resumeParentJobId || '')
+    parentJobId: ''
   };
 }
 
@@ -390,14 +394,15 @@ function setManagedTrainingStages(stages) {
 }
 
 function syncManagedTrainingResumeUi() {
-  var resumeEl = document.getElementById('training-run-resume-input');
   var checkpointEl = document.getElementById('training-run-checkpoint-select');
   var resumeStageOption = document.getElementById('training-run-resume-stage-option');
   var checkpointPath = document.getElementById('training-run-checkpoint-path');
+  var runNameInput = document.getElementById('training-run-name-input');
   if (!resumeStageOption) return;
-  var hasResume = !!((checkpointEl && String(checkpointEl.value || '').trim()) || (resumeEl && String(resumeEl.value || '').trim()));
+  var hasResume = !!(checkpointEl && String(checkpointEl.value || '').trim());
   resumeStageOption.classList.toggle('hidden', trainingWorkspaceState.runStages !== 'both' || !hasResume);
-  if (checkpointPath) checkpointPath.textContent = checkpointEl && checkpointEl.value ? String(checkpointEl.value) : '';
+  if (runNameInput) runNameInput.disabled = hasResume;
+  if (checkpointPath) checkpointPath.textContent = checkpointEl && checkpointEl.value ? String(checkpointEl.selectedOptions[0].textContent || '') : '';
 }
 
 function trainingStageLabel(stages) {
@@ -411,6 +416,8 @@ function trainingModelLabel(job) {
 }
 
 function trainingJobLabel(job) {
+  var runName = String(job && job.runName || '').trim();
+  if (runName) return runName;
   if (job && job.stages === 'krea2') return 'Krea2 Raw';
   var mode = normalizeTrainingWorkspaceMode(job && job.mode || 'normal').toUpperCase();
   var profileLabel = String(job && job.profileLabel || '').trim();
@@ -439,9 +446,10 @@ function startManagedTraining() {
           profileId: options.profileId,
           runId: options.runId,
           mode: options.mode,
-          resumeFromCheckpoint: options.resumeFromCheckpoint,
-          resumeStage: options.resumeStage,
-          parentJobId: options.parentJobId,
+           resumeStage: options.resumeStage,
+           resumeActionId: options.resumeActionId,
+           resumeOutputId: options.resumeOutputId,
+           runName: options.runName,
           selected_media: selectedMedia,
           total_media_count: Array.isArray(state.items) ? state.items.length : 0,
           selection_criteria: buildTrainingSelectionCriteria(),
@@ -619,7 +627,7 @@ function trainingOutputIdentity(job) {
     var parts = runPath.replace(/\\/g, '/').split('/').filter(Boolean);
     return parts.length ? parts[parts.length - 1] : runPath;
   }
-  var group = String(job && job.launchGroupId || '').trim();
+  var group = String(job && job.actionId || '').trim();
   var slug = String(job && job.outputSlug || '').trim();
   return group ? group + (slug ? ' / ' + slug : '') : slug;
 }
@@ -695,7 +703,7 @@ function buildTrainingQueueHtml(queuedJobs) {
         '</div>' +
         '<div class="training-runner-queue-controls">' +
           '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' +
-          (queuedJob.bundlePath ? '<button type="button" class="training-runner-queue-control" data-training-job-bundle="' + escapeHtml(queuedJob.id) + '" title="Open captured files" aria-label="Open captured files">&#128451;</button>' : '') +
+          (queuedJob.actionPath ? '<button type="button" class="training-runner-queue-control" data-training-job-action="' + escapeHtml(queuedJob.id) + '" title="Open action folder" aria-label="Open action folder">&#128451;</button>' : '') +
           '<button type="button" class="training-runner-queue-control" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + '>&#8593;</button>' +
           '<button type="button" class="training-runner-queue-control" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move down" aria-label="Move down"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
           '<button type="button" class="training-runner-queue-control training-runner-queue-cancel" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Remove from queue" aria-label="Remove from queue">&#215;</button>' +
@@ -925,10 +933,10 @@ function renderTrainingRunner() {
   var finishScheduleButton = canScheduleFinish
     ? '<button type="button" class="training-runner-output-action training-runner-finish-schedule' + (isFinite(finishAfterEpoch) && finishAfterEpoch > 0 ? ' is-armed' : '') + '" data-training-finish-schedule="' + escapeHtml(job.id || '') + '" title="' + escapeHtml(finishScheduleTitle) + '" aria-label="' + escapeHtml(finishScheduleTitle) + '">&#9201;' + (isFinite(finishAfterEpoch) && finishAfterEpoch > 0 ? '<span>' + Math.round(finishAfterEpoch) + '</span>' : '') + '</button>'
     : '';
-  var rowActions = finishScheduleButton || trainingOutputIdentity(job) || job.bundlePath
+  var rowActions = finishScheduleButton || trainingOutputIdentity(job) || job.actionPath
     ? '<span class="training-runner-row-actions">' + finishScheduleButton +
       (trainingOutputIdentity(job) ? '<button type="button" class="training-runner-output-action" data-training-job-output="' + escapeHtml(job.id || '') + '" title="Open ' + (runOutputPath ? 'run output: ' + escapeHtml(runOutputPath) : 'output root: ' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '')) + '" aria-label="Open training output folder">&#128193;</button>' : '') +
-      (job.bundlePath ? '<button type="button" class="training-runner-output-action" data-training-job-bundle="' + escapeHtml(job.id || '') + '" title="Open captured files" aria-label="Open captured files">&#128451;</button>' : '') +
+      (job.actionPath ? '<button type="button" class="training-runner-output-action" data-training-job-action="' + escapeHtml(job.id || '') + '" title="Open action folder" aria-label="Open action folder">&#128451;</button>' : '') +
       '</span>'
     : '';
   var queuePosition = selectedQueuePosition

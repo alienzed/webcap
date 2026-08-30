@@ -17,7 +17,7 @@ from .media import media_blur_background_response, media_crop_response, media_fl
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, bundle_path_for_job as training_runner_bundle_path_for_job, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, clear_history_response as training_runner_clear_history_response, history_metrics_response as training_runner_history_metrics_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses, start_observer as start_training_runner_observer
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, clear_history_response as training_runner_clear_history_response, history_metrics_response as training_runner_history_metrics_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses, start_observer as start_training_runner_observer
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .prune_candidates import prune_candidates_response
@@ -431,17 +431,12 @@ def train_run_route():
     if resume_from_checkpoint and resume_stage not in ("hi", "lo", "krea2", "wan21", "h3"):
         return Response("[ERROR] Resume stage must be hi, lo, krea2, wan21, or h3.\n", status=400, mimetype="text/plain")
     return train_run_response(
-        folder,
-        stages,
-        resume_from_checkpoint,
-        resume_stage,
-        data.get("profileId") or "",
-        data.get("runId") or "",
-        data.get("mode") or "normal",
-        data.get("selected_media"),
-        data.get("fallback_captions"),
-        data.get("selection_criteria"),
-        data.get("total_media_count"),
+        folder, stages=stages, resume_from_checkpoint=resume_from_checkpoint,
+        resume_stage=resume_stage, run_name=data.get("runName") or "",
+        profile_id=data.get("profileId") or "", run_id=data.get("runId") or "",
+        mode=data.get("mode") or "normal", selected_media=data.get("selected_media"),
+        fallback_captions=data.get("fallback_captions"), selection_criteria=data.get("selection_criteria"),
+        total_media_count=data.get("total_media_count"),
     )
 
 
@@ -453,6 +448,8 @@ def training_runner_validate_route():
         data.get("stages") or "both",
         data.get("resumeFromCheckpoint") or "",
         data.get("resumeStage") or "",
+        data.get("resumeActionId") or "",
+        data.get("resumeOutputId") or "",
         data.get("profileId") or "",
         data.get("runId") or "",
         data.get("mode") or "normal",
@@ -470,6 +467,9 @@ def training_runner_start_route():
         resume_from_checkpoint=data.get("resumeFromCheckpoint") or "",
         resume_stage=data.get("resumeStage") or "",
         parent_job_id=data.get("parentJobId") or "",
+        run_name=data.get("runName") or "",
+        resume_action_id=data.get("resumeActionId") or "",
+        resume_output_id=data.get("resumeOutputId") or "",
         profile_id=data.get("profileId") or "",
         run_id=data.get("runId") or "",
         mode=data.get("mode") or "normal",
@@ -528,12 +528,12 @@ def training_runner_open_output_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
-@app.route("/fs/training_runner/open_bundle", methods=["POST"])
-def training_runner_open_bundle_route():
+@app.route("/fs/training_runner/open_action", methods=["POST"])
+def training_runner_open_action_route():
     data = request.get_json(silent=True) or {}
     try:
         return open_path_in_explorer_response(
-            training_runner_bundle_path_for_job(data.get("jobId", ""), data.get("folder", ""))
+            training_runner_action_path_for_job(data.get("jobId", ""), data.get("folder", ""))
         )
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400

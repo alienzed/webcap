@@ -4,7 +4,7 @@ from flask import Response, stream_with_context
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
-from .training_history import training_output_group_for_folder
+from .training_action import allocate_action, update_action
 from .training_profiles import config_for_stage, normalize_mode, profile_run
 from .training_bundle import materialize_training_bundle
 from .training_commands import build_h3_command_plan, build_training_command_plan
@@ -20,6 +20,7 @@ def train_run_response(
     stages="both",
     resume_from_checkpoint="",
     resume_stage="",
+    run_name="",
     profile_id="",
     run_id="",
     mode="normal",
@@ -43,21 +44,21 @@ def train_run_response(
         selected_mode = normalize_mode(mode)
         stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
         stage_names = ("hi", "lo") if stages == "both" else (stages,)
-        launch_group = training_output_group_for_folder(folder_path, create=True)
+        action_root, action = allocate_action(folder_path, selected_profile, selected_mode, stage_names, run_name)
         output_dirs = {}
         for stage in stage_names:
             meta = config_for_stage(selected_profile["id"], stage, selected_mode)
             if resume_from_checkpoint and resume_stage == stage:
                 output_dir = str(Path(resume_from_checkpoint).parent) if not str(resume_from_checkpoint).startswith("/") else str(PurePosixPath(resume_from_checkpoint).parent)
             else:
-                stage_output = launch_group / meta["outputSlug"]
+                stage_output = action_root / "output" / meta["outputSlug"]
                 stage_output.mkdir(parents=True, exist_ok=True)
                 normalize_path_permissions(stage_output)
                 output_dir = _to_wsl_path(stage_output, runtime_settings["wslDistribution"])
             output_dirs[stage] = output_dir
         bundle = materialize_training_bundle(
             folder_path,
-            launch_group,
+            action_root,
             selected_profile["id"],
             selected_mode,
             stages,
@@ -68,6 +69,12 @@ def train_run_response(
             output_dirs=output_dirs,
             distribution=runtime_settings["wslDistribution"],
         )
+        def mark_manual(data):
+            data["launchType"] = "manual"
+            data["observation"] = "unobserved"
+            if resume_from_checkpoint:
+                data["externalOutput"] = {"kind": "external", "resumeStage": str(resume_stage or "")}
+        update_action(action_root.name, mark_manual)
         artifacts = bundle["artifacts"]
         stage_configs = {
             stage: _to_wsl_path(artifacts[stage + "Config"], runtime_settings["wslDistribution"])
@@ -105,8 +112,8 @@ def train_run_response(
             try:
                 yield f"[INFO] Running from: {diffusion_pipe_wsl}\n"
                 yield f"[INFO] Training stages: {stages}\n"
-                yield f"[INFO] Launch group: {launch_group.name}\n"
-                yield f"[INFO] Captured files: {bundle['path']}\n"
+                yield f"[INFO] Action folder: {action_root}\n"
+                yield f"[INFO] Captured input: {bundle['inputPath']}\n"
                 yield f"[INFO] Captured media items: {bundle['capturedItemCount']}\n"
                 summary = bundle.get("summary") or {}
                 actions = summary.get("captureActions") or {}

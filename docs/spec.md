@@ -47,7 +47,7 @@ Train saves the open TOML before capture. Captured copies preserve inspected val
 Each Train action reserves a numbered run group under `output/runs/`. Its captured dataset lives under:
 
 ```text
-<numbered-run>/.webcap/datasets/<profile>-<mode>-<unique-id>/
+<numbered-action>/record/ and <numbered-action>/input/
 ```
 
 The bundle contains grouped media, captions, copied TOMLs, `dataset_manifest.json`, and `training_plan.json`. Diffusion Pipe cache files live with the captured media. Bundles remain until the numbered run folder is deleted.

@@ -674,19 +674,20 @@
                                             <option value="hi">HI</option>
                                         </select>
                                     </label>
+                                    <label class="training-run-option">
+                                        <span>Run name <em>(optional)</em></span>
+                                        <input id="training-run-name-input" type="text" maxlength="80" placeholder="e.g. clothing baseline">
+                                    </label>
                                 </div>
                                 <div class="training-run-setup-actions">
                                     <button id="training-queue-job-btn" type="button" class="training-btn training-launch-btn" title="Start this set when the runner is idle, or add it behind active work.">Train this set</button>
                                 </div>
-                                <details class="training-run-custom-checkpoint">
-                                    <summary>Custom checkpoint path</summary>
-                                    <input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/runs/{setname}">
-                                </details>
                             </div>
                             <details class="training-run-details">
                                 <summary>Manual command &amp; diagnostics</summary>
                                 <div class="training-run-details-body">
                                     <div id="training-command-status" class="training-command-status">Generate and copy a manual WSL command when you need one.</div>
+                                    <label class="training-run-custom-checkpoint"><span>Manual external checkpoint path <em>(manual command only)</em></span><input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/runs/{legacy-run}"></label>
                                     <pre id="training-command-text" class="training-command-text hidden"></pre>
                                     <div class="training-command-actions">
                                         <button id="training-preview-command-btn" type="button" class="review-captions-btn" title="Generate the manual WSL command, show it here, and copy it to the clipboard.">Generate &amp; Copy Manual Command</button>

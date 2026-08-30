@@ -14,20 +14,19 @@ import tomllib
 
 from . import config as app_config
 from .permissions import normalize_path_permissions
-from .training_config_files import allocate_training_launch_group, output_dir_from_config, training_config_path
+from .training_config_files import output_dir_from_config, training_config_path
+from .training_action import action_paths, managed_action_children, read_action
 from .training_profiles import config_for_id
 
 
-HISTORY_FILE_NAME = ".webcap_training.json"
-HISTORY_VERSION = 3
+HISTORY_VERSION = 4
 RECENT_RUNS_FILE_NAME = "recent_runs.json"
-RECENT_RUNS_VERSION = 1
+RECENT_RUNS_VERSION = 2
 _history_lock = threading.RLock()
 _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(?:#.*)?$", re.MULTILINE)
-_OUTPUT_GROUP_PATTERN = re.compile(r"^\d{3}-.+$")
 
 
 def output_root_for_folder(folder_path, stage=""):
@@ -84,10 +83,6 @@ def _training_path_for_entry(entry, host_root, training_root):
     return str(path)
 
 
-def _history_path(folder_path):
-    return Path(folder_path) / HISTORY_FILE_NAME
-
-
 def _recent_runs_path():
     return Path(app_config.FS_ROOT) / ".webcap_training" / RECENT_RUNS_FILE_NAME
 
@@ -117,75 +112,16 @@ def _write_json_atomic(path, payload):
             pass
 
 
-def _local_metadata(data=None):
-    payload = {"version": HISTORY_VERSION}
-    output_group = str((data or {}).get("outputGroup") or "").strip()
-    if output_group:
-        payload["outputGroup"] = output_group
-    return payload
-
-
-def _migrate_legacy_histories():
-    """Move legacy per-set job rows into the central Recent Runs index once."""
-    root = Path(app_config.FS_ROOT)
-    jobs_by_key = {}
-    local_metadata = []
-    if root.is_dir():
-        for path in root.rglob(HISTORY_FILE_NAME):
-            if ".webcap_training" in path.parts or "auto_dataset" in path.parts:
-                continue
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                app_config.debug_print("[training_history] Left unreadable legacy metadata unchanged:", path)
-                continue
-            if not isinstance(data, dict) or data.get("version") not in (HISTORY_VERSION, 4):
-                app_config.debug_print("[training_history] Left unsupported legacy metadata unchanged:", path)
-                continue
-            try:
-                folder = path.parent.relative_to(root).as_posix()
-            except ValueError:
-                continue
-            for job in data.get("jobs") or []:
-                if not isinstance(job, dict) or job.get("status") == "cancelled":
-                    continue
-                item = dict(job)
-                item["folder"] = folder
-                job_id = str(item.get("id") or "").strip()
-                if not job_id:
-                    continue
-                key = (folder, job_id)
-                existing = jobs_by_key.get(key)
-                item_time = float(item.get("finishedAt") or item.get("startedAt") or item.get("createdAt") or 0)
-                existing_time = float((existing or {}).get("finishedAt") or (existing or {}).get("startedAt") or (existing or {}).get("createdAt") or 0)
-                if existing is None or item_time >= existing_time:
-                    jobs_by_key[key] = item
-            local_metadata.append((path.parent, _local_metadata(data)))
-    jobs = sorted(
-        jobs_by_key.values(),
-        key=lambda job: float(job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0),
-        reverse=True,
-    )
-    payload = {"version": RECENT_RUNS_VERSION, "jobs": jobs}
-    _write_json_atomic(_recent_runs_path(), payload)
-    for folder, metadata in local_metadata:
-        try:
-            _write_json_atomic(_history_path(folder), metadata)
-        except OSError as exc:
-            app_config.debug_print("[training_history] Could not compact legacy set metadata:", folder, exc)
-    return payload
-
-
 def _read_recent_runs():
     path = _recent_runs_path()
     if not path.exists():
-        return _migrate_legacy_histories()
+        return {"version": RECENT_RUNS_VERSION, "jobs": []}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError("Could not read Recent Runs; it was left unchanged: " + str(path)) from exc
     if not isinstance(data, dict) or data.get("version") != RECENT_RUNS_VERSION or not isinstance(data.get("jobs"), list):
-        raise ValueError("Recent Runs is invalid; it was left unchanged: " + str(path))
+        raise ValueError("Unsupported Recent Runs state. Rename FS_ROOT/.webcap_training for the action-layout reset; it was left unchanged: " + str(path))
     return data
 
 
@@ -195,6 +131,15 @@ def _write_recent_runs(data):
         "jobs": list((data or {}).get("jobs") or []),
     }
     _write_json_atomic(_recent_runs_path(), payload)
+
+
+def recent_jobs():
+    """Return persisted Recent Runs records for internal storage-reference checks."""
+    with _history_lock:
+        recent = _read_recent_runs()
+        if any(not isinstance(job, dict) for job in recent["jobs"]):
+            raise ValueError("Recent Runs contains an invalid job record; it was left unchanged: " + str(_recent_runs_path()))
+        return [dict(job) for job in recent["jobs"]]
 
 
 def _configured_epochs(folder_path, stage):
@@ -303,14 +248,12 @@ def _resume_artifacts(entry):
 
 
 def _default_history(folder_path):
-    result = {
+    return {
         "version": HISTORY_VERSION,
         "outputRoot": str(output_root_for_folder(folder_path)),
         "jobs": [],
         "runs": [],
     }
-    result.update(_local_metadata(_read_history_index(folder_path)))
-    return result
 
 
 def read_history(folder_path):
@@ -326,93 +269,6 @@ def read_history(folder_path):
         return result
 
 
-def _write_history(folder_path, data):
-    _write_json_atomic(_history_path(folder_path), _local_metadata(data))
-
-
-def _read_history_index(folder_path):
-    """Read optional set-local metadata without resolving any configured paths."""
-    path = _history_path(folder_path)
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {"version": HISTORY_VERSION}
-    if not isinstance(data, dict) or data.get("version") != HISTORY_VERSION:
-        return {"version": HISTORY_VERSION}
-    return _local_metadata(data)
-
-
-def _recorded_output_group(folder_path):
-    history = _read_history_index(folder_path)
-    group_name = str(history.get("outputGroup") or "").strip()
-    if not group_name or Path(group_name).name != group_name or not _OUTPUT_GROUP_PATTERN.match(group_name):
-        return None
-    candidate = Path(app_config.FS_ROOT) / "output" / "runs" / group_name
-    return candidate if candidate.is_dir() else None
-
-
-def _output_group_activity(group):
-    """Return the newest trainer-created run activity under one set group."""
-    newest = 0.0
-    try:
-        model_dirs = [path for path in group.iterdir() if path.is_dir() and path.name != ".webcap"]
-    except OSError:
-        return newest
-    for model_dir in model_dirs:
-        try:
-            run_dirs = [path for path in model_dir.iterdir() if path.is_dir()]
-        except OSError:
-            continue
-        for run_dir in run_dirs:
-            latest = run_dir / "latest"
-            try:
-                configs = list(run_dir.glob("config*.toml"))
-            except OSError:
-                continue
-            if not latest.is_file() and not configs:
-                continue
-            try:
-                newest = max(newest, latest.stat().st_mtime if latest.is_file() else run_dir.stat().st_mtime)
-            except OSError:
-                continue
-    return newest
-
-
-def _adopt_existing_output_group(folder_path):
-    root = Path(app_config.FS_ROOT) / "output" / "runs"
-    if not root.is_dir():
-        return None
-    suffix = "-" + Path(folder_path).name
-    try:
-        candidates = [
-            path for path in root.iterdir()
-            if path.is_dir() and path.name.endswith(suffix) and _OUTPUT_GROUP_PATTERN.match(path.name)
-        ]
-    except OSError:
-        return None
-    if not candidates:
-        return None
-    return max(candidates, key=lambda path: (_output_group_activity(path), path.name))
-
-
-def training_output_group_for_folder(folder_path, create=False):
-    """Return the set's optional managed output group, allocating only on request."""
-    folder = Path(folder_path)
-    group = _recorded_output_group(folder) or _adopt_existing_output_group(folder)
-    if group is None and create:
-        group = allocate_training_launch_group(folder)
-    if group is None:
-        return None
-    history = _read_history_index(folder)
-    if history.get("outputGroup") != group.name:
-        history["outputGroup"] = group.name
-        try:
-            _write_history(folder, history)
-        except OSError as exc:
-            app_config.debug_print("[training_history] Could not remember output group for", folder, ":", exc)
-    return group
-
-
 def discover_runs(folder_path, stage=""):
     folder = Path(folder_path)
     if not folder.is_dir():
@@ -423,75 +279,63 @@ def discover_runs(folder_path, stage=""):
             if training_config_path(folder, item).is_file():
                 combined.extend(discover_runs(folder, item))
         return sorted(combined, key=lambda run: run["modifiedAt"], reverse=True)
-    stages = (stage,)
     runs = []
-    for candidate_stage in stages:
-        source_config = training_config_path(folder, candidate_stage)
-        parsed_source = _parsed_config(source_config)
-        if parsed_source is None:
+    folder_key = _folder_key(folder)
+    for action_root, action in managed_action_children():
+        if str(action.get("folder") or "") != folder_key:
             continue
-        config_meta = config_for_id(candidate_stage)
-        wanted_identity = _model_identity(parsed_source, config_meta["modelIdentityKeys"])
-        if wanted_identity is None:
-            continue
-        try:
-            source_hash = config_sha256(source_config)
-            output_group = training_output_group_for_folder(folder)
-            if output_group is not None:
-                root = output_group / config_meta["outputSlug"]
-                training_root = str(root)
-            else:
-                training_root = output_root_path_for_folder(folder, candidate_stage)
-                root = output_root_for_folder(folder, candidate_stage)
-        except (OSError, RuntimeError) as exc:
-            app_config.debug_print("[training_history] Could not resolve", candidate_stage, "output root", "for", folder, ":", exc)
-            raise
-        if not root.is_dir():
-            app_config.debug_print("[training_history] No", candidate_stage, "output root to scan:", root)
-            continue
-        try:
-            app_config.debug_print("[training_history] Scanning", root, "for resumable", candidate_stage, "runs.")
-            latest_markers = list(root.rglob("latest"))
-        except OSError as exc:
-            app_config.debug_print("[training_history] Could not scan", root, ":", exc)
-            raise
-        for latest in latest_markers:
-            entry = latest.parent
-            if ".webcap" in entry.parts or not _resume_artifacts(entry):
-                continue
-            saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, wanted_identity)
-            if saved_config is None:
-                app_config.debug_print("[training_history] Skipping", entry, ": no matching", candidate_stage, "model config.")
+        profile_id = str(action.get("profileId") or "")
+        mode = str(action.get("mode") or "normal")
+        for candidate_stage in (stage,):
+            if candidate_stage not in action.get("requestedStages", ()):
                 continue
             try:
-                modified = entry.stat().st_mtime
-                checkpoint_tag = latest.read_text(encoding="utf-8").strip().splitlines()[0].strip()
-            except (OSError, IndexError):
+                meta = config_for_stage(profile_id, candidate_stage, mode)
+            except ValueError:
                 continue
-            expected_epochs = _epochs_from_parsed_config(parsed_saved)
-            completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
-            training_path = _training_path_for_entry(entry, root, training_root)
-            runs.append({
-                "path": training_path,
-                "runPath": training_path,
-                "name": entry.name,
-                "setName": _set_name_from_run_config(entry, folder.name),
-                "stage": candidate_stage,
-                "candidateFor": candidate_stage,
-                "modelLabel": config_meta["label"],
-                "matchType": "exact" if config_sha256(saved_config) == source_hash else "compatible",
-                "configHash": config_sha256(saved_config),
-                "modifiedAt": modified,
-                "checkpointAvailable": True,
-                "checkpointName": "latest",
-                "checkpointTag": checkpoint_tag,
-                "completed": completed,
-                "epoch": highest_epoch or None,
-                "steps": highest_step or None,
-                "expectedEpochs": expected_epochs or None,
-            })
+            branch = action_root / "output" / meta["outputSlug"]
+            if not branch.is_dir() or branch.is_symlink():
+                continue
+            for entry in branch.iterdir():
+                if not entry.is_dir() or entry.is_symlink() or not _resume_artifacts(entry):
+                    continue
+                try:
+                    modified = entry.stat().st_mtime
+                    checkpoint_tag = (entry / "latest").read_text(encoding="utf-8").strip().splitlines()[0].strip()
+                except (OSError, IndexError):
+                    continue
+                expected_epochs = _configured_epochs(folder, candidate_stage)
+                completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
+                relative_output = entry.relative_to(action_root).as_posix()
+                output_id = hashlib.sha256((action["actionId"] + "\0" + candidate_stage + "\0" + relative_output).encode("utf-8")).hexdigest()[:24]
+                runs.append({
+                    "path": str(entry), "runPath": str(entry), "name": entry.name,
+                    "setName": folder.name, "stage": candidate_stage, "candidateFor": candidate_stage,
+                    "modelLabel": meta["label"], "matchType": "managed", "modifiedAt": modified,
+                    "checkpointAvailable": True, "checkpointName": "latest", "checkpointTag": checkpoint_tag,
+                    "completed": completed, "epoch": highest_epoch or None, "steps": highest_step or None,
+                    "expectedEpochs": expected_epochs or None, "resumeActionId": action["actionId"],
+                    "resumeOutputId": output_id, "resumeStage": candidate_stage,
+                    "runName": str(action.get("runName") or ""),
+                })
     app_config.debug_print("[training_history] Found", len(runs), "resumable run(s) for", folder, "stage", stage or "all")
     return sorted(runs, key=lambda run: run["modifiedAt"], reverse=True)
+
+
+def resolve_managed_resume(folder_path, action_id, output_id, stage):
+    """Resolve the opaque action/output pair; no raw checkpoint paths enter managed launch."""
+    folder = Path(folder_path)
+    root, action = read_action(action_id)
+    if str(action.get("folder") or "") != _folder_key(folder):
+        raise ValueError("The selected training action belongs to another set.")
+    selected_stage = str(stage or "").strip().lower()
+    if selected_stage not in action.get("requestedStages", ()):
+        raise ValueError("The selected stage is not part of that training action.")
+    for run in discover_runs(folder, selected_stage):
+        if run.get("resumeActionId") == action_id and run.get("resumeOutputId") == output_id:
+            action_paths(action_id)  # require captured record and input before reusing them
+            return {"actionRoot": root, "action": action, "runPath": Path(run["path"]), "stage": selected_stage, "point": resume_point_from_directory(folder, selected_stage, run["path"])}
+    raise ValueError("The selected managed checkpoint is unavailable or no longer valid.")
 
 
 def validate_resumable_run_for_path(folder_path, stage, run_path):
@@ -582,9 +426,9 @@ def record_job(folder_path, job):
     folder_key = _folder_key(folder)
     runs = discover_runs(folder, str(job.get("stages") or ""))
     record_fields = (
-        "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "bundlePath", "bundleSummary", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "outputRunPath", "status", "stage",
+        "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId", "activeTrainingSeconds", "activeTrainingTimingComplete",
-        "outputRoot", "effectiveOutputDir", "outputSlug", "launchGroupId", "sequence", "launchGroupRoot", "progress", "model", "input", "artifactDir", "artifactSummary",
+        "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "progress", "model", "input", "artifactDir", "artifactSummary",
     )
     record = {field: job.get(field) for field in record_fields if field in job}
     record["folder"] = folder_key
@@ -660,8 +504,8 @@ def _history_job_view(job):
         artifact_dir = str(item.get("artifactDir") or "").strip()
         log_path = Path(artifact_dir) / "run.log" if artifact_dir else None
     item["logAvailable"] = bool(log_path) and log_path.is_file()
-    raw_bundle = str(item.get("bundlePath") or "").strip()
-    item["bundleAvailable"] = bool(raw_bundle) and Path(raw_bundle).is_dir()
+    raw_action = str(item.get("actionPath") or "").strip()
+    item["actionAvailable"] = bool(raw_action) and Path(raw_action).is_dir()
     folder = str(item.get("folder") or "").strip()
     try:
         item["sourceAvailable"] = bool(folder) and app_config.safe_join_fs_root(folder).is_dir()

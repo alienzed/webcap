@@ -21,7 +21,7 @@ Persistent set TOML remains editable and uses the neutral template output path. 
 
 For example, `001-Estel`. Stage output slugs are `wan22-hi`, `wan22-lo`, `krea2-raw`, `wan21-t2v`, and `minimax-h3`. A Wan2.2 HI → LO action shares one launch group for its two independent jobs; every other launch gets its own group.
 
-Managed and manual launches capture an immutable bundle under `<launch-group>/.webcap/datasets/`. The bundle owns the media, captions, inspected TOMLs, and cache. Only runtime paths are rewritten in the copied TOMLs; user-authored dimensions, frame counts, and unmarked direct stanzas remain authoritative and receive visible warnings when unsafe.
+Managed and manual launches create one visible action directory. Its `input/` holds captured media, captions, manifest, and cache; its `record/` holds immutable inspected TOMLs and the plan. Only runtime paths are rewritten in copied TOMLs; user-authored dimensions, frame counts, and unmarked direct stanzas remain authoritative and receive visible warnings when unsafe.
 
 ## Dataset calculation and progress
 

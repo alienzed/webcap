@@ -4,7 +4,6 @@ import re
 import shutil
 import subprocess
 import tomllib
-import uuid
 from pathlib import Path
 
 from .dataset_config import build_dataset_config_artifacts, coerce_frames, video_roles_for_profile
@@ -16,7 +15,7 @@ from .dataset_prep import (
 )
 from .permissions import normalize_path_permissions
 from .training_config_files import with_dataset_path, with_output_dir
-from .training_profiles import config_for_stage, normalize_mode, profile_for_mode, profile_slug
+from .training_profiles import config_for_stage, normalize_mode, profile_for_mode
 from .training_runtime import to_wsl_path
 
 
@@ -368,7 +367,7 @@ def _selected_stages(profile, stages):
 
 def materialize_training_bundle(
     folder_path,
-    group_root,
+    action_root,
     profile_id,
     mode,
     stages,
@@ -378,10 +377,9 @@ def materialize_training_bundle(
     total_media_count=None,
     output_dirs=None,
     distribution="",
-    bundle_parent="datasets",
 ):
     folder = Path(folder_path)
-    group = Path(group_root)
+    action = Path(action_root)
     selected_mode = normalize_mode(mode)
     selected_profile = profile_for_mode(profile_id, selected_mode)
     stage_names = _selected_stages(selected_profile, stages)
@@ -392,13 +390,18 @@ def materialize_training_bundle(
         selection_criteria=selection_criteria,
         total_media_count=total_media_count,
     )
-    bundle_name = profile_slug(profile_id) + "-" + selected_mode + "-" + uuid.uuid4().hex[:12]
-    bundle = group / ".webcap" / bundle_parent / bundle_name
-    configs_root = bundle / "configs"
-    media_root = bundle / "media"
-    configs_root.mkdir(parents=True, exist_ok=False)
+    record_root = action / "record"
+    input_root = action / "input"
+    configs_root = record_root / "configs"
+    media_root = input_root / "media"
+    # Allocation creates these first.  Keeping this idempotent also makes the
+    # focused capture helper usable by diagnostic callers without creating a
+    # second hidden bundle layout.
+    record_root.mkdir(parents=True, exist_ok=True)
+    input_root.mkdir(parents=True, exist_ok=True)
+    configs_root.mkdir(parents=True, exist_ok=True)
     media_root.mkdir(parents=True, exist_ok=True)
-    normalize_path_permissions(bundle)
+    normalize_path_permissions(action)
     normalize_path_permissions(configs_root)
     normalize_path_permissions(media_root)
 
@@ -492,10 +495,10 @@ def materialize_training_bundle(
         profile_id=profile_id,
         config_paths=config_paths,
     )
-    plan_path = bundle / "training_plan.json"
+    plan_path = record_root / "training_plan.json"
     plan_path.write_text(json.dumps(plan_artifacts["plan"], indent=2), encoding="utf-8")
     normalize_path_permissions(plan_path)
-    manifest_path = bundle / "dataset_manifest.json"
+    manifest_path = input_root / "dataset_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     normalize_path_permissions(manifest_path)
     summary = _build_bundle_summary(
@@ -505,14 +508,16 @@ def materialize_training_bundle(
         plan_artifacts["plan"],
         bundle_artifacts,
     )
-    summary_path = bundle / "bundle_summary.json"
+    summary_path = record_root / "bundle_summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     normalize_path_permissions(summary_path)
     bundle_artifacts["manifest"] = manifest_path
     bundle_artifacts["plan"] = plan_path
     bundle_artifacts["summary"] = summary_path
     return {
-        "path": bundle,
+        "path": action,
+        "recordPath": record_root,
+        "inputPath": input_root,
         "artifacts": bundle_artifacts,
         "manifest": manifest,
         "plan": plan_artifacts["plan"],

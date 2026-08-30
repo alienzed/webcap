@@ -541,15 +541,11 @@ function wireTrainingWorkspace() {
     };
   });
   setManagedTrainingStages(trainingWorkspaceState.runStages);
-  if (resumeInput) resumeInput.oninput = function () {
-    trainingWorkspaceState.resumeParentJobId = '';
-    syncManagedTrainingResumeUi();
-  };
   if (checkpointSelect) checkpointSelect.onchange = function () {
     trainingWorkspaceState.resumeSelectionTouched = true;
     trainingWorkspaceState.resumeParentJobId = '';
     var selectedRun = (trainingWorkspaceState.history && trainingWorkspaceState.history.runs || []).filter(function (run) {
-      return String(run.path || '') === String(checkpointSelect.value || '');
+      return String(run.resumeOutputId || '') === String(checkpointSelect.value || '');
     })[0];
     if (selectedRun && (selectedRun.stage === 'hi' || selectedRun.stage === 'lo') && resumeStageSelect) {
       resumeStageSelect.value = selectedRun.stage;
@@ -599,8 +595,8 @@ function wireTrainingWorkspace() {
     }
     var outputId = event.target.getAttribute('data-training-job-output');
     if (outputId) openTrainingJobOutput(outputId);
-    var bundleId = event.target.getAttribute('data-training-job-bundle');
-    if (bundleId) openTrainingJobBundle(bundleId);
+    var actionId = event.target.getAttribute('data-training-job-action');
+    if (actionId) openTrainingJobAction(actionId);
     if (event.target.closest('[data-training-runner-recover]')) recoverManagedTrainingQueue();
   };
   runnerConsoleBtn.onclick = function () {
@@ -626,9 +622,9 @@ function wireTrainingWorkspace() {
       openTrainingJobOutput(outputId);
       return;
     }
-    var bundleId = event.target.getAttribute('data-training-job-bundle');
-    if (bundleId) {
-      openTrainingJobBundle(bundleId);
+    var actionId = event.target.getAttribute('data-training-job-action');
+    if (actionId) {
+      openTrainingJobAction(actionId);
       return;
     }
     var action = event.target.getAttribute('data-training-queue-action');
@@ -667,13 +663,13 @@ function wireTrainingWorkspace() {
       return;
     }
     var historyMoreMenu = event.target.closest('.training-history-more');
-    if (historyMoreMenu && event.target.closest('[data-training-history-output], [data-training-history-bundle], [data-training-history-clear]')) {
+    if (historyMoreMenu && event.target.closest('[data-training-history-output], [data-training-history-action], [data-training-history-clear]')) {
       historyMoreMenu.removeAttribute('open');
     }
     var logId = event.target.getAttribute('data-training-history-log');
     var outputJobId = event.target.getAttribute('data-training-history-output');
     var runJobId = event.target.getAttribute('data-training-history-run');
-    var bundleJobId = event.target.getAttribute('data-training-history-bundle');
+    var actionJobId = event.target.getAttribute('data-training-history-action');
     var clearId = event.target.getAttribute('data-training-history-clear');
     if (outputJobId) {
       var outputJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === outputJobId; })[0];
@@ -685,9 +681,9 @@ function wireTrainingWorkspace() {
       openTrainingHistoryRun(runJob && runJob.folder, runJob && (runJob.stage || runJob.stages), runJob && runJob.outputRunPath);
       return;
     }
-    if (bundleJobId) {
-      var bundleJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === bundleJobId; })[0];
-      openTrainingJobBundle(bundleJobId, bundleJob && bundleJob.folder);
+    if (actionJobId) {
+      var actionJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === actionJobId; })[0];
+      openTrainingJobAction(actionJobId, actionJob && actionJob.folder);
       return;
     }
     if (clearId) {

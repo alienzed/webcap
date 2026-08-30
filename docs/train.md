@@ -58,7 +58,7 @@ Disabling a profile only hides it from new-run setup. Existing TOMLs, captured b
 - `.webcap_training/queue.json` contains ordered scheduler work and live fields.
 - `.webcap_training/recent_runs.json` is presentation history and never gates scheduling.
 - Per-set `.webcap_training.json` stores set-local output-group metadata.
-- Captured datasets live under `<numbered-run>/.webcap/datasets/<profile>-<mode>-<unique-id>/` and remain until the numbered run folder is deleted.
+- Captured input lives under the visible `<numbered-action>/input/`, while immutable TOMLs and the plan live under `<numbered-action>/record/`.
 
 The persistent set TOMLs remain the editable configuration interface. Only app-owned runtime paths are rewritten in captured copies.
 

@@ -171,6 +171,19 @@ def test_training_history_summary_uses_the_latest_managed_job(tmp_path, monkeypa
     assert training_history.summarize_history(set_folder)["status"] == "completed"
 
 
+def test_version_1_recent_runs_remain_readable(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    set_folder = root / "set"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "FS_ROOT", root)
+    recent_path = root / ".webcap_training" / training_history.RECENT_RUNS_FILE_NAME
+    recent_path.parent.mkdir()
+    recent_path.write_text(json.dumps({"version": 1, "jobs": []}), encoding="utf-8")
+
+    assert training_history.all_history_payload()["jobs"] == []
+    assert json.loads(recent_path.read_text(encoding="utf-8"))["version"] == 1
+
+
 def test_global_history_is_compact_and_clear_does_not_touch_run_artifacts(tmp_path, monkeypatch):
     root = tmp_path / "training"
     set_folder = root / "char" / "lilly"

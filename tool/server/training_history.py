@@ -120,8 +120,12 @@ def _read_recent_runs():
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError("Could not read Recent Runs; it was left unchanged: " + str(path)) from exc
-    if not isinstance(data, dict) or data.get("version") != RECENT_RUNS_VERSION or not isinstance(data.get("jobs"), list):
+    if not isinstance(data, dict) or data.get("version") not in (1, RECENT_RUNS_VERSION) or not isinstance(data.get("jobs"), list):
         raise ValueError("Unsupported Recent Runs state. Rename FS_ROOT/.webcap_training for the action-layout reset; it was left unchanged: " + str(path))
+    # Version 2 made the persisted job records richer without changing their
+    # container shape. Read the established version-1 index in place and let
+    # the next ordinary write upgrade it atomically.
+    data["version"] = RECENT_RUNS_VERSION
     return data
 
 

@@ -22,6 +22,7 @@ from .training_history import history_payload as training_history_payload, all_h
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .prune_candidates import prune_candidates_response
 from .training_setup import ensure_training_setup
+from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .training_runtime import repair_boot_critical_training_permissions, repair_configured_training_root_permissions
 from .permissions import normalize_path_permissions, run_with_directory_repair
@@ -379,6 +380,48 @@ def training_setup_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/training_review", methods=["POST"])
+def training_review_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        folder_path = safe_join_fs_root((data.get("folder") or "").strip())
+        payload = prepare_training_review(
+            folder_path,
+            data.get("profileId") or "wan22_t2v",
+            data.get("runId") or "",
+            data.get("selected_media"),
+            data.get("selection_criteria"),
+            data.get("total_media_count"),
+            data.get("fallback_captions"),
+            resume_action_id=data.get("resumeActionId") or "",
+        )
+        return jsonify(payload)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_review/update", methods=["POST"])
+def training_review_update_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        folder_path = safe_join_fs_root((data.get("folder") or "").strip())
+        payload = update_training_review(folder_path, data.get("profileId") or "wan22_t2v", data)
+        return jsonify(payload)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_initializers", methods=["GET"])
+def training_initializers_route():
+    try:
+        folder_path = safe_join_fs_root((request.args.get("folder") or "").strip())
+        return jsonify({"ok": True, "exports": discover_saved_initializers(
+            folder_path, request.args.get("profileId") or "", request.args.get("stage") or "",
+        )})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/h3_probe/prepare", methods=["POST"])
 def h3_probe_prepare_route():
     data = request.get_json(silent=True) or {}
@@ -437,6 +480,9 @@ def train_run_route():
         mode=data.get("mode") or "normal", selected_media=data.get("selected_media"),
         fallback_captions=data.get("fallback_captions"), selection_criteria=data.get("selection_criteria"),
         total_media_count=data.get("total_media_count"),
+        review_fingerprint=data.get("reviewFingerprint") or "", review_intent=data.get("reviewIntent"),
+        initializer_action_id=data.get("initializerActionId") or "", initializer_export_id=data.get("initializerExportId") or "",
+        initializer_stage=data.get("initializerStage") or "", force_constant_lr=data.get("forceConstantLr"),
     )
 
 
@@ -453,6 +499,11 @@ def training_runner_validate_route():
         data.get("profileId") or "",
         data.get("runId") or "",
         data.get("mode") or "normal",
+        data.get("reviewFingerprint") or "",
+        data.get("selected_media"),
+        data.get("fallback_captions"),
+        data.get("selection_criteria"),
+        data.get("total_media_count"),
     )
     return jsonify(payload), status
 
@@ -477,6 +528,12 @@ def training_runner_start_route():
         fallback_captions=data.get("fallback_captions"),
         selection_criteria=data.get("selection_criteria"),
         total_media_count=data.get("total_media_count"),
+        review_fingerprint=data.get("reviewFingerprint") or "",
+        review_intent=data.get("reviewIntent"),
+        initializer_action_id=data.get("initializerActionId") or "",
+        initializer_export_id=data.get("initializerExportId") or "",
+        initializer_stage=data.get("initializerStage") or "",
+        force_constant_lr=data.get("forceConstantLr"),
     )
     return jsonify(payload), status
 

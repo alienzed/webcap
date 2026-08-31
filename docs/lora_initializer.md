@@ -1,8 +1,7 @@
 # Fine-Tune From A Saved LoRA Run
 
-Status: implementation-ready plan, reviewed against the action-layout runner
-and a real MiniMax H3 initializer failure on 2026-08-30. No WebCap behavior
-described here is implemented yet.
+Status: implemented in Training Review. This document retains the validation
+rationale and the training-machine evidence behind the workflow.
 
 ## First-Version Decisions
 
@@ -12,8 +11,8 @@ The first implementation uses these boundaries:
   queue jobs, and new trainer output. It never reuses checkpoint state.
 - Discovery starts from durable `action.json` output records under
   `FS_ROOT/output/runs`, not from disposable Recent Runs history.
-- Candidates may come from any managed WebCap action, including another set,
-  but must match the selected profile and target stage.
+- Candidates come only from managed WebCap actions for the current set and
+  must match the selected model, adapter shape, and target stage.
 - Wan2.2 HI can initialize HI and LO can initialize LO. Cross-stage
   initialization is not offered.
 - The selected `epochN/` directory is copied into the new action's
@@ -24,12 +23,11 @@ The first implementation uses these boundaries:
   direct matches.
 - The client sends opaque action/export identities. It never sends an
   initializer filesystem path or TOML fragment.
-- A blank Constant LR remains blank. WebCap does not remember or invent a
-  fine-tune learning rate.
-- The first slice uses the training setup dropdown. A Recent Runs shortcut is
-  follow-up polish, not core scope.
-- Managed runs own this workflow initially. The manual-command path retains its
-  existing raw-config escape hatch and does not gain a second initializer UI.
+- Fine-tune defaults to a run-only constant LR equal to the visible target
+  optimizer LR. It remains editable and warns when it is not lower than the
+  source run.
+- Every new Review starts Fresh; Resume and Fine-tune remain mutually
+  exclusive starting points.
 
 ## Purpose
 
@@ -42,7 +40,7 @@ The intended workflow is to choose a known WebCap run, inspect its saved `.safet
 
 ## Important Diffusion Pipe Detail
 
-Diffusion Pipe's example config uses `[adapter].init_from_existing` with the path to a saved-LoRA **directory**, not a bare `.safetensors` filename. Its training entry point passes that path to the model's adapter loader. The saved `epochN/` directory also carries adapter/config metadata needed to understand the artifact.
+Diffusion Pipe's example config uses `[adapter].init_from_existing` with the path to a saved-LoRA **directory**, not a bare `.safetensors` filename. Its training entry point passes that path to the model's adapter loader. The loader only requires exactly one direct `.safetensors` child; adapter JSON is not required for this workflow.
 
 Therefore WebCap should display the `.safetensors` filename as useful evidence
 but write the selected `epochN/` directory to `adapter.init_from_existing`.

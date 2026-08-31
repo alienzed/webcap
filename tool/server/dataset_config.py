@@ -211,6 +211,9 @@ def training_plan_entries(entries, repeats):
             "upscaledCount": int(entry.get("upscaled_count") or 0),
             "limitingFiles": list(entry.get("limiting_files") or []),
             "numRepeats": int(repeats[index]),
+            "repeatWeight": float(entry.get("repeat_weight", 1.0) or 1.0),
+            "sourceDir": str(entry.get("sourceDir") or ""),
+            "detailIntent": bool(entry.get("detail_intent")),
         })
     return output
 

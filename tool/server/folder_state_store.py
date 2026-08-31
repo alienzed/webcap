@@ -32,6 +32,12 @@ def reject_wholesale_state_map_clear(previous_state, next_state):
                 f"Refusing to clear all {field} entries from folder state. "
                 "Reload the folder and retry the specific edit."
             )
+    previous_plan = previous_state.get("trainingPlan")
+    next_plan = next_state.get("trainingPlan")
+    if isinstance(previous_plan, dict) and previous_plan and (not isinstance(next_plan, dict) or not next_plan):
+        raise FolderStateUnsafeWriteError(
+            "Refusing to erase trainingPlan from folder state. Reload the folder and retry."
+        )
 
 
 def folder_state_exists(state_path):

@@ -14,7 +14,7 @@ from .dataset_prep import (
     write_prepared_caption,
 )
 from .permissions import normalize_path_permissions
-from .training_config_files import with_dataset_path, with_output_dir
+from .training_config_files import apply_captured_initializer, with_dataset_path, with_output_dir
 from .training_profiles import config_for_stage, normalize_mode, profile_for_mode
 from .training_runtime import to_wsl_path
 
@@ -126,6 +126,76 @@ def _link_or_copy(source, destination):
     except OSError:
         shutil.copy2(source, destination)
     normalize_path_permissions(destination)
+
+
+def _materialize_review_stage_dataset(stage, stage_plan, media_root, distribution):
+    """Materialize the exact reviewed memberships into isolated directories."""
+    lines = ["# Captured from WebCap Training Review", "# Every directory below is an immutable reviewed subset."]
+    entries = stage_plan.get("datasetEntries") if isinstance(stage_plan, dict) else []
+    if not isinstance(entries, list):
+        entries = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+        bucket = entry.get("bucket") or []
+        kind = str(entry.get("kind") or "")
+        if kind not in ("image", "video") or len(bucket) != (2 if kind == "image" else 3):
+            raise ValueError("Training Review contains an invalid captured bucket.")
+        source_dir = str(entry.get("sourceDir") or "").strip()
+        if not source_dir:
+            raise ValueError("Training Review entry is missing its source directory.")
+        target_dir = Path(media_root) / "review" / str(stage) / (str(index).zfill(3) + "-" + kind)
+        for filename in entry.get("files") or []:
+            name = Path(str(filename)).name
+            if not name or name != str(filename):
+                raise ValueError("Training Review contains an unsafe media filename.")
+            source = Path(media_root) / source_dir / name
+            caption = source.with_suffix(".txt")
+            if not source.is_file() or not caption.is_file():
+                raise FileNotFoundError("Reviewed captured source is unavailable: " + str(source))
+            _link_or_copy(source, target_dir / name)
+            _link_or_copy(caption, target_dir / caption.name)
+        wsl_path = to_wsl_path(target_dir, distribution)
+        lines.extend(["", "[[directory]]", 'path = "' + wsl_path + '"', "num_repeats = " + str(int(entry.get("numRepeats") or 1)), 'group = "' + ("images" if kind == "image" else "videos") + '"'])
+        if bool(entry.get("detailIntent")):
+            lines.append("# webcap_detail_subset = true")
+        lines.append("size_buckets = [")
+        lines.append("  [" + ", ".join(str(int(value)) for value in bucket) + "],")
+        lines.append("]")
+    rendered = "\n".join(lines) + "\n"
+    try:
+        tomllib.loads(rendered)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError("Captured Training Review dataset is invalid: " + str(exc)) from exc
+    return rendered
+
+
+def _capture_initializer(initializer, input_root):
+    if not isinstance(initializer, dict):
+        return None
+    source = Path(initializer.get("sourcePath") or "")
+    export_id = str(initializer.get("exportId") or "")
+    if not export_id or not re.fullmatch(r"[a-f0-9]{24}", export_id):
+        raise ValueError("Initializer identity is invalid.")
+    if not source.is_dir() or source.is_symlink():
+        raise FileNotFoundError("Initializer export is unavailable.")
+    destination = Path(input_root) / "initializer" / export_id
+    destination.mkdir(parents=True, exist_ok=False)
+    normalize_path_permissions(destination)
+    copied = []
+    for child in source.iterdir():
+        if child.is_symlink() or not child.is_file():
+            if child.is_symlink():
+                raise ValueError("Initializer export contains a symlink.")
+            continue
+        target = destination / child.name
+        shutil.copy2(child, target)
+        normalize_path_permissions(target)
+        copied.append(target)
+    weights = [item for item in copied if item.suffix.lower() == ".safetensors"]
+    if len(weights) != 1:
+        raise ValueError("Captured initializer must contain exactly one direct .safetensors file.")
+    return {"path": destination, "files": copied}
 
 
 def _source_matches_target_fps(source_fps, target_fps):
@@ -481,6 +551,8 @@ def materialize_training_bundle(
     total_media_count=None,
     output_dirs=None,
     distribution="",
+    review=None,
+    initializer=None,
 ):
     folder = Path(folder_path)
     action = Path(action_root)
@@ -550,6 +622,8 @@ def materialize_training_bundle(
     if not copied_rows:
         raise RuntimeError("No media could be captured for training.")
 
+    captured_initializer = _capture_initializer(initializer, input_root) if initializer else None
+
     resolved = {
         item["id"]: item
         for item in selected_profile["configs"]
@@ -564,18 +638,16 @@ def materialize_training_bundle(
         if not source_dataset.is_file() or not source_config.is_file():
             raise FileNotFoundError("Missing inspected training TOML for " + stage + ".")
         dataset_target = configs_root / item["dataset"]
-        dataset_target.write_text(
-            _materialize_dataset_config(
-                source_dataset.read_text(encoding="utf-8"),
-                media_root,
-                distribution,
-                manifest,
-                stage,
-                profile_id=profile_id,
-                mode=selected_mode,
-            ),
-            encoding="utf-8",
+        reviewed_stage = ((review or {}).get("review") or {}).get("stages", {}).get(stage) if isinstance(review, dict) else None
+        dataset_text = (
+            _materialize_review_stage_dataset(stage, reviewed_stage, media_root, distribution)
+            if isinstance(reviewed_stage, dict)
+            else _materialize_dataset_config(
+                source_dataset.read_text(encoding="utf-8"), media_root, distribution, manifest, stage,
+                profile_id=profile_id, mode=selected_mode,
+            )
         )
+        dataset_target.write_text(dataset_text, encoding="utf-8")
         normalize_path_permissions(dataset_target)
         dataset_wsl = to_wsl_path(dataset_target, distribution)
         output_dir = str(output_dirs.get(stage) or "").strip()
@@ -584,6 +656,12 @@ def materialize_training_bundle(
         config_text = source_config.read_text(encoding="utf-8")
         config_text = with_dataset_path(config_text, dataset_wsl)
         config_text = with_output_dir(config_text, output_dir)
+        if captured_initializer and str(initializer.get("stage") or "") == stage:
+            config_text = apply_captured_initializer(
+                config_text,
+                to_wsl_path(captured_initializer["path"], distribution),
+                initializer.get("forceConstantLr"),
+            )
         config_target = configs_root / item["file"]
         config_target.write_text(config_text, encoding="utf-8")
         normalize_path_permissions(config_target)
@@ -591,13 +669,8 @@ def materialize_training_bundle(
         bundle_artifacts[stage + "Dataset"] = dataset_target
         config_paths[stage] = source_config
 
-    plan_artifacts = build_dataset_config_artifacts(
-        folder,
-        manifest,
-        media_root,
-        mode=selected_mode,
-        profile_id=profile_id,
-        config_paths=config_paths,
+    plan_artifacts = {"plan": (review or {}).get("review")} if isinstance(review, dict) and isinstance((review or {}).get("review"), dict) else build_dataset_config_artifacts(
+        folder, manifest, media_root, mode=selected_mode, profile_id=profile_id, config_paths=config_paths,
     )
     plan_path = record_root / "training_plan.json"
     plan_path.write_text(json.dumps(plan_artifacts["plan"], indent=2), encoding="utf-8")
@@ -618,6 +691,8 @@ def materialize_training_bundle(
     bundle_artifacts["manifest"] = manifest_path
     bundle_artifacts["plan"] = plan_path
     bundle_artifacts["summary"] = summary_path
+    if captured_initializer:
+        bundle_artifacts["initializer"] = captured_initializer["path"]
     return {
         "path": action,
         "recordPath": record_root,
@@ -627,4 +702,9 @@ def materialize_training_bundle(
         "plan": plan_artifacts["plan"],
         "summary": summary,
         "capturedItemCount": len(copied_rows),
+        "initializer": {
+            "actionId": initializer.get("actionId"), "exportId": initializer.get("exportId"),
+            "stage": initializer.get("stage"), "epoch": initializer.get("epoch"),
+            "capturedPath": captured_initializer["path"].relative_to(action).as_posix(),
+        } if captured_initializer else {},
     }

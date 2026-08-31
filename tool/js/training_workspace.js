@@ -415,11 +415,13 @@ function refreshTrainingWorkspace() {
     .then(function () {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return null;
       syncTrainingModelProfileSelect(folder);
+      trainingWorkspaceState.selectedMode = 'normal';
+      syncTrainingWorkspaceProfile();
       return ensureSelectedTrainingSetup();
     })
     .then(function () {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return [];
-      return Promise.all([fetchTrainingWorkspaceConfigFiles(folder), refreshTrainingHistory()]);
+      return Promise.all([fetchTrainingWorkspaceConfigFiles(folder), refreshTrainingHistory(), refreshTrainingReview()]);
     })
     .then(function (results) {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
@@ -439,6 +441,14 @@ function refreshTrainingWorkspace() {
 }
 
 function runTrainingWorkspaceAction(options) {
+  if (trainingWorkspaceState.review && trainingWorkspaceState.review.customDataset) {
+    // Custom dataset TOMLs stay an explicit raw-command escape hatch.  They
+    // are never reconstructed from the structured Review plan.
+    options = Object.assign({}, options, {
+      reviewFingerprint: '', initializerActionId: '', initializerExportId: '', initializerStage: '', forceConstantLr: '',
+      reviewIntent: { startingPoint: 'fresh', customDataset: true }
+    });
+  }
   var request = runTrainCommandPreviewForCurrentFolder(options);
   syncWorkspaceConfigEditorUi();
   Promise.resolve(request)
@@ -539,6 +549,11 @@ function wireTrainingWorkspace() {
   stageButtons.forEach(function (button) {
     button.onclick = function () {
       setManagedTrainingStages(button.getAttribute('data-training-stage'));
+      trainingWorkspaceState.reviewInitializerStage = '';
+      trainingWorkspaceState.reviewInitializerExportId = '';
+      refreshTrainingReview().catch(function (err) {
+        setStatus('Could not refresh Training Review: ' + String(err && err.message ? err.message : err));
+      });
     };
   });
   setManagedTrainingStages(trainingWorkspaceState.runStages);
@@ -551,7 +566,11 @@ function wireTrainingWorkspace() {
     if (selectedRun && (selectedRun.stage === 'hi' || selectedRun.stage === 'lo') && resumeStageSelect) {
       resumeStageSelect.value = selectedRun.stage;
     }
+    trainingWorkspaceState.reviewStartingPoint = checkpointSelect.value ? 'resume' : 'fresh';
     syncManagedTrainingResumeUi();
+    refreshTrainingReview().catch(function (err) {
+      setStatus('Could not load the selected run review: ' + String(err && err.message ? err.message : err));
+    });
   };
   if (resumeStageSelect) resumeStageSelect.onchange = function () {
     renderTrainingHistory();

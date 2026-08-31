@@ -19,6 +19,7 @@ from .permissions import normalize_path_permissions
 from .training_commands import build_h3_command_plan, build_training_command_plan
 from .training_profiles import config_for_stage, normalize_mode, profile_for_mode, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
+from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets_for_mode
 from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume
 from .training_action import allocate_action, action_paths, fingerprint_files, read_action, update_action
@@ -1397,7 +1398,7 @@ def _public_job(job):
     return payload
 
 
-def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal"):
+def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", review_fingerprint="", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
     try:
         if str(resume_from_checkpoint or "").strip():
             raise ValueError("Managed Train accepts only a selected WebCap action checkpoint.")
@@ -1411,6 +1412,16 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
         resume_stage = _normalize_resume_stage(stages, "managed" if requested_resume else "", resume_stage)
         selected_mode = normalize_mode(mode)
         _, folder_path = _resolve_folder(folder)
+        if review_fingerprint and not requested_resume:
+            selected_profile, selected_run = profile_run(profile_id, run_id, stages)
+            review = prepare_training_review(
+                folder_path, selected_profile["id"], selected_run["id"], selected_media,
+                selection_criteria, total_media_count, fallback_captions, persist=False,
+            )
+            if str(review.get("reviewFingerprint") or "") != str(review_fingerprint):
+                return {"ok": False, "error": "Training Review is stale. Reload it before validating.", "staleReview": review, "checks": [], "summary": {"blockers": 1, "warnings": 0}}, 409
+            if not review.get("ok"):
+                return {"ok": False, "error": "Training Review has blockers.", "review": review, "checks": [], "summary": {"blockers": len(review.get("blockers") or []), "warnings": len(review.get("warnings") or [])}}, 200
         resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage) if requested_resume else None
         bundle = _bundle_from_action(resume_action_id, profile_id, selected_mode, stages) if resume else None
         payload = _preflight_payload(folder, stages, profile_id=profile_id, mode=selected_mode, artifacts_override=bundle["artifacts"] if bundle else None)
@@ -1599,6 +1610,12 @@ def start_response(
     fallback_captions=None,
     selection_criteria=None,
     total_media_count=None,
+    review_fingerprint="",
+    review_intent=None,
+    initializer_action_id="",
+    initializer_export_id="",
+    initializer_stage="",
+    force_constant_lr=None,
 ):
     if str(resume_from_checkpoint or "").strip():
         return {"ok": False, "error": "Managed Train accepts only a selected WebCap action checkpoint."}, 400
@@ -1621,6 +1638,34 @@ def start_response(
         if resume and (resume["action"].get("profileId") != selected_profile["id"] or resume["action"].get("mode") != selected_mode):
             return {"ok": False, "error": "The selected checkpoint does not match the chosen training profile."}, 400
         bundle = _bundle_from_action(resume_action_id, selected_profile["id"], selected_mode, stages) if resume else None
+        review = None
+        if review_fingerprint and not resume:
+            review = prepare_training_review(
+                folder_path,
+                selected_profile["id"],
+                selected_run["id"],
+                selected_media,
+                selection_criteria,
+                total_media_count,
+                fallback_captions,
+                persist=False,
+            )
+            if str(review.get("reviewFingerprint") or "") != str(review_fingerprint):
+                return {"ok": False, "error": "Training Review is stale. Reload it before queueing.", "staleReview": review}, 409
+            if not review.get("ok"):
+                return {"ok": False, "error": "Training Review has blockers.", "review": review}, 400
+        initializer = None
+        if initializer_action_id or initializer_export_id or initializer_stage:
+            if resume:
+                return {"ok": False, "error": "Checkpoint Resume and LoRA initialization cannot be combined."}, 400
+            if not (initializer_action_id and initializer_export_id and initializer_stage):
+                return {"ok": False, "error": "Saved LoRA initialization needs an action, export, and target stage."}, 400
+            if initializer_stage not in (("hi", "lo") if stages == "both" else (stages,)):
+                return {"ok": False, "error": "Initializer target stage does not belong to this run."}, 400
+            initializer = resolve_saved_initializer(folder_path, selected_profile["id"], initializer_stage, initializer_action_id, initializer_export_id)
+            initializer["stage"] = initializer_stage
+            reviewed_settings = (((review or {}).get("review") or {}).get("stages", {}).get(initializer_stage, {}).get("settings") or {})
+            initializer["forceConstantLr"] = force_constant_lr if force_constant_lr not in (None, "") else reviewed_settings.get("optimizerLr")
         _, folder_path, _, _, checks = _build_launch_preflight(
             folder,
             stages,
@@ -1684,6 +1729,8 @@ def start_response(
                     total_media_count=total_media_count,
                     output_dirs=output_dirs,
                     distribution=distribution,
+                    review=review,
+                    initializer=initializer,
                 )
                 def recorded(data):
                     data["record"].update({
@@ -1692,7 +1739,16 @@ def start_response(
                         "selectionCriteria": selection_criteria or {},
                         "inputFingerprint": fingerprint_files([bundle["artifacts"]["manifest"]]),
                         "configFingerprint": fingerprint_files([value for key, value in bundle["artifacts"].items() if key.endswith("Config")]),
+                        "review": {
+                            "fingerprint": str(review_fingerprint or ""),
+                            "warnings": list((review or {}).get("warnings") or []),
+                            "excluded": list(((review or {}).get("review") or {}).get("excluded") or []),
+                        },
                     })
+                    if isinstance(review_intent, dict):
+                        data["intent"] = review_intent
+                    if bundle.get("initializer"):
+                        data["initializer"] = bundle["initializer"]
                 update_action(action_root.name, recorded)
             except Exception as exc:
                 return {"ok": False, "error": "Could not create the run dataset: " + str(exc)}, 400

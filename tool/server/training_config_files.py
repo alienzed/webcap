@@ -1,4 +1,7 @@
+import json
+import math
 import re
+import tomllib
 from pathlib import Path
 
 from . import config as app_config
@@ -49,6 +52,7 @@ _OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']
 _OUTPUT_DIR_LINE_PATTERN = re.compile(r'^(\s*output_dir\s*=\s*)["\'][^"\']+["\'](\s*(?:#.*)?)$', re.MULTILINE)
 _DATASET_LINE_PATTERN = re.compile(r'^(\s*dataset\s*=\s*)["\'][^"\']+["\'](\s*(?:#.*)?)$', re.MULTILINE)
 _OUTPUT_PREFIX_PATTERN = re.compile(r"^(\d{3})-")
+_TABLE_PATTERN = re.compile(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$", re.MULTILINE)
 
 # Last-resort values only if a canonical template is missing or malformed.
 _FALLBACK_HI_EPOCHS = 50
@@ -188,6 +192,111 @@ def with_dataset_path(config_text: str, dataset_path):
     if count != 1:
         raise ValueError("Training config template is missing dataset.")
     return updated
+
+
+def _toml_number(value, label):
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(label + " must be a finite number.") from exc
+    if not math.isfinite(number) or number <= 0:
+        raise ValueError(label + " must be a positive finite number.")
+    return format(number, ".12g")
+
+
+def _toml_positive_int(value, label):
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(label + " must be a positive integer.") from exc
+    if number <= 0:
+        raise ValueError(label + " must be a positive integer.")
+    return str(number)
+
+
+def rewrite_toml_assignment(text, key, value=None, section=""):
+    """Replace one owned assignment while preserving all unrelated TOML text."""
+    table = str(section or "").strip()
+    key_pattern = re.compile(r"^(\s*" + re.escape(key) + r"\s*=\s*)([^\n]*)(\n?)$", re.MULTILINE)
+    matches = list(_TABLE_PATTERN.finditer(text))
+    start = 0
+    end = len(text)
+    if table:
+        target = next((item for item in matches if item.group(1).strip() == table), None)
+        if target is None:
+            suffix = "" if text.endswith("\n") else "\n"
+            rendered = suffix + "[" + table + "]\n"
+            if value is not None:
+                rendered += key + " = " + str(value) + "\n"
+            return text + rendered
+        start = target.end()
+        following = next((item for item in matches if item.start() >= start), None)
+        end = following.start() if following is not None else len(text)
+    else:
+        end = matches[0].start() if matches else len(text)
+    chunk = text[start:end]
+    match = key_pattern.search(chunk)
+    if match is not None:
+        if value is None:
+            chunk = chunk[:match.start()] + chunk[match.end():]
+        else:
+            newline = match.group(3) or "\n"
+            chunk = chunk[:match.start()] + match.group(1) + str(value) + newline + chunk[match.end():]
+        return text[:start] + chunk + text[end:]
+    if value is None:
+        return text
+    insertion = key + " = " + str(value) + "\n"
+    return text[:end] + ("" if text[:end].endswith("\n") else "\n") + insertion + text[end:]
+
+
+def apply_review_config_settings(config_text, settings):
+    """Apply the small, user-facing Training Review config surface.
+
+    Values are deliberately limited to known scalar keys. This is not a TOML
+    editor and never accepts a raw fragment or a caller-selected table path.
+    """
+    source = str(config_text or "")
+    data = settings if isinstance(settings, dict) else {}
+    if "optimizerLr" in data:
+        source = rewrite_toml_assignment(source, "lr", _toml_number(data["optimizerLr"], "Optimizer LR"), "optimizer")
+    if "adapterRank" in data:
+        source = rewrite_toml_assignment(source, "rank", _toml_positive_int(data["adapterRank"], "LoRA rank"), "adapter")
+    if "adapterDropout" in data:
+        raw_dropout = data["adapterDropout"]
+        if raw_dropout in (None, ""):
+            source = rewrite_toml_assignment(source, "dropout", None, "adapter")
+        else:
+            try:
+                dropout = float(raw_dropout)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("LoRA dropout must be a number from 0 to 1.") from exc
+            if not math.isfinite(dropout) or dropout < 0 or dropout > 1:
+                raise ValueError("LoRA dropout must be a number from 0 to 1.")
+            source = rewrite_toml_assignment(source, "dropout", format(dropout, ".12g"), "adapter")
+    if "forceConstantLr" in data:
+        raw_constant = data["forceConstantLr"]
+        source = rewrite_toml_assignment(
+            source,
+            "force_constant_lr",
+            None if raw_constant in (None, "", False) else _toml_number(raw_constant, "Constant LR"),
+        )
+    try:
+        tomllib.loads(source)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError("Training Review produced invalid TOML: " + str(exc)) from exc
+    return source
+
+
+def apply_captured_initializer(config_text, initializer_dir, force_constant_lr=None):
+    """Write run-only LoRA lineage into a captured config, never a set TOML."""
+    source = rewrite_toml_assignment(str(config_text or ""), "init_from_existing", json.dumps(str(initializer_dir).replace("\\", "/")), "adapter")
+    if force_constant_lr not in (None, ""):
+        source = rewrite_toml_assignment(source, "force_constant_lr", _toml_number(force_constant_lr, "Constant LR"))
+    try:
+        tomllib.loads(source)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError("Captured initializer config is invalid: " + str(exc)) from exc
+    return source
 
 
 def _render_mode_config(folder, profile_id, stage, mode, reset=False):

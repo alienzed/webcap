@@ -21,6 +21,7 @@ Start here when you need to know what the app does today:
 - `docs/filtered_selection_set.md` - visible-media training capture behavior
 - `docs/train.md` - run capture, managed queue, Resume, and manual-handoff behavior
 - `docs/training_profiles.md` - supported models, persistent files, media requirements, and output roots
+- `docs/training_review.md` - reviewed bucket plans, effective settings, and immutable launch evidence
 - `docs/dataset_config.md` - generated dataset roles, direct-folder capture, and saved-TOML behavior
 - `docs/image_bucketing.md` - single-bucket image selection and audit behavior
 - `docs/src_videos_semantics.md` - current `src_videos` rules

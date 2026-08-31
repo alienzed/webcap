@@ -10,6 +10,9 @@ function sanitizeFolderState(data) {
   var stats = src.stats || {};
   var primer = src.primer || {};
   var mediaFilters = (src.media_filters && typeof src.media_filters === 'object') ? src.media_filters : {};
+  var trainingPlan = (src.trainingPlan && typeof src.trainingPlan === 'object' && !Array.isArray(src.trainingPlan))
+    ? JSON.parse(JSON.stringify(src.trainingPlan))
+    : {};
   var reviewRulesValue = Array.isArray(stats.reviewRules)
     ? JSON.parse(JSON.stringify(stats.reviewRules))
     : (typeof stats.reviewRules === 'string' ? String(stats.reviewRules) : []);
@@ -122,7 +125,8 @@ function sanitizeFolderState(data) {
     },
     caption_tags_by_media: tagMap,
     ratings_by_media: ratingsByMedia,
-    mutated_media_keys: mutatedMediaKeys
+    mutated_media_keys: mutatedMediaKeys,
+    trainingPlan: trainingPlan
   };
 }
 
@@ -279,7 +283,10 @@ function snapshotFolderStateFromDom() {
     media_filters: mediaFilters,
     caption_tags_by_media: tagsByMedia,
     ratings_by_media: ratingsByMedia,
-    mutated_media_keys: mutatedKeys
+    mutated_media_keys: mutatedKeys,
+    trainingPlan: (state.trainingPlan && typeof state.trainingPlan === 'object')
+      ? JSON.parse(JSON.stringify(state.trainingPlan))
+      : {}
   });
 }
 
@@ -313,6 +320,9 @@ function applyFolderStateToDom(folderState) {
     : {};
   state.mutatedSet = new Set(Array.isArray(clean.mutated_media_keys) ? clean.mutated_media_keys : []);
   state.mutatedByMediaSource = {};
+  state.trainingPlan = (clean.trainingPlan && typeof clean.trainingPlan === 'object')
+    ? clean.trainingPlan
+    : {};
   state.mutatedSet.forEach(function (key) {
     state.mutatedByMediaSource[key] = 'best_effort';
   });

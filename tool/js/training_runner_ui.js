@@ -397,7 +397,12 @@ function validateTrainingRunner(options) {
       mode: options && options.mode ? options.mode : 'normal',
       resumeStage: options && options.resumeStage ? options.resumeStage : '',
       resumeActionId: options && options.resumeActionId ? options.resumeActionId : '',
-      resumeOutputId: options && options.resumeOutputId ? options.resumeOutputId : ''
+      resumeOutputId: options && options.resumeOutputId ? options.resumeOutputId : '',
+      reviewFingerprint: options && options.reviewFingerprint ? options.reviewFingerprint : '',
+      selected_media: getVisibleMediaSelectionForTraining(),
+      fallback_captions: buildTrainingFallbackCaptions(getVisibleMediaSelectionForTraining()).fallbackCaptions,
+      selection_criteria: buildTrainingSelectionCriteria(),
+      total_media_count: Array.isArray(state.items) ? state.items.length : 0
     }),
     allowNotOk: true
   }).then(function (payload) {
@@ -416,17 +421,29 @@ function getManagedTrainingOptions() {
   if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21' && stages !== 'h3') stages = 'both';
   var selectedProfile = getSelectedTrainingModelProfile();
   var selectedRun = getTrainingProfileRunForStage(selectedProfile, stages);
+  var startingPoint = String(trainingWorkspaceState.reviewStartingPoint || 'fresh');
+  var initializer = (trainingWorkspaceState.reviewInitializers || []).filter(function (item) {
+    return item && item.exportId === trainingWorkspaceState.reviewInitializerExportId;
+  })[0] || null;
+  var usingInitializer = startingPoint === 'initializer' && initializer;
+  var usingResume = startingPoint === 'resume';
   return {
     stages: stages,
     profileId: selectedProfile ? selectedProfile.id : '',
     runId: selectedRun ? selectedRun.id : '',
     mode: normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode),
-    resumeFromCheckpoint: manualResumeEl ? String(manualResumeEl.value || '').trim() : '',
+    resumeFromCheckpoint: usingInitializer || !usingResume ? '' : (manualResumeEl ? String(manualResumeEl.value || '').trim() : ''),
     runName: runNameEl ? String(runNameEl.value || '').trim() : '',
-    resumeOutputId: checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : '',
-    resumeActionId: checkpointEl && checkpointEl.selectedOptions && checkpointEl.selectedOptions[0] ? String(checkpointEl.selectedOptions[0].getAttribute('data-action-id') || '') : '',
+    resumeOutputId: usingResume ? (checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : '') : '',
+    resumeActionId: usingResume ? (checkpointEl && checkpointEl.selectedOptions && checkpointEl.selectedOptions[0] ? String(checkpointEl.selectedOptions[0].getAttribute('data-action-id') || '') : '') : '',
     resumeStage: stages === 'both' ? (resumeStageEl ? String(resumeStageEl.value || 'lo') : 'lo') : stages,
-    parentJobId: ''
+    parentJobId: '',
+    reviewFingerprint: String(trainingWorkspaceState.review && trainingWorkspaceState.review.reviewFingerprint || ''),
+    reviewIntent: usingInitializer ? { startingPoint: 'initializer', sourceActionId: initializer.actionId, epoch: initializer.epoch, stage: trainingWorkspaceState.reviewInitializerStage } : { startingPoint: usingResume ? 'resume' : 'fresh' },
+    initializerActionId: usingInitializer ? String(initializer.actionId || '') : '',
+    initializerExportId: usingInitializer ? String(initializer.exportId || '') : '',
+    initializerStage: usingInitializer ? String(trainingWorkspaceState.reviewInitializerStage || initializer.stage || '') : '',
+    forceConstantLr: usingInitializer ? String(trainingWorkspaceState.reviewForceConstantLr || '') : ''
   };
 }
 
@@ -508,8 +525,14 @@ function startManagedTraining() {
            runName: options.runName,
           selected_media: selectedMedia,
           total_media_count: Array.isArray(state.items) ? state.items.length : 0,
-          selection_criteria: buildTrainingSelectionCriteria(),
-          fallback_captions: fallbackResult.fallbackCaptions
+           selection_criteria: buildTrainingSelectionCriteria(),
+           fallback_captions: fallbackResult.fallbackCaptions,
+           reviewFingerprint: options.reviewFingerprint,
+           reviewIntent: options.reviewIntent,
+           initializerActionId: options.initializerActionId,
+           initializerExportId: options.initializerExportId,
+           initializerStage: options.initializerStage,
+           forceConstantLr: options.forceConstantLr
         })
       });
     })

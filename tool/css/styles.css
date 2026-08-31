@@ -1765,6 +1765,23 @@ iframe {
   font-size: 12px;
 }
 
+.training-run-name-option input {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.training-run-dependent-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  grid-column: 1 / -1;
+  gap: 8px;
+  align-items: end;
+}
+
+.training-run-dependent-fields.hidden {
+  display: none;
+}
+
 .training-run-checkpoint-path {
   min-height: 14px;
   overflow-wrap: anywhere;
@@ -2591,6 +2608,47 @@ iframe {
   margin-top: 6px;
   color: var(--muted);
 }
+
+.training-review {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color, #3d4452);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-bg, #20242c) 88%, #19232d);
+  font-size: 12px;
+  grid-column: 1 / -1;
+}
+.training-review-head, .training-review-stage, .training-review-start, .training-review-role, .training-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.training-review-head { justify-content: space-between; }
+.training-review-head > div { display: flex; gap: 8px; align-items: baseline; }
+.training-review-saved, .training-review-muted, .training-review-estimate { color: var(--muted-text, #a3adba); }
+.training-review-section-title { font-weight: 700; margin-bottom: 4px; }
+.training-review-settings, .training-review-buckets { display: grid; gap: 7px; }
+.training-review-stage { padding: 7px; border-radius: 5px; background: rgba(255,255,255,.035); }
+.training-review-stage label, .training-review-role label { display: inline-flex; gap: 4px; align-items: center; }
+.training-review-stage input, .training-review-stage select, .training-review-role input, .training-review-role select { width: 76px; }
+.training-review-inline-warning { color: #d9a441; }
+.training-review-notices { padding: 8px; border-left: 3px solid #d9a441; background: rgba(217,164,65,.1); }
+.training-review-notices.blockers { border-left-color: #d65a5a; background: rgba(214,90,90,.1); }
+.training-review-notices > div { margin-top: 4px; }
+.training-review-stage-buckets { border-top: 1px solid rgba(255,255,255,.1); padding-top: 7px; }
+.training-review-aspect { margin: 8px 0; padding-left: 8px; border-left: 2px solid rgba(255,255,255,.12); }
+.training-review-ladder { display: flex; flex-wrap: wrap; gap: 4px; margin: 5px 0; }
+.training-review-bucket { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; border: 1px solid rgba(255,255,255,.14); border-radius: 4px; color: var(--muted-text, #a3adba); }
+.training-review-bucket.selected { border-color: #6c9ed5; color: inherit; background: rgba(82,135,196,.12); }
+.training-review-bucket em { font-style: normal; font-size: 11px; opacity: .8; }
+.training-review-role { margin: 6px 0 0 7px; padding: 5px; background: rgba(255,255,255,.025); }
+.training-review-files > details { margin: 5px 0; }
+.training-review-effective pre { max-height: 320px; overflow: auto; white-space: pre; }
+.training-review-effective-stage { display: grid; gap: 6px; margin-top: 7px; }
+.training-advanced-config { margin-top: 8px; }
 
 .workspace-surface-training .training-model-trained-status {
   display: grid;

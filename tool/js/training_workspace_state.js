@@ -41,7 +41,17 @@ var trainingWorkspaceState = {
   historyMetricRequests: {},
   runnerQueueCollapsed: false,
   itemOverviewHidden: false,
-  detailTab: 'items'
+  detailTab: 'items',
+  review: null,
+  reviewPending: false,
+  reviewStartingPoint: 'fresh',
+  reviewInitializerStage: '',
+  reviewInitializers: [],
+  reviewInitializerExportId: '',
+  reviewForceConstantLr: '',
+  reviewSaveQueue: null,
+  reviewSavePending: 0,
+  reviewSaveStatus: 'saved'
 };
 var utilityTrainingTurtleTimer = 0;
 var utilityTrainingTurtleAtLeft = true;
@@ -70,6 +80,7 @@ function getTrainingWorkspaceEls() {
     configStepNumber: document.getElementById('training-workspace-config-step-number'),
     runStepNumber: document.getElementById('training-run-step-number'),
     queueJobBtn: document.getElementById('training-queue-job-btn'),
+    review: document.getElementById('training-review'),
     commandStatus: document.getElementById('training-command-status'),
     commandText: document.getElementById('training-command-text'),
     copyCommandBtn: document.getElementById('training-copy-command-btn'),

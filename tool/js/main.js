@@ -148,7 +148,13 @@ function runTrainCommandPreviewForCurrentFolder(options) {
         selected_media: selectedMedia,
         total_media_count: Array.isArray(state.items) ? state.items.length : 0,
         selection_criteria: buildTrainingSelectionCriteria(),
-        fallback_captions: fallbackResult.fallbackCaptions
+        fallback_captions: fallbackResult.fallbackCaptions,
+        reviewFingerprint: options && options.reviewFingerprint ? options.reviewFingerprint : '',
+        reviewIntent: options && options.reviewIntent ? options.reviewIntent : { startingPoint: 'fresh' },
+        initializerActionId: options && options.initializerActionId ? options.initializerActionId : '',
+        initializerExportId: options && options.initializerExportId ? options.initializerExportId : '',
+        initializerStage: options && options.initializerStage ? options.initializerStage : '',
+        forceConstantLr: options && options.forceConstantLr ? options.forceConstantLr : ''
       });
     })
     .then(function (outputText) {

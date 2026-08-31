@@ -80,6 +80,24 @@ def test_invalid_jobs_cannot_be_silently_replaced_with_an_empty_queue(tmp_path, 
     assert '"activeJobId": "live"' in state_path.read_text(encoding="utf-8")
 
 
+def test_brief_version_4_queue_remains_readable(tmp_path, monkeypatch):
+    root = tmp_path / "training"
+    state_path = root / ".webcap_training" / "queue.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(json.dumps({
+        "version": 4, "activeJobId": "", "jobs": [{"id": "queued", "status": "queued"}],
+        "queuePaused": False, "queuePauseReason": "",
+    }), encoding="utf-8")
+    monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_state_file_seen", None)
+    monkeypatch.setattr(training_runner, "_persisted_managed_job_ids", set())
+
+    state = training_runner._read_state()
+
+    assert state["version"] == 3
+    assert state["jobs"][0]["id"] == "queued"
+
+
 def test_deleted_queue_state_becomes_an_empty_disposable_queue(tmp_path, monkeypatch):
     root = tmp_path / "training"
     monkeypatch.setattr(training_runner.app_config, "FS_ROOT", root)

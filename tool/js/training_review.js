@@ -170,24 +170,42 @@ function reviewCountsHaveItems(counts) {
   return Object.keys(counts || {}).some(function (key) { return Number(counts[key] || 0) > 0; });
 }
 
+function reviewAspectAssignedCount(review, stage, kind, role, ar) {
+  return ((((review || {}).stages || {})[stage] || {}).datasetEntries || []).reduce(function (total, entry) {
+    if (entry.kind !== kind || entry.ar !== ar || (kind === 'video' && entry.role !== role)) return total;
+    return total + Number(entry.eligibleCount || 0);
+  }, 0);
+}
+
 function reviewBucketRows(review, plan, ladders, candidateCounts, stage, kind, role, ar) {
   var candidates = kind === 'image'
     ? (ladders.images[ar] || [])
     : ((ladders.videos[role] && ladders.videos[role][ar]) || []);
   var entries = reviewEntriesByKey(review);
-  return candidates.map(function (bucket) {
+  var roleFrames = ((plan.videoRoles || []).filter(function (item) { return item.id === role; })[0] || {}).frames;
+  var rows = candidates.map(function (bucket) {
     var checked = selectedReviewBucket(plan, stage, kind, role, ar, bucket);
-    var key = stage + '|' + reviewEntryKey({ kind: kind, role: role, ar: ar, bucket: kind === 'image' ? [bucket[0], bucket[1]] : [bucket[0], bucket[1], (plan.videoRoles.filter(function (item) { return item.id === role; })[0] || {}).frames] });
+    var key = stage + '|' + reviewEntryKey({ kind: kind, role: role, ar: ar, bucket: kind === 'image' ? [bucket[0], bucket[1]] : [bucket[0], bucket[1], roleFrames] });
     var entry = entries[key];
     var countKey = bucket[0] + 'x' + bucket[1];
     var prospective = kind === 'image'
       ? Number((((candidateCounts.images || {})[stage] || {})[ar] || {})[countKey] || 0)
       : Number((((candidateCounts.videos || {})[role] || {})[ar] || {})[countKey] || 0);
-    if (!checked && prospective <= 0) return '';
-    var count = entry ? Number(entry.eligibleCount || 0) : prospective;
+    return { bucket: bucket, checked: checked, count: entry ? Number(entry.eligibleCount || 0) : prospective };
+  }).filter(function (row) { return row.checked || row.count > 0; });
+  var maximum = Math.max.apply(Math, [1].concat(rows.map(function (row) { return row.count; })));
+  return rows.map(function (row) {
+    var bucket = row.bucket;
+    var count = row.count;
+    var checked = row.checked;
+    var fill = Math.max(3, Math.round((count / maximum) * 100));
+    var countLabel = count + ' item' + (count === 1 ? '' : 's');
     return '<label class="training-review-bucket' + (checked ? ' selected' : '') + '">' +
-      '<input type="checkbox" data-review-bucket="1" data-stage="' + escapeHtml(stage) + '" data-kind="' + escapeHtml(kind) + '" data-role="' + escapeHtml(role) + '" data-ar="' + escapeHtml(ar) + '" data-bucket="' + bucket.join(',') + '"' + (checked ? ' checked' : '') + '>' +
-      '<span>' + escapeHtml(bucket[0] + '×' + bucket[1]) + '</span><em>' + count + ' item' + (count === 1 ? '' : 's') + (checked ? '' : ' if enabled') + '</em></label>';
+      '<input class="training-review-bucket-check" type="checkbox" data-review-bucket="1" data-stage="' + escapeHtml(stage) + '" data-kind="' + escapeHtml(kind) + '" data-role="' + escapeHtml(role) + '" data-ar="' + escapeHtml(ar) + '" data-bucket="' + bucket.join(',') + '" aria-label="' + escapeHtml(bucket[0] + ' by ' + bucket[1] + ', ' + countLabel + (checked ? ', in plan' : ', would include')) + '"' + (checked ? ' checked' : '') + '>' +
+      '<span class="training-review-bucket-size">' + escapeHtml(bucket[0] + '×' + bucket[1]) + '</span>' +
+      '<strong class="training-review-bucket-count">' + escapeHtml(countLabel) + '</strong>' +
+      '<span class="training-review-bucket-state">' + (checked ? 'in plan' : 'would include') + '</span>' +
+      '<span class="training-review-bucket-meter" aria-hidden="true"><span style="width:' + fill + '%"></span></span></label>';
   }).join('');
 }
 
@@ -257,7 +275,8 @@ function renderTrainingReview() {
         var counts = (((candidateCounts.videos || {})[role.id] || {})[ar] || {});
         return reviewCountsHaveItems(counts);
       }).forEach(function (ar) {
-        html += '<div class="training-review-aspect"><strong>' + escapeHtml(formatReviewAspect(ar)) + '</strong><div class="training-review-ladder">' +
+        var assigned = reviewAspectAssignedCount(review, firstStage, 'video', role.id, ar);
+        html += '<div class="training-review-aspect"><div class="training-review-aspect-head"><strong>' + escapeHtml(formatReviewAspect(ar)) + '</strong><span>' + assigned + ' assigned</span></div><div class="training-review-ladder">' +
           reviewBucketRows(review, plan, ladders, candidateCounts, firstStage, 'video', role.id, ar) + '</div></div>';
       });
       html += '</details>';
@@ -273,7 +292,8 @@ function renderTrainingReview() {
       var counts = ((((candidateCounts.images || {})[stage] || {})[ar]) || {});
       return reviewCountsHaveItems(counts);
     }).forEach(function (ar) {
-      html += '<div class="training-review-aspect"><strong>' + escapeHtml(formatReviewAspect(ar)) + '</strong><div class="training-review-ladder">' +
+      var assigned = reviewAspectAssignedCount(review, stage, 'image', 'image', ar);
+      html += '<div class="training-review-aspect"><div class="training-review-aspect-head"><strong>' + escapeHtml(formatReviewAspect(ar)) + '</strong><span>' + assigned + ' assigned</span></div><div class="training-review-ladder">' +
         reviewBucketRows(review, plan, ladders, candidateCounts, stage, 'image', 'image', ar) + '</div></div>';
     });
     html += '</details>';

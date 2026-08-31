@@ -2640,11 +2640,84 @@ iframe {
 .training-review-notices > div { margin-top: 4px; }
 .training-review-stage-buckets { border-top: 1px solid rgba(255,255,255,.1); padding-top: 7px; }
 .training-review-aspect { margin: 8px 0; padding-left: 8px; border-left: 2px solid rgba(255,255,255,.12); }
-.training-review-ladder { display: flex; flex-wrap: wrap; gap: 4px; margin: 5px 0; }
-.training-review-bucket { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; border: 1px solid rgba(255,255,255,.14); border-radius: 4px; color: var(--muted-text, #a3adba); }
-.training-review-bucket.selected { border-color: #6c9ed5; color: inherit; background: rgba(82,135,196,.12); }
-.training-review-bucket em { font-style: normal; font-size: 11px; opacity: .8; }
+.training-review-aspect-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.training-review-aspect-head span { color: var(--muted-text, #a3adba); font-size: 11px; }
+.training-review-ladder { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 5px; margin: 5px 0; }
+.training-review-bucket {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto 3px;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 1px;
+  min-width: 0;
+  padding: 6px 7px 5px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 6px;
+  background: rgba(255,255,255,.018);
+  color: var(--muted-text, #a3adba);
+  cursor: pointer;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.training-review-bucket:hover { border-color: rgba(108,158,213,.52); background: rgba(108,158,213,.055); }
+.training-review-bucket.selected { border-color: rgba(108,158,213,.8); color: inherit; background: rgba(82,135,196,.11); }
+.training-review-bucket-check {
+  appearance: none;
+  display: grid;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  place-content: center;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 4px;
+  background: rgba(0,0,0,.14);
+}
+.training-review-bucket-check::before {
+  content: '';
+  width: 7px;
+  height: 4px;
+  border: solid #fff;
+  border-width: 0 0 2px 2px;
+  opacity: 0;
+  transform: translateY(-1px) rotate(-45deg);
+}
+.training-review-bucket-check:checked { border-color: #6c9ed5; background: #5788bd; }
+.training-review-bucket-check:checked::before { opacity: 1; }
+.training-review-bucket-size { grid-column: 2; grid-row: 1; overflow: hidden; color: inherit; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.training-review-bucket-count { grid-column: 3; grid-row: 1; color: inherit; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.training-review-bucket-state { grid-column: 2 / 4; grid-row: 2; color: var(--muted-text, #a3adba); font-size: 10px; }
+.training-review-bucket-meter { grid-column: 1 / -1; grid-row: 3; height: 3px; margin: 4px -7px -5px; overflow: hidden; background: rgba(255,255,255,.055); }
+.training-review-bucket-meter > span { display: block; height: 100%; background: rgba(128,157,190,.52); transition: width .15s ease; }
+.training-review-bucket.selected .training-review-bucket-meter > span { background: #6c9ed5; }
 .training-review-role { margin: 6px 0 0 7px; padding: 5px; background: rgba(255,255,255,.025); }
+.training-review-role input[type="checkbox"][data-review-role] {
+  appearance: none;
+  position: relative;
+  width: 30px;
+  height: 16px;
+  margin: 0;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255,255,255,.16);
+  transition: background-color .12s ease;
+}
+.training-review-role input[type="checkbox"][data-review-role]::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #dce3eb;
+  transition: transform .12s ease;
+}
+.training-review-role input[type="checkbox"][data-review-role]:checked { background: #5788bd; }
+.training-review-role input[type="checkbox"][data-review-role]:checked::before { transform: translateX(14px); }
 .training-review-files > details { margin: 5px 0; }
 .training-review-effective pre { max-height: 320px; overflow: auto; white-space: pre; }
 .training-review-effective-stage { display: grid; gap: 6px; margin-top: 7px; }

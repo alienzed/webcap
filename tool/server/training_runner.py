@@ -144,8 +144,12 @@ def _read_state():
         raise TrainingStateError("Could not read the existing training queue state; it was left unchanged: " + str(path)) from exc
     if not isinstance(parsed, dict):
         raise TrainingStateError("Existing training queue state is not a JSON object; it was left unchanged: " + str(path))
-    if parsed.get("version") != 3:
+    if parsed.get("version") not in (3, 4):
         raise TrainingStateError("Unsupported training queue state version; the state was left unchanged: " + str(path))
+    # Version 4 was briefly emitted while the action layout was introduced,
+    # even though the queue schema itself remained additive. Read it too and
+    # return to the established version on the next ordinary state write.
+    parsed["version"] = 3
     parsed.setdefault("activeJobId", "")
     parsed.setdefault("jobs", [])
     parsed.setdefault("queuePaused", False)

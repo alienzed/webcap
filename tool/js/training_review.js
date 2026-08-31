@@ -28,7 +28,8 @@ function trainingReviewRequest(path, payload) {
     body: JSON.stringify(payload)
   }).then(function (response) {
     return response.json().catch(function () { return {}; }).then(function (data) {
-      if (!response.ok || data.ok === false) throw new Error(data.error || 'Training Review request failed.');
+      var isReviewPayload = !!(data && data.review && typeof data.review === 'object');
+      if (!response.ok || (data.ok === false && !isReviewPayload)) throw new Error(data.error || 'Training Review request failed.');
       return data;
     });
   });
@@ -196,7 +197,18 @@ function renderTrainingReview() {
   var payload = trainingWorkspaceState.review;
   renderTrainingStartingPointControls(payload);
   if (!payload) {
-    el.textContent = trainingWorkspaceState.reviewPending ? 'Preparing training review...' : 'Training Review is unavailable.';
+    var trainButton = getTrainingWorkspaceEls().queueJobBtn;
+    if (trainButton) trainButton.disabled = true;
+    if (trainingWorkspaceState.reviewPending) {
+      el.textContent = 'Preparing training review...';
+    } else if (trainingWorkspaceState.reviewError) {
+      el.innerHTML = '<section class="training-review-notices blockers"><strong>Training Review failed</strong><div>' +
+        escapeHtml(trainingWorkspaceState.reviewError) + '</div><button type="button" class="review-captions-btn" data-review-retry>Retry</button></section>';
+      var retry = el.querySelector('[data-review-retry]');
+      if (retry) retry.onclick = function () { refreshTrainingReview().catch(function () {}); };
+    } else {
+      el.textContent = 'Preparing training review...';
+    }
     return;
   }
   var review = payload.review || {};
@@ -344,6 +356,7 @@ function renderTrainingReviewSaveStatus() {
 function refreshTrainingReview() {
   if (!isTrainingWorkspaceActive() || !state.folder) return Promise.resolve(null);
   trainingWorkspaceState.reviewPending = true;
+  trainingWorkspaceState.reviewError = '';
   renderTrainingReview();
   var request = trainingReviewPayload();
   return trainingReviewRequest('/fs/training_review', request).then(function (payload) {
@@ -354,6 +367,7 @@ function refreshTrainingReview() {
   }).catch(function (err) {
     trainingWorkspaceState.reviewPending = false;
     trainingWorkspaceState.review = null;
+    trainingWorkspaceState.reviewError = String(err && err.message ? err.message : err);
     renderTrainingReview();
     throw err;
   });

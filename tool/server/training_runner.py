@@ -98,7 +98,9 @@ def _ensure_runtime_dirs():
 
 
 def _default_state():
-    return {"version": 4, "activeJobId": "", "jobs": [], "queuePaused": False, "queuePauseReason": ""}
+    # Queue fields are additive. Keep the established version so existing
+    # queues remain readable across the action-layout transition.
+    return {"version": 3, "activeJobId": "", "jobs": [], "queuePaused": False, "queuePauseReason": ""}
 
 
 class TrainingStateError(RuntimeError):
@@ -142,8 +144,8 @@ def _read_state():
         raise TrainingStateError("Could not read the existing training queue state; it was left unchanged: " + str(path)) from exc
     if not isinstance(parsed, dict):
         raise TrainingStateError("Existing training queue state is not a JSON object; it was left unchanged: " + str(path))
-    if parsed.get("version") != 4:
-        raise TrainingStateError("Unsupported training queue state version. Rename FS_ROOT/.webcap_training for the action-layout reset; the state was left unchanged: " + str(path))
+    if parsed.get("version") != 3:
+        raise TrainingStateError("Unsupported training queue state version; the state was left unchanged: " + str(path))
     parsed.setdefault("activeJobId", "")
     parsed.setdefault("jobs", [])
     parsed.setdefault("queuePaused", False)

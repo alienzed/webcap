@@ -462,6 +462,11 @@ function setManagedTrainingStages(stages) {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
+  var stageOption = document.getElementById('training-run-stage-option');
+  if (stageOption) {
+    var availableRuns = selectedProfile && Array.isArray(selectedProfile.runs) ? selectedProfile.runs.length : 0;
+    stageOption.classList.toggle('hidden', availableRuns <= 1);
+  }
   syncManagedTrainingResumeUi();
   if (trainingWorkspaceState.history) renderTrainingHistory();
 }

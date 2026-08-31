@@ -136,6 +136,20 @@ def test_prepare_review_returns_effective_tomls_and_predictive_counts(tmp_path):
     assert payload['candidateCounts']['images']['h3']['square']['768x768'] == 1
 
 
+def test_prepare_review_returns_blocked_plan_instead_of_request_failure(tmp_path):
+    folder = tmp_path / 'set'
+    folder.mkdir()
+    Image.new('RGB', (768, 768), color=(12, 24, 36)).save(folder / 'uncaptioned.png')
+
+    payload = training_review.prepare_training_review(
+        folder, MINIMAX_H3_PROFILE_ID, 'train', ['uncaptioned.png'], total_media_count=1,
+    )
+
+    assert payload['ok'] is False
+    assert payload['review']['stages']['h3']['datasetEntries']
+    assert any(blocker['code'] == 'missing_caption' for blocker in payload['blockers'])
+
+
 def test_review_run_choice_contains_only_selected_wan_stage(tmp_path):
     folder = tmp_path / 'set'
     folder.mkdir()

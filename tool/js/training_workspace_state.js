@@ -44,6 +44,7 @@ var trainingWorkspaceState = {
   detailTab: 'items',
   review: null,
   reviewPending: false,
+  reviewError: '',
   reviewStartingPoint: 'fresh',
   reviewInitializerStage: '',
   reviewInitializers: [],

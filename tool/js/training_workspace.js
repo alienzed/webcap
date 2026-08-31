@@ -417,7 +417,7 @@ function refreshTrainingWorkspace() {
       syncTrainingModelProfileSelect(folder);
       trainingWorkspaceState.selectedMode = 'normal';
       syncTrainingWorkspaceProfile();
-      return ensureSelectedTrainingSetup();
+      return getVisibleMediaSelectionForTraining().length ? ensureSelectedTrainingSetup() : Promise.resolve(null);
     })
     .then(function () {
       if (state.folder !== folder || !isTrainingWorkspaceActive()) return [];
@@ -566,7 +566,7 @@ function wireTrainingWorkspace() {
     if (selectedRun && (selectedRun.stage === 'hi' || selectedRun.stage === 'lo') && resumeStageSelect) {
       resumeStageSelect.value = selectedRun.stage;
     }
-    trainingWorkspaceState.reviewStartingPoint = checkpointSelect.value ? 'resume' : 'fresh';
+    trainingWorkspaceState.reviewStartingPoint = 'resume';
     syncManagedTrainingResumeUi();
     refreshTrainingReview().catch(function (err) {
       setStatus('Could not load the selected run review: ' + String(err && err.message ? err.message : err));

@@ -193,7 +193,7 @@ function renderTrainingHistory() {
     ? String((document.getElementById('training-run-resume-stage-select') || {}).value || 'lo')
     : String(trainingWorkspaceState.runStages || '');
   runs = runs.filter(function (run) { return String(run.candidateFor || run.stage || '') === resumeStage; });
-  els.checkpointSelect.innerHTML = '<option value="">Start a new run</option>' + runs.map(function (run) {
+  els.checkpointSelect.innerHTML = '<option value="">Choose a checkpoint…</option>' + runs.map(function (run) {
     var details = [];
     if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
     var setName = String(run.setName || '').trim();

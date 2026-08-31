@@ -1,6 +1,35 @@
 # Fine-Tune From A Saved LoRA Run
 
-Status: planning note. No behavior described here is implemented yet.
+Status: implementation-ready plan, reviewed against the action-layout runner
+and a real MiniMax H3 initializer failure on 2026-08-30. No WebCap behavior
+described here is implemented yet.
+
+## First-Version Decisions
+
+The first implementation uses these boundaries:
+
+- A LoRA initializer always creates a fresh action, fresh captured dataset, new
+  queue jobs, and new trainer output. It never reuses checkpoint state.
+- Discovery starts from durable `action.json` output records under
+  `FS_ROOT/output/runs`, not from disposable Recent Runs history.
+- Candidates may come from any managed WebCap action, including another set,
+  but must match the selected profile and target stage.
+- Wan2.2 HI can initialize HI and LO can initialize LO. Cross-stage
+  initialization is not offered.
+- The selected `epochN/` directory is copied into the new action's
+  `input/initializer/` directory during bundle materialization. The captured
+  copy, not the source export, is written to the captured training config.
+- A candidate directory must contain exactly one direct `.safetensors` file.
+  The installed H3 loader scans a directory and rejects both zero and multiple
+  direct matches.
+- The client sends opaque action/export identities. It never sends an
+  initializer filesystem path or TOML fragment.
+- A blank Constant LR remains blank. WebCap does not remember or invent a
+  fine-tune learning rate.
+- The first slice uses the training setup dropdown. A Recent Runs shortcut is
+  follow-up polish, not core scope.
+- Managed runs own this workflow initially. The manual-command path retains its
+  existing raw-config escape hatch and does not gain a second initializer UI.
 
 ## Purpose
 
@@ -15,7 +44,11 @@ The intended workflow is to choose a known WebCap run, inspect its saved `.safet
 
 Diffusion Pipe's example config uses `[adapter].init_from_existing` with the path to a saved-LoRA **directory**, not a bare `.safetensors` filename. Its training entry point passes that path to the model's adapter loader. The saved `epochN/` directory also carries adapter/config metadata needed to understand the artifact.
 
-Therefore WebCap should display `.safetensors` filenames as useful evidence but write the selected `epochN/` directory to `adapter.init_from_existing`. Bare-file support should not be assumed unless the exact training-machine Diffusion Pipe version is verified to support it.
+Therefore WebCap should display the `.safetensors` filename as useful evidence
+but write the selected `epochN/` directory to `adapter.init_from_existing`.
+The confirmed MiniMax H3 loader scans that directory for one direct
+`.safetensors` file; passing the file path itself yields zero directory matches.
+It also rejects a directory with multiple direct weight files.
 
 References:
 
@@ -25,28 +58,34 @@ References:
 
 ## Proposed Minimal UI
 
-Use the existing resume/source area in the final training setup step. Present one **Starting point** choice:
+Replace the overloaded resume label in the final training setup step with one
+**Starting point** choice:
 
 1. Fresh
 2. Resume checkpoint
 3. Fine-tune from saved LoRA
 
-The first two preserve current behavior. Selecting Fine-tune shows only:
+When Fine-tune is selected, show:
 
-- a saved-export dropdown;
-- **Apply to stage** when the action has more than one stage;
-- an optional **Constant LR** numeric input.
+- **Apply initializer to** for a HI -> LO action;
+- a saved-export dropdown filtered to that target stage;
+- an optional **Constant LR** numeric input;
+- the current target optimizer LR beside the optional override.
 
-The export dropdown is grouped or labeled by existing Recent Runs identity:
+The export dropdown is grouped or labeled by durable action identity:
 
 ```text
 lower lr after face drift · LO · epoch12
   adapter_model.safetensors · 184 MB · Aug 28
 ```
 
-The row identifies the `epochN/` directory while its detail shows all direct-child `.safetensors` files. If a run has no compatible saved export, it is not selectable and the reason is visible.
+The row identifies the source set, named action, stage, and `epochN/` directory
+while its detail shows all direct-child `.safetensors` files. Incompatible
+exports remain visible only when showing their short incompatibility reason is
+useful; otherwise the stage-filtered dropdown contains compatible exports.
 
-Add **Fine-tune from this…** to the existing Recent Run overflow menu as a shortcut. It opens training setup with that source preselected; it does not immediately queue anything.
+**Fine-tune from this...** in Recent Runs may be added after the core path is
+proven. It would only preselect setup state and must never queue immediately.
 
 For a two-stage HI/LO action, require exactly one target stage. One saved adapter must never silently initialize both stage configs because stage model and adapter shapes may differ.
 
@@ -66,54 +105,81 @@ This keeps the UI to one optional number and keeps policy with the user. A later
 
 ## Discovery Must Be Separate From Checkpoint Resume
 
-Current `discover_runs()` is checkpoint-oriented: it discovers a run through a valid `latest` marker that names a real `global_stepN` directory. That is correct for Resume but wrong for saved-LoRA discovery. A user may intentionally remove checkpoint state while retaining `epochN/` exports.
+Current `discover_runs()` is checkpoint-oriented: it discovers a run through a
+valid `latest` marker that names a real `global_stepN` directory. That remains
+unchanged for Resume. Saved-LoRA discovery is separate because a user may
+remove checkpoint state while retaining `epochN/` exports.
 
-Add a narrow saved-export discovery function that starts from recorded `outputRunPath` values and inspects direct children matching `epoch<integer>`. For each candidate, return normalized app-shaped data such as:
+Add a narrow saved-export discovery function that walks the `outputs` recorded
+in managed `action.json` manifests and inspects each recorded trainer run's
+direct children matching `epoch<integer>`. Do not depend on Recent Runs or scan
+unowned output directories. For each candidate, return normalized app-shaped
+data such as:
 
 - source job/run ID and display label;
 - stage, profile, and model identity;
 - export directory path and epoch;
 - direct-child `.safetensors` filenames, sizes, and modified time;
+- an opaque export ID derived from action, stage, recorded run, and epoch;
 - compatible/incompatible state and a short reason.
 
 Do not recursively treat arbitrary `.safetensors` files elsewhere in the output tree as initializers. A manual filesystem browser or global initializer registry is unnecessary for the first version.
 
 ## Validation
 
-Before queueing, WebCap should establish what it can from existing recorded artifacts:
+Before capture, WebCap should establish what it can from existing recorded artifacts:
 
 - the source comes from a recorded timestamped output run under the configured output root;
 - the selected export is a direct `epochN/` child of that run;
-- the export contains at least one direct-child `.safetensors` file;
+- the export contains exactly one direct-child `.safetensors` file;
 - the selected target stage belongs to the requested action;
 - checkpoint Resume and Fine-tune initialization are mutually exclusive;
-- source and target profile/model identity match where the copied configs expose that identity;
-- obvious adapter incompatibilities such as different adapter type, rank, or target modules are rejected when both configs provide those values.
+- source and target profile and stage match;
+- source and target model identity keys from the profile registry match;
+- adapter type and rank match;
+- optional adapter-shape fields such as target modules are rejected when both
+  configs provide different values.
 
 Unknown compatibility should be stated as unknown rather than guessed. The trainer remains the final authority and its error must stay visible.
 
-The backend must revalidate the path and artifact immediately before launch. The client sends a stable source job/export identity, not arbitrary TOML or shell text.
+The backend resolves and revalidates the opaque source immediately before
+capture. It then copies every direct regular file from the selected `epochN/`
+directory into the new action, refusing symlinks and nested path tricks. The
+captured initializer directory and its fingerprint are validated again before
+launch. The client sends stable source identities, not arbitrary TOML or shell
+text.
 
 ## Managed Job And Bundle Behavior
 
-Suggested explicit fields:
+Suggested request fields:
 
-- `initFromExisting`: selected `epochN/` directory path;
-- `initSourceJobId`: originating managed job when known;
-- `initArtifactName`: display `.safetensors` filename or filenames;
-- `initStage`: the one target stage;
+- `initializerActionId`: owning managed action;
+- `initializerExportId`: opaque resolved export identity;
+- `initializerStage`: the one target stage;
 - `forceConstantLr`: optional numeric override.
 
-Persist these in queue state, Recent Runs history, and immutable bundle evidence.
+Persist normalized lineage rather than request fields in action, queue, Recent
+Runs, and bundle evidence: source action, source set/run label, source stage and
+epoch, displayed weight files, captured relative directory, fingerprint, and
+optional Constant LR.
 
 When materializing the normal immutable bundle for the new Train action:
 
-- modify only the captured TOML for `initStage`;
-- set `[adapter].init_from_existing` to the validated export directory;
+- copy the resolved source export to `input/initializer/<export-id>/`;
+- modify only the captured TOML for `initializerStage`;
+- set `[adapter].init_from_existing` to the captured directory's WSL path;
 - set top-level `force_constant_lr` only when explicitly supplied;
 - do not modify the set's editable TOML;
 - do not pass `--resume_from_checkpoint`;
 - let Diffusion Pipe create a new timestamped output run.
+
+Use a small comment-preserving text rewrite helper beside the existing dataset
+and output-dir rewrites. It must require exactly one `[adapter]` table, replace
+an existing `init_from_existing` inside that table when the UI selection is
+explicit, insert it otherwise, and parse the final text with `tomllib`. The LR
+override is a positive finite TOML number at the top level. If it is equal to or
+higher than the target optimizer LR, show a warning but allow the explicit
+choice.
 
 This is a new experiment initialized from old weights, not continuation of the source job. The UI should say `Fine-tuned from <run label> · epochN`, while checkpoint Resume continues to say `Continues <run label>`.
 
@@ -121,41 +187,80 @@ This is a new experiment initialized from old weights, not continuation of the s
 
 There is no new long-lived process ownership. The existing queue launches and observes the new job exactly like any fresh run.
 
-A queued, starting, or active initializer job protects its selected source `epochN/` directory from WebCap's proposed artifact cleanup. Once the trainer has successfully loaded the adapter, the process owns the in-memory weights and no longer needs the source for that execution. Historical lineage remains useful even if the source is explicitly deleted later, and the UI can mark it as missing.
+The queued action owns a captured copy, so it does not need to protect the
+source `epochN/` directory. Future cleanup may remove the source without
+invalidating the queued action. Historical lineage can still mark the original
+source as missing while retaining the captured evidence used by this run.
 
 ## Likely Change Surface
 
 - `tool/tool.html`: extend the current source/resume controls; add one optional LR field.
-- `tool/js/training_workspace.js`: source mode, export selection, target stage, validation.
-- `tool/js/training_history_ui.js`: **Fine-tune from this…** and lineage display.
-- `tool/server/training_history.py`: separate saved-export discovery and normalized metadata.
+- `tool/js/training_workspace.js` and `tool/js/training_runner_ui.js`: source mode, export selection, target stage, validation, and request fields.
+- `tool/js/training_history_ui.js`: lineage display; the shortcut is optional follow-up.
+- `tool/server/training_history.py`: separate action-owned saved-export discovery, compatibility, and opaque resolution.
+- `tool/server/training_config_files.py`: captured-config initializer and Constant LR rewrites.
 - `tool/server/training_runner.py`: validate/persist initializer fields and keep Resume mutually exclusive.
-- `tool/server/training_bundle.py`: targeted captured-TOML edits and immutable evidence.
+- `tool/server/training_bundle.py`: initializer capture, targeted captured-TOML edits, and immutable evidence.
+- `tool/server/app.py`: one read-only initializer-discovery route plus the existing validate/start request wiring.
 
 No process manager, external artifact registry, filesystem browser, model merge, or trainer fork is required.
 
-## Recommended First Slice
+## Implementation Slices
 
-1. Discover saved `epochN/` exports only from recorded managed output runs.
-2. Add Fine-tune as the third Starting point mode with one selected stage.
-3. Show `.safetensors` evidence but configure the export directory.
-4. Support the optional explicit Constant LR override.
-5. Record and render source lineage.
+### Slice 1: Backend contract and discovery
+
+1. Discover direct `epochN/` exports only beneath action-manifest output records.
+2. Resolve only opaque action/export IDs and reject stale or changed candidates.
+3. Compare profile, stage, model identity, adapter type, rank, and known optional shape fields.
+4. Add focused discovery/resolution tests, including no-`latest` exports,
+   zero/multiple/nested weights, symlinks, cleared Recent Runs, incompatible
+   stages/ranks, and tampered IDs.
+
+### Slice 2: Immutable capture and config rewrite
+
+1. Copy the selected export's direct regular files into the fresh action bundle.
+2. Fingerprint and record the captured initializer evidence.
+3. Write `adapter.init_from_existing` and optional top-level `force_constant_lr` into only the target captured config.
+4. Parse the result and test duplicate keys/tables, replacement, blank LR, scientific notation, path quoting, and untouched non-target configs.
+
+### Slice 3: Runner and persisted lineage
+
+1. Extend validate/start with mutually exclusive Resume and initializer identities.
+2. Recheck captured initializer evidence immediately before queued launch.
+3. Persist compact lineage in `action.json`, queue jobs, public job payloads, and Recent Runs.
+4. Render `Fine-tuned from <action> · <stage> · epochN` separately from `Continues ...`.
+
+### Slice 4: Setup UI
+
+1. Add Fresh / Resume checkpoint / Fine-tune from saved LoRA.
+2. Filter export choices by the selected target stage and show source set, action, epoch, files, and incompatibility details.
+3. Keep Run name enabled for Fine-tune and disabled for Resume.
+4. Show the target optimizer LR and optional Constant LR warning.
+
+### Slice 5: Training-machine proof
+
+1. Use one small known-good export for each supported profile/stage family.
+2. Confirm the installed Diffusion Pipe revision loads the captured directory and creates a new timestamped run without `--resume_from_checkpoint`.
+3. Confirm the first optimizer LR equals the explicit override when supplied.
+4. Only then describe the workflow as supported in `README.md` and `docs/train.md`.
 
 A configurable external initializer folder and manual path escape hatch can remain a later extension if managed-run discovery proves too narrow.
 
-## Open Questions
+## Training-Machine Evidence
 
-- When an export contains multiple `.safetensors` files, does the training-machine adapter loader treat the directory unambiguously? This should be verified with the installed Diffusion Pipe revision.
-- Should compatibility be strict for rank/target modules, or should advanced users be allowed to queue an explicitly acknowledged unknown match?
-- Is the Recent Run shortcut sufficient, or is grouping exports inside the training setup dropdown easier when comparing many experiments?
-- Should Constant LR default blank, or remember the last explicit fine-tune value per profile? The minimal recommendation is blank and visible.
+On 2026-08-30, the installed MiniMax H3 loader rejected a bare
+`ngp-mh3-e21.safetensors` path with `No safetensors file found`. Its loader
+uses `Path(adapter_path).glob('*.safetensors')` and explicitly rejects zero or
+multiple matches. This confirms that a manual H3 initializer must use a
+dedicated directory containing exactly one direct weights file. Keep a
+model-family smoke test in the release checklist because other supported
+pipelines may override this loader.
 
 ## Acceptance Criteria
 
 - Checkpoint Resume behavior and command construction are unchanged.
 - Fine-tune selects a recorded `epochN/` export and starts a new output run.
-- WebCap shows the saved `.safetensors` evidence but writes the validated directory path to `adapter.init_from_existing`.
+- WebCap shows the source `.safetensors` evidence but writes the captured initializer directory path to `adapter.init_from_existing`.
 - Exactly one captured stage config is changed; the editable set config is untouched.
 - A supplied Constant LR becomes top-level `force_constant_lr`; blank means no override.
 - Mixed checkpoint/initializer requests and invalid paths fail visibly before launch.

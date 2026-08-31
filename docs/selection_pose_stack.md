@@ -1,5 +1,13 @@
 # Selection Pose Stack
 
+## Status
+
+The core stack is implemented as optional local MediaPipe analysis. It writes
+normalized selection-pose metadata, powers pose summaries and Suggested
+Candidates, and supplies manual annotation suggestions. The proposed face-ROI
+rescue path and further tuning remain design work; this document therefore
+contains both shipped behavior and deferred direction.
+
 ## Purpose
 Define the smallest practical visual-analysis stack for `Review Set` analysis details that can support:
 

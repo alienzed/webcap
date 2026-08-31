@@ -1,5 +1,12 @@
 # Scene Complexity Analysis
 
+## Status
+
+V1 is implemented: the local heuristic is cached in `media_metadata.json` and
+shown in metadata and curation surfaces. It also participates as a light
+context signal for candidate review. A standalone filter, automatic pruning,
+and any stronger workflow coupling remain intentionally deferred.
+
 ## Purpose
 Add image-only scene complexity analysis to WebCap so curation can estimate how visually busy an image is.
 

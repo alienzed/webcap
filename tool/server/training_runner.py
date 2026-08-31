@@ -859,7 +859,7 @@ def _request_job_action(job, action, confirmation_note=""):
     return ""
 
 
-def _save_pause_run_directory(job):
+def _checkpointed_stop_run_directory(job):
     """Find the one Diffusion-Pipe run belonging to this managed job."""
     raw_run_path = str(job.get("outputRunPath") or "").strip()
     if raw_run_path:
@@ -914,60 +914,64 @@ def _recorded_runner_action(job):
     return action if action in ("pause", "finish", "stop") else ""
 
 
-def _request_save_and_pause(job):
+def _request_checkpointed_stop(job, action):
     """Ask Diffusion-Pipe to save its current state and exit without signalling it."""
-    if str(job.get("actionRequested") or "") == "pause":
+    if action not in ("pause", "finish"):
+        raise ValueError("Checkpointed stop action must be Pause or Finish.")
+    action_label = "Pause" if action == "pause" else "Finish"
+    if str(job.get("actionRequested") or "") == action:
         return ""
     if job.get("actionRequested"):
         return "Another runner action is already pending."
     if str(job.get("stage") or "") not in _SAVE_PAUSE_TRAINING_STAGES:
-        return "Save & Pause is available once training has started; caching and setup do not have a resumable checkpoint."
+        return action_label + " is available once training has started; caching and setup do not have a resumable checkpoint."
     pid = _job_runner_pid(job)
     if pid <= 0:
-        return "WebCap has no recorded runner PID, so it cannot request Save & Pause safely."
+        return "WebCap has no recorded runner PID, so it cannot request " + action_label + " safely."
     if not job.get("runnerVerified"):
-        return "WebCap has not verified the recorded runner process, so it cannot request Save & Pause safely."
+        return "WebCap has not verified the recorded runner process, so it cannot request " + action_label + " safely."
     try:
-        run_dir = _save_pause_run_directory(job)
+        run_dir = _checkpointed_stop_run_directory(job)
     except (OSError, RuntimeError, ValueError) as exc:
         return str(exc)
     action_path = _job_action_path(job)
     try:
-        action_path.write_text("pause", encoding="utf-8")
+        action_path.write_text(action, encoding="utf-8")
         normalize_path_permissions(action_path)
         (run_dir / "save_quit").touch(exist_ok=True)
         normalize_path_permissions(run_dir / "save_quit")
     except OSError as exc:
         try:
-            if action_path.read_text(encoding="utf-8").strip() == "pause":
+            if action_path.read_text(encoding="utf-8").strip() == action:
                 action_path.unlink()
         except OSError:
             pass
         return "Could not request the Diffusion-Pipe checkpoint save: " + str(exc)
-    job["actionRequested"] = "pause"
+    job["actionRequested"] = action
     job["actionRequestedAt"] = time.time()
-    job["savePauseLatestMtime"] = _latest_checkpoint_mtime(run_dir)
+    job["checkpointedStopLatestMtime"] = _latest_checkpoint_mtime(run_dir)
     job["status"] = "stopping"
     job["stage"] = "saving"
-    job["confirmationNote"] = "Save & Pause requested. Waiting for the current step and checkpoint save."
+    job["confirmationNote"] = action_label + " requested. Waiting for the current step and checkpoint save."
     job["updatedAt"] = time.time()
     return ""
 
 
-def _save_pause_checkpoint_error(job):
+def _checkpointed_stop_error(job, action):
+    action_label = "Pause" if action == "pause" else "Finish"
     raw_run_path = str(job.get("outputRunPath") or "").strip()
     if not raw_run_path:
-        return "Save & Pause ended without a recorded training run."
+        return action_label + " ended without a recorded training run."
     try:
         run_dir = host_path_for_training_path(raw_run_path)
         latest_mtime = _latest_checkpoint_mtime(run_dir)
-        baseline_mtime = float(job.get("savePauseLatestMtime") or 0)
+        baseline_mtime = float(job.get("checkpointedStopLatestMtime") or job.get("savePauseLatestMtime") or 0)
         if latest_mtime <= baseline_mtime:
-            return "Save & Pause ended without a newly written checkpoint."
+            return action_label + " ended without a newly written checkpoint."
         folder_path = app_config.safe_join_fs_root(job["folder"])
         validate_resumable_run_for_path(folder_path, str(job.get("stages") or ""), raw_run_path)
     except (OSError, RuntimeError, ValueError) as exc:
-        return "Save & Pause checkpoint could not be verified: " + str(exc)
+        return action_label + " checkpoint could not be verified: " + str(exc)
     return ""
 
 
@@ -977,11 +981,7 @@ def _trigger_scheduled_finish(job):
     current_epoch = int(progress.get("epoch") or 0)
     if target_epoch <= 0 or current_epoch <= target_epoch:
         return False
-    error = _request_job_action(
-        job,
-        "finish",
-        "Epoch " + str(target_epoch) + " saved. Finish requested; waiting for the runner result.",
-    )
+    error = _request_checkpointed_stop(job, "finish")
     if error:
         job["error"] = "Scheduled Finish could not be sent after epoch " + str(target_epoch) + " saved: " + error
         job["updatedAt"] = time.time()
@@ -1099,16 +1099,16 @@ def _record_action_evidence(job):
 
 def _apply_terminal_job_status(job, result_status=""):
     requested_action = _recorded_runner_action(job)
-    if requested_action == "pause":
-        checkpoint_error = _save_pause_checkpoint_error(job)
+    if requested_action in ("pause", "finish"):
+        checkpoint_error = _checkpointed_stop_error(job, requested_action)
         if checkpoint_error:
             job["status"] = "interrupted"
-            job["stage"] = "pause_failed"
+            job["stage"] = "checkpoint_failed"
             job["error"] = checkpoint_error
-        else:
+        elif requested_action == "pause":
             _queue_paused_job(job)
-    elif requested_action == "finish" and result_status != "completed":
-        job["status"] = "finished_early"
+        else:
+            job["status"] = "completed" if result_status == "completed" else "finished_early"
     elif requested_action == "stop":
         job["status"] = "stopped"
     elif result_status == "stopped" or not result_status:
@@ -1132,7 +1132,7 @@ def _queue_paused_job(job):
     for field in (
         "pid", "runnerVerified", "actionRequested", "actionRequestedAt", "startedAt", "finishedAt",
         "lastLogAt", "exitCode", "failureScope", "failureExcerpt", "completionNote", "confirmationNote",
-        "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "progress", "error", "savePauseLatestMtime",
+        "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "progress", "error", "checkpointedStopLatestMtime", "savePauseLatestMtime",
     ):
         job.pop(field, None)
     job["status"] = "queued"
@@ -1212,7 +1212,6 @@ def _refresh_job(job):
         requested_action = _apply_terminal_job_status(job, result_status)
         if job["status"] == "queued":
             return {"holdReason": "", "pauseQueue": requested_action == "pause"}
-        pause_failed = requested_action == "pause" and job["status"] != "queued"
         if job["status"] == "interrupted" and result_status == "stopped" and requested_action not in ("finish", "stop", "pause"):
             job["error"] = "Runner stopped without a WebCap stop action."
         job["exitCode"] = exit_code
@@ -1231,7 +1230,8 @@ def _refresh_job(job):
             job["updatedAt"] = prior_updated_at
         else:
             job.pop("updatedAt", None)
-        hold_reason = "Save & Pause could not verify a new checkpoint. Queue held for manual recovery." if pause_failed else (
+        checkpoint_failed = requested_action in ("pause", "finish") and job["status"] == "interrupted"
+        hold_reason = "Checkpoint-safe " + ("Pause" if requested_action == "pause" else "Finish") + " could not verify a new checkpoint. Queue held for manual recovery." if checkpoint_failed else (
             _distributed_socket_hold_reason(failure_excerpt) if job["status"] == "failed" and prior_status != "failed" else ""
         )
         return {"holdReason": hold_reason}
@@ -1286,9 +1286,10 @@ def _refresh_job(job):
         job["updatedAt"] = prior_updated_at
     else:
         job.pop("updatedAt", None)
+    checkpoint_failed = requested_action in ("pause", "finish") and job["status"] == "interrupted"
     return {
-        "holdReason": "Save & Pause could not verify a new checkpoint. Queue held for manual recovery."
-        if requested_action == "pause" else ""
+        "holdReason": "Checkpoint-safe " + ("Pause" if requested_action == "pause" else "Finish") + " could not verify a new checkpoint. Queue held for manual recovery."
+        if checkpoint_failed else ""
     }
 
 
@@ -2118,17 +2119,17 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if cancel:
-            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Save & Pause or Finish for the active job."}, 400
+            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Pause or Finish for the active job."}, 400
         if job.get("status") not in ACTIVE_STATUSES:
             return {"ok": False, "error": "Training job is not running."}, 400
         action = "pause" if pause else "finish" if finish else "stop"
-        message = _request_save_and_pause(job) if pause else _request_job_action(job, action)
+        message = _request_checkpointed_stop(job, action) if action in ("pause", "finish") else _request_job_action(job, action)
         if message:
             job["error"] = message
             job["updatedAt"] = time.time()
             _write_state(state)
             status = 502 if message.startswith("Could not request the Diffusion-Pipe checkpoint save:") else 409 if (
-                pause or "no recorded runner PID" in message or "not verified" in message
+                action in ("pause", "finish") or "no recorded runner PID" in message or "not verified" in message
             ) else 502
             return {"ok": False, "error": message, "job": _public_job(job)}, status
         if pause:

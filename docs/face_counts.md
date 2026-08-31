@@ -1,5 +1,13 @@
 # Face Counts and Focus Analysis
 
+## Status
+
+Implemented as optional **Face Focus** metadata. Enabling Face Focus analysis
+uses the local detector, caches the normalized result in `media_metadata.json`,
+and exposes it in Curation Signals and item metadata. The design detail below
+is retained as implementation rationale; the remaining threshold questions are
+tuning work, not missing feature wiring.
+
 ## Purpose
 Add image-only face analysis to WebCap so dataset curation can see how much usable face signal each image contains.
 

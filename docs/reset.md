@@ -1,5 +1,11 @@
 # Reset Feature
 
+## Status
+
+Implemented. Reset remains an explicit, reversible mutation: it restores the
+canonical file from `originals/`, leaves captions and the stored original
+untouched, then clears the item's mutation marker.
+
 ## Definition (from spec)
 - Only available for files in set folders with an equivalent original.
 - Overwrites the main file with the canonical original, regardless of current content.
@@ -34,9 +40,9 @@
 - This keeps Reset semantics stable over time.
 
 ## Validation Checklist
-- [ ] Reset only available for files in set folders (not originals).
-- [ ] Always overwrites the file in set folder with the original.
-- [ ] Does nothing if original is missing.
-- [ ] Does not alter or remove from originals.
-- [ ] Clears persisted mutation marker for that media item.
-- [ ] UI and backend error messages are clear and actionable.
+- [x] Reset only available for files in set folders (not originals).
+- [x] Always overwrites the file in set folder with the original.
+- [x] Does nothing if original is missing.
+- [x] Does not alter or remove from originals.
+- [x] Clears persisted mutation marker for that media item.
+- [x] UI and backend error messages are clear and actionable.

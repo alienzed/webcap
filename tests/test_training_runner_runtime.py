@@ -814,27 +814,40 @@ def test_runner_result_overrides_a_finish_request_when_the_job_completed(monkeyp
 
 
 def test_finish_request_waits_for_the_runner_result(tmp_path, monkeypatch):
-    active = {"id": "active", "status": "running", "pid": 42, "runnerVerified": True, "progress": {"epoch": 85, "epochs": 90}}
+    output_root = tmp_path / "output"
+    run_dir = output_root / "20260830_12-00-00"
+    run_dir.mkdir(parents=True)
+    source_config = tmp_path / "config.h3.toml"
+    source_config.write_text("[model]\nname = 'test'\n", encoding="utf-8")
+    (run_dir / source_config.name).write_bytes(source_config.read_bytes())
+    active = {
+        "id": "active", "status": "running", "stage": "h3", "stages": "h3", "pid": 42,
+        "runnerVerified": True, "progress": {"epoch": 85, "epochs": 90},
+        "snapshot": {"h3": str(source_config)}, "outputRoot": str(output_root), "startedAt": time.time(),
+    }
     state = {
         "activeJobId": "active",
-        "queuePaused": True,
-        "queuePauseReason": "Queue held after WebCap restarted.",
+        "queuePaused": False,
+        "queuePauseReason": "",
         "jobs": [active, {"id": "next", "status": "queued", "folder": "set"}],
     }
     monkeypatch.setattr(training_runner, "_read_state", lambda: state)
     monkeypatch.setattr(training_runner, "_refresh_state", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (0, "", ""))
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Finish must not interrupt the runner")))
     monkeypatch.setattr(training_runner, "_write_state", lambda candidate: None)
-    monkeypatch.setattr(training_runner, "_job_action_path", lambda job: tmp_path / "action")
+    action_path = tmp_path / "action"
+    monkeypatch.setattr(training_runner, "_job_action_path", lambda job: action_path)
 
     payload, status = training_runner.stop_response("active", finish=True)
 
     assert status == 200
     assert payload["job"]["status"] == "stopping"
     assert payload["job"]["actionRequested"] == "finish"
-    assert "Waiting for the runner result" in payload["job"]["confirmationNote"]
+    assert "checkpoint save" in payload["job"]["confirmationNote"]
+    assert action_path.read_text(encoding="utf-8") == "finish"
+    assert (run_dir / "save_quit").is_file()
     assert state["activeJobId"] == "active"
-    assert state["queuePaused"] is True
+    assert state["queuePaused"] is False
 
 
 def test_finish_can_be_scheduled_for_a_future_configured_save(tmp_path, monkeypatch):

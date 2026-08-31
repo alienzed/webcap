@@ -1,5 +1,12 @@
 # Image Crop Feature Specification
 
+## Status
+
+Implemented. Crop includes the live pixel readout, updates it for crop-box and
+aspect-ratio changes, and sends the same rounded geometry to the crop endpoint.
+The additional rotation and magnet controls in the current UI are later
+enhancements beyond this original V1 note.
+
 ## Goal
 
 Add a small, explicit crop command for image files so simple aspect-ratio fixes can be done inside WebCap without opening another editor.
@@ -85,10 +92,10 @@ This is not a general image-editing workflow. V1 is intentionally bare bones.
 
 ## Acceptance Checklist
 
-- [ ] Crop modal shows live pixel readout (`W x H px`).
-- [ ] Readout changes continuously while dragging crop handles.
-- [ ] Readout updates when user changes aspect ratio preset.
-- [ ] Readout values match cropped output dimensions after Apply.
+- [x] Crop modal shows live pixel readout (`W x H px`).
+- [x] Readout changes continuously while dragging crop handles.
+- [x] Readout updates when user changes aspect ratio preset.
+- [x] Readout values match cropped output dimensions after Apply.
 
 ## Implementation Touchpoints
 

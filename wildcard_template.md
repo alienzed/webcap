@@ -1,9 +1,11 @@
 # Wildcard Template Planning
 
 ## Status
-`IN PROGRESS` (as of May 18, 2026)
+`PARKED` (reviewed August 30, 2026)
 
-This plan is intentionally not final. We are iterating on UX and behavior before implementation.
+This plan is intentionally not final. No builder code or UI is currently
+implemented; resume it only if the caption-template workflow becomes a current
+priority.
 
 ## Goal
 Design a deterministic wildcard-template builder for short captions where:

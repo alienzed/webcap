@@ -531,9 +531,9 @@ function stopManagedTraining(cancel, pause, finish) {
   var job = getTrainingRunnerSelectedJob();
   if (!job || !job.id) return;
   var label = cancel ? 'Cancel this queued training job?' : pause
-    ? 'Save & Pause this run? Training will finish its current step, save a resumable checkpoint, then exit. This item will remain first and the queue will wait for Resume.'
+    ? 'Pause this run? Training will finish its current step, save a resumable checkpoint, then exit. This item will remain first and the queue will wait for Resume.'
     : finish
-      ? 'Finish this run early? Its current output will be kept, the run will be marked finished early, and the queue will continue.'
+      ? 'Finish this run early? Training will finish its current step, save a resumable checkpoint, then exit. The run will be marked finished early and the queue will continue.'
       : 'Stop this job and continue to the next queued set?';
   if (!window.confirm(label)) return;
   trainingRunnerRequest('/fs/training_runner/stop', {
@@ -541,7 +541,7 @@ function stopManagedTraining(cancel, pause, finish) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jobId: job.id, cancel: !!cancel, pause: !!pause, finish: !!finish })
   }).then(function () {
-    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Save & Pause requested; waiting for the current step and checkpoint save.' : finish ? 'Finish requested; waiting for the runner result.' : 'Stop requested; waiting for the runner result.'));
+    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Pause requested; waiting for the current step and checkpoint save.' : finish ? 'Finish requested; waiting for the current step and checkpoint save.' : 'Stop requested; waiting for the runner result.'));
     refreshTrainingRunnerStatus();
     refreshTrainingHistory(true);
   }).catch(function (err) {
@@ -1033,9 +1033,9 @@ function renderTrainingRunner() {
     (Number(job.capturedItemCount || 0) ? '<div class="training-runner-detail">Captured items: ' + escapeHtml(String(job.capturedItemCount)) + '</div>' : '') +
     buildTrainingRunnerProgressHtml(job);
   els.runnerActions.classList.remove('hidden');
-  if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !running);
-  var savePauseReady = running && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(String(job.stage || '')) !== -1 && !job.actionRequested;
-  if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !savePauseReady || trainingWorkspaceState.runnerQueuePaused);
+  var checkpointedStopReady = running && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(String(job.stage || '')) !== -1 && !job.actionRequested;
+  if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !checkpointedStopReady);
+  if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !checkpointedStopReady || trainingWorkspaceState.runnerQueuePaused);
   if (els.runnerCancelBtn) els.runnerCancelBtn.classList.toggle('hidden', !queued);
   if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused || !!activeCount);
   if (!activeCount && !queuedCount && !trainingWorkspaceState.runnerQueuePaused && status !== 'failed' && status !== 'completed' && status !== 'finished_early' && status !== 'stopped') {

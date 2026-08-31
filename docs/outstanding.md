@@ -1,8 +1,14 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-08-28.
+Last reviewed: 2026-08-30.
 
 ## Enhancements / Ideas
 - [LoRA initializer runs](lora_initializer.md): start a new run from an existing LoRA directory without resuming checkpoint state.
+
+## Parked Design Notes (Not Current Backlog)
+
+- [Wildcard template builder](../wildcard_template.md): deterministic caption-template generation. This remains an unimplemented concept, but is not queued for implementation.
+- [QA panel](qa_panel.md): tag-similarity and likely-missing-tag signals. The current Curation Signals surfaces remain in place; this replacement proposal is not queued.
+- [Model modules north star](model-modules.md): a larger training-architecture redesign. Do not start it piecemeal; current training profiles remain the supported structure.
 
 ## Completed (2026-08-29)
 

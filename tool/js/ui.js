@@ -468,10 +468,25 @@ function refreshCurrentDirectory() {
 }
 // Ensure live filtering as you type
 var debouncedSaveMediaFilters = debounceCreate(250);
+var debouncedRefreshTrainingReviewForFilter = debounceCreate(250);
 
 function handleMediaFilterChanged() {
   markSuperSetSearchDirty();
   renderFileList();
+  if (isTrainingWorkspaceActive()) {
+    var reviewFolder = String(state.folder || '');
+    debouncedRefreshTrainingReviewForFilter(function () {
+      if (!isTrainingWorkspaceActive() || String(state.folder || '') !== reviewFolder) return;
+      refreshTrainingReview().then(function () {
+        if (!isTrainingWorkspaceActive() || String(state.folder || '') !== reviewFolder) return;
+        var trainingEls = getTrainingWorkspaceEls();
+        if (trainingEls.readiness) trainingEls.readiness.innerHTML = buildTrainingReadinessHtml();
+        renderTrainingItemOverview(null);
+      }).catch(function (err) {
+        console.error('[webcap] Could not refresh Training Review for the visible media selection:', err);
+      });
+    });
+  }
   var capturedSave = captureCurrentFolderStateSave();
   debouncedSaveMediaFilters(function () {
     writeCapturedFolderState(capturedSave);

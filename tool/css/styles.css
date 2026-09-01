@@ -2706,6 +2706,7 @@ iframe {
 .training-review-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; color: var(--muted-text, #a3adba); font-size: 11px; }
 .training-review-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .training-review-legend i { display: inline-block; }
+.training-review-legend .histogram { width: 12px; height: 8px; background: rgba(184, 198, 214, .42); border: 1px solid rgba(255,255,255,.18); }
 .training-review-legend .native { width: 7px; height: 7px; border-radius: 50%; background: #8ca8c2; }
 .training-review-legend .target { width: 2px; height: 13px; background: #4f9bdf; }
 .training-review-plot { position: relative; height: 258px; overflow: hidden; border-radius: 6px; background: repeating-linear-gradient(0deg, transparent 0 48px, rgba(255,255,255,.075) 48px 49px); }

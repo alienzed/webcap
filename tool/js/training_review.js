@@ -44,13 +44,19 @@ function fetchTrainingReviewInitializers() {
   var profile = getSelectedTrainingModelProfile();
   var stage = reviewInitializerStage();
   if (!profile || !stage) return Promise.resolve([]);
-  return fetch('/fs/training_initializers?folder=' + encodeURIComponent(state.folder) + '&profileId=' + encodeURIComponent(profile.id) + '&stage=' + encodeURIComponent(stage))
+  var folder = state.folder;
+  return fetch('/fs/training_initializers?folder=' + encodeURIComponent(folder) + '&profileId=' + encodeURIComponent(profile.id) + '&stage=' + encodeURIComponent(stage))
     .then(function (response) { return response.json().then(function (payload) {
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'Could not load saved LoRAs.');
       return payload.exports || [];
     }); })
-    .then(function (exports) { trainingWorkspaceState.reviewInitializers = exports; return exports; })
+    .then(function (exports) {
+      if (state.folder !== folder || !isTrainingWorkspaceActive()) return [];
+      trainingWorkspaceState.reviewInitializers = exports;
+      return exports;
+    })
     .catch(function (err) {
+      if (state.folder !== folder || !isTrainingWorkspaceActive()) return [];
       trainingWorkspaceState.reviewInitializers = [];
       setStatus('Could not load saved LoRAs: ' + String(err.message || err));
       return [];
@@ -421,15 +427,18 @@ function renderTrainingReviewSaveStatus() {
 
 function refreshTrainingReview() {
   if (!isTrainingWorkspaceActive() || !state.folder) return Promise.resolve(null);
+  var folder = state.folder;
   trainingWorkspaceState.reviewPending = true;
   trainingWorkspaceState.reviewError = '';
   renderTrainingReview();
   return trainingReviewRequest('/fs/training_review', trainingReviewPayload()).then(function (payload) {
+    if (state.folder !== folder || !isTrainingWorkspaceActive()) return null;
     trainingWorkspaceState.review = payload;
     trainingWorkspaceState.reviewPending = false;
     renderTrainingReview();
     return payload;
   }).catch(function (err) {
+    if (state.folder !== folder || !isTrainingWorkspaceActive()) return null;
     trainingWorkspaceState.reviewPending = false;
     trainingWorkspaceState.review = null;
     trainingWorkspaceState.reviewError = String(err && err.message ? err.message : err);
@@ -441,20 +450,24 @@ function refreshTrainingReview() {
 function saveTrainingReview(change) {
   var current = trainingWorkspaceState.review;
   if (!current || current.customDataset) return Promise.resolve(null);
+  var folder = state.folder;
+  var baseRequest = trainingReviewPayload();
   var snapshot = JSON.parse(JSON.stringify({ plan: change.plan || current.plan, reset: change.reset || '' }));
   trainingWorkspaceState.reviewSavePending += 1;
   trainingWorkspaceState.reviewSaveStatus = 'saving';
   renderTrainingReviewSaveStatus();
   var prior = trainingWorkspaceState.reviewSaveQueue || Promise.resolve();
   var task = prior.catch(function () {}).then(function () {
-    var request = trainingReviewPayload();
+    var request = JSON.parse(JSON.stringify(baseRequest));
     request.plan = snapshot.plan;
     if (snapshot.reset) request.reset = snapshot.reset;
     return trainingReviewRequest('/fs/training_review/update', request);
   }).then(function (payload) {
+    if (state.folder !== folder || !isTrainingWorkspaceActive()) return null;
     trainingWorkspaceState.review = payload;
     return payload;
   }).catch(function (err) {
+    if (state.folder !== folder || !isTrainingWorkspaceActive()) return null;
     trainingWorkspaceState.reviewSaveStatus = 'error';
     setStatus('Could not save Training Review: ' + String(err && err.message ? err.message : err));
     return refreshTrainingReview().then(function () { return null; }, function () { return null; });

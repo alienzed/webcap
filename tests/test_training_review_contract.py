@@ -137,3 +137,21 @@ def test_bucket_modal_markup_and_script_keep_the_editor_focused():
     assert "data-review-step" in script
     assert "training-review-bucket-check" not in script
     assert "Training intent" not in script
+
+
+def test_switching_sets_resets_only_ephemeral_launch_inputs():
+    root = Path(__file__).parents[1]
+    script = (root / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    start = script.index("function resetTrainingRunSetupForFolder")
+    end = script.index("function refreshTrainingWorkspace", start)
+    reset = script[start:end]
+
+    for field in (
+        "training-run-name-input",
+        "training-run-starting-point-select",
+        "training-run-checkpoint-select",
+        "training-run-resume-input",
+    ):
+        assert field in reset
+    assert "resetTrainingReviewBuckets" not in reset
+    assert "ensureSelectedTrainingSetup" not in reset

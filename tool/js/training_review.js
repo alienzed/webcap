@@ -3,7 +3,7 @@
 
 var TRAINING_REVIEW_ASPECT_ORDER = ['43', '34', '169', '916', 'square'];
 var TRAINING_REVIEW_IMPACT_BANDS = [
-  ['down20', '20%+ down'], ['down', '5–20% down'], ['near', 'Near native'], ['up', '5–20% up'], ['up20', '20%+ up']
+  ['down20', '20%+ downscale'], ['down', '5–20% downscale'], ['near', 'Within 5%'], ['up', '5–20% upscale'], ['up20', '20%+ upscale']
 ];
 
 function trainingReviewPayload() {
@@ -331,7 +331,7 @@ function reviewImpactHtml(payload, view) {
   var impact = view === 'images' ? (((payload.distribution || {}).impact || {}).images || {}) : (((((payload.distribution || {}).impact || {}).videos || {})[view]) || {});
   var total = TRAINING_REVIEW_IMPACT_BANDS.reduce(function (sum, item) { return sum + Number(impact[item[0]] || 0); }, 0);
   if (!total) return '';
-  return '<section class="training-review-impact"><div class="training-review-label-row"><strong>Scale impact · all cohort tabs</strong><span>' + total + ' eligible item' + (total === 1 ? '' : 's') + '</span></div><div class="training-review-impact-bar">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { var count = Number(impact[item[0]] || 0); return '<span class="impact-' + item[0] + '" style="width:' + (count / total * 100) + '%"><b>' + count + '</b></span>'; }).join('') + '</div><div class="training-review-impact-labels">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { return '<span>' + escapeHtml(item[1]) + '</span>'; }).join('') + '</div></section>';
+  return '<section class="training-review-impact"><div class="training-review-label-row"><strong>Scale impact · all cohort tabs</strong><span>' + total + ' eligible item' + (total === 1 ? '' : 's') + '</span></div><div class="training-review-impact-direction"><span>Smaller target</span><span>Larger target</span></div><div class="training-review-impact-cells">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { var count = Number(impact[item[0]] || 0); var percent = Math.round(count / total * 100); return '<div class="training-review-impact-cell impact-' + item[0] + (count ? '' : ' is-empty') + '" title="' + count + ' of ' + total + ' eligible items"><b>' + count + '</b><em>' + percent + '%</em><span>' + escapeHtml(item[1]) + '</span></div>'; }).join('') + '</div></section>';
 }
 
 function reviewWarningsHtml(payload, view) {

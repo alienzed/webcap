@@ -2727,10 +2727,12 @@ iframe {
 .training-review-chart-axis { display: grid; gap: 3px; color: var(--muted-text, #a3adba); font-size: 10px; text-align: center; }
 .training-review-chart-ticks { position: relative; height: 13px; }
 .training-review-chart-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
-.training-review-impact-bar { display: flex; min-height: 35px; overflow: hidden; border-radius: 5px; }
-.training-review-impact-bar span { display: grid; min-width: 0; place-items: center; border-right: 1px solid var(--panel-bg, #20242c); color: #18212b; font-size: 12px; }
-.training-review-impact-bar .impact-down20 { background: #a9bed1; }.training-review-impact-bar .impact-down { background: #a8d2c4; }.training-review-impact-bar .impact-near { background: #dce0d0; }.training-review-impact-bar .impact-up { background: #e6cfaf; }.training-review-impact-bar .impact-up20 { background: #dfa997; }
-.training-review-impact-labels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; color: var(--muted-text, #a3adba); font-size: 10px; text-align: center; }
+.training-review-impact-direction { display: flex; justify-content: space-between; color: var(--muted-text, #a3adba); font-size: 10px; }
+.training-review-impact-cells { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.training-review-impact-cell { display: grid; min-height: 66px; align-content: center; justify-items: center; gap: 2px; padding: 7px 4px; border-radius: 5px; color: #18212b; text-align: center; }
+.training-review-impact-cell b { font-size: 17px; line-height: 1; }.training-review-impact-cell em { font-size: 10px; font-style: normal; opacity: .74; }.training-review-impact-cell span { font-size: 10px; line-height: 1.15; }
+.training-review-impact-cell.impact-down20 { background: #a9bed1; }.training-review-impact-cell.impact-down { background: #a8d2c4; }.training-review-impact-cell.impact-near { background: #dce0d0; }.training-review-impact-cell.impact-up { background: #e6cfaf; }.training-review-impact-cell.impact-up20 { background: #dfa997; }
+.training-review-impact-cell.is-empty { opacity: .34; }
 .training-review-warnings { border-left: 3px solid #d9a441; background: rgba(217,164,65,.1); }.training-review-warnings div { color: var(--muted-text, #a3adba); }
 .training-review-custom { max-width: 680px; margin: 32px auto; }.training-review-custom > span { color: var(--muted-text, #a3adba); }.training-review-custom > div { display: flex; gap: 8px; }
 .training-review-chart-empty { padding: 16px; color: var(--muted-text, #a3adba); text-align: center; }

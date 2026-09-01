@@ -851,14 +851,14 @@ def _distribution_warnings(distribution, manifest):
     for kind, role, groups in views:
         for ar_label, group in groups.items():
             eligible = [row for row in group.get("native") or [] if row.get("eligible", True) and row.get("target")]
-            substantial = sum(1 for row in eligible if row.get("impactBand") in ("down20", "up20"))
-            if substantial:
+            substantial_upscale = sum(1 for row in eligible if row.get("impactBand") == "up20")
+            if substantial_upscale:
                 label = (role + " video") if role else "image"
                 warnings.append({
-                    "code": "substantial_resize",
+                    "code": "substantial_upscale",
                     "view": role or "images",
                     "ar": ar_label,
-                    "message": str(substantial) + " of " + str(len(eligible)) + " " + label + " item(s) in " + ASPECT_LABELS.get(ar_label, ar_label) + " will resize more than 20%.",
+                    "message": str(substantial_upscale) + " of " + str(len(eligible)) + " " + label + " item(s) in " + ASPECT_LABELS.get(ar_label, ar_label) + " need more than 20% enlargement.",
                     "files": [],
                 })
             total = len(eligible)

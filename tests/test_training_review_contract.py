@@ -157,6 +157,19 @@ def test_video_distribution_reports_when_a_role_has_no_eligible_clips():
     assert group["native"][0]["assignedTarget"] == []
 
 
+def test_review_warnings_flag_substantial_upscale_but_not_downscale():
+    distribution = {"images": {"square": {"native": [
+        {"eligible": True, "target": [512, 512], "impactBand": "down20"},
+        {"eligible": True, "target": [512, 512], "impactBand": "up20"},
+    ], "targets": []}}, "videos": {}}
+
+    warnings = training_review._distribution_warnings(distribution, {"skipped": []})
+
+    resize_warnings = [warning for warning in warnings if warning["code"] == "substantial_upscale"]
+    assert len(resize_warnings) == 1
+    assert resize_warnings[0]["message"].startswith("1 of 2 image item(s)")
+
+
 def test_review_route_returns_recomputed_payload_and_invalid_toml_is_loud(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder, names = _set(tmp_path)
@@ -188,6 +201,8 @@ def test_bucket_modal_markup_and_script_keep_the_editor_focused():
     assert "data-review-aspect" in script
     assert "data-review-step" in script
     assert "training-review-unavailable-roles" in script
+    assert "training-review-impact-cells" in script
+    assert "Smaller target" in script and "Larger target" in script
     assert "training-review-bucket-check" not in script
     assert "Training intent" not in script
 

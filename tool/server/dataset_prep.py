@@ -62,7 +62,6 @@ def write_prepared_caption(source_media_path: Path, dest_dir: Path, cleaned_text
         raise RuntimeError(f"Prepared caption text is empty for media: {source_media_path.name}")
     dest_caption = dest_dir / source_media_path.with_suffix(".txt").name
     dest_caption.write_text(cleaned, encoding="utf-8")
-    normalize_path_permissions(dest_caption)
     return cleaned
 
 

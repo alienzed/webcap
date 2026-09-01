@@ -15,7 +15,6 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .permissions import normalize_path_permissions
 from .training_commands import build_h3_command_plan, build_training_command_plan
 from .training_profiles import config_for_stage, normalize_mode, profile_for_mode, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
@@ -94,7 +93,6 @@ def _jobs_root():
 
 def _ensure_runtime_dirs():
     _runtime_root().mkdir(parents=True, exist_ok=True)
-    normalize_path_permissions(_runtime_root())
 
 
 def _default_state():
@@ -183,36 +181,13 @@ def _write_state(state, retired_job_ids=()):
             tmp.unlink()
         except FileNotFoundError:
             pass
-    normalize_path_permissions(path)
     _state_file_seen = path
     _persisted_managed_job_ids = _managed_job_ids(state)
 
 
 def recover_state_response():
-    """Archive an unreadable queue state and start a fresh, empty queue."""
-    global _state_file_seen, _persisted_managed_job_ids
-    with _lock:
-        _ensure_runtime_dirs()
-        path = _state_path()
-        archived_path = None
-        if path.exists():
-            archived_path = path.with_name(
-                "queue.recovery." + time.strftime("%Y%m%d_%H%M%S") + "." + uuid.uuid4().hex + ".json"
-            )
-            os.replace(path, archived_path)
-            normalize_path_permissions(archived_path)
-        _state_file_seen = None
-        _persisted_managed_job_ids = set()
-        state = _default_state()
-        _write_state(state)
-        return {
-            "ok": True,
-            "archivedState": str(archived_path) if archived_path else "",
-            "activeJobId": "",
-            "queuePaused": False,
-            "queuePauseReason": "",
-            "jobs": [],
-        }, 200
+    """Recovery is deliberately manual: WebCap must not replace queue state."""
+    return {"ok": False, "error": "Queue recovery is manual. Fix, move aside, or delete the queue file yourself."}, 409
 
 
 def _sync_job_history(job):
@@ -254,9 +229,6 @@ def _retire_terminal_jobs(state):
 
 
 def _persist_reconciled_state(state):
-    for job in state.get("jobs", []):
-        if str(job.get("status") or "") in HISTORY_STATUSES:
-            _record_action_evidence(job)
     history_errors = _sync_histories(state) or []
     for error in history_errors:
         _logger.error(error)
@@ -432,29 +404,21 @@ def _file_digest(path):
 
 def _input_evidence(bundle_path, stages="both"):
     bundle = Path(bundle_path)
-    manifest_path = bundle / "dataset_manifest.json"
     digest = hashlib.sha256()
     count = 0
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        manifest = {}
-    rows = (manifest.get("images") or []) + (manifest.get("videos") or []) if isinstance(manifest, dict) else []
-    for row in sorted((item for item in rows if isinstance(item, dict)), key=lambda item: str(item.get("prepared_path") or item.get("file") or "")):
-        prepared = str(row.get("prepared_path") or "")
-        name = str(row.get("file") or prepared)
-        if not prepared:
+    for source in (sorted((bundle / "media").rglob("*"), key=lambda path: path.as_posix().lower()) if (bundle / "media").is_dir() else []):
+        if not source.is_file() or source.suffix.lower() == ".txt":
             continue
+        prepared = source.relative_to(bundle / "media").as_posix()
+        name = source.name
         count += 1
         digest.update(name.encode("utf-8"))
-        caption = bundle / "media" / prepared
-        caption = caption.with_suffix(".txt")
+        caption = source.with_suffix(".txt")
         try:
             digest.update(caption.read_bytes())
         except OSError:
             digest.update(b"<missing-caption>")
-    config_paths = sorted((bundle / "configs").glob("*.toml"), key=lambda path: path.name.lower())
-    config_paths.append(bundle / "training_plan.json")
+    config_paths = sorted(bundle.glob("*.toml"), key=lambda path: path.name.lower())
     config_digest = hashlib.sha256()
     for path in config_paths:
         config_digest.update(path.name.encode("utf-8"))
@@ -665,7 +629,6 @@ def _write_runner_script(job, settings, artifacts):
     script, resolved = _build_runner_script(job, settings, artifacts, job_dir)
     path = job_dir / "runner.sh"
     path.write_text(script, encoding="utf-8", newline="\n")
-    normalize_path_permissions(path)
     job["runnerScript"] = str(path)
     job["resolvedConfigs"] = dict(resolved, usedSnapshot=True)
     return path
@@ -683,49 +646,11 @@ def _launch_job(job, folder_path):
     job["updatedAt"] = launch_time
     job["status"] = "starting"
     job["stage"] = "launch"
-    if str(job.get("resumeFromCheckpoint") or "").strip():
-        try:
-            validate_resumable_run_for_path(
-                folder_path,
-                str(job.get("resumeStage") or job.get("stages") or ""),
-                job["resumeFromCheckpoint"],
-            )
-        except ValueError as exc:
-            job["status"] = "failed"
-            job["stage"] = "resume"
-            job["failureScope"] = "job"
-            job["error"] = "Resume invariant failed: " + str(exc)
-            job["finishedAt"] = time.time()
-            return False
-    stages = job.get("stages") or "both"
     captured_artifacts = {
         key: Path(value)
         for key, value in (job.get("bundleArtifacts") or {}).items()
     }
-    _, _, artifacts, settings, checks = (
-        _build_launch_preflight(
-            job["folder"],
-            stages,
-            profile_id=job.get("profileId") or "",
-            mode=job.get("mode") or "normal",
-            artifacts_override=captured_artifacts,
-        )
-    )
-    blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
-    job["preflight"] = {"checks": checks, "blockers": len(blockers)}
-    if blockers:
-        job["status"] = "failed"
-        job["stage"] = "launch"
-        job_local_checks = {"set_folder_exists", "training_artifacts", "training_toml"}
-        job["failureScope"] = "job" if all(item.get("id") in job_local_checks for item in blockers) else "system"
-        blocker_messages = []
-        for item in blockers:
-            text = str(item.get("message") or item.get("id") or "Preflight blocker").strip()
-            details = str(item.get("details") or "").strip()
-            blocker_messages.append(text + ((" — " + details) if details else ""))
-        job["error"] = "Preflight failed: " + "; ".join(blocker_messages)
-        job["finishedAt"] = time.time()
-        return False
+    settings = _training_settings()
     job_dir = _job_dir(job)
     result_path = job_dir / "result.json"
     if result_path.exists():
@@ -734,7 +659,7 @@ def _launch_job(job, folder_path):
     if action_path.exists():
         action_path.unlink()
     try:
-        launch_artifacts = _launch_artifacts(job, artifacts)
+        launch_artifacts = _launch_artifacts(job, captured_artifacts)
         script_path = _write_runner_script(job, settings, launch_artifacts)
     except Exception as exc:
         job["status"] = "failed"
@@ -847,7 +772,6 @@ def _request_job_action(job, action, confirmation_note=""):
         return "WebCap has not verified the recorded runner process, so it cannot send the " + action + " request safely."
     action_path = _job_action_path(job)
     action_path.write_text(action, encoding="utf-8")
-    normalize_path_permissions(action_path)
     code, stdout, stderr = _run_wsl(
         "kill -INT -- -" + str(pid), timeout=8, distribution=_job_wsl_distribution(job)
     )
@@ -944,9 +868,7 @@ def _request_checkpointed_stop(job, action):
     action_path = _job_action_path(job)
     try:
         action_path.write_text(action, encoding="utf-8")
-        normalize_path_permissions(action_path)
         (run_dir / "save_quit").touch(exist_ok=True)
-        normalize_path_permissions(run_dir / "save_quit")
     except OSError as exc:
         try:
             if action_path.read_text(encoding="utf-8").strip() == action:
@@ -1055,53 +977,7 @@ def _sync_job_log_evidence(job):
         job["stage"] = "hi"
     _bind_job_run_path_from_log(job, tail)
     _sync_job_progress(job, tail)
-    _record_action_evidence(job)
     return tail, log_mtime
-
-
-def _record_action_evidence(job):
-    """Promote only compact, first-save/terminal facts into the action manifest."""
-    action_id = str(job.get("actionId") or "").strip()
-    job_id = str(job.get("id") or "").strip()
-    if not action_id or not job_id:
-        return
-    status = str(job.get("status") or "")
-    run_path = str(job.get("outputRunPath") or "").strip()
-    first_epoch = 0
-    if run_path:
-        try:
-            run_dir = host_path_for_training_path(run_path)
-            for child in run_dir.iterdir():
-                match = re.match(r"^epoch(\d+)$", child.name, re.IGNORECASE)
-                if match and child.is_dir() and not child.is_symlink():
-                    first_epoch = int(match.group(1)) if not first_epoch else min(first_epoch, int(match.group(1)))
-        except OSError:
-            pass
-    if not first_epoch and status not in HISTORY_STATUSES:
-        return
-    def update(data):
-        entries = data.get("jobs", {}).setdefault(str(job.get("stages") or ""), [])
-        entry = next((item for item in entries if isinstance(item, dict) and item.get("id") == job_id), None)
-        if entry is not None and status in HISTORY_STATUSES:
-            entry.update({key: job.get(key) for key in ("status", "stage", "startedAt", "finishedAt", "exitCode") if key in job})
-            summary = str(job.get("completionNote") or job.get("error") or "").strip()
-            if summary:
-                entry["summary"] = summary[:1000]
-        if first_epoch and run_path:
-            root, _ = read_action(action_id)
-            try:
-                relative = host_path_for_training_path(run_path).relative_to(root).as_posix()
-            except ValueError:
-                return
-            outputs = data.get("outputs", {}).setdefault(str(job.get("stages") or ""), [])
-            job["resumeActionId"] = action_id
-            job["resumeOutputId"] = hashlib.sha256((action_id + "\0" + str(job.get("stages") or "") + "\0" + relative).encode("utf-8")).hexdigest()[:24]
-            if not any(isinstance(item, dict) and item.get("path") == relative for item in outputs):
-                outputs.append({"path": relative, "firstSavedEpoch": first_epoch, "firstSavedAt": time.time(), "jobId": job_id})
-    try:
-        update_action(action_id, update)
-    except (OSError, ValueError):
-        _logger.exception("Could not update training action evidence for %s", action_id)
 
 
 def _apply_terminal_job_status(job, result_status=""):
@@ -1325,16 +1201,7 @@ def _refresh_state(state):
     for job in state.get("jobs", []):
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
-        if job.get("status") == "queued" and str(job.get("resumeFromCheckpoint") or "").strip():
-            try:
-                folder_path = app_config.safe_join_fs_root(job["folder"])
-                stage = str(job.get("resumeStage") or job.get("stages") or "")
-                job["resumePoint"] = resume_point_from_directory(folder_path, stage, job["resumeFromCheckpoint"])
-                job.pop("resumePointError", None)
-            except Exception as exc:
-                job["resumePoint"] = {}
-                job["resumePointError"] = str(exc)
-        elif job.get("status") == "completed":
+        if job.get("status") == "completed":
             _annotate_completed_job(job)
         outcome = _refresh_job(job) if job.get("status") not in QUEUE_STATUSES | {"cancelled"} else None
         if outcome and outcome.get("holdReason"):
@@ -1356,11 +1223,6 @@ def _refresh_state(state):
     if hold_reason:
         state["queuePaused"] = True
         state["queuePauseReason"] = hold_reason
-    queued_jobs = [job for job in state.get("jobs", []) if job.get("status") == "queued"]
-    if not _startup_reconciled and queued_jobs and not any(job.get("runnerVerified") for job in active_jobs):
-        state["queuePaused"] = True
-        state["queuePauseReason"] = state.get("queuePauseReason") or "Queue waiting for manual start after WebCap restarted."
-    _startup_reconciled = True
     _launch_next_queued_job(state)
 
 
@@ -1386,7 +1248,29 @@ def _ensure_monitor_started():
 
 
 def start_observer():
-    """Start queue observation independently of whether the Training workspace is open."""
+    """Normalize a stopped app's active job into an explicit paused resume."""
+    global _startup_reconciled
+    with _lock:
+        if not _startup_reconciled:
+            state = _read_state()
+            active = [job for job in state.get("jobs", []) if job.get("status") in ACTIVE_STATUSES]
+            if active:
+                active_ids = {job["id"] for job in active}
+                for job in active:
+                    job["status"] = "queued"
+                    job["stage"] = "resumable"
+                    job["resumeFromCheckpoint"] = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "")
+                    job["resumeStage"] = str(job.get("stages") or job.get("resumeStage") or "")
+                    job.pop("pid", None)
+                    job.pop("runnerVerified", None)
+                    job.pop("actionRequested", None)
+                    job["updatedAt"] = time.time()
+                state["jobs"] = [job for job in state["jobs"] if job.get("id") in active_ids] + [job for job in state["jobs"] if job.get("id") not in active_ids]
+                state["activeJobId"] = ""
+                state["queuePaused"] = True
+                state["queuePauseReason"] = "Queue paused after WebCap restarted. Resume the first item when ready."
+                _write_state(state)
+            _startup_reconciled = True
     _ensure_monitor_started()
 
 
@@ -1506,7 +1390,6 @@ def _new_job(
     action_root = Path(action_root)
     job_dir = action_root / "jobs" / job_id
     job_dir.mkdir(parents=True, exist_ok=False)
-    normalize_path_permissions(job_dir)
     artifacts = {key: Path(value) for key, value in bundle["artifacts"].items()}
     if selected_profile["id"] == "wan22_t2v":
         if stages == "hi":
@@ -1538,7 +1421,7 @@ def _new_job(
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
         "outputRunPath": resume_path,
-        "resumePoint": resume_point_for_path(folder_path, stages, resume_path) if resume_path else {},
+        "resumePoint": {},
         "status": "queued",
         "stage": "queued",
         "createdAt": time.time(),
@@ -1621,181 +1504,95 @@ def start_response(
     initializer_action_id="",
     initializer_export_id="",
     initializer_stage="",
+    initializer_custom_path="",
     force_constant_lr=None,
 ):
-    if str(resume_from_checkpoint or "").strip():
-        return {"ok": False, "error": "Managed Train accepts only a selected WebCap action checkpoint."}, 400
-    if parent_job_id:
-        return {"ok": False, "error": "Use the selected managed checkpoint identity to resume."}, 400
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id, stages)
         selected_mode = normalize_mode(mode)
-        stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
-        stages = _normalize_training_stages(stages)
-        requested_resume = bool(resume_action_id or resume_output_id)
-        if bool(resume_action_id) != bool(resume_output_id):
-            raise ValueError("A managed resume requires both an action and output selection.")
-        resume_stage = _normalize_resume_stage(stages, "managed" if requested_resume else "", resume_stage)
-    except ValueError as exc:
-        return {"ok": False, "error": str(exc)}, 400
-    try:
+        stages = _normalize_training_stages(selected_run["stages"][0])
+        resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint or resume_output_id, resume_stage)
         _, folder_path = _resolve_folder(folder)
-        resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage) if requested_resume else None
-        if resume and (resume["action"].get("profileId") != selected_profile["id"] or resume["action"].get("mode") != selected_mode):
-            return {"ok": False, "error": "The selected checkpoint does not match the chosen training profile."}, 400
-        bundle = _bundle_from_action(resume_action_id, selected_profile["id"], selected_mode, stages) if resume else None
-        review = None
-        if review_fingerprint and not resume:
-            review = prepare_training_review(
-                folder_path,
-                selected_profile["id"],
-                selected_run["id"],
-                selected_media,
-                selection_criteria,
-                total_media_count,
-                fallback_captions,
-                persist=False,
-            )
-            if str(review.get("reviewFingerprint") or "") != str(review_fingerprint):
-                return {"ok": False, "error": "Training Review is stale. Reload it before queueing.", "staleReview": review}, 409
-            if not review.get("ok"):
-                return {"ok": False, "error": "Training Review has blockers.", "review": review}, 400
+        review = prepare_training_review(
+            folder_path, selected_profile["id"], selected_run["id"], selected_media,
+            selection_criteria, total_media_count, fallback_captions, persist=False,
+        )
         initializer = None
-        if initializer_action_id or initializer_export_id or initializer_stage:
-            if resume:
-                return {"ok": False, "error": "Checkpoint Resume and LoRA initialization cannot be combined."}, 400
-            if not (initializer_action_id and initializer_export_id and initializer_stage):
-                return {"ok": False, "error": "Saved LoRA initialization needs an action, export, and target stage."}, 400
-            if initializer_stage not in (("hi", "lo") if stages == "both" else (stages,)):
-                return {"ok": False, "error": "Initializer target stage does not belong to this run."}, 400
-            initializer = resolve_saved_initializer(folder_path, selected_profile["id"], initializer_stage, initializer_action_id, initializer_export_id)
+        if initializer_action_id or initializer_export_id or initializer_stage or initializer_custom_path:
+            if resume_from_checkpoint or resume_output_id:
+                raise ValueError("Checkpoint Resume and LoRA initialization cannot be combined.")
+            if initializer_custom_path:
+                initializer = {
+                    "sourcePath": Path(str(initializer_custom_path).strip()),
+                    "exportId": "custom",
+                    "actionId": "",
+                    "epoch": "",
+                }
+            else:
+                initializer = resolve_saved_initializer(folder_path, selected_profile["id"], initializer_stage, initializer_action_id, initializer_export_id)
             initializer["stage"] = initializer_stage
-            reviewed_settings = (((review or {}).get("review") or {}).get("stages", {}).get(initializer_stage, {}).get("settings") or {})
-            initializer["forceConstantLr"] = force_constant_lr if force_constant_lr not in (None, "") else reviewed_settings.get("optimizerLr")
-        _, folder_path, _, _, checks = _build_launch_preflight(
-            folder,
-            stages,
-            profile_id=selected_profile["id"],
-            mode=selected_mode,
-            artifacts_override=bundle["artifacts"] if bundle else None,
+            initializer["forceConstantLr"] = force_constant_lr
+        resume_path = str(resume_from_checkpoint or "").strip()
+        resume_action = None
+        if resume_output_id and not resume_path:
+            resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage)
+            resume_path = str(resume["runPath"])
+            resume_action = resume["actionRoot"]
+        if resume_action is not None:
+            action_root, action = resume_action, read_action(resume_action.name)[1]
+        else:
+            action_root, action = allocate_action(folder_path, selected_profile, selected_mode, (stages,), run_name)
+        distribution = _training_settings()["wslDistribution"]
+        meta = config_for_stage(selected_profile["id"], stages, selected_mode)
+        output_root = Path(resume_path).parent if resume_path else action_root / "output" / meta["outputSlug"]
+        if not resume_path:
+            output_root.mkdir(parents=True, exist_ok=True)
+        # A custom resume is deliberately anchored beside the chosen Diffusion
+        # Pipe output. It remains a new WebCap action, but its captured inputs
+        # stay physically adjacent to the run they continue.
+        external_capture_root = None
+        if resume_path and resume_action is None:
+            external_capture_root = output_root.parent / ".webcap-captures" / uuid.uuid4().hex
+        output_dir = _to_wsl_path(output_root, distribution)
+        bundle = materialize_training_bundle(
+            folder_path, action_root, selected_profile["id"], selected_mode, stages, selected_media,
+            fallback_captions=fallback_captions, selection_criteria=selection_criteria,
+            total_media_count=total_media_count, output_dirs={stages: output_dir},
+            distribution=distribution, review=review if not review.get("customDataset") else None,
+            initializer=initializer,
+            capture_root=external_capture_root,
         )
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}, 400
-    blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
-    preflight = {"checks": checks, "summary": {"blockers": len(blockers), "warnings": 0}}
-    if blockers:
-        return {"ok": False, "error": "Launch checks failed.", "preflight": preflight}, 400
+        return {"ok": False, "error": "Could not create the training capture: " + str(exc)}, 400
+
     with _lock:
         _ensure_monitor_started()
         state = _read_state()
-        _refresh_state(state)
         active = _find_job(state, state.get("activeJobId")) if state.get("activeJobId") else None
-        has_pending_queue = any(job.get("status") in QUEUE_STATUSES for job in state.get("jobs", []))
-        if active and active.get("status") not in TERMINAL_STATUSES and not queue:
-            _write_state(state)
-            return {"ok": False, "error": "A managed training job is already active.", "activeJob": _public_job(active)}, 409
-        # An explicit Train request is permission to start a fresh queue. A
-        # stale hold from a previous terminal job must not leave the new job
-        # queued forever when there is no active or pending work to protect.
-        if not active and not has_pending_queue:
-            state["queuePaused"] = False
-            state["queuePauseReason"] = ""
-        job_stages = ("hi", "lo") if stages == "both" else (stages,)
-        if resume:
-            action_root = resume["actionRoot"]
-            action = resume["action"]
-        else:
-            action_root, action = allocate_action(folder_path, selected_profile, selected_mode, job_stages, run_name)
-
-        output_roots = {}
-        output_dirs = {}
-        distribution = _training_settings()["wslDistribution"]
-        for job_stage in job_stages:
-            meta = config_for_stage(selected_profile["id"], job_stage, selected_mode)
-            if resume and resume_stage == job_stage:
-                output_roots[job_stage] = resume["runPath"].parent
-                output_dirs[job_stage] = _to_wsl_path(output_roots[job_stage], distribution)
-            else:
-                output_root = action_root / "output" / meta["outputSlug"]
-                output_root.mkdir(parents=True, exist_ok=True)
-                normalize_path_permissions(output_root)
-                output_roots[job_stage] = output_root
-                output_dirs[job_stage] = _to_wsl_path(output_root, distribution)
-        if not resume:
+        preflight = {"checks": [], "summary": {"blockers": 0, "warnings": 0}}
+        job = _new_job(
+            str(folder).strip(), preflight, stages, bundle, output_root, output_dir,
+            resume_path, resume_stage, "", selected_profile["id"], selected_run["id"], selected_mode,
+            action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
+        )
+        def record_capture(data):
             try:
-                bundle = materialize_training_bundle(
-                    folder_path,
-                    action_root,
-                    selected_profile["id"],
-                    selected_mode,
-                    stages,
-                    selected_media,
-                    fallback_captions=fallback_captions,
-                    selection_criteria=selection_criteria,
-                    total_media_count=total_media_count,
-                    output_dirs=output_dirs,
-                    distribution=distribution,
-                    review=review,
-                    initializer=initializer,
-                )
-                def recorded(data):
-                    data["record"].update({
-                        "capturedItemCount": int(bundle.get("capturedItemCount") or 0),
-                        "bundleSummary": {"capturedItems": int(bundle.get("capturedItemCount") or 0)},
-                        "selectionCriteria": selection_criteria or {},
-                        "inputFingerprint": fingerprint_files([bundle["artifacts"]["manifest"]]),
-                        "configFingerprint": fingerprint_files([value for key, value in bundle["artifacts"].items() if key.endswith("Config")]),
-                        "review": {
-                            "fingerprint": str(review_fingerprint or ""),
-                            "warnings": list((review or {}).get("warnings") or []),
-                            "excluded": list(((review or {}).get("review") or {}).get("excluded") or []),
-                        },
-                    })
-                    if isinstance(review_intent, dict):
-                        data["intent"] = review_intent
-                    if bundle.get("initializer"):
-                        data["initializer"] = bundle["initializer"]
-                update_action(action_root.name, recorded)
-            except Exception as exc:
-                return {"ok": False, "error": "Could not create the run dataset: " + str(exc)}, 400
-        parent_active_seconds = 0
-        jobs = []
-        for job_stage in job_stages:
-            stage_resume = str(resume["runPath"]) if resume and resume_stage == job_stage else ""
-            jobs.append(_new_job(
-                str(folder).strip(),
-                preflight,
-                job_stage,
-                bundle,
-                output_roots[job_stage],
-                output_dirs[job_stage],
-                stage_resume,
-                job_stage if stage_resume else "",
-                "",
-                selected_profile["id"],
-                selected_run["id"],
-                selected_mode,
-                action_root,
-                str(action.get("runName") or ""),
-                resume_action_id if stage_resume else "",
-                resume_output_id if stage_resume else "",
-                parent_active_seconds,
-            ))
-        def register_jobs(data):
-            for job in jobs:
-                entries = data["jobs"].setdefault(job["stages"], [])
-                entries.append({"id": job["id"], "path": (Path("jobs") / job["id"]).as_posix(), "status": "queued", "createdAt": job["createdAt"]})
-        update_action(action_root.name, register_jobs)
-        state["jobs"].extend(jobs)
-        if not active or active.get("status") in TERMINAL_STATUSES:
+                capture_path = Path(bundle["path"]).relative_to(action_root).as_posix()
+            except ValueError:
+                capture_path = str(Path(bundle["path"]))
+            data.setdefault("captures", []).append({
+                "jobId": job["id"], "path": capture_path,
+                "createdAt": job["createdAt"], "count": int(bundle.get("capturedItemCount") or 0),
+            })
+            data.setdefault("jobs", {}).setdefault(job["stages"], []).append({
+                "id": job["id"], "path": (Path("jobs") / job["id"]).as_posix(), "status": "queued", "createdAt": job["createdAt"],
+            })
+        update_action(action_root.name, record_capture)
+        state["jobs"].append(job)
+        if not active and not state.get("queuePaused"):
             _launch_next_queued_job(state)
-        _persist_reconciled_state(state)
-        return {
-            "ok": True,
-            "job": _public_job(jobs[0]),
-            "jobs": [_public_job(job) for job in jobs],
-            "queued": jobs[0].get("status") == "queued",
-        }, 200
+        _write_state(state)
+        return {"ok": True, "job": _public_job(job), "jobs": [_public_job(job)], "queued": job.get("status") == "queued"}, 200
 
 
 def folder_statuses_for_folders(folder_paths):

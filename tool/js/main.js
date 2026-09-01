@@ -138,7 +138,7 @@ function runTrainCommandPreviewForCurrentFolder(options) {
       setStatus('Generating manual training command...');
       return runTrainingActionRequest('/fs/train_run', {
         folder: state.folder,
-        stages: options && options.stages ? options.stages : 'both',
+        stages: options && options.stages ? options.stages : 'h3',
         profileId: options && options.profileId ? options.profileId : '',
         runId: options && options.runId ? options.runId : '',
         mode: options && options.mode ? options.mode : getTrainingWorkspaceSelectedProfile(state.folder),

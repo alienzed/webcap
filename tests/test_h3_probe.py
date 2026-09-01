@@ -622,7 +622,7 @@ def test_prepare_route_uses_canonical_config_when_set_has_none(tmp_path, monkeyp
     seed_path = Path(response.get_json()["seedPath"])
     seed = json.loads(seed_path.read_text(encoding="utf-8"))
     assert seed["baseConfigSource"] == "template"
-    assert (seed_path.parent / seed["baseConfig"]).read_text(encoding="utf-8") == h3_config_text() + "# config.h3.normal.toml\n"
+    assert (seed_path.parent / seed["baseConfig"]).read_text(encoding="utf-8") == h3_config_text() + "# config.h3.toml\n"
 
 
 def test_prepare_route_fails_visibly_without_saved_caption(tmp_path, monkeypatch):
@@ -630,7 +630,7 @@ def test_prepare_route_fails_visibly_without_saved_caption(tmp_path, monkeypatch
     folder = fs_root / "set"
     folder.mkdir(parents=True)
     (folder / "probe.mp4").write_bytes(b"video")
-    (folder / "config.h3.normal.toml").write_text(h3_config_text(), encoding="utf-8")
+    (folder / "config.h3.toml").write_text(h3_config_text(), encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
     response = app_module.app.test_client().post("/fs/h3_probe/prepare", json={"folder": "set", "fileName": "probe.mp4"})
     assert response.status_code == 400

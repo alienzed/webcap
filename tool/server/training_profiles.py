@@ -12,7 +12,9 @@ WAN22_PROFILE_ID = "wan22_t2v"
 KREA2_PROFILE_ID = "krea2_raw"
 WAN21_PROFILE_ID = "wan21_t2v_14b"
 MINIMAX_H3_PROFILE_ID = "minimax_h3"
-TRAINING_MODES = ("poc", "normal", "quality")
+# Keep a wire-compatible default for older requests, but stop creating
+# user-visible POC/Normal/Quality variants of the same set config.
+TRAINING_MODES = ("normal",)
 
 _PROFILE_SLUGS = {
     WAN22_PROFILE_ID: "wan22",
@@ -35,9 +37,8 @@ _PROFILES = {
             {"id": "lo", "file": "config.lo.toml", "dataset": "dataset.lo.toml", "label": "Wan2.2 Low Noise", "outputSlug": "wan22-lo", "modelIdentityKeys": ("type", "ckpt_path", "transformer_path")},
         ),
         "runs": (
-            {"id": "both", "label": "HI → LO", "stages": ("hi", "lo")},
-            {"id": "hi", "label": "HI only", "stages": ("hi",)},
-            {"id": "lo", "label": "LO only", "stages": ("lo",)},
+            {"id": "hi", "label": "Wan2.2 High", "stages": ("hi",)},
+            {"id": "lo", "label": "Wan2.2 Low", "stages": ("lo",)},
         ),
     },
     KREA2_PROFILE_ID: {
@@ -87,7 +88,6 @@ _PROFILES = {
 PROFILE_IDS = tuple(_PROFILES)
 
 _LEGACY_STAGES = {
-    "both": (WAN22_PROFILE_ID, "both"),
     "hi": (WAN22_PROFILE_ID, "hi"),
     "lo": (WAN22_PROFILE_ID, "lo"),
     "krea2": (KREA2_PROFILE_ID, "train"),
@@ -95,10 +95,8 @@ _LEGACY_STAGES = {
 
 
 def normalize_mode(mode):
-    value = str(mode or "normal").strip().lower()
-    if value not in TRAINING_MODES:
-        raise ValueError("Unknown training mode: " + str(mode or ""))
-    return value
+    """Retain the request field without restoring mode-specific configs."""
+    return "normal"
 
 
 def profile_slug(profile_id):
@@ -116,13 +114,11 @@ def resolved_config(profile_id, config_id, mode="normal"):
             break
     if base is None:
         raise ValueError("Unknown configuration stage for " + selected["label"] + ": " + str(config_id or ""))
-    slug = profile_slug(profile_id)
-    stage_suffix = "." + base["id"] if selected["id"] == WAN22_PROFILE_ID else ""
     resolved = deepcopy(base)
     resolved["legacyFile"] = base["file"]
     resolved["legacyDataset"] = base["dataset"]
-    resolved["file"] = f"config.{slug}.{selected_mode}{stage_suffix}.toml"
-    resolved["dataset"] = f"dataset.{slug}.{selected_mode}{stage_suffix}.toml"
+    resolved["file"] = base["file"]
+    resolved["dataset"] = base["dataset"]
     resolved["mode"] = selected_mode
     return resolved
 

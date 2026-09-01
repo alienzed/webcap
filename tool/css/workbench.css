@@ -998,12 +998,27 @@
   justify-self: start;
 }
 
-.app.shell-revamp .training-back-btn {
+.app.shell-revamp .training-navigator-actions {
+  display: flex;
   justify-self: end;
+  align-items: center;
+  gap: 8px;
+}
+
+.app.shell-revamp .training-back-btn,
+.app.shell-revamp .training-tensorboard-link {
   flex: 0 0 auto;
   width: auto !important;
   min-height: 28px;
   padding: 4px 8px;
+}
+
+.app.shell-revamp .training-tensorboard-link {
+  text-decoration: none;
+}
+
+.app.shell-revamp .training-tensorboard-link.is-unavailable {
+  opacity: .68;
 }
 
 .app.shell-revamp .training-set-only.hidden {

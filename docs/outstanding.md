@@ -1,6 +1,8 @@
 This file tracks implemented work vs outstanding items.
 Last reviewed: 2026-08-30.
 
+> Training note: [Training Stabilization](training_stabilization.md) is the current authority for training behavior and deployment. Older profile, immutable-bundle, transcoding, preflight, recovery, and automatic-permission notes below are historical only where they conflict.
+
 ## Enhancements / Ideas
 - [LoRA initializer runs](lora_initializer.md): start a new run from an existing LoRA directory without resuming checkpoint state.
 

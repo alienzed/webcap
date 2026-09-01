@@ -2214,40 +2214,6 @@ iframe {
   white-space: nowrap;
 }
 
-.workspace-surface-training .training-runner-header-statuses {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px 12px;
-}
-
-.workspace-surface-training .training-tensorboard-status {
-  min-height: 16px;
-  color: var(--muted);
-  font-size: 12px;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.workspace-surface-training .training-tensorboard-status strong {
-  color: var(--text);
-}
-
-.workspace-surface-training .training-tensorboard-status .is-warning {
-  color: #cc7a3f;
-}
-
-.workspace-surface-training .training-tensorboard-status a,
-.workspace-surface-training .training-tensorboard-status button {
-  margin-left: 6px;
-}
-
-.workspace-surface-training .training-tensorboard-status button {
-  padding: 2px 6px;
-  font-size: 11px;
-}
-
 .workspace-surface-training .training-gpu-status strong {
   color: var(--text);
 }
@@ -2721,6 +2687,18 @@ iframe {
 .training-review-files > details { margin: 5px 0; }
 .training-review-effective pre { max-height: 320px; overflow: auto; white-space: pre; }
 .training-review-effective-stage { display: grid; gap: 6px; margin-top: 7px; }
+.training-review-distribution { display: grid; gap: 8px; padding: 9px; border: 1px solid rgba(108,158,213,.28); border-radius: 6px; background: rgba(108,158,213,.045); }
+.training-review-distribution-note { color: var(--muted-text, #a3adba); font-size: 11px; }
+.training-review-distribution-row { display: grid; gap: 4px; }
+.training-review-distribution-row > div:first-child { display: flex; justify-content: space-between; color: var(--muted-text, #a3adba); font-size: 11px; }
+.training-review-distribution-row > div:first-child strong { color: inherit; }
+.training-review-distribution-track { position: relative; height: 42px; overflow: visible; border-radius: 4px; background: repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 25%); }
+.training-review-native-dot { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #7ba9d8; transform: translateX(-50%); opacity: .9; }
+.training-review-native-dot.resize-light { background: #d9a441; }
+.training-review-native-dot.resize-heavy { background: #d96852; }
+.training-review-target-marker { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #d9e8f8; transform: translateX(-50%); }
+.training-review-target-marker span { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 1px 3px; border-radius: 3px; background: #263445; color: #e8f2fc; font-size: 9px; white-space: nowrap; }
+.training-review-distribution-scale { display: flex; justify-content: space-between; color: var(--muted-text, #a3adba); font-size: 10px; }
 .training-advanced-config { margin-top: 8px; }
 
 .workspace-surface-training .training-model-trained-status {

@@ -1,6 +1,5 @@
-// Training Review is the normal launch surface. It keeps the compact UI state
-// in the existing folder state while the backend remains the source of truth
-// for membership, safety checks, and TOML rendering.
+// Training Review edits the set-owned dataset TOML directly.  There is no
+// second hidden plan stored in folder state.
 
 function trainingReviewPayload() {
   var selected = getVisibleMediaSelectionForTraining();
@@ -65,17 +64,16 @@ function renderTrainingStartingPointControls(payload) {
   if (startPoint === 'initializer') {
     var initStage = reviewInitializerStage();
     var exports = trainingWorkspaceState.reviewInitializers || [];
-    var chosen = exports.filter(function (item) { return item.exportId === trainingWorkspaceState.reviewInitializerExportId; })[0];
-    var warning = chosen && Number(trainingWorkspaceState.reviewForceConstantLr || 0) >= Number(chosen.optimizerLr || Infinity)
-      ? '<span class="training-review-inline-warning">This LR is not lower than the source run.</span>' : '';
+    var warning = '';
     initializerFields.innerHTML = '<label class="training-run-option">Apply to<select data-review-initializer-stage>' + Object.keys(stages).map(function (stage) {
       return '<option value="' + escapeHtml(stage) + '"' + (stage === initStage ? ' selected' : '') + '>' + escapeHtml(stage.toUpperCase()) + '</option>';
     }).join('') + '</select></label>' +
-      '<label class="training-run-option">Saved LoRA<select data-review-initializer-export><option value="">Choose export…</option>' + exports.map(function (item) {
+      (exports.length ? '<label class="training-run-option">Set checkpoint<select data-review-initializer-export><option value="">Choose checkpoint…</option>' + exports.map(function (item) {
         var weight = item.weights && item.weights.length === 1 ? ' · ' + item.weights[0].name : '';
-        return '<option value="' + escapeHtml(item.exportId) + '"' + (item.exportId === trainingWorkspaceState.reviewInitializerExportId ? ' selected' : '') + (item.compatible ? '' : ' disabled') + '>' +
-          escapeHtml(item.runName + ' · ' + item.stage.toUpperCase() + ' · epoch' + item.epoch + weight + (item.compatible ? '' : ' · ' + item.reason)) + '</option>';
-      }).join('') + '</select></label>' +
+        return '<option value="' + escapeHtml(item.exportId) + '"' + (item.exportId === trainingWorkspaceState.reviewInitializerExportId ? ' selected' : '') + '>' +
+          escapeHtml(item.runName + ' · ' + item.stage.toUpperCase() + ' · epoch' + item.epoch + weight) + '</option>';
+      }).join('') + '</select></label>' : '') +
+      '<label class="training-run-option">LoRA file or folder<input type="text" data-review-initializer-custom-path value="' + escapeHtml(String(trainingWorkspaceState.reviewInitializerCustomPath || '')) + '" placeholder="Path to a .safetensors file or its folder"></label>' +
       '<label class="training-run-option">Constant LR<input type="number" min="0" step="any" data-review-constant-lr value="' + escapeHtml(String(trainingWorkspaceState.reviewForceConstantLr || '')) + '">' + warning + '</label>';
     var stageSelect = initializerFields.querySelector('[data-review-initializer-stage]');
     if (stageSelect) stageSelect.onchange = function () {
@@ -87,7 +85,14 @@ function renderTrainingStartingPointControls(payload) {
     var exportSelect = initializerFields.querySelector('[data-review-initializer-export]');
     if (exportSelect) exportSelect.onchange = function () {
       trainingWorkspaceState.reviewInitializerExportId = exportSelect.value;
+      if (exportSelect.value) trainingWorkspaceState.reviewInitializerCustomPath = '';
       renderTrainingStartingPointControls(trainingWorkspaceState.review);
+      renderTrainingReview();
+    };
+    var customPath = initializerFields.querySelector('[data-review-initializer-custom-path]');
+    if (customPath) customPath.onchange = function () {
+      trainingWorkspaceState.reviewInitializerCustomPath = customPath.value;
+      if (customPath.value.trim()) trainingWorkspaceState.reviewInitializerExportId = '';
       renderTrainingReview();
     };
     var constantLr = initializerFields.querySelector('[data-review-constant-lr]');
@@ -102,6 +107,7 @@ function renderTrainingStartingPointControls(payload) {
   select.onchange = function () {
     trainingWorkspaceState.reviewStartingPoint = select.value;
     trainingWorkspaceState.reviewInitializerExportId = '';
+    trainingWorkspaceState.reviewInitializerCustomPath = '';
     var checkpoint = document.getElementById('training-run-checkpoint-select');
     if (select.value !== 'resume' && checkpoint) checkpoint.value = '';
     syncManagedTrainingResumeUi();
@@ -134,7 +140,13 @@ function setReviewBucket(plan, stage, kind, role, ar, bucket, enabled) {
     stagePlan.imageBuckets = stagePlan.imageBuckets || {};
     var items = stagePlan.imageBuckets[ar] || [];
     stagePlan.imageBuckets[ar] = items.filter(function (item) { return Number(item[0]) !== bucket[0] || Number(item[1]) !== bucket[1]; });
-    if (enabled) stagePlan.imageBuckets[ar].push([bucket[0], bucket[1]]);
+    if (enabled) {
+      if (stagePlan.imageBuckets[ar].length >= 3) {
+        setStatus('Images use at most three buckets per aspect ratio. Remove one before adding another.');
+        return;
+      }
+      stagePlan.imageBuckets[ar].push([bucket[0], bucket[1]]);
+    }
     return;
   }
   var entry = plan.videoRoles.filter(function (item) { return item.id === role; })[0];
@@ -143,6 +155,35 @@ function setReviewBucket(plan, stage, kind, role, ar, bucket, enabled) {
   var rows = entry.buckets[ar] || [];
   entry.buckets[ar] = rows.filter(function (item) { return Number(item[0]) !== bucket[0] || Number(item[1]) !== bucket[1]; });
   if (enabled) entry.buckets[ar].push([bucket[0], bucket[1]]);
+}
+
+function reviewDistributionHtml(distribution) {
+  var groups = distribution && distribution.images || {};
+  var aspects = Object.keys(groups).sort();
+  if (!aspects.length) return '';
+  var html = '<section class="training-review-distribution"><div class="training-review-section-title">Native resolution and selected targets</div><div class="training-review-distribution-note">Dots are source media. Markers are the buckets that will fit them; amber indicates stronger resizing.</div>';
+  aspects.forEach(function (ar) {
+    var group = groups[ar] || {};
+    var rows = group.native || [];
+    var edges = rows.map(function (item) { return Number(item.edge || 0); }).filter(Boolean);
+    if (!edges.length) return;
+    var low = Math.min.apply(Math, edges);
+    var high = Math.max.apply(Math, edges);
+    if (low === high) { low = Math.max(1, low - 1); high += 1; }
+    function pos(value) { return Math.max(2, Math.min(98, ((Number(value) - low) / (high - low)) * 96 + 2)); }
+    var dots = rows.slice(0, 120).map(function (item, index) {
+      var target = item.target || [];
+      var scale = target.length ? Math.max(target[0], target[1]) / Math.max(1, Number(item.edge || 1)) : 1;
+      var tone = scale > 1.25 || scale < 0.75 ? ' resize-heavy' : scale > 1.08 || scale < 0.92 ? ' resize-light' : '';
+      return '<i class="training-review-native-dot' + tone + '" style="left:' + pos(item.edge) + '%;bottom:' + ((index % 5) * 5 + 5) + '%" title="native short edge ' + escapeHtml(String(item.edge)) + '"></i>';
+    }).join('');
+    var targets = (group.targets || []).map(function (target) {
+      var edge = Math.min(Number(target[0]), Number(target[1]));
+      return '<b class="training-review-target-marker" style="left:' + pos(edge) + '%"><span>' + escapeHtml(target[0] + '×' + target[1]) + '</span></b>';
+    }).join('');
+    html += '<div class="training-review-distribution-row"><div><strong>' + escapeHtml(formatReviewAspect(ar)) + '</strong><span>' + edges.length + ' images</span></div><div class="training-review-distribution-track">' + dots + targets + '</div><div class="training-review-distribution-scale"><span>' + low + 'px</span><span>' + high + 'px</span></div></div>';
+  });
+  return html + '</section>';
 }
 
 function reviewEntryKey(entry) {
@@ -242,6 +283,7 @@ function renderTrainingReview() {
   if (blockers.length) html += '<section class="training-review-notices blockers"><strong>Blockers</strong>' + blockers.map(function (item) { return '<div>' + escapeHtml(item.message || '') + (item.files && item.files.length ? ': ' + escapeHtml(item.files.join(', ')) : '') + '</div>'; }).join('') + '</section>';
   if (warnings.length) html += '<section class="training-review-notices warnings"><strong>Critical Warnings</strong>' + warnings.map(function (item) { return '<div>' + escapeHtml(item.message || '') + (item.files && item.files.length ? ': ' + escapeHtml(item.files.join(', ')) : '') + '</div>'; }).join('') + '</section>';
   if (customDataset) html += '<section class="training-review-notices warnings"><strong>Custom dataset</strong><div>' + escapeHtml(customDataset.message || 'This dataset is read-only in Training Review until buckets are reset.') + '</div></section>';
+  html += reviewDistributionHtml(payload.distribution || {});
   html += '<section class="training-review-settings"><div class="training-review-section-title">Training intent</div>';
   Object.keys(stages).forEach(function (stage) {
     var data = stages[stage];
@@ -298,13 +340,7 @@ function renderTrainingReview() {
     });
     html += '</details>';
   });
-  html += '</section><details class="training-review-files"><summary>Exact included files</summary>';
-  Object.keys(stages).forEach(function (stage) {
-    (stages[stage].datasetEntries || []).forEach(function (entry) {
-      html += '<details><summary>' + escapeHtml(stage.toUpperCase() + ' · ' + entry.kind + ' · ' + entry.role + ' · ' + (entry.bucket || []).join('×') + ' · ' + entry.eligibleCount + ' items') + '</summary><div>' + escapeHtml((entry.files || []).join(', ')) + '</div></details>';
-    });
-  });
-  html += '</details>';
+  html += '</section>';
   var effectiveToml = payload.effectiveToml || {};
   if (Object.keys(effectiveToml).length) {
     html += '<details class="training-review-effective"><summary>Effective TOML diagnostic</summary>';
@@ -361,7 +397,8 @@ function renderTrainingReview() {
   });
   var trainButton = getTrainingWorkspaceEls().queueJobBtn;
   var checkpoint = document.getElementById('training-run-checkpoint-select');
-  if (trainButton) trainButton.disabled = !!trainingWorkspaceState.reviewSavePending || !payload.ok || (startPoint === 'initializer' && !trainingWorkspaceState.reviewInitializerExportId) || (startPoint === 'resume' && !(checkpoint && checkpoint.value));
+  var manualResume = document.getElementById('training-run-resume-input');
+  if (trainButton) trainButton.disabled = !!trainingWorkspaceState.reviewSavePending || !payload.ok || (startPoint === 'initializer' && !trainingWorkspaceState.reviewInitializerExportId && !String(trainingWorkspaceState.reviewInitializerCustomPath || '').trim()) || (startPoint === 'resume' && !(checkpoint && checkpoint.value) && !(manualResume && manualResume.value.trim()));
 }
 
 function renderTrainingReviewSaveStatus() {
@@ -415,10 +452,6 @@ function saveTrainingReview(change) {
     return trainingReviewRequest('/fs/training_review/update', payload);
   }).then(function (result) {
     trainingWorkspaceState.review = result;
-    state.trainingPlan = state.trainingPlan || {};
-    state.trainingPlan.version = 1;
-    state.trainingPlan.profiles = state.trainingPlan.profiles || {};
-    state.trainingPlan.profiles[result.profileId] = result.plan;
     return result;
   }).catch(function (err) {
     trainingWorkspaceState.reviewSaveStatus = 'error';

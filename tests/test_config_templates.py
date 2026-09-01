@@ -123,10 +123,6 @@ def test_h3_config_uses_the_recommended_components_and_shared_output_root(tmp_pa
     assert "cfg = 4" in text
     assert training_config_files_module.output_dir_from_config(folder, "h3").name == "lilly"
 
-    training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3", mode="poc")
-    poc_text = (folder / "config.h3.poc.toml").read_text(encoding="utf-8")
-    assert "/Stable-diffusion/mh3/minimax_h3_fl2va_pruned_int8_convrot.safetensors" in poc_text
-
     path.write_text("edited = true\n", encoding="utf-8")
     training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3")
     assert path.read_text(encoding="utf-8") == "edited = true\n"

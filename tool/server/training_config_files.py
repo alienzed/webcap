@@ -6,7 +6,6 @@ from pathlib import Path
 
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
-from .permissions import normalize_path_permissions
 from .training_profiles import (
     KREA2_PROFILE_ID,
     MINIMAX_H3_PROFILE_ID,
@@ -159,7 +158,6 @@ def allocate_training_launch_group(folder_path: Path):
     """Reserve one never-reused three-digit launch identity."""
     root = Path(app_config.FS_ROOT) / "output" / "runs"
     root.mkdir(parents=True, exist_ok=True)
-    normalize_path_permissions(root)
     highest = 0
     try:
         entries = list(root.iterdir())
@@ -174,7 +172,6 @@ def allocate_training_launch_group(folder_path: Path):
     prefix = _decimal_prefix(highest + 1)
     output_dir = root / (prefix + "-" + Path(folder_path).name)
     output_dir.mkdir(exist_ok=False)
-    normalize_path_permissions(output_dir)
     return output_dir
 
 
@@ -344,9 +341,11 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, 
             for base in selected_profile["configs"]:
                 destination = folder / base["file"]
                 if destination.exists() and not reset:
+                    # Existing set files are authoritative.  Reading them now
+                    # makes corruption visible instead of silently replacing it.
+                    tomllib.loads(destination.read_text(encoding="utf-8"))
                     continue
                 destination.write_text(render_training_config_template(base["file"], folder), encoding="utf-8")
-                normalize_path_permissions(destination)
                 written.append(destination)
         return written
 
@@ -356,10 +355,10 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, 
         resolved = config_for_stage(selected_profile["id"], base["id"], mode)
         dest = folder / resolved["file"]
         if dest.exists() and not reset:
+            tomllib.loads(dest.read_text(encoding="utf-8"))
             continue
         rendered = _render_mode_config(folder, selected_profile["id"], base["id"], mode, reset=reset)
         dest.write_text(rendered, encoding="utf-8")
-        normalize_path_permissions(dest)
         written.append(dest)
     return written
 
@@ -373,7 +372,6 @@ def reset_training_config_file(folder_path: Path, filename: str, profile_id=None
             raise ValueError("Unknown training config: " + name)
         destination = folder / name
         destination.write_text(render_training_config_template(name, folder), encoding="utf-8")
-        normalize_path_permissions(destination)
         return destination
     selected = profile(profile_id or WAN22_PROFILE_ID)
     matches = [config_for_stage(selected["id"], item["id"], mode) for item in selected["configs"]]
@@ -383,5 +381,4 @@ def reset_training_config_file(folder_path: Path, filename: str, profile_id=None
     destination = folder / name
     rendered = _render_mode_config(folder, selected["id"], resolved["id"], mode, reset=True)
     destination.write_text(rendered, encoding="utf-8")
-    normalize_path_permissions(destination)
     return destination

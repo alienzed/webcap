@@ -3,8 +3,6 @@ import json
 from flask import Response, stream_with_context
 import traceback
 import re
-import threading
-import time
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
@@ -24,7 +22,6 @@ from .prune_candidates import prune_candidates_response
 from .training_setup import ensure_training_setup
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
-from .training_runtime import repair_boot_critical_training_permissions, repair_configured_training_root_permissions
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, write_folder_state_atomic
 
@@ -37,26 +34,6 @@ CSS_DIR = TOOL_DIR / "css"
 TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
-
-
-def start_training_root_permission_repair():
-    def repair():
-        started = time.monotonic()
-        print("[webcap] Restoring configured training-root permissions in the background.", flush=True)
-        error = repair_configured_training_root_permissions()
-        elapsed = time.monotonic() - started
-        if error:
-            print(f"[webcap] {error} ({elapsed:.1f}s)", flush=True)
-            return
-        print(f"[webcap] Restored configured training-root permissions ({elapsed:.1f}s).", flush=True)
-
-    thread = threading.Thread(
-        target=repair,
-        name="webcap-training-root-permissions",
-        daemon=True,
-    )
-    thread.start()
-    return thread
 
 
 @app.errorhandler(TrainingStateError)
@@ -533,6 +510,7 @@ def training_runner_start_route():
         initializer_action_id=data.get("initializerActionId") or "",
         initializer_export_id=data.get("initializerExportId") or "",
         initializer_stage=data.get("initializerStage") or "",
+        initializer_custom_path=data.get("initializerCustomPath") or "",
         force_constant_lr=data.get("forceConstantLr"),
     )
     return jsonify(payload), status
@@ -1022,13 +1000,6 @@ def open_in_vscode():
     return open_in_vscode_response(rel_path)
     
 if __name__ == "__main__":
-    print("[webcap] Restoring boot-critical training permissions.", flush=True)
-    boot_permission_error = repair_boot_critical_training_permissions()
-    if boot_permission_error:
-        print(f"[webcap] {boot_permission_error}", flush=True)
-    else:
-        print("[webcap] Restored boot-critical training permissions.", flush=True)
-    start_training_root_permission_repair()
     start_training_runner_observer()
     # Only bind to localhost for desktop/offline use.
     # Disable Flask debug mode for a production-like local runtime.

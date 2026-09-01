@@ -15,7 +15,6 @@ import uuid
 from pathlib import Path
 
 from . import config as app_config
-from .permissions import normalize_path_permissions
 
 
 ACTION_VERSION = 1
@@ -60,7 +59,6 @@ def _atomic_write(path, payload):
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp, target)
-        normalize_path_permissions(target)
     finally:
         try:
             tmp.unlink()
@@ -93,19 +91,17 @@ def read_action(action_id):
         raise ValueError("Training action manifest is unavailable: " + name) from exc
     if not isinstance(data, dict) or data.get("version") != ACTION_VERSION or data.get("actionId") != name:
         raise ValueError("Training action manifest is invalid: " + name)
-    if not isinstance(data.get("record"), dict) or not isinstance(data.get("jobs"), dict) or not isinstance(data.get("outputs"), dict):
+    if not isinstance(data.get("jobs"), dict) or not isinstance(data.get("outputs"), dict):
         raise ValueError("Training action manifest has invalid job/output records: " + name)
-    _validate_relpath((data.get("record") or {}).get("path"), "record")
     return path, data
 
 
 def action_paths(action_id):
     root, data = read_action(action_id)
-    record = root / _validate_relpath((data.get("record") or {}).get("path"), "record")
-    input_root = root / "input"
-    if not record.is_dir() or not input_root.is_dir() or record.is_symlink() or input_root.is_symlink():
-        raise FileNotFoundError("Training action record or captured input is unavailable.")
-    return root, record, input_root, data
+    captures = root / "captures"
+    if not captures.is_dir() or captures.is_symlink():
+        raise FileNotFoundError("Training action captures are unavailable.")
+    return root, captures, captures, data
 
 
 def allocate_action(folder_path, profile, mode, stages, run_name=""):
@@ -113,7 +109,6 @@ def allocate_action(folder_path, profile, mode, stages, run_name=""):
     run_name, run_slug = normalize_run_name(run_name)
     root = actions_root()
     root.mkdir(parents=True, exist_ok=True)
-    normalize_path_permissions(root)
     set_slug = _folder_slug(folder_path)
     with _action_lock:
         highest = 0
@@ -126,7 +121,8 @@ def allocate_action(folder_path, profile, mode, stages, run_name=""):
             if match and child.is_dir() and not child.is_symlink():
                 highest = max(highest, int(match.group(1)))
         for sequence in range(highest + 1, highest + 10000):
-            action_id = str(sequence).zfill(max(3, len(str(sequence)))) + "-" + set_slug
+            model_slug = _SLUG_UNSAFE.sub("-", str(profile.get("slug") or profile.get("id") or "model")).strip(_TRIM_PUNCTUATION)
+            action_id = str(sequence).zfill(max(3, len(str(sequence)))) + "-" + set_slug + "--" + model_slug
             if run_slug:
                 action_id += "--" + run_slug
             action = root / action_id
@@ -134,13 +130,9 @@ def allocate_action(folder_path, profile, mode, stages, run_name=""):
                 action.mkdir()
             except FileExistsError:
                 continue
-            normalize_path_permissions(action)
-            record = action / "record"
-            input_root = action / "input"
-            (record / "configs").mkdir(parents=True)
-            input_root.mkdir()
-            normalize_path_permissions(record)
-            normalize_path_permissions(input_root)
+            (action / "captures").mkdir()
+            (action / "jobs").mkdir()
+            (action / "output").mkdir()
             payload = {
                 "version": ACTION_VERSION,
                 "actionId": action_id,
@@ -151,7 +143,7 @@ def allocate_action(folder_path, profile, mode, stages, run_name=""):
                 "mode": str(mode or "normal"),
                 "requestedStages": list(stages),
                 "createdAt": time.time(),
-                "record": {"path": "record", "capturedItemCount": 0, "bundleSummary": {}, "selectionCriteria": {}, "inputFingerprint": "", "configFingerprint": ""},
+                "captures": [],
                 "jobs": {stage: [] for stage in stages},
                 "outputs": {stage: [] for stage in stages},
             }

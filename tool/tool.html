@@ -612,7 +612,10 @@
                                 <div id="training-navigator-title" class="training-navigator-title">Training</div>
                                 <div id="training-navigator-folder" class="training-navigator-subtitle">No folder selected</div>
                             </div>
-                            <button id="training-workspace-back-btn" type="button" class="review-captions-btn training-back-btn">Back</button>
+                            <div class="training-navigator-actions">
+                                <a id="training-tensorboard-link" class="review-captions-btn training-tensorboard-link" target="_blank" rel="noopener noreferrer">TensorBoard ↗</a>
+                                <button id="training-workspace-back-btn" type="button" class="review-captions-btn training-back-btn">Back</button>
+                            </div>
                         </div>
                         <section id="training-set-workflow" class="training-set-workflow training-set-only" aria-label="Configure this training set">
                             <div class="training-workflow-step">
@@ -621,13 +624,6 @@
                                     <div class="training-workspace-section-title">Model</div>
                                     <label class="training-profile-control">Model
                                         <select id="training-model-profile-select"></select>
-                                    </label>
-                                    <label class="training-profile-control hidden">Legacy mode
-                                        <select id="training-workspace-profile-select" title="Training mode">
-                                            <option value="poc">POC</option>
-                                            <option value="normal" selected>Normal</option>
-                                            <option value="quality">Quality</option>
-                                        </select>
                                     </label>
                                     <div id="training-model-trained-status" class="training-model-trained-status hidden" aria-live="polite"></div>
                                 </div>
@@ -649,9 +645,8 @@
                                     <div id="training-run-stage-option" class="training-run-option">
                                         <span>Model stage</span>
                                         <div id="training-run-stage-buttons" class="training-run-stage-buttons" role="group" aria-label="Training run option">
-                                            <button type="button" class="training-run-stage-btn active" data-training-stage="both" aria-pressed="true">HI → LO</button>
-                                            <button type="button" class="training-run-stage-btn" data-training-stage="hi" aria-pressed="false">HI only</button>
-                                            <button type="button" class="training-run-stage-btn" data-training-stage="lo" aria-pressed="false">LO only</button>
+                                            <button type="button" class="training-run-stage-btn" data-training-stage="hi" aria-pressed="false">Wan2.2 High</button>
+                                            <button type="button" class="training-run-stage-btn" data-training-stage="lo" aria-pressed="false">Wan2.2 Low</button>
                                             <button type="button" class="training-run-stage-btn" data-training-stage="krea2" aria-pressed="false">Krea2 Raw</button>
                                             <button type="button" class="training-run-stage-btn" data-training-stage="wan21" aria-pressed="false">Wan2.1 T2V</button>
                                         </div>
@@ -698,7 +693,7 @@
                                 <summary>Manual command &amp; diagnostics</summary>
                                 <div class="training-run-details-body">
                                     <div id="training-command-status" class="training-command-status">Generate and copy a manual WSL command when you need one.</div>
-                                    <label class="training-run-custom-checkpoint"><span>Manual external checkpoint path <em>(manual command only)</em></span><input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/runs/{legacy-run}"></label>
+                                    <label class="training-run-custom-checkpoint"><span>Custom resume output path <em>(optional)</em></span><input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/runs/{run}"></label>
                                     <pre id="training-command-text" class="training-command-text hidden"></pre>
                                     <div class="training-command-actions">
                                         <button id="training-preview-command-btn" type="button" class="review-captions-btn" title="Generate the manual WSL command, show it here, and copy it to the clipboard.">Generate &amp; Copy Manual Command</button>
@@ -714,10 +709,7 @@
                             <section class="training-runner-card" aria-label="Training queue">
                                 <div class="training-runner-card-header">
                                     <div class="training-workspace-section-title">Training Queue</div>
-                                    <div class="training-runner-header-statuses">
-                                        <div id="training-gpu-status" class="training-gpu-status" aria-label="GPU status"></div>
-                                        <div id="training-tensorboard-status" class="training-tensorboard-status" aria-label="TensorBoard status"></div>
-                                    </div>
+                                    <div id="training-gpu-status" class="training-gpu-status" aria-label="GPU status"></div>
                                 </div>
                                 <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
                                 <div id="training-runner-actions" class="training-runner-actions hidden">

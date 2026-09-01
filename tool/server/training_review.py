@@ -1,10 +1,4 @@
-"""Structured, set-owned training review plans.
-
-The trainer still consumes TOML.  This module keeps the small amount of intent
-that TOML cannot express (empty enabled buckets, target-step budgets and role
-membership) in the folder state, renders app-owned dataset TOMLs, and returns
-an auditable launch review before anything is captured.
-"""
+"""Set-owned TOML review data and bucket visualizations for training."""
 
 import hashlib
 import json
@@ -34,9 +28,7 @@ from .dataset_config import (
 )
 from .dataset_prep import build_dataset_manifest
 from . import config as app_config
-from .training_action import managed_action_children, read_action
-from .folder_state_store import read_folder_state, write_folder_state_atomic
-from .permissions import normalize_path_permissions
+from .training_action import read_action
 from .training_config_files import apply_review_config_settings, reset_training_config_file
 from .training_profiles import (
     KREA2_PROFILE_ID,
@@ -47,6 +39,7 @@ from .training_profiles import (
     profile_run,
 )
 from .training_setup import DATASET_ROOT_PLACEHOLDER, ensure_training_setup
+from .training_history import discover_runs
 
 
 TRAINING_PLAN_VERSION = 1
@@ -157,6 +150,58 @@ def _candidate_video_buckets(ar_label, profile_id, role, frames):
     return list(dict.fromkeys(out))
 
 
+def _cluster_targets(values, candidates):
+    """Choose one to three obvious native-resolution clusters.
+
+    This is intentionally modest: gaps must be visible and each resulting
+    group must have enough items to be useful.  It is a default, never an
+    exclusion rule, and users may still select any supported target.
+    """
+    ordered = sorted(float(value) for value in values if value > 0)
+    if not ordered or not candidates:
+        return []
+    minimum = max(3, int(math.ceil(len(ordered) * 0.15)))
+    breaks = []
+    for index in range(1, len(ordered)):
+        ratio = ordered[index] / ordered[index - 1]
+        if ratio >= 1.20 and index >= minimum and len(ordered) - index >= minimum:
+            breaks.append((ratio, index))
+    chosen_breaks = sorted((index for _ratio, index in sorted(breaks, reverse=True)[:2]))
+    groups, start = [], 0
+    for stop in chosen_breaks + [len(ordered)]:
+        groups.append(ordered[start:stop])
+        start = stop
+    output = []
+    for group in groups:
+        median = group[len(group) // 2]
+        target = min(candidates, key=lambda bucket: (abs(math.log(min(bucket) / median)), -min(bucket)))
+        if target not in output:
+            output.append(target)
+    return output[:3]
+
+
+def _clustered_buckets(manifest, profile_id, role="", frames=1):
+    by_aspect = {label: [] for label in ASPECT_RATIOS}
+    key = "videos" if role else "images"
+    for row in manifest.get(key, []):
+        if not isinstance(row, dict):
+            continue
+        ar_label = str(row.get("ar") or "")
+        try:
+            width, height = int(row.get("width")), int(row.get("height"))
+        except (TypeError, ValueError):
+            continue
+        if ar_label in by_aspect and width > 0 and height > 0:
+            by_aspect[ar_label].append(min(width, height))
+    return {
+        ar_label: [[width, height] for width, height in _cluster_targets(
+            values,
+            _candidate_video_buckets(ar_label, profile_id, role, frames) if role else _candidate_image_buckets(ar_label, profile_id),
+        )]
+        for ar_label, values in by_aspect.items() if values
+    }
+
+
 def _default_profile_plan(folder, profile_id, manifest, setup):
     config_paths = {item["id"]: Path(folder) / item["file"] for item in setup["configs"]}
     default = build_dataset_config_artifacts(
@@ -169,54 +214,28 @@ def _default_profile_plan(folder, profile_id, manifest, setup):
     )["plan"]
     stages = {}
     for stage, data in default.get("stages", {}).items():
-        images = {}
-        for entry in data.get("datasetEntries", []):
-            if entry.get("kind") != "image":
-                continue
-            ar_label = str(entry.get("ar") or "")
-            bucket = entry.get("bucket") or []
-            if ar_label in ASPECT_RATIOS and len(bucket) >= 2:
-                images.setdefault(ar_label, []).append([int(bucket[0]), int(bucket[1])])
+        images = _clustered_buckets(manifest, profile_id)
         stages[stage] = {"targetSteps": int(data.get("targetSteps") or _default_target_steps(stage)), "imageBuckets": images}
-    return {"version": TRAINING_PLAN_VERSION, "revision": 1, "stages": stages, "videoRoles": _normal_roles(profile_id), "datasetFingerprints": {}}
+    roles = _normal_roles(profile_id)
+    for role in roles:
+        role["buckets"] = _clustered_buckets(manifest, profile_id, role["id"], role["frames"])
+    return {"version": TRAINING_PLAN_VERSION, "revision": 1, "stages": stages, "videoRoles": roles, "datasetFingerprints": {}}
 
 
 def _folder_plan_state(folder):
-    state_path = Path(folder) / ".webcap_state.json"
-    state = read_folder_state(state_path)
-    raw = state.get("trainingPlan")
-    if not isinstance(raw, dict) or raw.get("version") != TRAINING_PLAN_VERSION or not isinstance(raw.get("profiles"), dict):
-        raw = {"version": TRAINING_PLAN_VERSION, "profiles": {}}
-    return state_path, state, raw
+    return None, {}, {"version": TRAINING_PLAN_VERSION, "profiles": {}}
 
 
 def _write_profile_plan(folder, profile_id, profile_plan, expected_revision=None):
     with _review_lock:
-        state_path, state, root = _folder_plan_state(folder)
-        current = root["profiles"].get(profile_id)
-        current_revision = int(current.get("revision") or 0) if isinstance(current, dict) else 0
-        if expected_revision is not None and current_revision != int(expected_revision):
-            raise ValueError("Training Review changed in another window. Reload the review and retry.")
         updated = deepcopy(profile_plan)
         updated["version"] = TRAINING_PLAN_VERSION
-        updated["revision"] = current_revision + 1
-        root["profiles"][profile_id] = updated
-        state["trainingPlan"] = root
-        write_folder_state_atomic(state_path, state)
+        updated["revision"] = int(updated.get("revision") or 0) + 1
         return updated
 
 
 def _read_profile_plan(folder, profile_id, manifest, setup):
-    with _review_lock:
-        state_path, state, root = _folder_plan_state(folder)
-        plan = root["profiles"].get(profile_id)
-        if isinstance(plan, dict) and plan.get("version") == TRAINING_PLAN_VERSION:
-            return deepcopy(plan)
-        plan = _default_profile_plan(folder, profile_id, manifest, setup)
-        root["profiles"][profile_id] = plan
-        state["trainingPlan"] = root
-        write_folder_state_atomic(state_path, state)
-        return deepcopy(plan)
+    return _default_profile_plan(folder, profile_id, manifest, setup)
 
 
 def _normalize_bucket_list(raw, candidates, label):
@@ -318,19 +337,21 @@ def _image_rows(manifest):
 
 
 def _assign_images(rows, buckets):
-    selected = sorted((tuple(item) for item in buckets), key=lambda item: item[0] * item[1], reverse=True)
+    selected = list(dict.fromkeys(tuple(item) for item in buckets))
     assigned = {bucket: [] for bucket in selected}
     uncovered = []
     for image in rows:
-        chosen, status = None, ""
-        for bucket in selected:
-            status = image_bucket_compatibility(image, bucket, IMAGE_BUCKET_MAX_UPSCALE_RATIO)
-            if status:
-                chosen = bucket
-                break
-        if chosen is None:
+        if not selected:
             uncovered.append(image[0])
             continue
+        # Resolution is a fitting preference, not an exclusion gate.  Pick the
+        # closest selected shape by log-scale distance so every valid image is
+        # represented exactly once.
+        chosen = min(
+            selected,
+            key=lambda bucket: abs(math.log((bucket[0] * bucket[1]) / float(image[1] * image[2]))),
+        )
+        status = "native" if image[1] >= chosen[0] and image[2] >= chosen[1] else "upscaled"
         assigned[chosen].append((image, status))
     return assigned, uncovered
 
@@ -467,7 +488,6 @@ def _write_structured_datasets(folder, setup, review_plan, profile_plan):
         text = _render_stage_dataset((review_plan.get("stages") or {}).get(stage, {}))
         destination = Path(folder) / filename
         destination.write_text(text, encoding="utf-8")
-        normalize_path_permissions(destination)
         fingerprints[stage] = _file_fingerprint(destination)
     profile_plan["datasetFingerprints"] = fingerprints
 
@@ -709,15 +729,6 @@ def prepare_training_review(folder, profile_id, run_id="", selected_media=None, 
         blockers.append({"code": "custom_dataset", "message": custom_dataset["message"], "files": []})
     if persist and not custom_dataset:
         _write_structured_datasets(folder, review_setup, reviewed, profile_plan)
-        # Fingerprints are bookkeeping, not a user edit, so preserve revision.
-        with _review_lock:
-            state_path, state, root = _folder_plan_state(folder)
-            saved = deepcopy(profile_plan)
-            saved["revision"] = int((root["profiles"].get(profile_id) or {}).get("revision") or profile_plan.get("revision") or 1)
-            root["profiles"][profile_id] = saved
-            state["trainingPlan"] = root
-            write_folder_state_atomic(state_path, state)
-            profile_plan = saved
     fingerprint = _json_fingerprint({
         "profile": profile_id, "run": run_id, "plan": profile_plan, "review": reviewed,
         "selection": manifest.get("selection"), "fallback": sorted((str(k), str(v)) for k, v in fallback.items()),
@@ -759,7 +770,6 @@ def update_training_review(folder, profile_id, payload):
             raise ValueError("Training Review received an unknown config stage.")
         path = Path(folder) / valid_stages[stage]["file"]
         path.write_text(apply_review_config_settings(path.read_text(encoding="utf-8"), values), encoding="utf-8")
-        normalize_path_permissions(path)
     saved = _write_profile_plan(folder, profile_id, normalized, expected_revision=expected)
     return prepare_training_review(
         folder, profile_id, source.get("runId") or "", selected_media, selection_criteria, total_media_count,
@@ -767,103 +777,195 @@ def update_training_review(folder, profile_id, payload):
     )
 
 
-def _initializer_id(action_id, stage, relative_export):
-    return hashlib.sha256((str(action_id) + "\0" + str(stage) + "\0" + str(relative_export)).encode("utf-8")).hexdigest()[:24]
-
-
-def _adapter_shape(path):
-    try:
-        parsed = tomllib.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, tomllib.TOMLDecodeError):
-        return None
-    adapter = parsed.get("adapter") if isinstance(parsed.get("adapter"), dict) else {}
-    rank = adapter.get("rank")
-    if not isinstance(rank, int) or isinstance(rank, bool) or rank <= 0:
-        return None
-    # These are adapter-shape settings, not runtime choices.  If either is
-    # present in both configs it must agree for an existing LoRA to load.
-    shape = {"rank": rank}
-    for key in ("type", "target_modules"):
-        if key in adapter:
-            shape[key] = adapter[key]
-    return shape
-
-
-def _optimizer_lr(path):
-    try:
-        parsed = tomllib.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, tomllib.TOMLDecodeError):
-        return None
-    optimizer = parsed.get("optimizer") if isinstance(parsed.get("optimizer"), dict) else {}
-    value = optimizer.get("lr")
-    return value if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 else None
-
-
-def _initializer_compatibility(folder, profile_id, stage, action_root):
-    target = config_for_stage(profile_id, stage, "normal")
-    source_shape = _adapter_shape(Path(action_root) / "record" / "configs" / target["file"])
-    target_shape = _adapter_shape(Path(folder) / target["file"])
-    if source_shape is None or target_shape is None:
-        return False, "Could not verify the source or current adapter shape."
-    for key in set(source_shape) | set(target_shape):
-        if source_shape.get(key) != target_shape.get(key):
-            return False, "Initializer adapter " + key.replace("_", " ") + " does not match the current model settings."
-    return True, ""
-
-
 def discover_saved_initializers(folder, profile_id, stage):
-    """Discover only current-set managed epoch exports, never arbitrary files."""
-    try:
-        relative_folder = Path(folder).resolve().relative_to(Path(app_config.FS_ROOT).resolve()).as_posix()
-    except ValueError as exc:
-        raise ValueError("Training set is outside the configured root.") from exc
-    wanted_stage = str(stage or "").strip()
-    output = []
-    for action_root, action in managed_action_children():
-        if action.get("folder") != relative_folder or action.get("profileId") != profile_id:
+    """List explicit current-set epoch exports for the Init LoRA picker.
+
+    This is intentionally invoked only by the Init LoRA UI. It is not part of
+    startup/recovery and never searches unrelated output roots.
+    """
+    wanted_stage = str(stage or "").strip().lower()
+    if wanted_stage not in ("hi", "lo", "krea2", "wan21", "h3"):
+        return []
+    result = []
+    for run in discover_runs(folder, wanted_stage):
+        run_path = Path(str(run.get("runPath") or run.get("path") or ""))
+        try:
+            exports = list(run_path.iterdir())
+        except OSError:
             continue
-        for record in (action.get("outputs") or {}).get(wanted_stage, []):
-            if not isinstance(record, dict):
+        for export in exports:
+            match = re.match(r"^epoch(\d+)$", export.name, re.IGNORECASE)
+            if not match or not export.is_dir() or export.is_symlink():
                 continue
-            relative_run = str(record.get("path") or "")
-            run_dir = action_root / relative_run
             try:
-                run_dir.resolve().relative_to(action_root.resolve())
-            except ValueError:
-                continue
-            if not run_dir.is_dir() or run_dir.is_symlink():
-                continue
-            for export in run_dir.iterdir():
-                match = re.match(r"^epoch(\d+)$", export.name, re.IGNORECASE)
-                if not match or not export.is_dir() or export.is_symlink():
-                    continue
                 weights = [child for child in export.iterdir() if child.is_file() and not child.is_symlink() and child.suffix.lower() == ".safetensors"]
-                relative_export = export.relative_to(action_root).as_posix()
-                shape_ok, shape_reason = _initializer_compatibility(folder, profile_id, wanted_stage, action_root)
-                compatible = len(weights) == 1 and shape_ok
-                source_config = action_root / "record" / "configs" / config_for_stage(profile_id, wanted_stage, "normal")["file"]
-                output.append({
-                    "exportId": _initializer_id(action.get("actionId"), wanted_stage, relative_export),
-                    "actionId": action.get("actionId"), "runName": action.get("runName") or action.get("actionId"),
-                    "stage": wanted_stage, "epoch": int(match.group(1)), "path": relative_export,
-                    "weights": [{"name": child.name, "bytes": child.stat().st_size} for child in weights],
-                    "optimizerLr": _optimizer_lr(source_config),
-                    "compatible": compatible,
-                    "reason": "" if compatible else ("Initializer directory must contain exactly one direct .safetensors file." if len(weights) != 1 else shape_reason),
-                })
-    output.sort(key=lambda item: (item["compatible"], item["epoch"]), reverse=True)
-    return output
+            except OSError:
+                continue
+            if len(weights) != 1:
+                continue
+            export_id = hashlib.sha256((str(run.get("resumeActionId") or "") + "\0" + str(export)).encode("utf-8")).hexdigest()[:24]
+            result.append({
+                "exportId": export_id,
+                "actionId": str(run.get("resumeActionId") or ""),
+                "runName": str(run.get("runName") or run.get("name") or "run"),
+                "stage": wanted_stage,
+                "epoch": int(match.group(1)),
+                "sourcePath": str(export),
+                "weights": [{"name": weights[0].name, "bytes": weights[0].stat().st_size}],
+                "compatible": True,
+                "reason": "",
+            })
+    return sorted(result, key=lambda item: item["epoch"], reverse=True)
 
 
 def resolve_saved_initializer(folder, profile_id, stage, action_id, export_id):
     candidate = next((item for item in discover_saved_initializers(folder, profile_id, stage)
                       if item["actionId"] == str(action_id or "") and item["exportId"] == str(export_id or "")), None)
     if candidate is None:
-        raise ValueError("Saved LoRA initializer is unavailable or no longer compatible.")
-    if not candidate["compatible"]:
-        raise ValueError(candidate["reason"])
-    action_root = next((root for root, data in managed_action_children() if data.get("actionId") == candidate["actionId"]), None)
-    if action_root is None:
-        raise ValueError("Initializer action is unavailable.")
-    export = action_root / candidate["path"]
-    return {**candidate, "sourcePath": export}
+        raise ValueError("The selected LoRA checkpoint is unavailable.")
+    return {**candidate, "sourcePath": Path(candidate["sourcePath"])}
+
+
+# The Review used to persist a parallel plan inside .webcap_state.json.  The
+# canonical dataset TOML is now the only editable authority; these definitions
+# deliberately replace the older state-backed implementation above.
+def _set_toml_review(folder, profile_id, run_id, selected_media, selection_criteria, total_media_count):
+    setup = _normal_setup(folder, profile_id, selected_media, selection_criteria, total_media_count)
+    review_setup = _setup_for_run(setup, profile_id, run_id)
+    manifest = build_dataset_manifest(folder, selected_media=selected_media, selection_criteria=selection_criteria, total_media_count=total_media_count)
+    plan = _default_profile_plan(folder, profile_id, manifest, review_setup)
+    custom = None
+    for config in review_setup["configs"]:
+        config_path = Path(folder) / config["file"]
+        dataset_path = Path(folder) / config["dataset"]
+        # Required TOMLs are intentionally read here.  A bad existing file is
+        # an operation failure, never a signal to silently replace it.
+        tomllib.loads(config_path.read_text(encoding="utf-8"))
+        dataset_text = dataset_path.read_text(encoding="utf-8")
+        imported = _import_representable_dataset(dataset_text, profile_id, config["id"], plan)
+        if imported is None:
+            custom = {"stage": config["id"], "message": dataset_path.name + " is custom. Edit it directly or Reset buckets to return to the bucket editor."}
+            break
+        plan = imported
+    plan = normalize_profile_plan(plan, profile_id, review_setup)
+    review = _build_review_plan(folder, profile_id, review_setup, manifest, plan)
+    return setup, review_setup, manifest, plan, review, custom
+
+
+def _distribution_payload(manifest, plan):
+    output = {"images": {}, "videos": {}}
+    image_buckets = {}
+    for stage in (plan.get("stages") or {}).values():
+        for ar_label, buckets in (stage.get("imageBuckets") or {}).items():
+            image_buckets.setdefault(ar_label, [])
+            for bucket in buckets:
+                if bucket not in image_buckets[ar_label]:
+                    image_buckets[ar_label].append(bucket)
+    for row in manifest.get("images") or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            short_edge = min(int(row["width"]), int(row["height"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        ar_label = str(row.get("ar") or "")
+        buckets = image_buckets.get(ar_label) or []
+        target = min(buckets, key=lambda bucket: abs(math.log(min(bucket) / float(short_edge)))) if buckets else []
+        output["images"].setdefault(ar_label, {"native": [], "targets": []})["native"].append({"edge": short_edge, "target": target})
+    for role in plan.get("videoRoles") or []:
+        role_name = str(role.get("id") or "")
+        for row in manifest.get("videos") or []:
+            if not isinstance(row, dict):
+                continue
+            try:
+                short_edge = min(int(row["width"]), int(row["height"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+            ar_label = str(row.get("ar") or "")
+            buckets = (role.get("buckets") or {}).get(ar_label) or []
+            target = min(buckets, key=lambda bucket: abs(math.log(min(bucket) / float(short_edge)))) if buckets else []
+            output["videos"].setdefault(role_name, {}).setdefault(ar_label, {"native": [], "targets": [], "frames": role.get("frames")})["native"].append({"edge": short_edge, "target": target})
+    for group in list(output["images"].values()):
+        group["targets"] = sorted({tuple(item["target"]) for item in group["native"] if item["target"]})
+    for roles in output["videos"].values():
+        for group in roles.values():
+            group["targets"] = sorted({tuple(item["target"]) for item in group["native"] if item["target"]})
+    return output
+
+
+def prepare_training_review(folder, profile_id, run_id="", selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None, persist=True, resume_action_id=""):
+    folder = Path(folder)
+    selected_media = list(selected_media or [])
+    setup, review_setup, manifest, plan, review, custom = _set_toml_review(
+        folder, profile_id, run_id, selected_media, selection_criteria, total_media_count,
+    )
+    blockers = []
+    warnings = []
+    if not selected_media:
+        blockers.append({"code": "no_visible_media", "message": "No visible media items are selected for training.", "files": []})
+    fallback = fallback_captions if isinstance(fallback_captions, dict) else {}
+    for name in selected_media:
+        source = folder / str(name)
+        caption = source.with_suffix(".txt")
+        if not caption.is_file() and not str(fallback.get(str(name)) or "").strip():
+            blockers.append({"code": "missing_caption", "message": "No caption or fallback is available.", "files": [str(name)]})
+    for skipped in manifest.get("skipped") or []:
+        if str(skipped.get("reason") or "") == "invalid_aspect_ratio":
+            warnings.append({"code": "invalid_ar", "message": "Invalid aspect-ratio media is outside the existing training cohorts.", "files": [str(skipped.get("file") or "")]})
+    for stage in (review.get("stages") or {}).values():
+        for entry in stage.get("datasetEntries") or []:
+            count = int(entry.get("sample_count") or entry.get("eligibleCount") or 0)
+            upscaled = int(entry.get("upscaled_count") or entry.get("upscaledCount") or 0)
+            if count and upscaled / float(count) >= 0.5:
+                warnings.append({"code": "resize_pressure", "message": "A selected bucket substantially resizes most of its media.", "files": []})
+    if not any((stage.get("datasetEntries") or []) for stage in (review.get("stages") or {}).values()):
+        blockers.append({"code": "no_trainable_media", "message": "The selected buckets contain no trainable media.", "files": []})
+    fingerprint = _json_fingerprint({
+        "profile": profile_id, "run": run_id, "selection": selected_media,
+        "configs": {item["id"]: _file_fingerprint(folder / item["file"]) for item in review_setup["configs"]},
+        "datasets": {item["id"]: _file_fingerprint(folder / item["dataset"]) for item in review_setup["configs"]},
+    })
+    ladders = _ladders(profile_id, plan, manifest)
+    return {
+        "ok": not blockers, "profileId": profile_id, "runId": run_id, "reviewFingerprint": fingerprint,
+        "plan": plan, "review": review, "blockers": blockers, "warnings": warnings,
+        "ladders": ladders, "candidateCounts": _candidate_counts(profile_id, plan, manifest, ladders),
+        "effectiveToml": _effective_tomls(folder, review_setup), "customDataset": custom or False,
+        "distribution": _distribution_payload(manifest, plan),
+    }
+
+
+def update_training_review(folder, profile_id, payload):
+    source = payload if isinstance(payload, dict) else {}
+    folder = Path(folder)
+    selected_media = list(source.get("selected_media") or [])
+    selection_criteria = source.get("selection_criteria")
+    total_media_count = source.get("total_media_count")
+    run_id = source.get("runId") or ""
+    setup, review_setup, manifest, current, _review, custom = _set_toml_review(
+        folder, profile_id, run_id, selected_media, selection_criteria, total_media_count,
+    )
+    reset = str(source.get("reset") or "")
+    if reset in ("settings", "all"):
+        for config in review_setup["configs"]:
+            reset_training_config_file(folder, config["file"], profile_id=profile_id, mode="normal")
+    if reset in ("buckets", "all"):
+        current = _default_profile_plan(folder, profile_id, manifest, review_setup)
+        custom = None
+    elif isinstance(source.get("plan"), dict) and not custom:
+        current = source["plan"]
+    current = normalize_profile_plan(current, profile_id, review_setup)
+    settings = source.get("settings") if isinstance(source.get("settings"), dict) else {}
+    allowed = {item["id"]: item for item in review_setup["configs"]}
+    for stage, values in settings.items():
+        if stage not in allowed or not isinstance(values, dict):
+            raise ValueError("Training Review received an unknown config stage.")
+        path = folder / allowed[stage]["file"]
+        path.write_text(apply_review_config_settings(path.read_text(encoding="utf-8"), values), encoding="utf-8")
+    reviewed = _build_review_plan(folder, profile_id, review_setup, manifest, current)
+    if not custom:
+        _write_structured_datasets(folder, review_setup, reviewed, current)
+    return prepare_training_review(
+        folder, profile_id, run_id, selected_media, selection_criteria, total_media_count,
+        source.get("fallback_captions"), persist=True,
+    )

@@ -417,15 +417,16 @@ function getManagedTrainingOptions() {
   var checkpointEl = document.getElementById('training-run-checkpoint-select');
   var resumeStageEl = document.getElementById('training-run-resume-stage-select');
   var runNameEl = document.getElementById('training-run-name-input');
-  var stages = String(trainingWorkspaceState.runStages || 'both');
-  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21' && stages !== 'h3') stages = 'both';
+  var stages = String(trainingWorkspaceState.runStages || 'h3');
+  if (stages !== 'hi' && stages !== 'lo' && stages !== 'krea2' && stages !== 'wan21' && stages !== 'h3') stages = 'h3';
   var selectedProfile = getSelectedTrainingModelProfile();
   var selectedRun = getTrainingProfileRunForStage(selectedProfile, stages);
   var startingPoint = String(trainingWorkspaceState.reviewStartingPoint || 'fresh');
   var initializer = (trainingWorkspaceState.reviewInitializers || []).filter(function (item) {
     return item && item.exportId === trainingWorkspaceState.reviewInitializerExportId;
   })[0] || null;
-  var usingInitializer = startingPoint === 'initializer' && initializer;
+  var initializerCustomPath = String(trainingWorkspaceState.reviewInitializerCustomPath || '').trim();
+  var usingInitializer = startingPoint === 'initializer' && (initializer || initializerCustomPath);
   var usingResume = startingPoint === 'resume';
   return {
     stages: stages,
@@ -436,22 +437,23 @@ function getManagedTrainingOptions() {
     runName: runNameEl ? String(runNameEl.value || '').trim() : '',
     resumeOutputId: usingResume ? (checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : '') : '',
     resumeActionId: usingResume ? (checkpointEl && checkpointEl.selectedOptions && checkpointEl.selectedOptions[0] ? String(checkpointEl.selectedOptions[0].getAttribute('data-action-id') || '') : '') : '',
-    resumeStage: stages === 'both' ? (resumeStageEl ? String(resumeStageEl.value || 'lo') : 'lo') : stages,
+    resumeStage: stages,
     parentJobId: '',
     reviewFingerprint: String(trainingWorkspaceState.review && trainingWorkspaceState.review.reviewFingerprint || ''),
-    reviewIntent: usingInitializer ? { startingPoint: 'initializer', sourceActionId: initializer.actionId, epoch: initializer.epoch, stage: trainingWorkspaceState.reviewInitializerStage } : { startingPoint: usingResume ? 'resume' : 'fresh' },
-    initializerActionId: usingInitializer ? String(initializer.actionId || '') : '',
-    initializerExportId: usingInitializer ? String(initializer.exportId || '') : '',
-    initializerStage: usingInitializer ? String(trainingWorkspaceState.reviewInitializerStage || initializer.stage || '') : '',
+    reviewIntent: usingInitializer ? { startingPoint: 'initializer', sourceActionId: initializer ? initializer.actionId : '', epoch: initializer ? initializer.epoch : '', stage: trainingWorkspaceState.reviewInitializerStage } : { startingPoint: usingResume ? 'resume' : 'fresh' },
+    initializerActionId: initializer ? String(initializer.actionId || '') : '',
+    initializerExportId: initializer ? String(initializer.exportId || '') : '',
+    initializerStage: usingInitializer ? String(trainingWorkspaceState.reviewInitializerStage || (initializer && initializer.stage) || stages) : '',
+    initializerCustomPath: usingInitializer ? initializerCustomPath : '',
     forceConstantLr: usingInitializer ? String(trainingWorkspaceState.reviewForceConstantLr || '') : ''
   };
 }
 
 function setManagedTrainingStages(stages) {
-  if (stages !== 'hi' && stages !== 'lo' && stages !== 'both' && stages !== 'krea2' && stages !== 'wan21' && stages !== 'h3') stages = 'both';
+  if (stages !== 'hi' && stages !== 'lo' && stages !== 'krea2' && stages !== 'wan21' && stages !== 'h3') stages = 'h3';
   var selectedProfile = getSelectedTrainingModelProfile();
   if (selectedProfile && !getTrainingProfileRunForStage(selectedProfile, stages)) {
-    stages = String(selectedProfile.runs[0].stages[0] || 'both');
+    stages = String(selectedProfile.runs[0].stages[0] || 'h3');
   }
   trainingWorkspaceState.runStages = stages;
   var buttons = document.querySelectorAll('[data-training-stage]');
@@ -478,7 +480,7 @@ function syncManagedTrainingResumeUi() {
   var runNameInput = document.getElementById('training-run-name-input');
   if (!resumeStageOption) return;
   var hasResume = !!(checkpointEl && String(checkpointEl.value || '').trim());
-  resumeStageOption.classList.toggle('hidden', trainingWorkspaceState.runStages !== 'both' || !hasResume);
+  resumeStageOption.classList.add('hidden');
   if (runNameInput) runNameInput.disabled = hasResume;
   if (checkpointPath) checkpointPath.textContent = checkpointEl && checkpointEl.value ? String(checkpointEl.selectedOptions[0].textContent || '') : '';
 }
@@ -508,12 +510,14 @@ function startManagedTraining() {
     return;
   }
   var options = getManagedTrainingOptions();
+  var trainButton = getTrainingWorkspaceEls().queueJobBtn;
+  if (trainButton) trainButton.disabled = true;
   Promise.resolve(saveCurrentEditorContent())
     .then(function () {
       var selectedMedia = getVisibleMediaSelectionForTraining();
       if (!selectedMedia.length) throw new Error('No visible media items to train.');
       var fallbackResult = buildTrainingFallbackCaptions(selectedMedia);
-      setStatus('Creating run dataset...');
+      setStatus('Preparing self-contained training capture…');
       return trainingRunnerRequest('/fs/training_runner/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -524,6 +528,7 @@ function startManagedTraining() {
           profileId: options.profileId,
           runId: options.runId,
           mode: options.mode,
+          resumeFromCheckpoint: options.resumeFromCheckpoint,
            resumeStage: options.resumeStage,
            resumeActionId: options.resumeActionId,
            resumeOutputId: options.resumeOutputId,
@@ -535,9 +540,10 @@ function startManagedTraining() {
            reviewFingerprint: options.reviewFingerprint,
            reviewIntent: options.reviewIntent,
            initializerActionId: options.initializerActionId,
-           initializerExportId: options.initializerExportId,
-           initializerStage: options.initializerStage,
-           forceConstantLr: options.forceConstantLr
+            initializerExportId: options.initializerExportId,
+            initializerStage: options.initializerStage,
+            initializerCustomPath: options.initializerCustomPath,
+            forceConstantLr: options.forceConstantLr
         })
       });
     })
@@ -552,6 +558,8 @@ function startManagedTraining() {
     })
     .catch(function (err) {
       setStatus('Managed training did not start: ' + String(err && err.message ? err.message : err));
+    }).finally(function () {
+      if (trainButton) trainButton.disabled = false;
     });
 }
 
@@ -883,19 +891,22 @@ function buildTrainingGpuStatusHtml() {
   return '<strong title="Live GPU utilization, VRAM use, temperature, and power draw.">' + escapeHtml(primarySummary) + '</strong>';
 }
 
-function buildTrainingTensorboardStatusHtml() {
+function renderTrainingTensorboardLink() {
+  var link = getTrainingWorkspaceEls().tensorboardLink;
+  if (!link) return;
   var tensorboard = trainingWorkspaceState.tensorboard;
-  if (!tensorboard) {
-    return trainingWorkspaceState.tensorboardStatusPending ? 'Checking TensorBoard...' : '';
+  var isRunning = !!(tensorboard && tensorboard.running);
+  var diagnostic = String((tensorboard && tensorboard.diagnostic) || 'Checking whether TensorBoard is available.');
+  var url = String((tensorboard && tensorboard.url) || '');
+  link.textContent = 'TensorBoard ↗';
+  link.title = isRunning ? 'Open TensorBoard in a new tab.' : ('TensorBoard is not running. ' + diagnostic);
+  link.setAttribute('aria-label', isRunning ? 'Open TensorBoard in a new tab' : 'TensorBoard is not running');
+  link.classList.toggle('is-unavailable', !!tensorboard && !isRunning);
+  if (url) {
+    link.href = url;
+  } else {
+    link.removeAttribute('href');
   }
-  var diagnostic = tensorboard.diagnostic ? ' title="' + escapeHtml(tensorboard.diagnostic) + '"' : '';
-  var html = tensorboard.running
-    ? '<strong>TensorBoard: Running</strong><a href="' + escapeHtml(tensorboard.url || '') + '" target="_blank" rel="noopener noreferrer">Open TensorBoard</a>'
-    : '<span class="is-warning"' + diagnostic + '>TensorBoard: Not Running</span>';
-  if (tensorboard.controlEnabled) {
-    html += '<button type="button" class="btn" data-training-tensorboard-control="' + (tensorboard.running ? 'restart' : 'start') + '">' + (tensorboard.running ? 'Restart TensorBoard' : 'Start TensorBoard') + '</button>';
-  }
-  return html;
 }
 
 function trainingQueueHoldLabel() {
@@ -958,7 +969,7 @@ function renderTrainingRunner() {
     els.runnerActions.classList.add('hidden');
     if (els.runnerQueue) els.runnerQueue.classList.add('hidden');
     if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
-    if (els.tensorboardStatus) els.tensorboardStatus.innerHTML = buildTrainingTensorboardStatusHtml();
+    renderTrainingTensorboardLink();
     return;
   }
   var jobs = trainingWorkspaceState.runnerJobs || [];
@@ -968,7 +979,7 @@ function renderTrainingRunner() {
   var job = getTrainingRunnerActiveJob();
   var followingQueuedJobs = queuedJobs;
   if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
-  if (els.tensorboardStatus) els.tensorboardStatus.innerHTML = buildTrainingTensorboardStatusHtml();
+  renderTrainingTensorboardLink();
   syncTrainingQueueResumeButton(els, queuedJobs);
   if (els.runnerQueue) {
     if (!followingQueuedJobs.length) {

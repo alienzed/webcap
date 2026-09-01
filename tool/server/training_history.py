@@ -13,7 +13,6 @@ from pathlib import Path, PurePosixPath
 import tomllib
 
 from . import config as app_config
-from .permissions import normalize_path_permissions
 from .training_config_files import output_dir_from_config, training_config_path
 from .training_action import action_paths, managed_action_children, read_action
 from .training_profiles import config_for_id
@@ -96,7 +95,6 @@ def _folder_key(folder_path):
 def _write_json_atomic(path, payload):
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    normalize_path_permissions(target.parent)
     tmp = target.with_name("." + target.name + "." + str(os.getpid()) + "." + uuid.uuid4().hex + ".tmp")
     try:
         with tmp.open("x", encoding="utf-8") as handle:
@@ -104,7 +102,6 @@ def _write_json_atomic(path, payload):
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp, target)
-        normalize_path_permissions(target)
     finally:
         try:
             tmp.unlink()
@@ -428,7 +425,6 @@ def summarize_history(folder_path):
 def record_job(folder_path, job):
     folder = Path(folder_path)
     folder_key = _folder_key(folder)
-    runs = discover_runs(folder, str(job.get("stages") or ""))
     record_fields = (
         "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId", "activeTrainingSeconds", "activeTrainingTimingComplete",
@@ -446,13 +442,7 @@ def record_job(folder_path, job):
             "label": str(record["model"].get("label") or "")[:160],
             "source": str(record["model"].get("source") or "")[:512],
         }
-    latest_run = runs[0] if runs else {}
-    record["artifactSummary"] = {
-        "runCount": len(runs), "latestName": latest_run.get("name", ""),
-        "checkpointAvailable": bool(latest_run.get("checkpointAvailable")),
-        "checkpointTag": latest_run.get("checkpointTag", ""),
-        "epoch": latest_run.get("epoch"), "steps": latest_run.get("steps"),
-    }
+    record["artifactSummary"] = dict(record.get("artifactSummary") or {})
     with _history_lock:
         recent = _read_recent_runs()
         existing = recent["jobs"]
@@ -470,13 +460,14 @@ def record_job(folder_path, job):
             reverse=True,
         )
         _write_recent_runs(recent)
-    history = read_history(folder)
-    history["runs"] = runs
-    return history
+    return read_history(folder)
 
 
 def history_payload(folder_path):
     history = read_history(folder_path)
+    # This is an explicit resume picker, not startup recovery. Limit the walk
+    # to managed actions for the current set and only inspect their output
+    # branches when the user opens training history.
     history["runs"] = discover_runs(folder_path)
     history["resumeDefaults"] = {}
     return history

@@ -10,7 +10,7 @@ from tool.server.training_profiles import (
 
 def test_training_profiles_expose_only_their_valid_runs_and_artifacts():
     wan22 = profile(WAN22_PROFILE_ID)
-    assert [item["id"] for item in wan22["runs"]] == ["both", "hi", "lo"]
+    assert [item["id"] for item in wan22["runs"]] == ["hi", "lo"]
     assert wan22["videoFps"] == 16
     assert set(wan22["datasetFiles"]) == {"dataset.hi.toml", "dataset.lo.toml"}
     assert tuple(wan22["configs"][0]["modelIdentityKeys"]) == ("type", "ckpt_path", "transformer_path")

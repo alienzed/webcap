@@ -2,8 +2,8 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import tomllib
+import uuid
 from pathlib import Path
 
 from .dataset_config import assign_images_to_resolution_classes, build_dataset_config_artifacts, coerce_frames, video_roles_for_profile
@@ -13,7 +13,6 @@ from .dataset_prep import (
     resolve_prepared_caption_text,
     write_prepared_caption,
 )
-from .permissions import normalize_path_permissions
 from .training_config_files import apply_captured_initializer, with_dataset_path, with_output_dir
 from .training_profiles import config_for_stage, normalize_mode, profile_for_mode
 from .training_runtime import to_wsl_path
@@ -116,16 +115,11 @@ def _valid_image_buckets(value):
 
 def _link_or_copy(source, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
-    normalize_path_permissions(destination.parent)
     if destination.exists():
         if destination.is_file() and os.path.samefile(source, destination):
             return
         raise FileExistsError("Captured materialized target already exists: " + str(destination))
-    try:
-        os.link(source, destination)
-    except OSError:
-        shutil.copy2(source, destination)
-    normalize_path_permissions(destination)
+    shutil.copy2(source, destination)
 
 
 def _materialize_review_stage_dataset(stage, stage_plan, media_root, distribution):
@@ -174,23 +168,21 @@ def _capture_initializer(initializer, input_root):
     if not isinstance(initializer, dict):
         return None
     source = Path(initializer.get("sourcePath") or "")
-    export_id = str(initializer.get("exportId") or "")
-    if not export_id or not re.fullmatch(r"[a-f0-9]{24}", export_id):
-        raise ValueError("Initializer identity is invalid.")
-    if not source.is_dir() or source.is_symlink():
-        raise FileNotFoundError("Initializer export is unavailable.")
-    destination = Path(input_root) / "initializer" / export_id
+    export_id = str(initializer.get("exportId") or "custom")
+    safe_export_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", export_id).strip(".-") or "custom"
+    destination = Path(input_root) / "initializer" / safe_export_id
     destination.mkdir(parents=True, exist_ok=False)
-    normalize_path_permissions(destination)
+    if source.is_file():
+        shutil.copy2(source, destination / source.name)
+        return {"path": destination, "files": [destination / source.name]}
+    if not source.is_dir():
+        raise FileNotFoundError("Initializer path is unavailable.")
     copied = []
     for child in source.iterdir():
-        if child.is_symlink() or not child.is_file():
-            if child.is_symlink():
-                raise ValueError("Initializer export contains a symlink.")
+        if not child.is_file():
             continue
         target = destination / child.name
         shutil.copy2(child, target)
-        normalize_path_permissions(target)
         copied.append(target)
     weights = [item for item in copied if item.suffix.lower() == ".safetensors"]
     if len(weights) != 1:
@@ -198,74 +190,18 @@ def _capture_initializer(initializer, input_root):
     return {"path": destination, "files": copied}
 
 
-def _source_matches_target_fps(source_fps, target_fps):
+def _action_relative_or_direct_path(path, action_root):
     try:
-        return abs(float(source_fps) - float(target_fps)) <= 0.1
-    except (TypeError, ValueError):
-        return False
-
-
-def _video_transcode_temp_path(destination):
-    return destination.with_name(destination.stem + ".webcap-transcoding" + destination.suffix)
-
-
-def _error_excerpt(error):
-    detail = str(getattr(error, "stderr", "") or str(error)).strip()
-    return " ".join(detail.split())[:500]
+        return Path(path).relative_to(Path(action_root)).as_posix()
+    except ValueError:
+        return str(Path(path))
 
 
 def _copy_or_convert_bundle_video(source, destination, target_fps, source_fps):
-    """Copy a video already at the model FPS, or make a bundle-local CFR copy."""
+    """Capture source video exactly as supplied; Diffusion Pipe owns decoding."""
     destination.parent.mkdir(parents=True, exist_ok=True)
-    normalize_path_permissions(destination.parent)
-    if not target_fps or _source_matches_target_fps(source_fps, target_fps):
-        shutil.copy2(source, destination)
-        normalize_path_permissions(destination)
-        return {"action": "copied"}
-
-    temporary = _video_transcode_temp_path(destination)
-    try:
-        if temporary.exists():
-            temporary.unlink()
-        subprocess.run(
-            [
-                "ffmpeg", "-y", "-i", str(source),
-                "-map", "0:v:0", "-map", "0:a?", "-map_metadata", "0",
-                "-vf", f"fps={int(target_fps)}:round=near,format=yuv420p",
-                "-vsync", "cfr",
-                "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p",
-                "-crf", "10", "-preset", "slow", "-c:a", "copy", str(temporary),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        os.replace(temporary, destination)
-        normalize_path_permissions(destination)
-        return {"action": "transcoded"}
-    except (OSError, subprocess.CalledProcessError) as error:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-        detail = _error_excerpt(error)
-        print(
-            "[WARN] Could not normalize video to " + str(target_fps) + " FPS: " + source.name
-            + "; copying the source unchanged. " + detail,
-            flush=True,
-        )
-        try:
-            shutil.copy2(source, destination)
-            normalize_path_permissions(destination)
-            return {"action": "copied_fallback", "error": detail}
-        except OSError as copy_error:
-            fallback_detail = _error_excerpt(copy_error)
-            print(
-                "[WARN] Could not capture video after normalization fallback: " + source.name
-                + "; skipping it. " + fallback_detail,
-                flush=True,
-            )
-            return {"action": None, "error": fallback_detail}
+    shutil.copy2(source, destination)
+    return {"action": "copied"}
 
 
 def _detail_subset_members(rows, bucket, profile_id, mode):
@@ -524,7 +460,6 @@ def _build_bundle_summary(selected_profile, selected_mode, manifest, plan, bundl
         "capturedItems": sum(capture_actions.values()),
         "captureActions": capture_actions,
         "skipped": list(manifest.get("skipped") or []),
-        "trainingPlan": plan,
         "datasets": datasets,
     }
 
@@ -553,6 +488,7 @@ def materialize_training_bundle(
     distribution="",
     review=None,
     initializer=None,
+    capture_root=None,
 ):
     folder = Path(folder_path)
     action = Path(action_root)
@@ -566,20 +502,12 @@ def materialize_training_bundle(
         selection_criteria=selection_criteria,
         total_media_count=total_media_count,
     )
-    record_root = action / "record"
-    input_root = action / "input"
-    configs_root = record_root / "configs"
-    media_root = input_root / "media"
-    # Allocation creates these first.  Keeping this idempotent also makes the
-    # focused capture helper usable by diagnostic callers without creating a
-    # second hidden bundle layout.
-    record_root.mkdir(parents=True, exist_ok=True)
-    input_root.mkdir(parents=True, exist_ok=True)
-    configs_root.mkdir(parents=True, exist_ok=True)
+    capture_root = Path(capture_root) if capture_root else action / "captures" / uuid.uuid4().hex
+    configs_root = capture_root
+    input_root = capture_root
+    media_root = capture_root / "media"
+    capture_root.mkdir(parents=True, exist_ok=False)
     media_root.mkdir(parents=True, exist_ok=True)
-    normalize_path_permissions(action)
-    normalize_path_permissions(configs_root)
-    normalize_path_permissions(media_root)
 
     fallback_by_name = normalize_fallback_captions(fallback_captions)
     copied_rows = []
@@ -606,9 +534,7 @@ def materialize_training_bundle(
                 row["target_fps"] = selected_profile.get("videoFps")
             else:
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                normalize_path_permissions(destination.parent)
                 shutil.copy2(source, destination)
-                normalize_path_permissions(destination)
             caption_text, used_fallback = resolve_prepared_caption_text(source, fallback_by_name)
             if not caption_text:
                 raise RuntimeError("Train requires captions or primer fallbacks for: " + source.name)
@@ -648,7 +574,6 @@ def materialize_training_bundle(
             )
         )
         dataset_target.write_text(dataset_text, encoding="utf-8")
-        normalize_path_permissions(dataset_target)
         dataset_wsl = to_wsl_path(dataset_target, distribution)
         output_dir = str(output_dirs.get(stage) or "").strip()
         if not output_dir:
@@ -664,7 +589,6 @@ def materialize_training_bundle(
             )
         config_target = configs_root / item["file"]
         config_target.write_text(config_text, encoding="utf-8")
-        normalize_path_permissions(config_target)
         bundle_artifacts[stage + "Config"] = config_target
         bundle_artifacts[stage + "Dataset"] = dataset_target
         config_paths[stage] = source_config
@@ -672,12 +596,6 @@ def materialize_training_bundle(
     plan_artifacts = {"plan": (review or {}).get("review")} if isinstance(review, dict) and isinstance((review or {}).get("review"), dict) else build_dataset_config_artifacts(
         folder, manifest, media_root, mode=selected_mode, profile_id=profile_id, config_paths=config_paths,
     )
-    plan_path = record_root / "training_plan.json"
-    plan_path.write_text(json.dumps(plan_artifacts["plan"], indent=2), encoding="utf-8")
-    normalize_path_permissions(plan_path)
-    manifest_path = input_root / "dataset_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    normalize_path_permissions(manifest_path)
     summary = _build_bundle_summary(
         selected_profile,
         selected_mode,
@@ -685,17 +603,14 @@ def materialize_training_bundle(
         plan_artifacts["plan"],
         bundle_artifacts,
     )
-    summary_path = record_root / "bundle_summary.json"
+    summary_path = capture_root / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    normalize_path_permissions(summary_path)
-    bundle_artifacts["manifest"] = manifest_path
-    bundle_artifacts["plan"] = plan_path
     bundle_artifacts["summary"] = summary_path
     if captured_initializer:
         bundle_artifacts["initializer"] = captured_initializer["path"]
     return {
-        "path": action,
-        "recordPath": record_root,
+        "path": capture_root,
+        "recordPath": capture_root,
         "inputPath": input_root,
         "artifacts": bundle_artifacts,
         "manifest": manifest,
@@ -705,6 +620,6 @@ def materialize_training_bundle(
         "initializer": {
             "actionId": initializer.get("actionId"), "exportId": initializer.get("exportId"),
             "stage": initializer.get("stage"), "epoch": initializer.get("epoch"),
-            "capturedPath": captured_initializer["path"].relative_to(action).as_posix(),
+            "capturedPath": _action_relative_or_direct_path(captured_initializer["path"], action),
         } if captured_initializer else {},
     }

@@ -103,36 +103,6 @@ def test_app_config_get_prefers_disk_config(monkeypatch):
     assert response.get_json()["filesystem"]["root"] == "C:/disk-root"
 
 
-def test_training_root_permission_repair_runs_in_background_and_prints_failure(monkeypatch, capsys):
-    captured = {}
-
-    class ImmediateThread:
-        def __init__(self, target, name, daemon):
-            captured.update(target=target, name=name, daemon=daemon)
-
-        def start(self):
-            captured["started"] = True
-            captured["target"]()
-
-    monkeypatch.setattr(app_module.threading, "Thread", ImmediateThread)
-    monkeypatch.setattr(
-        app_module,
-        "repair_configured_training_root_permissions",
-        lambda: "Could not restore training-root permissions: denied",
-    )
-    monkeypatch.setattr(app_module.time, "monotonic", lambda: 10.0)
-
-    thread = app_module.start_training_root_permission_repair()
-    output = capsys.readouterr().out
-
-    assert isinstance(thread, ImmediateThread)
-    assert captured["started"] is True
-    assert captured["name"] == "webcap-training-root-permissions"
-    assert captured["daemon"] is True
-    assert "[webcap] Restoring configured training-root permissions in the background." in output
-    assert "[webcap] Could not restore training-root permissions: denied (0.0s)" in output
-
-
 def test_app_config_save_persists_enabled_training_profiles(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
     monkeypatch.setattr(app_module.app_config, "CONFIG_PATH", config_path)
@@ -625,29 +595,6 @@ def test_fs_describe_hides_internal_and_originals_directories(tmp_path, monkeypa
     assert "visible_folder" in names
 
 
-def test_training_history_opens_the_recorded_effective_output_folder(tmp_path, monkeypatch):
-    fs_root = tmp_path / "fs_root"
-    set_dir = fs_root / "set_training"
-    output_dir = fs_root / "output" / "runs" / "set-lo"
-    set_dir.mkdir(parents=True)
-    output_dir.mkdir(parents=True)
-    write_text(set_dir / ".webcap_training.json", json.dumps({
-        "version": 3,
-        "outputRoot": str(output_dir),
-        "jobs": [{"id": "job-1", "outputRoot": str(output_dir)}],
-        "runs": [],
-    }))
-    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
-    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
-    opened = []
-    monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))
-
-    response = app_module.app.test_client().post("/fs/training_history/open_output", json={"folder": "set_training", "jobId": "job-1"})
-
-    assert response.status_code == 200
-    assert opened == [output_dir]
-
-
 def test_training_history_opens_a_discovered_same_model_run(tmp_path, monkeypatch):
     set_dir = tmp_path / "set_training"
     run_dir = tmp_path / "output" / "20260718_14-20-10"
@@ -905,56 +852,6 @@ def test_removed_generate_dataset_config_route_does_not_write_dataset_files(tmp_
 
     assert response.status_code == 404
     assert not (set_dir / "dataset.lo.toml").exists()
-
-
-def test_train_run_captures_a_self_contained_bundle_for_manual_handoff(tmp_path, monkeypatch):
-    fs_root = tmp_path / "fs_root"
-    set_dir = fs_root / "set_train"
-    set_dir.mkdir(parents=True)
-    write_image(set_dir / "clip.png", (512, 512))
-    write_text(set_dir / "clip.txt", "source caption")
-
-    def safe_join(rel_path):
-        rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
-        if rel.startswith("/"):
-            rel = rel[1:]
-        return (fs_root / rel).resolve()
-
-    monkeypatch.setattr(run_ops_module.app_config, "safe_join_fs_root", safe_join)
-    monkeypatch.setattr(run_ops_module.app_config, "FS_ROOT", fs_root)
-    monkeypatch.setattr(run_ops_module.app_config, "config", {"training": {"mode": "normal"}})
-    monkeypatch.setattr(run_ops_module, "_to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
-    monkeypatch.setattr(training_bundle_module, "to_wsl_path", lambda path, distribution="": "/mnt/w/" + Path(path).name)
-    training_setup_module.ensure_training_setup(
-        set_dir, "wan22_t2v", "normal", selected_media=["clip.png"]
-    )
-
-    client = app_module.app.test_client()
-    response = client.post("/fs/train_run", json={
-        "folder": "set_train",
-        "profileId": "wan22_t2v",
-        "runId": "both",
-        "mode": "normal",
-        "selected_media": ["clip.png"],
-    })
-
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "[INFO] Manual training command (copy/paste):" in body
-    assert "[INFO] Launch group: 001-set_train" in body
-    assert "Bundle policy" not in body
-    assert "simple_v2" not in body
-    assert "wan22-hi" in body
-    assert "wan22-lo" in body
-    assert " ; " in body
-    assert "pkill" not in body
-    assert "Manual handoff only" in body
-    assert "config.wan22.normal.hi.toml" in body
-    assert "config.wan22.normal.lo.toml" in body
-    bundles = list((fs_root / "output" / "runs" / "001-set_train" / ".webcap" / "datasets").iterdir())
-    assert len(bundles) == 1
-    assert (bundles[0] / "media" / "square_img" / "clip.png").is_file()
-    assert not (set_dir / "auto_dataset").exists()
 
 
 def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path, monkeypatch):

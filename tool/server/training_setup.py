@@ -1,8 +1,8 @@
 from pathlib import Path
+import tomllib
 
 from .dataset_config import build_dataset_config_artifacts
 from .dataset_prep import build_dataset_manifest
-from .permissions import normalize_path_permissions
 from .training_config_files import ensure_training_config_files, reset_training_config_file
 from .training_profiles import WAN22_PROFILE_ID, config_for_stage, normalize_mode, profile_for_mode
 
@@ -41,6 +41,10 @@ def ensure_training_setup(
         raise ValueError("File does not belong to the selected training setup: " + reset_name)
 
     ensure_training_config_files(folder, profile_id=selected["id"], mode=selected_mode)
+    for item in selected["configs"]:
+        dataset_path = folder / item["dataset"]
+        if dataset_path.exists() and dataset_path.name != reset_name:
+            tomllib.loads(dataset_path.read_text(encoding="utf-8"))
     if reset_name in known_configs:
         reset_training_config_file(
             folder,
@@ -77,7 +81,6 @@ def ensure_training_setup(
             text = artifacts["hiText"] if selected["id"] == WAN22_PROFILE_ID and item["id"] == "hi" else artifacts["loText"]
             destination = folder / item["dataset"]
             destination.write_text(text, encoding="utf-8")
-            normalize_path_permissions(destination)
 
     return {
         "profileId": selected["id"],

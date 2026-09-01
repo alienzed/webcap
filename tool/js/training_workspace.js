@@ -1,6 +1,5 @@
 function normalizeTrainingWorkspaceMode(mode) {
-  var value = String(mode || '').trim().toLowerCase();
-  return ['poc', 'normal', 'quality'].indexOf(value) !== -1 ? value : 'normal';
+  return 'normal';
 }
 
 function syncTrainingWorkspaceProfile() {
@@ -521,7 +520,6 @@ function wireTrainingWorkspace() {
   var runnerConsoleBtn = document.getElementById('training-runner-console-btn');
   var runnerConsoleRevealBtn = document.getElementById('training-runner-console-reveal-btn');
   var runnerConsoleCloseBtn = document.getElementById('training-runner-console-close-btn');
-  var tensorboardStatus = document.getElementById('training-tensorboard-status');
   Array.prototype.forEach.call(document.querySelectorAll('[data-training-detail-tab]'), function (button) {
     button.onclick = function () {
       requestTrainingDetailTab(button.getAttribute('data-training-detail-tab'));
@@ -601,10 +599,6 @@ function wireTrainingWorkspace() {
   runnerPauseBtn.onclick = function () { stopManagedTraining(false, true); };
   runnerCancelBtn.onclick = function () { stopManagedTraining(true); };
   runnerResumeQueueBtn.onclick = resumeManagedTrainingQueue;
-  if (tensorboardStatus) tensorboardStatus.onclick = function (event) {
-    var button = event.target.closest('[data-training-tensorboard-control]');
-    if (button) controlTrainingTensorboard(button.getAttribute('data-training-tensorboard-control'));
-  };
   getTrainingWorkspaceEls().runnerSummary.onclick = function (event) {
     var folderButton = event.target.closest('[data-training-open-folder]');
     var folder = folderButton && folderButton.getAttribute('data-training-open-folder');

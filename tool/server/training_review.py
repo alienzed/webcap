@@ -748,6 +748,7 @@ def _distribution_group(rows, targets, frames=None, assign_target=None):
             "file": str(row.get("file") or ""),
             "width": width,
             "height": height,
+            "frames": int(row.get("frames") or 0),
             "edge": short_edge,
             "nativeShortEdge": short_edge,
             "target": list(target),
@@ -755,6 +756,15 @@ def _distribution_group(rows, targets, frames=None, assign_target=None):
             "scaleRatio": scale_ratio,
             "impactBand": band,
             "eligible": bool(row.get("eligible", True)),
+            "eligibilityReason": (
+                "Frame count unavailable."
+                if frames is not None and not row.get("eligible", True) and not int(row.get("frames") or 0)
+                else (
+                    str(int(row.get("frames") or 0)) + " frames; this role requires " + str(int(frames)) + "."
+                    if frames is not None and not row.get("eligible", True)
+                    else ""
+                )
+            ),
         })
     group = {
         "count": len(native),
@@ -765,6 +775,8 @@ def _distribution_group(rows, targets, frames=None, assign_target=None):
     }
     if frames is not None:
         group["frames"] = int(frames)
+        group["missingFrameCount"] = sum(1 for row in native if not row["frames"])
+        group["shortFrameCount"] = sum(1 for row in native if row["frames"] and not row["eligible"])
     return group
 
 
@@ -809,8 +821,8 @@ def _distribution_payload(manifest, plan):
         except (KeyError, TypeError, ValueError):
             continue
         frames = coerce_frames(row, model_fps)
-        if ar_label in video_rows and width > 0 and height > 0 and frames:
-            video_rows[ar_label].append({"file": str(row.get("file") or ""), "width": width, "height": height, "frames": int(frames)})
+        if ar_label in video_rows and width > 0 and height > 0:
+            video_rows[ar_label].append({"file": str(row.get("file") or ""), "width": width, "height": height, "frames": int(frames or 0)})
     for role in plan.get("videoRoles") or []:
         role_name = str(role.get("id") or "")
         frames = int(role.get("frames") or 0)

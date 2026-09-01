@@ -202,12 +202,12 @@ function reviewViewItems(payload) {
     if (!Object.keys(groups).length) return;
     var count = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).count || 0); }, 0);
     var eligibleCount = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).eligibleCount || 0); }, 0);
-    views.push({ id: role, available: eligibleCount > 0, count: count, eligibleCount: eligibleCount });
+    views.push({ id: role, count: count, eligibleCount: eligibleCount });
   });
   return views;
 }
 
-function reviewAvailableViews(payload) { return reviewViewItems(payload).filter(function (item) { return item.available; }).map(function (item) { return item.id; }); }
+function reviewAvailableViews(payload) { return reviewViewItems(payload).map(function (item) { return item.id; }); }
 
 function reviewActiveView(payload) {
   var views = reviewAvailableViews(payload);
@@ -325,7 +325,7 @@ function reviewChartHtml(group, selected, aspect) {
     var scaleRatio = Number(row.scaleRatio || 1);
     var scale = Math.round((scaleRatio - 1) * 100);
     var resize = Math.abs(scale) < 1 ? 'No meaningful resize · 1.00×' : (scale > 0 ? 'Upscale ' : 'Downscale ') + scaleRatio.toFixed(2) + '× · ' + (scale > 0 ? '+' : '') + scale + '%';
-    var detail = (row.file || 'Source media') + '\nNative: ' + row.width + ' × ' + row.height + ' · short edge ' + edge + ' px' + (target.length ? '\nTarget: ' + target[0] + ' × ' + target[1] + '\n' + resize : '\nNot eligible for this role');
+    var detail = (row.file || 'Source media') + '\nNative: ' + row.width + ' × ' + row.height + ' · short edge ' + edge + ' px' + (target.length ? '\nTarget: ' + target[0] + ' × ' + target[1] + '\n' + resize : '\nNot eligible for this role' + (row.eligibilityReason ? ': ' + row.eligibilityReason : ''));
     return '<i class="training-review-chart-dot ' + reviewTargetColor(selected, target) + '" style="left:' + dotLeft + '%;bottom:' + (11 + level * 15) + 'px" title="' + escapeHtml(detail) + '"></i>';
   }).join('');
   var markers = (group.targets || []).map(function (target) {
@@ -361,14 +361,18 @@ function reviewModalHtml(payload) {
   var views = reviewViewItems(payload);
   var viewCount = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).count || 0); }, 0);
   var eligibleCount = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).eligibleCount || 0); }, 0);
+  var missingFrameCount = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).missingFrameCount || 0); }, 0);
+  var shortFrameCount = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).shortFrameCount || 0); }, 0);
   var cohortCount = Object.keys(groups).length;
   function label(id) { return id === 'images' ? 'Images' : id.charAt(0).toUpperCase() + id.slice(1); }
   var viewDescription = view === 'images' ? viewCount + ' image' + (viewCount === 1 ? '' : 's') : viewCount + ' video' + (viewCount === 1 ? '' : 's') + ' · ' + eligibleCount + ' eligible for ' + label(view);
-  var roleNote = role && !eligibleCount ? '<div class="training-review-role-note">This role is enabled, but no current clip reaches its ' + escapeHtml(String(role.frames)) + '-frame requirement. It will not contribute samples to this run.</div>' : '';
-  var unavailableRoles = views.filter(function (item) { return item.id !== 'images' && !item.available; });
-  return '<section class="training-review-workbench"><div class="training-review-overview"><div><strong>Dataset buckets</strong><span>' + escapeHtml(viewDescription) + ' · ' + cohortCount + ' cohort' + (cohortCount === 1 ? '' : 's') + '</span></div><div class="training-review-tabs" role="tablist">' + views.map(function (item) { var unavailable = !item.available; return '<button type="button" class="training-review-tab' + (item.id === view ? ' active' : '') + (unavailable ? ' unavailable' : '') + '" data-review-view="' + escapeHtml(item.id) + '" aria-selected="' + (item.id === view ? 'true' : 'false') + '"' + (unavailable ? ' disabled title="No current video meets this role’s fixed frame requirement."' : '') + '>' + escapeHtml(label(item.id)) + (item.id === 'images' ? '' : ' <span>· ' + Number(item.eligibleCount || 0) + '</span>') + '</button>'; }).join('') + '</div></div>' +
+  var roleNotes = [];
+  if (role && missingFrameCount) roleNotes.push(missingFrameCount + ' video' + (missingFrameCount === 1 ? ' has' : 's have') + ' no readable frame count.');
+  if (role && shortFrameCount) roleNotes.push(shortFrameCount + ' video' + (shortFrameCount === 1 ? ' is' : 's are') + ' shorter than ' + role.frames + ' frames.');
+  if (role && !eligibleCount && !roleNotes.length) roleNotes.push('No current video reaches this role’s ' + role.frames + '-frame requirement.');
+  var roleNote = roleNotes.length ? '<div class="training-review-role-note">' + escapeHtml(roleNotes.join(' ')) + '</div>' : '';
+  return '<section class="training-review-workbench"><div class="training-review-overview"><div><strong>Dataset buckets</strong><span>' + escapeHtml(viewDescription) + ' · ' + cohortCount + ' cohort' + (cohortCount === 1 ? '' : 's') + '</span></div><div class="training-review-tabs" role="tablist">' + views.map(function (item) { return '<button type="button" class="training-review-tab' + (item.id === view ? ' active' : '') + '" data-review-view="' + escapeHtml(item.id) + '" aria-selected="' + (item.id === view ? 'true' : 'false') + '">' + escapeHtml(label(item.id)) + (item.id === 'images' ? '' : ' <span>· ' + Number(item.eligibleCount || 0) + '</span>') + '</button>'; }).join('') + '</div></div>' +
     (role ? '<div class="training-review-role-summary"><label><input type="checkbox" data-review-role-enabled="' + escapeHtml(role.id) + '"' + (role.enabled ? ' checked' : '') + '> ' + escapeHtml(label(role.id)) + ' enabled</label><span>Fixed at ' + escapeHtml(String(role.frames)) + ' frames · ' + eligibleCount + ' of ' + viewCount + ' eligible</span></div>' + roleNote : '') +
-    (unavailableRoles.length ? '<div class="training-review-unavailable-roles">' + unavailableRoles.map(function (item) { var unavailableRole = reviewRole(plan, item.id); return '<span><strong>' + escapeHtml(label(item.id)) + ' · 0 eligible</strong> No current video reaches ' + escapeHtml(String(unavailableRole.frames)) + ' frames.</span>'; }).join('') + '</div>' : '') +
     '<div class="training-review-cohort-tabs" role="tablist">' + TRAINING_REVIEW_ASPECT_ORDER.filter(function (id) { return !!groups[id]; }).map(function (id) { return '<button type="button" class="training-review-cohort-tab' + (id === aspect ? ' active' : '') + '" data-review-aspect="' + escapeHtml(id) + '" aria-selected="' + (id === aspect ? 'true' : 'false') + '">' + escapeHtml(formatReviewAspect(id)) + ' <span>· ' + Number((groups[id] || {}).count || 0) + '</span></button>'; }).join('') + '</div>' +
     reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect), aspect) + reviewImpactHtml(payload, view) + reviewWarningsHtml(payload, view) + '</section>';
 }

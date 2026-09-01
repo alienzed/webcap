@@ -154,7 +154,25 @@ def test_video_distribution_reports_when_a_role_has_no_eligible_clips():
 
     assert group["count"] == 1
     assert group["eligibleCount"] == 0
+    assert group["missingFrameCount"] == 0
+    assert group["shortFrameCount"] == 1
     assert group["native"][0]["assignedTarget"] == []
+
+
+def test_video_distribution_keeps_a_visible_video_when_frame_metadata_is_missing():
+    plan = {
+        "profileId": MINIMAX_H3_PROFILE_ID,
+        "stages": {"h3": {"imageBuckets": {}}},
+        "videoRoles": [{"id": "temporal", "enabled": True, "frames": 68, "weight": 1.0, "buckets": {"square": [[352, 352]]}}],
+    }
+    manifest = {"images": [], "videos": [{"file": "unknown.mp4", "ar": "square", "width": 640, "height": 640, "frames": None}]}
+
+    group = training_review._distribution_payload(manifest, plan)["videos"]["temporal"]["square"]
+
+    assert group["count"] == 1
+    assert group["eligibleCount"] == 0
+    assert group["missingFrameCount"] == 1
+    assert group["native"][0]["eligibilityReason"] == "Frame count unavailable."
 
 
 def test_review_warnings_flag_substantial_upscale_but_not_downscale():
@@ -200,7 +218,7 @@ def test_bucket_modal_markup_and_script_keep_the_editor_focused():
     assert "data-review-view" in script
     assert "data-review-aspect" in script
     assert "data-review-step" in script
-    assert "training-review-unavailable-roles" in script
+    assert 'disabled title="No current video meets' not in script
     assert "training-review-impact-cells" in script
     assert "Smaller target" in script and "Larger target" in script
     assert "training-review-bucket-check" not in script

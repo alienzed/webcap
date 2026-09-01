@@ -214,28 +214,59 @@ function reviewTargetColor(selected, target) {
   return index < 0 ? 'target-neutral' : 'target-' + Math.min(index, 2);
 }
 
+function reviewCandidates(payload, view, aspect) {
+  var ladders = payload.ladders || { images: {}, videos: {} };
+  return view === 'images' ? ((ladders.images || {})[aspect] || []) : (((ladders.videos || {})[view] || {})[aspect] || []);
+}
+
+function reviewNeutralTargetChipHtml(bucket, selectedCount) {
+  return '<button type="button" class="training-review-target-chip neutral" data-review-target="' + bucket.join(',') + '"' + (selectedCount >= 3 ? ' disabled title="Use at most three targets per cohort."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button>';
+}
+
 function reviewTargetsHtml(payload, view, aspect) {
   var plan = payload.plan || {};
   var selected = reviewSelectedBuckets(plan, view, aspect);
-  var ladders = payload.ladders || { images: {}, videos: {} };
-  var candidates = view === 'images' ? ((ladders.images || {})[aspect] || []) : (((ladders.videos || {})[view] || {})[aspect] || []);
-  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><span>Click a target to add or remove it. Arrows move a selected target one supported rung.</span></div><div class="training-review-chip-strip">' + candidates.map(function (bucket) {
-    var selectedTarget = hasReviewBucket(plan, view, aspect, bucket);
-    if (!selectedTarget) return '<button type="button" class="training-review-target-chip neutral" data-review-target="' + bucket.join(',') + '"' + (selected.length >= 3 ? ' disabled title="Use at most three targets per cohort."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button>';
+  var candidates = reviewCandidates(payload, view, aspect);
+  var neutral = candidates.filter(function (bucket) { return !hasReviewBucket(plan, view, aspect, bucket); });
+  var visible = [];
+  function addVisible(bucket) {
+    if (bucket && !visible.some(function (item) { return sameReviewBucket(item, bucket); })) visible.push(bucket);
+  }
+  selected.forEach(function (bucket) {
+    var index = candidates.findIndex(function (item) { return sameReviewBucket(item, bucket); });
+    addVisible(candidates[index - 1]);
+    addVisible(candidates[index + 1]);
+  });
+  var nativeEdges = (((reviewViewGroups(payload, view)[aspect] || {}).native) || []).map(function (item) { return Number(item.nativeShortEdge || item.edge || 0); }).filter(Boolean);
+  if (nativeEdges.length) {
+    var low = Math.min.apply(Math, nativeEdges);
+    var high = Math.max.apply(Math, nativeEdges);
+    [low, high].forEach(function (edge) {
+      addVisible(candidates.reduce(function (nearest, bucket) {
+        return !nearest || Math.abs(Math.min(bucket[0], bucket[1]) - edge) < Math.abs(Math.min(nearest[0], nearest[1]) - edge) ? bucket : nearest;
+      }, null));
+    });
+  }
+  visible = visible.filter(function (bucket) { return neutral.some(function (item) { return sameReviewBucket(item, bucket); }); }).slice(0, 4);
+  var remaining = neutral.filter(function (bucket) { return !visible.some(function (item) { return sameReviewBucket(item, bucket); }); });
+  function selectedChip(bucket) {
     var color = reviewTargetColor(selected, bucket);
     var removeDisabled = selected.length <= 1;
     return '<span class="training-review-selected-target ' + color + '"><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Move target lower">‹</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Move target higher">›</button></span>';
-  }).join('') + '</div></section>';
+  }
+  function neutralChip(bucket) { return reviewNeutralTargetChipHtml(bucket, selected.length); }
+  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><span>Choose up to three. Arrows move a selected target one rung.</span></div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + selected.map(selectedChip).join('') + '</div></div><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></section>';
 }
 
-function reviewChartHtml(group, selected) {
+function reviewChartHtml(group, selected, candidates, aspect) {
   var rows = group && group.native || [];
   if (!rows.length) return '<section class="training-review-chart-empty">No eligible media is visible in this cohort.</section>';
   var shapes = (group.targets || []).map(function (item) { return item.shape || []; });
-  var edges = rows.map(function (item) { return Number(item.nativeShortEdge || item.edge || 0); }).filter(Boolean).concat(shapes.map(function (item) { return Math.min(Number(item[0]), Number(item[1])); }).filter(Boolean));
+  var candidateEdges = (candidates || []).map(function (item) { return Math.min(Number(item[0]), Number(item[1])); }).filter(Boolean);
+  var edges = candidateEdges.length ? candidateEdges : rows.map(function (item) { return Number(item.nativeShortEdge || item.edge || 0); }).filter(Boolean).concat(shapes.map(function (item) { return Math.min(Number(item[0]), Number(item[1])); }).filter(Boolean));
   var low = Math.min.apply(Math, edges);
   var high = Math.max.apply(Math, edges);
-  var padding = Math.max(24, Math.round((high - low || low) * 0.08));
+  var padding = candidateEdges.length ? 0 : Math.max(24, Math.round((high - low || low) * 0.08));
   low = Math.max(1, low - padding);
   high += padding;
   function position(value) { return Math.max(1.5, Math.min(98.5, ((Number(value) - low) / Math.max(1, high - low)) * 97)); }
@@ -247,16 +278,21 @@ function reviewChartHtml(group, selected) {
   var dots = rows.map(function (row) {
     var edge = Number(row.edge || 0);
     var bin = Math.min(11, Math.max(0, Math.floor(((edge - low) / Math.max(1, high - low)) * 12)));
-    stacks[bin] = (stacks[bin] || 0) + 1;
+    var ordinal = stacks[bin] || 0;
+    stacks[bin] = ordinal + 1;
     var target = row.assignedTarget || row.target || [];
-    return '<i class="training-review-chart-dot ' + reviewTargetColor(selected, target) + '" style="left:' + position(edge) + '%;bottom:' + (10 + ((stacks[bin] - 1) % 8) * 8) + 'px"></i>';
+    var lane = (ordinal % 5) - 2;
+    var level = Math.floor(ordinal / 5);
+    var scale = Math.round((Number(row.scaleRatio || 1) - 1) * 100);
+    var detail = 'Native ' + row.width + ' × ' + row.height + ' · short edge ' + edge + ' px' + (target.length ? ' · target ' + target[0] + ' × ' + target[1] + ' · ' + (scale >= 0 ? '+' : '') + scale + '%' : ' · not eligible for this role');
+    return '<i class="training-review-chart-dot ' + reviewTargetColor(selected, target) + '" style="left:' + position(edge) + '%;bottom:' + (11 + level * 15) + 'px;margin-left:' + (lane * 5) + 'px" title="' + escapeHtml(detail) + '"></i>';
   }).join('');
   var markers = (group.targets || []).map(function (target) {
     var shape = target.shape || [];
     var edge = Math.min(Number(shape[0]), Number(shape[1]));
     return '<b class="training-review-chart-marker ' + reviewTargetColor(selected, shape) + '" style="left:' + position(edge) + '%"><span>' + escapeHtml(shape[0] + ' × ' + shape[1]) + '</span><em>' + escapeHtml(String(target.assignedCount || 0)) + '</em></b>';
   }).join('');
-  return '<section class="training-review-chart"><div class="training-review-label-row"><strong>Native resolution and selected targets</strong><span>Columns cluster native short edges. Dots are source media; markers show selected targets and assigned counts.</span></div><div class="training-review-plot">' + histogram + dots + markers + '</div><div class="training-review-chart-axis"><span>' + escapeHtml(Math.round(low) + ' px') + '</span><span>Native short edge</span><span>' + escapeHtml(Math.round(high) + ' px') + '</span></div></section>';
+  return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Short edge in pixels</span></div><div class="training-review-legend"><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + histogram + dots + markers + '</div><div class="training-review-chart-axis"><span>' + escapeHtml(Math.round(low) + ' px') + '</span><span>Native short edge</span><span>' + escapeHtml(Math.round(high) + ' px') + '</span></div></section>';
 }
 
 function reviewImpactHtml(payload, view) {
@@ -281,11 +317,13 @@ function reviewModalHtml(payload) {
   var aspect = reviewActiveAspect(payload, view);
   var role = view === 'images' ? null : reviewRole(plan, view);
   var views = reviewAvailableViews(payload);
+  var viewCount = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).count || 0); }, 0);
+  var cohortCount = Object.keys(groups).length;
   function label(id) { return id === 'images' ? 'Images' : id.charAt(0).toUpperCase() + id.slice(1); }
-  return '<section class="training-review-workbench"><div class="training-review-tabs" role="tablist">' + views.map(function (id) { return '<button type="button" class="training-review-tab' + (id === view ? ' active' : '') + '" data-review-view="' + escapeHtml(id) + '" aria-selected="' + (id === view ? 'true' : 'false') + '">' + escapeHtml(label(id)) + '</button>'; }).join('') + '</div>' +
+  return '<section class="training-review-workbench"><div class="training-review-overview"><div><strong>Dataset buckets</strong><span>' + viewCount + ' ' + escapeHtml(label(view).toLowerCase()) + ' · ' + cohortCount + ' cohort' + (cohortCount === 1 ? '' : 's') + '</span></div><div class="training-review-tabs" role="tablist">' + views.map(function (id) { return '<button type="button" class="training-review-tab' + (id === view ? ' active' : '') + '" data-review-view="' + escapeHtml(id) + '" aria-selected="' + (id === view ? 'true' : 'false') + '">' + escapeHtml(label(id)) + '</button>'; }).join('') + '</div></div>' +
     (role ? '<div class="training-review-role-summary"><label><input type="checkbox" data-review-role-enabled="' + escapeHtml(role.id) + '"' + (role.enabled ? ' checked' : '') + '> ' + escapeHtml(label(role.id)) + ' enabled</label><span>Fixed at ' + escapeHtml(String(role.frames)) + ' frames</span></div>' : '') +
-    '<div class="training-review-cohort-tabs" role="tablist">' + TRAINING_REVIEW_ASPECT_ORDER.filter(function (id) { return !!groups[id]; }).map(function (id) { return '<button type="button" class="training-review-cohort-tab' + (id === aspect ? ' active' : '') + '" data-review-aspect="' + escapeHtml(id) + '" aria-selected="' + (id === aspect ? 'true' : 'false') + '">' + escapeHtml(formatReviewAspect(id)) + ' <span>' + Number((groups[id] || {}).count || 0) + '</span></button>'; }).join('') + '</div>' +
-    reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect)) + reviewImpactHtml(payload, view) + reviewWarningsHtml(payload, view) + '</section>';
+    '<div class="training-review-cohort-tabs" role="tablist">' + TRAINING_REVIEW_ASPECT_ORDER.filter(function (id) { return !!groups[id]; }).map(function (id) { return '<button type="button" class="training-review-cohort-tab' + (id === aspect ? ' active' : '') + '" data-review-aspect="' + escapeHtml(id) + '" aria-selected="' + (id === aspect ? 'true' : 'false') + '">' + escapeHtml(formatReviewAspect(id)) + ' <span>· ' + Number((groups[id] || {}).count || 0) + '</span></button>'; }).join('') + '</div>' +
+    reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect), reviewCandidates(payload, view, aspect), aspect) + reviewImpactHtml(payload, view) + reviewWarningsHtml(payload, view) + '</section>';
 }
 
 function trainingReviewSummaryHtml(payload) {
@@ -294,7 +332,7 @@ function trainingReviewSummaryHtml(payload) {
   var items = imageEntries.reduce(function (sum, entry) { return sum + Number(entry.eligibleCount || entry.count || 0); }, 0);
   var blockers = payload.blockers || [];
   var custom = payload.customDataset || false;
-  var note = custom ? 'Custom dataset TOML · raw editing remains available under Advanced configuration.' : blockers.length ? String(blockers[0].message || 'Training Review needs attention.') : imageEntries.length + ' image target' + (imageEntries.length === 1 ? '' : 's') + ' · ' + items + ' image item' + (items === 1 ? '' : 's');
+  var note = custom ? 'Custom dataset TOML · edit it under Advanced configuration, or Reset dataset.' : blockers.length ? String(blockers[0].message || 'Training Review needs attention.') : imageEntries.length + ' image target' + (imageEntries.length === 1 ? '' : 's') + ' · ' + items + ' image item' + (items === 1 ? '' : 's');
   return '<div class="training-review-summary"><div class="training-review-summary-copy"><strong>Bucket plan <span class="training-review-saved">' + escapeHtml(trainingWorkspaceState.reviewSaveStatus === 'saving' ? 'Saving…' : trainingWorkspaceState.reviewSaveStatus === 'error' ? 'Save error' : 'Saved') + '</span></strong><span' + (custom || blockers.length || (payload.warnings || []).length ? ' class="training-review-summary-warning"' : '') + '>' + escapeHtml(note) + '</span></div><button type="button" class="review-captions-btn training-review-open-btn" data-open-training-review>Adjust buckets</button></div>';
 }
 

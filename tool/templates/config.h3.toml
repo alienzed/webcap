@@ -19,8 +19,6 @@ caching_batch_size = 1
 steps_per_print = 10
 video_clip_mode = "single_beginning"
 
-# Safe 24 GB starting point. Lower this gradually when more VRAM is available.
-blocks_to_swap = 48
 compile = true
 
 [model]

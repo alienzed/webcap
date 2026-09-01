@@ -83,9 +83,9 @@ Minimum practical shape:
 
 Notes:
 - `filesystem.root` is required.
-- Training modes are `POC`, `Normal`, and `Quality`; each profile/mode owns persistent config and dataset TOMLs.
+- Training uses one canonical persistent config per profile; Wan2.2 keeps separate HI and LO configs.
 - `training.enabled_profiles` controls which models appear for new training runs. At least one must be enabled.
-- Wan2.2 uses `config.wan22.{mode}.{hi|lo}.toml`; Krea2 Raw, Wan2.1, and MiniMax H3 use `config.{krea2|wan21|h3}.{mode}.toml`, each with a matching dataset file.
+- Wan2.2 uses `config.hi.toml` and `config.lo.toml`; Krea2 Raw, Wan2.1, and MiniMax H3 use `config.{krea2|wan21|h3}.toml`, each with its matching dataset file.
 - `analysis.enableFaceAnalysis` enables Face Focus metadata available in `Review Set` analysis details.
 - `analysis.enableMediaPipeAnalysis` enables selection-pose metadata and tag suggestions.
 - `set_destinations.presets` powers destination shortcuts in `Create Set`.

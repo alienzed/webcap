@@ -29,16 +29,16 @@ Queued and running jobs use their captured bundle and are independent of later c
 Supported profiles are Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, and MiniMax H3. The app-owned profile registry defines media support, persistent filenames, run options, and standard DeepSpeed launch behavior.
 
 - Wan2.2 accepts images and videos and owns separate HI and LO setup files. HI → LO creates two jobs sharing one captured bundle.
-- Krea2 Raw is image-only and owns `config.krea2.{mode}.toml` and `dataset.krea2.{mode}.toml`.
-- Wan2.1 accepts images and videos and owns `config.wan21.{mode}.toml` and `dataset.wan21.{mode}.toml`.
-- MiniMax H3 accepts images and videos and owns `config.h3.{mode}.toml` and `dataset.h3.{mode}.toml`.
+- Krea2 Raw is image-only and owns `config.krea2.toml` and `dataset.train.toml`.
+- Wan2.1 accepts images and videos and owns `config.wan21.toml` and `dataset.train.toml`.
+- MiniMax H3 accepts images and videos and owns `config.h3.toml` and `dataset.train.toml`.
 - App Settings can hide profiles from new-run selection. All are enabled by default; disabling one never deletes files or run data.
 
 See [training_profiles.md](training_profiles.md) and [train.md](train.md).
 
 ## Configuration behavior
 
-Selecting a profile/mode creates only its missing TOMLs and shows only the applicable files in Training. Existing TOMLs are preserved. Training config Reset restores the appropriate template source; dataset Reset recalculates that one file from currently visible media metadata without copying media.
+Selecting a profile creates only its missing TOMLs and shows only the applicable files in Training. Existing TOMLs are preserved. Training config Reset restores the appropriate template source; dataset Reset recalculates that one file from currently visible media metadata without copying media.
 
 Train saves the open TOML before capture. Captured copies preserve inspected values except for app-owned runtime paths: output directory, training-config dataset path, and dataset media directories.
 

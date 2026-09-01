@@ -4,7 +4,7 @@ The H3 probe is an external, fixed 90-shape experiment that measures the largest
 
 ## Prepare and run
 
-Right-click a representative video in WebCap and select **Prepare H3 envelope probe…**. WebCap captures that exact video, its saved sidecar caption, base config, and the immutable campaign plan under `.webcap_training/h3-probes/`, then copies a command to the clipboard. It uses the set's `config.h3.normal.toml` when present; otherwise it creates a probe-local config from WebCap's canonical H3 Normal template.
+Right-click a representative video in WebCap and select **Prepare H3 envelope probe…**. WebCap captures that exact video, its saved sidecar caption, base config, and the immutable campaign plan under `.webcap_training/h3-probes/`, then copies a command to the clipboard. It uses the set's `config.h3.toml` when present; otherwise it creates a probe-local config from WebCap's canonical H3 template.
 
 Run the command in the configured training WSL environment with the GPU idle. The runner creates two sibling directories: `work/` holds per-candidate media/cache artifacts and trainer outputs; `results/` holds portable diagnostic evidence. It runs one candidate at a time: a fresh cache-only process creates the cache for that candidate's one bucket, then a fresh training process reuses that exact cache.
 

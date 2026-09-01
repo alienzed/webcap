@@ -4,10 +4,10 @@ WebCap keeps a small app-owned registry of supported Diffusion Pipe profiles. A 
 
 | Profile | Captured media | Persistent files | Run options |
 | --- | --- | --- | --- |
-| Wan2.2 T2V | Images and videos | `config.wan22.{mode}.{hi|lo}.toml`, matching dataset files | HI → LO, HI only, LO only |
-| Krea2 Raw | Images only | `config.krea2.{mode}.toml`, matching dataset file | Train |
-| Wan2.1 T2V 14B | Images and videos | `config.wan21.{mode}.toml`, matching dataset file | Train |
-| MiniMax H3 | Images and videos | `config.h3.{mode}.toml`, matching dataset file | Train |
+| Wan2.2 T2V | Images and videos | `config.hi.toml`, `config.lo.toml`, matching dataset files | HI → LO, HI only, LO only |
+| Krea2 Raw | Images only | `config.krea2.toml`, matching dataset file | Train |
+| Wan2.1 T2V 14B | Images and videos | `config.wan21.toml`, matching dataset file | Train |
+| MiniMax H3 | Images and videos | `config.h3.toml`, matching dataset file | Train |
 
 Krea2 excludes video. Wan profiles normalize bundle videos to 16 fps; H3 normalizes them to 24 fps. Dataset roles are shared and explicit: Wan POC uses 33f temporal; Wan Normal/Quality uses 37f temporal plus 13f detail; H3 POC uses 34f temporal; H3 Normal/Quality uses 68f temporal plus 17f detail. Detail uses an explicit bundle subset and a `1.0 : 0.25` temporal/detail exposure weight.
 

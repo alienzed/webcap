@@ -574,7 +574,7 @@ def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkey
     source = folder / "probe.mp4"
     source.write_bytes(b"video")
     source.with_suffix(".txt").write_text("probe caption", encoding="utf-8")
-    (folder / "config.h3.normal.toml").write_text(h3_config_text(), encoding="utf-8")
+    (folder / "config.h3.toml").write_text(h3_config_text(), encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
     monkeypatch.setattr(h3_probe_module, "update_media_metadata", lambda _folder: {"probe.mp4": {"fps": 24}})
 

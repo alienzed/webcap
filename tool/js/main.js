@@ -73,11 +73,8 @@ function fetchPathExistsForCurrentFolder(pathSuffix) {
 }
 
 function getVisibleMediaSelectionForTraining() {
-  var visibleRows = Array.prototype.slice.call(
-    ui.mediaListEl ? ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]') : []
-  );
-  return visibleRows
-    .map(function (row) { return String(row.getAttribute('data-key') || '').trim(); })
+  return getFilteredMediaItems(false)
+    .map(function (item) { return String((item && (item.fileName || item.key)) || '').trim(); })
     .filter(Boolean);
 }
 

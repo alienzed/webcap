@@ -212,6 +212,7 @@ def test_bucket_modal_markup_and_script_keep_the_editor_focused():
     root = Path(__file__).parents[1]
     html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
+    main_script = (root / "tool" / "js" / "main.js").read_text(encoding="utf-8")
 
     assert 'id="training-review-modal"' in html
     assert 'id="training-review-modal-done"' in html
@@ -223,6 +224,8 @@ def test_bucket_modal_markup_and_script_keep_the_editor_focused():
     assert "Smaller target" in script and "Larger target" in script
     assert "training-review-bucket-check" not in script
     assert "Training intent" not in script
+    assert "return getFilteredMediaItems(false)" in main_script
+    assert "querySelectorAll('.media-item[data-type=\"media\"]')" not in main_script
 
 
 def test_switching_sets_resets_only_ephemeral_launch_inputs():

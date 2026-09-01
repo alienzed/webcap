@@ -23,6 +23,9 @@ FS_DEBUG = False
 
 H3_CALIBRATION_FRAMES = {"17", "34", "68"}
 H3_CALIBRATION_ASPECTS = {"169", "square", "43"}
+H3_CALIBRATION_MAX_SHAPES = {
+    "square": (768, 768), "43": (1024, 768), "169": (1344, 768),
+}
 
 
 def debug_print(*args, **kwargs):
@@ -120,6 +123,12 @@ def _validate_h3_calibration(value):
                 raise ValueError("A calibrated square H3 shape must have equal dimensions.")
             if aspect in ("169", "43") and width <= height:
                 raise ValueError("A calibrated landscape H3 shape must be wider than tall.")
+            maximum = H3_CALIBRATION_MAX_SHAPES[aspect]
+            if width > maximum[0] or height > maximum[1]:
+                raise ValueError(
+                    "A calibrated H3 shape exceeds the app-owned model/probe envelope "
+                    + str(maximum[0]) + "x" + str(maximum[1]) + "."
+                )
             normalized_aspects[aspect] = [width, height]
         safe_shapes[frames] = normalized_aspects
     return {"version": 1, "campaign": campaign, "safe_shapes": safe_shapes}

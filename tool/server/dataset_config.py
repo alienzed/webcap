@@ -81,23 +81,29 @@ PREP_MANIFEST_NAME = "prep_manifest.json"
 VIDEO_MFP_LIMIT = 11000
 # H3 buckets use 32x32 latent cells. 11,900 cells is 12.19 raw MegaFramePixels.
 H3_VIDEO_MFP_LIMIT = 11900
-# One built-in ceiling per active H3 role. A saved calibration may only lower
-# these ceilings; it does not create another role or selection path.
+# Conservative ceilings for uncalibrated active H3 video roles.  A matching
+# calibration replaces (rather than clamps) the matching role/aspect ceiling.
 H3_VIDEO_MODE_CEILINGS = {
     "normal": {
-        "square": {"temporal": (352, 352), "detail": (768, 768)},
-        "43": {"temporal": (416, 320), "detail": (928, 704)},
-        "34": {"temporal": (320, 416), "detail": (704, 928)},
-        "169": {"temporal": (448, 256), "detail": (1088, 608)},
-        "916": {"temporal": (256, 448), "detail": (608, 1088)},
+        "square": {"temporal": (352, 352), "detail": (736, 736)},
+        "43": {"temporal": (416, 320), "detail": (896, 672)},
+        "34": {"temporal": (320, 416), "detail": (672, 896)},
+        "169": {"temporal": (448, 256), "detail": (1024, 576)},
+        "916": {"temporal": (256, 448), "detail": (576, 1024)},
     },
     "quality": {
-        "square": {"temporal": (352, 352), "detail": (768, 768)},
-        "43": {"temporal": (416, 320), "detail": (928, 704)},
-        "34": {"temporal": (320, 416), "detail": (704, 928)},
-        "169": {"temporal": (448, 256), "detail": (1088, 608)},
-        "916": {"temporal": (256, 448), "detail": (608, 1088)},
+        "square": {"temporal": (352, 352), "detail": (736, 736)},
+        "43": {"temporal": (416, 320), "detail": (896, 672)},
+        "34": {"temporal": (320, 416), "detail": (672, 896)},
+        "169": {"temporal": (448, 256), "detail": (1024, 576)},
+        "916": {"temporal": (256, 448), "detail": (576, 1024)},
     },
+}
+# Calibration is only valid inside the model/probe envelope.  These are video
+# limits, not image caps: H3 images retain their existing resolution classes.
+H3_VIDEO_ABSOLUTE_CEILINGS = {
+    "square": (768, 768), "43": (1024, 768), "34": (768, 1024),
+    "169": (1344, 768), "916": (768, 1344),
 }
 REPEAT_TARGET_STEPS = {
     "poc": {"hi": 5000, "lo": 20000},
@@ -499,39 +505,107 @@ def _h3_calibrated_ceiling(frames: int, ar_label: str):
     return shape[0], shape[1]
 
 
-def video_role_ceiling(profile_id: str, mode: str, ar_label: str, role: str):
+def _h3_calibration_campaign():
+    runtime_config = app_config.config if isinstance(app_config.config, dict) else {}
+    training = runtime_config.get("training") if isinstance(runtime_config.get("training"), dict) else {}
+    calibration = training.get("h3_calibration")
+    if calibration is None:
+        return ""
+    if not isinstance(calibration, dict):
+        raise ValueError("training.h3_calibration must be an object.")
+    return str(calibration.get("campaign") or "").strip()
+
+
+def _h3_video_limit(profile_id: str, mode: str, ar_label: str, role: str):
+    """Return the effective active-role H3 ceiling and its authority."""
     generate_mode = normalize_training_generate_mode(mode)
-    selected_profile_id = str(profile_id or "").strip().lower()
-    if selected_profile_id == MINIMAX_H3_PROFILE_ID and generate_mode != "poc":
-        built_in = H3_VIDEO_MODE_CEILINGS[generate_mode][ar_label][role]
-    else:
-        built_in = TRAINING_MODE_TARGETS[generate_mode][ar_label]
-    if selected_profile_id != MINIMAX_H3_PROFILE_ID:
-        return built_in
+    baseline = H3_VIDEO_MODE_CEILINGS[generate_mode][ar_label][role]
     role_frames = next(
-        (frames for name, frames, _weight in video_roles_for_profile(selected_profile_id, generate_mode) if name == role),
+        (frames for name, frames, _weight in video_roles_for_profile(profile_id, generate_mode) if name == role),
         None,
     )
     calibrated = _h3_calibrated_ceiling(role_frames, ar_label) if role_frames else None
     if not calibrated:
-        return built_in
-    return min(built_in[0], calibrated[0]), min(built_in[1], calibrated[1])
+        return {"ceiling": baseline, "source": "baseline", "campaign": ""}
+    absolute = H3_VIDEO_ABSOLUTE_CEILINGS[ar_label]
+    if calibrated[0] > absolute[0] or calibrated[1] > absolute[1]:
+        raise ValueError(
+            "H3 calibration " + str(role_frames) + "f " + ar_label + " "
+            + str(calibrated[0]) + "x" + str(calibrated[1])
+            + " exceeds the H3 model/probe envelope " + str(absolute[0]) + "x" + str(absolute[1]) + "."
+        )
+    return {"ceiling": calibrated, "source": "calibration", "campaign": _h3_calibration_campaign()}
 
 
-def _video_candidates(ar_label, ceiling, frames, profile_id):
-    limit = H3_VIDEO_MFP_LIMIT if str(profile_id or "").strip().lower() == MINIMAX_H3_PROFILE_ID else VIDEO_MFP_LIMIT
-    return [
-        (w, h) for (w, h, _) in generate_candidates(ar_label)
-        if w <= ceiling[0] and h <= ceiling[1] and mfp(w, h, frames) <= limit
+def video_bucket_ladder(profile_id: str, mode: str, ar_label: str, role: str, frames: int):
+    """Return one authoritative selectable/default video ladder for a role."""
+    generate_mode = normalize_training_generate_mode(mode)
+    selected_profile_id = str(profile_id or "").strip().lower()
+    active_h3_role = selected_profile_id == MINIMAX_H3_PROFILE_ID and generate_mode != "poc"
+    if active_h3_role:
+        limit_info = _h3_video_limit(selected_profile_id, generate_mode, ar_label, role)
+        ceiling = limit_info["ceiling"]
+        absolute = H3_VIDEO_ABSOLUTE_CEILINGS[ar_label]
+        candidates = [
+            (w, h) for w, h, _area in generate_candidates_with_caps(
+                ar_label,
+                H3_VIDEO_ABSOLUTE_CEILINGS["square"][0],
+                max(absolute),
+                min(absolute),
+            )
+            if w <= ceiling[0] and h <= ceiling[1]
+        ]
+        # The old MFP heuristic remains a conservative baseline safeguard.  A
+        # measured calibration is authoritative for exactly its frame/aspect.
+        if limit_info["source"] == "baseline":
+            candidates = [shape for shape in candidates if mfp(shape[0], shape[1], frames) <= H3_VIDEO_MFP_LIMIT]
+        if limit_info["source"] == "calibration" and ceiling not in candidates:
+            candidates.append(ceiling)
+            candidates.sort(key=lambda shape: shape[0] * shape[1], reverse=True)
+        default_candidates = candidates[1:] if len(candidates) > 1 else candidates
+        return {
+            "selectable": candidates,
+            "defaults": default_candidates,
+            "ceiling": ceiling,
+            "defaultCeiling": default_candidates[0] if default_candidates else None,
+            "source": limit_info["source"],
+            "campaign": limit_info["campaign"],
+        }
+
+    ceiling = TRAINING_MODE_TARGETS[generate_mode][ar_label]
+    if selected_profile_id == MINIMAX_H3_PROFILE_ID:
+        role_frames = next((value for name, value, _weight in video_roles_for_profile(selected_profile_id, generate_mode) if name == role), None)
+        calibrated = _h3_calibrated_ceiling(role_frames, ar_label) if role_frames else None
+        if calibrated:
+            ceiling = min(ceiling[0], calibrated[0]), min(ceiling[1], calibrated[1])
+    candidates = [
+        (w, h) for w, h, _area in generate_candidates(ar_label)
+        if w <= ceiling[0] and h <= ceiling[1] and mfp(w, h, frames) <= VIDEO_MFP_LIMIT
     ]
+    return {
+        "selectable": candidates,
+        "defaults": candidates,
+        "ceiling": ceiling,
+        "defaultCeiling": candidates[0] if candidates else None,
+        "source": "baseline",
+        "campaign": "",
+    }
+
+
+def video_role_ceiling(profile_id: str, mode: str, ar_label: str, role: str):
+    frames = next(
+        (value for name, value, _weight in video_roles_for_profile(profile_id, mode) if name == role),
+        1,
+    )
+    return video_bucket_ladder(profile_id, mode, ar_label, role, frames)["ceiling"]
 
 
 def _native_video_support(clips, bucket):
     return [clip for clip in clips if clip["width"] >= bucket[0] and clip["height"] >= bucket[1]]
 
 
-def _choose_common_video_bucket(ar_label, clips, frames, ceiling, profile_id):
-    candidates = _video_candidates(ar_label, ceiling, frames, profile_id)
+def _choose_common_video_bucket(ar_label, clips, frames, profile_id, mode, role):
+    candidates = video_bucket_ladder(profile_id, mode, ar_label, role, frames)["defaults"]
     if not candidates:
         return None, []
     for bucket in candidates:
@@ -542,8 +616,8 @@ def _choose_common_video_bucket(ar_label, clips, frames, ceiling, profile_id):
     return bucket, unsupported
 
 
-def _choose_optional_detail_bucket(ar_label, clips, frames, ceiling, profile_id):
-    for bucket in _video_candidates(ar_label, ceiling, frames, profile_id):
+def _choose_optional_detail_bucket(ar_label, clips, frames, profile_id, mode, role):
+    for bucket in video_bucket_ladder(profile_id, mode, ar_label, role, frames)["defaults"]:
         members = _native_video_support(clips, bucket)
         if len(members) >= 2:
             return bucket, members
@@ -589,8 +663,9 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
             lines.append(f"[WARN] {ar_label}: skipped {len(too_short)} clip(s) shorter than {minimum_frames} frames: " + ", ".join(clip["file"] for clip in too_short))
         temporal_clips = [clip for clip in clips if clip["frames"] >= temporal_frames]
         if temporal_clips:
-            ceiling = video_role_ceiling(selected_profile_id, generate_mode, ar_label, temporal_name)
-            bucket, unsafe = _choose_common_video_bucket(ar_label, temporal_clips, temporal_frames, ceiling, selected_profile_id)
+            bucket, unsafe = _choose_common_video_bucket(
+                ar_label, temporal_clips, temporal_frames, selected_profile_id, generate_mode, temporal_name,
+            )
             if bucket:
                 if unsafe:
                     lines.append(f"[WARN] {ar_label} temporal {bucket[0]}x{bucket[1]} @ {temporal_frames} exceeds native support for: " + ", ".join(unsafe))
@@ -602,15 +677,18 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
         detail_name, detail_frames, detail_weight = detail_role
         detail_eligible = [clip for clip in clips if clip["frames"] >= detail_frames]
         mandatory = [clip for clip in detail_eligible if clip["frames"] < temporal_frames]
-        ceiling = video_role_ceiling(selected_profile_id, generate_mode, ar_label, detail_name)
         if mandatory:
-            bucket, unsafe = _choose_common_video_bucket(ar_label, mandatory, detail_frames, ceiling, selected_profile_id)
+            bucket, unsafe = _choose_common_video_bucket(
+                ar_label, mandatory, detail_frames, selected_profile_id, generate_mode, detail_name,
+            )
             if not bucket:
                 continue
             members = list(mandatory)
             members.extend(clip for clip in temporal_clips if clip not in members and clip in _native_video_support(temporal_clips, bucket))
         else:
-            bucket, members = _choose_optional_detail_bucket(ar_label, detail_eligible, detail_frames, ceiling, selected_profile_id)
+            bucket, members = _choose_optional_detail_bucket(
+                ar_label, detail_eligible, detail_frames, selected_profile_id, generate_mode, detail_name,
+            )
             unsafe = []
         if not bucket or not members:
             continue

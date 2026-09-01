@@ -22,6 +22,7 @@ from tool.server.dataset_config import (
     normalize_training_generate_mode,
     read_epochs_from_training_config,
     repeat_targets_for_mode,
+    video_bucket_ladder,
     video_role_ceiling,
     mfp,
 )
@@ -185,7 +186,7 @@ def test_h3_uses_temporal_and_detail_roles_then_one_poc_role(tmp_path):
     report = generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
-    assert "[352, 352, 68]" in text
+    assert "[320, 320, 68]" in text
     assert "[768, 768, 17]" not in text
     assert "[512, 512, 1]" in text
     assert all(f", {frames}]" not in text for frames in (13, 34, 136))
@@ -193,7 +194,7 @@ def test_h3_uses_temporal_and_detail_roles_then_one_poc_role(tmp_path):
     video_blocks = [block for block in text.split("[[directory]]") if 'group = "videos"' in block]
     video_repeats = [int(block.split("num_repeats = ", 1)[1].splitlines()[0]) for block in video_blocks]
     assert video_repeats[0] >= 1
-    assert "square: temporal 352x352 @ 68" in report
+    assert "square: temporal 320x320 @ 68" in report
     assert "square: detail" not in report
     plan = json.loads((set_folder / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))
     assert set(plan["stages"]) == {"h3"}
@@ -211,7 +212,7 @@ def test_h3_dataset_warns_when_a_short_clip_is_excluded_from_a_usable_set(tmp_pa
     report = generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
-    assert "square: detail 768x768 @ 17" in report
+    assert "square: detail 704x704 @ 17" in report
     assert 'group = "videos"' in text
     assert ", 1]" in text
 
@@ -276,9 +277,9 @@ def test_h3_bucket_timing_uses_24fps_for_legacy_and_high_fps_sources(tmp_path):
 
 def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
     expected = {
-        "square": (352, 352, 68),
-        "43": (416, 320, 68),
-        "34": (320, 416, 68),
+        "square": (320, 320, 68),
+        "43": (384, 288, 68),
+        "34": (288, 384, 68),
         "169": (448, 256, 68),
         "916": (256, 448, 68),
     }
@@ -316,7 +317,7 @@ def test_h3_calibration_clamps_active_role_ceilings(monkeypatch):
     assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "poc", "square", "temporal") == (320, 320)
 
 
-def test_h3_calibration_never_raises_built_in_ceiling(monkeypatch):
+def test_h3_calibration_replaces_the_conservative_ceiling(monkeypatch):
     monkeypatch.setattr(dataset_config_module.app_config, "config", {
         "training": {
             "h3_calibration": {
@@ -327,7 +328,7 @@ def test_h3_calibration_never_raises_built_in_ceiling(monkeypatch):
         },
     })
 
-    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "normal", "square", "temporal") == (352, 352)
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "normal", "square", "temporal") == (768, 768)
 
 
 def test_h3_dataset_generation_applies_calibrated_ceiling(tmp_path, monkeypatch):
@@ -346,8 +347,70 @@ def test_h3_dataset_generation_applies_calibrated_ceiling(tmp_path, monkeypatch)
     generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
-    assert "[320, 320, 68]" in text
-    assert "[352, 352, 68]" not in text
+    assert "[288, 288, 68]" in text
+    assert "[320, 320, 68]" not in text
+
+
+def test_h3_sparse_calibration_uses_exact_entries_and_conservative_fallbacks(monkeypatch):
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {
+        "training": {
+            "h3_calibration": {
+                "version": 1,
+                "campaign": "h3-envelope-2026-08-27",
+                "safe_shapes": {
+                    "17": {"169": [1184, 672]},
+                    "34": {"43": [800, 608], "169": [896, 512], "square": [704, 704]},
+                    "68": {"43": [512, 384], "169": [576, 320], "square": [448, 448]},
+                },
+            },
+        },
+    })
+
+    detail_square = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "square", "detail", 17)
+    assert detail_square["source"] == "baseline"
+    assert detail_square["ceiling"] == (736, 736)
+    assert detail_square["selectable"][0] == (736, 736)
+    assert detail_square["defaults"][0] == (704, 704)
+    assert (768, 768) not in detail_square["selectable"]
+
+    detail_wide = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "169", "detail", 17)
+    assert detail_wide["source"] == "calibration"
+    assert detail_wide["campaign"] == "h3-envelope-2026-08-27"
+    assert detail_wide["selectable"][0] == (1184, 672)
+    assert detail_wide["defaults"][0] == (1152, 640)
+
+    detail_four_three = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "43", "detail", 17)
+    assert detail_four_three["source"] == "baseline"
+    assert detail_four_three["selectable"][0] == (896, 672)
+    assert detail_four_three["defaults"][0] == (864, 640)
+
+    for ar_label, ceiling, default in (
+        ("square", (448, 448), (416, 416)),
+        ("43", (512, 384), (480, 352)),
+        ("169", (576, 320), (512, 288)),
+        ("34", (384, 512), (352, 480)),
+        ("916", (320, 576), (288, 512)),
+    ):
+        ladder = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", ar_label, "temporal", 68)
+        assert ladder["source"] == "calibration"
+        assert ladder["selectable"][0] == ceiling
+        assert ladder["defaults"][0] == default
+
+
+def test_h3_calibration_can_lower_a_baseline_and_must_stay_inside_the_model_envelope(monkeypatch):
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {
+        "training": {"h3_calibration": {"safe_shapes": {"17": {"square": [640, 640]}}}},
+    })
+    lowered = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "square", "detail", 17)
+    assert lowered["source"] == "calibration"
+    assert lowered["selectable"][0] == (640, 640)
+    assert lowered["defaults"][0] == (608, 608)
+
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {
+        "training": {"h3_calibration": {"safe_shapes": {"17": {"169": [1376, 768]}}}},
+    })
+    with pytest.raises(ValueError, match="model/probe envelope"):
+        video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "169", "detail", 17)
 
 
 def test_h3_bucket_selection_tolerates_small_upscale_and_falls_back_for_smaller_sources(tmp_path):

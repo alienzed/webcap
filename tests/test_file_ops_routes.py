@@ -201,6 +201,18 @@ def test_validate_config_payload_preserves_h3_calibration_shapes():
             },
         })
 
+    with pytest.raises(ValueError, match="model/probe envelope"):
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/sets", "models": ""},
+            "training": {
+                "h3_calibration": {
+                    "version": 1,
+                    "campaign": "h3-manual",
+                    "safe_shapes": {"17": {"169": [1376, 768]}},
+                },
+            },
+        })
+
 
 def test_training_profiles_route_only_returns_enabled_models(monkeypatch):
     monkeypatch.setattr(

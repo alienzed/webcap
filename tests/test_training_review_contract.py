@@ -7,6 +7,7 @@ from PIL import Image
 from tool.server import config as app_config
 from tool.server import app as app_module
 from tool.server import training_review
+from tool.server.dataset_config import build_video_blocks
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID
 
 
@@ -105,6 +106,65 @@ def test_video_distribution_keeps_temporal_and_detail_roles_independent():
     assert temporal["native"][0]["assignedTarget"] == [512, 512]
     assert detail["native"][0]["assignedTarget"] == [672, 672]
     assert distribution["impact"]["videos"]["temporal"] != distribution["impact"]["videos"]["detail"]
+
+
+def test_h3_review_uses_video_limits_and_rejects_managed_targets_above_them(monkeypatch):
+    monkeypatch.setattr(app_config, "config", {
+        "training": {
+            "h3_calibration": {
+                "campaign": "h3-envelope-2026-08-27",
+                "safe_shapes": {"17": {"169": [1184, 672]}},
+            },
+        },
+    })
+    wide = training_review._candidate_video_buckets("169", MINIMAX_H3_PROFILE_ID, "detail", 17)
+    assert wide[0] == (1184, 672)
+    square = training_review._candidate_video_buckets("square", MINIMAX_H3_PROFILE_ID, "detail", 17)
+    assert square[0] == (736, 736)
+    assert (768, 768) not in square
+
+    limits = training_review._video_limits(
+        MINIMAX_H3_PROFILE_ID,
+        {"videoRoles": [{"id": "detail", "frames": 17}]},
+        {"videos": [{"ar": "169"}, {"ar": "square"}]},
+    )
+    assert limits["detail"]["169"] == {
+        "effectiveCeiling": [1184, 672],
+        "automaticDefaultCeiling": [1152, 640],
+        "source": "calibration",
+        "campaign": "h3-envelope-2026-08-27",
+    }
+    assert limits["detail"]["square"]["source"] == "baseline"
+    assert limits["detail"]["square"]["automaticDefaultCeiling"] == [704, 704]
+
+    with pytest.raises(ValueError, match="outside this model's supported ladder"):
+        training_review.normalize_profile_plan({
+            "stages": {"h3": {"targetSteps": 1, "imageBuckets": {}}},
+            "videoRoles": [{"id": "detail", "frames": 17, "buckets": {"square": [[768, 768]]}}],
+        }, MINIMAX_H3_PROFILE_ID, {"configs": [{"id": "h3"}]})
+
+
+def test_h3_generation_and_review_reset_share_the_automatic_default_ladder(monkeypatch, tmp_path):
+    monkeypatch.setattr(app_config, "config", {
+        "training": {
+            "h3_calibration": {
+                "campaign": "mixed-validated",
+                "safe_shapes": {"68": {"square": [448, 448]}},
+            },
+        },
+    })
+    videos = [{
+        "file": "clip.mp4", "ar": "square", "width": 1024, "height": 1024,
+        "prepared_path": "square/clip.mp4", "frames": 136,
+    }]
+    entries = build_video_blocks(tmp_path, videos, [], mode="normal", profile_id=MINIMAX_H3_PROFILE_ID, require_files=False)
+    temporal = next(item for item in entries if item["role"] == "temporal")
+    reset_defaults = training_review._clustered_buckets(
+        {"videos": videos}, MINIMAX_H3_PROFILE_ID, "temporal", 68,
+    )
+
+    assert temporal["bucket"] == (416, 416, 68)
+    assert reset_defaults["square"] == [[416, 416]]
 
 
 def test_video_role_metadata_round_trips_without_a_trainable_directory():

@@ -1,12 +1,12 @@
 # VRAM Bucket Calibration
 
-Last reviewed against code: 2026-08-28
+Last reviewed against code: 2026-09-01
 
 Status: **Implemented for MiniMax H3.** The historical design notes below are retained for context; the current runtime contract is this document's source of truth.
 
 ## Purpose
 
-WebCap can empirically determine which `(width, height, frames)` training shapes are safe for a specific model and training runtime. This remains separate diagnostic tooling; the simplified dataset generator uses its saved safe shapes only as upper bounds.
+WebCap can empirically determine which `(width, height, frames)` training shapes are safe for a specific model and training runtime. This remains separate diagnostic tooling; the dataset generator uses a matching saved shape as the effective video ceiling for that exact frame/aspect entry.
 
 The first implementation targets MiniMax H3 video training. H3 is the useful first case because model, optimizer, and runtime allocations consume a large fixed portion of VRAM, making the remaining spatial/temporal ceiling difficult to infer from total card capacity alone.
 
@@ -18,9 +18,9 @@ The feature has three distinct layers:
 
 1. **Probe candidates** — an app-owned, reviewed catalog of shapes to measure.
 2. **Calibration result** — hardware/runtime-specific evidence describing which candidates completed safely.
-3. **Dataset generation** — compatible safe shapes clamp the fixed H3 ceilings without changing the normal selection flow.
+3. **Dataset generation** — compatible safe shapes replace the matching conservative H3 video ceiling without changing the normal selection flow.
 
-Calibration writes a separate result for inspection and ceiling clamping. Newly generated or explicitly reset H3 datasets use the lower of the fixed app-owned ceiling and the compatible calibrated safe shape. Calibration never raises a built-in ceiling, changes role membership, or rewrites persistent user-owned dataset TOML.
+Calibration writes a separate result for inspection and ceiling selection. Newly generated or explicitly reset H3 datasets use the exact compatible calibrated shape for its recorded frame/aspect entry, whether that expands or contracts the conservative baseline. Calibration above the app-owned model/probe envelope fails visibly. Automatic defaults retain one lower 32px ladder rung; the exact calibrated maximum remains selectable. Calibration never changes role membership or rewrites persistent user-owned dataset TOML.
 
 ## Current H3 Runtime Contract
 

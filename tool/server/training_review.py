@@ -20,9 +20,8 @@ from .dataset_config import (
     render_dataset_toml,
     solve_repeat_scalar,
     training_plan_entries,
-    video_role_ceiling,
+    video_bucket_ladder,
     video_roles_for_profile,
-    mfp,
 )
 from .dataset_prep import build_dataset_manifest
 from .training_profiles import (
@@ -117,15 +116,11 @@ def _candidate_image_buckets(ar_label, profile_id):
 
 
 def _candidate_video_buckets(ar_label, profile_id, role, frames):
-    ceiling = video_role_ceiling(profile_id, "quality", ar_label, role)
-    out = []
-    for width, height, _area in generate_image_candidates(ar_label, "quality"):
-        # The ceiling captures the calibrated model shape; the cell budget also
-        # applies when a user chooses a supported frame-count variant.
-        limit = 11900 if profile_id == MINIMAX_H3_PROFILE_ID else 11000
-        if width <= ceiling[0] and height <= ceiling[1] and mfp(width, height, int(frames)) <= limit:
-            out.append((int(width), int(height)))
-    return list(dict.fromkeys(out))
+    return video_bucket_ladder(profile_id, "quality", ar_label, role, int(frames))["selectable"]
+
+
+def _default_video_buckets(ar_label, profile_id, role, frames):
+    return video_bucket_ladder(profile_id, "quality", ar_label, role, int(frames))["defaults"]
 
 
 def _cluster_targets(values, candidates):
@@ -174,7 +169,7 @@ def _clustered_buckets(manifest, profile_id, role="", frames=1):
     return {
         ar_label: [[width, height] for width, height in _cluster_targets(
             values,
-            _candidate_video_buckets(ar_label, profile_id, role, frames) if role else _candidate_image_buckets(ar_label, profile_id),
+            _default_video_buckets(ar_label, profile_id, role, frames) if role else _candidate_image_buckets(ar_label, profile_id),
         )]
         for ar_label, values in by_aspect.items() if values
     }
@@ -606,6 +601,28 @@ def _ladders(profile_id, review_plan, manifest):
     return output
 
 
+def _video_limits(profile_id, review_plan, manifest):
+    present_aspects = {
+        str(row.get("ar") or "") for row in manifest.get("videos", []) if isinstance(row, dict)
+    }
+    output = {}
+    for role in review_plan.get("videoRoles", []):
+        name = role["id"]
+        frames = int(role["frames"])
+        output[name] = {}
+        for ar_label in sorted(present_aspects):
+            if ar_label not in ASPECT_RATIOS:
+                continue
+            ladder = video_bucket_ladder(profile_id, "quality", ar_label, name, frames)
+            output[name][ar_label] = {
+                "effectiveCeiling": list(ladder["ceiling"]),
+                "automaticDefaultCeiling": list(ladder["defaultCeiling"]) if ladder["defaultCeiling"] else None,
+                "source": ladder["source"],
+                "campaign": ladder["campaign"],
+            }
+    return output
+
+
 def discover_saved_initializers(folder, profile_id, stage):
     """List explicit current-set epoch exports for the Init LoRA picker.
 
@@ -918,7 +935,7 @@ def prepare_training_review(folder, profile_id, run_id="", selected_media=None, 
     return {
         "ok": not blockers, "profileId": profile_id, "runId": run_id,
         "plan": plan, "review": review, "blockers": blockers, "warnings": warnings,
-        "ladders": ladders,
+        "ladders": ladders, "videoLimits": _video_limits(profile_id, plan, manifest),
         "customDataset": custom or False, "distribution": distribution,
     }
 

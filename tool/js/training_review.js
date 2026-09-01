@@ -232,6 +232,17 @@ function reviewCandidates(payload, view, aspect) {
   return view === 'images' ? ((ladders.images || {})[aspect] || []) : (((ladders.videos || {})[view] || {})[aspect] || []);
 }
 
+function reviewVideoLimitNote(payload, view, aspect) {
+  if (view === 'images') return '';
+  var limit = (((payload.videoLimits || {})[view] || {})[aspect]) || null;
+  if (!limit || !limit.effectiveCeiling || !limit.automaticDefaultCeiling) return '';
+  var source = limit.source === 'calibration' ? 'Calibrated' : 'Conservative';
+  var maximum = limit.effectiveCeiling[0] + ' × ' + limit.effectiveCeiling[1];
+  var automatic = limit.automaticDefaultCeiling[0] + ' × ' + limit.automaticDefaultCeiling[1];
+  var campaign = limit.source === 'calibration' && limit.campaign ? ' · ' + limit.campaign : '';
+  return '<span>' + escapeHtml(source + ' maximum ' + maximum + ' · automatic defaults up to ' + automatic + campaign) + '</span>';
+}
+
 function reviewNeutralTargetChipHtml(bucket, selectedCount) {
   return '<button type="button" class="training-review-target-chip neutral" data-review-target="' + bucket.join(',') + '"' + (selectedCount >= 3 ? ' disabled title="Use at most three targets per cohort."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button>';
 }
@@ -240,6 +251,7 @@ function reviewTargetsHtml(payload, view, aspect) {
   var plan = payload.plan || {};
   var selected = reviewSelectedBuckets(plan, view, aspect);
   var candidates = reviewCandidates(payload, view, aspect);
+  var limitNote = reviewVideoLimitNote(payload, view, aspect);
   var neutral = candidates.filter(function (bucket) { return !hasReviewBucket(plan, view, aspect, bucket); });
   var visible = [];
   function addVisible(bucket) {
@@ -268,7 +280,7 @@ function reviewTargetsHtml(payload, view, aspect) {
     return '<span class="training-review-selected-target ' + color + '"><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Move target lower">‹</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Move target higher">›</button></span>';
   }
   function neutralChip(bucket) { return reviewNeutralTargetChipHtml(bucket, selected.length); }
-  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><span>Choose up to three. Arrows move a selected target one rung.</span></div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></section>';
+  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><span>Choose up to three. Arrows move a selected target one rung.</span></div>' + (limitNote ? '<div class="training-review-label-row training-review-limit">' + limitNote + '</div>' : '') + '<div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></section>';
 }
 
 function reviewChartHtml(group, selected, aspect) {

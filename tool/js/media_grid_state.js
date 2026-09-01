@@ -105,6 +105,46 @@ var MEDIA_GRID_FOCUS_SET_DEFS = [
     why: 'Reclining shots are compositionally distinct and worth isolating.',
     signals: 'Selection pose class reclining.',
     bias: 'Misses reclining images when the pose model falls back to unknown.'
+  },
+  {
+    key: 'aspect_square',
+    label: '1:1',
+    section: 'aspect',
+    why: 'Review the square composition cohort together.',
+    signals: 'Existing media metadata aspect bucket 1:1.',
+    bias: 'Only includes media whose recorded aspect ratio maps to this supported bucket.'
+  },
+  {
+    key: 'aspect_43',
+    label: '4:3',
+    section: 'aspect',
+    why: 'Review the 4:3 composition cohort together.',
+    signals: 'Existing media metadata aspect bucket 4:3.',
+    bias: 'Only includes media whose recorded aspect ratio maps to this supported bucket.'
+  },
+  {
+    key: 'aspect_34',
+    label: '3:4',
+    section: 'aspect',
+    why: 'Review the 3:4 composition cohort together.',
+    signals: 'Existing media metadata aspect bucket 3:4.',
+    bias: 'Only includes media whose recorded aspect ratio maps to this supported bucket.'
+  },
+  {
+    key: 'aspect_169',
+    label: '16:9',
+    section: 'aspect',
+    why: 'Review the 16:9 composition cohort together.',
+    signals: 'Existing media metadata aspect bucket 16:9.',
+    bias: 'Only includes media whose recorded aspect ratio maps to this supported bucket.'
+  },
+  {
+    key: 'aspect_916',
+    label: '9:16',
+    section: 'aspect',
+    why: 'Review the 9:16 composition cohort together.',
+    signals: 'Existing media metadata aspect bucket 9:16.',
+    bias: 'Only includes media whose recorded aspect ratio maps to this supported bucket.'
   }
 ];
 
@@ -120,6 +160,8 @@ function mediaGridGetEls() {
     focusMeta: document.getElementById('media-grid-focus-meta'),
     focusLoading: document.getElementById('media-grid-focus-loading'),
     focusList: document.getElementById('media-grid-focus-list'),
+    aspectMeta: document.getElementById('media-grid-aspect-meta'),
+    aspectList: document.getElementById('media-grid-aspect-list'),
     activeSet: document.getElementById('media-grid-active-set'),
     canvas: document.getElementById('media-grid-canvas'),
     sidebar: document.getElementById('media-grid-sidebar'),
@@ -431,6 +473,10 @@ function mediaGridFocusSetMatches(def, mediaItem, context) {
   var isSingleFaceUsable = mediaGridHasUsableSingleFace(mediaItem);
 
   if (def.key === 'all') return true;
+  if (def.key.indexOf('aspect_') === 0) {
+    var metadata = mediaGridGetMetadataRow(mediaItem);
+    return mapAspectRatioToBucket(metadata && metadata.aspect) === def.label;
+  }
   if (def.key === 'prune_candidates') return isPruneCandidateFile(mediaItem.fileName || mediaItem.key);
   if (def.key === 'suggested') {
     return !!(context && context.suggestedLookup && context.suggestedLookup[String(mediaItem.fileName || '')]);

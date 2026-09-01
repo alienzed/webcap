@@ -198,13 +198,12 @@ function mediaGridSetRailCollapsed(collapsed) {
   renderMediaGridLeftRail();
 }
 
-function mediaGridRenderFocusList() {
-  var els = mediaGridGetEls();
-  if (!els.focusList) return;
-  els.focusList.innerHTML = '';
+function mediaGridRenderFocusList(target, section) {
+  if (!target) return;
+  target.innerHTML = '';
   var activeSet = mediaGridGetActiveFocusSet();
   (mediaGridState.focusSets || []).filter(function (entry) {
-    return entry && entry.count > 0;
+    return entry && entry.count > 0 && String(entry.section || 'focus') === section;
   }).forEach(function (entry) {
     var btn = document.createElement('button');
     btn.type = 'button';
@@ -228,7 +227,7 @@ function mediaGridRenderFocusList() {
     count.textContent = String(entry.count);
     btn.appendChild(count);
 
-    els.focusList.appendChild(btn);
+    target.appendChild(btn);
   });
 }
 
@@ -241,10 +240,12 @@ function renderMediaGridLeftRail() {
   els.railCollapseBtn.title = mediaGridState.railCollapsed ? 'Expand left rail' : 'Collapse left rail';
   els.railCollapseBtn.setAttribute('aria-label', mediaGridState.railCollapsed ? 'Expand left rail' : 'Collapse left rail');
   els.focusMeta.textContent = mediaGridState.baseItems.length + ' visible';
+  if (els.aspectMeta) els.aspectMeta.textContent = 'Metadata groups';
   var loading = typeof isMediaMetadataLoading === 'function' && isMediaMetadataLoading();
   els.focusLoading.textContent = loading ? 'Metadata-driven sets will sharpen as analysis finishes.' : '';
   els.focusLoading.classList.toggle('hidden', !loading);
-  mediaGridRenderFocusList();
+  mediaGridRenderFocusList(els.focusList, 'focus');
+  mediaGridRenderFocusList(els.aspectList, 'aspect');
 }
 
 function renderMediaGridActiveScope() {

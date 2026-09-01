@@ -1,9 +1,14 @@
 var FOCUS_SET_PRESETS = [
-  { key: 'prune_candidates', label: 'Prune Candidates' },
-  { key: 'suggested', label: 'Suggested' },
-  { key: 'close', label: 'Close' },
-  { key: 'medium', label: 'Medium' },
-  { key: 'unknown', label: 'Unknown' }
+  { key: 'prune_candidates', label: 'Prune Candidates', group: 'Selection', source: 'prune' },
+  { key: 'suggested', label: 'Suggested', group: 'Selection', source: 'analysis' },
+  { key: 'close', label: 'Close', group: 'Selection', source: 'analysis' },
+  { key: 'medium', label: 'Medium', group: 'Selection', source: 'analysis' },
+  { key: 'unknown', label: 'Unknown', group: 'Selection', source: 'analysis' },
+  { key: 'aspect_square', label: '1:1', group: 'Aspect Ratio', aspectBucket: 'square' },
+  { key: 'aspect_43', label: '4:3', group: 'Aspect Ratio', aspectBucket: '4:3' },
+  { key: 'aspect_34', label: '3:4', group: 'Aspect Ratio', aspectBucket: '3:4' },
+  { key: 'aspect_169', label: '16:9', group: 'Aspect Ratio', aspectBucket: '16:9' },
+  { key: 'aspect_916', label: '9:16', group: 'Aspect Ratio', aspectBucket: '9:16' }
 ];
 
 function getFocusSetAnalysisConfig() {
@@ -59,6 +64,17 @@ function getFocusSetSuggestedLookup(rows, fileNames) {
   return lookup;
 }
 
+function getFocusSetPreset(presetKey) {
+  return FOCUS_SET_PRESETS.find(function (preset) { return preset.key === presetKey; }) || null;
+}
+
+function isFocusSetPresetAvailable(preset) {
+  if (!preset || preset.aspectBucket) return true;
+  if (preset.source === 'prune') return state.pruneCandidatesStatus === 'ready';
+  var config = getFocusSetAnalysisConfig();
+  return config.face && config.pose && state.focusSetMetadataStatus === 'ready';
+}
+
 function getFocusSetPresetFiles() {
   var scopeItems = getFilteredMediaItems(true);
   var byFile = getFocusSetMetadataByFile();
@@ -75,6 +91,17 @@ function getFocusSetPresetFiles() {
   var suggestedLookup = getFocusSetSuggestedLookup(rows, analyzedFileNames);
   var result = { all: fileNames };
   FOCUS_SET_PRESETS.forEach(function (preset) {
+    if (preset.aspectBucket) {
+      result[preset.key] = scopeItems.filter(function (item) {
+        var metadata = item && (item.metadata || getMetadataForMedia(item.fileName));
+        return mapAspectRatioToBucket(metadata && metadata.aspect) === preset.aspectBucket;
+      }).map(function (item) { return item.fileName; });
+      return;
+    }
+    if (!isFocusSetPresetAvailable(preset)) {
+      result[preset.key] = [];
+      return;
+    }
     result[preset.key] = fileNames.filter(function (fileName) {
       var row = byFile[fileName];
       if (preset.key === 'prune_candidates') return isPruneCandidateFile(fileName);
@@ -88,7 +115,9 @@ function getFocusSetPresetFiles() {
 function getActiveFocusSetPresetKey() {
   var source = String(state.focusSet && state.focusSet.source || '');
   if (source.indexOf('Focus Set: ') !== 0) return 'all';
-  return source.slice('Focus Set: '.length).toLowerCase().replace(/\s+/g, '_');
+  var label = source.slice('Focus Set: '.length);
+  var preset = FOCUS_SET_PRESETS.find(function (entry) { return entry.label === label; });
+  return preset ? preset.key : 'all';
 }
 
 function activateFocusSetPreset(key) {
@@ -101,49 +130,50 @@ function activateFocusSetPreset(key) {
     setStatus('No ' + key + ' items match the current filters.');
     return;
   }
-  var preset = FOCUS_SET_PRESETS.find(function (entry) { return entry.key === key; });
+  var preset = getFocusSetPreset(key);
+  if (!preset) throw new Error('Unknown focus set preset: ' + key);
   activateFocusSet(files, 'Focus Set: ' + (preset ? preset.label : key), '');
 }
 
 function buildFocusSetPresetOptions(filesByPreset, activeKey) {
   var html = '<option value="all"' + (activeKey === 'all' ? ' selected' : '') + '>All \u00b7 ' + (filesByPreset.all || []).length + '</option>';
-  FOCUS_SET_PRESETS.forEach(function (preset) {
-    var count = (filesByPreset[preset.key] || []).length;
-    html += '<option value="' + preset.key + '"' + (activeKey === preset.key ? ' selected' : '') + (count ? '' : ' disabled') + '>' + preset.label + ' \u00b7 ' + count + '</option>';
+  ['Selection', 'Aspect Ratio'].forEach(function (group) {
+    var options = FOCUS_SET_PRESETS.filter(function (preset) { return preset.group === group; });
+    if (!options.length) return;
+    html += '<optgroup label="' + group + '">';
+    options.forEach(function (preset) {
+      var count = (filesByPreset[preset.key] || []).length;
+      var disabled = !isFocusSetPresetAvailable(preset) || !count;
+      html += '<option value="' + preset.key + '"' + (activeKey === preset.key ? ' selected' : '') + (disabled ? ' disabled' : '') + '>' + preset.label + ' \u00b7 ' + count + '</option>';
+    });
+    html += '</optgroup>';
   });
   return html;
 }
 
-function buildFocusSetGridTabsHtml(filesByPreset, activeKey) {
-  var html = '<div class="focus-set-tabstrip" aria-label="Focus Sets"><span class="focus-set-tabstrip-label">Focus Sets</span>';
-  html += '<button type="button" class="focus-set-tab' + (activeKey === 'all' ? ' active' : '') + '" data-focus-set="all">All <span>' + (filesByPreset.all || []).length + '</span></button>';
-  FOCUS_SET_PRESETS.forEach(function (preset) {
-    var count = (filesByPreset[preset.key] || []).length;
-    if (!count) return;
-    html += '<button type="button" class="focus-set-tab' + (activeKey === preset.key ? ' active' : '') + '" data-focus-set="' + preset.key + '">' + preset.label + ' <span>' + count + '</span></button>';
-  });
-  return html + '</div>';
+function getFocusSetControlsNotice() {
+  var config = getFocusSetAnalysisConfig();
+  if (!config.face || !config.pose) {
+    return 'Selection sets need Face Focus and selection-pose analysis. <button type="button" class="focus-set-settings-btn">Settings</button>';
+  }
+  if (state.focusSetMetadataStatus === 'loading') return 'Analyzing selection sets...';
+  if (state.focusSetMetadataStatus === 'error') return 'Selection set analysis failed. <button type="button" class="focus-set-retry-btn">Retry</button>';
+  if (state.pruneCandidatesStatus === 'loading') return 'Updating prune candidates...';
+  if (state.pruneCandidatesStatus === 'error') return 'Prune candidate analysis failed. <button type="button" class="focus-set-retry-btn">Retry</button>';
+  return '';
 }
 
-function buildFocusSetControlsHtml(container, isEnabled, status, filesByPreset) {
+function buildFocusSetControlsHtml(container, filesByPreset) {
   if (!state.folder) return '';
-  if (status === 'loading') {
-    return '<div class="focus-set-controls-status">Analyzing focus sets...</div>';
-  }
-  if (status === 'error') {
-    return '<div class="focus-set-controls-status">Focus set analysis failed. <button type="button" class="focus-set-retry-btn">Retry</button></div>';
-  }
-  if (!isEnabled) {
-    return '<div class="focus-set-controls-status">Selection sets need Face Focus and selection-pose analysis. <button type="button" class="focus-set-settings-btn">Settings</button></div>';
-  }
   var activeKey = getActiveFocusSetPresetKey();
-  if (container.classList.contains('focus-set-controls--grid')) {
-    return buildFocusSetGridTabsHtml(filesByPreset, activeKey);
-  }
-  return '<label class="focus-set-select-label" for="focus-set-sidebar-select">Focus set</label>' +
-    '<select id="focus-set-sidebar-select" class="focus-set-select" data-focus-set-select>' +
+  var isGrid = container.classList.contains('focus-set-controls--grid');
+  var selectId = isGrid ? 'focus-set-grid-select' : 'focus-set-sidebar-select';
+  var notice = getFocusSetControlsNotice();
+  return '<label class="focus-set-select-label" for="' + selectId + '">Focus set</label>' +
+    '<select id="' + selectId + '" class="focus-set-select" data-focus-set-select>' +
     buildFocusSetPresetOptions(filesByPreset, activeKey) +
-    '</select>';
+    '</select>' +
+    (notice ? '<div class="focus-set-controls-status">' + notice + '</div>' : '');
 }
 
 function wireFocusSetControls(container) {
@@ -170,22 +200,10 @@ function wireFocusSetControls(container) {
 
 function renderFocusSetControls() {
   var containers = [ui.focusSetFilterControlsEl, ui.focusSetGridControlsEl];
-  var config = getFocusSetAnalysisConfig();
-  var analysisEnabled = config.face && config.pose;
-  var pruneReady = state.pruneCandidatesStatus === 'ready';
-  var enabled = analysisEnabled || pruneReady;
-  var metadataReady = analysisEnabled && state.focusSetMetadataStatus === 'ready';
-  var filesByPreset = enabled
-    ? getFocusSetPresetFiles()
-    : { all: [] };
-  var status = metadataReady || pruneReady
-    ? 'ready'
-    : (state.pruneCandidatesStatus === 'loading'
-      ? 'loading'
-      : (state.pruneCandidatesStatus === 'error' ? 'error' : state.focusSetMetadataStatus));
+  var filesByPreset = getFocusSetPresetFiles();
   containers.forEach(function (container) {
     if (!container) return;
-    container.innerHTML = buildFocusSetControlsHtml(container, enabled, status, filesByPreset);
+    container.innerHTML = buildFocusSetControlsHtml(container, filesByPreset);
     container.classList.toggle('hidden', !state.folder);
     wireFocusSetControls(container);
   });

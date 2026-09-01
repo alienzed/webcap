@@ -5,6 +5,7 @@ Last reviewed: 2026-08-30.
 
 ## Enhancements / Ideas
 - [LoRA initializer runs](lora_initializer.md): start a new run from an existing LoRA directory without resuming checkpoint state.
+- Sometimes I want to bump the running training, test/start another, right now I have to Pause, reorder the queue and Resume, which is fine, but in this case what would be cool would be to like, with one button, swap the running process with the one below it. Is this a diminishing returns kind of feature where I just accept Pause, wait, reorder, resume, or do we add a button for this? There's room for more buttons but I am weary of overengineering.
 
 ## Parked Design Notes (Not Current Backlog)
 

@@ -20,8 +20,7 @@ function getPruneCandidateFiles(scopeItems) {
 function syncPruneCandidateConsumers() {
   renderFocusSetControls();
   if (mediaGridState && mediaGridState.open) {
-    if (mediaGridIsSurfaceMode()) renderMediaGridSurface();
-    else renderMediaGridModal();
+    renderMediaGridSurface();
   }
 }
 

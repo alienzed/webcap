@@ -2,7 +2,7 @@ function mediaGridCreateViewerModal() {
   if (!document.getElementById('media-grid-viewer-modal')) {
     throw new Error('Media Grid viewer shell is missing from tool.html.');
   }
-  var els = mediaGridGetEls();
+  var els = mediaGridGetViewerEls();
   if (!els.viewerModal || !els.viewerCloseBtn) throw new Error('Media Grid viewer is missing.');
   if (els.viewerModal.__wired) return;
   els.viewerModal.__wired = true;
@@ -30,7 +30,7 @@ function openMediaGridViewer(mediaKey) {
     mediaGridSetStatus('Item is no longer visible in Grid.');
     return;
   }
-  var els = mediaGridGetEls();
+  var els = mediaGridGetViewerEls();
   if (!els.viewerModal || !els.viewerStage || !els.viewerTitle || !els.viewerTitleName || !els.viewerTitleCaption) throw new Error('Media Grid viewer is missing.');
   mediaGridState.viewerKey = item.key;
   var titleParts = mediaGridBuildViewerTitleParts(item);
@@ -74,7 +74,7 @@ function openMediaGridViewer(mediaKey) {
 }
 
 function closeMediaGridViewer() {
-  var els = mediaGridGetEls();
+  var els = mediaGridGetViewerEls();
   if (!els.viewerModal || !els.viewerStage) return;
   els.viewerModal.classList.add('hidden');
   els.viewerModal.setAttribute('aria-hidden', 'true');

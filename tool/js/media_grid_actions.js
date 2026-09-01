@@ -24,37 +24,11 @@ function mediaGridUpdateEntryVisibility() {
   }
 }
 
-function mediaGridCreateModal() {
-  if (!document.getElementById('media-grid-modal')) {
-    throw new Error('Media Grid shell is missing from tool.html.');
-  }
-  mediaGridWireModal();
-  mediaGridCreateViewerModal();
-}
-
 function mediaGridCreateSurface() {
   if (!document.getElementById('media-grid-surface')) {
     throw new Error('Media Grid surface is missing from tool.html.');
   }
   mediaGridWireSurface();
-}
-
-function mediaGridWireModal() {
-  var els = mediaGridGetEls();
-  if (!els.modal) throw new Error('Media Grid shell is missing.');
-  if (els.modal.__wired) return;
-  els.modal.__wired = true;
-  els.closeBtn.onclick = closeMediaGridModal;
-  els.selectAllBtn.onclick = mediaGridSelectAll;
-  els.clearBtn.onclick = mediaGridClearSelection;
-  els.modal.addEventListener('click', function (e) {
-    if (e.target === els.modal) closeMediaGridModal();
-  });
-  mediaGridBuildFilterControls();
-  if (!els.railCollapseBtn) throw new Error('Media Grid rail controls are missing.');
-  els.railCollapseBtn.addEventListener('click', function () {
-    mediaGridSetRailCollapsed(!mediaGridState.railCollapsed);
-  });
 }
 
 function mediaGridWireSurface() {
@@ -71,48 +45,6 @@ function mediaGridWireSurface() {
 }
 
 
-function openMediaGridModal() {
-  var items = mediaGridGetVisibleItems();
-  if (!items.length) {
-    setStatus('No visible media items for Grid.');
-    return;
-  }
-  closeMediaGridViewer();
-  mediaGridHideSurfaceShell();
-  mediaGridCaptureWorkspaceState();
-  mediaGridBeginSession('modal');
-  var els = mediaGridGetEls();
-  var overlayHost = document.getElementById('workspace-overlays');
-  if (overlayHost && els.modal && els.modal.parentNode !== overlayHost) {
-    overlayHost.appendChild(els.modal);
-  }
-  els.modal.classList.remove('hidden');
-  els.modal.setAttribute('aria-hidden', 'false');
-  document.body.classList.add('media-grid-open');
-  if (typeof setWorkspaceViewMode === 'function') {
-    setWorkspaceViewMode('grid');
-  }
-  if (typeof setWorkspaceSurface === 'function') {
-    setWorkspaceSurface('grid');
-  }
-  if (typeof setWorkspaceWorkflowMode === 'function') {
-    setWorkspaceWorkflowMode('select');
-  }
-  if (typeof renderPreviewHeaderMeta === 'function') {
-    renderPreviewHeaderMeta();
-  }
-  renderMediaGridModal();
-  focusFirstModalTextField(els.modal);
-}
-
-function closeMediaGridModal() {
-  closeMediaGridViewer();
-  mediaGridHideModalShell();
-  var previousWorkspaceState = mediaGridState.previousWorkspaceState;
-  mediaGridResetSessionState();
-  mediaGridRestoreItemWorkspace(previousWorkspaceState);
-}
-
 function openMediaGridSurface() {
   var items = mediaGridGetVisibleItems();
   if (!items.length) {
@@ -121,13 +53,11 @@ function openMediaGridSurface() {
   }
   var surfaceEls = mediaGridGetSurfaceEls();
   if (!surfaceEls.surface || !surfaceEls.canvas) {
-    openMediaGridModal();
-    return;
+    throw new Error('Media Grid surface is missing its required controls.');
   }
   closeMediaGridViewer();
-  mediaGridHideModalShell();
   mediaGridCaptureWorkspaceState();
-  mediaGridBeginSession('surface');
+  mediaGridBeginSession();
   mediaGridSyncItemsToCurrentView();
   mediaGridSeedSelectionFromCurrentItem();
   mediaGridEnsureMainWorkbenchVisible();
@@ -156,36 +86,12 @@ function closeMediaGridSurface() {
   mediaGridRestoreItemWorkspace(previousWorkspaceState);
 }
 
-function renderMediaGridModal() {
-  if (!mediaGridIsModalMode()) return;
-  mediaGridSyncItemsToCurrentView();
-  renderMediaGridHeader();
-  renderMediaGridLeftRail();
-  renderMediaGridActiveScope();
-  renderMediaGridCanvas();
-  renderMediaGridSidebar();
-  mediaGridRenderSharedWorkbench();
-}
-
 function renderMediaGridSurface() {
-  if (!mediaGridIsSurfaceMode()) return;
   mediaGridSyncItemsToCurrentView();
   mediaGridEnsureMainWorkbenchVisible();
   renderMediaGridSurfaceHeader();
   renderMediaGridCanvas();
   mediaGridRenderSharedWorkbench();
-}
-
-function renderMediaGridHeader() {
-  var els = mediaGridGetEls();
-  var selectedCount = mediaGridState.selectedKeys.size;
-  var totalCount = mediaGridState.items.length;
-  els.meta.textContent = mediaGridBuildMetaText();
-  els.meta.title = String(state.folder || 'Root');
-  els.clearBtn.disabled = selectedCount <= 0;
-  els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
-  els.status.textContent = mediaGridState.status;
-  mediaGridSyncFilterControls();
 }
 
 function renderMediaGridSurfaceHeader() {
@@ -319,283 +225,14 @@ function mediaGridApplyRating(rating) {
   mediaGridRefreshAfterMutation();
 }
 
-function mediaGridPasteTagsToSelected() {
-  var items = mediaGridGetSelectedItems();
-  var tags = getTagClipboardTags();
-  if (!items.length || !tags.length) {
-    renderMediaGridHeader();
-    return;
-  }
-  var changedItems = 0;
-  items.forEach(function (item, index) {
-    mediaGridSetStatus('Pasting tags ' + (index + 1) + '/' + items.length + '...');
-    var result = mergeTagsIntoMediaKey(item.key, tags);
-    if (result && result.added > 0) changedItems += 1;
-  });
-  mediaGridSetStatus('Pasted tags onto ' + changedItems + ' item' + (changedItems === 1 ? '' : 's') + '.');
-  mediaGridRefreshAfterMutation();
-}
-
 function mediaGridRefreshAfterMutation() {
   if (!mediaGridState.open) return;
-  if (mediaGridIsSurfaceMode()) {
-    renderMediaGridSurface();
-    return;
-  }
-  renderMediaGridModal();
+  renderMediaGridSurface();
 }
 
 function mediaGridRefreshFromCurrentFilters() {
   if (!mediaGridState.open) return;
-  if (mediaGridIsSurfaceMode()) {
-    renderMediaGridSurface();
-    return;
-  }
-  renderMediaGridModal();
-}
-
-function mediaGridBuildSidebarHeader() {
-  var wrap = document.createElement('div');
-  wrap.className = 'media-grid-sidebar-header';
-
-  var titleWrap = document.createElement('div');
-  titleWrap.className = 'media-grid-sidebar-title-wrap';
-  wrap.appendChild(titleWrap);
-
-  var title = document.createElement('div');
-  title.className = 'media-grid-sidebar-title';
-  title.textContent = 'Actions';
-  titleWrap.appendChild(title);
-
-  var hint = document.createElement('div');
-  hint.className = 'media-grid-sidebar-hint';
-  hint.textContent = 'Select items, then rate or tag them from this rail.';
-  titleWrap.appendChild(hint);
-
-  var pasteBtn = document.createElement('button');
-  pasteBtn.type = 'button';
-  pasteBtn.className = 'media-grid-btn media-grid-sidebar-action';
-  pasteBtn.textContent = 'Paste Tags';
-  var canPaste = mediaGridState.selectedKeys.size > 0 && hasTagClipboardTags();
-  pasteBtn.classList.toggle('hidden', !canPaste);
-  pasteBtn.disabled = !canPaste;
-  pasteBtn.onclick = mediaGridPasteTagsToSelected;
-  wrap.appendChild(pasteBtn);
-
-  return wrap;
-}
-
-function mediaGridBuildSelectionPanel() {
-  var selectedCount = mediaGridState.selectedKeys.size;
-  var wrap = document.createElement('div');
-  wrap.className = 'media-grid-selection-panel';
-
-  var summary = document.createElement('div');
-  summary.className = 'media-grid-selection-summary';
-  summary.textContent = selectedCount > 0
-    ? (selectedCount + ' selected')
-    : 'No items selected';
-  wrap.appendChild(summary);
-
-  var ratingRow = document.createElement('div');
-  ratingRow.className = 'media-grid-rating-controls';
-  var values = [0, 1, 2, 3, 4, 5];
-  values.forEach(function (rating) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'media-grid-btn media-grid-rating-btn';
-    btn.disabled = selectedCount <= 0;
-    btn.textContent = rating <= 0 ? '0' : '\u2605' + rating;
-    btn.title = rating <= 0 ? 'Clear rating on selected items' : ('Set ' + rating + ' star rating on selected items');
-    btn.onclick = function () {
-      mediaGridApplyRating(rating);
-    };
-    ratingRow.appendChild(btn);
-  });
-  wrap.appendChild(ratingRow);
-
-  return wrap;
-}
-
-function mediaGridBuildTagGroupHeader(requirementLabel) {
-  var wrap = document.createElement('div');
-  wrap.className = 'media-grid-tag-group-header';
-
-  var label = document.createElement('span');
-  label.className = 'media-grid-tag-group-title';
-  label.textContent = requirementLabel;
-  wrap.appendChild(label);
-
-  var editBtn = document.createElement('button');
-  editBtn.type = 'button';
-  editBtn.className = 'media-grid-tag-group-edit';
-  editBtn.title = 'Edit terms for ' + requirementLabel;
-  editBtn.setAttribute('aria-label', 'Edit terms for ' + requirementLabel);
-  editBtn.innerHTML = '&#9998;';
-  editBtn.onclick = function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    openChecklistGroupTermsModal(requirementLabel);
-  };
-  wrap.appendChild(editBtn);
-
-  return wrap;
-}
-
-function mediaGridGetTagGroupState(terms) {
-  var sawAll = false;
-  var sawMixed = false;
-  (terms || []).forEach(function (term) {
-    var stateName = mediaGridGetTagSelectionState(term);
-    if (stateName === 'mixed') sawMixed = true;
-    if (stateName === 'all') sawAll = true;
-  });
-  if (sawMixed) return 'mixed';
-  if (sawAll) return 'all';
-  return 'none';
-}
-
-function mediaGridBuildTagChip(term) {
-  var stateName = mediaGridGetTagSelectionState(term);
-  var usageState = mediaGridGetTagUsageState(term);
-  var btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'media-grid-tag-chip media-grid-tag-chip--' + usageState +
-    (stateName === 'all' ? ' all' : '') +
-    (stateName === 'mixed' ? ' mixed' : '');
-  btn.textContent = term;
-  btn.title = mediaGridBuildTagTitle(term, stateName);
-  btn.onclick = function () {
-    mediaGridToggleTagForSelection(term, stateName);
-  };
-  return btn;
-}
-
-function mediaGridGetTagUsageState(term) {
-  var total = mediaGridState.items.length;
-  if (total <= 0) return 'none';
-  var count = 0;
-  mediaGridState.items.forEach(function (item) {
-    if (hasTagForMediaKey(item.key, term)) count += 1;
-  });
-  if (count <= 0) return 'none';
-  var ratio = count / total;
-  if (ratio >= 0.7) return 'most';
-  if (ratio >= 0.35) return 'many';
-  return 'some';
-}
-
-function mediaGridGetTagSelectionState(term) {
-  var selected = mediaGridGetSelectedItems();
-  if (!selected.length) return 'none';
-  var count = 0;
-  selected.forEach(function (item) {
-    if (hasTagForMediaKey(item.key, term)) count += 1;
-  });
-  if (count <= 0) return 'none';
-  if (count >= selected.length) return 'all';
-  return 'mixed';
-}
-
-function mediaGridBuildTagTitle(term, stateName) {
-  if (!mediaGridState.selectedKeys.size) return 'Select items before applying "' + term + '"';
-  if (stateName === 'all') return 'Remove "' + term + '" from selected items';
-  if (stateName === 'mixed') return 'Add "' + term + '" to all selected items';
-  return 'Add "' + term + '" to selected items';
-}
-
-function mediaGridToggleTagForSelection(term, stateName) {
-  var selected = mediaGridGetSelectedItems();
-  if (!selected.length) {
-    mediaGridSetStatus('Select items before tagging.');
-    return;
-  }
-  var remove = stateName === 'all';
-  var changed = 0;
-  selected.forEach(function (item, index) {
-    mediaGridSetStatus((remove ? 'Removing' : 'Adding') + ' tag ' + (index + 1) + '/' + selected.length + '...');
-    var ok = remove ? removeTagFromMediaKey(item.key, term) : addTagToMediaKey(item.key, term);
-    if (ok) changed += 1;
-  });
-  mediaGridSetStatus((remove ? 'Removed' : 'Added') + ' "' + term + '" on ' + changed + ' item' + (changed === 1 ? '' : 's') + '.');
-  mediaGridRefreshAfterMutation();
-}
-
-function renderMediaGridSidebar() {
-  var els = mediaGridGetEls();
-  els.sidebar.innerHTML = '';
-  els.sidebar.appendChild(mediaGridBuildSidebarHeader());
-  els.sidebar.appendChild(mediaGridBuildSelectionPanel());
-
-  var sectionTitle = document.createElement('div');
-  sectionTitle.className = 'media-grid-sidebar-title media-grid-sidebar-section-title';
-  sectionTitle.textContent = 'Groups';
-  els.sidebar.appendChild(sectionTitle);
-
-  if (typeof renderGroupWorkbench === 'function') {
-    var workbenchWrap = document.createElement('section');
-    workbenchWrap.id = 'media-grid-group-workbench';
-    workbenchWrap.className = 'media-grid-group-workbench group-workbench';
-    workbenchWrap.setAttribute('aria-label', 'Grid Groups');
-
-    var workbenchList = document.createElement('div');
-    workbenchList.id = 'media-grid-group-workbench-list';
-    workbenchList.className = 'group-workbench-list';
-
-    workbenchWrap.appendChild(workbenchList);
-    els.sidebar.appendChild(workbenchWrap);
-    return;
-  }
-
-  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
-  if (!requirements.length) {
-    var empty = document.createElement('div');
-    empty.className = 'media-grid-empty';
-    empty.textContent = 'No tag groups configured.';
-    els.sidebar.appendChild(empty);
-    return;
-  }
-
-  requirements.forEach(function (requirementLabel) {
-    var terms = getChecklistKeywordTermsForRequirement(requirementLabel);
-    var group = document.createElement('details');
-    group.className = 'media-grid-tag-group media-grid-tag-group--' + mediaGridGetTagGroupState(terms);
-    group.open = true;
-    var summary = document.createElement('summary');
-    summary.className = 'media-grid-tag-group-summary';
-    summary.appendChild(mediaGridBuildTagGroupHeader(requirementLabel));
-    group.appendChild(summary);
-
-    var list = document.createElement('div');
-    list.className = 'media-grid-tag-list';
-    if (!terms.length) {
-      var emptyTerms = document.createElement('div');
-      emptyTerms.className = 'media-grid-empty';
-      emptyTerms.textContent = 'No tags in this group.';
-      list.appendChild(emptyTerms);
-    } else {
-      var termEntries = terms.map(function (term) {
-        return {
-          term: term,
-          stateName: mediaGridGetTagSelectionState(term),
-          usageState: mediaGridGetTagUsageState(term)
-        };
-      });
-      renderTermFamilyEntries(list, termEntries, {
-        getText: function (entry) { return entry.term; },
-        isBreakout: function (entry) { return entry.stateName === 'all' || entry.stateName === 'mixed'; },
-        getHint: function (entry) {
-          if (entry.usageState === 'most') return { className: 'usage', text: 'frequently used' };
-          return null;
-        },
-        triggerClass: 'media-grid-tag-chip',
-        popoverClass: 'term-family-popover--grid',
-        renderItem: function (entry) { return mediaGridBuildTagChip(entry.term); }
-      });
-    }
-    group.appendChild(list);
-    els.sidebar.appendChild(group);
-  });
+  renderMediaGridSurface();
 }
 
 function mediaGridHandleKeydown(e) {
@@ -646,7 +283,7 @@ function initMediaGrid() {
   mediaGridCreateEntryButton();
   mediaGridCreateSurface();
   mediaGridBuildSurfaceFilterControls();
-  mediaGridCreateModal();
+  mediaGridCreateViewerModal();
   document.addEventListener('keydown', mediaGridHandleKeydown);
   window.addEventListener('webcap:context-menu-hidden', function () {
     if (!mediaGridState.open) return;

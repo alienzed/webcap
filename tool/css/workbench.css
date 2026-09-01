@@ -1668,19 +1668,8 @@ html[data-theme="dark"] .focus-set-select {
   color: #e2e8f0;
 }
 
-html[data-theme="dark"] .focus-set-select-label,
-html[data-theme="dark"] .focus-set-tabstrip-label {
+html[data-theme="dark"] .focus-set-select-label {
   color: rgba(226, 232, 240, 0.7);
-}
-
-html[data-theme="dark"] .focus-set-tab {
-  color: #cbd5e1;
-}
-
-html[data-theme="dark"] .focus-set-tab:hover:not(:disabled),
-html[data-theme="dark"] .focus-set-tab.active {
-  border-bottom-color: rgba(45, 212, 191, 0.72);
-  color: #ccfbf1;
 }
 
 html[data-theme="dark"] .focus-set-controls-status,

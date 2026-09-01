@@ -12,7 +12,7 @@ gradient_clipping = 1.0
 warmup_steps = 10
 
 checkpoint_every_n_epochs = 5
-activation_checkpointing = "unsloth"
+activation_checkpointing = true
 partition_method = "parameters"
 save_dtype = "bfloat16"
 caching_batch_size = 1

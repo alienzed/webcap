@@ -144,22 +144,13 @@ function mediaGridGetVisibleKeysSnapshot() {
 }
 
 function mediaGridRenderSelectionState() {
-  if (mediaGridIsSurfaceMode()) {
-    renderMediaGridSurfaceHeader();
-  } else {
-    renderMediaGridHeader();
-  }
+  renderMediaGridSurfaceHeader();
   mediaGridSyncSelectionDisplay();
-  if (mediaGridIsModalMode()) {
-    renderMediaGridSidebar();
-  }
   mediaGridRenderSharedWorkbench();
 }
 
 function mediaGridRenderSharedWorkbench() {
-  var targetEl = mediaGridIsSurfaceMode()
-    ? document.getElementById('group-workbench-list')
-    : (document.getElementById('media-grid-group-workbench-list') || document.getElementById('group-workbench-list'));
+  var targetEl = document.getElementById('group-workbench-list');
   renderGroupWorkbench({
     mode: 'grid',
     targetEl: targetEl,

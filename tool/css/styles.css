@@ -1350,8 +1350,11 @@ iframe {
 }
 
 .focus-set-controls--grid {
-  justify-content: center;
-  white-space: nowrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 250px;
 }
 
 .focus-set-select-label {
@@ -1372,50 +1375,6 @@ iframe {
   font-size: 12px;
 }
 
-.focus-set-tabstrip {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.focus-set-tabstrip-label {
-  color: #475569;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.focus-set-tab {
-  padding: 3px 0 4px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: #334155;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.focus-set-tab span {
-  color: #64748b;
-  font-size: 10px;
-}
-
-.focus-set-tab:hover:not(:disabled),
-.focus-set-tab.active {
-  border-bottom-color: #0f766e;
-  color: #115e59;
-}
-
-.focus-set-tab.active span {
-  color: inherit;
-}
-
-.focus-set-tab:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
 .focus-set-controls-status {
   color: #64748b;
   font-size: 11px;
@@ -1423,6 +1382,10 @@ iframe {
 }
 
 .focus-set-controls--sidebar .focus-set-controls-status {
+  grid-column: 1 / -1;
+}
+
+.focus-set-controls--grid .focus-set-controls-status {
   grid-column: 1 / -1;
 }
 

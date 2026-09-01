@@ -380,7 +380,6 @@ function rebuildUnifiedWorkspaceShell() {
 
   ensureWorkspaceOverlayChildren([
     'focused-annotation-modal',
-    'media-grid-modal',
     'media-grid-viewer-modal',
     'advanced-modal-overlay',
     'review-rules-modal',

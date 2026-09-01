@@ -2702,8 +2702,11 @@ iframe {
 .training-review-legend i { display: inline-block; }
 .training-review-legend .native { width: 7px; height: 7px; border-radius: 50%; background: #8ca8c2; }
 .training-review-legend .target { width: 2px; height: 13px; background: #4f9bdf; }
-.training-review-plot { position: relative; height: 258px; overflow: hidden; border-radius: 6px; background: repeating-linear-gradient(0deg, transparent 0 48px, rgba(255,255,255,.075) 48px 49px), repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 1px, transparent 1px 25%); }
-.training-review-hist-bin { position: absolute; bottom: 0; min-height: 2px; background: rgba(135, 162, 194, .28); border-right: 1px solid rgba(255,255,255,.10); }
+.training-review-plot { position: relative; height: 258px; overflow: hidden; border-radius: 6px; background: repeating-linear-gradient(0deg, transparent 0 48px, rgba(255,255,255,.075) 48px 49px); }
+.training-review-target-zone { position: absolute; top: 0; bottom: 0; opacity: .11; }
+.training-review-target-zone.target-0 { background: #4f9bdf; }.training-review-target-zone.target-1 { background: #a671e5; }.training-review-target-zone.target-2 { background: #d96e55; }
+.training-review-chart-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.09); }
+.training-review-hist-bin { position: absolute; bottom: 0; min-height: 2px; background: rgba(184, 198, 214, .26); border-right: 1px solid rgba(255,255,255,.11); }
 .training-review-chart-dot { position: absolute; width: 11px; height: 11px; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; transform: translateX(-50%); background: #8ca8c2; box-shadow: 0 1px 3px rgba(0,0,0,.28); cursor: help; }
 .training-review-chart-dot.target-0 { background: #4f9bdf; }
 .training-review-chart-dot.target-1 { background: #a671e5; }
@@ -2715,7 +2718,9 @@ iframe {
 .training-review-chart-marker span, .training-review-chart-marker em { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 10px; font-style: normal; }
 .training-review-chart-marker span { top: -18px; color: var(--text, #e5e7eb); font-weight: 700; }
 .training-review-chart-marker em { top: -2px; padding: 1px 4px; border-radius: 4px; background: var(--panel-bg, #20242c); color: var(--muted-text, #a3adba); }
-.training-review-chart-axis { display: flex; justify-content: space-between; color: var(--muted-text, #a3adba); font-size: 10px; }
+.training-review-chart-axis { display: grid; gap: 3px; color: var(--muted-text, #a3adba); font-size: 10px; text-align: center; }
+.training-review-chart-ticks { position: relative; height: 13px; }
+.training-review-chart-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .training-review-impact-bar { display: flex; min-height: 35px; overflow: hidden; border-radius: 5px; }
 .training-review-impact-bar span { display: grid; min-width: 0; place-items: center; border-right: 1px solid var(--panel-bg, #20242c); color: #18212b; font-size: 12px; }
 .training-review-impact-bar .impact-down20 { background: #a9bed1; }.training-review-impact-bar .impact-down { background: #a8d2c4; }.training-review-impact-bar .impact-near { background: #dce0d0; }.training-review-impact-bar .impact-up { background: #e6cfaf; }.training-review-impact-bar .impact-up20 { background: #dfa997; }

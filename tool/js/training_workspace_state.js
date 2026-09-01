@@ -56,7 +56,8 @@ var trainingWorkspaceState = {
   reviewSaveStatus: 'saved',
   reviewModalOpen: false,
   reviewMediaView: 'images',
-  reviewAspect: ''
+  reviewAspect: '',
+  runSetupFolder: ''
 };
 var utilityTrainingTurtleTimer = 0;
 var utilityTrainingTurtleAtLeft = true;

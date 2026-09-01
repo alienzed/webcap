@@ -392,6 +392,44 @@ function setTrainingCommandHandoff(command) {
   renderTrainingCommandHandoff();
 }
 
+function resetTrainingRunSetupForFolder(folder) {
+  if (trainingWorkspaceState.runSetupFolder === folder) return;
+  trainingWorkspaceState.runSetupFolder = folder;
+  var runName = document.getElementById('training-run-name-input');
+  var startingPoint = document.getElementById('training-run-starting-point-select');
+  var checkpoint = document.getElementById('training-run-checkpoint-select');
+  var checkpointPath = document.getElementById('training-run-checkpoint-path');
+  var resumeStage = document.getElementById('training-run-resume-stage-select');
+  var customResume = document.getElementById('training-run-resume-input');
+  if (runName) runName.value = '';
+  if (startingPoint) startingPoint.value = 'fresh';
+  if (checkpoint) checkpoint.value = '';
+  if (checkpointPath) checkpointPath.textContent = '';
+  if (resumeStage) resumeStage.selectedIndex = 0;
+  if (customResume) customResume.value = '';
+  // Starting-point selections are just as set-specific as the name. A resume
+  // or initializer selected for another set must never carry into this one.
+  trainingWorkspaceState.runStages = 'h3';
+  trainingWorkspaceState.resumeParentJobId = '';
+  trainingWorkspaceState.resumeSelectionTouched = false;
+  trainingWorkspaceState.reviewStartingPoint = 'fresh';
+  trainingWorkspaceState.reviewInitializerStage = '';
+  trainingWorkspaceState.reviewInitializers = [];
+  trainingWorkspaceState.reviewInitializerExportId = '';
+  trainingWorkspaceState.reviewInitializerCustomPath = '';
+  trainingWorkspaceState.reviewForceConstantLr = '';
+  trainingWorkspaceState.reviewMediaView = 'images';
+  trainingWorkspaceState.reviewAspect = '';
+  trainingWorkspaceState.review = null;
+  trainingWorkspaceState.reviewError = '';
+  trainingWorkspaceState.reviewModalOpen = false;
+  var modal = document.getElementById('training-review-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
 function refreshTrainingWorkspace() {
   if (!isTrainingWorkspaceActive()) return;
   var els = getTrainingWorkspaceEls();
@@ -404,6 +442,7 @@ function refreshTrainingWorkspace() {
   if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);
   if (els.runSetup) els.runSetup.classList.toggle('hidden', !isSetEntry);
   if (!isSetEntry) {
+    trainingWorkspaceState.runSetupFolder = '';
     trainingWorkspaceState.configFiles = [];
     if (els.readiness) els.readiness.textContent = 'Select a set folder to configure training.';
     renderTrainingItemOverview(null);
@@ -412,6 +451,7 @@ function refreshTrainingWorkspace() {
     renderTrainingCommandHandoff();
     return;
   }
+  resetTrainingRunSetupForFolder(folder);
   if (els.readiness) els.readiness.textContent = 'Loading training setup...';
   fetchTrainingProfiles()
     .then(function () {

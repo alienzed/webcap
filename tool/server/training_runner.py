@@ -1472,6 +1472,55 @@ def _bundle_from_action(action_id, profile_id, mode, stages):
     return {"path": path, "recordPath": record_root, "inputPath": input_root, "artifacts": artifacts, "summary": summary, "capturedItemCount": len(rows), "action": action}
 
 
+def _bundle_from_recorded_capture(action_id, capture_path, folder_path, profile_id, mode, stages):
+    """Reuse a known action capture for Recent Runs and paused-resume launches."""
+    action_root, action = read_action(action_id)
+    expected_folder = Path(folder_path).resolve().relative_to(Path(app_config.FS_ROOT).resolve()).as_posix()
+    if str(action.get("folder") or "") != expected_folder:
+        raise ValueError("The recorded training capture belongs to another set.")
+    if str(action.get("profileId") or "") != str(profile_id or ""):
+        raise ValueError("The recorded training capture belongs to a different model.")
+    if stages not in action.get("requestedStages", ()):
+        raise ValueError("The recorded training capture does not include the selected training stage.")
+    capture = Path(str(capture_path or "")).resolve()
+    captures_root = (action_root / "captures").resolve()
+    try:
+        capture.relative_to(captures_root)
+    except ValueError as exc:
+        raise ValueError("The recorded training capture is outside its action folder.") from exc
+    if not capture.is_dir() or capture.is_symlink():
+        raise FileNotFoundError("The recorded training capture is unavailable: " + str(capture))
+    selected = profile_for_mode(profile_id, mode)
+    stage_names = ("hi", "lo") if stages == "both" else (stages,)
+    artifacts = {}
+    for stage in stage_names:
+        item = next((item for item in selected["configs"] if item["id"] == stage), None)
+        if item is None:
+            raise ValueError("The recorded capture does not support the selected training stage.")
+        artifacts[stage + "Config"] = capture / item["file"]
+        artifacts[stage + "Dataset"] = capture / item["dataset"]
+    summary_path = capture / "summary.json"
+    missing = [str(path) for path in list(artifacts.values()) + [summary_path] if not path.is_file()]
+    if missing:
+        raise FileNotFoundError("Recorded training capture is missing required files: " + ", ".join(missing))
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("Could not read recorded training capture summary: " + str(exc)) from exc
+    if not isinstance(summary, dict):
+        raise ValueError("Recorded training capture summary is invalid.")
+    return {
+        "path": capture,
+        "recordPath": capture,
+        "inputPath": capture,
+        "artifacts": artifacts,
+        "summary": summary,
+        "capturedItemCount": int(summary.get("capturedItems") or 0),
+        "action": action,
+        "reused": True,
+    }
+
+
 def start_response(
     folder,
     queue=False,
@@ -1494,6 +1543,8 @@ def start_response(
     initializer_stage="",
     initializer_custom_path="",
     force_constant_lr=None,
+    reuse_capture_action_id="",
+    reuse_capture_path="",
 ):
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id, stages)
@@ -1501,12 +1552,17 @@ def start_response(
         stages = _normalize_training_stages(selected_run["stages"][0])
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint or resume_output_id, resume_stage)
         _, folder_path = _resolve_folder(folder)
-        review = prepare_training_review(
+        reuse_capture = bool(str(reuse_capture_action_id or "").strip() or str(reuse_capture_path or "").strip())
+        if reuse_capture and (not str(reuse_capture_action_id or "").strip() or not str(reuse_capture_path or "").strip()):
+            raise ValueError("Recent Run resume requires its recorded action and capture path.")
+        review = None if reuse_capture else prepare_training_review(
             folder_path, selected_profile["id"], selected_run["id"], selected_media,
             selection_criteria, total_media_count, fallback_captions, persist=False,
         )
         initializer = None
         if initializer_action_id or initializer_export_id or initializer_stage or initializer_custom_path:
+            if reuse_capture:
+                raise ValueError("A recorded-capture resume cannot add a LoRA initializer.")
             if resume_from_checkpoint or resume_output_id:
                 raise ValueError("Checkpoint Resume and LoRA initialization cannot be combined.")
             if initializer_custom_path:
@@ -1526,7 +1582,13 @@ def start_response(
             resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage)
             resume_path = str(resume["runPath"])
             resume_action = resume["actionRoot"]
-        if resume_action is not None:
+        if reuse_capture:
+            action_root, action = read_action(str(reuse_capture_action_id).strip())
+            bundle = _bundle_from_recorded_capture(
+                str(reuse_capture_action_id).strip(), reuse_capture_path, folder_path,
+                selected_profile["id"], selected_mode, stages,
+            )
+        elif resume_action is not None:
             action_root, action = resume_action, read_action(resume_action.name)[1]
         else:
             action_root, action = allocate_action(folder_path, selected_profile, selected_mode, (stages,), run_name)
@@ -1535,21 +1597,22 @@ def start_response(
         output_root = Path(resume_path).parent if resume_path else action_root / "output" / meta["outputSlug"]
         if not resume_path:
             output_root.mkdir(parents=True, exist_ok=True)
-        # A custom resume is deliberately anchored beside the chosen Diffusion
+        # A custom wizard resume is deliberately anchored beside the chosen Diffusion
         # Pipe output. It remains a new WebCap action, but its captured inputs
         # stay physically adjacent to the run they continue.
         external_capture_root = None
-        if resume_path and resume_action is None:
+        if resume_path and resume_action is None and not reuse_capture:
             external_capture_root = output_root.parent / ".webcap-captures" / uuid.uuid4().hex
         output_dir = _to_wsl_path(output_root, distribution)
-        bundle = materialize_training_bundle(
-            folder_path, action_root, selected_profile["id"], selected_mode, stages, selected_media,
-            fallback_captions=fallback_captions, selection_criteria=selection_criteria,
-            total_media_count=total_media_count, output_dirs={stages: output_dir},
-            distribution=distribution, review=review if not review.get("customDataset") else None,
-            initializer=initializer,
-            capture_root=external_capture_root,
-        )
+        if not reuse_capture:
+            bundle = materialize_training_bundle(
+                folder_path, action_root, selected_profile["id"], selected_mode, stages, selected_media,
+                fallback_captions=fallback_captions, selection_criteria=selection_criteria,
+                total_media_count=total_media_count, output_dirs={stages: output_dir},
+                distribution=distribution, review=review if not review.get("customDataset") else None,
+                initializer=initializer,
+                capture_root=external_capture_root,
+            )
     except Exception as exc:
         return {"ok": False, "error": "Could not create the training capture: " + str(exc)}, 400
 
@@ -1564,14 +1627,15 @@ def start_response(
             action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
         )
         def record_capture(data):
-            try:
-                capture_path = Path(bundle["path"]).relative_to(action_root).as_posix()
-            except ValueError:
-                capture_path = str(Path(bundle["path"]))
-            data.setdefault("captures", []).append({
-                "jobId": job["id"], "path": capture_path,
-                "createdAt": job["createdAt"], "count": int(bundle.get("capturedItemCount") or 0),
-            })
+            if not reuse_capture:
+                try:
+                    capture_path = Path(bundle["path"]).relative_to(action_root).as_posix()
+                except ValueError:
+                    capture_path = str(Path(bundle["path"]))
+                data.setdefault("captures", []).append({
+                    "jobId": job["id"], "path": capture_path,
+                    "createdAt": job["createdAt"], "count": int(bundle.get("capturedItemCount") or 0),
+                })
             data.setdefault("jobs", {}).setdefault(job["stages"], []).append({
                 "id": job["id"], "path": (Path("jobs") / job["id"]).as_posix(), "status": "queued", "createdAt": job["createdAt"],
             })

@@ -104,6 +104,28 @@ def test_bundle_copies_source_bytes_into_a_distinct_capture(tmp_path, monkeypatc
     assert (Path(bundle["path"]) / "config.h3.toml").is_file()
 
 
+def test_captured_review_dataset_keeps_image_frame_count_and_bucket_annotations(tmp_path, monkeypatch):
+    monkeypatch.setattr(training_bundle, "to_wsl_path", lambda path, distribution="": Path(path).as_posix())
+    media_root = tmp_path / "capture" / "media"
+    source = media_root / "square_img" / "one.png"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"image")
+    source.with_suffix(".txt").write_text("caption", encoding="utf-8")
+    stage_plan = {"datasetEntries": [{
+        "kind": "image", "role": "image", "ar": "square", "bucket": [512, 512], "sourceDir": "square_img",
+        "files": ["one.png"], "eligibleCount": 1, "nativeCount": 1, "upscaledCount": 0, "numRepeats": 10,
+    }]}
+    ladders = {"images": {"square": [[768, 768], [512, 512], [384, 384]]}, "videos": {}}
+
+    text = training_bundle._materialize_review_stage_dataset("h3", stage_plan, media_root, "", ladders)
+
+    assert "enable_ar_bucket = true" in text
+    assert "[512, 512, 1]" in text
+    assert "# bucket: 512 × 512 × 1 frame" in text
+    assert "# assigned: 1 item · 1 near/native · 0 resized" in text
+    assert "# adjacent supported targets: lower 384 × 384 · higher 768 × 768" in text
+
+
 def test_video_capture_is_always_a_direct_copy(tmp_path):
     source = tmp_path / "source.mp4"
     destination = tmp_path / "capture" / "source.mp4"
@@ -141,6 +163,31 @@ def test_train_captures_before_it_writes_the_queue_and_skips_preflight(tmp_path,
     state = training_runner._read_state()
     assert len(state["jobs"]) == 1
     assert Path(state["jobs"][0]["inputPath"]).is_dir()
+
+
+def test_recent_run_resume_reuses_its_recorded_capture(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    bundle = training_bundle.materialize_training_bundle(
+        folder, action, MINIMAX_H3_PROFILE_ID, "normal", "h3", ["one.png"], output_dirs={"h3": str(action / "output" / "minimax-h3")},
+    )
+    resume_output = action / "output" / "minimax-h3" / "checkpoint-run"
+    resume_output.mkdir(parents=True)
+    captures_before = list((action / "captures").iterdir())
+    training_runner._write_state({"version": 3, "activeJobId": "", "jobs": [], "queuePaused": True, "queuePauseReason": "test"})
+
+    payload, status = training_runner.start_response(
+        "sets/subject", queue=True, stages="h3", resume_from_checkpoint=str(resume_output), resume_stage="h3",
+        profile_id=MINIMAX_H3_PROFILE_ID, run_id="train", reuse_capture_action_id=action.name, reuse_capture_path=bundle["path"],
+    )
+
+    assert status == 200 and payload["ok"] is True
+    assert list((action / "captures").iterdir()) == captures_before
+    assert payload["job"]["inputPath"] == str(bundle["path"])
 
 
 def test_capture_failure_never_appends_a_queue_item(tmp_path, monkeypatch):

@@ -507,6 +507,8 @@ def training_runner_start_route():
         initializer_stage=data.get("initializerStage") or "",
         initializer_custom_path=data.get("initializerCustomPath") or "",
         force_constant_lr=data.get("forceConstantLr"),
+        reuse_capture_action_id=data.get("reuseCaptureActionId") or "",
+        reuse_capture_path=data.get("reuseCapturePath") or "",
     )
     return jsonify(payload), status
 

@@ -1,6 +1,7 @@
 """Set-owned TOML review data and bucket visualizations for training."""
 
 import hashlib
+import json
 import math
 import re
 import tomllib
@@ -16,6 +17,7 @@ from .dataset_config import (
     estimate_steps,
     generate_image_candidates,
     render_dataset_entry,
+    render_dataset_toml,
     solve_repeat_scalar,
     training_plan_entries,
     video_role_ceiling,
@@ -35,6 +37,7 @@ from .training_history import discover_runs
 
 
 TRAINING_PLAN_VERSION = 1
+VIDEO_ROLE_METADATA_PREFIX = "# webcap_video_role = "
 
 
 def _number(value, label, minimum=0.0):
@@ -418,9 +421,59 @@ def _build_review_plan(folder, profile_id, setup, manifest, profile_plan):
     return {"version": TRAINING_PLAN_VERSION, "profileId": profile_id, "mode": "review", "stages": stages, "excluded": all_excluded}
 
 
-def _render_stage_dataset(stage_plan):
+def _review_bucket_comment_lines(entry, profile_id):
+    bucket = entry.get("bucket") or []
+    if len(bucket) < 2:
+        raise ValueError("Training Review dataset entry is missing a bucket shape.")
+    kind = str(entry.get("kind") or "")
+    role = str(entry.get("role") or "")
+    ar_label = str(entry.get("ar") or "")
+    width, height = int(bucket[0]), int(bucket[1])
+    frames = int(bucket[2]) if len(bucket) >= 3 else 1
+    candidates = (
+        _candidate_image_buckets(ar_label, profile_id)
+        if kind == "image"
+        else _candidate_video_buckets(ar_label, profile_id, role, frames)
+    )
+    ordered = sorted(candidates, key=lambda shape: min(shape))
+    current = (width, height)
+    index = ordered.index(current) if current in ordered else -1
+    lower = ordered[index - 1] if index > 0 else None
+    higher = ordered[index + 1] if index >= 0 and index + 1 < len(ordered) else None
+    label = "images" if kind == "image" else (role or "video")
+    count = int(entry.get("eligibleCount") or 0)
+    native = int(entry.get("nativeCount") or 0)
+    resized = int(entry.get("upscaledCount") or 0)
+    lines = [
+        "# WebCap Review: " + label + " · " + ASPECT_LABELS.get(ar_label, ar_label),
+        "# bucket: " + str(width) + " × " + str(height) + " × " + str(frames) + " frame" + ("s" if frames != 1 else ""),
+        "# assigned: " + str(count) + " item" + ("s" if count != 1 else "") + " · " + str(native) + " near/native · " + str(resized) + " resized",
+    ]
+    siblings = []
+    if lower:
+        siblings.append("lower " + str(lower[0]) + " × " + str(lower[1]))
+    if higher:
+        siblings.append("higher " + str(higher[0]) + " × " + str(higher[1]))
+    if siblings:
+        lines.append("# adjacent supported targets: " + " · ".join(siblings))
+    return lines
+
+
+def _render_stage_dataset(stage_plan, profile_plan, profile_id):
     entries = stage_plan.get("datasetEntries") or []
     lines = ["# webcap_training_review = 1", "# This file is generated from the Training Review plan."]
+    # Diffusion Pipe represents a video role only when it has a trainable
+    # directory stanza. Keep its direct Review settings in this canonical TOML
+    # comment so an enabled role with no eligible clips cannot lose its bucket.
+    for role in profile_plan.get("videoRoles") or []:
+        lines.append(VIDEO_ROLE_METADATA_PREFIX + json.dumps({
+            "id": role.get("id"),
+            "enabled": bool(role.get("enabled")),
+            "frames": int(role.get("frames") or 0),
+            "weight": float(role.get("weight") or 0),
+            "buckets": role.get("buckets") or {},
+        }, separators=(",", ":"), sort_keys=True))
+    blocks = []
     for entry in entries:
         bucket = entry.get("bucket") or []
         if entry.get("kind") == "image":
@@ -433,7 +486,8 @@ def _render_stage_dataset(stage_plan):
                 "kind": "video", "dir_path": (DATASET_ROOT_PLACEHOLDER / str(entry.get("sourceDir") or entry.get("ar") or "videos")).as_posix(),
                 "bucket": (bucket[0], bucket[1], bucket[2]), "detail_intent": entry.get("role") == "detail",
             }
-        lines.append(render_dataset_entry(rendered, int(entry.get("numRepeats") or 1)))
+        blocks.append("\n".join(_review_bucket_comment_lines(entry, profile_id) + [render_dataset_entry(rendered, int(entry.get("numRepeats") or 1))]))
+    lines.append(render_dataset_toml(blocks).rstrip())
     return "\n\n".join(lines) + "\n"
 
 
@@ -441,12 +495,12 @@ def _dataset_paths(setup):
     return {item["id"]: item["dataset"] for item in setup["configs"]}
 
 
-def _write_structured_datasets(folder, setup, review_plan, profile_plan, stages=None):
+def _write_structured_datasets(folder, setup, review_plan, profile_plan, profile_id, stages=None):
     wanted_stages = set(stages) if stages is not None else None
     for stage, filename in _dataset_paths(setup).items():
         if wanted_stages is not None and stage not in wanted_stages:
             continue
-        text = _render_stage_dataset((review_plan.get("stages") or {}).get(stage, {}))
+        text = _render_stage_dataset((review_plan.get("stages") or {}).get(stage, {}), profile_plan, profile_id)
         destination = Path(folder) / filename
         destination.write_text(text, encoding="utf-8")
 
@@ -467,8 +521,8 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
     # caller deliberately lets this exception reach the route/log so it never
     # gets mistaken for a safe alternative and silently overwritten.
     parsed = tomllib.loads(text)
-    directories = parsed.get("directory")
-    if not isinstance(directories, list):
+    directories = parsed.get("directory", [])
+    if not isinstance(directories, list) or (not directories and set(parsed) - {"enable_ar_bucket"}):
         return None
     imported = deepcopy(profile_plan)
     stage_plan = imported.get("stages", {}).get(stage)
@@ -478,6 +532,20 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
     roles = {item["id"]: item for item in imported.get("videoRoles", [])}
     for role in roles.values():
         role["buckets"] = {}
+    for line in text.splitlines():
+        if not line.startswith(VIDEO_ROLE_METADATA_PREFIX):
+            continue
+        try:
+            saved = json.loads(line[len(VIDEO_ROLE_METADATA_PREFIX):])
+        except json.JSONDecodeError as exc:
+            raise ValueError("Could not read WebCap video-role metadata in the dataset TOML: " + str(exc)) from exc
+        if not isinstance(saved, dict) or str(saved.get("id") or "") not in roles:
+            return None
+        role = roles[str(saved["id"])]
+        role["enabled"] = bool(saved.get("enabled"))
+        role["frames"] = saved.get("frames")
+        role["weight"] = saved.get("weight")
+        role["buckets"] = saved.get("buckets") if isinstance(saved.get("buckets"), dict) else {}
     for item in directories:
         if not isinstance(item, dict) or set(item) - {"path", "num_repeats", "group", "size_buckets"}:
             return None
@@ -513,7 +581,8 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
             return None
         role, ar_label = possible[0]
         selected = role["buckets"].setdefault(ar_label, [])
-        selected.append([bucket[0], bucket[1]])
+        if [bucket[0], bucket[1]] not in selected:
+            selected.append([bucket[0], bucket[1]])
         if len(selected) > 3:
             return None
     return imported
@@ -622,7 +691,7 @@ def _set_toml_review(folder, profile_id, run_id, selected_media, selection_crite
     plan["profileId"] = profile_id
     review = _build_review_plan(folder, profile_id, review_setup, manifest, plan)
     if materialized_stages:
-        _write_structured_datasets(folder, review_setup, review, plan, materialized_stages)
+        _write_structured_datasets(folder, review_setup, review, plan, profile_id, materialized_stages)
     return setup, review_setup, manifest, plan, review, custom
 
 
@@ -676,6 +745,7 @@ def _distribution_group(rows, targets, frames=None, assign_target=None):
             target_counts[target] += 1
             impact[band] += 1
         native.append({
+            "file": str(row.get("file") or ""),
             "width": width,
             "height": height,
             "edge": short_edge,
@@ -688,6 +758,7 @@ def _distribution_group(rows, targets, frames=None, assign_target=None):
         })
     group = {
         "count": len(native),
+        "eligibleCount": sum(1 for row in native if row["eligible"]),
         "native": native,
         "targets": [{"shape": list(target), "assignedCount": target_counts[target]} for target in targets],
         "impact": impact,
@@ -698,7 +769,7 @@ def _distribution_group(rows, targets, frames=None, assign_target=None):
 
 
 def _distribution_payload(manifest, plan):
-    """Return chart-shaped source facts, never filenames or a second plan."""
+    """Return chart-shaped source facts for the Review chart, including source filenames."""
     output = {"images": {}, "videos": {}, "impact": {"images": _empty_impact_counts(), "videos": {}}}
     image_buckets = {}
     for stage in (plan.get("stages") or {}).values():
@@ -717,7 +788,7 @@ def _distribution_payload(manifest, plan):
         except (KeyError, TypeError, ValueError):
             continue
         if ar_label in image_rows and width > 0 and height > 0:
-            image_rows[ar_label].append({"width": width, "height": height})
+            image_rows[ar_label].append({"file": str(row.get("file") or ""), "width": width, "height": height})
     for ar_label, rows in image_rows.items():
         if not rows:
             continue
@@ -739,7 +810,7 @@ def _distribution_payload(manifest, plan):
             continue
         frames = coerce_frames(row, model_fps)
         if ar_label in video_rows and width > 0 and height > 0 and frames:
-            video_rows[ar_label].append({"width": width, "height": height, "frames": int(frames)})
+            video_rows[ar_label].append({"file": str(row.get("file") or ""), "width": width, "height": height, "frames": int(frames)})
     for role in plan.get("videoRoles") or []:
         role_name = str(role.get("id") or "")
         frames = int(role.get("frames") or 0)
@@ -859,7 +930,7 @@ def update_training_review(folder, profile_id, payload):
     current = normalize_profile_plan(current, profile_id, review_setup)
     reviewed = _build_review_plan(folder, profile_id, review_setup, manifest, current)
     if not custom:
-        _write_structured_datasets(folder, review_setup, reviewed, current)
+        _write_structured_datasets(folder, review_setup, reviewed, current, profile_id)
     return prepare_training_review(
         folder, profile_id, run_id, selected_media, selection_criteria, total_media_count,
         source.get("fallback_captions"), persist=False,

@@ -193,18 +193,25 @@ function reviewViewGroups(payload, view) {
   return view === 'images' ? ((payload.distribution || {}).images || {}) : ((((payload.distribution || {}).videos || {})[view]) || {});
 }
 
-function reviewAvailableViews(payload) {
+function reviewViewItems(payload) {
   var views = [];
-  if (Object.keys(reviewViewGroups(payload, 'images')).length) views.push('images');
+  var imageGroups = reviewViewGroups(payload, 'images');
+  if (Object.keys(imageGroups).length) views.push({ id: 'images', available: true, count: Object.keys(imageGroups).reduce(function (total, ar) { return total + Number((imageGroups[ar] || {}).count || 0); }, 0) });
   Object.keys(((payload.distribution || {}).videos || {})).forEach(function (role) {
-    if (Object.keys(reviewViewGroups(payload, role)).length) views.push(role);
+    var groups = reviewViewGroups(payload, role);
+    if (!Object.keys(groups).length) return;
+    var count = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).count || 0); }, 0);
+    var eligibleCount = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).eligibleCount || 0); }, 0);
+    views.push({ id: role, available: eligibleCount > 0, count: count, eligibleCount: eligibleCount });
   });
   return views;
 }
 
+function reviewAvailableViews(payload) { return reviewViewItems(payload).filter(function (item) { return item.available; }).map(function (item) { return item.id; }); }
+
 function reviewActiveView(payload) {
   var views = reviewAvailableViews(payload);
-  if (views.indexOf(trainingWorkspaceState.reviewMediaView) === -1) trainingWorkspaceState.reviewMediaView = views[0] || 'images';
+  if (views.indexOf(trainingWorkspaceState.reviewMediaView) === -1) trainingWorkspaceState.reviewMediaView = views[0] || (reviewViewItems(payload)[0] || {}).id || 'images';
   return trainingWorkspaceState.reviewMediaView;
 }
 
@@ -261,7 +268,7 @@ function reviewTargetsHtml(payload, view, aspect) {
     return '<span class="training-review-selected-target ' + color + '"><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Move target lower">‹</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Move target higher">›</button></span>';
   }
   function neutralChip(bucket) { return reviewNeutralTargetChipHtml(bucket, selected.length); }
-  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><span>Choose up to three. Arrows move a selected target one rung.</span></div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + selected.map(selectedChip).join('') + '</div></div><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></section>';
+  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><span>Choose up to three. Arrows move a selected target one rung.</span></div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></section>';
 }
 
 function reviewChartHtml(group, selected, aspect) {
@@ -305,8 +312,10 @@ function reviewChartHtml(group, selected, aspect) {
     var target = row.assignedTarget || row.target || [];
     var lane = (ordinal % 5) - 2;
     var level = Math.floor(ordinal / 5);
-    var scale = Math.round((Number(row.scaleRatio || 1) - 1) * 100);
-    var detail = 'Native ' + row.width + ' × ' + row.height + ' · short edge ' + edge + ' px' + (target.length ? ' · target ' + target[0] + ' × ' + target[1] + ' · ' + (scale >= 0 ? '+' : '') + scale + '%' : ' · not eligible for this role');
+    var scaleRatio = Number(row.scaleRatio || 1);
+    var scale = Math.round((scaleRatio - 1) * 100);
+    var resize = Math.abs(scale) < 1 ? 'No meaningful resize · 1.00×' : (scale > 0 ? 'Upscale ' : 'Downscale ') + scaleRatio.toFixed(2) + '× · ' + (scale > 0 ? '+' : '') + scale + '%';
+    var detail = (row.file || 'Source media') + '\nNative: ' + row.width + ' × ' + row.height + ' · short edge ' + edge + ' px' + (target.length ? '\nTarget: ' + target[0] + ' × ' + target[1] + '\n' + resize : '\nNot eligible for this role');
     return '<i class="training-review-chart-dot ' + reviewTargetColor(selected, target) + '" style="left:' + position(edge) + '%;bottom:' + (11 + level * 15) + 'px;margin-left:' + (lane * 5) + 'px" title="' + escapeHtml(detail) + '"></i>';
   }).join('');
   var markers = (group.targets || []).map(function (target) {
@@ -339,12 +348,17 @@ function reviewModalHtml(payload) {
   var groups = reviewViewGroups(payload, view);
   var aspect = reviewActiveAspect(payload, view);
   var role = view === 'images' ? null : reviewRole(plan, view);
-  var views = reviewAvailableViews(payload);
+  var views = reviewViewItems(payload);
   var viewCount = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).count || 0); }, 0);
+  var eligibleCount = Object.keys(groups).reduce(function (total, ar) { return total + Number((groups[ar] || {}).eligibleCount || 0); }, 0);
   var cohortCount = Object.keys(groups).length;
   function label(id) { return id === 'images' ? 'Images' : id.charAt(0).toUpperCase() + id.slice(1); }
-  return '<section class="training-review-workbench"><div class="training-review-overview"><div><strong>Dataset buckets</strong><span>' + viewCount + ' ' + escapeHtml(label(view).toLowerCase()) + ' · ' + cohortCount + ' cohort' + (cohortCount === 1 ? '' : 's') + '</span></div><div class="training-review-tabs" role="tablist">' + views.map(function (id) { return '<button type="button" class="training-review-tab' + (id === view ? ' active' : '') + '" data-review-view="' + escapeHtml(id) + '" aria-selected="' + (id === view ? 'true' : 'false') + '">' + escapeHtml(label(id)) + '</button>'; }).join('') + '</div></div>' +
-    (role ? '<div class="training-review-role-summary"><label><input type="checkbox" data-review-role-enabled="' + escapeHtml(role.id) + '"' + (role.enabled ? ' checked' : '') + '> ' + escapeHtml(label(role.id)) + ' enabled</label><span>Fixed at ' + escapeHtml(String(role.frames)) + ' frames</span></div>' : '') +
+  var viewDescription = view === 'images' ? viewCount + ' image' + (viewCount === 1 ? '' : 's') : viewCount + ' video' + (viewCount === 1 ? '' : 's') + ' · ' + eligibleCount + ' eligible for ' + label(view);
+  var roleNote = role && !eligibleCount ? '<div class="training-review-role-note">This role is enabled, but no current clip reaches its ' + escapeHtml(String(role.frames)) + '-frame requirement. It will not contribute samples to this run.</div>' : '';
+  var unavailableRoles = views.filter(function (item) { return item.id !== 'images' && !item.available; });
+  return '<section class="training-review-workbench"><div class="training-review-overview"><div><strong>Dataset buckets</strong><span>' + escapeHtml(viewDescription) + ' · ' + cohortCount + ' cohort' + (cohortCount === 1 ? '' : 's') + '</span></div><div class="training-review-tabs" role="tablist">' + views.map(function (item) { var unavailable = !item.available; return '<button type="button" class="training-review-tab' + (item.id === view ? ' active' : '') + (unavailable ? ' unavailable' : '') + '" data-review-view="' + escapeHtml(item.id) + '" aria-selected="' + (item.id === view ? 'true' : 'false') + '"' + (unavailable ? ' disabled title="No current video meets this role’s fixed frame requirement."' : '') + '>' + escapeHtml(label(item.id)) + (item.id === 'images' ? '' : ' <span>· ' + Number(item.eligibleCount || 0) + '</span>') + '</button>'; }).join('') + '</div></div>' +
+    (role ? '<div class="training-review-role-summary"><label><input type="checkbox" data-review-role-enabled="' + escapeHtml(role.id) + '"' + (role.enabled ? ' checked' : '') + '> ' + escapeHtml(label(role.id)) + ' enabled</label><span>Fixed at ' + escapeHtml(String(role.frames)) + ' frames · ' + eligibleCount + ' of ' + viewCount + ' eligible</span></div>' + roleNote : '') +
+    (unavailableRoles.length ? '<div class="training-review-unavailable-roles">' + unavailableRoles.map(function (item) { var unavailableRole = reviewRole(plan, item.id); return '<span><strong>' + escapeHtml(label(item.id)) + ' · 0 eligible</strong> No current video reaches ' + escapeHtml(String(unavailableRole.frames)) + ' frames.</span>'; }).join('') + '</div>' : '') +
     '<div class="training-review-cohort-tabs" role="tablist">' + TRAINING_REVIEW_ASPECT_ORDER.filter(function (id) { return !!groups[id]; }).map(function (id) { return '<button type="button" class="training-review-cohort-tab' + (id === aspect ? ' active' : '') + '" data-review-aspect="' + escapeHtml(id) + '" aria-selected="' + (id === aspect ? 'true' : 'false') + '">' + escapeHtml(formatReviewAspect(id)) + ' <span>· ' + Number((groups[id] || {}).count || 0) + '</span></button>'; }).join('') + '</div>' +
     reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect), aspect) + reviewImpactHtml(payload, view) + reviewWarningsHtml(payload, view) + '</section>';
 }

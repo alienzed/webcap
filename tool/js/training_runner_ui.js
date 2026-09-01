@@ -496,9 +496,10 @@ function trainingJobLabel(job) {
   var runName = String(job && job.runName || '').trim();
   if (runName) return runName;
   if (job && job.stages === 'krea2') return 'Krea2 Raw';
-  var mode = normalizeTrainingWorkspaceMode(job && job.mode || 'normal').toUpperCase();
   var profileLabel = String(job && job.profileLabel || '').trim();
-  return (profileLabel || trainingModelLabel(job)) + ' · ' + mode + ' · ' + trainingStageLabel(String(job && job.stages || 'both'));
+  var modelLabel = profileLabel || trainingModelLabel(job);
+  var stageLabel = trainingStageLabel(String(job && job.stages || 'both'));
+  return stageLabel.toLowerCase() === modelLabel.toLowerCase() ? modelLabel : modelLabel + ' · ' + stageLabel;
 }
 
 function startManagedTraining() {

@@ -121,7 +121,8 @@ function renderTrainingHistory() {
     var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
     var modelSourcePath = String(job.model && job.model.source || '');
     var modelSource = modelSourcePath.split(/[\\/]/).pop();
-    var profileLabel = modelLabel + ' · ' + normalizeTrainingWorkspaceMode(job.mode || job.datasetTarget || 'normal').toUpperCase();
+    var stageLabel = trainingStageLabel(job.stages || 'both');
+    var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
     var checkpointLabel = trainingHistoryCheckpointLabel(artifact);
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
     var canOpenCheckpointRun = !!(checkpointLabel && job.folder && job.outputRunPath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(checkpointStage) !== -1);
@@ -160,7 +161,7 @@ function renderTrainingHistory() {
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</span></div>' +
         '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
-      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(job.runName || ((job.model && job.model.label) || job.modelLabel || 'Training model')) + ' · ' + escapeHtml(normalizeTrainingWorkspaceMode(job.mode || job.datasetTarget || 'normal').toUpperCase()) + ' · ' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</div>' +
+      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(job.runName || profileLabel) + '</div>' +
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
         (details.length ? '<div>' +
@@ -263,6 +264,9 @@ function resumeTrainingHistoryJob(jobId) {
   if (!job || !job.folder || !resumePath || ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(resumeStage) === -1) {
     throw new Error('This historical run no longer has a resumable checkpoint.');
   }
+  if (!job.actionId || !job.inputPath) {
+    throw new Error('This Recent Run has no recorded capture. Resume it from Run Setup if you want to create a new capture.');
+  }
   trainingRunnerRequest('/fs/training_runner/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -274,7 +278,9 @@ function resumeTrainingHistoryJob(jobId) {
       resumeFromCheckpoint: resumePath,
       profileId: job.profileId || '',
       runId: job.runId || '',
-      mode: job.mode || 'normal'
+      mode: job.mode || 'normal',
+      reuseCaptureActionId: job.actionId,
+      reuseCapturePath: job.inputPath
     })
   }).then(function (payload) {
     trainingWorkspaceState.runnerSelectedJobId = payload.job.id;

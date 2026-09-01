@@ -122,9 +122,46 @@ def _link_or_copy(source, destination):
     shutil.copy2(source, destination)
 
 
-def _materialize_review_stage_dataset(stage, stage_plan, media_root, distribution):
+def _captured_review_comment_lines(entry, kind, bucket, ladders):
+    ar_label = str(entry.get("ar") or "")
+    role = str(entry.get("role") or "")
+    width, height = int(bucket[0]), int(bucket[1])
+    frames = int(bucket[2]) if kind == "video" else 1
+    candidates = (
+        ((ladders or {}).get("images") or {}).get(ar_label, [])
+        if kind == "image"
+        else ((((ladders or {}).get("videos") or {}).get(role, {}) or {}).get(ar_label, []))
+    )
+    ordered = sorted(
+        [tuple(shape[:2]) for shape in candidates if isinstance(shape, list) and len(shape) >= 2],
+        key=lambda shape: min(shape),
+    )
+    current = (width, height)
+    index = ordered.index(current) if current in ordered else -1
+    lower = ordered[index - 1] if index > 0 else None
+    higher = ordered[index + 1] if index >= 0 and index + 1 < len(ordered) else None
+    count = int(entry.get("eligibleCount") or 0)
+    native = int(entry.get("nativeCount") or 0)
+    resized = int(entry.get("upscaledCount") or 0)
+    label = "images" if kind == "image" else (role or "video")
+    lines = [
+        "# WebCap Review: " + label + (" · " + ar_label if ar_label else ""),
+        "# bucket: " + str(width) + " × " + str(height) + " × " + str(frames) + " frame" + ("s" if frames != 1 else ""),
+        "# assigned: " + str(count) + " item" + ("s" if count != 1 else "") + " · " + str(native) + " near/native · " + str(resized) + " resized",
+    ]
+    siblings = []
+    if lower:
+        siblings.append("lower " + str(lower[0]) + " × " + str(lower[1]))
+    if higher:
+        siblings.append("higher " + str(higher[0]) + " × " + str(higher[1]))
+    if siblings:
+        lines.append("# adjacent supported targets: " + " · ".join(siblings))
+    return lines
+
+
+def _materialize_review_stage_dataset(stage, stage_plan, media_root, distribution, ladders=None):
     """Materialize the exact reviewed memberships into isolated directories."""
-    lines = ["# Captured from WebCap Training Review", "# Every directory below is an immutable reviewed subset."]
+    lines = ["# Captured from WebCap Training Review", "# Every directory below is an immutable reviewed subset.", "enable_ar_bucket = true"]
     entries = stage_plan.get("datasetEntries") if isinstance(stage_plan, dict) else []
     if not isinstance(entries, list):
         entries = []
@@ -150,11 +187,12 @@ def _materialize_review_stage_dataset(stage, stage_plan, media_root, distributio
             _link_or_copy(source, target_dir / name)
             _link_or_copy(caption, target_dir / caption.name)
         wsl_path = to_wsl_path(target_dir, distribution)
-        lines.extend(["", "[[directory]]", 'path = "' + wsl_path + '"', "num_repeats = " + str(int(entry.get("numRepeats") or 1)), 'group = "' + ("images" if kind == "image" else "videos") + '"'])
+        values = list(bucket) if kind == "video" else [bucket[0], bucket[1], 1]
+        lines.extend([""] + _captured_review_comment_lines(entry, kind, values, ladders) + ["[[directory]]", 'path = "' + wsl_path + '"', "num_repeats = " + str(int(entry.get("numRepeats") or 1)), 'group = "' + ("images" if kind == "image" else "videos") + '"'])
         if bool(entry.get("detailIntent")):
             lines.append("# webcap_detail_subset = true")
         lines.append("size_buckets = [")
-        lines.append("  [" + ", ".join(str(int(value)) for value in bucket) + "],")
+        lines.append("  [" + ", ".join(str(int(value)) for value in values) + "],")
         lines.append("]")
     rendered = "\n".join(lines) + "\n"
     try:
@@ -566,7 +604,7 @@ def materialize_training_bundle(
         dataset_target = configs_root / item["dataset"]
         reviewed_stage = ((review or {}).get("review") or {}).get("stages", {}).get(stage) if isinstance(review, dict) else None
         dataset_text = (
-            _materialize_review_stage_dataset(stage, reviewed_stage, media_root, distribution)
+            _materialize_review_stage_dataset(stage, reviewed_stage, media_root, distribution, (review or {}).get("ladders"))
             if isinstance(reviewed_stage, dict)
             else _materialize_dataset_config(
                 source_dataset.read_text(encoding="utf-8"), media_root, distribution, manifest, stage,

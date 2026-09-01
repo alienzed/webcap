@@ -47,6 +47,7 @@ def test_review_distribution_assigns_each_image_once_and_uses_short_edge(tmp_pat
         assert len(assigned) == len(group["native"])
         assert sum(item["assignedCount"] for item in group["targets"]) == len(assigned)
         for row in assigned:
+            assert row["file"] in names
             expected = min(row["assignedTarget"]) / row["nativeShortEdge"]
             assert math.isclose(row["scaleRatio"], expected)
             assert row["impactBand"] in {"down20", "down", "near", "up", "up20"}
@@ -100,9 +101,60 @@ def test_video_distribution_keeps_temporal_and_detail_roles_independent():
     temporal = distribution["videos"]["temporal"]["square"]
     detail = distribution["videos"]["detail"]["square"]
     assert temporal["frames"] == 68 and detail["frames"] == 17
+    assert temporal["eligibleCount"] == 1 and detail["eligibleCount"] == 1
     assert temporal["native"][0]["assignedTarget"] == [512, 512]
     assert detail["native"][0]["assignedTarget"] == [672, 672]
     assert distribution["impact"]["videos"]["temporal"] != distribution["impact"]["videos"]["detail"]
+
+
+def test_video_role_metadata_round_trips_without_a_trainable_directory():
+    profile_plan = {
+        "version": 1,
+        "stages": {"h3": {"targetSteps": 20000, "imageBuckets": {}}},
+        "videoRoles": [
+            {"id": "temporal", "enabled": True, "frames": 68, "weight": 1.0, "buckets": {"square": [[352, 352]]}},
+            {"id": "detail", "enabled": False, "frames": 17, "weight": 0.25, "buckets": {"square": [[672, 672]]}},
+        ],
+    }
+
+    text = training_review._render_stage_dataset({"datasetEntries": []}, profile_plan, MINIMAX_H3_PROFILE_ID)
+    imported = training_review._import_representable_dataset(text, MINIMAX_H3_PROFILE_ID, "h3", profile_plan)
+    roles = {role["id"]: role for role in imported["videoRoles"]}
+
+    assert '# webcap_video_role = ' in text
+    assert roles["temporal"]["buckets"] == {"square": [[352, 352]]}
+    assert roles["detail"]["enabled"] is False
+
+
+def test_structured_dataset_render_keeps_image_frame_count_and_review_comments():
+    profile_plan = {"videoRoles": []}
+    stage_plan = {"datasetEntries": [{
+        "kind": "image", "role": "image", "ar": "square", "bucket": [512, 512], "sourceDir": "square_img",
+        "eligibleCount": 3, "nativeCount": 2, "upscaledCount": 1, "numRepeats": 10,
+    }]}
+
+    text = training_review._render_stage_dataset(stage_plan, profile_plan, MINIMAX_H3_PROFILE_ID)
+
+    assert "enable_ar_bucket = true" in text
+    assert "[512, 512, 1]" in text
+    assert "# bucket: 512 × 512 × 1 frame" in text
+    assert "# assigned: 3 items · 2 near/native · 1 resized" in text
+    assert "# adjacent supported targets:" in text
+
+
+def test_video_distribution_reports_when_a_role_has_no_eligible_clips():
+    plan = {
+        "profileId": MINIMAX_H3_PROFILE_ID,
+        "stages": {"h3": {"imageBuckets": {}}},
+        "videoRoles": [{"id": "temporal", "enabled": True, "frames": 68, "weight": 1.0, "buckets": {"square": [[352, 352]]}}],
+    }
+    manifest = {"images": [], "videos": [{"file": "short.mp4", "ar": "square", "width": 640, "height": 640, "frames": 20}]}
+
+    group = training_review._distribution_payload(manifest, plan)["videos"]["temporal"]["square"]
+
+    assert group["count"] == 1
+    assert group["eligibleCount"] == 0
+    assert group["native"][0]["assignedTarget"] == []
 
 
 def test_review_route_returns_recomputed_payload_and_invalid_toml_is_loud(tmp_path, monkeypatch):
@@ -135,6 +187,7 @@ def test_bucket_modal_markup_and_script_keep_the_editor_focused():
     assert "data-review-view" in script
     assert "data-review-aspect" in script
     assert "data-review-step" in script
+    assert "training-review-unavailable-roles" in script
     assert "training-review-bucket-check" not in script
     assert "Training intent" not in script
 

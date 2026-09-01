@@ -217,6 +217,29 @@ def test_restart_moves_active_job_to_front_and_pauses_queue(tmp_path, monkeypatc
     assert restored["jobs"][0]["resumeFromCheckpoint"] == "/runs/original"
 
 
+def test_finish_after_epoch_does_not_require_a_configured_savepoint(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda state: None)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "active",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{
+            "id": "active",
+            "status": "running",
+            "stages": "h3",
+            "progress": {"stage": "h3", "epoch": 2, "epochs": 10},
+        }],
+    })
+
+    payload, status = training_runner.finish_schedule_response("active", epoch=3)
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert training_runner._read_state()["jobs"][0]["finishAtEpoch"] == 3
+
+
 def test_missing_history_is_empty_and_invalid_history_is_loud(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
@@ -230,5 +253,5 @@ def test_missing_history_is_empty_and_invalid_history_is_loud(tmp_path, monkeypa
 
 def test_training_modules_do_not_apply_permissions_repairs():
     root = Path(__file__).parents[1] / "tool" / "server"
-    for name in ("training_runner.py", "training_bundle.py", "training_action.py"):
+    for name in ("training_runner.py", "training_bundle.py", "training_action.py", "run_ops.py", "dataset_config.py"):
         assert "normalize_path_permissions" not in (root / name).read_text(encoding="utf-8")

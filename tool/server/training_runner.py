@@ -1288,7 +1288,7 @@ def _public_job(job):
     return payload
 
 
-def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", review_fingerprint="", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
+def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
     try:
         if str(resume_from_checkpoint or "").strip():
             raise ValueError("Managed Train accepts only a selected WebCap action checkpoint.")
@@ -1302,16 +1302,6 @@ def validate_response(folder, stages="both", resume_from_checkpoint="", resume_s
         resume_stage = _normalize_resume_stage(stages, "managed" if requested_resume else "", resume_stage)
         selected_mode = normalize_mode(mode)
         _, folder_path = _resolve_folder(folder)
-        if review_fingerprint and not requested_resume:
-            selected_profile, selected_run = profile_run(profile_id, run_id, stages)
-            review = prepare_training_review(
-                folder_path, selected_profile["id"], selected_run["id"], selected_media,
-                selection_criteria, total_media_count, fallback_captions, persist=False,
-            )
-            if str(review.get("reviewFingerprint") or "") != str(review_fingerprint):
-                return {"ok": False, "error": "Training Review is stale. Reload it before validating.", "staleReview": review, "checks": [], "summary": {"blockers": 1, "warnings": 0}}, 409
-            if not review.get("ok"):
-                return {"ok": False, "error": "Training Review has blockers.", "review": review, "checks": [], "summary": {"blockers": len(review.get("blockers") or []), "warnings": len(review.get("warnings") or [])}}, 200
         resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage) if requested_resume else None
         bundle = _bundle_from_action(resume_action_id, profile_id, selected_mode, stages) if resume else None
         payload = _preflight_payload(folder, stages, profile_id=profile_id, mode=selected_mode, artifacts_override=bundle["artifacts"] if bundle else None)
@@ -1499,8 +1489,6 @@ def start_response(
     fallback_captions=None,
     selection_criteria=None,
     total_media_count=None,
-    review_fingerprint="",
-    review_intent=None,
     initializer_action_id="",
     initializer_export_id="",
     initializer_stage="",
@@ -2029,15 +2017,6 @@ def finish_schedule_response(job_id, epoch=None, cancel=False):
             return {"ok": False, "error": "Finish epoch must be the current epoch or a future epoch."}, 400
         if target_epoch >= planned_epochs:
             return {"ok": False, "error": "Finish epoch must be before the planned final epoch."}, 400
-        snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
-        save_every_epochs = _read_config_positive_int(snapshot.get(stage), "save_every_n_epochs", 0)
-        if save_every_epochs <= 0:
-            return {"ok": False, "error": "The launch snapshot has no save_every_n_epochs setting."}, 409
-        if target_epoch % save_every_epochs:
-            return {
-                "ok": False,
-                "error": "Epoch " + str(target_epoch) + " is not a configured save point; this run saves every " + str(save_every_epochs) + " epochs.",
-            }, 400
         job["finishAfterEpoch"] = target_epoch
         job["finishScheduledAt"] = time.time()
         job.pop("finishTriggeredEpoch", None)

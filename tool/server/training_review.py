@@ -1,24 +1,20 @@
 """Set-owned TOML review data and bucket visualizations for training."""
 
 import hashlib
-import json
 import math
 import re
-import threading
 import tomllib
 from copy import deepcopy
 from pathlib import Path
 
 from .dataset_config import (
     ASPECT_RATIOS,
-    IMAGE_BUCKET_MAX_UPSCALE_RATIO,
     build_dataset_config_artifacts,
     build_repeats,
     coerce_frames,
     estimate_kind_exposures,
     estimate_steps,
     generate_image_candidates,
-    image_bucket_compatibility,
     render_dataset_entry,
     solve_repeat_scalar,
     training_plan_entries,
@@ -27,14 +23,10 @@ from .dataset_config import (
     mfp,
 )
 from .dataset_prep import build_dataset_manifest
-from . import config as app_config
-from .training_action import read_action
-from .training_config_files import apply_review_config_settings, reset_training_config_file
 from .training_profiles import (
     KREA2_PROFILE_ID,
     MINIMAX_H3_PROFILE_ID,
     WAN22_PROFILE_ID,
-    config_for_stage,
     profile_for_mode,
     profile_run,
 )
@@ -43,8 +35,6 @@ from .training_history import discover_runs
 
 
 TRAINING_PLAN_VERSION = 1
-REVIEW_PLAN_VERSION = 3
-_review_lock = threading.RLock()
 
 
 def _number(value, label, minimum=0.0):
@@ -65,21 +55,6 @@ def _positive_int(value, label):
     if parsed <= 0:
         raise ValueError(label + " must be a positive integer.")
     return parsed
-
-
-def _json_fingerprint(payload):
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
-
-def _file_fingerprint(path):
-    target = Path(path)
-    return "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest()
-
-
-def _stage_names(profile, run_id):
-    selected, selected_run = profile_run(profile["id"], run_id or profile["runs"][0]["id"])
-    return tuple(selected_run["stages"]), selected_run
 
 
 def _normal_setup(folder, profile_id, selected_media, selection_criteria, total_media_count):
@@ -219,23 +194,7 @@ def _default_profile_plan(folder, profile_id, manifest, setup):
     roles = _normal_roles(profile_id)
     for role in roles:
         role["buckets"] = _clustered_buckets(manifest, profile_id, role["id"], role["frames"])
-    return {"version": TRAINING_PLAN_VERSION, "revision": 1, "stages": stages, "videoRoles": roles, "datasetFingerprints": {}}
-
-
-def _folder_plan_state(folder):
-    return None, {}, {"version": TRAINING_PLAN_VERSION, "profiles": {}}
-
-
-def _write_profile_plan(folder, profile_id, profile_plan, expected_revision=None):
-    with _review_lock:
-        updated = deepcopy(profile_plan)
-        updated["version"] = TRAINING_PLAN_VERSION
-        updated["revision"] = int(updated.get("revision") or 0) + 1
-        return updated
-
-
-def _read_profile_plan(folder, profile_id, manifest, setup):
-    return _default_profile_plan(folder, profile_id, manifest, setup)
+    return {"version": TRAINING_PLAN_VERSION, "stages": stages, "videoRoles": roles}
 
 
 def _normalize_bucket_list(raw, candidates, label):
@@ -252,15 +211,15 @@ def _normalize_bucket_list(raw, candidates, label):
         if bucket not in seen:
             seen.add(bucket)
             output.append([bucket[0], bucket[1]])
+    if len(output) > 3:
+        raise ValueError(label + " contains more than three targets.")
     return output
 
 
 def normalize_profile_plan(raw, profile_id, setup):
     source = raw if isinstance(raw, dict) else {}
     valid_stages = [item["id"] for item in setup["configs"]]
-    output = {"version": TRAINING_PLAN_VERSION, "revision": int(source.get("revision") or 0), "stages": {}, "videoRoles": [], "datasetFingerprints": {}}
-    if isinstance(source.get("customDataset"), dict):
-        output["customDataset"] = deepcopy(source["customDataset"])
+    output = {"version": TRAINING_PLAN_VERSION, "stages": {}, "videoRoles": []}
     raw_stages = source.get("stages") if isinstance(source.get("stages"), dict) else {}
     for stage in valid_stages:
         item = raw_stages.get(stage) if isinstance(raw_stages.get(stage), dict) else {}
@@ -344,12 +303,12 @@ def _assign_images(rows, buckets):
         if not selected:
             uncovered.append(image[0])
             continue
-        # Resolution is a fitting preference, not an exclusion gate.  Pick the
-        # closest selected shape by log-scale distance so every valid image is
-        # represented exactly once.
+        # Resolution is a fitting preference, not an exclusion gate.  Use the
+        # same native-short-edge distance the chart reports, so the visible
+        # target marker and the generated dataset assignment always agree.
         chosen = min(
             selected,
-            key=lambda bucket: abs(math.log((bucket[0] * bucket[1]) / float(image[1] * image[2]))),
+            key=lambda bucket: abs(math.log(min(bucket) / float(min(image[1], image[2])))),
         )
         status = "native" if image[1] >= chosen[0] and image[2] >= chosen[1] else "upscaled"
         assigned[chosen].append((image, status))
@@ -456,7 +415,7 @@ def _build_review_plan(folder, profile_id, setup, manifest, profile_plan):
             "datasetEntries": training_plan_entries(entries, repeats), "settings": settings,
         }
         all_excluded.extend(dict(item, stage=stage) for item in excluded)
-    return {"version": REVIEW_PLAN_VERSION, "profileId": profile_id, "mode": "review", "stages": stages, "excluded": all_excluded}
+    return {"version": TRAINING_PLAN_VERSION, "profileId": profile_id, "mode": "review", "stages": stages, "excluded": all_excluded}
 
 
 def _render_stage_dataset(stage_plan):
@@ -482,14 +441,14 @@ def _dataset_paths(setup):
     return {item["id"]: item["dataset"] for item in setup["configs"]}
 
 
-def _write_structured_datasets(folder, setup, review_plan, profile_plan):
-    fingerprints = dict(profile_plan.get("datasetFingerprints") or {})
+def _write_structured_datasets(folder, setup, review_plan, profile_plan, stages=None):
+    wanted_stages = set(stages) if stages is not None else None
     for stage, filename in _dataset_paths(setup).items():
+        if wanted_stages is not None and stage not in wanted_stages:
+            continue
         text = _render_stage_dataset((review_plan.get("stages") or {}).get(stage, {}))
         destination = Path(folder) / filename
         destination.write_text(text, encoding="utf-8")
-        fingerprints[stage] = _file_fingerprint(destination)
-    profile_plan["datasetFingerprints"] = fingerprints
 
 
 def _closest_aspect(bucket, profile_id, kind, role="", frames=1):
@@ -504,10 +463,10 @@ def _closest_aspect(bucket, profile_id, kind, role="", frames=1):
 
 def _import_representable_dataset(text, profile_id, stage, profile_plan):
     """Import a simple hand edit without guessing at custom stanza semantics."""
-    try:
-        parsed = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        return None
+    # A malformed existing TOML is an error, not a custom configuration.  The
+    # caller deliberately lets this exception reach the route/log so it never
+    # gets mistaken for a safe alternative and silently overwritten.
+    parsed = tomllib.loads(text)
     directories = parsed.get("directory")
     if not isinstance(directories, list):
         return None
@@ -535,7 +494,13 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
             ar_label = _closest_aspect(bucket, profile_id, "image")
             if not ar_label:
                 return None
-            stage_plan["imageBuckets"].setdefault(ar_label, []).append([bucket[0], bucket[1]])
+            selected = stage_plan["imageBuckets"].setdefault(ar_label, [])
+            selected.append([bucket[0], bucket[1]])
+            # The TOML can be perfectly valid while expressing a bucket mix
+            # that the intentionally small Review UI cannot represent.  Treat
+            # it as a custom dataset instead of rejecting it as a bad file.
+            if len(selected) > 3:
+                return None
             continue
         possible = []
         for role_name, role in roles.items():
@@ -547,33 +512,11 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
         if len(possible) != 1:
             return None
         role, ar_label = possible[0]
-        role["buckets"].setdefault(ar_label, []).append([bucket[0], bucket[1]])
+        selected = role["buckets"].setdefault(ar_label, [])
+        selected.append([bucket[0], bucket[1]])
+        if len(selected) > 3:
+            return None
     return imported
-
-
-def _sync_dataset_edits(folder, setup, profile_id, profile_plan):
-    """Keep user TOMLs intact unless their simple bucket shape maps to Review."""
-    fingerprints = profile_plan.get("datasetFingerprints") if isinstance(profile_plan.get("datasetFingerprints"), dict) else {}
-    current = deepcopy(profile_plan)
-    imported_any = False
-    for config in setup["configs"]:
-        stage = config["id"]
-        path = Path(folder) / config["dataset"]
-        try:
-            text = path.read_text(encoding="utf-8")
-            fingerprint = _file_fingerprint(path)
-        except (OSError, UnicodeError):
-            continue
-        if text.startswith("# webcap_training_review = 1") or fingerprints.get(stage) == fingerprint:
-            continue
-        imported = _import_representable_dataset(text, profile_id, stage, current)
-        if imported is None:
-            current["customDataset"] = {"stage": stage, "message": path.name + " has custom dataset stanzas. Reset buckets to return to structured controls."}
-            return current, False
-        current = imported
-        imported_any = True
-    current.pop("customDataset", None)
-    return current, imported_any
 
 
 def _ladders(profile_id, review_plan, manifest):
@@ -592,189 +535,6 @@ def _ladders(profile_id, review_plan, manifest):
             for ar in output["images"]
         }
     return output
-
-
-def _candidate_counts(profile_id, profile_plan, manifest, ladders):
-    image_by_aspect = {ar: [] for ar in ASPECT_RATIOS}
-    for (_directory, ar_label), rows in _image_rows(manifest).items():
-        image_by_aspect.setdefault(ar_label, []).extend(rows)
-    output = {"images": {}, "videos": {}}
-    for stage, stage_plan in (profile_plan.get("stages") or {}).items():
-        output["images"][stage] = {}
-        for ar_label, candidates in ladders.get("images", {}).items():
-            enabled = [tuple(item) for item in (stage_plan.get("imageBuckets") or {}).get(ar_label, [])]
-            output["images"][stage][ar_label] = {}
-            for candidate in candidates:
-                bucket = tuple(candidate)
-                assignments, _uncovered = _assign_images(image_by_aspect.get(ar_label, []), list(dict.fromkeys(enabled + [bucket])))
-                output["images"][stage][ar_label][str(bucket[0]) + "x" + str(bucket[1])] = len(assignments.get(bucket, []))
-
-    profile = profile_for_mode(profile_id, "normal")
-    model_fps = profile.get("videoFps")
-    video_by_aspect = {ar: [] for ar in ASPECT_RATIOS}
-    for row in manifest.get("videos", []):
-        if not isinstance(row, dict):
-            continue
-        ar_label = str(row.get("ar") or "")
-        try:
-            width, height = int(row.get("width")), int(row.get("height"))
-        except (TypeError, ValueError):
-            continue
-        frames = coerce_frames(row, model_fps)
-        if ar_label in video_by_aspect and frames:
-            video_by_aspect[ar_label].append((width, height, int(frames)))
-    for role in profile_plan.get("videoRoles", []):
-        role_name = role["id"]
-        role_frames = int(role["frames"])
-        output["videos"][role_name] = {}
-        for ar_label, candidates in (ladders.get("videos", {}).get(role_name) or {}).items():
-            enabled = [tuple(item) for item in (role.get("buckets") or {}).get(ar_label, [])]
-            output["videos"][role_name][ar_label] = {}
-            for candidate in candidates:
-                bucket = tuple(candidate)
-                selected = sorted(set(enabled + [bucket]), key=lambda item: item[0] * item[1], reverse=True)
-                count = 0
-                for width, height, frames in video_by_aspect.get(ar_label, []):
-                    if frames < role_frames or not selected:
-                        continue
-                    chosen = next((item for item in selected if width >= item[0] and height >= item[1]), selected[-1])
-                    if chosen == bucket:
-                        count += 1
-                output["videos"][role_name][ar_label][str(bucket[0]) + "x" + str(bucket[1])] = count
-    return output
-
-
-def _effective_tomls(folder, setup):
-    output = {}
-    for item in setup["configs"]:
-        config_path = Path(folder) / item["file"]
-        dataset_path = Path(folder) / item["dataset"]
-        output[item["id"]] = {
-            "configName": item["file"],
-            "configText": config_path.read_text(encoding="utf-8"),
-            "datasetName": item["dataset"],
-            "datasetText": dataset_path.read_text(encoding="utf-8"),
-        }
-    return output
-
-
-def prepare_training_review(folder, profile_id, run_id="", selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None, persist=True, resume_action_id=""):
-    folder = Path(folder)
-    if resume_action_id:
-        action_root, action = read_action(str(resume_action_id))
-        try:
-            relative_folder = folder.resolve().relative_to(Path(app_config.FS_ROOT).resolve()).as_posix()
-        except ValueError as exc:
-            raise ValueError("Training set is outside the configured root.") from exc
-        if action.get("folder") != relative_folder:
-            raise ValueError("The selected checkpoint belongs to another set.")
-        plan_path = action_root / "record" / "training_plan.json"
-        try:
-            reviewed = json.loads(plan_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise ValueError("The selected checkpoint has no readable immutable Training Review.") from exc
-        if not isinstance(reviewed, dict) or not isinstance(reviewed.get("stages"), dict):
-            raise ValueError("The selected checkpoint has an invalid immutable Training Review.")
-        record_review = action.get("record", {}).get("review") if isinstance(action.get("record"), dict) else {}
-        effective = {}
-        for stage in reviewed["stages"]:
-            try:
-                item = config_for_stage(profile_id, stage, action.get("mode") or "normal")
-                config_path = action_root / "record" / "configs" / item["file"]
-                dataset_path = action_root / "record" / "configs" / item["dataset"]
-                effective[stage] = {
-                    "configName": item["file"], "configText": config_path.read_text(encoding="utf-8"),
-                    "datasetName": item["dataset"], "datasetText": dataset_path.read_text(encoding="utf-8"),
-                }
-            except (OSError, ValueError):
-                continue
-        return {
-            "ok": True, "profileId": profile_id, "runId": run_id,
-            "reviewFingerprint": str(record_review.get("fingerprint") or _json_fingerprint(reviewed)),
-            "plan": {"revision": 0, "stages": {}, "videoRoles": []}, "review": reviewed,
-            "blockers": [], "warnings": list(record_review.get("warnings") or []), "ladders": {"images": {}, "videos": {}},
-            "customDataset": False, "readOnly": True, "resumeActionId": str(resume_action_id),
-            "effectiveToml": effective, "candidateCounts": {"images": {}, "videos": {}},
-        }
-    selected_media = list(selected_media or [])
-    setup = _normal_setup(folder, profile_id, selected_media, selection_criteria, total_media_count)
-    review_setup = _setup_for_run(setup, profile_id, run_id)
-    manifest = build_dataset_manifest(folder, selected_media=selected_media, selection_criteria=selection_criteria, total_media_count=total_media_count)
-    profile_plan = normalize_profile_plan(_read_profile_plan(folder, profile_id, manifest, setup), profile_id, setup)
-    profile_plan, imported_manual_dataset = _sync_dataset_edits(folder, review_setup, profile_id, profile_plan)
-    profile_plan = normalize_profile_plan(profile_plan, profile_id, setup)
-    reviewed = _build_review_plan(folder, profile_id, review_setup, manifest, profile_plan)
-    blockers = []
-    warnings = []
-    if not selected_media:
-        blockers.append({"code": "no_visible_media", "message": "No visible media items are selected for training.", "files": []})
-    fallback = fallback_captions if isinstance(fallback_captions, dict) else {}
-    for name in selected_media:
-        source = folder / str(name)
-        caption = source.with_suffix(".txt")
-        try:
-            caption_ok = caption.is_file() and bool(caption.read_text(encoding="utf-8").strip())
-        except OSError:
-            caption_ok = False
-        if not caption_ok and not str(fallback.get(str(name)) or "").strip():
-            blockers.append({"code": "missing_caption", "message": "No caption or fallback is available.", "files": [str(name)]})
-    excluded = reviewed.get("excluded") or []
-    if excluded:
-        warnings.append({"code": "excluded_media", "message": str(len(excluded)) + " selected media item(s) are not covered by the current bucket plan.", "files": [item.get("file") for item in excluded]})
-    usable = sum(len(stage.get("datasetEntries") or []) for stage in reviewed.get("stages", {}).values())
-    if not usable:
-        blockers.append({"code": "no_trainable_media", "message": "The reviewed plan contains no trainable media.", "files": []})
-    custom_dataset = profile_plan.get("customDataset") if isinstance(profile_plan.get("customDataset"), dict) else None
-    if custom_dataset:
-        blockers.append({"code": "custom_dataset", "message": custom_dataset["message"], "files": []})
-    if persist and not custom_dataset:
-        _write_structured_datasets(folder, review_setup, reviewed, profile_plan)
-    fingerprint = _json_fingerprint({
-        "profile": profile_id, "run": run_id, "plan": profile_plan, "review": reviewed,
-        "selection": manifest.get("selection"), "fallback": sorted((str(k), str(v)) for k, v in fallback.items()),
-        "configs": {item["id"]: _file_fingerprint(folder / item["file"]) for item in setup["configs"]},
-    })
-    ladders = _ladders(profile_id, profile_plan, manifest)
-    return {
-        "ok": not blockers, "profileId": profile_id, "runId": run_id, "reviewFingerprint": fingerprint,
-        "plan": profile_plan, "review": reviewed, "blockers": blockers, "warnings": warnings,
-        "ladders": ladders, "candidateCounts": _candidate_counts(profile_id, profile_plan, manifest, ladders),
-        "effectiveToml": _effective_tomls(folder, review_setup), "customDataset": custom_dataset or False,
-    }
-
-
-def update_training_review(folder, profile_id, payload):
-    source = payload if isinstance(payload, dict) else {}
-    selected_media = list(source.get("selected_media") or [])
-    selection_criteria = source.get("selection_criteria")
-    total_media_count = source.get("total_media_count")
-    setup = _normal_setup(folder, profile_id, selected_media, selection_criteria, total_media_count)
-    manifest = build_dataset_manifest(folder, selected_media=selected_media, selection_criteria=selection_criteria, total_media_count=total_media_count)
-    current = _read_profile_plan(folder, profile_id, manifest, setup)
-    expected = source.get("revision")
-    if expected is not None and int(expected) != int(current.get("revision") or 0):
-        raise ValueError("Training Review changed in another window. Reload the review and retry.")
-    reset = str(source.get("reset") or "")
-    if reset in ("settings", "all"):
-        for config in setup["configs"]:
-            reset_training_config_file(folder, config["file"], profile_id=profile_id, mode="normal")
-    if reset in ("buckets", "all"):
-        current = _default_profile_plan(folder, profile_id, manifest, setup)
-    if isinstance(source.get("plan"), dict) and reset not in ("buckets", "all"):
-        current = source["plan"]
-    normalized = normalize_profile_plan(current, profile_id, setup)
-    settings = source.get("settings") if isinstance(source.get("settings"), dict) else {}
-    valid_stages = {item["id"]: item for item in setup["configs"]}
-    for stage, values in settings.items():
-        if stage not in valid_stages or not isinstance(values, dict):
-            raise ValueError("Training Review received an unknown config stage.")
-        path = Path(folder) / valid_stages[stage]["file"]
-        path.write_text(apply_review_config_settings(path.read_text(encoding="utf-8"), values), encoding="utf-8")
-    saved = _write_profile_plan(folder, profile_id, normalized, expected_revision=expected)
-    return prepare_training_review(
-        folder, profile_id, source.get("runId") or "", selected_media, selection_criteria, total_media_count,
-        source.get("fallback_captions"), persist=True,
-    )
 
 
 def discover_saved_initializers(folder, profile_id, stage):
@@ -830,70 +590,228 @@ def resolve_saved_initializer(folder, profile_id, stage, action_id, export_id):
 # canonical dataset TOML is now the only editable authority; these definitions
 # deliberately replace the older state-backed implementation above.
 def _set_toml_review(folder, profile_id, run_id, selected_media, selection_criteria, total_media_count):
+    expected_setup = profile_for_mode(profile_id, "normal")
+    missing_datasets = {
+        item["dataset"] for item in expected_setup["configs"]
+        if not (Path(folder) / item["dataset"]).is_file()
+    }
     setup = _normal_setup(folder, profile_id, selected_media, selection_criteria, total_media_count)
     review_setup = _setup_for_run(setup, profile_id, run_id)
     manifest = build_dataset_manifest(folder, selected_media=selected_media, selection_criteria=selection_criteria, total_media_count=total_media_count)
     plan = _default_profile_plan(folder, profile_id, manifest, review_setup)
     custom = None
+    materialized_stages = {
+        config["id"] for config in review_setup["configs"]
+        if config["dataset"] in missing_datasets
+    }
     for config in review_setup["configs"]:
         config_path = Path(folder) / config["file"]
         dataset_path = Path(folder) / config["dataset"]
         # Required TOMLs are intentionally read here.  A bad existing file is
         # an operation failure, never a signal to silently replace it.
         tomllib.loads(config_path.read_text(encoding="utf-8"))
+        if config["id"] in materialized_stages:
+            continue
         dataset_text = dataset_path.read_text(encoding="utf-8")
         imported = _import_representable_dataset(dataset_text, profile_id, config["id"], plan)
         if imported is None:
-            custom = {"stage": config["id"], "message": dataset_path.name + " is custom. Edit it directly or Reset buckets to return to the bucket editor."}
+            custom = {"stage": config["id"], "datasetName": config["dataset"], "message": dataset_path.name + " is custom. Edit the raw TOML or Reset dataset to return to bucket controls."}
             break
         plan = imported
     plan = normalize_profile_plan(plan, profile_id, review_setup)
+    plan["profileId"] = profile_id
     review = _build_review_plan(folder, profile_id, review_setup, manifest, plan)
+    if materialized_stages:
+        _write_structured_datasets(folder, review_setup, review, plan, materialized_stages)
     return setup, review_setup, manifest, plan, review, custom
 
 
+IMPACT_BANDS = ("down20", "down", "near", "up", "up20")
+ASPECT_LABELS = {"43": "4:3", "34": "3:4", "169": "16:9", "916": "9:16", "square": "Square"}
+
+
+def _impact_band(scale_ratio):
+    if scale_ratio < 0.80:
+        return "down20"
+    if scale_ratio < 0.95:
+        return "down"
+    if scale_ratio <= 1.05:
+        return "near"
+    if scale_ratio <= 1.20:
+        return "up"
+    return "up20"
+
+
+def _empty_impact_counts():
+    return {band: 0 for band in IMPACT_BANDS}
+
+
+def _selected_targets(buckets):
+    return [tuple(item) for item in buckets if isinstance(item, (list, tuple)) and len(item) == 2]
+
+
+def _closest_target(short_edge, targets):
+    if not targets:
+        return ()
+    return min(targets, key=lambda target: abs(math.log(min(target) / float(short_edge))))
+
+
+def _video_assignment(width, height, targets):
+    """Match the existing Temporal/Detail bucket-selection semantics."""
+    ordered = sorted(targets, key=lambda target: target[0] * target[1], reverse=True)
+    return next((target for target in ordered if width >= target[0] and height >= target[1]), ordered[-1] if ordered else ())
+
+
+def _distribution_group(rows, targets, frames=None, assign_target=None):
+    target_counts = {target: 0 for target in targets}
+    native = []
+    impact = _empty_impact_counts()
+    for row in rows:
+        width, height = int(row["width"]), int(row["height"])
+        short_edge = min(width, height)
+        target = (assign_target(width, height, targets) if assign_target else _closest_target(short_edge, targets)) if row.get("eligible", True) else ()
+        scale_ratio = min(target) / float(short_edge) if target else 1.0
+        band = _impact_band(scale_ratio)
+        if target:
+            target_counts[target] += 1
+            impact[band] += 1
+        native.append({
+            "width": width,
+            "height": height,
+            "edge": short_edge,
+            "nativeShortEdge": short_edge,
+            "target": list(target),
+            "assignedTarget": list(target),
+            "scaleRatio": scale_ratio,
+            "impactBand": band,
+            "eligible": bool(row.get("eligible", True)),
+        })
+    group = {
+        "count": len(native),
+        "native": native,
+        "targets": [{"shape": list(target), "assignedCount": target_counts[target]} for target in targets],
+        "impact": impact,
+    }
+    if frames is not None:
+        group["frames"] = int(frames)
+    return group
+
+
 def _distribution_payload(manifest, plan):
-    output = {"images": {}, "videos": {}}
+    """Return chart-shaped source facts, never filenames or a second plan."""
+    output = {"images": {}, "videos": {}, "impact": {"images": _empty_impact_counts(), "videos": {}}}
     image_buckets = {}
     for stage in (plan.get("stages") or {}).values():
         for ar_label, buckets in (stage.get("imageBuckets") or {}).items():
             image_buckets.setdefault(ar_label, [])
-            for bucket in buckets:
+            for bucket in _selected_targets(buckets):
                 if bucket not in image_buckets[ar_label]:
                     image_buckets[ar_label].append(bucket)
+    image_rows = {ar_label: [] for ar_label in ASPECT_RATIOS}
     for row in manifest.get("images") or []:
         if not isinstance(row, dict):
             continue
+        ar_label = str(row.get("ar") or "")
         try:
-            short_edge = min(int(row["width"]), int(row["height"]))
+            width, height = int(row["width"]), int(row["height"])
         except (KeyError, TypeError, ValueError):
             continue
+        if ar_label in image_rows and width > 0 and height > 0:
+            image_rows[ar_label].append({"width": width, "height": height})
+    for ar_label, rows in image_rows.items():
+        if not rows:
+            continue
+        group = _distribution_group(rows, image_buckets.get(ar_label, []))
+        output["images"][ar_label] = group
+        for band, count in group["impact"].items():
+            output["impact"]["images"][band] += count
+
+    profile = profile_for_mode(str(plan.get("profileId") or ""), "normal") if plan.get("profileId") else None
+    model_fps = profile.get("videoFps") if profile else None
+    video_rows = {ar_label: [] for ar_label in ASPECT_RATIOS}
+    for row in manifest.get("videos") or []:
+        if not isinstance(row, dict):
+            continue
         ar_label = str(row.get("ar") or "")
-        buckets = image_buckets.get(ar_label) or []
-        target = min(buckets, key=lambda bucket: abs(math.log(min(bucket) / float(short_edge)))) if buckets else []
-        output["images"].setdefault(ar_label, {"native": [], "targets": []})["native"].append({"edge": short_edge, "target": target})
+        try:
+            width, height = int(row["width"]), int(row["height"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        frames = coerce_frames(row, model_fps)
+        if ar_label in video_rows and width > 0 and height > 0 and frames:
+            video_rows[ar_label].append({"width": width, "height": height, "frames": int(frames)})
     for role in plan.get("videoRoles") or []:
         role_name = str(role.get("id") or "")
-        for row in manifest.get("videos") or []:
-            if not isinstance(row, dict):
+        frames = int(role.get("frames") or 0)
+        if not role_name or not frames:
+            continue
+        role_groups = {}
+        role_impact = _empty_impact_counts()
+        for ar_label, rows in video_rows.items():
+            if not rows:
                 continue
-            try:
-                short_edge = min(int(row["width"]), int(row["height"]))
-            except (KeyError, TypeError, ValueError):
-                continue
-            ar_label = str(row.get("ar") or "")
-            buckets = (role.get("buckets") or {}).get(ar_label) or []
-            target = min(buckets, key=lambda bucket: abs(math.log(min(bucket) / float(short_edge)))) if buckets else []
-            output["videos"].setdefault(role_name, {}).setdefault(ar_label, {"native": [], "targets": [], "frames": role.get("frames")})["native"].append({"edge": short_edge, "target": target})
-    for group in list(output["images"].values()):
-        group["targets"] = sorted({tuple(item["target"]) for item in group["native"] if item["target"]})
-    for roles in output["videos"].values():
-        for group in roles.values():
-            group["targets"] = sorted({tuple(item["target"]) for item in group["native"] if item["target"]})
+            eligible_rows = [dict(row, eligible=int(row["frames"]) >= frames) for row in rows]
+            group = _distribution_group(
+                eligible_rows,
+                _selected_targets((role.get("buckets") or {}).get(ar_label, [])),
+                frames,
+                assign_target=_video_assignment,
+            )
+            role_groups[ar_label] = group
+            for band, count in group["impact"].items():
+                role_impact[band] += count
+        output["videos"][role_name] = role_groups
+        output["impact"]["videos"][role_name] = role_impact
     return output
 
 
-def prepare_training_review(folder, profile_id, run_id="", selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None, persist=True, resume_action_id=""):
+def _distribution_warnings(distribution, manifest):
+    warnings = []
+    invalid = [row for row in manifest.get("skipped") or [] if str(row.get("reason") or "") == "invalid_aspect_ratio"]
+    if invalid:
+        warnings.append({
+            "code": "invalid_ar",
+            "view": "",
+            "message": str(len(invalid)) + " item(s) have an invalid aspect ratio and remain outside the existing cohorts.",
+            "files": [],
+        })
+    views = [("images", "", distribution.get("images") or {})]
+    views.extend(("videos", str(role), groups) for role, groups in (distribution.get("videos") or {}).items())
+    for kind, role, groups in views:
+        for ar_label, group in groups.items():
+            eligible = [row for row in group.get("native") or [] if row.get("eligible", True) and row.get("target")]
+            substantial = sum(1 for row in eligible if row.get("impactBand") in ("down20", "up20"))
+            if substantial:
+                label = (role + " video") if role else "image"
+                warnings.append({
+                    "code": "substantial_resize",
+                    "view": role or "images",
+                    "ar": ar_label,
+                    "message": str(substantial) + " of " + str(len(eligible)) + " " + label + " item(s) in " + ASPECT_LABELS.get(ar_label, ar_label) + " will resize more than 20%.",
+                    "files": [],
+                })
+            total = len(eligible)
+            if total >= 8:
+                for target in group.get("targets") or []:
+                    assigned = int(target.get("assignedCount") or 0)
+                    if 0 < assigned <= max(2, int(math.floor(total * 0.10))):
+                        shape = target.get("shape") or []
+                        warnings.append({
+                            "code": "small_bucket",
+                            "view": role or "images",
+                            "ar": ar_label,
+                            "message": str(shape[0]) + "×" + str(shape[1]) + " receives only " + str(assigned) + " item(s) in " + ASPECT_LABELS.get(ar_label, ar_label) + ".",
+                            "files": [],
+                        })
+    return warnings
+
+
+def prepare_training_review(folder, profile_id, run_id="", selected_media=None, selection_criteria=None, total_media_count=None, fallback_captions=None, persist=True):
+    """Read the canonical TOMLs and return a renderable bucket report.
+
+    ``persist`` remains accepted for older callers, but Review is no longer an
+    immutable resume record and opening it never writes a dataset TOML.
+    """
     folder = Path(folder)
     selected_media = list(selected_media or [])
     setup, review_setup, manifest, plan, review, custom = _set_toml_review(
@@ -909,29 +827,16 @@ def prepare_training_review(folder, profile_id, run_id="", selected_media=None, 
         caption = source.with_suffix(".txt")
         if not caption.is_file() and not str(fallback.get(str(name)) or "").strip():
             blockers.append({"code": "missing_caption", "message": "No caption or fallback is available.", "files": [str(name)]})
-    for skipped in manifest.get("skipped") or []:
-        if str(skipped.get("reason") or "") == "invalid_aspect_ratio":
-            warnings.append({"code": "invalid_ar", "message": "Invalid aspect-ratio media is outside the existing training cohorts.", "files": [str(skipped.get("file") or "")]})
-    for stage in (review.get("stages") or {}).values():
-        for entry in stage.get("datasetEntries") or []:
-            count = int(entry.get("sample_count") or entry.get("eligibleCount") or 0)
-            upscaled = int(entry.get("upscaled_count") or entry.get("upscaledCount") or 0)
-            if count and upscaled / float(count) >= 0.5:
-                warnings.append({"code": "resize_pressure", "message": "A selected bucket substantially resizes most of its media.", "files": []})
-    if not any((stage.get("datasetEntries") or []) for stage in (review.get("stages") or {}).values()):
+    distribution = _distribution_payload(manifest, plan)
+    warnings.extend(_distribution_warnings(distribution, manifest))
+    if not custom and not any((stage.get("datasetEntries") or []) for stage in (review.get("stages") or {}).values()):
         blockers.append({"code": "no_trainable_media", "message": "The selected buckets contain no trainable media.", "files": []})
-    fingerprint = _json_fingerprint({
-        "profile": profile_id, "run": run_id, "selection": selected_media,
-        "configs": {item["id"]: _file_fingerprint(folder / item["file"]) for item in review_setup["configs"]},
-        "datasets": {item["id"]: _file_fingerprint(folder / item["dataset"]) for item in review_setup["configs"]},
-    })
     ladders = _ladders(profile_id, plan, manifest)
     return {
-        "ok": not blockers, "profileId": profile_id, "runId": run_id, "reviewFingerprint": fingerprint,
+        "ok": not blockers, "profileId": profile_id, "runId": run_id,
         "plan": plan, "review": review, "blockers": blockers, "warnings": warnings,
-        "ladders": ladders, "candidateCounts": _candidate_counts(profile_id, plan, manifest, ladders),
-        "effectiveToml": _effective_tomls(folder, review_setup), "customDataset": custom or False,
-        "distribution": _distribution_payload(manifest, plan),
+        "ladders": ladders,
+        "customDataset": custom or False, "distribution": distribution,
     }
 
 
@@ -946,26 +851,16 @@ def update_training_review(folder, profile_id, payload):
         folder, profile_id, run_id, selected_media, selection_criteria, total_media_count,
     )
     reset = str(source.get("reset") or "")
-    if reset in ("settings", "all"):
-        for config in review_setup["configs"]:
-            reset_training_config_file(folder, config["file"], profile_id=profile_id, mode="normal")
-    if reset in ("buckets", "all"):
+    if reset == "buckets":
         current = _default_profile_plan(folder, profile_id, manifest, review_setup)
         custom = None
     elif isinstance(source.get("plan"), dict) and not custom:
         current = source["plan"]
     current = normalize_profile_plan(current, profile_id, review_setup)
-    settings = source.get("settings") if isinstance(source.get("settings"), dict) else {}
-    allowed = {item["id"]: item for item in review_setup["configs"]}
-    for stage, values in settings.items():
-        if stage not in allowed or not isinstance(values, dict):
-            raise ValueError("Training Review received an unknown config stage.")
-        path = folder / allowed[stage]["file"]
-        path.write_text(apply_review_config_settings(path.read_text(encoding="utf-8"), values), encoding="utf-8")
     reviewed = _build_review_plan(folder, profile_id, review_setup, manifest, current)
     if not custom:
         _write_structured_datasets(folder, review_setup, reviewed, current)
     return prepare_training_review(
         folder, profile_id, run_id, selected_media, selection_criteria, total_media_count,
-        source.get("fallback_captions"), persist=True,
+        source.get("fallback_captions"), persist=False,
     )

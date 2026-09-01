@@ -15,7 +15,7 @@ import tomllib
 from . import config as app_config
 from .training_config_files import output_dir_from_config, training_config_path
 from .training_action import action_paths, managed_action_children, read_action
-from .training_profiles import config_for_id
+from .training_profiles import config_for_id, config_for_stage
 
 
 HISTORY_VERSION = 4

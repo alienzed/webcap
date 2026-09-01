@@ -634,7 +634,7 @@
                                 <div class="training-run-setup-header">
                                     <div class="training-run-setup-heading">
                                         <div id="training-run-step-number" class="training-workflow-step-number">2</div>
-                                        <div class="training-workspace-section-title">Training Review</div>
+                                        <div class="training-workspace-section-title">Run setup</div>
                                     </div>
                                 </div>
                                 <div class="training-run-setup-fields">
@@ -808,6 +808,21 @@
                 </div>
             </div>
             <div id="workspace-overlays" class="workspace-overlays">
+                <div id="training-review-modal" class="training-review-modal hidden" aria-hidden="true">
+                    <section class="training-review-dialog" role="dialog" aria-modal="true" aria-labelledby="training-review-modal-title">
+                        <header class="training-review-modal-header">
+                            <div>
+                                <h2 id="training-review-modal-title">Adjust training buckets</h2>
+                                <p>Changes save directly to this set’s dataset TOML.</p>
+                            </div>
+                            <button id="training-review-modal-close" type="button" class="training-review-modal-close" aria-label="Close bucket review">&times;</button>
+                        </header>
+                        <div id="training-review-modal-content" class="training-review-modal-content"></div>
+                        <footer class="training-review-modal-footer">
+                            <button id="training-review-modal-done" type="button" class="review-captions-btn">Done</button>
+                        </footer>
+                    </section>
+                </div>
                 <div id="media-grid-modal" class="media-grid-modal hidden" aria-hidden="true">
                     <div class="media-grid-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-title">
                         <div class="media-grid-header">

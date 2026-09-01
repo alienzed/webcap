@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config as app_config
-from .permissions import normalize_path_permissions
 from .training_config_files import HI_CONFIG_NAME, LO_CONFIG_NAME, default_training_config_epochs
 from .training_profiles import KREA2_PROFILE_ID, MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, WAN22_PROFILE_ID, config_for_stage, profile as training_profile
 
@@ -427,25 +426,20 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
         })
     metadata_path = dataset_root / "webcap_dataset_metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    normalize_path_permissions(metadata_path)
     lines.append(f"[INFO] Wrote metadata cache: {metadata_path}")
     training_plan_path = dataset_root / TRAINING_PLAN_FILE_NAME
     training_plan_path.write_text(json.dumps(artifacts["plan"], indent=2), encoding="utf-8")
-    normalize_path_permissions(training_plan_path)
     lines.append(f"[INFO] Wrote training plan: {training_plan_path}")
     single_stage = str(profile_id or "") in {KREA2_PROFILE_ID, WAN21_PROFILE_ID, MINIMAX_H3_PROFILE_ID}
     if single_stage:
         train_path = folder / "dataset.train.toml"
         train_path.write_text(artifacts["loText"], encoding="utf-8")
-        normalize_path_permissions(train_path)
         lines.append(f"[INFO] Wrote {train_path}")
     else:
         hi_path = folder / "dataset.hi.toml"
         lo_path = folder / "dataset.lo.toml"
         hi_path.write_text(artifacts["hiText"], encoding="utf-8")
         lo_path.write_text(artifacts["loText"], encoding="utf-8")
-        normalize_path_permissions(hi_path)
-        normalize_path_permissions(lo_path)
         lines.append(f"[INFO] Wrote {hi_path}")
         lines.append(f"[INFO] Wrote {lo_path}")
 

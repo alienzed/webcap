@@ -1,12 +1,16 @@
-// Training Review edits the set-owned dataset TOML directly.  There is no
-// second hidden plan stored in folder state.
+// Training Review is a view onto the set-owned TOMLs. It keeps no parallel
+// bucket authority in folder state.
+
+var TRAINING_REVIEW_ASPECT_ORDER = ['43', '34', '169', '916', 'square'];
+var TRAINING_REVIEW_IMPACT_BANDS = [
+  ['down20', '20%+ down'], ['down', '5–20% down'], ['near', 'Near native'], ['up', '5–20% up'], ['up20', '20%+ up']
+];
 
 function trainingReviewPayload() {
   var selected = getVisibleMediaSelectionForTraining();
   var fallback = buildTrainingFallbackCaptions(selected);
   var profile = getSelectedTrainingModelProfile();
   var selectedRun = getTrainingProfileRunForStage(profile, trainingWorkspaceState.runStages);
-  var checkpoint = document.getElementById('training-run-checkpoint-select');
   return {
     folder: state.folder,
     profileId: profile ? profile.id : '',
@@ -14,21 +18,17 @@ function trainingReviewPayload() {
     selected_media: selected,
     total_media_count: Array.isArray(state.items) ? state.items.length : 0,
     selection_criteria: buildTrainingSelectionCriteria(),
-    fallback_captions: fallback.fallbackCaptions,
-    resumeActionId: trainingWorkspaceState.reviewStartingPoint === 'resume' && checkpoint && checkpoint.selectedOptions && checkpoint.selectedOptions[0]
-      ? String(checkpoint.selectedOptions[0].getAttribute('data-action-id') || '') : ''
+    fallback_captions: fallback.fallbackCaptions
   };
 }
 
 function trainingReviewRequest(path, payload) {
   return fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   }).then(function (response) {
     return response.json().catch(function () { return {}; }).then(function (data) {
-      var isReviewPayload = !!(data && data.review && typeof data.review === 'object');
-      if (!response.ok || (data.ok === false && !isReviewPayload)) throw new Error(data.error || 'Training Review request failed.');
+      var reviewPayload = !!(data && data.review && typeof data.review === 'object');
+      if (!response.ok || (data.ok === false && !reviewPayload)) throw new Error(data.error || 'Training Review request failed.');
       return data;
     });
   });
@@ -45,9 +45,16 @@ function fetchTrainingReviewInitializers() {
   var stage = reviewInitializerStage();
   if (!profile || !stage) return Promise.resolve([]);
   return fetch('/fs/training_initializers?folder=' + encodeURIComponent(state.folder) + '&profileId=' + encodeURIComponent(profile.id) + '&stage=' + encodeURIComponent(stage))
-    .then(function (response) { return response.json().then(function (payload) { if (!response.ok || !payload.ok) throw new Error(payload.error || 'Could not load saved LoRAs.'); return payload.exports || []; }); })
+    .then(function (response) { return response.json().then(function (payload) {
+      if (!response.ok || !payload.ok) throw new Error(payload.error || 'Could not load saved LoRAs.');
+      return payload.exports || [];
+    }); })
     .then(function (exports) { trainingWorkspaceState.reviewInitializers = exports; return exports; })
-    .catch(function (err) { trainingWorkspaceState.reviewInitializers = []; setStatus('Could not load saved LoRAs: ' + String(err.message || err)); return []; });
+    .catch(function (err) {
+      trainingWorkspaceState.reviewInitializers = [];
+      setStatus('Could not load saved LoRAs: ' + String(err.message || err));
+      return [];
+    });
 }
 
 function renderTrainingStartingPointControls(payload) {
@@ -59,22 +66,19 @@ function renderTrainingStartingPointControls(payload) {
   select.value = startPoint;
   resumeFields.classList.toggle('hidden', startPoint !== 'resume');
   initializerFields.classList.toggle('hidden', startPoint !== 'initializer');
-  var review = payload && payload.review || {};
-  var stages = review.stages || {};
+  var stages = payload && payload.review && payload.review.stages || {};
   if (startPoint === 'initializer') {
     var initStage = reviewInitializerStage();
     var exports = trainingWorkspaceState.reviewInitializers || [];
-    var warning = '';
     initializerFields.innerHTML = '<label class="training-run-option">Apply to<select data-review-initializer-stage>' + Object.keys(stages).map(function (stage) {
       return '<option value="' + escapeHtml(stage) + '"' + (stage === initStage ? ' selected' : '') + '>' + escapeHtml(stage.toUpperCase()) + '</option>';
     }).join('') + '</select></label>' +
       (exports.length ? '<label class="training-run-option">Set checkpoint<select data-review-initializer-export><option value="">Choose checkpoint…</option>' + exports.map(function (item) {
         var weight = item.weights && item.weights.length === 1 ? ' · ' + item.weights[0].name : '';
-        return '<option value="' + escapeHtml(item.exportId) + '"' + (item.exportId === trainingWorkspaceState.reviewInitializerExportId ? ' selected' : '') + '>' +
-          escapeHtml(item.runName + ' · ' + item.stage.toUpperCase() + ' · epoch' + item.epoch + weight) + '</option>';
+        return '<option value="' + escapeHtml(item.exportId) + '"' + (item.exportId === trainingWorkspaceState.reviewInitializerExportId ? ' selected' : '') + '>' + escapeHtml(item.runName + ' · ' + item.stage.toUpperCase() + ' · epoch' + item.epoch + weight) + '</option>';
       }).join('') + '</select></label>' : '') +
       '<label class="training-run-option">LoRA file or folder<input type="text" data-review-initializer-custom-path value="' + escapeHtml(String(trainingWorkspaceState.reviewInitializerCustomPath || '')) + '" placeholder="Path to a .safetensors file or its folder"></label>' +
-      '<label class="training-run-option">Constant LR<input type="number" min="0" step="any" data-review-constant-lr value="' + escapeHtml(String(trainingWorkspaceState.reviewForceConstantLr || '')) + '">' + warning + '</label>';
+      '<label class="training-run-option">Constant LR<input type="number" min="0" step="any" data-review-constant-lr value="' + escapeHtml(String(trainingWorkspaceState.reviewForceConstantLr || '')) + '"></label>';
     var stageSelect = initializerFields.querySelector('[data-review-initializer-stage]');
     if (stageSelect) stageSelect.onchange = function () {
       trainingWorkspaceState.reviewInitializerStage = stageSelect.value;
@@ -124,290 +128,257 @@ function renderTrainingStartingPointControls(payload) {
   };
 }
 
-function selectedReviewBucket(plan, stage, kind, role, ar, bucket) {
-  if (kind === 'image') {
-    var images = plan && plan.stages && plan.stages[stage] && plan.stages[stage].imageBuckets;
-    return !!(images && images[ar] || []).some(function (item) { return Number(item[0]) === bucket[0] && Number(item[1]) === bucket[1]; });
-  }
-  var roles = plan && Array.isArray(plan.videoRoles) ? plan.videoRoles : [];
-  var entry = roles.filter(function (item) { return item.id === role; })[0];
-  return !!(entry && entry.buckets && entry.buckets[ar] || []).some(function (item) { return Number(item[0]) === bucket[0] && Number(item[1]) === bucket[1]; });
-}
-
-function setReviewBucket(plan, stage, kind, role, ar, bucket, enabled) {
-  if (kind === 'image') {
-    var stagePlan = plan.stages[stage];
-    stagePlan.imageBuckets = stagePlan.imageBuckets || {};
-    var items = stagePlan.imageBuckets[ar] || [];
-    stagePlan.imageBuckets[ar] = items.filter(function (item) { return Number(item[0]) !== bucket[0] || Number(item[1]) !== bucket[1]; });
-    if (enabled) {
-      if (stagePlan.imageBuckets[ar].length >= 3) {
-        setStatus('Images use at most three buckets per aspect ratio. Remove one before adding another.');
-        return;
-      }
-      stagePlan.imageBuckets[ar].push([bucket[0], bucket[1]]);
-    }
-    return;
-  }
-  var entry = plan.videoRoles.filter(function (item) { return item.id === role; })[0];
-  if (!entry) return;
-  entry.buckets = entry.buckets || {};
-  var rows = entry.buckets[ar] || [];
-  entry.buckets[ar] = rows.filter(function (item) { return Number(item[0]) !== bucket[0] || Number(item[1]) !== bucket[1]; });
-  if (enabled) entry.buckets[ar].push([bucket[0], bucket[1]]);
-}
-
-function reviewDistributionHtml(distribution) {
-  var groups = distribution && distribution.images || {};
-  var aspects = Object.keys(groups).sort();
-  if (!aspects.length) return '';
-  var html = '<section class="training-review-distribution"><div class="training-review-section-title">Native resolution and selected targets</div><div class="training-review-distribution-note">Dots are source media. Markers are the buckets that will fit them; amber indicates stronger resizing.</div>';
-  aspects.forEach(function (ar) {
-    var group = groups[ar] || {};
-    var rows = group.native || [];
-    var edges = rows.map(function (item) { return Number(item.edge || 0); }).filter(Boolean);
-    if (!edges.length) return;
-    var low = Math.min.apply(Math, edges);
-    var high = Math.max.apply(Math, edges);
-    if (low === high) { low = Math.max(1, low - 1); high += 1; }
-    function pos(value) { return Math.max(2, Math.min(98, ((Number(value) - low) / (high - low)) * 96 + 2)); }
-    var dots = rows.slice(0, 120).map(function (item, index) {
-      var target = item.target || [];
-      var scale = target.length ? Math.max(target[0], target[1]) / Math.max(1, Number(item.edge || 1)) : 1;
-      var tone = scale > 1.25 || scale < 0.75 ? ' resize-heavy' : scale > 1.08 || scale < 0.92 ? ' resize-light' : '';
-      return '<i class="training-review-native-dot' + tone + '" style="left:' + pos(item.edge) + '%;bottom:' + ((index % 5) * 5 + 5) + '%" title="native short edge ' + escapeHtml(String(item.edge)) + '"></i>';
-    }).join('');
-    var targets = (group.targets || []).map(function (target) {
-      var edge = Math.min(Number(target[0]), Number(target[1]));
-      return '<b class="training-review-target-marker" style="left:' + pos(edge) + '%"><span>' + escapeHtml(target[0] + '×' + target[1]) + '</span></b>';
-    }).join('');
-    html += '<div class="training-review-distribution-row"><div><strong>' + escapeHtml(formatReviewAspect(ar)) + '</strong><span>' + edges.length + ' images</span></div><div class="training-review-distribution-track">' + dots + targets + '</div><div class="training-review-distribution-scale"><span>' + low + 'px</span><span>' + high + 'px</span></div></div>';
-  });
-  return html + '</section>';
-}
-
-function reviewEntryKey(entry) {
-  return [entry.kind, entry.role, entry.ar, (entry.bucket || []).join('x')].join('|');
-}
-
-function reviewEntriesByKey(review) {
-  var output = {};
-  Object.keys(review && review.stages || {}).forEach(function (stage) {
-    (review.stages[stage].datasetEntries || []).forEach(function (entry) {
-      var key = stage + '|' + reviewEntryKey(entry);
-      if (!output[key]) output[key] = { eligibleCount: 0, files: [] };
-      output[key].eligibleCount += Number(entry.eligibleCount || 0);
-      output[key].files = output[key].files.concat(entry.files || []);
-    });
-  });
-  return output;
-}
-
 function formatReviewAspect(ar) {
-  return ({ '43': '4:3', '34': '3:4', '169': '16:9', '916': '9:16', square: 'square' })[ar] || ar;
+  return ({ '43': '4:3', '34': '3:4', '169': '16:9', '916': '9:16', square: 'Square' })[ar] || ar;
 }
 
-function reviewCountsHaveItems(counts) {
-  return Object.keys(counts || {}).some(function (key) { return Number(counts[key] || 0) > 0; });
+function reviewStageId(plan) { return Object.keys(plan && plan.stages || {})[0] || ''; }
+function reviewRole(plan, name) { return (plan && plan.videoRoles || []).filter(function (item) { return item.id === name; })[0] || null; }
+function sameReviewBucket(a, b) { return Number(a && a[0]) === Number(b && b[0]) && Number(a && a[1]) === Number(b && b[1]); }
+
+function reviewSelectedBuckets(plan, view, aspect) {
+  if (view === 'images') return (((plan.stages || {})[reviewStageId(plan)] || {}).imageBuckets || {})[aspect] || [];
+  return ((reviewRole(plan, view) || {}).buckets || {})[aspect] || [];
 }
 
-function reviewAspectAssignedCount(review, stage, kind, role, ar) {
-  return ((((review || {}).stages || {})[stage] || {}).datasetEntries || []).reduce(function (total, entry) {
-    if (entry.kind !== kind || entry.ar !== ar || (kind === 'video' && entry.role !== role)) return total;
-    return total + Number(entry.eligibleCount || 0);
-  }, 0);
+function hasReviewBucket(plan, view, aspect, bucket) {
+  return reviewSelectedBuckets(plan, view, aspect).some(function (item) { return sameReviewBucket(item, bucket); });
 }
 
-function reviewBucketRows(review, plan, ladders, candidateCounts, stage, kind, role, ar) {
-  var candidates = kind === 'image'
-    ? (ladders.images[ar] || [])
-    : ((ladders.videos[role] && ladders.videos[role][ar]) || []);
-  var entries = reviewEntriesByKey(review);
-  var roleFrames = ((plan.videoRoles || []).filter(function (item) { return item.id === role; })[0] || {}).frames;
-  var rows = candidates.map(function (bucket) {
-    var checked = selectedReviewBucket(plan, stage, kind, role, ar, bucket);
-    var key = stage + '|' + reviewEntryKey({ kind: kind, role: role, ar: ar, bucket: kind === 'image' ? [bucket[0], bucket[1]] : [bucket[0], bucket[1], roleFrames] });
-    var entry = entries[key];
-    var countKey = bucket[0] + 'x' + bucket[1];
-    var prospective = kind === 'image'
-      ? Number((((candidateCounts.images || {})[stage] || {})[ar] || {})[countKey] || 0)
-      : Number((((candidateCounts.videos || {})[role] || {})[ar] || {})[countKey] || 0);
-    return { bucket: bucket, checked: checked, count: entry ? Number(entry.eligibleCount || 0) : prospective };
-  }).filter(function (row) { return row.checked || row.count > 0; });
-  var maximum = Math.max.apply(Math, [1].concat(rows.map(function (row) { return row.count; })));
-  return rows.map(function (row) {
-    var bucket = row.bucket;
-    var count = row.count;
-    var checked = row.checked;
-    var fill = Math.max(3, Math.round((count / maximum) * 100));
-    var countLabel = count + ' item' + (count === 1 ? '' : 's');
-    return '<label class="training-review-bucket' + (checked ? ' selected' : '') + '">' +
-      '<input class="training-review-bucket-check" type="checkbox" data-review-bucket="1" data-stage="' + escapeHtml(stage) + '" data-kind="' + escapeHtml(kind) + '" data-role="' + escapeHtml(role) + '" data-ar="' + escapeHtml(ar) + '" data-bucket="' + bucket.join(',') + '" aria-label="' + escapeHtml(bucket[0] + ' by ' + bucket[1] + ', ' + countLabel + (checked ? ', in plan' : ', would include')) + '"' + (checked ? ' checked' : '') + '>' +
-      '<span class="training-review-bucket-size">' + escapeHtml(bucket[0] + '×' + bucket[1]) + '</span>' +
-      '<strong class="training-review-bucket-count">' + escapeHtml(countLabel) + '</strong>' +
-      '<span class="training-review-bucket-state">' + (checked ? 'in plan' : 'would include') + '</span>' +
-      '<span class="training-review-bucket-meter" aria-hidden="true"><span style="width:' + fill + '%"></span></span></label>';
+function setReviewBucket(plan, view, aspect, bucket, enabled) {
+  var selected = reviewSelectedBuckets(plan, view, aspect);
+  var next = selected.filter(function (item) { return !sameReviewBucket(item, bucket); });
+  if (enabled) {
+    if (next.length >= 3) { setStatus('Use at most three targets in one aspect-ratio cohort.'); return false; }
+    next.push([Number(bucket[0]), Number(bucket[1])]);
+  } else if (!next.length) {
+    setStatus('Keep one target selected for this cohort.');
+    return false;
+  }
+  if (view === 'images') {
+    var stage = reviewStageId(plan);
+    plan.stages[stage].imageBuckets = plan.stages[stage].imageBuckets || {};
+    plan.stages[stage].imageBuckets[aspect] = next;
+  } else {
+    var role = reviewRole(plan, view);
+    role.buckets = role.buckets || {};
+    role.buckets[aspect] = next;
+  }
+  return true;
+}
+
+function stepReviewBucket(plan, ladders, view, aspect, bucket, direction) {
+  var candidates = view === 'images' ? ((ladders.images || {})[aspect] || []) : (((ladders.videos || {})[view] || {})[aspect] || []);
+  var selected = reviewSelectedBuckets(plan, view, aspect);
+  var index = candidates.findIndex(function (item) { return sameReviewBucket(item, bucket); });
+  for (var cursor = index + direction; cursor >= 0 && cursor < candidates.length; cursor += direction) {
+    if (!selected.some(function (item) { return sameReviewBucket(item, candidates[cursor]); })) {
+      var replacement = candidates[cursor];
+      var next = selected.map(function (item) { return sameReviewBucket(item, bucket) ? [Number(replacement[0]), Number(replacement[1])] : item; });
+      if (view === 'images') plan.stages[reviewStageId(plan)].imageBuckets[aspect] = next;
+      else reviewRole(plan, view).buckets[aspect] = next;
+      return true;
+    }
+  }
+  return false;
+}
+
+function reviewViewGroups(payload, view) {
+  return view === 'images' ? ((payload.distribution || {}).images || {}) : ((((payload.distribution || {}).videos || {})[view]) || {});
+}
+
+function reviewAvailableViews(payload) {
+  var views = [];
+  if (Object.keys(reviewViewGroups(payload, 'images')).length) views.push('images');
+  Object.keys(((payload.distribution || {}).videos || {})).forEach(function (role) {
+    if (Object.keys(reviewViewGroups(payload, role)).length) views.push(role);
+  });
+  return views;
+}
+
+function reviewActiveView(payload) {
+  var views = reviewAvailableViews(payload);
+  if (views.indexOf(trainingWorkspaceState.reviewMediaView) === -1) trainingWorkspaceState.reviewMediaView = views[0] || 'images';
+  return trainingWorkspaceState.reviewMediaView;
+}
+
+function reviewActiveAspect(payload, view) {
+  var groups = reviewViewGroups(payload, view);
+  var aspects = TRAINING_REVIEW_ASPECT_ORDER.filter(function (aspect) { return !!groups[aspect]; });
+  if (aspects.indexOf(trainingWorkspaceState.reviewAspect) === -1) trainingWorkspaceState.reviewAspect = aspects[0] || '';
+  return trainingWorkspaceState.reviewAspect;
+}
+
+function reviewTargetColor(selected, target) {
+  var index = selected.findIndex(function (item) { return sameReviewBucket(item, target); });
+  return index < 0 ? 'target-neutral' : 'target-' + Math.min(index, 2);
+}
+
+function reviewTargetsHtml(payload, view, aspect) {
+  var plan = payload.plan || {};
+  var selected = reviewSelectedBuckets(plan, view, aspect);
+  var ladders = payload.ladders || { images: {}, videos: {} };
+  var candidates = view === 'images' ? ((ladders.images || {})[aspect] || []) : (((ladders.videos || {})[view] || {})[aspect] || []);
+  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><span>Click a target to add or remove it. Arrows move a selected target one supported rung.</span></div><div class="training-review-chip-strip">' + candidates.map(function (bucket) {
+    var selectedTarget = hasReviewBucket(plan, view, aspect, bucket);
+    if (!selectedTarget) return '<button type="button" class="training-review-target-chip neutral" data-review-target="' + bucket.join(',') + '"' + (selected.length >= 3 ? ' disabled title="Use at most three targets per cohort."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button>';
+    var color = reviewTargetColor(selected, bucket);
+    var removeDisabled = selected.length <= 1;
+    return '<span class="training-review-selected-target ' + color + '"><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Move target lower">‹</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Move target higher">›</button></span>';
+  }).join('') + '</div></section>';
+}
+
+function reviewChartHtml(group, selected) {
+  var rows = group && group.native || [];
+  if (!rows.length) return '<section class="training-review-chart-empty">No eligible media is visible in this cohort.</section>';
+  var shapes = (group.targets || []).map(function (item) { return item.shape || []; });
+  var edges = rows.map(function (item) { return Number(item.nativeShortEdge || item.edge || 0); }).filter(Boolean).concat(shapes.map(function (item) { return Math.min(Number(item[0]), Number(item[1])); }).filter(Boolean));
+  var low = Math.min.apply(Math, edges);
+  var high = Math.max.apply(Math, edges);
+  var padding = Math.max(24, Math.round((high - low || low) * 0.08));
+  low = Math.max(1, low - padding);
+  high += padding;
+  function position(value) { return Math.max(1.5, Math.min(98.5, ((Number(value) - low) / Math.max(1, high - low)) * 97)); }
+  var bins = Array.apply(null, Array(12)).map(function () { return 0; });
+  rows.forEach(function (row) { var bin = Math.min(11, Math.max(0, Math.floor(((Number(row.edge) - low) / Math.max(1, high - low)) * 12))); bins[bin] += 1; });
+  var maximum = Math.max.apply(Math, [1].concat(bins));
+  var stacks = {};
+  var histogram = bins.map(function (count, index) { return '<i class="training-review-hist-bin" style="left:' + (index / 12 * 100) + '%;width:' + (100 / 12) + '%;height:' + Math.round((count / maximum) * 72) + '%"></i>'; }).join('');
+  var dots = rows.map(function (row) {
+    var edge = Number(row.edge || 0);
+    var bin = Math.min(11, Math.max(0, Math.floor(((edge - low) / Math.max(1, high - low)) * 12)));
+    stacks[bin] = (stacks[bin] || 0) + 1;
+    var target = row.assignedTarget || row.target || [];
+    return '<i class="training-review-chart-dot ' + reviewTargetColor(selected, target) + '" style="left:' + position(edge) + '%;bottom:' + (10 + ((stacks[bin] - 1) % 8) * 8) + 'px"></i>';
   }).join('');
+  var markers = (group.targets || []).map(function (target) {
+    var shape = target.shape || [];
+    var edge = Math.min(Number(shape[0]), Number(shape[1]));
+    return '<b class="training-review-chart-marker ' + reviewTargetColor(selected, shape) + '" style="left:' + position(edge) + '%"><span>' + escapeHtml(shape[0] + ' × ' + shape[1]) + '</span><em>' + escapeHtml(String(target.assignedCount || 0)) + '</em></b>';
+  }).join('');
+  return '<section class="training-review-chart"><div class="training-review-label-row"><strong>Native resolution and selected targets</strong><span>Columns cluster native short edges. Dots are source media; markers show selected targets and assigned counts.</span></div><div class="training-review-plot">' + histogram + dots + markers + '</div><div class="training-review-chart-axis"><span>' + escapeHtml(Math.round(low) + ' px') + '</span><span>Native short edge</span><span>' + escapeHtml(Math.round(high) + ' px') + '</span></div></section>';
+}
+
+function reviewImpactHtml(payload, view) {
+  var impact = view === 'images' ? (((payload.distribution || {}).impact || {}).images || {}) : (((((payload.distribution || {}).impact || {}).videos || {})[view]) || {});
+  var total = TRAINING_REVIEW_IMPACT_BANDS.reduce(function (sum, item) { return sum + Number(impact[item[0]] || 0); }, 0);
+  if (!total) return '';
+  return '<section class="training-review-impact"><div class="training-review-label-row"><strong>Scale impact · all cohort tabs</strong><span>' + total + ' eligible item' + (total === 1 ? '' : 's') + '</span></div><div class="training-review-impact-bar">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { var count = Number(impact[item[0]] || 0); return '<span class="impact-' + item[0] + '" style="width:' + (count / total * 100) + '%"><b>' + count + '</b></span>'; }).join('') + '</div><div class="training-review-impact-labels">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { return '<span>' + escapeHtml(item[1]) + '</span>'; }).join('') + '</div></section>';
+}
+
+function reviewWarningsHtml(payload, view) {
+  var warnings = (payload.warnings || []).filter(function (warning) { return !warning.view || warning.view === view; });
+  if (!warnings.length) return '';
+  return '<section class="training-review-warnings"><strong>Worth noticing</strong>' + warnings.map(function (warning) { return '<div>' + escapeHtml(warning.message || '') + '</div>'; }).join('') + '</section>';
+}
+
+function reviewModalHtml(payload) {
+  var custom = payload.customDataset || false;
+  if (custom) return '<section class="training-review-custom"><strong>Bucket controls are unavailable for this custom dataset TOML.</strong><span>' + escapeHtml(custom.message || 'Edit the raw dataset TOML or reset it to the current defaults.') + '</span><div><button type="button" class="review-captions-btn" data-review-open-dataset="' + escapeHtml(custom.datasetName || '') + '">Open raw TOML</button><button type="button" class="review-captions-btn" data-review-reset-dataset="' + escapeHtml(custom.datasetName || '') + '">Reset dataset</button></div></section>';
+  var plan = payload.plan || {};
+  var view = reviewActiveView(payload);
+  var groups = reviewViewGroups(payload, view);
+  var aspect = reviewActiveAspect(payload, view);
+  var role = view === 'images' ? null : reviewRole(plan, view);
+  var views = reviewAvailableViews(payload);
+  function label(id) { return id === 'images' ? 'Images' : id.charAt(0).toUpperCase() + id.slice(1); }
+  return '<section class="training-review-workbench"><div class="training-review-tabs" role="tablist">' + views.map(function (id) { return '<button type="button" class="training-review-tab' + (id === view ? ' active' : '') + '" data-review-view="' + escapeHtml(id) + '" aria-selected="' + (id === view ? 'true' : 'false') + '">' + escapeHtml(label(id)) + '</button>'; }).join('') + '</div>' +
+    (role ? '<div class="training-review-role-summary"><label><input type="checkbox" data-review-role-enabled="' + escapeHtml(role.id) + '"' + (role.enabled ? ' checked' : '') + '> ' + escapeHtml(label(role.id)) + ' enabled</label><span>Fixed at ' + escapeHtml(String(role.frames)) + ' frames</span></div>' : '') +
+    '<div class="training-review-cohort-tabs" role="tablist">' + TRAINING_REVIEW_ASPECT_ORDER.filter(function (id) { return !!groups[id]; }).map(function (id) { return '<button type="button" class="training-review-cohort-tab' + (id === aspect ? ' active' : '') + '" data-review-aspect="' + escapeHtml(id) + '" aria-selected="' + (id === aspect ? 'true' : 'false') + '">' + escapeHtml(formatReviewAspect(id)) + ' <span>' + Number((groups[id] || {}).count || 0) + '</span></button>'; }).join('') + '</div>' +
+    reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect)) + reviewImpactHtml(payload, view) + reviewWarningsHtml(payload, view) + '</section>';
+}
+
+function trainingReviewSummaryHtml(payload) {
+  var imageEntries = [];
+  Object.keys((payload.review || {}).stages || {}).forEach(function (stage) { imageEntries = imageEntries.concat(((payload.review || {}).stages[stage].datasetEntries || []).filter(function (entry) { return entry.kind === 'image'; })); });
+  var items = imageEntries.reduce(function (sum, entry) { return sum + Number(entry.eligibleCount || entry.count || 0); }, 0);
+  var blockers = payload.blockers || [];
+  var custom = payload.customDataset || false;
+  var note = custom ? 'Custom dataset TOML · raw editing remains available under Advanced configuration.' : blockers.length ? String(blockers[0].message || 'Training Review needs attention.') : imageEntries.length + ' image target' + (imageEntries.length === 1 ? '' : 's') + ' · ' + items + ' image item' + (items === 1 ? '' : 's');
+  return '<div class="training-review-summary"><div class="training-review-summary-copy"><strong>Bucket plan <span class="training-review-saved">' + escapeHtml(trainingWorkspaceState.reviewSaveStatus === 'saving' ? 'Saving…' : trainingWorkspaceState.reviewSaveStatus === 'error' ? 'Save error' : 'Saved') + '</span></strong><span' + (custom || blockers.length || (payload.warnings || []).length ? ' class="training-review-summary-warning"' : '') + '>' + escapeHtml(note) + '</span></div><button type="button" class="review-captions-btn training-review-open-btn" data-open-training-review>Adjust buckets</button></div>';
+}
+
+function closeTrainingReviewModal() {
+  var els = getTrainingWorkspaceEls();
+  trainingWorkspaceState.reviewModalOpen = false;
+  els.reviewModal.classList.add('hidden');
+  els.reviewModal.setAttribute('aria-hidden', 'true');
+  var button = els.review.querySelector('[data-open-training-review]');
+  if (button) button.focus();
+}
+
+function openTrainingReviewModal() {
+  var els = getTrainingWorkspaceEls();
+  trainingWorkspaceState.reviewModalOpen = true;
+  els.reviewModal.classList.remove('hidden');
+  els.reviewModal.setAttribute('aria-hidden', 'false');
+  els.reviewModalClose.onclick = closeTrainingReviewModal;
+  els.reviewModalDone.onclick = closeTrainingReviewModal;
+  renderTrainingReview();
+  els.reviewModalClose.focus();
+}
+
+function bindTrainingReviewModal(payload) {
+  var modal = getTrainingWorkspaceEls().reviewModalContent;
+  modal.querySelectorAll('[data-review-view]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewMediaView = button.getAttribute('data-review-view'); trainingWorkspaceState.reviewAspect = ''; renderTrainingReview(); }; });
+  modal.querySelectorAll('[data-review-aspect]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewAspect = button.getAttribute('data-review-aspect'); renderTrainingReview(); }; });
+  modal.querySelectorAll('[data-review-target]').forEach(function (button) { button.onclick = function () {
+    if (button.disabled) return;
+    var target = String(button.getAttribute('data-review-target') || '').split(',').map(Number);
+    var view = reviewActiveView(payload);
+    var aspect = reviewActiveAspect(payload, view);
+    var selected = hasReviewBucket(payload.plan, view, aspect, target);
+    if (setReviewBucket(payload.plan, view, aspect, target, !selected)) saveTrainingReview({ plan: payload.plan });
+  }; });
+  modal.querySelectorAll('[data-review-step]').forEach(function (button) { button.onclick = function () {
+    var target = String(button.getAttribute('data-review-target') || '').split(',').map(Number);
+    var view = reviewActiveView(payload);
+    var aspect = reviewActiveAspect(payload, view);
+    if (stepReviewBucket(payload.plan, payload.ladders || {}, view, aspect, target, Number(button.getAttribute('data-review-step')))) saveTrainingReview({ plan: payload.plan });
+  }; });
+  modal.querySelectorAll('[data-review-role-enabled]').forEach(function (input) { input.onchange = function () { reviewRole(payload.plan, input.getAttribute('data-review-role-enabled')).enabled = input.checked; saveTrainingReview({ plan: payload.plan }); }; });
+  modal.querySelectorAll('[data-review-open-dataset]').forEach(function (button) { button.onclick = function () { closeTrainingReviewModal(); selectTrainingWorkspaceConfigFile(button.getAttribute('data-review-open-dataset')); }; });
+  modal.querySelectorAll('[data-review-reset-dataset]').forEach(function (button) { button.onclick = function () {
+    var fileName = button.getAttribute('data-review-reset-dataset');
+    if (!window.confirm('Reset ' + fileName + ' from the currently visible media? Your edits to this file will be replaced.')) return;
+    if (state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName) cancelEditorAutosaveForConfig(state.folder, fileName);
+    resetTrainingReviewBuckets().then(function () { closeTrainingReviewModal(); refreshTrainingWorkspace(); }).catch(function (err) { setStatus('Could not reset dataset: ' + String(err.message || err)); });
+  }; });
+}
+
+function reviewTrainButtonState(payload) {
+  var button = getTrainingWorkspaceEls().queueJobBtn;
+  if (!button) return;
+  var checkpoint = document.getElementById('training-run-checkpoint-select');
+  var manualResume = document.getElementById('training-run-resume-input');
+  var startPoint = trainingWorkspaceState.reviewStartingPoint || 'fresh';
+  button.disabled = !!trainingWorkspaceState.reviewSavePending || !payload.ok || (startPoint === 'initializer' && !trainingWorkspaceState.reviewInitializerExportId && !String(trainingWorkspaceState.reviewInitializerCustomPath || '').trim()) || (startPoint === 'resume' && !(checkpoint && checkpoint.value) && !(manualResume && manualResume.value.trim()));
 }
 
 function renderTrainingReview() {
-  var el = getTrainingWorkspaceEls().review;
-  if (!el) return;
+  var els = getTrainingWorkspaceEls();
+  if (!els.review || !els.reviewModalContent) return;
   var payload = trainingWorkspaceState.review;
-  renderTrainingStartingPointControls(payload);
   if (!payload) {
-    var trainButton = getTrainingWorkspaceEls().queueJobBtn;
-    if (trainButton) trainButton.disabled = true;
-    if (trainingWorkspaceState.reviewPending) {
-      el.textContent = 'Preparing training review...';
-    } else if (trainingWorkspaceState.reviewError) {
-      el.innerHTML = '<section class="training-review-notices blockers"><strong>Training Review failed</strong><div>' +
-        escapeHtml(trainingWorkspaceState.reviewError) + '</div><button type="button" class="review-captions-btn" data-review-retry>Retry</button></section>';
-      var retry = el.querySelector('[data-review-retry]');
-      if (retry) retry.onclick = function () { refreshTrainingReview().catch(function () {}); };
-    } else {
-      el.textContent = 'Preparing training review...';
-    }
+    var message = trainingWorkspaceState.reviewError ? '<section class="training-review-error">' + escapeHtml(trainingWorkspaceState.reviewError) + '<button type="button" class="review-captions-btn" data-review-retry>Retry</button></section>' : 'Preparing bucket plan…';
+    els.review.innerHTML = message;
+    els.reviewModalContent.innerHTML = message;
+    els.review.querySelectorAll('[data-review-retry]').forEach(function (button) { button.onclick = function () { refreshTrainingReview().catch(function () {}); }; });
+    els.reviewModalContent.querySelectorAll('[data-review-retry]').forEach(function (button) { button.onclick = function () { refreshTrainingReview().catch(function () {}); }; });
     return;
   }
-  var review = payload.review || {};
-  var plan = payload.plan || {};
-  var warnings = payload.warnings || [];
-  var blockers = payload.blockers || [];
-  var customDataset = payload.customDataset || false;
-  var readOnly = !!payload.readOnly;
-  var stages = review.stages || {};
-  var startPoint = trainingWorkspaceState.reviewStartingPoint || 'fresh';
-  var saveStatus = readOnly ? 'Immutable prior run' : trainingWorkspaceState.reviewSaveStatus === 'saving' ? 'Saving…' : trainingWorkspaceState.reviewSaveStatus === 'error' ? 'Save error' : 'Saved';
-  var html = '<div class="training-review-head"><div><strong>Reviewed plan</strong><span>' + escapeHtml(Object.keys(stages).length + ' stage' + (Object.keys(stages).length === 1 ? '' : 's')) + '</span></div><span class="training-review-saved">' + escapeHtml(saveStatus) + '</span></div>';
-  if (blockers.length) html += '<section class="training-review-notices blockers"><strong>Blockers</strong>' + blockers.map(function (item) { return '<div>' + escapeHtml(item.message || '') + (item.files && item.files.length ? ': ' + escapeHtml(item.files.join(', ')) : '') + '</div>'; }).join('') + '</section>';
-  if (warnings.length) html += '<section class="training-review-notices warnings"><strong>Critical Warnings</strong>' + warnings.map(function (item) { return '<div>' + escapeHtml(item.message || '') + (item.files && item.files.length ? ': ' + escapeHtml(item.files.join(', ')) : '') + '</div>'; }).join('') + '</section>';
-  if (customDataset) html += '<section class="training-review-notices warnings"><strong>Custom dataset</strong><div>' + escapeHtml(customDataset.message || 'This dataset is read-only in Training Review until buckets are reset.') + '</div></section>';
-  html += reviewDistributionHtml(payload.distribution || {});
-  html += '<section class="training-review-settings"><div class="training-review-section-title">Training intent</div>';
-  Object.keys(stages).forEach(function (stage) {
-    var data = stages[stage];
-    var settings = data.settings || {};
-    html += '<div class="training-review-stage"><strong>' + escapeHtml(stage.toUpperCase()) + '</strong>' +
-      '<label>Target steps <input type="number" min="1" data-review-target="' + escapeHtml(stage) + '" value="' + escapeHtml(String((plan.stages && plan.stages[stage] || {}).targetSteps || data.targetSteps || '')) + '"></label>' +
-      '<label>Optimizer LR <input type="number" step="any" min="0" data-review-setting="optimizerLr" data-stage="' + escapeHtml(stage) + '" value="' + escapeHtml(String(settings.optimizerLr || '')) + '"></label>' +
-      '<label>LR behavior <select data-review-lr-behavior data-stage="' + escapeHtml(stage) + '"><option value="scheduled"' + (settings.forceConstantLr === '' || settings.forceConstantLr === undefined ? ' selected' : '') + '>Scheduled</option><option value="constant"' + (settings.forceConstantLr !== '' && settings.forceConstantLr !== undefined ? ' selected' : '') + '>Constant</option></select></label>' +
-      '<label>LoRA rank <input type="number" min="1" data-review-setting="adapterRank" data-stage="' + escapeHtml(stage) + '" value="' + escapeHtml(String(settings.adapterRank || '')) + '"></label>' +
-      '<label>Dropout <input type="number" step="any" min="0" max="1" data-review-setting="adapterDropout" data-stage="' + escapeHtml(stage) + '" value="' + escapeHtml(String(settings.adapterDropout === undefined ? '' : settings.adapterDropout)) + '"></label>' +
-      '<span class="training-review-estimate">' + escapeHtml(data.epochs + ' epochs · ' + data.estimatedSteps + ' estimated steps · ' + data.estimatedImageExposures + ' image / ' + data.estimatedVideoExposures + ' video exposures') + '</span></div>';
-  });
-  var ladders = payload.ladders || { images: {}, videos: {} };
-  var candidateCounts = payload.candidateCounts || { images: {}, videos: {} };
-  var aspects = Object.keys(ladders.images || {}).sort();
-  var firstStage = Object.keys(stages)[0] || '';
-  var hasVideoCandidates = Object.keys(candidateCounts.videos || {}).some(function (role) {
-    return Object.keys(candidateCounts.videos[role] || {}).some(function (ar) {
-      return reviewCountsHaveItems(candidateCounts.videos[role][ar]);
-    });
-  });
-  html += '</section>';
-  if ((plan.videoRoles || []).length && hasVideoCandidates) {
-    html += '<section class="training-review-buckets"><div class="training-review-section-title">Video roles</div>';
-    (plan.videoRoles || []).forEach(function (role) {
-      html += '<details class="training-review-stage-buckets" open><summary>' + escapeHtml(role.id) + '</summary><div class="training-review-role">' +
-        '<label><input type="checkbox" data-review-role="' + escapeHtml(role.id) + '"' + (role.enabled ? ' checked' : '') + '> enabled</label>' +
-        '<label>frames <input type="number" min="1" data-review-frames="' + escapeHtml(role.id) + '" value="' + escapeHtml(String(role.frames)) + '"></label>' +
-        '<label>weight <input type="number" step="0.05" min="0.01" data-review-weight="' + escapeHtml(role.id) + '" value="' + escapeHtml(String(role.weight)) + '"></label></div>';
-      aspects.filter(function (ar) {
-        var counts = (((candidateCounts.videos || {})[role.id] || {})[ar] || {});
-        return reviewCountsHaveItems(counts);
-      }).forEach(function (ar) {
-        var assigned = reviewAspectAssignedCount(review, firstStage, 'video', role.id, ar);
-        html += '<div class="training-review-aspect"><div class="training-review-aspect-head"><strong>' + escapeHtml(formatReviewAspect(ar)) + '</strong><span>' + assigned + ' assigned</span></div><div class="training-review-ladder">' +
-          reviewBucketRows(review, plan, ladders, candidateCounts, firstStage, 'video', role.id, ar) + '</div></div>';
-      });
-      html += '</details>';
-    });
-    html += '</section>';
-  }
-  html += '<section class="training-review-buckets"><div class="training-review-section-title">Image buckets and membership</div>';
-  Object.keys(stages).forEach(function (stage) {
-    var stageData = stages[stage];
-    var activeImages = (stageData.datasetEntries || []).filter(function (entry) { return entry.kind === 'image'; }).length;
-    html += '<details class="training-review-stage-buckets" open><summary>' + escapeHtml(stage.toUpperCase()) + ' · ' + activeImages + ' active image buckets</summary>';
-    aspects.filter(function (ar) {
-      var counts = ((((candidateCounts.images || {})[stage] || {})[ar]) || {});
-      return reviewCountsHaveItems(counts);
-    }).forEach(function (ar) {
-      var assigned = reviewAspectAssignedCount(review, stage, 'image', 'image', ar);
-      html += '<div class="training-review-aspect"><div class="training-review-aspect-head"><strong>' + escapeHtml(formatReviewAspect(ar)) + '</strong><span>' + assigned + ' assigned</span></div><div class="training-review-ladder">' +
-        reviewBucketRows(review, plan, ladders, candidateCounts, stage, 'image', 'image', ar) + '</div></div>';
-    });
-    html += '</details>';
-  });
-  html += '</section>';
-  var effectiveToml = payload.effectiveToml || {};
-  if (Object.keys(effectiveToml).length) {
-    html += '<details class="training-review-effective"><summary>Effective TOML diagnostic</summary>';
-    Object.keys(effectiveToml).forEach(function (stage) {
-      var item = effectiveToml[stage] || {};
-      html += '<details class="training-review-effective-stage"><summary>' + escapeHtml(stage.toUpperCase()) + '</summary>' +
-        '<strong>' + escapeHtml(item.configName || 'config.toml') + '</strong><pre>' + escapeHtml(item.configText || '') + '</pre>' +
-        '<strong>' + escapeHtml(item.datasetName || 'dataset.toml') + '</strong><pre>' + escapeHtml(item.datasetText || '') + '</pre></details>';
-    });
-    html += '</details>';
-  }
-  html += '<div class="training-review-actions"><button type="button" data-review-reset="settings">Reset settings</button><button type="button" data-review-reset="buckets">Reset buckets</button><button type="button" data-review-reset="all">Reset all</button></div>';
-  el.innerHTML = html;
-  el.querySelectorAll('[data-review-bucket]').forEach(function (input) {
-    if (customDataset || readOnly) input.disabled = true;
-    input.onchange = function () {
-      var bucket = String(input.getAttribute('data-bucket') || '').split(',').map(Number);
-      setReviewBucket(plan, input.getAttribute('data-stage'), input.getAttribute('data-kind'), input.getAttribute('data-role'), input.getAttribute('data-ar'), bucket, input.checked);
-      saveTrainingReview({ plan: plan });
-    };
-  });
-  el.querySelectorAll('[data-review-target]').forEach(function (input) {
-    if (customDataset || readOnly) input.disabled = true;
-    input.onchange = function () { plan.stages[input.getAttribute('data-review-target')].targetSteps = Number(input.value); saveTrainingReview({ plan: plan }); };
-  });
-  el.querySelectorAll('[data-review-setting]').forEach(function (input) {
-    if (readOnly) input.disabled = true;
-    input.onchange = function () { var stage = input.getAttribute('data-stage'); var settings = {}; settings[stage] = {}; settings[stage][input.getAttribute('data-review-setting')] = input.value; saveTrainingReview({ plan: plan, settings: settings }); };
-  });
-  el.querySelectorAll('[data-review-lr-behavior]').forEach(function (input) {
-    if (readOnly) input.disabled = true;
-    input.onchange = function () {
-      var stage = input.getAttribute('data-stage');
-      var lrInput = el.querySelector('[data-review-setting="optimizerLr"][data-stage="' + stage + '"]');
-      var settings = {}; settings[stage] = { forceConstantLr: input.value === 'constant' ? String(lrInput && lrInput.value || '') : '' };
-      saveTrainingReview({ plan: plan, settings: settings });
-    };
-  });
-  el.querySelectorAll('[data-review-role]').forEach(function (input) {
-    if (customDataset || readOnly) input.disabled = true;
-    input.onchange = function () { plan.videoRoles.filter(function (role) { return role.id === input.getAttribute('data-review-role'); })[0].enabled = input.checked; saveTrainingReview({ plan: plan }); };
-  });
-  el.querySelectorAll('[data-review-frames]').forEach(function (input) {
-    if (customDataset || readOnly) input.disabled = true;
-    input.onchange = function () { plan.videoRoles.filter(function (role) { return role.id === input.getAttribute('data-review-frames'); })[0].frames = Number(input.value); saveTrainingReview({ plan: plan }); };
-  });
-  el.querySelectorAll('[data-review-weight]').forEach(function (input) {
-    if (customDataset || readOnly) input.disabled = true;
-    input.onchange = function () { plan.videoRoles.filter(function (role) { return role.id === input.getAttribute('data-review-weight'); })[0].weight = Number(input.value); saveTrainingReview({ plan: plan }); };
-  });
-  el.querySelectorAll('[data-review-reset]').forEach(function (button) {
-    if (readOnly) button.disabled = true;
-    button.onclick = function () { if (window.confirm('Reset ' + button.getAttribute('data-review-reset') + ' for this model?')) saveTrainingReview({ reset: button.getAttribute('data-review-reset') }); };
-  });
-  var trainButton = getTrainingWorkspaceEls().queueJobBtn;
-  var checkpoint = document.getElementById('training-run-checkpoint-select');
-  var manualResume = document.getElementById('training-run-resume-input');
-  if (trainButton) trainButton.disabled = !!trainingWorkspaceState.reviewSavePending || !payload.ok || (startPoint === 'initializer' && !trainingWorkspaceState.reviewInitializerExportId && !String(trainingWorkspaceState.reviewInitializerCustomPath || '').trim()) || (startPoint === 'resume' && !(checkpoint && checkpoint.value) && !(manualResume && manualResume.value.trim()));
+  renderTrainingStartingPointControls(payload);
+  els.review.innerHTML = trainingReviewSummaryHtml(payload);
+  els.review.querySelector('[data-open-training-review]').onclick = openTrainingReviewModal;
+  els.reviewModalContent.innerHTML = reviewModalHtml(payload);
+  bindTrainingReviewModal(payload);
+  reviewTrainButtonState(payload);
 }
 
 function renderTrainingReviewSaveStatus() {
-  var el = getTrainingWorkspaceEls().review;
-  var status = el && el.querySelector('.training-review-saved');
-  if (!status) return;
-  status.textContent = trainingWorkspaceState.reviewSaveStatus === 'saving' ? 'Saving…' : trainingWorkspaceState.reviewSaveStatus === 'error' ? 'Save error' : 'Saved';
-  var trainButton = getTrainingWorkspaceEls().queueJobBtn;
-  if (trainButton && trainingWorkspaceState.reviewSavePending) trainButton.disabled = true;
+  document.querySelectorAll('.training-review-saved').forEach(function (status) { status.textContent = trainingWorkspaceState.reviewSaveStatus === 'saving' ? 'Saving…' : trainingWorkspaceState.reviewSaveStatus === 'error' ? 'Save error' : 'Saved'; });
+  var button = getTrainingWorkspaceEls().queueJobBtn;
+  if (button && trainingWorkspaceState.reviewSavePending) button.disabled = true;
 }
 
 function refreshTrainingReview() {
@@ -415,8 +386,7 @@ function refreshTrainingReview() {
   trainingWorkspaceState.reviewPending = true;
   trainingWorkspaceState.reviewError = '';
   renderTrainingReview();
-  var request = trainingReviewPayload();
-  return trainingReviewRequest('/fs/training_review', request).then(function (payload) {
+  return trainingReviewRequest('/fs/training_review', trainingReviewPayload()).then(function (payload) {
     trainingWorkspaceState.review = payload;
     trainingWorkspaceState.reviewPending = false;
     renderTrainingReview();
@@ -432,27 +402,20 @@ function refreshTrainingReview() {
 
 function saveTrainingReview(change) {
   var current = trainingWorkspaceState.review;
-  if (!current || current.readOnly) return Promise.resolve(null);
-  var snapshot = JSON.parse(JSON.stringify({
-    plan: change.plan || current.plan,
-    settings: change.settings || null,
-    reset: change.reset || ''
-  }));
+  if (!current || current.customDataset) return Promise.resolve(null);
+  var snapshot = JSON.parse(JSON.stringify({ plan: change.plan || current.plan, reset: change.reset || '' }));
   trainingWorkspaceState.reviewSavePending += 1;
   trainingWorkspaceState.reviewSaveStatus = 'saving';
   renderTrainingReviewSaveStatus();
   var prior = trainingWorkspaceState.reviewSaveQueue || Promise.resolve();
   var task = prior.catch(function () {}).then(function () {
-    var latest = trainingWorkspaceState.review;
-    var payload = trainingReviewPayload();
-    payload.revision = Number((latest && latest.plan || {}).revision || 0);
-    payload.plan = snapshot.plan;
-    if (snapshot.settings) payload.settings = snapshot.settings;
-    if (snapshot.reset) payload.reset = snapshot.reset;
-    return trainingReviewRequest('/fs/training_review/update', payload);
-  }).then(function (result) {
-    trainingWorkspaceState.review = result;
-    return result;
+    var request = trainingReviewPayload();
+    request.plan = snapshot.plan;
+    if (snapshot.reset) request.reset = snapshot.reset;
+    return trainingReviewRequest('/fs/training_review/update', request);
+  }).then(function (payload) {
+    trainingWorkspaceState.review = payload;
+    return payload;
   }).catch(function (err) {
     trainingWorkspaceState.reviewSaveStatus = 'error';
     setStatus('Could not save Training Review: ' + String(err && err.message ? err.message : err));
@@ -460,9 +423,21 @@ function saveTrainingReview(change) {
   }).finally(function () {
     trainingWorkspaceState.reviewSavePending = Math.max(0, trainingWorkspaceState.reviewSavePending - 1);
     if (!trainingWorkspaceState.reviewSavePending && trainingWorkspaceState.reviewSaveStatus !== 'error') trainingWorkspaceState.reviewSaveStatus = 'saved';
-    if (!trainingWorkspaceState.reviewSavePending) renderTrainingReview();
-    else renderTrainingReviewSaveStatus();
+    renderTrainingReview();
   });
   trainingWorkspaceState.reviewSaveQueue = task;
   return task;
 }
+
+function resetTrainingReviewBuckets() {
+  var request = trainingReviewPayload();
+  request.reset = 'buckets';
+  return trainingReviewRequest('/fs/training_review/update', request).then(function (payload) {
+    trainingWorkspaceState.review = payload;
+    return payload;
+  });
+}
+
+document.addEventListener('keydown', function (event) {
+  if (event.key === 'Escape' && trainingWorkspaceState.reviewModalOpen) closeTrainingReviewModal();
+});

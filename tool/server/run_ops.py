@@ -3,12 +3,11 @@ from pathlib import Path, PurePosixPath
 from flask import Response, stream_with_context
 
 from . import config as app_config
-from .permissions import normalize_path_permissions
 from .training_action import allocate_action, update_action
 from .training_profiles import config_for_stage, normalize_mode, profile_run
 from .training_bundle import materialize_training_bundle
 from .training_commands import build_h3_command_plan, build_training_command_plan
-from .training_review import prepare_training_review, resolve_saved_initializer
+from .training_review import resolve_saved_initializer
 from .training_runtime import build_training_launcher, to_wsl_path, training_runtime_settings
 
 
@@ -29,11 +28,10 @@ def train_run_response(
     fallback_captions=None,
     selection_criteria=None,
     total_media_count=None,
-    review_fingerprint="",
-    review_intent=None,
     initializer_action_id="",
     initializer_export_id="",
     initializer_stage="",
+    initializer_custom_path="",
     force_constant_lr=None,
 ):
     if not folder:
@@ -52,24 +50,18 @@ def train_run_response(
         stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
         stage_names = ("hi", "lo") if stages == "both" else (stages,)
         review = None
-        if review_fingerprint and not resume_from_checkpoint:
-            review = prepare_training_review(
-                folder_path, selected_profile["id"], selected_run["id"], selected_media,
-                selection_criteria, total_media_count, fallback_captions, persist=False,
-            )
-            if str(review.get("reviewFingerprint") or "") != str(review_fingerprint):
-                return Response("[ERROR] Training Review is stale. Reload it before generating a command.\n", status=409, mimetype="text/plain")
-            if not review.get("ok"):
-                return Response("[ERROR] Training Review has blockers.\n", status=400, mimetype="text/plain")
         initializer = None
-        if initializer_action_id or initializer_export_id or initializer_stage:
+        if initializer_action_id or initializer_export_id or initializer_stage or initializer_custom_path:
             if resume_from_checkpoint:
                 return Response("[ERROR] Checkpoint Resume and LoRA initialization cannot be combined.\n", status=400, mimetype="text/plain")
-            if not (initializer_action_id and initializer_export_id and initializer_stage):
-                return Response("[ERROR] Saved LoRA initialization needs an action, export, and target stage.\n", status=400, mimetype="text/plain")
             if initializer_stage not in stage_names:
                 return Response("[ERROR] Initializer target stage does not belong to this run.\n", status=400, mimetype="text/plain")
-            initializer = resolve_saved_initializer(folder_path, selected_profile["id"], initializer_stage, initializer_action_id, initializer_export_id)
+            if initializer_custom_path:
+                initializer = {"sourcePath": Path(str(initializer_custom_path).strip()), "exportId": "custom", "actionId": "", "epoch": ""}
+            elif initializer_action_id and initializer_export_id:
+                initializer = resolve_saved_initializer(folder_path, selected_profile["id"], initializer_stage, initializer_action_id, initializer_export_id)
+            else:
+                return Response("[ERROR] Saved LoRA initialization needs an action, export, and target stage.\n", status=400, mimetype="text/plain")
             initializer["stage"] = initializer_stage
             settings = (((review or {}).get("review") or {}).get("stages", {}).get(initializer_stage, {}).get("settings") or {})
             initializer["forceConstantLr"] = force_constant_lr if force_constant_lr not in (None, "") else settings.get("optimizerLr")
@@ -82,7 +74,6 @@ def train_run_response(
             else:
                 stage_output = action_root / "output" / meta["outputSlug"]
                 stage_output.mkdir(parents=True, exist_ok=True)
-                normalize_path_permissions(stage_output)
                 output_dir = _to_wsl_path(stage_output, runtime_settings["wslDistribution"])
             output_dirs[stage] = output_dir
         bundle = materialize_training_bundle(
@@ -105,10 +96,6 @@ def train_run_response(
             data["observation"] = "unobserved"
             if resume_from_checkpoint:
                 data["externalOutput"] = {"kind": "external", "resumeStage": str(resume_stage or "")}
-            if isinstance(review_intent, dict):
-                data["intent"] = review_intent
-            if review:
-                data["record"]["review"] = {"fingerprint": str(review_fingerprint), "warnings": list(review.get("warnings") or []), "excluded": list(((review.get("review") or {}).get("excluded") or []))}
             if bundle.get("initializer"):
                 data["initializer"] = bundle["initializer"]
         update_action(action_root.name, mark_manual)

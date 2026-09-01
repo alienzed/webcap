@@ -1,0 +1,139 @@
+import math
+from pathlib import Path
+
+import pytest
+from PIL import Image
+
+from tool.server import config as app_config
+from tool.server import app as app_module
+from tool.server import training_review
+from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID
+
+
+def _configure_root(monkeypatch, root):
+    monkeypatch.setattr(app_config, "FS_ROOT", root)
+
+
+def _set(root):
+    folder = root / "sets" / "subject"
+    folder.mkdir(parents=True)
+    images = {
+        "square-small.png": (480, 480),
+        "square-large.png": (768, 768),
+        "landscape.png": (896, 672),
+        "portrait.png": (672, 896),
+    }
+    for name, size in images.items():
+        Image.new("RGB", size, color=(20, 30, 40)).save(folder / name)
+        (folder / Path(name).with_suffix(".txt").name).write_text("subject", encoding="utf-8")
+    return folder, list(images)
+
+
+def _review(folder, names):
+    return training_review.prepare_training_review(
+        folder, MINIMAX_H3_PROFILE_ID, "train", names, total_media_count=len(names),
+    )
+
+
+def test_review_distribution_assigns_each_image_once_and_uses_short_edge(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder, names = _set(tmp_path)
+
+    payload = _review(folder, names)
+
+    assert payload["ok"] is True
+    for group in payload["distribution"]["images"].values():
+        assigned = [row for row in group["native"] if row["assignedTarget"]]
+        assert len(assigned) == len(group["native"])
+        assert sum(item["assignedCount"] for item in group["targets"]) == len(assigned)
+        for row in assigned:
+            expected = min(row["assignedTarget"]) / row["nativeShortEdge"]
+            assert math.isclose(row["scaleRatio"], expected)
+            assert row["impactBand"] in {"down20", "down", "near", "up", "up20"}
+
+
+def test_review_update_limits_targets_and_reset_replaces_custom_dataset(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder, names = _set(tmp_path)
+    payload = _review(folder, names)
+    ladder = payload["ladders"]["images"]["square"]
+    assert len(ladder) >= 4
+
+    plan = payload["plan"]
+    plan["stages"]["h3"]["imageBuckets"]["square"] = ladder[:3]
+    updated = training_review.update_training_review(folder, MINIMAX_H3_PROFILE_ID, {
+        "runId": "train", "selected_media": names, "total_media_count": len(names), "plan": plan,
+    })
+    assert len(updated["plan"]["stages"]["h3"]["imageBuckets"]["square"]) == 3
+
+    plan = updated["plan"]
+    plan["stages"]["h3"]["imageBuckets"]["square"] = ladder[:4]
+    with pytest.raises(ValueError, match="more than three"):
+        training_review.update_training_review(folder, MINIMAX_H3_PROFILE_ID, {
+            "runId": "train", "selected_media": names, "total_media_count": len(names), "plan": plan,
+        })
+
+    dataset = folder / "dataset.train.toml"
+    dataset.write_text('[[directory]]\npath = "custom"\nnum_repeats = 1\ngroup = "images"\nsize_buckets = [[512, 512, 1]]\nextra = true\n', encoding="utf-8")
+    custom = _review(folder, names)
+    assert custom["customDataset"]
+    reset = training_review.update_training_review(folder, MINIMAX_H3_PROFILE_ID, {
+        "runId": "train", "selected_media": names, "total_media_count": len(names), "reset": "buckets",
+    })
+    assert reset["customDataset"] is False
+    assert dataset.read_text(encoding="utf-8").startswith("# webcap_training_review = 1")
+
+
+def test_video_distribution_keeps_temporal_and_detail_roles_independent():
+    plan = {
+        "profileId": MINIMAX_H3_PROFILE_ID,
+        "stages": {"h3": {"imageBuckets": {}}},
+        "videoRoles": [
+            {"id": "temporal", "enabled": True, "frames": 68, "weight": 1.0, "buckets": {"square": [[512, 512], [672, 672]]}},
+            {"id": "detail", "enabled": True, "frames": 17, "weight": 0.25, "buckets": {"square": [[672, 672]]}},
+        ],
+    }
+    manifest = {"images": [], "videos": [{"ar": "square", "width": 640, "height": 640, "frames": 80}]}
+
+    distribution = training_review._distribution_payload(manifest, plan)
+
+    temporal = distribution["videos"]["temporal"]["square"]
+    detail = distribution["videos"]["detail"]["square"]
+    assert temporal["frames"] == 68 and detail["frames"] == 17
+    assert temporal["native"][0]["assignedTarget"] == [512, 512]
+    assert detail["native"][0]["assignedTarget"] == [672, 672]
+    assert distribution["impact"]["videos"]["temporal"] != distribution["impact"]["videos"]["detail"]
+
+
+def test_review_route_returns_recomputed_payload_and_invalid_toml_is_loud(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder, names = _set(tmp_path)
+    client = app_module.app.test_client()
+    request = {"folder": "sets/subject", "profileId": MINIMAX_H3_PROFILE_ID, "runId": "train", "selected_media": names, "total_media_count": len(names)}
+
+    response = client.post("/fs/training_review", json=request)
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert "distribution" in payload and "impact" in payload["distribution"]
+    request["plan"] = payload["plan"]
+    update = client.post("/fs/training_review/update", json=request)
+    assert update.status_code == 200 and "distribution" in update.get_json()
+
+    (folder / "dataset.train.toml").write_text("not = [valid", encoding="utf-8")
+    invalid = client.post("/fs/training_review", json=request)
+    assert invalid.status_code == 400
+
+
+def test_bucket_modal_markup_and_script_keep_the_editor_focused():
+    root = Path(__file__).parents[1]
+    html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
+
+    assert 'id="training-review-modal"' in html
+    assert 'id="training-review-modal-done"' in html
+    assert "data-review-view" in script
+    assert "data-review-aspect" in script
+    assert "data-review-step" in script
+    assert "training-review-bucket-check" not in script
+    assert "Training intent" not in script

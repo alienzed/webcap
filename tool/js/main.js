@@ -149,11 +149,10 @@ function runTrainCommandPreviewForCurrentFolder(options) {
         total_media_count: Array.isArray(state.items) ? state.items.length : 0,
         selection_criteria: buildTrainingSelectionCriteria(),
         fallback_captions: fallbackResult.fallbackCaptions,
-        reviewFingerprint: options && options.reviewFingerprint ? options.reviewFingerprint : '',
-        reviewIntent: options && options.reviewIntent ? options.reviewIntent : { startingPoint: 'fresh' },
         initializerActionId: options && options.initializerActionId ? options.initializerActionId : '',
         initializerExportId: options && options.initializerExportId ? options.initializerExportId : '',
         initializerStage: options && options.initializerStage ? options.initializerStage : '',
+        initializerCustomPath: options && options.initializerCustomPath ? options.initializerCustomPath : '',
         forceConstantLr: options && options.forceConstantLr ? options.forceConstantLr : ''
       });
     })

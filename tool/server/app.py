@@ -370,7 +370,6 @@ def training_review_route():
             data.get("selection_criteria"),
             data.get("total_media_count"),
             data.get("fallback_captions"),
-            resume_action_id=data.get("resumeActionId") or "",
         )
         return jsonify(payload)
     except Exception as exc:
@@ -457,9 +456,8 @@ def train_run_route():
         mode=data.get("mode") or "normal", selected_media=data.get("selected_media"),
         fallback_captions=data.get("fallback_captions"), selection_criteria=data.get("selection_criteria"),
         total_media_count=data.get("total_media_count"),
-        review_fingerprint=data.get("reviewFingerprint") or "", review_intent=data.get("reviewIntent"),
         initializer_action_id=data.get("initializerActionId") or "", initializer_export_id=data.get("initializerExportId") or "",
-        initializer_stage=data.get("initializerStage") or "", force_constant_lr=data.get("forceConstantLr"),
+        initializer_stage=data.get("initializerStage") or "", initializer_custom_path=data.get("initializerCustomPath") or "", force_constant_lr=data.get("forceConstantLr"),
     )
 
 
@@ -476,7 +474,6 @@ def training_runner_validate_route():
         data.get("profileId") or "",
         data.get("runId") or "",
         data.get("mode") or "normal",
-        data.get("reviewFingerprint") or "",
         data.get("selected_media"),
         data.get("fallback_captions"),
         data.get("selection_criteria"),
@@ -505,8 +502,6 @@ def training_runner_start_route():
         fallback_captions=data.get("fallback_captions"),
         selection_criteria=data.get("selection_criteria"),
         total_media_count=data.get("total_media_count"),
-        review_fingerprint=data.get("reviewFingerprint") or "",
-        review_intent=data.get("reviewIntent"),
         initializer_action_id=data.get("initializerActionId") or "",
         initializer_export_id=data.get("initializerExportId") or "",
         initializer_stage=data.get("initializerStage") or "",

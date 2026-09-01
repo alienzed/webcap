@@ -347,7 +347,10 @@ function renderTrainingWorkspaceConfigList(files) {
       if (state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName) {
         cancelEditorAutosaveForConfig(state.folder, fileName);
       }
-      ensureSelectedTrainingSetup(fileName).then(function () {
+      var reset = /^dataset\./.test(fileName)
+        ? resetTrainingReviewBuckets()
+        : ensureSelectedTrainingSetup(fileName);
+      reset.then(function () {
         if (state.currentConfigFile && state.currentConfigFile.file === fileName) loadConfigFileToEditor(fileName, { preserveTrainingWorkspace: true });
         refreshTrainingWorkspace();
       }).catch(function (err) { setStatus('Could not reset file: ' + String(err.message || err)); });
@@ -440,14 +443,6 @@ function refreshTrainingWorkspace() {
 }
 
 function runTrainingWorkspaceAction(options) {
-  if (trainingWorkspaceState.review && trainingWorkspaceState.review.customDataset) {
-    // Custom dataset TOMLs stay an explicit raw-command escape hatch.  They
-    // are never reconstructed from the structured Review plan.
-    options = Object.assign({}, options, {
-      reviewFingerprint: '', initializerActionId: '', initializerExportId: '', initializerStage: '', forceConstantLr: '',
-      reviewIntent: { startingPoint: 'fresh', customDataset: true }
-    });
-  }
   var request = runTrainCommandPreviewForCurrentFolder(options);
   syncWorkspaceConfigEditorUi();
   Promise.resolve(request)

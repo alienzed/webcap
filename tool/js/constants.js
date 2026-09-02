@@ -17,6 +17,8 @@ state = {
   pruneCandidates: [],
   pruneCandidateLookup: {},
   pruneCandidatesFolder: '',
+  pruneCandidatesScopeKey: '',
+  pruneCandidatesScopeFiles: [],
   pruneCandidatesStatus: 'idle',
   pruneCandidatesError: '',
   pruneCandidatesPopulation: 0,

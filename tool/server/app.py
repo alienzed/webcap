@@ -915,9 +915,11 @@ def fs_media_metadata():
     )
 
 
-@app.route("/fs/prune_candidates", methods=["GET"])
+@app.route("/fs/prune_candidates", methods=["GET", "POST"])
 def fs_prune_candidates():
-    rel_path = request.args.get("folder", "").strip()
+    data = (request.get_json(silent=True) or {}) if request.method == "POST" else {}
+    rel_path = (data.get("folder") if request.method == "POST" else request.args.get("folder", "")) or ""
+    rel_path = str(rel_path).strip()
     try:
         disk_config = app_config.load_config_from_disk()
     except Exception:
@@ -927,6 +929,7 @@ def fs_prune_candidates():
         rel_path,
         include_face_focus=bool(analysis.get("enableFaceAnalysis", False)),
         include_selection_pose=bool(analysis.get("enableMediaPipeAnalysis", False)),
+        selected_media=data.get("selected_media") if request.method == "POST" else None,
     )
 
 

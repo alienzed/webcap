@@ -17,6 +17,20 @@ function getPruneCandidateFiles(scopeItems) {
     .filter(function (fileName) { return !!lookup[fileName]; });
 }
 
+function pruneCandidateScopeFiles() {
+  var focusSet = state.focusSet || {};
+  if (focusSet.reportType === 'pruneCandidates' && Array.isArray(state.pruneCandidatesScopeFiles)) {
+    return state.pruneCandidatesScopeFiles.slice();
+  }
+  return getFilteredMediaItems(false)
+    .map(function (item) { return String(item && (item.fileName || item.key) || '').trim(); })
+    .filter(Boolean);
+}
+
+function pruneCandidateScopeKey(files) {
+  return files.slice().sort(function (left, right) { return left.localeCompare(right); }).join('\n');
+}
+
 function syncPruneCandidateConsumers() {
   renderFocusSetControls();
   if (mediaGridState && mediaGridState.open) {
@@ -28,6 +42,8 @@ function resetPruneCandidateState(status) {
   state.pruneCandidates = [];
   state.pruneCandidateLookup = {};
   state.pruneCandidatesFolder = String(state.folder || '');
+  state.pruneCandidatesScopeKey = '';
+  state.pruneCandidatesScopeFiles = [];
   state.pruneCandidatesStatus = status || 'idle';
   state.pruneCandidatesError = '';
   state.pruneCandidatesPopulation = 0;
@@ -37,10 +53,16 @@ function resetPruneCandidateState(status) {
 
 function invalidatePruneCandidates() {
   state.pruneCandidatesSeq = Number(state.pruneCandidatesSeq || 0) + 1;
-  resetPruneCandidateState('idle');
+  state.pruneCandidates = [];
+  state.pruneCandidateLookup = {};
+  state.pruneCandidatesStatus = 'idle';
+  state.pruneCandidatesError = '';
+  state.pruneCandidatesPopulation = 0;
+  state.pruneCandidatesDirty = true;
+  syncPruneCandidateConsumers();
 }
 
-function applyPruneCandidatePayload(folder, payload) {
+function applyPruneCandidatePayload(folder, scopeFiles, scopeKey, payload) {
   if (!payload || !Array.isArray(payload.candidates)) throw new Error('Malformed prune candidate response.');
   var lookup = {};
   payload.candidates.forEach(function (candidate) {
@@ -50,6 +72,8 @@ function applyPruneCandidatePayload(folder, payload) {
   state.pruneCandidates = payload.candidates.slice();
   state.pruneCandidateLookup = lookup;
   state.pruneCandidatesFolder = folder;
+  state.pruneCandidatesScopeKey = scopeKey;
+  state.pruneCandidatesScopeFiles = scopeFiles.slice();
   state.pruneCandidatesPopulation = Number(payload.population_count || 0);
   state.pruneCandidatesStatus = 'ready';
   state.pruneCandidatesError = '';
@@ -59,14 +83,16 @@ function applyPruneCandidatePayload(folder, payload) {
 
 function ensurePruneCandidatesForCurrentFolder(force) {
   var folder = String(state.folder || '').trim();
-  if (!folder || !Array.isArray(state.items) || !state.items.length) {
+  if (!folder) {
     resetPruneCandidateState('ready');
     return Promise.resolve([]);
   }
-  if (!force && !state.pruneCandidatesDirty && state.pruneCandidatesFolder === folder && state.pruneCandidatesStatus === 'ready') {
+  var scopeFiles = pruneCandidateScopeFiles();
+  var scopeKey = pruneCandidateScopeKey(scopeFiles);
+  if (!force && !state.pruneCandidatesDirty && state.pruneCandidatesFolder === folder && state.pruneCandidatesScopeKey === scopeKey && state.pruneCandidatesStatus === 'ready') {
     return Promise.resolve(state.pruneCandidates.slice());
   }
-  if (!force && state.pruneCandidatesFolder === folder && state.pruneCandidatesStatus === 'loading') {
+  if (!force && state.pruneCandidatesFolder === folder && state.pruneCandidatesScopeKey === scopeKey && state.pruneCandidatesStatus === 'loading') {
     return Promise.resolve([]);
   }
   var seq = Number(state.pruneCandidatesSeq || 0) + 1;
@@ -75,7 +101,11 @@ function ensurePruneCandidatesForCurrentFolder(force) {
   state.pruneCandidatesStatus = 'loading';
   state.pruneCandidatesError = '';
   syncPruneCandidateConsumers();
-  return fetch('/fs/prune_candidates?folder=' + encodeURIComponent(folder))
+  return fetch('/fs/prune_candidates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder: folder, selected_media: scopeFiles })
+  })
     .then(function (response) {
       return response.json().catch(function () { return {}; }).then(function (payload) {
         if (!response.ok) throw new Error((payload && payload.error) || ('Prune candidate request failed (' + response.status + ')'));
@@ -84,7 +114,7 @@ function ensurePruneCandidatesForCurrentFolder(force) {
     })
     .then(function (payload) {
       if (state.folder !== folder || state.pruneCandidatesSeq !== seq) return [];
-      applyPruneCandidatePayload(folder, payload);
+      applyPruneCandidatePayload(folder, scopeFiles, scopeKey, payload);
       return state.pruneCandidates.slice();
     })
     .catch(function (err) {
@@ -97,6 +127,18 @@ function ensurePruneCandidatesForCurrentFolder(force) {
       setStatus('Prune candidate analysis failed: ' + state.pruneCandidatesError);
       throw err;
     });
+}
+
+var debouncedRefreshPruneCandidatesForScope = debounceCreate(250);
+
+function pruneCandidatesScopeChanged() {
+  if (state.focusSet && state.focusSet.reportType === 'pruneCandidates') return;
+  invalidatePruneCandidates();
+  if (reviewWorkspaceState.detailTab !== 'prune') return;
+  debouncedRefreshPruneCandidatesForScope(function () {
+    if (reviewWorkspaceState.detailTab !== 'prune') return;
+    ensurePruneCandidatesForCurrentFolder(false).then(renderPruneCandidatesReport).catch(renderPruneCandidatesReport);
+  });
 }
 
 function removePruneCandidateFile(fileName) {
@@ -152,7 +194,7 @@ function renderPruneCandidatesReport() {
   var candidates = Array.isArray(state.pruneCandidates) ? state.pruneCandidates : [];
   ui.pruneCandidatesInspectBtn.disabled = status !== 'ready' || !candidates.length;
   if (status === 'loading') {
-    ui.pruneCandidatesSummaryEl.textContent = 'Analyzing the whole set...';
+    ui.pruneCandidatesSummaryEl.textContent = 'Analyzing visible media...';
     return;
   }
   if (status === 'error') {

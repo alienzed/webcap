@@ -473,6 +473,7 @@ var debouncedRefreshTrainingReviewForFilter = debounceCreate(250);
 function handleMediaFilterChanged() {
   markSuperSetSearchDirty();
   renderFileList();
+  pruneCandidatesScopeChanged();
   if (isTrainingWorkspaceActive()) {
     var reviewFolder = String(state.folder || '');
     debouncedRefreshTrainingReviewForFilter(function () {

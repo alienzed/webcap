@@ -82,13 +82,16 @@ def _context_for(info, rating, flag):
     }
 
 
-def build_prune_candidates(folder_path, metadata):
+def build_prune_candidates(folder_path, metadata, selected_media=None):
     folder = Path(folder_path)
     state = _load_folder_state(folder)
     ratings = state.get("ratings_by_media") if isinstance(state.get("ratings_by_media"), dict) else {}
     flags = state.get("flags") if isinstance(state.get("flags"), dict) else {}
     records = []
     cohorts = {}
+    selected_names = None if selected_media is None else {
+        str(name or "").strip() for name in selected_media if str(name or "").strip()
+    }
 
     media_files = sorted(
         [
@@ -98,6 +101,8 @@ def build_prune_candidates(folder_path, metadata):
         key=lambda path: path.name.lower(),
     )
     for media_path in media_files:
+        if selected_names is not None and media_path.name not in selected_names:
+            continue
         info = metadata.get(media_path.name) if isinstance(metadata.get(media_path.name), dict) else {}
         dims = _parse_resolution(info.get("resolution"))
         kind = "video" if media_path.suffix.lower() in VIDEO_EXTS else "image"
@@ -214,7 +219,7 @@ def build_prune_candidates(folder_path, metadata):
     }
 
 
-def prune_candidates_response(rel_path, include_face_focus=False, include_selection_pose=False):
+def prune_candidates_response(rel_path, include_face_focus=False, include_selection_pose=False, selected_media=None):
     rel_path = str(rel_path or "").strip()
     if not rel_path:
         return jsonify({"error": "Missing folder argument."}), 400
@@ -222,15 +227,19 @@ def prune_candidates_response(rel_path, include_face_focus=False, include_select
         folder_path = app_config.safe_join_fs_root(rel_path)
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
-        metadata = run_with_directory_repair(
+        if selected_media is not None and not isinstance(selected_media, list):
+            return jsonify({"error": "selected_media must be a list when provided."}), 400
+        selected_media = list(selected_media) if selected_media is not None else None
+        metadata = {} if selected_media == [] else run_with_directory_repair(
             folder_path,
             lambda: update_media_metadata(
                 folder_path,
                 include_face_focus=include_face_focus,
                 include_selection_pose=include_selection_pose,
+                scoped_filenames=selected_media,
             ),
         )
-        payload = build_prune_candidates(folder_path, metadata)
+        payload = build_prune_candidates(folder_path, metadata, selected_media)
         payload["folder"] = rel_path
         return jsonify(payload)
     except Exception as exc:

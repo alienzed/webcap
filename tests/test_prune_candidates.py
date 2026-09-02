@@ -54,6 +54,25 @@ def test_prune_candidates_does_not_apply_relative_rule_to_small_or_mixed_cohorts
     assert "portrait.png" in [row["file"] for row in payload["candidates"]]
 
 
+def test_prune_candidates_uses_only_selected_media_for_population_and_cohort_medians(tmp_path):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    visible_names = ["a.png", "b.png", "c.png", "d.png", "e.png", "candidate.png"]
+    hidden_names = ["hidden-1.png", "hidden-2.png", "hidden-3.png", "hidden-4.png", "hidden-5.png", "hidden-6.png"]
+    for name in visible_names + hidden_names:
+        _touch(folder, name)
+    metadata = {name: _meta("512x512") for name in visible_names}
+    metadata.update({name: _meta("2048x2048") for name in hidden_names})
+
+    scoped = prune_module.build_prune_candidates(folder, metadata, visible_names)
+    whole_folder = prune_module.build_prune_candidates(folder, metadata)
+
+    assert scoped["population_count"] == len(visible_names)
+    assert scoped["candidate_count"] == 0
+    assert whole_folder["population_count"] == len(visible_names) + len(hidden_names)
+    assert "candidate.png" in [row["file"] for row in whole_folder["candidates"]]
+
+
 def test_prune_candidates_detects_blocking_metadata_aspect_and_video_frame_problems(tmp_path):
     folder = tmp_path / "set"
     folder.mkdir()
@@ -122,6 +141,36 @@ def test_prune_candidates_route_returns_normalized_payload(tmp_path, monkeypatch
     assert payload["folder"] == "set"
     assert payload["candidate_count"] == 1
     assert payload["candidates"][0]["file"] == "tiny.png"
+
+
+def test_prune_candidates_post_scopes_metadata_and_empty_selection(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    folder = root / "set"
+    folder.mkdir(parents=True)
+    _touch(folder, "visible.png")
+    _touch(folder, "hidden.png")
+    monkeypatch.setattr(prune_module.app_config, "FS_ROOT", root)
+    calls = []
+
+    def metadata_for_scope(*args, **kwargs):
+        calls.append(kwargs.get("scoped_filenames"))
+        return {
+            "visible.png": _meta("512x512"),
+            "hidden.png": _meta("128x128"),
+        }
+
+    monkeypatch.setattr(prune_module, "update_media_metadata", metadata_for_scope)
+    client = app_module.app.test_client()
+    response = client.post("/fs/prune_candidates", json={"folder": "set", "selected_media": ["visible.png"]})
+    empty_response = client.post("/fs/prune_candidates", json={"folder": "set", "selected_media": []})
+
+    assert response.status_code == 200
+    assert response.get_json()["population_count"] == 1
+    assert response.get_json()["candidate_count"] == 0
+    assert calls == [["visible.png"]]
+    assert empty_response.status_code == 200
+    assert empty_response.get_json()["population_count"] == 0
+    assert empty_response.get_json()["candidate_count"] == 0
 
 
 def test_prune_candidates_route_rejects_missing_folder():

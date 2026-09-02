@@ -28,6 +28,7 @@ function activateFocusSet(fileNames, source, reportType) {
   };
   updateFocusSetUi();
   renderFileList(ui.filterEl.value);
+  pruneCandidatesScopeChanged();
 }
 
 function getFocusSetReportLabel(reportType) {
@@ -152,6 +153,7 @@ function clearFocusSet() {
   state.focusSet = null;
   updateFocusSetUi();
   renderFileList(ui.filterEl.value);
+  pruneCandidatesScopeChanged();
 }
 
 function rerunFocusSetReport() {
@@ -171,6 +173,7 @@ function rerunFocusSetReport() {
 function exitFocusSetToBrowsing() {
   state.focusSet = null;
   updateFocusSetUi();
+  pruneCandidatesScopeChanged();
   if (ui.editorEl) ui.editorEl.removeAttribute('readonly');
   clearEditorAndPreview();
   refreshCurrentDirectory();

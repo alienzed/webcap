@@ -222,8 +222,11 @@ function reviewViewItems(payload) {
 function reviewAvailableViews(payload) { return reviewViewItems(payload).map(function (item) { return item.id; }); }
 
 function reviewActiveView(payload) {
-  var views = reviewAvailableViews(payload);
-  if (views.indexOf(trainingWorkspaceState.reviewMediaView) === -1) trainingWorkspaceState.reviewMediaView = views[0] || (reviewViewItems(payload)[0] || {}).id || 'images';
+  var views = reviewAvailableViews(payload).filter(function (item) {
+    var role = item === 'images' ? null : reviewRole((payload || {}).plan || {}, item);
+    return !role || role.enabled;
+  });
+  if (views.indexOf(trainingWorkspaceState.reviewMediaView) === -1) trainingWorkspaceState.reviewMediaView = views[0] || 'images';
   return trainingWorkspaceState.reviewMediaView;
 }
 
@@ -265,6 +268,17 @@ function reviewBucketPressureLevel(payload, view, aspect, bucket) {
   return maximumIndex < 0 || index < 0 ? '' : distance === 0 ? 'pressure-high' : distance === 1 ? 'pressure-medium' : distance === 2 ? 'pressure-low' : '';
 }
 
+function reviewBucketPressureNote(payload, view, aspect, bucket) {
+  if (view === 'images') return '';
+  var limit = (((payload.videoLimits || {})[view] || {})[aspect]) || null;
+  var ladder = reviewCandidates(payload, view, aspect);
+  var maximumIndex = limit && limit.effectiveCeiling ? ladder.findIndex(function (item) { return sameReviewBucket(item, limit.effectiveCeiling); }) : -1;
+  var index = ladder.findIndex(function (item) { return sameReviewBucket(item, bucket); });
+  if (maximumIndex < 0 || index < 0) return '';
+  var distance = index - maximumIndex;
+  return distance <= 0 ? 'At tested limit · very little GPU headroom' : distance === 1 ? 'Near tested limit · limited GPU headroom' : distance === 2 ? 'Moderate GPU headroom' : 'More GPU headroom';
+}
+
 function reviewProjectedTarget(view, row, targets) {
   if (view === 'images') {
     return targets.reduce(function (closest, target) {
@@ -294,9 +308,11 @@ function reviewCandidateImpactTitle(payload, view, aspect, selected, candidate) 
     if (projectedDistance < currentDistance) closer += 1;
     if (Math.min(current[0], current[1]) / edge > 1.2 && Math.min(projected[0], projected[1]) / edge <= 1.2) majorUpscaleReduced += 1;
   });
-  if (!changed) return 'Would not change current assignments.';
+  var pressure = reviewBucketPressureNote(payload, view, aspect, candidate);
+  if (!changed) return 'Would not change current assignments.' + (pressure ? ' ' + pressure + '.' : '');
   var text = 'Would become the target for ' + changed + ' of ' + eligible + ' item' + (eligible === 1 ? '' : 's') + '; ' + closer + ' would train closer to native resolution.';
   if (majorUpscaleReduced) text += ' Removes >20% upscale for ' + majorUpscaleReduced + ' item' + (majorUpscaleReduced === 1 ? '' : 's') + '.';
+  if (pressure) text += ' ' + pressure + '.';
   return text;
 }
 
@@ -337,7 +353,8 @@ function reviewTargetsHtml(payload, view, aspect) {
   function selectedChip(bucket) {
     var color = reviewTargetColor(selected, bucket);
     var removeDisabled = selected.length <= 1;
-    return '<span class="training-review-selected-target ' + color + ' ' + reviewBucketPressureLevel(payload, view, aspect, bucket) + '"><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Move target lower">‹</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Move target higher">›</button></span>';
+    var pressure = reviewBucketPressureNote(payload, view, aspect, bucket);
+    return '<span class="training-review-selected-target ' + color + ' ' + reviewBucketPressureLevel(payload, view, aspect, bucket) + '"><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Move target lower"' + (pressure ? ' title="' + escapeHtml(pressure) + '"' : '') + '>‹</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : pressure ? ' title="' + escapeHtml(pressure) + '"' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Move target higher"' + (pressure ? ' title="' + escapeHtml(pressure) + '"' : '') + '>›</button></span>';
   }
   function neutralChip(bucket) { return reviewNeutralTargetChipHtml(payload, view, aspect, selected, bucket); }
   return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><div class="training-review-target-utilities">' + limitNote + '<button type="button" class="training-review-reset-defaults" data-review-reset-buckets>↺ Reset defaults</button></div></div><div class="training-review-target-instructions">Choose up to three. Arrows move a selected target one rung.</div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-add"><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></div></section>';
@@ -428,10 +445,34 @@ function reviewImpactHtml(payload, view) {
   return '<section class="training-review-impact"><div class="training-review-label-row"><strong>Scale impact · all cohort tabs</strong><span>' + total + ' eligible item' + (total === 1 ? '' : 's') + '</span></div><div class="training-review-impact-direction"><span>Smaller target</span><span>Larger target</span></div><div class="training-review-impact-cells">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { var count = Number(impact[item[0]] || 0); var percent = Math.round(count / total * 100); return '<div class="training-review-impact-cell impact-' + item[0] + (count ? '' : ' is-empty') + '" title="' + count + ' of ' + total + ' eligible items"><b>' + count + '</b><em>' + percent + '%</em><span>' + escapeHtml(item[1]) + '</span></div>'; }).join('') + '</div></section>';
 }
 
-function reviewWarningsHtml(payload, view) {
-  var warnings = (payload.warnings || []).filter(function (warning) { return !warning.view || warning.view === view; });
-  if (!warnings.length) return '';
-  return '<section class="training-review-warnings"><strong>Worth noticing</strong>' + warnings.map(function (warning) { return '<div>' + escapeHtml(warning.message || '') + '</div>'; }).join('') + '</section>';
+function reviewSubstantialUpscaleRows(payload, view, aspect) {
+  return (((reviewViewGroups(payload, view)[aspect] || {}).native) || []).filter(function (row) {
+    return row && row.eligible && row.impactBand === 'up20' && (row.assignedTarget || row.target || []).length;
+  });
+}
+
+function reviewCanStepBucket(payload, view, aspect, bucket, direction) {
+  var candidates = reviewCandidates(payload, view, aspect);
+  var selected = reviewSelectedBuckets(payload.plan || {}, view, aspect);
+  var index = candidates.findIndex(function (item) { return sameReviewBucket(item, bucket); });
+  return index >= 0 && candidates.slice(0, index).some(function (item) {
+    return direction < 0 && !selected.some(function (selectedBucket) { return sameReviewBucket(selectedBucket, item); });
+  });
+}
+
+function reviewWarningsHtml(payload, view, aspect) {
+  var rows = reviewSubstantialUpscaleRows(payload, view, aspect);
+  var warnings = (payload.warnings || []).filter(function (warning) {
+    return (!warning.view || warning.view === view) && warning.code !== 'substantial_upscale' && (!warning.ar || warning.ar === aspect);
+  });
+  if (!warnings.length && !rows.length) return '';
+  var roleLabel = view === 'images' ? 'image' : view.charAt(0).toUpperCase() + view.slice(1) + ' ' + formatReviewAspect(aspect) + ' video';
+  var files = rows.map(function (row) { return String(row.file || ''); }).filter(Boolean);
+  var targets = rows.map(function (row) { return row.assignedTarget || row.target || []; });
+  var target = targets.length && targets.every(function (item) { return sameReviewBucket(item, targets[0]); }) ? targets[0] : null;
+  var canLower = target && reviewCanStepBucket(payload, view, aspect, target, -1);
+  var upscale = rows.length ? '<div class="training-review-warning-actionable"><span>' + escapeHtml(rows.length + ' ' + roleLabel + (rows.length === 1 ? ' needs' : 's need') + ' more than 20% enlargement.') + '</span><div class="training-review-warning-actions"><button type="button" class="training-review-reset-defaults" data-review-show-upscale>' + (files.length === 1 ? 'Show affected item' : 'Show affected items') + '</button>' + (canLower ? '<button type="button" class="training-review-reset-defaults" data-review-lower-upscale-target="' + escapeHtml(target.join(',')) + '">Lower target one rung</button>' : '') + '</div></div>' : '';
+  return '<section class="training-review-warnings"><strong>Worth noticing</strong>' + upscale + warnings.map(function (warning) { return '<div>' + escapeHtml(warning.message || '') + '</div>'; }).join('') + '</section>';
 }
 
 function reviewModalHtml(payload) {
@@ -459,13 +500,13 @@ function reviewModalHtml(payload) {
     var itemTitle = itemRole ? itemRole.frames + ' frames · ' + itemEligible + ' of ' + itemCount + ' videos eligible' : itemCount + ' image' + (itemCount === 1 ? '' : 's');
     if (item.id === view && roleNotes.length) itemTitle += '. ' + roleNotes.join(' ');
     if (!itemRole) return '<button type="button" class="training-review-tab training-review-image-tab' + (item.id === view ? ' active' : '') + '" data-review-view="' + escapeHtml(item.id) + '" aria-selected="' + (item.id === view ? 'true' : 'false') + '" title="' + escapeHtml(itemTitle) + '">' + escapeHtml(label(item.id)) + ' <span>· ' + itemCount + '</span></button>';
-    return '<div class="training-review-role-pill' + (item.id === view ? ' active' : '') + (itemRole.enabled ? '' : ' disabled') + '" title="' + escapeHtml(itemTitle) + '"><label class="training-review-role-toggle"><input type="checkbox" data-review-role-enabled="' + escapeHtml(itemRole.id) + '"' + (itemRole.enabled ? ' checked' : '') + ' aria-label="Enable ' + escapeHtml(label(item.id)) + ' role"></label><button type="button" class="training-review-tab" data-review-view="' + escapeHtml(item.id) + '" aria-selected="' + (item.id === view ? 'true' : 'false') + '">' + escapeHtml(label(item.id)) + ' <span>· ' + itemEligible + '</span></button></div>';
+    return '<div class="training-review-role-pill' + (item.id === view ? ' active' : '') + (itemRole.enabled ? '' : ' disabled') + '" title="' + escapeHtml(itemTitle) + '"><label class="training-review-role-toggle"><input type="checkbox" data-review-role-enabled="' + escapeHtml(itemRole.id) + '"' + (itemRole.enabled ? ' checked' : '') + ' aria-label="Enable ' + escapeHtml(label(item.id)) + ' role"></label><button type="button" class="training-review-tab" data-review-view="' + escapeHtml(item.id) + '" aria-selected="' + (item.id === view ? 'true' : 'false') + '"' + (itemRole.enabled ? '' : ' disabled') + '>' + escapeHtml(label(item.id)) + ' <span>· ' + itemEligible + '</span></button></div>';
   }).join('') + '</div><span class="training-review-scope-separator" aria-hidden="true"></span><div class="training-review-cohort-tabs" role="tablist">' + TRAINING_REVIEW_ASPECT_ORDER.filter(function (id) { return !!groups[id]; }).map(function (id) {
     var cohortEligible = Number((groups[id] || {}).eligibleCount || 0);
     var tiny = cohortEligible < 4;
     return '<button type="button" class="training-review-cohort-tab' + (id === aspect ? ' active' : '') + '" data-review-aspect="' + escapeHtml(id) + '" aria-selected="' + (id === aspect ? 'true' : 'false') + '"' + (tiny ? ' title="Only ' + cohortEligible + ' eligible items in this cohort."' : '') + '>' + escapeHtml(formatReviewAspect(id)) + ' <span>· ' + cohortEligible + '</span>' + (tiny ? ' <b class="training-review-tiny-cohort" aria-label="Only ' + cohortEligible + ' eligible items in this cohort.">!</b>' : '') + '</button>';
   }).join('') + '</div></div>' +
-    reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(payload, view, groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect), aspect) + reviewImpactHtml(payload, view) + reviewWarningsHtml(payload, view) + '</section>';
+    reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(payload, view, groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect), aspect) + reviewImpactHtml(payload, view) + reviewWarningsHtml(payload, view, aspect) + '</section>';
 }
 
 function trainingReviewSummaryHtml(payload) {
@@ -539,7 +580,30 @@ function bindTrainingReviewModal(payload) {
     var aspect = reviewActiveAspect(payload, view);
     if (stepReviewBucket(payload.plan, payload.ladders || {}, view, aspect, target, Number(button.getAttribute('data-review-step')))) saveTrainingReview({ plan: payload.plan });
   }; });
-  modal.querySelectorAll('[data-review-role-enabled]').forEach(function (input) { input.onchange = function () { reviewRole(payload.plan, input.getAttribute('data-review-role-enabled')).enabled = input.checked; saveTrainingReview({ plan: payload.plan }); }; });
+  modal.querySelectorAll('[data-review-role-enabled]').forEach(function (input) { input.onchange = function () {
+    var role = reviewRole(payload.plan, input.getAttribute('data-review-role-enabled'));
+    role.enabled = input.checked;
+    if (!input.checked && trainingWorkspaceState.reviewMediaView === role.id) {
+      trainingWorkspaceState.reviewMediaView = reviewAvailableViews(payload).filter(function (candidate) {
+        var candidateRole = candidate === 'images' ? null : reviewRole(payload.plan, candidate);
+        return candidate !== role.id && (!candidateRole || candidateRole.enabled);
+      })[0] || 'images';
+      trainingWorkspaceState.reviewAspect = '';
+    }
+    saveTrainingReview({ plan: payload.plan });
+  }; });
+  modal.querySelectorAll('[data-review-show-upscale]').forEach(function (button) { button.onclick = function () {
+    var view = reviewActiveView(payload);
+    var aspect = reviewActiveAspect(payload, view);
+    var files = reviewSubstantialUpscaleRows(payload, view, aspect).map(function (row) { return row.file; }).filter(Boolean);
+    if (files.length) selectByFileName(files[0], files, 'Training Review');
+  }; });
+  modal.querySelectorAll('[data-review-lower-upscale-target]').forEach(function (button) { button.onclick = function () {
+    var target = String(button.getAttribute('data-review-lower-upscale-target') || '').split(',').map(Number);
+    var view = reviewActiveView(payload);
+    var aspect = reviewActiveAspect(payload, view);
+    if (stepReviewBucket(payload.plan, payload.ladders || {}, view, aspect, target, -1)) saveTrainingReview({ plan: payload.plan });
+  }; });
   modal.querySelectorAll('[data-review-reset-buckets]').forEach(function (button) { button.onclick = function () {
     if (!window.confirm('Reset bucket selections to WebCap defaults?')) return;
     resetTrainingReviewBuckets().then(function () { renderTrainingReview(); }).catch(function (err) { setStatus('Could not reset bucket selections: ' + String(err.message || err)); });

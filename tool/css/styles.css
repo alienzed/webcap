@@ -2690,6 +2690,10 @@ iframe {
 .training-review-chart-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.09); }
 .training-review-hist-bin { position: absolute; bottom: 0; min-height: 2px; background: rgba(184, 198, 214, .26); border-right: 1px solid rgba(255,255,255,.11); }
 .training-review-chart-dot { position: absolute; width: 11px; height: 11px; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; transform: translateX(-50%); background: #8ca8c2; box-shadow: 0 1px 3px rgba(0,0,0,.28); cursor: help; }
+.training-review-chart-dot.impact-up20 { width: 14px; height: 14px; border-width: 2px; box-shadow: 0 0 0 2px rgba(217, 164, 65, .16), 0 1px 3px rgba(0,0,0,.36); z-index: 2; }
+.training-review-chart-dot.impact-up { width: 12px; height: 12px; border-width: 2px; z-index: 1; }
+.training-review-chart-dot.impact-down { opacity: .68; }
+.training-review-chart-dot.impact-down20 { width: 9px; height: 9px; opacity: .42; }
 .training-review-chart-dot.target-0 { background: #4f9bdf; }
 .training-review-chart-dot.target-1 { background: #a671e5; }
 .training-review-chart-dot.target-2 { background: #d96e55; }
@@ -2697,9 +2701,18 @@ iframe {
 .training-review-chart-marker.target-0 { background: #4f9bdf; }
 .training-review-chart-marker.target-1 { background: #a671e5; }
 .training-review-chart-marker.target-2 { background: #d96e55; }
+.training-review-chart-marker.pressure-high { box-shadow: 0 0 0 1px rgba(207, 91, 91, .72); }
+.training-review-chart-marker.pressure-medium { box-shadow: 0 0 0 1px rgba(217, 164, 65, .72); }
+.training-review-chart-marker.pressure-low { box-shadow: 0 0 0 1px rgba(218, 195, 102, .68); }
 .training-review-chart-marker span, .training-review-chart-marker em { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 10px; font-style: normal; }
 .training-review-chart-marker span { top: -18px; color: var(--text, #e5e7eb); font-weight: 700; }
 .training-review-chart-marker em { top: -2px; padding: 1px 4px; border-radius: 4px; background: var(--panel-bg, #20242c); color: var(--muted-text, #a3adba); }
+.training-review-envelope-marker { position: absolute; top: 0; bottom: 0; width: 1px; transform: translateX(-50%); pointer-events: none; }
+.training-review-envelope-marker span { position: absolute; top: 4px; left: 4px; padding: 1px 3px; border-radius: 3px; background: color-mix(in srgb, var(--panel-bg, #20242c) 88%, transparent); color: var(--muted-text, #a3adba); font-size: 9px; line-height: 1.1; white-space: nowrap; }
+.training-review-envelope-marker.floor { background: rgba(174, 189, 202, .42); }
+.training-review-envelope-marker.default { background: rgba(217, 164, 65, .62); }
+.training-review-envelope-marker.maximum { background: rgba(207, 91, 91, .7); }
+.training-review-chart-overflow { position: absolute; top: 5px; right: 6px; padding: 2px 4px; border-radius: 4px; background: rgba(15, 23, 42, .68); color: var(--muted-text, #a3adba); font-size: 10px; }
 .training-review-chart-axis { display: grid; gap: 3px; color: var(--muted-text, #a3adba); font-size: 10px; text-align: center; }
 .training-review-chart-ticks { position: relative; height: 13px; }
 .training-review-chart-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }

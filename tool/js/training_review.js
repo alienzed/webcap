@@ -343,18 +343,24 @@ function reviewTargetsHtml(payload, view, aspect) {
   return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><div class="training-review-target-utilities">' + limitNote + '<button type="button" class="training-review-reset-defaults" data-review-reset-buckets>↺ Reset defaults</button></div></div><div class="training-review-target-instructions">Choose up to three. Arrows move a selected target one rung.</div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-add"><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></div></section>';
 }
 
-function reviewChartHtml(group, selected, aspect) {
+function reviewChartHtml(payload, view, group, selected, aspect) {
   var rows = group && group.native || [];
   if (!rows.length) return '<section class="training-review-chart-empty">No eligible media is visible in this cohort.</section>';
   var shapes = (group.targets || []).map(function (item) { return item.shape || []; });
-  var edges = rows.map(function (item) { return Number(item.nativeShortEdge || item.edge || 0); }).filter(Boolean).concat(shapes.map(function (item) { return Math.min(Number(item[0]), Number(item[1])); }).filter(Boolean));
-  var sourceLow = Math.min.apply(Math, edges);
-  var sourceHigh = Math.max.apply(Math, edges);
-  var span = Math.max(64, sourceHigh - sourceLow);
+  var sourceEdges = rows.map(function (item) { return Number(item.nativeShortEdge || item.edge || 0); }).filter(Boolean);
+  var candidateEdges = reviewCandidates(payload, view, aspect).map(function (item) { return Math.min(Number(item[0]), Number(item[1])); }).filter(Boolean);
+  var selectedEdges = shapes.map(function (item) { return Math.min(Number(item[0]), Number(item[1])); }).filter(Boolean);
+  var sourceLow = Math.min.apply(Math, sourceEdges.concat(selectedEdges));
+  var limit = view === 'images' ? null : (((payload.videoLimits || {})[view] || {})[aspect]) || null;
+  var maximumEdge = limit && limit.effectiveCeiling ? Math.min(Number(limit.effectiveCeiling[0]), Number(limit.effectiveCeiling[1])) : Math.max.apply(Math, candidateEdges.concat(selectedEdges));
+  var defaultEdge = limit && limit.automaticDefaultCeiling ? Math.min(Number(limit.automaticDefaultCeiling[0]), Number(limit.automaticDefaultCeiling[1])) : 0;
+  var floorEdge = candidateEdges.length ? Math.min.apply(Math, candidateEdges) : 0;
+  var usefulHigh = Math.max(maximumEdge || 0, defaultEdge || 0, floorEdge || 0, sourceLow);
+  var span = Math.max(64, usefulHigh - sourceLow);
   var tickSteps = [32, 64, 96, 128, 160, 192, 256];
   var step = tickSteps.filter(function (value) { return value >= span / 5; })[0] || 256;
-  var low = Math.max(step, Math.floor((sourceLow - step * .5) / step) * step);
-  var high = Math.ceil((sourceHigh + step * .5) / step) * step;
+  var low = Math.max(0, Math.floor((sourceLow - step * .5) / step) * step);
+  var high = Math.ceil((usefulHigh + step) / step) * step;
   if (high - low < step * 3) high = low + step * 3;
   function position(value) { return Math.max(1.5, Math.min(98.5, ((Number(value) - low) / Math.max(1, high - low)) * 97)); }
   var ticks = [];
@@ -362,8 +368,10 @@ function reviewChartHtml(group, selected, aspect) {
   var binCount = 12;
   var binSpan = (high - low) / binCount;
   function binForEdge(edge) { return Math.min(binCount - 1, Math.max(0, Math.floor((edge - low) / Math.max(1, binSpan)))); }
+  var inRangeRows = rows.filter(function (row) { return Number(row.nativeShortEdge || row.edge || 0) <= high; });
+  var overflowRows = rows.filter(function (row) { return Number(row.nativeShortEdge || row.edge || 0) > high; });
   var bins = Array.apply(null, Array(binCount)).map(function () { return 0; });
-  rows.forEach(function (row) { bins[binForEdge(Number(row.nativeShortEdge || row.edge || 0))] += 1; });
+  inRangeRows.forEach(function (row) { bins[binForEdge(Number(row.nativeShortEdge || row.edge || 0))] += 1; });
   var maximum = Math.max.apply(Math, [1].concat(bins));
   var stacks = {};
   var orderedTargets = (group.targets || []).slice().sort(function (a, b) {
@@ -383,7 +391,7 @@ function reviewChartHtml(group, selected, aspect) {
     var end = position(low + (index + 1) * binSpan);
     return '<i class="training-review-hist-bin" style="left:' + start + '%;width:' + Math.max(0, end - start) + '%;height:' + Math.round((count / maximum) * 72) + '%"></i>';
   }).join('');
-  var dots = rows.map(function (row) {
+  var dots = inRangeRows.map(function (row) {
     var edge = Number(row.nativeShortEdge || row.edge || 0);
     var bin = binForEdge(edge);
     var ordinal = stacks[bin] || 0;
@@ -398,15 +406,19 @@ function reviewChartHtml(group, selected, aspect) {
     var scale = Math.round((scaleRatio - 1) * 100);
     var resize = Math.abs(scale) < 1 ? 'No meaningful resize · 1.00×' : (scale > 0 ? 'Upscale ' : 'Downscale ') + scaleRatio.toFixed(2) + '× · ' + (scale > 0 ? '+' : '') + scale + '%';
     var detail = (row.file || 'Source media') + '\nNative: ' + row.width + ' × ' + row.height + ' · short edge ' + edge + ' px' + (target.length ? '\nTarget: ' + target[0] + ' × ' + target[1] + '\n' + resize : '\nNot eligible for this role' + (row.eligibilityReason ? ': ' + row.eligibilityReason : ''));
-    return '<i class="training-review-chart-dot ' + reviewTargetColor(selected, target) + '" style="left:' + dotLeft + '%;bottom:' + (11 + level * 15) + 'px" title="' + escapeHtml(detail) + '"></i>';
+    return '<i class="training-review-chart-dot ' + reviewTargetColor(selected, target) + ' impact-' + escapeHtml(row.impactBand || 'near') + '" style="left:' + dotLeft + '%;bottom:' + (11 + level * 15) + 'px" title="' + escapeHtml(detail) + '"></i>';
   }).join('');
   var markers = (group.targets || []).map(function (target) {
     var shape = target.shape || [];
     var edge = Math.min(Number(shape[0]), Number(shape[1]));
-    return '<b class="training-review-chart-marker ' + reviewTargetColor(selected, shape) + '" style="left:' + position(edge) + '%"><span>' + escapeHtml(shape[0] + ' × ' + shape[1]) + '</span><em>' + escapeHtml(String(target.assignedCount || 0)) + '</em></b>';
+    return '<b class="training-review-chart-marker ' + reviewTargetColor(selected, shape) + ' ' + reviewBucketPressureLevel(payload, view, aspect, shape) + '" style="left:' + position(edge) + '%"><span>' + escapeHtml(shape[0] + ' × ' + shape[1]) + '</span><em>' + escapeHtml(String(target.assignedCount || 0)) + '</em></b>';
   }).join('');
+  function envelopeMarker(kind, edge, label, title) {
+    return edge ? '<b class="training-review-envelope-marker ' + kind + '" style="left:' + position(edge) + '%" title="' + escapeHtml(title) + '"><span>' + escapeHtml(label) + '</span></b>' : '';
+  }
+  var envelope = view === 'images' ? '' : envelopeMarker('floor', floorEdge, 'Floor', 'Lowest selectable supported rung') + envelopeMarker('default', defaultEdge, defaultEdge === maximumEdge ? 'Default / max' : 'Default', defaultEdge === maximumEdge ? 'Automatic default ceiling and effective maximum' : 'Automatic default ceiling') + (defaultEdge === maximumEdge ? '' : envelopeMarker('maximum', maximumEdge, 'Max', limit && limit.source === 'calibration' ? 'Calibrated maximum' : 'Effective maximum'));
   var tickLabels = ticks.map(function (value) { return '<span style="left:' + position(value) + '%">' + escapeHtml(String(value)) + '</span>'; }).join('');
-  return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Bars group nearby native short edges; each dot is one source file.</span></div><div class="training-review-legend"><span><i class="histogram"></i>Native range</span><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + zones + gridlines + histogram + dots + markers + '</div><div class="training-review-chart-axis"><div class="training-review-chart-ticks">' + tickLabels + '</div><span>Native short edge (px)</span></div></section>';
+  return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Bars group nearby native short edges; each dot is one source file.</span></div><div class="training-review-legend"><span><i class="histogram"></i>Native range</span><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + zones + gridlines + histogram + dots + markers + envelope + (overflowRows.length ? '<span class="training-review-chart-overflow" title="' + overflowRows.length + ' native source' + (overflowRows.length === 1 ? '' : 's') + ' above the plotted training envelope.">' + overflowRows.length + ' above range</span>' : '') + '</div><div class="training-review-chart-axis"><div class="training-review-chart-ticks">' + tickLabels + '</div><span>Native short edge (px)</span></div></section>';
 }
 
 function reviewImpactHtml(payload, view) {
@@ -453,7 +465,7 @@ function reviewModalHtml(payload) {
     var tiny = cohortEligible < 4;
     return '<button type="button" class="training-review-cohort-tab' + (id === aspect ? ' active' : '') + '" data-review-aspect="' + escapeHtml(id) + '" aria-selected="' + (id === aspect ? 'true' : 'false') + '"' + (tiny ? ' title="Only ' + cohortEligible + ' eligible items in this cohort."' : '') + '>' + escapeHtml(formatReviewAspect(id)) + ' <span>· ' + cohortEligible + '</span>' + (tiny ? ' <b class="training-review-tiny-cohort" aria-label="Only ' + cohortEligible + ' eligible items in this cohort.">!</b>' : '') + '</button>';
   }).join('') + '</div></div>' +
-    reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect), aspect) + reviewImpactHtml(payload, view) + reviewWarningsHtml(payload, view) + '</section>';
+    reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(payload, view, groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect), aspect) + reviewImpactHtml(payload, view) + reviewWarningsHtml(payload, view) + '</section>';
 }
 
 function trainingReviewSummaryHtml(payload) {

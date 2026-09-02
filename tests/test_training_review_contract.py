@@ -104,6 +104,46 @@ def test_wan22_lo_review_only_edits_the_lo_stage(tmp_path, monkeypatch):
     assert updated["plan"]["stages"]["lo"]["imageBuckets"]["square"] == [ladder[0]]
 
 
+def test_off_ladder_image_bucket_stays_connected_to_review(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder, names = _set(tmp_path)
+    _review(folder, names)
+    (folder / "dataset.train.toml").write_text(
+        'enable_ar_bucket = true\n\n[[directory]]\npath = "square"\nnum_repeats = 1\ngroup = "images"\nsize_buckets = [[510, 510, 1]]\n',
+        encoding="utf-8",
+    )
+
+    payload = _review(folder, names)
+
+    assert payload["customDataset"] is False
+    assert payload["plan"]["stages"]["h3"]["imageBuckets"]["square"] == [[510, 510]]
+    updated = training_review.update_training_review(folder, MINIMAX_H3_PROFILE_ID, {
+        "runId": "train", "selected_media": names, "total_media_count": len(names), "plan": payload["plan"],
+    })
+    assert updated["plan"]["stages"]["h3"]["imageBuckets"]["square"] == [[510, 510]]
+
+
+def test_off_ladder_video_bucket_stays_connected_to_review(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder, names = _set(tmp_path)
+    _review(folder, names)
+    (folder / "dataset.train.toml").write_text(
+        'enable_ar_bucket = true\n\n[[directory]]\npath = "square"\nnum_repeats = 1\ngroup = "videos"\nsize_buckets = [[370, 370, 68]]\n',
+        encoding="utf-8",
+    )
+
+    payload = _review(folder, names)
+
+    assert payload["customDataset"] is False
+    temporal = next(role for role in payload["plan"]["videoRoles"] if role["id"] == "temporal")
+    assert temporal["buckets"]["square"] == [[370, 370]]
+    updated = training_review.update_training_review(folder, MINIMAX_H3_PROFILE_ID, {
+        "runId": "train", "selected_media": names, "total_media_count": len(names), "plan": payload["plan"],
+    })
+    temporal = next(role for role in updated["plan"]["videoRoles"] if role["id"] == "temporal")
+    assert temporal["buckets"]["square"] == [[370, 370]]
+
+
 def test_video_distribution_keeps_h3_roles_independent():
     plan = {
         "profileId": MINIMAX_H3_PROFILE_ID,

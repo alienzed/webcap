@@ -9,6 +9,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from .dataset_config import (
+    AR_TOL,
     ASPECT_RATIOS,
     build_dataset_config_artifacts,
     build_repeats,
@@ -201,7 +202,7 @@ def _default_profile_plan(folder, profile_id, manifest, setup):
     return {"version": TRAINING_PLAN_VERSION, "stages": stages, "videoRoles": roles}
 
 
-def _normalize_bucket_list(raw, candidates, label):
+def _normalize_bucket_list(raw, candidates, label, ar_label):
     source = raw if isinstance(raw, list) else []
     valid = set(candidates)
     output = []
@@ -210,8 +211,8 @@ def _normalize_bucket_list(raw, candidates, label):
         if not isinstance(row, (list, tuple)) or len(row) != 2:
             raise ValueError(label + " contains an invalid bucket.")
         bucket = (_positive_int(row[0], label + " width"), _positive_int(row[1], label + " height"))
-        if bucket not in valid:
-            raise ValueError(label + " contains a bucket outside this model's supported ladder.")
+        if bucket not in valid and abs((bucket[0] / float(bucket[1])) - ASPECT_RATIOS[ar_label]) > AR_TOL:
+            raise ValueError(label + " contains a bucket outside this aspect-ratio cohort.")
         if bucket not in seen:
             seen.add(bucket)
             output.append([bucket[0], bucket[1]])
@@ -233,7 +234,7 @@ def normalize_profile_plan(raw, profile_id, setup):
             if ar_label not in image_buckets:
                 continue
             normalized_images[ar_label] = _normalize_bucket_list(
-                image_buckets.get(ar_label), _candidate_image_buckets(ar_label, profile_id), stage + " " + ar_label + " image buckets",
+                image_buckets.get(ar_label), _candidate_image_buckets(ar_label, profile_id), stage + " " + ar_label + " image buckets", ar_label,
             )
         output["stages"][stage] = {
             "targetSteps": _positive_int(item.get("targetSteps", _default_target_steps(stage)), stage + " target steps"),
@@ -253,7 +254,7 @@ def normalize_profile_plan(raw, profile_id, setup):
             if ar_label not in buckets:
                 continue
             normalized_buckets[ar_label] = _normalize_bucket_list(
-                buckets.get(ar_label), _candidate_video_buckets(ar_label, profile_id, role, frames), role + " " + ar_label + " video buckets",
+                buckets.get(ar_label), _candidate_video_buckets(ar_label, profile_id, role, frames), role + " " + ar_label + " video buckets", ar_label,
             )
         output["videoRoles"].append({
             "id": role,
@@ -506,13 +507,10 @@ def _write_structured_datasets(folder, setup, review_plan, profile_plan, profile
         destination.write_text(text, encoding="utf-8")
 
 
-def _closest_aspect(bucket, profile_id, kind, role="", frames=1):
-    """Find the sole ladder aspect containing a manually selected bucket."""
-    matches = []
-    for ar_label in ASPECT_RATIOS:
-        candidates = _candidate_image_buckets(ar_label, profile_id) if kind == "image" else _candidate_video_buckets(ar_label, profile_id, role, frames)
-        if tuple(bucket[:2]) in candidates:
-            matches.append(ar_label)
+def _bucket_aspect(bucket):
+    """Infer a supported aspect cohort without requiring a ladder rung."""
+    ratio = bucket[0] / float(bucket[1])
+    matches = [ar_label for ar_label, target in ASPECT_RATIOS.items() if abs(ratio - target) <= AR_TOL]
     return matches[0] if len(matches) == 1 else ""
 
 
@@ -563,7 +561,7 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
         if group == "images":
             if bucket[2] != 1:
                 return None
-            ar_label = _closest_aspect(bucket, profile_id, "image")
+            ar_label = _bucket_aspect(bucket)
             if not ar_label:
                 return None
             selected = stage_plan["imageBuckets"].setdefault(ar_label, [])
@@ -578,7 +576,7 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
         for role_name, role in roles.items():
             if int(role["frames"]) != bucket[2]:
                 continue
-            ar_label = _closest_aspect(bucket, profile_id, "video", role_name, bucket[2])
+            ar_label = _bucket_aspect(bucket)
             if ar_label:
                 possible.append((role, ar_label))
         if len(possible) != 1:

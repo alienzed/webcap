@@ -177,6 +177,18 @@ function stepReviewBucket(plan, ladders, view, aspect, bucket, direction) {
   var candidates = view === 'images' ? ((ladders.images || {})[aspect] || []) : (((ladders.videos || {})[view] || {})[aspect] || []);
   var selected = reviewSelectedBuckets(plan, view, aspect);
   var index = candidates.findIndex(function (item) { return sameReviewBucket(item, bucket); });
+  if (index < 0) {
+    var nearest = candidates.reduce(function (best, item) {
+      var distance = Math.pow(Number(item[0]) - Number(bucket[0]), 2) + Math.pow(Number(item[1]) - Number(bucket[1]), 2);
+      return !best || distance < best.distance ? { bucket: item, distance: distance } : best;
+    }, null);
+    if (!nearest) return false;
+    var next = selected.map(function (item) { return sameReviewBucket(item, bucket) ? [Number(nearest.bucket[0]), Number(nearest.bucket[1])] : item; });
+    next = next.filter(function (item, itemIndex) { return next.findIndex(function (other) { return sameReviewBucket(other, item); }) === itemIndex; });
+    if (view === 'images') plan.stages[reviewStageId(plan)].imageBuckets[aspect] = next;
+    else reviewRole(plan, view).buckets[aspect] = next;
+    return true;
+  }
   for (var cursor = index + direction; cursor >= 0 && cursor < candidates.length; cursor += direction) {
     if (!selected.some(function (item) { return sameReviewBucket(item, candidates[cursor]); })) {
       var replacement = candidates[cursor];

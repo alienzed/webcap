@@ -3483,6 +3483,15 @@ html[data-theme="dark"] input[type="checkbox"] {
   accent-color: var(--accent);
 }
 
+html[data-theme="dark"] .training-review-role-toggle input {
+  accent-color: #4f9bdf;
+}
+
+html[data-theme="dark"] .training-review-role-toggle input:focus {
+  border-color: #4f9bdf;
+  box-shadow: 0 0 0 2px rgba(79, 155, 223, .2);
+}
+
 html[data-theme="dark"] textarea:focus,
 html[data-theme="dark"] input:focus {
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);

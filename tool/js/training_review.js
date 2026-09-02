@@ -367,40 +367,44 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
   var sourceEdges = rows.map(function (item) { return Number(item.nativeShortEdge || item.edge || 0); }).filter(Boolean);
   var candidateEdges = reviewCandidates(payload, view, aspect).map(function (item) { return Math.min(Number(item[0]), Number(item[1])); }).filter(Boolean);
   var selectedEdges = shapes.map(function (item) { return Math.min(Number(item[0]), Number(item[1])); }).filter(Boolean);
-  var sourceLow = Math.min.apply(Math, sourceEdges.concat(selectedEdges));
   var limit = view === 'images' ? null : (((payload.videoLimits || {})[view] || {})[aspect]) || null;
   var maximumEdge = limit && limit.effectiveCeiling ? Math.min(Number(limit.effectiveCeiling[0]), Number(limit.effectiveCeiling[1])) : Math.max.apply(Math, candidateEdges.concat(selectedEdges));
+  if (!isFinite(maximumEdge) || !maximumEdge) maximumEdge = Math.max.apply(Math, sourceEdges);
   var defaultEdge = limit && limit.automaticDefaultCeiling ? Math.min(Number(limit.automaticDefaultCeiling[0]), Number(limit.automaticDefaultCeiling[1])) : 0;
   var floorEdge = candidateEdges.length ? Math.min.apply(Math, candidateEdges) : 0;
-  var usefulHigh = Math.max(maximumEdge || 0, defaultEdge || 0, floorEdge || 0, sourceLow);
-  var span = Math.max(64, usefulHigh - sourceLow);
+  var leftValues = sourceEdges.filter(function (edge) { return edge <= maximumEdge; }).concat(candidateEdges, selectedEdges, [floorEdge, defaultEdge, maximumEdge]).filter(Boolean);
+  var sourceLow = Math.min.apply(Math, leftValues);
+  var leftSpan = Math.max(64, maximumEdge - sourceLow);
   var tickSteps = [32, 64, 96, 128, 160, 192, 256];
-  var step = tickSteps.filter(function (value) { return value >= span / 5; })[0] || 256;
+  var step = tickSteps.filter(function (value) { return value >= leftSpan / 5; })[0] || 256;
   var low = Math.max(0, Math.floor((sourceLow - step * .5) / step) * step);
-  var high = Math.ceil((usefulHigh + step) / step) * step;
-  if (high - low < step * 3) high = low + step * 3;
-  var aboveCeiling = sourceEdges.filter(function (edge) { return edge > high; }).sort(function (a, b) { return a - b; });
-  var nextPopulation = aboveCeiling[0] || 0;
-  var emptyGap = nextPopulation - high;
-  var fullSpan = Math.max(1, nextPopulation - low);
-  var hasBreak = !!nextPopulation && emptyGap >= Math.max(step * 2, (high - low) * .35) && emptyGap / fullSpan >= .28;
-  var highSource = sourceEdges.length ? Math.max.apply(Math, sourceEdges) : high;
+  if (maximumEdge - low < step * 3) low = Math.max(0, maximumEdge - step * 3);
+  var aboveMaximum = sourceEdges.filter(function (edge) { return edge > maximumEdge; }).sort(function (a, b) { return a - b; });
+  var nextPopulation = aboveMaximum[0] || 0;
+  var emptyGap = nextPopulation - maximumEdge;
+  // Only skip a visibly substantial empty interval after the effective maximum.
+  var hasBreak = !!nextPopulation && emptyGap >= Math.max(step * 2, (maximumEdge - low) * .35);
+  var highSource = sourceEdges.length ? Math.max.apply(Math, sourceEdges) : maximumEdge;
   var rightStep = tickSteps.filter(function (value) { return value >= Math.max(32, highSource - nextPopulation) / 3; })[0] || 256;
-  var rightLow = hasBreak ? Math.floor(nextPopulation / rightStep) * rightStep : 0;
+  var rightLow = hasBreak ? nextPopulation : 0;
   var rightHigh = hasBreak ? Math.ceil((highSource + rightStep * .5) / rightStep) * rightStep : 0;
   if (hasBreak && rightHigh - rightLow < rightStep * 2) rightHigh = rightLow + rightStep * 2;
+  var normalHigh = Math.ceil((Math.max(maximumEdge, highSource) + step) / step) * step;
+  if (!hasBreak && normalHigh - low < step * 3) normalHigh = low + step * 3;
+  var high = hasBreak ? maximumEdge : normalHigh;
   var segments = hasBreak
     ? [{ low: low, high: high, start: 1.5, end: 70, bins: 10 }, { low: rightLow, high: rightHigh, start: 76, end: 98.5, bins: 5 }]
     : [{ low: low, high: high, start: 1.5, end: 98.5, bins: 12 }];
-  function segmentForEdge(edge) { return hasBreak && edge >= rightLow ? segments[1] : segments[0]; }
+  function segmentForEdge(edge) { return hasBreak && Number(edge) > maximumEdge ? segments[1] : segments[0]; }
   function position(value) {
     var segment = segmentForEdge(Number(value));
-    return Math.max(segment.start, Math.min(segment.end, segment.start + ((Number(value) - segment.low) / Math.max(1, segment.high - segment.low)) * (segment.end - segment.start)));
+    return segment.start + ((Number(value) - segment.low) / Math.max(1, segment.high - segment.low)) * (segment.end - segment.start);
   }
   var ticks = [];
   segments.forEach(function (segment) {
     var tickSize = segment === segments[0] ? step : rightStep;
     for (var tick = segment.low; tick <= segment.high; tick += tickSize) ticks.push(tick);
+    if (ticks[ticks.length - 1] !== segment.high) ticks.push(segment.high);
   });
   function binForEdge(edge) {
     var segment = segmentForEdge(edge);
@@ -464,7 +468,7 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
   }
   var envelope = view === 'images' ? '' : envelopeMarker('floor', floorEdge, 'Floor', 'Lowest selectable supported rung') + envelopeMarker('default', defaultEdge, defaultEdge === maximumEdge ? 'Default / max' : 'Default', defaultEdge === maximumEdge ? 'Automatic default ceiling and effective maximum' : 'Automatic default ceiling') + (defaultEdge === maximumEdge ? '' : envelopeMarker('maximum', maximumEdge, 'Max', limit && limit.source === 'calibration' ? 'Calibrated maximum' : 'Effective maximum'));
   var tickLabels = ticks.map(function (value) { return '<span style="left:' + position(value) + '%">' + escapeHtml(String(value)) + '</span>'; }).join('');
-  var axisBreak = hasBreak ? '<i class="training-review-axis-break" aria-label="Resolution scale skips an empty interval"><b></b><b></b></i>' : '';
+  var axisBreak = hasBreak ? '<i class="training-review-axis-break" style="left:' + ((segments[0].end + segments[1].start) / 2) + '%" aria-label="Resolution scale skips an empty interval"><b></b><b></b></i>' : '';
   return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Bars group nearby native short edges; each dot is one source file.</span></div><div class="training-review-legend"><span><i class="histogram"></i>Native range</span><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + zones + gridlines + histogram + dots + markers + envelope + axisBreak + '</div><div class="training-review-chart-axis"><div class="training-review-chart-ticks">' + tickLabels + axisBreak + '</div><span>Native short edge (px)</span></div></section>';
 }
 

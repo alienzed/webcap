@@ -324,7 +324,7 @@ def test_media_metadata_response_flattens_face_focus(client, isolated_fs_root, m
     monkeypatch.setattr(
         media_module,
         "update_media_metadata",
-        lambda folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None: {
+        lambda folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None, summary=None: {
             "photo.jpg": {
                 "size": 100,
                 "mtime": 123,
@@ -348,6 +348,7 @@ def test_media_metadata_response_flattens_face_focus(client, isolated_fs_root, m
     assert payload[0]["face_focus_bucket"] == "medium"
     assert payload[0]["largest_face_height_pct"] == 20.0
     assert payload[0]["largest_face_score"] == 0.82
+    assert response.headers["X-WebCap-Metadata-Generated"] == "0"
 
 
 def test_media_metadata_failure_is_server_error_and_logs_traceback(client, isolated_fs_root, monkeypatch, caplog):
@@ -374,8 +375,10 @@ def test_media_metadata_route_opts_into_face_focus(client, isolated_fs_root, mon
     set_folder.mkdir(parents=True)
     seen = []
 
-    def fake_update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None):
+    def fake_update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None, summary=None):
         seen.append((include_face_focus, include_selection_pose))
+        if summary is not None:
+            summary.update({"checked": 0, "generated": 0, "removed": 0})
         return {}
 
     monkeypatch.setattr(media_module, "update_media_metadata", fake_update_media_metadata)

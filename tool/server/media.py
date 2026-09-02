@@ -198,7 +198,7 @@ def write_media_metadata_file(metadata_path, metadata):
     normalize_path_permissions(metadata_path)
 
 
-def update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None):
+def update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None, summary=None):
     folder_path = Path(folder_path)
     metadata_path = folder_path / "media_metadata.json"
     if metadata_path.exists():
@@ -209,6 +209,7 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
     face_detector = None
     selection_pose_analyzers = None
     pending_entries = []
+    checked_count = 0
     scoped_filename_set = None
     if scoped_filenames:
         scoped_filename_set = {str(name or "").strip() for name in scoped_filenames if str(name or "").strip()}
@@ -217,6 +218,7 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
             continue
         if scoped_filename_set is not None and entry.name not in scoped_filename_set:
             continue
+        checked_count += 1
         key = entry.name
         stat = entry.stat()
         mtime = int(stat.st_mtime)
@@ -256,6 +258,12 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
         del metadata[k]
     if pending_entries or to_remove or not metadata_path.exists():
         write_media_metadata_file(metadata_path, metadata)
+    if summary is not None:
+        summary.update({
+            "checked": checked_count,
+            "generated": len(pending_entries),
+            "removed": len(to_remove),
+        })
     return metadata
 
 
@@ -438,6 +446,7 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
         folder_path = safe_join_fs_root(rel_path)
         if not folder_path.exists() or not folder_path.is_dir():
             return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
+        metadata_summary = {}
         metadata_dict = run_with_directory_repair(
             folder_path,
             lambda: update_media_metadata(
@@ -445,9 +454,17 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
                 include_face_focus=include_face_focus,
                 include_selection_pose=include_selection_pose,
                 scoped_filenames=scoped_filenames,
+                summary=metadata_summary,
             ),
         )
-        app_config.debug_print("[metadata] Media metadata generated.")
+        print(
+            "[metadata] Checked {checked} media file(s); generated {generated}; removed {removed}.".format(
+                checked=metadata_summary.get("checked", 0),
+                generated=metadata_summary.get("generated", 0),
+                removed=metadata_summary.get("removed", 0),
+            ),
+            flush=True,
+        )
         metadata_list = []
         for filename, info in metadata_dict.items():
             record = {
@@ -491,7 +508,11 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
                     record["scene_complexity_label"] = str(scene_complexity.get("bucket", "unknown")).title()
                 record["scene"] = record["scene_complexity_label"]
             metadata_list.append(record)
-        return jsonify(metadata_list)
+        response = jsonify(metadata_list)
+        response.headers["X-WebCap-Metadata-Checked"] = str(metadata_summary.get("checked", 0))
+        response.headers["X-WebCap-Metadata-Generated"] = str(metadata_summary.get("generated", 0))
+        response.headers["X-WebCap-Metadata-Removed"] = str(metadata_summary.get("removed", 0))
+        return response
     except Exception as e:
         logger.exception("MEDIA METADATA FAILED for %r: %s", rel_path, e)
         return jsonify({"error": str(e)}), 500

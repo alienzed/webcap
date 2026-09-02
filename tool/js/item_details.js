@@ -1337,7 +1337,7 @@ function refreshMediaResolutionCache(options) {
 
   var requestFolder = state.folder;
   mediaMetadataLoading = true;
-  setStatus('Generating metadata...');
+  setStatus('Checking metadata...');
   return new Promise(function (resolve) {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', '/fs/media_metadata?folder=' + encodeURIComponent(requestFolder));
@@ -1366,6 +1366,8 @@ function refreshMediaResolutionCache(options) {
       }
       try {
         var rows = JSON.parse(xhr.responseText);
+        var generatedCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Generated') || 0);
+        var checkedCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Checked') || 0);
         var metadataByFile = {};
         (rows || []).forEach(function (row) {
           if (!row || !row.file) return;
@@ -1379,6 +1381,10 @@ function refreshMediaResolutionCache(options) {
           });
         }
         mediaMetadataLoading = false;
+        var metadataStatus = generatedCount
+          ? ('Generated metadata for ' + generatedCount + ' media item' + (generatedCount === 1 ? '' : 's') + '.')
+          : ('Metadata is current (' + checkedCount + ' media item' + (checkedCount === 1 ? '' : 's') + ' checked).');
+        setStatus(options.successStatus || metadataStatus);
         window.dispatchEvent(new CustomEvent('webcap:media-metadata-updated', {
           detail: { folder: requestFolder, rows: rows, folderLoadSequence: options.folderLoadSequence || 0 }
         }));
@@ -1386,7 +1392,7 @@ function refreshMediaResolutionCache(options) {
           setStatus(buildSelectedMediaStatus(state.currentItem));
           renderItemMetadataPanel();
         }
-        resolve({ ok: true, folder: requestFolder, rows: rows });
+        resolve({ ok: true, folder: requestFolder, rows: rows, generated: generatedCount, checked: checkedCount });
       } catch (e) {
         mediaMetadataLoading = false;
         clearMetadataCache();

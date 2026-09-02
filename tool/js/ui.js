@@ -466,13 +466,12 @@ function refreshCurrentDirectory() {
           if (typeof updateUtilityPathLabel === 'function') {
             updateUtilityPathLabel(state.folder || '');
           }
-           if (captionErrors.length) {
-             setStatus('Loaded folder with ' + captionErrors.length + ' caption read error' + (captionErrors.length === 1 ? '' : 's') + '. Check the browser and server consoles.');
-           } else {
-             setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
-           }
+            var folderStatus = captionErrors.length
+              ? ('Loaded folder with ' + captionErrors.length + ' unreadable caption' + (captionErrors.length === 1 ? '' : 's') + '. Check the browser and server consoles.')
+              : ('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
+            setStatus(folderStatus);
             refreshTrainingWorkspace();
-            refreshMediaResolutionCache({ folderLoadSequence: loadSequence }).then(function (metadataResult) {
+            refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {
               completeFolderLoadPipeline(path, loadSequence, metadataResult, captionErrors);
             });
           // If a file was just renamed, reselect it

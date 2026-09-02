@@ -391,7 +391,7 @@ function validateTrainingRunner(options) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       folder: state.folder,
-      stages: options && options.stages ? options.stages : 'both',
+      stages: options && options.stages ? options.stages : '',
       profileId: options && options.profileId ? options.profileId : '',
       runId: options && options.runId ? options.runId : '',
       mode: options && options.mode ? options.mode : 'normal',
@@ -483,7 +483,7 @@ function syncManagedTrainingResumeUi() {
 }
 
 function trainingStageLabel(stages) {
-  return stages === 'hi' ? 'High Noise' : stages === 'lo' ? 'Low Noise' : stages === 'krea2' ? 'Krea2 Raw' : stages === 'wan21' ? 'Wan2.1 T2V' : stages === 'h3' ? 'MiniMax H3' : 'High Noise to Low Noise';
+  return stages === 'hi' ? 'High Noise' : stages === 'lo' ? 'Low Noise' : stages === 'krea2' ? 'Krea2 Raw' : stages === 'wan21' ? 'Wan2.1 T2V' : stages === 'h3' ? 'MiniMax H3' : 'Unknown stage';
 }
 
 function trainingModelLabel(job) {
@@ -498,7 +498,7 @@ function trainingJobLabel(job) {
   if (job && job.stages === 'krea2') return 'Krea2 Raw';
   var profileLabel = String(job && job.profileLabel || '').trim();
   var modelLabel = profileLabel || trainingModelLabel(job);
-  var stageLabel = trainingStageLabel(String(job && job.stages || 'both'));
+  var stageLabel = trainingStageLabel(String(job && job.stages || ''));
   return stageLabel.toLowerCase() === modelLabel.toLowerCase() ? modelLabel : modelLabel + ' · ' + stageLabel;
 }
 
@@ -689,8 +689,7 @@ function trainingRunnerStatusLabel(status) {
 
 function trainingPlannedStepCount(job) {
   var plan = job && job.progressPlan && typeof job.progressPlan === 'object' ? job.progressPlan : {};
-  var stages = String(job && job.stages || 'both');
-  var names = stages === 'both' ? ['hi', 'lo'] : [stages];
+  var names = [String(job && job.stages || '')];
   return names.reduce(function (total, name) {
     var stage = plan[name] && typeof plan[name] === 'object' ? plan[name] : {};
     var steps = Number(stage.estimatedSteps);
@@ -700,8 +699,7 @@ function trainingPlannedStepCount(job) {
 
 function trainingPlannedEpochCount(job) {
   var plan = job && job.progressPlan && typeof job.progressPlan === 'object' ? job.progressPlan : {};
-  var stages = String(job && job.stages || 'both');
-  var names = stages === 'both' ? ['hi', 'lo'] : [stages];
+  var names = [String(job && job.stages || '')];
   return names.reduce(function (total, name) {
     var stage = plan[name] && typeof plan[name] === 'object' ? plan[name] : {};
     var epochs = Number(stage.epochs);
@@ -773,7 +771,7 @@ function buildTrainingQueueHtml(queuedJobs) {
         ? '<div class="training-runner-queue-resume is-error">' + escapeHtml(queuedJob.sourceUnavailable) + '</div>'
         : '';
       var resume = queuedJob.resumeFromCheckpoint
-        ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(trainingStageLabel(queuedJob.resumeStage || queuedJob.stages || 'both')) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
+        ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(trainingStageLabel(queuedJob.resumeStage || queuedJob.stages || '')) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
         : '';
       var outputIdentity = trainingOutputIdentity(queuedJob);
       var output = outputIdentity ? '<div class="training-runner-queue-resume" title="' + escapeHtml(queuedJob.effectiveOutputDir || queuedJob.outputRoot || '') + '">Output: ' + escapeHtml(outputIdentity) + '</div>' : '';
@@ -825,12 +823,8 @@ function buildTrainingRunnerProgressHtml(job) {
     positionLabel += ' · ~' + formatTrainingRunnerDuration(etaSeconds) + (progress.etaScope === 'completion' ? ' to completion' : ' left in this stage');
   }
   var progressLabel = progress.source === 'steps'
-    ? (job.stages === 'both'
-      ? 'Step estimate: ' + Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall'
-      : 'Step estimate: ' + Math.round(stagePercent) + '% of ' + trainingStageLabel(progress.stage || job.stages || 'both'))
-    : (job.stages === 'both'
-      ? Math.round(stagePercent) + '% this stage · ' + Math.round(boundedOverall) + '% overall'
-      : Math.round(stagePercent) + '% of ' + trainingStageLabel(progress.stage || job.stages || 'both'));
+    ? 'Step estimate: ' + Math.round(stagePercent) + '% of ' + trainingStageLabel(progress.stage || job.stages || '')
+    : Math.round(stagePercent) + '% of ' + trainingStageLabel(progress.stage || job.stages || '');
   var checkpointEpoch = Number(progress.nextCheckpointEpoch);
   var checkpointEvery = Number(progress.checkpointEveryNEpochs);
   var checkpointEta = Number(progress.checkpointEtaSeconds);
@@ -844,7 +838,7 @@ function buildTrainingRunnerProgressHtml(job) {
   var progressTitle = 'Current model run, epoch, and progress. Estimates use recent iteration time.';
   if (checkpointLabel) progressTitle += ' Checkpoints are configured every ' + Math.round(checkpointEvery) + ' epochs.';
   return '<div class="training-runner-progress" aria-label="Estimated training progress">' +
-    '<div class="training-runner-progress-copy"><span>' + escapeHtml(trainingStageLabel(progress.stage || job.stages || 'both')) +
+    '<div class="training-runner-progress-copy"><span>' + escapeHtml(trainingStageLabel(progress.stage || job.stages || '')) +
       positionLabel + '</span>' +
       '<span title="' + escapeHtml(progressTitle) + '">' + escapeHtml(progressLabel) + '</span>' +
       (checkpointLabel ? '<span class="training-runner-checkpoint" title="Checkpoint saves are configured every ' + Math.round(checkpointEvery) + ' epochs. This estimate uses recent iteration time.">' + escapeHtml(checkpointLabel) + '</span>' : '') +

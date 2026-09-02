@@ -14,9 +14,9 @@ ETA_SAMPLE_WINDOW = 8
 
 
 def normalize_training_stages(stages):
-    value = str(stages or "both").strip().lower()
-    if value not in ("hi", "lo", "both", "krea2", "wan21", "h3"):
-        raise ValueError("Training stage must be hi, lo, both, krea2, wan21, or h3.")
+    value = str(stages or "").strip().lower()
+    if value not in ("hi", "lo", "krea2", "wan21", "h3"):
+        raise ValueError("Training stage must be hi, lo, krea2, wan21, or h3.")
     return value
 
 
@@ -103,19 +103,8 @@ def sync_job_progress(job, log_text):
         return
     stage_fraction = min(1.0, max(0.0, float(step) / float(planned_steps))) if use_steps else min(1.0, max(0.0, float(epoch) / float(current_epochs)))
 
-    stages = normalize_training_stages(job.get("stages"))
-    hi_planned_steps = int((plan.get("hi") or {}).get("estimatedSteps") or 0) if isinstance(plan.get("hi"), dict) else 0
-    lo_planned_steps = int((plan.get("lo") or {}).get("estimatedSteps") or 0) if isinstance(plan.get("lo"), dict) else 0
-    hi_epochs = read_config_epochs(snapshot.get("hi", ""))
-    lo_epochs = read_config_epochs(snapshot.get("lo", ""))
-    if stages == "both" and use_steps and hi_planned_steps and lo_planned_steps:
-        total_steps = hi_planned_steps + lo_planned_steps
-        overall_fraction = (stage_fraction * hi_planned_steps / total_steps) if stage == "hi" else ((hi_planned_steps + stage_fraction * lo_planned_steps) / total_steps)
-    elif stages == "both" and hi_epochs and lo_epochs:
-        total_epochs = hi_epochs + lo_epochs
-        overall_fraction = (stage_fraction * hi_epochs / total_epochs) if stage == "hi" else ((hi_epochs + stage_fraction * lo_epochs) / total_epochs)
-    else:
-        overall_fraction = stage_fraction
+    normalize_training_stages(job.get("stages"))
+    overall_fraction = stage_fraction
 
     progress = {
         "stage": stage,
@@ -142,15 +131,8 @@ def sync_job_progress(job, log_text):
             remaining_steps = max(0.0, estimated_stage_steps - float(step))
         else:
             remaining_steps = max(0, planned_steps - step)
-        eta_scope = "completion"
-        if stages == "both" and stage == "hi":
-            next_stage_steps = lo_planned_steps
-            if next_stage_steps > 0:
-                remaining_steps += next_stage_steps
-            else:
-                eta_scope = "stage"
         progress["etaSeconds"] = round(remaining_steps * seconds_per_step)
-        progress["etaScope"] = eta_scope
+        progress["etaScope"] = "completion"
     if epoch is not None and checkpoint_every_epochs:
         completed_epochs = max(0, int(epoch) - 1)
         next_checkpoint_epoch = ((completed_epochs // checkpoint_every_epochs) + 1) * checkpoint_every_epochs

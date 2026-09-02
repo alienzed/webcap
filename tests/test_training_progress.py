@@ -1,15 +1,13 @@
 from tool.server import training_progress
 
 
-def test_runner_progress_estimates_stage_and_overall_from_epoch_logs(tmp_path):
+def test_runner_progress_reports_single_stage_epoch_progress(tmp_path):
     hi_path = tmp_path / "config.hi.toml"
-    lo_path = tmp_path / "config.lo.toml"
     hi_path.write_text("epochs = 50\n", encoding="utf-8")
-    lo_path.write_text("epochs = 90\n", encoding="utf-8")
     job = {
         "stage": "hi",
-        "stages": "both",
-        "snapshot": {"hi": str(hi_path), "lo": str(lo_path)},
+        "stages": "hi",
+        "snapshot": {"hi": str(hi_path)},
     }
 
     training_progress.sync_job_progress(
@@ -23,7 +21,7 @@ def test_runner_progress_estimates_stage_and_overall_from_epoch_logs(tmp_path):
         "epochs": 50,
         "step": 4160,
         "stagePercent": 76.0,
-        "overallPercent": 27.1,
+        "overallPercent": 76.0,
         "estimated": False,
         "source": "epochs",
     }
@@ -34,16 +32,13 @@ def test_runner_progress_estimates_stage_and_overall_from_epoch_logs(tmp_path):
     assert job["progress"]["step"] == 4170
 
 def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_path):
-    hi_path = tmp_path / "config.hi.toml"
     lo_path = tmp_path / "config.lo.toml"
-    hi_path.write_text("epochs = 50\n", encoding="utf-8")
     lo_path.write_text("epochs = 90\n", encoding="utf-8")
     job = {
         "stage": "lo",
-        "stages": "both",
-        "snapshot": {"hi": str(hi_path), "lo": str(lo_path)},
+        "stages": "lo",
+        "snapshot": {"lo": str(lo_path)},
         "progressPlan": {
-            "hi": {"estimatedSteps": 5000},
             "lo": {"estimatedSteps": 20000},
         },
     }
@@ -60,7 +55,7 @@ def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_pa
         "epochs": 90,
         "step": 9700,
         "stagePercent": 48.5,
-        "overallPercent": 58.8,
+        "overallPercent": 48.5,
         "estimated": True,
         "plannedSteps": 20000,
         "source": "steps",

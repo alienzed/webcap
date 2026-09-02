@@ -16,7 +16,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .training_commands import build_h3_command_plan, build_training_command_plan
-from .training_profiles import config_for_stage, normalize_mode, profile_for_mode, profile_run, profiles as training_profiles
+from .training_profiles import config_for_stage, normalize_mode, profile, profile_for_mode, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets_for_mode
@@ -402,7 +402,7 @@ def _file_digest(path):
     return digest.hexdigest()
 
 
-def _input_evidence(bundle_path, stages="both"):
+def _input_evidence(bundle_path, stages):
     bundle = Path(bundle_path)
     digest = hashlib.sha256()
     count = 0
@@ -442,8 +442,7 @@ def _model_identity(artifacts, profile_id="wan22_t2v", stage="hi"):
     source_name = Path(source).name if source else ""
     if source_name.lower().endswith((".safetensors", ".ckpt", ".pt")):
         source_name = Path(source_name).stem
-    selected_profile, _ = profile_run(profile_id, None, stage)
-    label = selected_profile["label"]
+    label = profile(profile_id)["label"]
     return {"label": label, "source": source}
 
 
@@ -567,7 +566,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         lines.append("printf '%s\\n' " + shlex.quote(
             "[webcap] resume stage=" + resume_stage + " checkpoint=" + str(job.get("resumeFromCheckpoint") or "")
         ))
-    if stages in ("hi", "both"):
+    if stages == "hi":
         lines.extend([
             "echo '[webcap] stage=hi'",
             "printf '%s\\n' " + shlex.quote("[webcap] command hi: " + command_plan["hiCommand"]),
@@ -577,7 +576,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "if [ \"$HI_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
             "if [ \"$HI_CODE\" -ne 0 ]; then echo '[webcap] HI failed'; write_result failed \"$HI_CODE\"; exit \"$HI_CODE\"; fi",
         ])
-    if stages in ("lo", "both"):
+    if stages == "lo":
         lines.extend([
             "echo '[webcap] stage=lo'",
             "printf '%s\\n' " + shlex.quote("[webcap] command lo: " + command_plan["loCommand"]),
@@ -1288,13 +1287,12 @@ def _public_job(job):
     return payload
 
 
-def validate_response(folder, stages="both", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
+def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
     try:
         if str(resume_from_checkpoint or "").strip():
             raise ValueError("Managed Train accepts only a selected WebCap action checkpoint.")
-        if profile_id or run_id:
-            _, selected_run = profile_run(profile_id, run_id, stages)
-            stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
+        _, selected_run = profile_run(profile_id, run_id)
+        stages = selected_run["stages"][0]
         stages = _normalize_training_stages(stages)
         requested_resume = bool(resume_action_id or resume_output_id)
         if bool(resume_action_id) != bool(resume_output_id):
@@ -1371,7 +1369,7 @@ def _new_job(
     job_id = uuid.uuid4().hex[:12]
     _, folder_path = _resolve_folder(folder)
     stages = _normalize_training_stages(stages)
-    selected_profile, _ = profile_run(profile_id, run_id, stages)
+    selected_profile, _ = profile_run(profile_id, run_id)
     selected_mode = normalize_mode(mode)
     config_meta = config_for_stage(selected_profile["id"], stages, selected_mode)
     output_slug = config_meta["outputSlug"]
@@ -1381,20 +1379,12 @@ def _new_job(
     job_dir = action_root / "jobs" / job_id
     job_dir.mkdir(parents=True, exist_ok=False)
     artifacts = {key: Path(value) for key, value in bundle["artifacts"].items()}
-    if selected_profile["id"] == "wan22_t2v":
-        if stages == "hi":
-            artifacts.setdefault("loConfig", artifacts["hiConfig"])
-            artifacts.setdefault("loDataset", artifacts["hiDataset"])
-        elif stages == "lo":
-            artifacts.setdefault("hiConfig", artifacts["loConfig"])
-            artifacts.setdefault("hiDataset", artifacts["loDataset"])
     snapshot = {stages: str(artifacts[stages + "Config"])}
     progress_plan = _plan_run_steps(_read_training_plan(bundle.get("recordPath") or bundle["path"]) or _default_progress_plan(), snapshot)
     input_evidence = _input_evidence(bundle.get("inputPath") or bundle["path"], stages)
     model = _model_identity(artifacts, selected_profile["id"], stages)
     sequence_match = re.match(r"^(\d+)-", action_root.name)
     action_run_id = str(run_id or "")
-    job_run_id = stages if selected_profile["id"] == "wan22_t2v" and action_run_id == "both" else action_run_id
     return {
         "id": job_id,
         "folder": folder,
@@ -1402,7 +1392,7 @@ def _new_job(
         "profileId": selected_profile["id"],
         "profileLabel": selected_profile["label"],
         "mode": selected_mode,
-        "runId": job_run_id,
+        "runId": action_run_id,
         "actionRunId": action_run_id,
         "modelLabel": model["label"],
         "model": model,
@@ -1445,7 +1435,7 @@ def _new_job(
 def _bundle_from_action(action_id, profile_id, mode, stages):
     path, record_root, input_root, action = action_paths(action_id)
     selected = profile_for_mode(profile_id, mode)
-    stage_names = ("hi", "lo") if stages == "both" else (stages,)
+    stage_names = (stages,)
     artifacts = {
         "manifest": input_root / "dataset_manifest.json",
         "plan": record_root / "training_plan.json",
@@ -1491,7 +1481,7 @@ def _bundle_from_recorded_capture(action_id, capture_path, folder_path, profile_
     if not capture.is_dir() or capture.is_symlink():
         raise FileNotFoundError("The recorded training capture is unavailable: " + str(capture))
     selected = profile_for_mode(profile_id, mode)
-    stage_names = ("hi", "lo") if stages == "both" else (stages,)
+    stage_names = (stages,)
     artifacts = {}
     for stage in stage_names:
         item = next((item for item in selected["configs"] if item["id"] == stage), None)
@@ -1524,7 +1514,7 @@ def _bundle_from_recorded_capture(action_id, capture_path, folder_path, profile_
 def start_response(
     folder,
     queue=False,
-    stages="both",
+    stages="",
     resume_from_checkpoint="",
     resume_stage="",
     parent_job_id="",
@@ -1547,7 +1537,7 @@ def start_response(
     reuse_capture_path="",
 ):
     try:
-        selected_profile, selected_run = profile_run(profile_id, run_id, stages)
+        selected_profile, selected_run = profile_run(profile_id, run_id)
         selected_mode = normalize_mode(mode)
         stages = _normalize_training_stages(selected_run["stages"][0])
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint or resume_output_id, resume_stage)

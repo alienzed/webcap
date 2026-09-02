@@ -4,7 +4,7 @@ WebCap keeps a small app-owned registry of supported Diffusion Pipe profiles. A 
 
 | Profile | Captured media | Persistent files | Run options |
 | --- | --- | --- | --- |
-| Wan2.2 T2V | Images and videos | `config.hi.toml`, `config.lo.toml`, matching dataset files | HI → LO, HI only, LO only |
+| Wan2.2 T2V | Images and videos | `config.hi.toml`, `config.lo.toml`, matching dataset files | Wan2.2 High, Wan2.2 Low |
 | Krea2 Raw | Images only | `config.krea2.toml`, matching dataset file | Train |
 | Wan2.1 T2V 14B | Images and videos | `config.wan21.toml`, matching dataset file | Train |
 | MiniMax H3 | Images and videos | `config.h3.toml`, matching dataset file | Train |
@@ -19,7 +19,7 @@ Persistent set TOML remains editable and uses the neutral template output path. 
 <filesystem.root>/output/runs/<prefix>-<set-name>/
 ```
 
-For example, `001-Estel`. Stage output slugs are `wan22-hi`, `wan22-lo`, `krea2-raw`, `wan21-t2v`, and `minimax-h3`. A Wan2.2 HI → LO action shares one launch group for its two independent jobs; every other launch gets its own group.
+For example, `001-Estel`. Stage output slugs are `wan22-hi`, `wan22-lo`, `krea2-raw`, `wan21-t2v`, and `minimax-h3`. Each selected run creates its own launch group.
 
 Managed and manual launches create one visible action directory. Its `input/` holds captured media, captions, manifest, and cache; its `record/` holds immutable inspected TOMLs and the plan. Only runtime paths are rewritten in copied TOMLs; user-authored dimensions, frame counts, and unmarked direct stanzas remain authoritative and receive visible warnings when unsafe.
 

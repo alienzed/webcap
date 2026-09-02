@@ -507,9 +507,7 @@ def _build_bundle_summary(selected_profile, selected_mode, manifest, plan, bundl
 
 
 def _selected_stages(profile, stages):
-    value = str(stages or "both").strip().lower()
-    if value == "both":
-        return ("hi", "lo")
+    value = str(stages or "").strip().lower()
     available = {item["id"] for item in profile["configs"]}
     if value not in available:
         raise ValueError("Training stage does not belong to the selected profile: " + value)

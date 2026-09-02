@@ -52,7 +52,7 @@ def test_invalid_training_toml_is_a_job_local_preflight_blocker(tmp_path, monkey
     monkeypatch.setattr(training_preflight, "configured_training_settings", lambda: {"cwd": "/pipe", "wslDistribution": ""})
     monkeypatch.setattr(training_preflight, "wsl_executable", lambda: "wsl.exe")
 
-    _, _, _, _, checks = training_preflight.build_launch_preflight("set", "lo")
+    _, _, _, _, checks = training_preflight.build_launch_preflight("set", "lo", "wan22_t2v")
     failed = [item for item in checks if not item["ok"]]
 
     assert [item["id"] for item in failed] == ["training_toml"]
@@ -89,7 +89,7 @@ def test_krea_preflight_accepts_mixed_manifest_when_generated_dataset_is_image_o
         ),
     )
 
-    _, _, _, _, checks = training_preflight.build_preflight("set", "krea2")
+    _, _, _, _, checks = training_preflight.build_preflight("set", "krea2", "krea2_raw")
 
     assert not [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     assert "krea2_image_only" not in [item["id"] for item in checks]
@@ -103,8 +103,8 @@ def test_h3_preflight_requires_h3_config_and_shared_dataset(tmp_path):
     (folder / "dataset.train.toml").write_text("[[directory]]\npath = '/data'\n", encoding="utf-8")
     (auto_dataset / "prep_manifest.json").write_text("{}", encoding="utf-8")
 
-    artifacts, missing = training_preflight.resolve_artifacts("set", folder, "h3")
+    artifacts, missing = training_preflight.resolve_artifacts("set", folder, "h3", "minimax_h3")
 
     assert missing == []
     assert artifacts["h3Config"].name == "config.h3.toml"
-    assert artifacts["trainDataset"].name == "dataset.train.toml"
+    assert artifacts["h3Dataset"].name == "dataset.train.toml"

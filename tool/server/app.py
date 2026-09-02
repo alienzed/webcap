@@ -451,7 +451,7 @@ def h3_probe_stop_route():
 def train_run_route():
     data = request.get_json(silent=True) or {}
     folder = (data.get("folder") or "").strip()
-    stages = str(data.get("stages") or "both").strip().lower()
+    stages = str(data.get("stages") or "").strip().lower()
     resume_from_checkpoint = str(data.get("resumeFromCheckpoint") or "").strip()
     resume_stage = str(data.get("resumeStage") or (stages if stages in ("hi", "lo") else "lo")).strip().lower()
     if resume_from_checkpoint and resume_stage not in ("hi", "lo", "krea2", "wan21", "h3"):
@@ -473,7 +473,7 @@ def training_runner_validate_route():
     data = request.get_json(silent=True) or {}
     payload, status = training_runner_validate_response(
         (data.get("folder") or "").strip(),
-        data.get("stages") or "both",
+        data.get("stages") or "",
         data.get("resumeFromCheckpoint") or "",
         data.get("resumeStage") or "",
         data.get("resumeActionId") or "",
@@ -495,7 +495,7 @@ def training_runner_start_route():
     payload, status = training_runner_start_response(
         (data.get("folder") or "").strip(),
         queue=bool(data.get("queue")),
-        stages=data.get("stages") or "both",
+        stages=data.get("stages") or "",
         resume_from_checkpoint=data.get("resumeFromCheckpoint") or "",
         resume_stage=data.get("resumeStage") or "",
         parent_job_id=data.get("parentJobId") or "",

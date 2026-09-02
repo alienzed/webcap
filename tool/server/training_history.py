@@ -581,9 +581,7 @@ def completed_stages(folder_path, include_discovered_runs=True):
         if job.get("status") not in ("completed", "finished_early"):
             continue
         stage = str(job.get("stages") or "")
-        if stage == "both":
-            completed.update(stages)
-        elif stage in stages:
+        if stage in stages:
             completed.add(stage)
     if include_discovered_runs:
         for stage in stages:

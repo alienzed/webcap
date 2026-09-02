@@ -1,3 +1,5 @@
+import pytest
+
 from tool.server.training_profiles import (
     KREA2_PROFILE_ID,
     MINIMAX_H3_PROFILE_ID,
@@ -14,6 +16,10 @@ def test_training_profiles_expose_only_their_valid_runs_and_artifacts():
     assert wan22["videoFps"] == 16
     assert set(wan22["datasetFiles"]) == {"dataset.hi.toml", "dataset.lo.toml"}
     assert tuple(wan22["configs"][0]["modelIdentityKeys"]) == ("type", "ckpt_path", "transformer_path")
+    assert tuple(profile_run(WAN22_PROFILE_ID, "hi")[1]["stages"]) == ("hi",)
+    assert tuple(profile_run(WAN22_PROFILE_ID, "lo")[1]["stages"]) == ("lo",)
+    with pytest.raises(ValueError, match="Unknown run option"):
+        profile_run(WAN22_PROFILE_ID, "both")
 
     krea = profile(KREA2_PROFILE_ID)
     assert tuple(krea["mediaKinds"]) == ("image",)

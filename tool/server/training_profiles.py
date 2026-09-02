@@ -87,13 +87,6 @@ _PROFILES = {
 
 PROFILE_IDS = tuple(_PROFILES)
 
-_LEGACY_STAGES = {
-    "hi": (WAN22_PROFILE_ID, "hi"),
-    "lo": (WAN22_PROFILE_ID, "lo"),
-    "krea2": (KREA2_PROFILE_ID, "train"),
-}
-
-
 def normalize_mode(mode):
     """Retain the request field without restoring mode-specific configs."""
     return "normal"
@@ -115,8 +108,6 @@ def resolved_config(profile_id, config_id, mode="normal"):
     if base is None:
         raise ValueError("Unknown configuration stage for " + selected["label"] + ": " + str(config_id or ""))
     resolved = deepcopy(base)
-    resolved["legacyFile"] = base["file"]
-    resolved["legacyDataset"] = base["dataset"]
     resolved["file"] = base["file"]
     resolved["dataset"] = base["dataset"]
     resolved["mode"] = selected_mode
@@ -169,17 +160,10 @@ def run(profile_id, run_id):
     raise ValueError("Unknown run option for " + selected["label"] + ": " + str(run_id or ""))
 
 
-def profile_run(profile_id=None, run_id=None, stages=None):
-    """Resolve new profile/run input or one of the retained legacy stages."""
-    if profile_id:
-        selected = profile(profile_id)
-        selected_run = run(profile_id, run_id or selected["runs"][0]["id"])
-        return selected, selected_run
-    legacy = str(stages or "both").strip().lower()
-    if legacy not in _LEGACY_STAGES:
-        raise ValueError("Training stage must be hi, lo, both, or krea2.")
-    mapped_profile, mapped_run = _LEGACY_STAGES[legacy]
-    return profile(mapped_profile), run(mapped_profile, mapped_run)
+def profile_run(profile_id, run_id):
+    """Resolve one explicit current model/stage choice."""
+    selected = profile(profile_id)
+    return selected, run(profile_id, run_id)
 
 
 def config_for_stage(profile_id, stage, mode="normal"):
@@ -202,12 +186,3 @@ def profile_config_files(profile_id, mode="normal"):
 
 def profile_dataset_files(profile_id, mode="normal"):
     return tuple(profile_for_mode(profile_id, mode)["datasetFiles"])
-
-
-def legacy_stage_for(profile_id, run_id):
-    """The existing runner stores one stage string per managed job."""
-    selected = run(profile_id, run_id)
-    stages = selected["stages"]
-    if tuple(stages) == ("hi", "lo"):
-        return "both"
-    return stages[0]

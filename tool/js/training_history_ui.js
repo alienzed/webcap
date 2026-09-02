@@ -121,7 +121,7 @@ function renderTrainingHistory() {
     var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
     var modelSourcePath = String(job.model && job.model.source || '');
     var modelSource = modelSourcePath.split(/[\\/]/).pop();
-    var stageLabel = trainingStageLabel(job.stages || 'both');
+    var stageLabel = trainingStageLabel(job.stages || '');
     var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
     var checkpointLabel = trainingHistoryCheckpointLabel(artifact);
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
@@ -159,7 +159,7 @@ function renderTrainingHistory() {
         trainingHistoryFact('Continues', job.parentJobId ? 'run ' + job.parentJobId : '') +
       '</div></div>' : '';
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
-      '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || 'both')) + '</span></div>' +
+      '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span></div>' +
         '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
       '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(job.runName || profileLabel) + '</div>' +
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
@@ -190,9 +190,7 @@ function renderTrainingHistory() {
     els.historyShowAllBtn.textContent = trainingWorkspaceState.historyExpanded ? 'Show less' : 'Show all (' + jobs.length + ')';
   }
   var selectedCheckpoint = String(els.checkpointSelect.value || '');
-  var resumeStage = trainingWorkspaceState.runStages === 'both'
-    ? String((document.getElementById('training-run-resume-stage-select') || {}).value || 'lo')
-    : String(trainingWorkspaceState.runStages || '');
+  var resumeStage = String(trainingWorkspaceState.runStages || '');
   runs = runs.filter(function (run) { return String(run.candidateFor || run.stage || '') === resumeStage; });
   els.checkpointSelect.innerHTML = '<option value="">Choose a checkpoint…</option>' + runs.map(function (run) {
     var details = [];

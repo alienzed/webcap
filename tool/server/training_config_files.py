@@ -300,12 +300,8 @@ def _render_mode_config(folder, profile_id, stage, mode, reset=False):
     selected_mode = normalize_mode(mode)
     config = config_for_stage(profile_id, stage, selected_mode)
     destination = folder / config["file"]
-    if selected_mode == "normal":
-        legacy = folder / config["legacyFile"]
-        if legacy.is_file() and not reset:
-            text = legacy.read_text(encoding="utf-8")
-        else:
-            text = render_training_config_template(config["file"], folder)
+    if destination.is_file() and not reset:
+        text = destination.read_text(encoding="utf-8")
     else:
         text = render_training_config_template(config["file"], folder)
     dataset_value = None

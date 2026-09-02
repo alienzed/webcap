@@ -17,7 +17,7 @@ def _to_wsl_path(path_obj: Path, distribution=""):
 
 def train_run_response(
     folder: str,
-    stages="both",
+    stages="",
     resume_from_checkpoint="",
     resume_stage="",
     run_name="",
@@ -45,10 +45,10 @@ def train_run_response(
         folder_path = app_config.safe_join_fs_root(folder)
         if not folder_path.exists() or not folder_path.is_dir():
             return Response(f"[ERROR] Folder does not exist: {folder}\n", status=404, mimetype="text/plain")
-        selected_profile, selected_run = profile_run(profile_id, run_id, stages)
+        selected_profile, selected_run = profile_run(profile_id, run_id)
         selected_mode = normalize_mode(mode)
-        stages = selected_run["stages"][0] if len(selected_run["stages"]) == 1 else "both"
-        stage_names = ("hi", "lo") if stages == "both" else (stages,)
+        stages = selected_run["stages"][0]
+        stage_names = (stages,)
         review = None
         initializer = None
         if initializer_action_id or initializer_export_id or initializer_stage or initializer_custom_path:

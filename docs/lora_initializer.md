@@ -85,7 +85,7 @@ useful; otherwise the stage-filtered dropdown contains compatible exports.
 **Fine-tune from this...** in Recent Runs may be added after the core path is
 proven. It would only preselect setup state and must never queue immediately.
 
-For a two-stage HI/LO action, require exactly one target stage. One saved adapter must never silently initialize both stage configs because stage model and adapter shapes may differ.
+For Wan2.2, initialization always targets the explicitly selected High or Low run. One saved adapter must never silently initialize another stage config because stage model and adapter shapes may differ.
 
 ## Constant Learning Rate
 

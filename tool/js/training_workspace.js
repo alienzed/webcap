@@ -53,7 +53,7 @@ function getTrainingProfileRunForStage(profile, stage) {
   if (!profile || !Array.isArray(profile.runs)) return null;
   for (var i = 0; i < profile.runs.length; i++) {
     var run = profile.runs[i];
-    var runStage = run.stages && run.stages.length === 1 ? run.stages[0] : 'both';
+    var runStage = run.stages && run.stages[0];
     if (runStage === stage) return run;
   }
   return null;

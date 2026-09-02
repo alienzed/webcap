@@ -396,7 +396,7 @@ def test_open_in_explorer_selects_windows_file_with_spaces(tmp_path, monkeypatch
     assert popen_calls == [["explorer.exe", "/select,", str(media_path.resolve())]]
 
 
-def test_open_in_explorer_wsl_uses_select_comma_path(tmp_path, monkeypatch):
+def test_open_in_explorer_wsl_uses_windows_interop_for_select(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     media_path = fs_root / "set" / "photo.png"
     write_image(media_path)
@@ -416,14 +416,27 @@ def test_open_in_explorer_wsl_uses_select_comma_path(tmp_path, monkeypatch):
     monkeypatch.setattr(file_ops_module, "_is_wsl_runtime", lambda: True)
     monkeypatch.setattr(file_ops_module.sys, "platform", "linux")
     monkeypatch.setattr(file_ops_module, "_to_windows_path", lambda path: "C:\\set\\photo.png")
-    monkeypatch.setattr(file_ops_module, "_windows_explorer_exe", lambda: "C:\\Windows\\explorer.exe")
     monkeypatch.setattr(file_ops_module.subprocess, "Popen", fake_popen)
 
     client = app_module.app.test_client()
     response = client.post("/fs/open_in_explorer", json={"path": "set/photo.png"})
 
     assert response.status_code == 200
-    assert popen_calls == [["C:\\Windows\\explorer.exe", "/select,C:\\set\\photo.png"]]
+    assert popen_calls == [["cmd.exe", "/c", "start", "", "explorer.exe", "/select,C:\\set\\photo.png"]]
+
+
+def test_open_in_explorer_error_names_the_requested_windows_path(tmp_path, monkeypatch):
+    target = tmp_path / "set" / "action"
+    target.mkdir(parents=True)
+    monkeypatch.setattr(file_ops_module, "_is_wsl_runtime", lambda: True)
+    monkeypatch.setattr(file_ops_module, "_to_windows_path", lambda path: "C:\\set\\action")
+    monkeypatch.setattr(file_ops_module.subprocess, "Popen", lambda args: (_ for _ in ()).throw(OSError("launch failed")))
+
+    with app_module.app.app_context():
+        response, status = file_ops_module.open_path_in_explorer_response(target)
+
+    assert status == 500
+    assert "C:\\set\\action" in response.get_json()["error"]
 
 
 def test_open_in_vscode_opens_current_folder(tmp_path, monkeypatch):

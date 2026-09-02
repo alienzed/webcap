@@ -278,22 +278,23 @@ def _launch_windows_explorer(abs_path: Path):
     if not win_path:
         raise ValueError("Empty Windows path")
 
-    explorer = _windows_explorer_exe()
     app_config.debug_print("[open_in_explorer] Windows reveal requested.")
-
-    if abs_path.is_file():
+    try:
         if _is_wsl_runtime():
-            subprocess.Popen([explorer, f"/select,{win_path}"])
+            command = ["cmd.exe", "/c", "start", "", "explorer.exe"]
+            command.append(f"/select,{win_path}" if abs_path.is_file() else win_path)
+            subprocess.Popen(command)
             return
-        subprocess.Popen([explorer, "/select,", win_path])
-        return
 
-    if not abs_path.is_dir():
-        raise FileNotFoundError(f"Folder does not exist: {abs_path}")
-    if _is_wsl_runtime():
-        subprocess.Popen([explorer, win_path])
-        return
-    os.startfile(win_path)
+        explorer = _windows_explorer_exe()
+        if abs_path.is_file():
+            subprocess.Popen([explorer, "/select,", win_path])
+            return
+        if not abs_path.is_dir():
+            raise FileNotFoundError(f"Folder does not exist: {abs_path}")
+        os.startfile(win_path)
+    except Exception as exc:
+        raise RuntimeError("Could not open Explorer for " + win_path + ": " + str(exc)) from exc
 
 
 def open_path_in_explorer_response(abs_path):

@@ -8,7 +8,7 @@ from tool.server import config as app_config
 from tool.server import app as app_module
 from tool.server import training_review
 from tool.server.dataset_config import build_video_blocks
-from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID
+from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN22_PROFILE_ID
 
 
 def _configure_root(monkeypatch, root):
@@ -84,6 +84,24 @@ def test_review_update_limits_targets_and_reset_replaces_custom_dataset(tmp_path
     })
     assert reset["customDataset"] is False
     assert dataset.read_text(encoding="utf-8").startswith("# webcap_training_review = 1")
+
+
+def test_wan22_lo_review_only_edits_the_lo_stage(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder, names = _set(tmp_path)
+
+    payload = training_review.prepare_training_review(
+        folder, WAN22_PROFILE_ID, "lo", names, total_media_count=len(names),
+    )
+
+    assert set(payload["plan"]["stages"]) == {"lo"}
+    ladder = payload["ladders"]["images"]["square"]
+    payload["plan"]["stages"]["lo"]["imageBuckets"]["square"] = [ladder[0]]
+    updated = training_review.update_training_review(folder, WAN22_PROFILE_ID, {
+        "runId": "lo", "selected_media": names, "total_media_count": len(names), "plan": payload["plan"],
+    })
+
+    assert updated["plan"]["stages"]["lo"]["imageBuckets"]["square"] == [ladder[0]]
 
 
 def test_video_distribution_keeps_h3_roles_independent():

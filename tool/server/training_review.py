@@ -189,7 +189,10 @@ def _default_profile_plan(folder, profile_id, manifest, setup):
         config_paths=config_paths,
     )["plan"]
     stages = {}
+    selected_stages = {item["id"] for item in setup["configs"]}
     for stage, data in default.get("stages", {}).items():
+        if stage not in selected_stages:
+            continue
         images = _clustered_buckets(manifest, profile_id)
         stages[stage] = {"targetSteps": int(data.get("targetSteps") or _default_target_steps(stage)), "imageBuckets": images}
     roles = _normal_roles(profile_id)

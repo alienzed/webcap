@@ -245,7 +245,8 @@ def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_pat
 
 def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
-    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    monitor_starts = []
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: monitor_starts.append(True))
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (0, "/bin/bash\n/runs/runner.sh\n", ""))
     monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
     state = {
@@ -261,19 +262,24 @@ def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     training_runner._write_state(state)
 
     training_runner.start_observer()
+    assert monitor_starts == [True]
+    assert training_runner._read_state() == state
+
+    training_runner._refresh_state(state)
+    training_runner._write_state(state)
     restored = training_runner._read_state()
 
     active = next(job for job in restored["jobs"] if job["id"] == "active")
     assert restored["queuePaused"] is False
     assert restored["activeJobId"] == "active"
+    assert [job["id"] for job in restored["jobs"]] == ["later", "active"]
     assert active["status"] == "running"
     assert active["pid"] == 4242
     assert active["runnerVerified"] is True
 
 
-def test_restart_moves_missing_runner_to_front_and_pauses_queue(tmp_path, monkeypatch):
+def test_restart_preserves_missing_runner_state_and_blocks_queue(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
-    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (3, "", ""))
     state = {
         "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
@@ -287,14 +293,99 @@ def test_restart_moves_missing_runner_to_front_and_pauses_queue(tmp_path, monkey
     }
     training_runner._write_state(state)
 
-    training_runner.start_observer()
+    training_runner._refresh_state(state)
+    training_runner._write_state(state)
     restored = training_runner._read_state()
 
-    assert restored["queuePaused"] is True
-    assert restored["jobs"][0]["id"] == "active"
-    assert restored["jobs"][0]["status"] == "queued"
-    assert restored["jobs"][0]["resumeFromCheckpoint"] == "/runs/original"
-    assert restored["queuePauseReason"] == "Previous runner ended without a result. Resume or restart the first item."
+    assert restored["queuePaused"] is False
+    assert [job["id"] for job in restored["jobs"]] == ["later", "active"]
+    active = restored["jobs"][1]
+    assert restored["activeJobId"] == "active"
+    assert active["status"] == "running"
+    assert active["pid"] == 4242
+    assert "runnerVerified" not in active
+    assert "resumeFromCheckpoint" not in active
+    assert "no longer active" in active["error"]
+
+
+def test_restart_preserves_unverifiable_runner_until_exact_process_verifies(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    state = {
+        "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
+        "jobs": [
+            {
+                "id": "active", "status": "running", "stages": "h3", "pid": 4242,
+                "runnerScriptWsl": "/runs/runner.sh", "outputRunPath": "/runs/original", "runnerVerified": True,
+            },
+            {"id": "later", "status": "queued", "stages": "h3"},
+        ],
+    }
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (1, "", "WSL is unavailable"))
+
+    training_runner._refresh_state(state)
+    active = state["jobs"][0]
+
+    assert state["queuePaused"] is False
+    assert state["activeJobId"] == "active"
+    assert [job["id"] for job in state["jobs"]] == ["active", "later"]
+    assert active["status"] == "running"
+    assert active["pid"] == 4242
+    assert "runnerVerified" not in active
+    assert "WSL is unavailable" in active["error"]
+
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (0, "/bin/bash\n/runs/runner.sh\n", ""))
+    monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
+    training_runner._refresh_state(state)
+
+    assert active["runnerVerified"] is True
+    assert "error" not in active
+
+
+def test_first_monitor_pass_pauses_pending_queue_without_active_job(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    state = {
+        "version": 3, "activeJobId": "", "queuePaused": False, "queuePauseReason": "",
+        "jobs": [{"id": "later", "status": "queued", "stages": "h3"}],
+    }
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("must not launch on restart"))
+
+    training_runner._refresh_state(state)
+
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"] == "Queue waiting for manual start after WebCap restarted."
+    assert state["jobs"][0]["status"] == "queued"
+
+
+def test_result_evidence_still_applies_terminal_status(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    state = {
+        "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
+        "jobs": [{"id": "active", "status": "running", "stages": "h3", "pid": 4242}],
+    }
+    job_dir = training_runner._job_dir(state["jobs"][0])
+    job_dir.mkdir(parents=True)
+    (job_dir / "result.json").write_text(json.dumps({"status": "completed", "exitCode": 0}), encoding="utf-8")
+
+    training_runner._refresh_state(state)
+
+    assert state["jobs"][0]["status"] == "completed"
+    assert state["activeJobId"] == ""
+
+
+def test_invalid_queue_state_is_loud_and_not_offered_recovery(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    path = training_runner._state_path()
+    path.parent.mkdir(parents=True)
+    path.write_text("{not json", encoding="utf-8")
+    before = path.read_bytes()
+
+    payload, status = training_runner.status_response()
+
+    assert status == 409
+    assert payload["stateError"] is True
+    assert "recoveryAvailable" not in payload
+    assert path.read_bytes() == before
 
 
 def test_finish_after_epoch_does_not_require_a_configured_savepoint(tmp_path, monkeypatch):

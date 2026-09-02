@@ -1022,15 +1022,17 @@ def _queue_paused_job(job):
     job["updatedAt"] = time.time()
 
 
-def _hold_job_for_manual_recovery(
-    job,
-    detail="",
-    hold_reason="Previous runner could not be confirmed. Resume or cancel the first item.",
-):
-    """Keep uncertain work recoverable without occupying the active runner slot."""
-    _queue_paused_job(job)
-    job["error"] = str(detail or "WebCap could not confirm the previous runner.").strip()
-    return {"holdReason": hold_reason}
+def _record_unverified_runner(job, detail):
+    """Expose missing runner evidence without inventing a new queue state."""
+    message = (
+        "WebCap could not verify the recorded training runner and left this job unchanged. "
+        + str(detail or "No runner evidence is available.").strip()
+    )
+    job.pop("runnerVerified", None)
+    if job.get("error") != message:
+        job["error"] = message
+        job["updatedAt"] = time.time()
+    return {"holdReason": ""}
 
 
 def _distributed_socket_hold_reason(log_text):
@@ -1076,7 +1078,7 @@ def _refresh_job(job):
     )
     if result_state == "absent" and not has_runner_evidence:
         if prior_status in ACTIVE_STATUSES:
-            return _hold_job_for_manual_recovery(job, "Runner PID and script evidence are unavailable.")
+            return _record_unverified_runner(job, "Runner PID and script evidence are unavailable.")
         return {"holdReason": ""}
     if not job.get("progressPlan"):
         job["progressPlan"] = _default_progress_plan()
@@ -1138,13 +1140,12 @@ def _refresh_job(job):
         return {"holdReason": ""}
     if process_state == "unknown":
         if prior_status in ACTIVE_STATUSES:
-            return _hold_job_for_manual_recovery(job, result_error or process_detail)
+            return _record_unverified_runner(job, result_error or process_detail)
         return {"holdReason": ""}
     if prior_status in ACTIVE_STATUSES and not job.get("actionRequested"):
-        return _hold_job_for_manual_recovery(
+        return _record_unverified_runner(
             job,
-            result_error or "The previous runner is no longer active and did not write a result; this item remains first.",
-            "Previous runner ended without a result. Resume or restart the first item.",
+            result_error or "The recorded runner is no longer active and did not write a result record.",
         )
     prior_projection = _terminal_projection_signature(job)
     prior_updated_at = job.get("updatedAt")
@@ -1222,6 +1223,11 @@ def _refresh_state(state):
     if hold_reason:
         state["queuePaused"] = True
         state["queuePauseReason"] = hold_reason
+    queued_jobs = [job for job in state.get("jobs", []) if job.get("status") in QUEUE_STATUSES]
+    if not _startup_reconciled and queued_jobs and not active_jobs:
+        state["queuePaused"] = True
+        state["queuePauseReason"] = state.get("queuePauseReason") or "Queue waiting for manual start after WebCap restarted."
+    _startup_reconciled = True
     _launch_next_queued_job(state)
 
 
@@ -1247,25 +1253,7 @@ def _ensure_monitor_started():
 
 
 def start_observer():
-    """Reconcile persisted runners before starting background observation."""
-    global _startup_reconciled
-    with _lock:
-        if not _startup_reconciled:
-            state = _read_state()
-            active_ids = {
-                job["id"] for job in state.get("jobs", []) if job.get("status") in ACTIVE_STATUSES
-            }
-            if active_ids:
-                _refresh_state(state)
-                recovered = [
-                    job for job in state["jobs"]
-                    if job.get("id") in active_ids and job.get("status") in QUEUE_STATUSES
-                ]
-                if recovered:
-                    recovered_ids = {job["id"] for job in recovered}
-                    state["jobs"] = recovered + [job for job in state["jobs"] if job.get("id") not in recovered_ids]
-                _persist_reconciled_state(state)
-            _startup_reconciled = True
+    """Start queue observation independently of whether Training is open."""
     _ensure_monitor_started()
 
 
@@ -1704,7 +1692,7 @@ def status_response():
         try:
             state = _read_state()
         except TrainingStateError as exc:
-            return {"ok": False, "stateError": True, "recoveryAvailable": True, "error": str(exc)}, 409
+            return {"ok": False, "stateError": True, "error": str(exc)}, 409
         _refresh_state(state)
         _persist_reconciled_state(state)
         return {

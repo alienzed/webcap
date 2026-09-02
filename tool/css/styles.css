@@ -2605,13 +2605,11 @@ iframe {
 .training-review-modal-content { min-height: 0; overflow: auto; padding: 16px; }
 .training-review-modal-content .training-review { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .training-review-modal-footer { justify-content: flex-end; border-top: 1px solid var(--border-color, #3d4452); }
-.training-review-workbench { display: grid; gap: 18px; max-width: 1180px; margin: 0 auto; }
-.training-review-overview { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
-.training-review-overview > div:first-child { display: grid; gap: 3px; min-width: 0; }
-.training-review-overview strong { font-size: 15px; }
-.training-review-overview > div:first-child span { color: var(--muted-text, #a3adba); font-size: 12px; }
-.training-review-tabs, .training-review-cohort-tabs, .training-review-chip-strip { display: flex; flex-wrap: wrap; gap: 7px; }
-.training-review-tabs { justify-content: flex-end; }
+.training-review-workbench { display: grid; gap: 14px; max-width: 1180px; margin: 0 auto; }
+.training-review-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 0 10px; border-bottom: 1px solid var(--border-color, #3d4452); }
+.training-review-tabs, .training-review-cohort-tabs, .training-review-chip-strip { display: flex; flex-wrap: wrap; gap: 6px; }
+.training-review-tabs, .training-review-cohort-tabs { align-items: center; }
+.training-review-scope-separator { align-self: stretch; width: 1px; min-height: 24px; margin: 0 3px; background: var(--border-color, #3d4452); }
 .training-review-tab, .training-review-cohort-tab, .training-review-target-chip, .training-review-step {
   border: 1px solid var(--border-color, #3d4452);
   border-radius: 6px;
@@ -2621,11 +2619,23 @@ iframe {
   font-size: 12px;
   cursor: pointer;
 }
-.training-review-tab, .training-review-cohort-tab { padding: 7px 11px; }
+.training-review-tab, .training-review-cohort-tab { padding: 6px 9px; }
 .training-review-tab.active, .training-review-cohort-tab.active { border-color: var(--accent, #f59e0b); background: color-mix(in srgb, var(--accent, #f59e0b) 12%, var(--panel-soft, #1a2230)); box-shadow: inset 0 -2px 0 var(--accent, #f59e0b); }
 .training-review-cohort-tab span { color: var(--muted-text, #a3adba); font-size: 11px; }
+.training-review-role-pill { display: inline-flex; align-items: stretch; overflow: hidden; border: 1px solid var(--border-color, #3d4452); border-radius: 6px; background: var(--panel-soft, #1a2230); }
+.training-review-role-pill.active { border-color: var(--accent, #f59e0b); background: color-mix(in srgb, var(--accent, #f59e0b) 12%, var(--panel-soft, #1a2230)); box-shadow: inset 0 -2px 0 var(--accent, #f59e0b); }
+.training-review-role-pill.disabled { opacity: .62; }
+.training-review-role-toggle { display: inline-flex; align-items: center; justify-content: center; width: 27px; padding: 0; border-right: 1px solid var(--border-color, #3d4452); cursor: pointer; }
+.training-review-role-toggle input { margin: 0; cursor: pointer; }
+.training-review-role-pill .training-review-tab { border: 0; border-radius: 0; background: transparent; }
+.training-review-role-pill .training-review-tab:hover { background: rgba(255,255,255,.04); }
+.training-review-tiny-cohort { display: inline-flex; align-items: center; justify-content: center; min-width: 13px; height: 13px; margin-left: 2px; border: 1px solid currentColor; border-radius: 50%; color: var(--muted-text, #a3adba); font-size: 9px; line-height: 1; vertical-align: 1px; }
 .training-review-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .training-review-label-row > span { color: var(--muted-text, #a3adba); font-size: 11px; text-align: right; }
+.training-review-target-utilities { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 10px; }
+.training-review-target-utilities > span { color: var(--muted-text, #a3adba); font-size: 11px; text-align: right; }
+.training-review-reset-defaults { padding: 0; border: 0; background: transparent; color: var(--muted-text, #a3adba); font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.training-review-reset-defaults:hover { color: var(--text, #e5e7eb); text-decoration: underline; }
 .training-review-targets, .training-review-chart, .training-review-impact, .training-review-warnings, .training-review-custom {
   display: grid;
   gap: 11px;
@@ -2656,9 +2666,6 @@ iframe {
 .target-2 { --review-target: #d96e55; }
 .training-review-selected-target.target-0 > *, .training-review-selected-target.target-1 > *, .training-review-selected-target.target-2 > * { border-color: var(--review-target); }
 .training-review-selected-target.target-0 .training-review-target-chip, .training-review-selected-target.target-1 .training-review-target-chip, .training-review-selected-target.target-2 .training-review-target-chip { color: var(--review-target); font-weight: 700; background: color-mix(in srgb, var(--review-target) 20%, var(--panel-soft, #1a2230)); }
-.training-review-role-summary { display: flex; align-items: center; gap: 12px; color: var(--muted-text, #a3adba); font-size: 12px; }
-.training-review-role-summary label { color: var(--text, #e5e7eb); }
-.training-review-role-note { margin: -3px 0 12px; color: var(--muted-text, #a3adba); font-size: 12px; }
 .training-review-chart-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
 .training-review-chart-heading > div:first-child { display: grid; gap: 3px; }
 .training-review-chart-heading > div:first-child span { color: var(--muted-text, #a3adba); font-size: 11px; }
@@ -2702,8 +2709,10 @@ iframe {
   .training-review-modal-content { padding: 10px; }
   .training-review-label-row { align-items: flex-start; flex-direction: column; gap: 3px; }
   .training-review-label-row > span { text-align: left; }
-  .training-review-overview { align-items: flex-start; flex-direction: column; }
-  .training-review-tabs { justify-content: flex-start; }
+  .training-review-scope { align-items: flex-start; }
+  .training-review-scope-separator { display: none; }
+  .training-review-target-utilities { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .training-review-target-utilities > span { text-align: left; }
   .training-review-chart-heading { align-items: flex-start; flex-direction: column; }
   .training-review-legend { justify-content: flex-start; }
   .training-review-target-row { grid-template-columns: 1fr; gap: 4px; }

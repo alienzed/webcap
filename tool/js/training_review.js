@@ -252,11 +252,59 @@ function reviewVideoLimitNote(payload, view, aspect) {
   var maximum = limit.effectiveCeiling[0] + ' × ' + limit.effectiveCeiling[1];
   var automatic = limit.automaticDefaultCeiling[0] + ' × ' + limit.automaticDefaultCeiling[1];
   var campaign = limit.source === 'calibration' && limit.campaign ? ' · ' + limit.campaign : '';
-  return '<span>' + escapeHtml(source + ' maximum ' + maximum + ' · automatic defaults up to ' + automatic + campaign) + '</span>';
+  return '<span title="' + escapeHtml(source + campaign) + '">' + escapeHtml(source + ' · default ' + automatic + ' · max ' + maximum) + '</span>';
 }
 
-function reviewNeutralTargetChipHtml(bucket, selectedCount) {
-  return '<button type="button" class="training-review-target-chip neutral" data-review-target="' + bucket.join(',') + '"' + (selectedCount >= 3 ? ' disabled title="Use at most three targets per cohort."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button>';
+function reviewBucketPressureLevel(payload, view, aspect, bucket) {
+  var limit = (((payload.videoLimits || {})[view] || {})[aspect]) || null;
+  if (view === 'images' || !limit || !limit.effectiveCeiling) return '';
+  var ladder = reviewCandidates(payload, view, aspect);
+  var maximumIndex = ladder.findIndex(function (item) { return sameReviewBucket(item, limit.effectiveCeiling); });
+  var index = ladder.findIndex(function (item) { return sameReviewBucket(item, bucket); });
+  var distance = index - maximumIndex;
+  return maximumIndex < 0 || index < 0 ? '' : distance === 0 ? 'pressure-high' : distance === 1 ? 'pressure-medium' : distance === 2 ? 'pressure-low' : '';
+}
+
+function reviewProjectedTarget(view, row, targets) {
+  if (view === 'images') {
+    return targets.reduce(function (closest, target) {
+      return !closest || Math.abs(Math.log(Math.min(target[0], target[1]) / Math.min(row.width, row.height))) < Math.abs(Math.log(Math.min(closest[0], closest[1]) / Math.min(row.width, row.height))) ? target : closest;
+    }, null);
+  }
+  var ordered = targets.slice().sort(function (a, b) { return b[0] * b[1] - a[0] * a[1]; });
+  return ordered.filter(function (target) { return Number(row.width) >= target[0] && Number(row.height) >= target[1]; })[0] || ordered[ordered.length - 1] || null;
+}
+
+function reviewCandidateImpactTitle(payload, view, aspect, selected, candidate) {
+  var changed = 0;
+  var closer = 0;
+  var majorUpscaleReduced = 0;
+  var eligible = 0;
+  var projectedTargets = selected.concat([candidate]);
+  (((reviewViewGroups(payload, view)[aspect] || {}).native) || []).forEach(function (row) {
+    if (!row.eligible) return;
+    eligible += 1;
+    var current = row.assignedTarget || row.target || [];
+    var projected = reviewProjectedTarget(view, row, projectedTargets);
+    if (!projected || sameReviewBucket(current, projected)) return;
+    changed += 1;
+    var edge = Math.min(Number(row.width), Number(row.height));
+    var currentDistance = Math.abs(Math.log(Math.min(current[0], current[1]) / edge));
+    var projectedDistance = Math.abs(Math.log(Math.min(projected[0], projected[1]) / edge));
+    if (projectedDistance < currentDistance) closer += 1;
+    if (Math.min(current[0], current[1]) / edge > 1.2 && Math.min(projected[0], projected[1]) / edge <= 1.2) majorUpscaleReduced += 1;
+  });
+  if (!changed) return 'Would not change current assignments.';
+  var text = 'Would become the target for ' + changed + ' of ' + eligible + ' item' + (eligible === 1 ? '' : 's') + '; ' + closer + ' would train closer to native resolution.';
+  if (majorUpscaleReduced) text += ' Removes >20% upscale for ' + majorUpscaleReduced + ' item' + (majorUpscaleReduced === 1 ? '' : 's') + '.';
+  return text;
+}
+
+function reviewNeutralTargetChipHtml(payload, view, aspect, selected, bucket) {
+  var disabled = selected.length >= 3;
+  var title = reviewCandidateImpactTitle(payload, view, aspect, selected, bucket);
+  if (disabled) title = 'Use at most three targets per cohort. ' + title;
+  return '<button type="button" class="training-review-target-chip neutral ' + reviewBucketPressureLevel(payload, view, aspect, bucket) + '" data-review-target="' + bucket.join(',') + '"' + (disabled ? ' disabled' : '') + ' title="' + escapeHtml(title) + '">' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button>';
 }
 
 function reviewTargetsHtml(payload, view, aspect) {
@@ -289,10 +337,10 @@ function reviewTargetsHtml(payload, view, aspect) {
   function selectedChip(bucket) {
     var color = reviewTargetColor(selected, bucket);
     var removeDisabled = selected.length <= 1;
-    return '<span class="training-review-selected-target ' + color + '"><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Move target lower">‹</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Move target higher">›</button></span>';
+    return '<span class="training-review-selected-target ' + color + ' ' + reviewBucketPressureLevel(payload, view, aspect, bucket) + '"><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Move target lower">‹</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Move target higher">›</button></span>';
   }
-  function neutralChip(bucket) { return reviewNeutralTargetChipHtml(bucket, selected.length); }
-  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><div class="training-review-target-utilities"><span>Choose up to three. Arrows move a selected target one rung.</span><button type="button" class="training-review-reset-defaults" data-review-reset-buckets>↺ Reset defaults</button></div></div>' + (limitNote ? '<div class="training-review-label-row training-review-limit">' + limitNote + '</div>' : '') + '<div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></section>';
+  function neutralChip(bucket) { return reviewNeutralTargetChipHtml(payload, view, aspect, selected, bucket); }
+  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><div class="training-review-target-utilities">' + limitNote + '<button type="button" class="training-review-reset-defaults" data-review-reset-buckets>↺ Reset defaults</button></div></div><div class="training-review-target-instructions">Choose up to three. Arrows move a selected target one rung.</div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-add"><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></div></section>';
 }
 
 function reviewChartHtml(group, selected, aspect) {

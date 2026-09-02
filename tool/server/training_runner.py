@@ -1247,28 +1247,24 @@ def _ensure_monitor_started():
 
 
 def start_observer():
-    """Normalize a stopped app's active job into an explicit paused resume."""
+    """Reconcile persisted runners before starting background observation."""
     global _startup_reconciled
     with _lock:
         if not _startup_reconciled:
             state = _read_state()
-            active = [job for job in state.get("jobs", []) if job.get("status") in ACTIVE_STATUSES]
-            if active:
-                active_ids = {job["id"] for job in active}
-                for job in active:
-                    job["status"] = "queued"
-                    job["stage"] = "resumable"
-                    job["resumeFromCheckpoint"] = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "")
-                    job["resumeStage"] = str(job.get("stages") or job.get("resumeStage") or "")
-                    job.pop("pid", None)
-                    job.pop("runnerVerified", None)
-                    job.pop("actionRequested", None)
-                    job["updatedAt"] = time.time()
-                state["jobs"] = [job for job in state["jobs"] if job.get("id") in active_ids] + [job for job in state["jobs"] if job.get("id") not in active_ids]
-                state["activeJobId"] = ""
-                state["queuePaused"] = True
-                state["queuePauseReason"] = "Queue paused after WebCap restarted. Resume the first item when ready."
-                _write_state(state)
+            active_ids = {
+                job["id"] for job in state.get("jobs", []) if job.get("status") in ACTIVE_STATUSES
+            }
+            if active_ids:
+                _refresh_state(state)
+                recovered = [
+                    job for job in state["jobs"]
+                    if job.get("id") in active_ids and job.get("status") in QUEUE_STATUSES
+                ]
+                if recovered:
+                    recovered_ids = {job["id"] for job in recovered}
+                    state["jobs"] = recovered + [job for job in state["jobs"] if job.get("id") not in recovered_ids]
+                _persist_reconciled_state(state)
             _startup_reconciled = True
     _ensure_monitor_started()
 

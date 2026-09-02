@@ -243,14 +243,46 @@ def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_pat
     assert exports[0]["sourcePath"] == str(epoch)
 
 
-def test_restart_moves_active_job_to_front_and_pauses_queue(tmp_path, monkeypatch):
+def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (0, "/bin/bash\n/runs/runner.sh\n", ""))
+    monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
     state = {
         "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
         "jobs": [
             {"id": "later", "status": "queued", "stages": "h3"},
-            {"id": "active", "status": "running", "stages": "h3", "outputRunPath": "/runs/original"},
+            {
+                "id": "active", "status": "running", "stages": "h3", "pid": 4242,
+                "runnerScriptWsl": "/runs/runner.sh", "outputRunPath": "/runs/original",
+            },
+        ],
+    }
+    training_runner._write_state(state)
+
+    training_runner.start_observer()
+    restored = training_runner._read_state()
+
+    active = next(job for job in restored["jobs"] if job["id"] == "active")
+    assert restored["queuePaused"] is False
+    assert restored["activeJobId"] == "active"
+    assert active["status"] == "running"
+    assert active["pid"] == 4242
+    assert active["runnerVerified"] is True
+
+
+def test_restart_moves_missing_runner_to_front_and_pauses_queue(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (3, "", ""))
+    state = {
+        "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
+        "jobs": [
+            {"id": "later", "status": "queued", "stages": "h3"},
+            {
+                "id": "active", "status": "running", "stages": "h3", "pid": 4242,
+                "runnerScriptWsl": "/runs/runner.sh", "outputRunPath": "/runs/original",
+            },
         ],
     }
     training_runner._write_state(state)
@@ -262,6 +294,7 @@ def test_restart_moves_active_job_to_front_and_pauses_queue(tmp_path, monkeypatc
     assert restored["jobs"][0]["id"] == "active"
     assert restored["jobs"][0]["status"] == "queued"
     assert restored["jobs"][0]["resumeFromCheckpoint"] == "/runs/original"
+    assert restored["queuePauseReason"] == "Previous runner ended without a result. Resume or restart the first item."
 
 
 def test_finish_after_epoch_does_not_require_a_configured_savepoint(tmp_path, monkeypatch):

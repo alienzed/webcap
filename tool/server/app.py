@@ -828,13 +828,26 @@ def fs_describe():
         return jsonify({"error": str(e)}), 400
 
 
+@app.route("/fs/originals/sync", methods=["POST"])
+def fs_originals_sync():
+    data = request.get_json(silent=True) or {}
+    rel_path = str(data.get("folder", "")).strip()
+    try:
+        dir_path = safe_join_fs_root(rel_path)
+        if not dir_path.exists() or not dir_path.is_dir():
+            return jsonify({"error": f"Directory does not exist: {rel_path}"}), 404
+        copy_media_to_originals(dir_path)
+        return jsonify({"ok": True})
+    except Exception as e:
+        app.logger.exception("ORIGINALS SYNC FAILED for %r: %s", rel_path, e)
+        return jsonify({"error": str(e)}), 500
+
+
 def _build_fs_describe_payload(dir_path):
     # State is user-authored set data. Validate it before any directory-load
     # side effects so a failed read cannot be bypassed or normalized away.
     state_path = dir_path / ".webcap_state.json"
     folder_state = read_folder_state(state_path)
-
-    copy_media_to_originals(dir_path)
 
     entries = []
     for entry in sorted(dir_path.iterdir(), key=lambda e: e.name.lower()):
@@ -852,23 +865,25 @@ def _build_fs_describe_payload(dir_path):
 
     from .originals import MEDIA_ALL_EXTS
     from .caption_ops import _caption_name_for_media
+    listed_file_names = {entry["name"] for entry in entries if entry["type"] == "file"}
     captions = {}
     caption_errors = []
     for meta in entries:
         if meta["type"] == "file" and meta["extension"] in MEDIA_ALL_EXTS:
             caption_name = _caption_name_for_media(meta["name"])
             caption_path = dir_path / caption_name
-            if caption_path.exists():
+            caption_exists = caption_name in listed_file_names
+            if caption_exists:
                 try:
                     text = caption_path.read_text(encoding="utf-8")
                 except Exception as e:
                     text = None
                     error = f"Could not read caption {caption_path}: {e}"
-                    print(f"[fs_describe] CAPTION READ ERROR: {error}", flush=True)
+                    app.logger.exception("CAPTION READ FAILED for media=%r caption=%r: %s", meta["name"], caption_name, e)
                     caption_errors.append({"media": meta["name"], "caption": caption_name, "error": error})
             else:
                 text = None
-            caption_payload = {"text": text}
+            caption_payload = {"exists": caption_exists, "text": text}
             if caption_errors and caption_errors[-1]["media"] == meta["name"]:
                 caption_payload["error"] = caption_errors[-1]["error"]
             captions[meta["name"]] = caption_payload

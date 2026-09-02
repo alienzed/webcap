@@ -314,9 +314,54 @@ function navigateIntoFolder(name) {
   refreshCurrentDirectory();
 }
 
-// Directory listing now uses backend /fs/list
+var folderLoadSequence = 0;
+
+function syncOriginalsForFolderLoad(path, loadSequence, priorFailure) {
+  if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return Promise.resolve();
+  return fetch('/fs/originals/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder: path })
+  }).then(function (response) {
+    return response.json().catch(function () { return {}; }).then(function (payload) {
+      if (!response.ok) throw new Error((payload && payload.error) || ('Originals sync failed (' + response.status + ')'));
+      return payload;
+    });
+  }).then(function () {
+    if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
+    refreshDeterministicMutationStatus();
+  }).catch(function (err) {
+    if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
+    var message = 'Originals sync failed: ' + String(err && err.message ? err.message : err);
+    console.error('[webcap] ' + message, err);
+    setStatus(priorFailure ? (String(priorFailure) + ' ' + message) : message);
+  });
+}
+
+function completeFolderLoadPipeline(path, loadSequence, metadataResult, captionErrors) {
+  if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
+  var priorFailure = captionErrors.length
+    ? ('Loaded folder with ' + captionErrors.length + ' unreadable caption' + (captionErrors.length === 1 ? '' : 's') + '.')
+    : '';
+  if (metadataResult.ok) {
+    applyFocusSetMetadataRows(path, metadataResult.rows);
+    ensurePruneCandidatesForCurrentFolder(true).catch(function (err) {
+      console.error('[webcap] Prune candidate analysis failed after metadata load:', err);
+    }).then(function () {
+      syncOriginalsForFolderLoad(path, loadSequence, priorFailure);
+    });
+    return;
+  }
+  failFocusSetMetadataForCurrentFolder(path);
+  var pipelineFailure = metadataResult.error || '';
+  if (priorFailure) pipelineFailure += (pipelineFailure ? ' ' : '') + priorFailure;
+  syncOriginalsForFolderLoad(path, loadSequence, pipelineFailure);
+}
+
+// Directory listing now uses backend /fs/describe.
 function refreshCurrentDirectory() {
   var path = state.folder || '';
+  var loadSequence = ++folderLoadSequence;
   state.folderStateWritable = false;
   invalidatePruneCandidates();
   if (state && state.supersetActive) {
@@ -359,7 +404,7 @@ function refreshCurrentDirectory() {
   xhr.open('GET', url);
   xhr.onreadystatechange = function () {
     if (xhr.readyState === 4) {
-      if (String(state.folder || '') !== String(path || '')) {
+      if (loadSequence !== folderLoadSequence || String(state.folder || '') !== String(path || '')) {
         return;
       }
       if (xhr.status === 200) {
@@ -385,7 +430,9 @@ function refreshCurrentDirectory() {
               key: f.name,
               fileName: f.name,
               caption: text,
-              hasCaption: !!(text && text.trim().length)
+              captionExists: cap.exists === true,
+              captionReadError: cap.error || '',
+              hasCaption: !!(cap.error || (text && text.trim().length))
             };
           });
           // --- Load and apply folder state fields ---
@@ -399,11 +446,9 @@ function refreshCurrentDirectory() {
            if (captionErrors.length) {
              console.error('[webcap] Caption read failures:', captionErrors);
            }
-          refreshMediaResolutionCache();
-           state.reviewedSet = state.reviewedSet || new Set();
-           renderFileList(ui.filterEl.value);
-           ensureFocusSetMetadataForCurrentFolder();
-           refreshDeterministicMutationStatus();
+            state.reviewedSet = state.reviewedSet || new Set();
+            renderFileList(ui.filterEl.value);
+            prepareFocusSetMetadataForCurrentFolder();
           
           // --- Static header toggling (display only, wiring in main.js) ---
           if (ui.upBtn) {
@@ -426,7 +471,10 @@ function refreshCurrentDirectory() {
            } else {
              setStatus('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
            }
-           refreshTrainingWorkspace();
+            refreshTrainingWorkspace();
+            refreshMediaResolutionCache({ folderLoadSequence: loadSequence }).then(function (metadataResult) {
+              completeFolderLoadPipeline(path, loadSequence, metadataResult, captionErrors);
+            });
           // If a file was just renamed, reselect it
           if (window.state && state.pendingSelectFileName) {
             var fname = state.pendingSelectFileName;

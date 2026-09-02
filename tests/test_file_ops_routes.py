@@ -577,7 +577,7 @@ def test_folder_state_save_allows_an_explicit_last_rating_clear(tmp_path, monkey
     assert json.loads(state_path.read_text(encoding="utf-8"))["ratings_by_media"] == {}
 
 
-def test_fs_describe_surfaces_caption_read_errors(tmp_path, monkeypatch):
+def test_fs_describe_surfaces_caption_read_errors(tmp_path, monkeypatch, caplog):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_bad_caption"
     set_dir.mkdir(parents=True)
@@ -587,15 +587,68 @@ def test_fs_describe_surfaces_caption_read_errors(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
 
-    response = app_module.app.test_client().get("/fs/describe?path=set_bad_caption")
+    with caplog.at_level("ERROR"):
+        response = app_module.app.test_client().get("/fs/describe?path=set_bad_caption")
 
     assert response.status_code == 200
     payload = response.get_json()
     assert len(payload["caption_errors"]) == 1
     assert payload["caption_errors"][0]["media"] == "clip.png"
     assert "Could not read caption" in payload["caption_errors"][0]["error"]
+    assert payload["captions"]["clip.png"]["exists"] is True
     assert payload["captions"]["clip.png"]["text"] is None
     assert "Could not read caption" in payload["captions"]["clip.png"]["error"]
+    assert "CAPTION READ FAILED" in caplog.text
+    assert "Traceback" in caplog.text
+
+
+def test_fs_describe_distinguishes_missing_and_empty_captions(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_captions"
+    set_dir.mkdir(parents=True)
+    write_image(set_dir / "missing.png")
+    write_image(set_dir / "empty.png")
+    write_text(set_dir / "empty.txt", "")
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    payload = app_module.app.test_client().get("/fs/describe?path=set_captions").get_json()
+
+    assert payload["captions"]["missing.png"] == {"exists": False, "text": None}
+    assert payload["captions"]["empty.png"] == {"exists": True, "text": ""}
+
+
+def test_originals_sync_creates_baseline_after_describe(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_originals"
+    set_dir.mkdir(parents=True)
+    write_image(set_dir / "clip.png")
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+    client = app_module.app.test_client()
+
+    assert client.get("/fs/describe?path=set_originals").status_code == 200
+    assert not (set_dir / "originals").exists()
+    assert client.post("/fs/originals/sync", json={"folder": "set_originals"}).get_json() == {"ok": True}
+    assert (set_dir / "originals" / "clip.png").exists()
+
+
+def test_originals_sync_failure_is_server_error_and_logs_traceback(tmp_path, monkeypatch, caplog):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_originals_error"
+    set_dir.mkdir(parents=True)
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
+    monkeypatch.setattr(app_module, "copy_media_to_originals", lambda _folder: (_ for _ in ()).throw(RuntimeError("backup failed")))
+
+    with caplog.at_level("ERROR"):
+        response = app_module.app.test_client().post("/fs/originals/sync", json={"folder": "set_originals_error"})
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "backup failed"
+    assert "ORIGINALS SYNC FAILED" in caplog.text
+    assert "Traceback" in caplog.text
 
 
 def test_fs_describe_hides_internal_and_originals_directories(tmp_path, monkeypatch):

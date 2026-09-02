@@ -350,6 +350,24 @@ def test_media_metadata_response_flattens_face_focus(client, isolated_fs_root, m
     assert payload[0]["largest_face_score"] == 0.82
 
 
+def test_media_metadata_failure_is_server_error_and_logs_traceback(client, isolated_fs_root, monkeypatch, caplog):
+    set_folder = isolated_fs_root / "set_metadata_error"
+    set_folder.mkdir(parents=True)
+
+    def fail_metadata(*_args, **_kwargs):
+        raise RuntimeError("metadata probe failed")
+
+    monkeypatch.setattr(media_module, "update_media_metadata", fail_metadata)
+
+    with caplog.at_level("ERROR"):
+        response = client.get("/fs/media_metadata?folder=set_metadata_error")
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "metadata probe failed"
+    assert "MEDIA METADATA FAILED" in caplog.text
+    assert "Traceback" in caplog.text
+
+
 def test_media_metadata_route_opts_into_face_focus(client, isolated_fs_root, monkeypatch):
     set_folder_rel = "set_face_focus_route"
     set_folder = isolated_fs_root / set_folder_rel
@@ -601,14 +619,14 @@ def test_blur_background_overwrites_media_and_preserves_caption(client, isolated
 
 
 def test_baseline_only_backup_immutable_canonicals(client, isolated_fs_root):
-    """Test that repeated directory loads do not replace canonical originals."""
+    """Test that repeated originals syncs do not replace canonical originals."""
     set_folder_rel = "set_baseline"
     set_folder = isolated_fs_root / set_folder_rel
     set_folder.mkdir(parents=True)
 
-    # First directory load backs up original
+    # First originals sync backs up original.
     write_bytes(set_folder / "video.mp4", b"original-content")
-    r = client.get(f"/fs/describe?path={set_folder_rel}")
+    r = client.post("/fs/originals/sync", json={"folder": set_folder_rel})
     assert r.status_code == 200
     assert (set_folder / "originals" / "video.mp4").exists()
     original_hash = (set_folder / "originals" / "video.mp4").read_bytes()
@@ -616,8 +634,8 @@ def test_baseline_only_backup_immutable_canonicals(client, isolated_fs_root):
     # Edit the working file
     write_bytes(set_folder / "video.mp4", b"edited-content-v1")
 
-    # Second directory load should NOT replace canonical
-    r = client.get(f"/fs/describe?path={set_folder_rel}")
+    # Second originals sync should NOT replace canonical.
+    r = client.post("/fs/originals/sync", json={"folder": set_folder_rel})
     assert r.status_code == 200
     assert (set_folder / "originals" / "video.mp4").read_bytes() == original_hash
     # No suffix files should be created
@@ -626,8 +644,8 @@ def test_baseline_only_backup_immutable_canonicals(client, isolated_fs_root):
     # Edit again
     write_bytes(set_folder / "video.mp4", b"edited-content-v2")
 
-    # Third directory load should still keep canonical unchanged
-    r = client.get(f"/fs/describe?path={set_folder_rel}")
+    # Third originals sync should still keep canonical unchanged.
+    r = client.post("/fs/originals/sync", json={"folder": set_folder_rel})
     assert r.status_code == 200
     assert (set_folder / "originals" / "video.mp4").read_bytes() == original_hash
     assert not (set_folder / "originals" / "video-1.mp4").exists()

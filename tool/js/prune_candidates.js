@@ -264,9 +264,10 @@ function wirePruneCandidatesUi() {
   ui.pruneCandidatesInspectBtn.onclick = function () { inspectPruneCandidates(''); };
   syncPruneCandidateConsumers();
 }
-
 window.addEventListener('webcap:media-metadata-updated', function (event) {
-  var folder = String(event && event.detail && event.detail.folder || '');
+  var detail = event && event.detail ? event.detail : {};
+  var folder = String(detail.folder || '');
   if (!folder || folder !== String(state.folder || '')) return;
+  if (detail.folderLoadSequence) return;
   ensurePruneCandidatesForCurrentFolder(true).catch(function () {});
 });

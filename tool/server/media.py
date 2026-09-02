@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -15,6 +16,8 @@ from .permissions import normalize_path_permissions, run_with_directory_repair
 from .rembg_ops import blur_background_in_place, remove_background_in_place
 from .scene_complexity import SCENE_COMPLEXITY_METHOD, SCENE_COMPLEXITY_VERSION, analyze_image_scene_complexity, is_scene_complexity_image
 from .selection_pose import SELECTION_POSE_VERSION, analyze_image_selection_pose, get_selection_pose_analyzers, is_selection_pose_image
+
+logger = logging.getLogger(__name__)
 
 safe_join_fs_root = app_config.safe_join_fs_root
 
@@ -490,6 +493,5 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
             metadata_list.append(record)
         return jsonify(metadata_list)
     except Exception as e:
-        app_config.debug_print("[fs_media_metadata] ERROR:", e)
-        app_config.debug_traceback()
-        return jsonify({"error": str(e)}), 400
+        logger.exception("MEDIA METADATA FAILED for %r: %s", rel_path, e)
+        return jsonify({"error": str(e)}), 500

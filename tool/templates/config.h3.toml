@@ -9,7 +9,7 @@ image_micro_batch_size_per_gpu = 2
 pipeline_stages = 1
 gradient_accumulation_steps = 1
 gradient_clipping = 1.0
-warmup_steps = 10
+warmup_steps = 100
 
 checkpoint_every_n_epochs = 5
 activation_checkpointing = true

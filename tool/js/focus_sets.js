@@ -209,6 +209,50 @@ function renderFocusSetControls() {
   });
 }
 
+function prepareFocusSetMetadataForCurrentFolder() {
+  var folder = String(state.folder || '').trim();
+  var config = getFocusSetAnalysisConfig();
+  if (!folder || !config.face || !config.pose) {
+    state.focusSetMetadata = [];
+    state.focusSetMetadataFolder = folder;
+    state.focusSetMetadataStatus = 'disabled';
+    renderFocusSetControls();
+    return;
+  }
+  state.focusSetMetadata = [];
+  state.focusSetMetadataFolder = folder;
+  state.focusSetMetadataStatus = 'loading';
+  renderFocusSetControls();
+}
+
+function applyFocusSetMetadataRows(folder, rows) {
+  var requestFolder = String(folder || '').trim();
+  var config = getFocusSetAnalysisConfig();
+  if (state.folder !== requestFolder || !config.face || !config.pose) return;
+  var fileNames = getFocusSetCurrentFileNames();
+  var byFile = {};
+  (rows || []).forEach(function (row) {
+    if (row && row.file) byFile[row.file] = row;
+  });
+  var scopedRows = fileNames.map(function (fileName) { return byFile[fileName]; }).filter(Boolean);
+  var cacheKey = getFocusSetMetadataCacheKey(requestFolder, config, fileNames);
+  getFocusSetMetadataCache()[cacheKey] = scopedRows;
+  state.focusSetMetadata = scopedRows;
+  state.focusSetMetadataFolder = requestFolder;
+  state.focusSetMetadataStatus = 'ready';
+  renderFocusSetControls();
+}
+
+function failFocusSetMetadataForCurrentFolder(folder) {
+  if (state.folder !== String(folder || '').trim()) return;
+  var config = getFocusSetAnalysisConfig();
+  if (!config.face || !config.pose) return;
+  state.focusSetMetadata = [];
+  state.focusSetMetadataFolder = state.folder;
+  state.focusSetMetadataStatus = 'error';
+  renderFocusSetControls();
+}
+
 function ensureFocusSetMetadataForCurrentFolder(force) {
   var folder = String(state.folder || '').trim();
   var config = getFocusSetAnalysisConfig();

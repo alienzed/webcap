@@ -1318,7 +1318,8 @@ function renderItemTagsPanel() {
   }
 }
 
-function refreshMediaResolutionCache() {
+function refreshMediaResolutionCache(options) {
+  options = options || {};
   function clearMetadataCache() {
     mediaMetadataLoading = false;
     if (Array.isArray(state.items)) {
@@ -1331,56 +1332,70 @@ function refreshMediaResolutionCache() {
 
   if (!state.folder || !Array.isArray(state.items) || !state.items.length) {
     clearMetadataCache();
-    return;
+    return Promise.resolve({ ok: true, folder: state.folder || '', rows: [] });
   }
 
   var requestFolder = state.folder;
   mediaMetadataLoading = true;
   setStatus('Generating metadata...');
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', '/fs/media_metadata?folder=' + encodeURIComponent(requestFolder));
-  xhr.onreadystatechange = function () {
-    if (xhr.readyState !== 4) return;
-    if (state.folder !== requestFolder) {
-      mediaMetadataLoading = false;
-      return;
-    }
-    if (xhr.status !== 200) {
-      mediaMetadataLoading = false;
-      clearMetadataCache();
-      setStatus('Metadata failed (' + xhr.status + ').');
-      return;
-    }
-    try {
-      var rows = JSON.parse(xhr.responseText);
-      var metadataByFile = {};
-      (rows || []).forEach(function (row) {
-        if (!row || !row.file) return;
-        metadataByFile[row.file] = row;
-      });
-      if (Array.isArray(state.items)) {
-        state.items.forEach(function (item) {
-          if (!item || !item.fileName) return;
-          var row = metadataByFile[item.fileName] || null;
-          item.metadata = row;
-        });
-      }
-      mediaMetadataLoading = false;
-      window.dispatchEvent(new CustomEvent('webcap:media-metadata-updated', {
-        detail: { folder: requestFolder }
-      }));
-      if (state.currentItem) {
-        setStatus(buildSelectedMediaStatus(state.currentItem));
-        renderItemMetadataPanel();
+  return new Promise(function (resolve) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/fs/media_metadata?folder=' + encodeURIComponent(requestFolder));
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (state.folder !== requestFolder || (options.folderLoadSequence && options.folderLoadSequence !== folderLoadSequence)) {
+        if (!options.folderLoadSequence || options.folderLoadSequence === folderLoadSequence) {
+          mediaMetadataLoading = false;
+        }
+        resolve({ ok: false, stale: true, folder: requestFolder, rows: [] });
         return;
       }
-    } catch (e) {
-      mediaMetadataLoading = false;
-      clearMetadataCache();
-      setStatus('Metadata parse failed.');
-    }
-  };
-  xhr.send();
+      if (xhr.status !== 200) {
+        mediaMetadataLoading = false;
+        clearMetadataCache();
+        var error = 'Metadata failed (' + xhr.status + ').';
+        try {
+          var errorPayload = JSON.parse(xhr.responseText || '{}');
+          if (errorPayload && errorPayload.error) error += ' ' + errorPayload.error;
+        } catch (_metadataErrorParseFailure) {
+          // The HTTP status remains useful when an intermediary returned non-JSON.
+        }
+        setStatus(error);
+        resolve({ ok: false, folder: requestFolder, error: error, rows: [] });
+        return;
+      }
+      try {
+        var rows = JSON.parse(xhr.responseText);
+        var metadataByFile = {};
+        (rows || []).forEach(function (row) {
+          if (!row || !row.file) return;
+          metadataByFile[row.file] = row;
+        });
+        if (Array.isArray(state.items)) {
+          state.items.forEach(function (item) {
+            if (!item || !item.fileName) return;
+            var row = metadataByFile[item.fileName] || null;
+            item.metadata = row;
+          });
+        }
+        mediaMetadataLoading = false;
+        window.dispatchEvent(new CustomEvent('webcap:media-metadata-updated', {
+          detail: { folder: requestFolder, rows: rows, folderLoadSequence: options.folderLoadSequence || 0 }
+        }));
+        if (state.currentItem) {
+          setStatus(buildSelectedMediaStatus(state.currentItem));
+          renderItemMetadataPanel();
+        }
+        resolve({ ok: true, folder: requestFolder, rows: rows });
+      } catch (e) {
+        mediaMetadataLoading = false;
+        clearMetadataCache();
+        setStatus('Metadata parse failed.');
+        resolve({ ok: false, folder: requestFolder, error: String(e && e.message ? e.message : e), rows: [] });
+      }
+    };
+    xhr.send();
+  });
 }
 
 function wireItemDetailsUi() {

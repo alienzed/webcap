@@ -33,7 +33,7 @@ max_t = 0.875
 type = "lora"
 rank = 32
 dtype = "bfloat16"
-dropout = 0.01
+dropout = 0.04
 
 [optimizer]
 type = "AdamW8bitKahan"

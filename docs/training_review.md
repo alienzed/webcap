@@ -13,7 +13,7 @@ Reset controls—remain under **Advanced configuration**.
 
 **Adjust buckets** opens a full-screen, internally scrolling modal. It shows:
 
-- `Images`, `Temporal`, and `Detail` tabs when their media exists;
+- `Images`, `Balanced`, `Temporal`, and `Detail` tabs when their media exists;
 - the existing populated aspect-ratio cohorts: 4:3, 3:4, 16:9, 9:16, and
   Square;
 - supported target chips for the active cohort;
@@ -32,8 +32,8 @@ dataset TOML; **Done**, ×, and Escape simply close the modal.
 Every valid image is assigned exactly once to its closest selected target by
 short-edge scale. Resolution is a fitting preference, not an exclusion rule.
 The chart uses `target short edge / native short edge`, so portrait and
-landscape media are measured correctly. Temporal and Detail retain their fixed
-frame counts; eligible clips may participate in both roles.
+landscape media are measured correctly. Balanced, Temporal, and Detail retain
+their fixed frame counts; eligible clips may participate in all applicable roles.
 
 ## TOML behavior
 

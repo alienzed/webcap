@@ -2,7 +2,25 @@
 
 ## Status
 
-Tabled design note. The app currently offers browser-based frame-sized nudging; this document describes a possible authoritative workflow and is not an implementation contract.
+Implemented Clip workflow. Browser-based frame-sized nudging remains available
+for quick orientation; the explicit exact-frame controls provide the
+authoritative selection/export path described below.
+
+## Implemented Behavior
+
+- **Check Frame** resolves the first decoded source frame at or after the
+  browser playhead through `ffprobe`, displays an FFmpeg-decoded PNG preview,
+  and records its zero-based decoded-frame index and presentation timestamp.
+- **Exact Prev** and **Exact Next** navigate by decoded-frame index. Frame
+  timestamp lists are cached only in memory, keyed by the source's normalized
+  path, size, and high-resolution modification time, and retain at most eight
+  source files.
+- **Use Exact Start** attaches the selected frame index and opaque fingerprint
+  to the pending export. The export worker rechecks the fingerprint immediately
+  before it runs; a changed source fails visibly and must be checked again.
+- Exact export trims video with `trim=start_frame=N`, resets timestamps, then
+  applies the crop. Audio is trimmed from the selected frame timestamp and
+  re-encoded for alignment. Ordinary timestamp-based exports remain available.
 
 ## Problem
 
@@ -16,7 +34,7 @@ The desired workflow is:
 - Select that frame as the clip start.
 - Guarantee that the selected frame is the first video frame in the export.
 
-## Proposed Boundary
+## Implementation Boundary
 
 Keep the browser player as the fast, approximate navigation surface. Make ffprobe/FFmpeg authoritative only after the user chooses `Check Frame`.
 
@@ -28,7 +46,7 @@ The client should not attempt to prove frame identity. It should retain and retu
 
 The source fingerprint should identify the unchanged source file, initially with normalized path, size, and high-resolution modification time. Export must fail loudly and require another frame check if the source no longer matches.
 
-## Proposed Workflow
+## Workflow
 
 1. `Check Frame` sends the browser's approximate time to the backend.
 2. The backend uses ffprobe frame data to resolve that time to a decoded frame, then uses FFmpeg to return a PNG preview plus its frame index and presentation timestamp.

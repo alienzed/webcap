@@ -85,18 +85,18 @@ H3_VIDEO_MFP_LIMIT = 11900
 # calibration replaces (rather than clamps) the matching role/aspect ceiling.
 H3_VIDEO_MODE_CEILINGS = {
     "normal": {
-        "square": {"temporal": (352, 352), "detail": (736, 736)},
-        "43": {"temporal": (416, 320), "detail": (896, 672)},
-        "34": {"temporal": (320, 416), "detail": (672, 896)},
-        "169": {"temporal": (448, 256), "detail": (1024, 576)},
-        "916": {"temporal": (256, 448), "detail": (576, 1024)},
+        "square": {"balanced": (576, 576), "temporal": (352, 352), "detail": (736, 736)},
+        "43": {"balanced": (672, 512), "temporal": (416, 320), "detail": (896, 672)},
+        "34": {"balanced": (512, 672), "temporal": (320, 416), "detail": (672, 896)},
+        "169": {"balanced": (800, 448), "temporal": (448, 256), "detail": (1024, 576)},
+        "916": {"balanced": (448, 800), "temporal": (256, 448), "detail": (576, 1024)},
     },
     "quality": {
-        "square": {"temporal": (352, 352), "detail": (736, 736)},
-        "43": {"temporal": (416, 320), "detail": (896, 672)},
-        "34": {"temporal": (320, 416), "detail": (672, 896)},
-        "169": {"temporal": (448, 256), "detail": (1024, 576)},
-        "916": {"temporal": (256, 448), "detail": (576, 1024)},
+        "square": {"balanced": (576, 576), "temporal": (352, 352), "detail": (736, 736)},
+        "43": {"balanced": (672, 512), "temporal": (416, 320), "detail": (896, 672)},
+        "34": {"balanced": (512, 672), "temporal": (320, 416), "detail": (672, 896)},
+        "169": {"balanced": (800, 448), "temporal": (448, 256), "detail": (1024, 576)},
+        "916": {"balanced": (448, 800), "temporal": (256, 448), "detail": (576, 1024)},
     },
 }
 # Calibration is only valid inside the model/probe envelope.  These are video
@@ -112,10 +112,12 @@ REPEAT_TARGET_STEPS = {
 }
 TRAINING_PLAN_FILE_NAME = "training_plan.json"
 VIDEO_TEMPORAL_REPEAT_WEIGHT = 1.0
+VIDEO_BALANCED_REPEAT_WEIGHT = 1.0
+H3_VIDEO_TEMPORAL_REPEAT_WEIGHT = 0.5
 VIDEO_DETAIL_REPEAT_WEIGHT = 0.25
 IMAGE_REPEAT_WEIGHT = 1.0
-# Roles are data, not model-specific selection branches.  POC keeps one cheaper
-# temporal role; Normal and Quality add a shorter, high-detail role.
+# Roles are data, not model-specific selection branches. POC keeps one cheaper
+# temporal role; H3 Normal and Quality use balanced, long-motion, and detail roles.
 VIDEO_ROLE_TABLE = {
     WAN22_PROFILE_ID: {
         "poc": (("temporal", 33, VIDEO_TEMPORAL_REPEAT_WEIGHT),),
@@ -129,8 +131,8 @@ VIDEO_ROLE_TABLE = {
     },
     MINIMAX_H3_PROFILE_ID: {
         "poc": (("temporal", 34, VIDEO_TEMPORAL_REPEAT_WEIGHT),),
-        "normal": (("temporal", 68, VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 17, VIDEO_DETAIL_REPEAT_WEIGHT)),
-        "quality": (("temporal", 68, VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 17, VIDEO_DETAIL_REPEAT_WEIGHT)),
+        "normal": (("balanced", 34, VIDEO_BALANCED_REPEAT_WEIGHT), ("temporal", 68, H3_VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 17, VIDEO_DETAIL_REPEAT_WEIGHT)),
+        "quality": (("balanced", 34, VIDEO_BALANCED_REPEAT_WEIGHT), ("temporal", 68, H3_VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 17, VIDEO_DETAIL_REPEAT_WEIGHT)),
     },
 }
 
@@ -616,10 +618,10 @@ def _choose_common_video_bucket(ar_label, clips, frames, profile_id, mode, role)
     return bucket, unsupported
 
 
-def _choose_optional_detail_bucket(ar_label, clips, frames, profile_id, mode, role):
+def _choose_optional_detail_bucket(ar_label, clips, frames, profile_id, mode, role, minimum_members=2):
     for bucket in video_bucket_ladder(profile_id, mode, ar_label, role, frames)["defaults"]:
         members = _native_video_support(clips, bucket)
-        if len(members) >= 2:
+        if len(members) >= minimum_members:
             return bucket, members
     return None, []
 
@@ -651,32 +653,35 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
     entries = []
     if not roles:
         return entries
-    temporal_role = roles[0]
-    detail_role = roles[1] if len(roles) > 1 else None
+    full_roles = [role for role in roles if role[0] != "detail"]
+    detail_role = next((role for role in roles if role[0] == "detail"), None)
     for ar_label, clips in grouped.items():
         if not clips:
             continue
-        temporal_name, temporal_frames, temporal_weight = temporal_role
-        minimum_frames = detail_role[1] if detail_role else temporal_frames
+        minimum_frames = min(role[1] for role in roles)
         too_short = [clip for clip in clips if clip["frames"] < minimum_frames]
         if too_short:
             lines.append(f"[WARN] {ar_label}: skipped {len(too_short)} clip(s) shorter than {minimum_frames} frames: " + ", ".join(clip["file"] for clip in too_short))
-        temporal_clips = [clip for clip in clips if clip["frames"] >= temporal_frames]
-        if temporal_clips:
+
+        for role_name, role_frames, role_weight in full_roles:
+            role_clips = [clip for clip in clips if clip["frames"] >= role_frames]
+            if not role_clips:
+                continue
             bucket, unsafe = _choose_common_video_bucket(
-                ar_label, temporal_clips, temporal_frames, selected_profile_id, generate_mode, temporal_name,
+                ar_label, role_clips, role_frames, selected_profile_id, generate_mode, role_name,
             )
             if bucket:
                 if unsafe:
-                    lines.append(f"[WARN] {ar_label} temporal {bucket[0]}x{bucket[1]} @ {temporal_frames} exceeds native support for: " + ", ".join(unsafe))
-                lines.append(f"[INFO] {ar_label}: temporal {bucket[0]}x{bucket[1]} @ {temporal_frames} ({len(temporal_clips)} clip(s))")
-                entries.append({"kind": "video", "role": temporal_name, "ar_label": ar_label, "dir_path": (dataset_root / ar_label).as_posix(), "bucket": (bucket[0], bucket[1], temporal_frames), "files": [clip["file"] for clip in temporal_clips], "sample_count": len(temporal_clips), "native_count": len(temporal_clips) - len(unsafe), "upscaled_count": len(unsafe), "limiting_files": unsafe, "repeat_weight": temporal_weight})
+                    lines.append(f"[WARN] {ar_label} {role_name} {bucket[0]}x{bucket[1]} @ {role_frames} exceeds native support for: " + ", ".join(unsafe))
+                lines.append(f"[INFO] {ar_label}: {role_name} {bucket[0]}x{bucket[1]} @ {role_frames} ({len(role_clips)} clip(s))")
+                entries.append({"kind": "video", "role": role_name, "ar_label": ar_label, "dir_path": (dataset_root / ar_label).as_posix(), "bucket": (bucket[0], bucket[1], role_frames), "files": [clip["file"] for clip in role_clips], "sample_count": len(role_clips), "native_count": len(role_clips) - len(unsafe), "upscaled_count": len(unsafe), "limiting_files": unsafe, "repeat_weight": role_weight})
 
         if not detail_role:
             continue
         detail_name, detail_frames, detail_weight = detail_role
         detail_eligible = [clip for clip in clips if clip["frames"] >= detail_frames]
-        mandatory = [clip for clip in detail_eligible if clip["frames"] < temporal_frames]
+        next_role_frames = min((role[1] for role in full_roles), default=detail_frames)
+        mandatory = [clip for clip in detail_eligible if clip["frames"] < next_role_frames]
         if mandatory:
             bucket, unsafe = _choose_common_video_bucket(
                 ar_label, mandatory, detail_frames, selected_profile_id, generate_mode, detail_name,
@@ -684,10 +689,16 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
             if not bucket:
                 continue
             members = list(mandatory)
-            members.extend(clip for clip in temporal_clips if clip not in members and clip in _native_video_support(temporal_clips, bucket))
+            members.extend(clip for clip in detail_eligible if clip not in members and clip in _native_video_support(detail_eligible, bucket))
         else:
             bucket, members = _choose_optional_detail_bucket(
-                ar_label, detail_eligible, detail_frames, selected_profile_id, generate_mode, detail_name,
+                ar_label,
+                detail_eligible,
+                detail_frames,
+                selected_profile_id,
+                generate_mode,
+                detail_name,
+                minimum_members=1 if selected_profile_id == MINIMAX_H3_PROFILE_ID else 2,
             )
             unsafe = []
         if not bucket or not members:
@@ -727,7 +738,7 @@ def coerce_frames(record, model_fps=None):
     return frames
 
 
-def render_video_block(dir_path: str, bucket, num_repeats: int = 1, detail_intent=False):
+def render_video_block(dir_path: str, bucket, num_repeats: int = 1, detail_intent=False, role=""):
     repeats = int(num_repeats) if isinstance(num_repeats, int) else 1
     if repeats < 1:
         repeats = 1
@@ -736,6 +747,7 @@ def render_video_block(dir_path: str, bucket, num_repeats: int = 1, detail_inten
         f'path = "{dir_path}"',
         f"num_repeats = {repeats}",
         'group = "videos"',
+        "# webcap_dataset_role = " + str(role) if role else "",
         "# webcap_detail_subset = true" if detail_intent else "",
         "size_buckets = [",
     ]
@@ -1021,6 +1033,7 @@ def render_dataset_entry(entry, num_repeats: int):
             entry["bucket"],
             num_repeats=num_repeats,
             detail_intent=bool(entry.get("detail_intent")),
+            role=str(entry.get("role") or ""),
         )
     if kind == "image":
         return render_image_block(entry["path"], entry["ar_label"], entry["bucket"], num_repeats=num_repeats)

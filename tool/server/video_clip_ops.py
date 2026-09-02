@@ -1,3 +1,4 @@
+import json
 import math
 import os
 import shutil
@@ -15,6 +16,7 @@ from . import config as app_config
 from .media import probe_media_metadata
 from .originals import ensure_original_by_hash, ensure_originals_folder
 from .permissions import normalize_path_permissions
+from .video_frame_ops import resolve_exact_start
 
 # Alias kept for compatibility with callers and tests that monkeypatch this name.
 safe_join_fs_root = app_config.safe_join_fs_root
@@ -161,6 +163,47 @@ def _run_clip_ffmpeg(source_path, out_path, start_sec, duration_sec, crop_rect):
     normalize_path_permissions(out_path)
 
 
+def _source_has_audio(source_path):
+    cmd = [
+        "ffprobe", "-v", "error", "-select_streams", "a:0",
+        "-show_entries", "stream=index", "-of", "json", str(source_path),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError("ffprobe audio inspection failed: " + (proc.stderr or proc.stdout or "").strip())
+    try:
+        return bool(json.loads(proc.stdout or "{}").get("streams"))
+    except Exception as exc:
+        raise RuntimeError("ffprobe audio inspection returned invalid JSON") from exc
+
+
+def _run_exact_clip_ffmpeg(source_path, out_path, frame_index, timestamp_sec, duration_sec, crop_rect):
+    crop_filter = "crop={w}:{h}:{x}:{y}".format(
+        w=crop_rect["width"], h=crop_rect["height"], x=crop_rect["x"], y=crop_rect["y"],
+    )
+    video_filter = "trim=start_frame={}:duration={:.6f},setpts=PTS-STARTPTS,{}".format(
+        int(frame_index), float(duration_sec), crop_filter,
+    )
+    cmd = ["ffmpeg", "-y", "-i", str(source_path)]
+    if _source_has_audio(source_path):
+        audio_filter = "atrim=start={:.6f}:duration={:.6f},asetpts=PTS-STARTPTS".format(
+            float(timestamp_sec), float(duration_sec),
+        )
+        cmd.extend([
+            "-filter_complex", "[0:v:0]{}[v];[0:a:0]{}[a]".format(video_filter, audio_filter),
+            "-map", "[v]", "-map", "[a]", "-c:a", "aac",
+        ])
+    else:
+        cmd.extend(["-filter:v", video_filter, "-map", "0:v:0"])
+    cmd.extend([
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out_path),
+    ])
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError("ffmpeg failed: " + (proc.stderr or proc.stdout or "").strip())
+    normalize_path_permissions(out_path)
+
+
 def _run_clip_ffmpeg_overwrite_source(source_path, start_sec, duration_sec, crop_rect):
     originals_dir = ensure_originals_folder(source_path.parent)
     if originals_dir is None:
@@ -231,7 +274,48 @@ def _run_clip_ffmpeg_new_file(source_path, out_path, start_sec, duration_sec, cr
             pass
 
 
-def _format_signature(source_path, out_path, start_sec, duration_sec, crop_rect):
+def _run_exact_clip_ffmpeg_new_file(source_path, out_path, frame_index, timestamp_sec, duration_sec, crop_rect):
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=out_path.stem + "_clip_tmp_", suffix=out_path.suffix or ".mp4", dir=str(out_path.parent),
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        _run_exact_clip_ffmpeg(source_path, tmp_path, frame_index, timestamp_sec, duration_sec, crop_rect)
+        os.replace(tmp_path, out_path)
+        normalize_path_permissions(out_path)
+        _copy_clip_caption(source_path, out_path)
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+
+
+def _run_exact_clip_ffmpeg_overwrite_source(source_path, frame_index, timestamp_sec, duration_sec, crop_rect):
+    originals_dir = ensure_originals_folder(source_path.parent)
+    if originals_dir is None:
+        raise RuntimeError("Cannot overwrite source in this folder")
+    ensure_original_by_hash(source_path, originals_dir)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=source_path.stem + "_clip_tmp_", suffix=(source_path.suffix or ".mp4"), dir=str(source_path.parent),
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        _run_exact_clip_ffmpeg(source_path, tmp_path, frame_index, timestamp_sec, duration_sec, crop_rect)
+        os.replace(tmp_path, source_path)
+        normalize_path_permissions(source_path)
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+
+
+def _format_signature(source_path, out_path, start_sec, duration_sec, crop_rect, exact_start=None):
     return "|".join([
         str(source_path).lower(),
         str(out_path).lower(),
@@ -241,6 +325,7 @@ def _format_signature(source_path, out_path, start_sec, duration_sec, crop_rect)
         str(int(crop_rect["y"])),
         str(int(crop_rect["width"])),
         str(int(crop_rect["height"])),
+        str((exact_start or {}).get("frameIndex") if exact_start else ""),
     ])
 
 
@@ -311,7 +396,22 @@ def _clip_worker_loop():
                 job["updatedAt"] = time.time()
                 _set_signature_state(job["signature"], "running")
 
-            if bool(job.get("overwriteSource")):
+            exact_start = job.get("exactStart")
+            if exact_start:
+                verified = resolve_exact_start(
+                    Path(job["sourcePath"]), exact_start.get("frameIndex"), exact_start.get("sourceFingerprint"),
+                )
+                if bool(job.get("overwriteSource")):
+                    _run_exact_clip_ffmpeg_overwrite_source(
+                        Path(job["sourcePath"]), verified["frameIndex"], verified["timestampSec"],
+                        float(job["durationSec"]), job["crop"],
+                    )
+                else:
+                    _run_exact_clip_ffmpeg_new_file(
+                        Path(job["sourcePath"]), Path(job["outputPath"]), verified["frameIndex"], verified["timestampSec"],
+                        float(job["durationSec"]), job["crop"],
+                    )
+            elif bool(job.get("overwriteSource")):
                 _run_clip_ffmpeg_overwrite_source(
                     Path(job["sourcePath"]),
                     float(job["startSec"]),
@@ -381,6 +481,18 @@ def clip_video_response(data):
         if not _is_video_file(source_path):
             return jsonify({"error": "Clip export is only available for video files"}), 400
 
+        exact_start = None
+        if data.get("exactStart") is not None:
+            requested_exact_start = data.get("exactStart")
+            if not isinstance(requested_exact_start, dict):
+                return jsonify({"error": "Exact frame selection is invalid"}), 400
+            exact_start = resolve_exact_start(
+                source_path,
+                requested_exact_start.get("frameIndex"),
+                requested_exact_start.get("sourceFingerprint"),
+            )
+            start_sec = float(exact_start["timestampSec"])
+
         metadata = probe_media_metadata(source_path)
         src_w, src_h = _parse_video_resolution(metadata)
         duration_total = float(metadata.get("duration") or 0)
@@ -414,7 +526,7 @@ def clip_video_response(data):
             if out_path.exists() and not overwrite:
                 return jsonify({"error": "Output file already exists", "requiresOverwrite": True, "outputName": output_name}), 409
 
-        signature = _format_signature(source_path, out_path, start_sec, duration_sec, crop_rect)
+        signature = _format_signature(source_path, out_path, start_sec, duration_sec, crop_rect, exact_start)
         now_ts = time.time()
         with _video_clip_lock:
             _prune_tracking(now_ts)
@@ -441,6 +553,7 @@ def clip_video_response(data):
                 "startSec": start_sec,
                 "durationSec": duration_sec,
                 "crop": crop_rect,
+                "exactStart": exact_start,
                 "signature": signature,
                 "overwriteSource": overwrite_source,
             }
@@ -458,6 +571,7 @@ def clip_video_response(data):
             "crop": crop_rect,
             "resolution": f"{src_w}x{src_h}",
             "overwriteSource": overwrite_source,
+            "exactStart": exact_start,
         }), 202
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 400

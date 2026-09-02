@@ -13,6 +13,9 @@ var videoClipLoopPreviewActive = false;
 var videoClipPlaybackRate = 1;
 var videoClipRangeDrag = null;
 var videoClipFrameSeekPending = false;
+var videoClipExactFrame = null;
+var videoClipExactStart = null;
+var videoClipExactFrameRequestPending = false;
 
 function clearVideoClipStatusPoll() {
   if (videoClipStatusPollTimer) {
@@ -186,6 +189,103 @@ function updateVideoClipFrameStepUi() {
       ? ('Frame step uses the reported ' + fps.toFixed(2) + ' FPS and browser timestamp seeking.')
       : 'FPS unavailable; Left/Right fall back to 0.05-second steps.';
   }
+}
+
+function updateVideoClipExactFrameUi() {
+  var checkBtn = getVideoClipEl('video-clip-check-frame-btn');
+  var backBtn = getVideoClipEl('video-clip-exact-back-btn');
+  var forwardBtn = getVideoClipEl('video-clip-exact-forward-btn');
+  var useStartBtn = getVideoClipEl('video-clip-use-exact-start-btn');
+  var noteEl = getVideoClipEl('video-clip-exact-frame-note');
+  var previewEl = getVideoClipEl('video-clip-exact-frame-preview');
+  if (!checkBtn || !backBtn || !forwardBtn || !useStartBtn || !noteEl || !previewEl) {
+    throw new Error('Video clip exact-frame controls are missing');
+  }
+  checkBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
+  backBtn.disabled = videoClipExactFrameRequestPending || !videoClipExactFrame || Number(videoClipExactFrame.frameIndex) <= 0;
+  forwardBtn.disabled = videoClipExactFrameRequestPending || !videoClipExactFrame;
+  useStartBtn.disabled = videoClipExactFrameRequestPending || !videoClipExactFrame;
+  if (videoClipExactFrameRequestPending) {
+    noteEl.textContent = 'Resolving the decoded source frame...';
+  } else if (videoClipExactFrame) {
+    noteEl.textContent = 'Exact frame ' + videoClipExactFrame.frameIndex + ' at ' + formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec) + 's.' + (videoClipExactStart ? ' Export will begin at this frame.' : ' Use Exact Start to make export authoritative.');
+    previewEl.classList.remove('hidden');
+  } else {
+    noteEl.textContent = 'Check Frame resolves the decoded source frame at the playhead.';
+    previewEl.classList.add('hidden');
+    previewEl.removeAttribute('src');
+  }
+}
+
+function setVideoClipExactFrame(frame) {
+  if (!frame || !isFinite(Number(frame.frameIndex)) || !isFinite(Number(frame.timestampSec)) || !String(frame.sourceFingerprint || '') || !String(frame.previewDataUrl || '')) {
+    throw new Error('Frame inspection returned an invalid exact frame');
+  }
+  videoClipExactStart = null;
+  videoClipExactFrame = {
+    frameIndex: Math.round(Number(frame.frameIndex)),
+    timestampSec: Number(frame.timestampSec),
+    sourceFingerprint: String(frame.sourceFingerprint),
+    previewDataUrl: String(frame.previewDataUrl)
+  };
+  var previewEl = getVideoClipEl('video-clip-exact-frame-preview');
+  if (!previewEl) throw new Error('Video clip exact-frame preview is missing');
+  previewEl.src = videoClipExactFrame.previewDataUrl;
+  updateVideoClipExactFrameUi();
+}
+
+function requestVideoClipExactFrame(request) {
+  if (!videoClipTargetItem || !videoClipTargetItem.fileName || videoClipExactFrameRequestPending) return;
+  var videoEl = getVideoClipEl('video-clip-video');
+  if (!videoEl) throw new Error('Video clip player is missing');
+  stopVideoClipLoopPreview();
+  try { videoEl.pause(); } catch (e) {}
+  videoClipExactFrameRequestPending = true;
+  updateVideoClipExactFrameUi();
+  var payload = {
+    folder: state.folder || '',
+    fileName: videoClipTargetItem.fileName
+  };
+  if (request && request.frameIndex !== undefined) payload.frameIndex = request.frameIndex;
+  else payload.approximateTimeSec = Number(videoEl.currentTime || 0);
+  HttpModule.postJson('/media/video_clip_frame', payload, function (status, responseText) {
+    videoClipExactFrameRequestPending = false;
+    var response = null;
+    try { response = JSON.parse(responseText); } catch (e) {}
+    if (status !== 200 || !response || !response.frame) {
+      updateVideoClipExactFrameUi();
+      var message = response && response.error ? response.error : 'Frame inspection failed';
+      setVideoClipStatus(message, { kind: 'error' });
+      setStatus(message);
+      return;
+    }
+    try {
+      setVideoClipExactFrame(response.frame);
+      seekVideoClipPlayhead(videoClipExactFrame.timestampSec);
+      setVideoClipStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' checked.', { kind: 'success' });
+      setStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' checked.');
+    } catch (err) {
+      updateVideoClipExactFrameUi();
+      setVideoClipStatus(String(err && err.message ? err.message : err), { kind: 'error' });
+      setStatus(String(err && err.message ? err.message : err));
+    }
+  });
+}
+
+function useVideoClipExactStart() {
+  if (!videoClipExactFrame) {
+    throw new Error('Check an exact frame before using it as the start');
+  }
+  var startEl = getVideoClipEl('video-clip-start-input');
+  if (!startEl) throw new Error('Video clip start input is missing');
+  startEl.value = formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec);
+  syncVideoClipTrimInputs('start');
+  videoClipExactStart = {
+    frameIndex: videoClipExactFrame.frameIndex,
+    sourceFingerprint: videoClipExactFrame.sourceFingerprint
+  };
+  updateVideoClipExactFrameUi();
+  updateVideoClipExportSummary();
 }
 
 function updateVideoClipCropFrameAvailability() {
@@ -638,6 +738,10 @@ function beginVideoClipRangeDrag(event) {
     : null;
   var dragMode = handleEl ? String(handleEl.getAttribute('data-video-clip-range-handle') || '') : 'move';
   if (dragMode !== 'start' && dragMode !== 'end') dragMode = 'move';
+  if (dragMode !== 'end') {
+    videoClipExactStart = null;
+    updateVideoClipExactFrameUi();
+  }
 
   videoClipRangeDrag = {
     pointerId: event.pointerId,
@@ -795,6 +899,9 @@ function openVideoClipModal(mediaItem) {
   videoClipLastExportSignature = '';
   videoClipLoopPreviewActive = false;
   videoClipFrameSeekPending = false;
+  videoClipExactFrame = null;
+  videoClipExactStart = null;
+  videoClipExactFrameRequestPending = false;
   setVideoClipBusy(false);
   setVideoClipStatus('');
   setStatus('');
@@ -804,6 +911,7 @@ function openVideoClipModal(mediaItem) {
   updateVideoClipLoopPreviewButton();
   updateVideoClipCropButtons();
   updateVideoClipFrameStepUi();
+  updateVideoClipExactFrameUi();
 
   var stem = mediaItem.fileName.replace(/\.[^.]+$/, '');
   outputEl.value = isVideoClipInSrcVideosFolder() ? (stem + '_clip') : mediaItem.fileName;
@@ -838,6 +946,7 @@ function openVideoClipModal(mediaItem) {
     videoClipFrameSeekPending = false;
     updateVideoClipCropFrameAvailability();
     updateVideoClipFrameStepUi();
+    updateVideoClipExactFrameUi();
     syncVideoClipTrimInputs('end');
     setVideoClipPlaybackRate(1);
     updateVideoClipCropOverlay();
@@ -905,7 +1014,7 @@ function getVideoClipPayload(overwrite) {
     throw new Error('Duration must be > 0');
   }
 
-  return {
+  var payload = {
     folder: state.folder || '',
     fileName: videoClipTargetItem.fileName,
     outputName: outputName,
@@ -915,6 +1024,13 @@ function getVideoClipPayload(overwrite) {
     overwrite: !!overwrite,
     overwriteSource: !!videoClipOverwriteSourceMode
   };
+  if (videoClipExactStart) {
+    payload.exactStart = {
+      frameIndex: videoClipExactStart.frameIndex,
+      sourceFingerprint: videoClipExactStart.sourceFingerprint
+    };
+  }
+  return payload;
 }
 
 function getVideoClipPayloadSignature(payload) {
@@ -928,7 +1044,9 @@ function getVideoClipPayloadSignature(payload) {
     String(Math.round(Number(payload.crop && payload.crop.x || 0))),
     String(Math.round(Number(payload.crop && payload.crop.y || 0))),
     String(Math.round(Number(payload.crop && payload.crop.width || 0))),
-    String(Math.round(Number(payload.crop && payload.crop.height || 0)))
+    String(Math.round(Number(payload.crop && payload.crop.height || 0))),
+    String(payload.exactStart && payload.exactStart.frameIndex || ''),
+    String(payload.exactStart && payload.exactStart.sourceFingerprint || '')
   ].join('|');
 }
 
@@ -1253,12 +1371,16 @@ function wireVideoClipModal() {
   var cropClearBtn = getVideoClipEl('video-clip-crop-clear-btn');
   var frameBackBtn = getVideoClipEl('video-clip-frame-back-btn');
   var frameForwardBtn = getVideoClipEl('video-clip-frame-forward-btn');
+  var checkFrameBtn = getVideoClipEl('video-clip-check-frame-btn');
+  var exactBackBtn = getVideoClipEl('video-clip-exact-back-btn');
+  var exactForwardBtn = getVideoClipEl('video-clip-exact-forward-btn');
   var skipBackBtn = getVideoClipEl('video-clip-skip-back-btn');
   var skipForwardBtn = getVideoClipEl('video-clip-skip-forward-btn');
   var skipForward15Btn = getVideoClipEl('video-clip-skip-forward-15-btn');
   var skipForward30Btn = getVideoClipEl('video-clip-skip-forward-30-btn');
   var loopPreviewBtn = getVideoClipEl('video-clip-loop-preview-btn');
   var markStartBtn = getVideoClipEl('video-clip-mark-start-btn');
+  var useExactStartBtn = getVideoClipEl('video-clip-use-exact-start-btn');
   var markEndBtn = getVideoClipEl('video-clip-mark-end-btn');
   var startEl = getVideoClipEl('video-clip-start-input');
   var endEl = getVideoClipEl('video-clip-end-input');
@@ -1275,6 +1397,9 @@ function wireVideoClipModal() {
   if (cropClearBtn) cropClearBtn.onclick = clearVideoClipCrop;
   if (frameBackBtn) frameBackBtn.onclick = function () { stepVideoClipFrame(-1); };
   if (frameForwardBtn) frameForwardBtn.onclick = function () { stepVideoClipFrame(1); };
+  if (checkFrameBtn) checkFrameBtn.onclick = function () { requestVideoClipExactFrame(null); };
+  if (exactBackBtn) exactBackBtn.onclick = function () { if (videoClipExactFrame) requestVideoClipExactFrame({ frameIndex: videoClipExactFrame.frameIndex - 1 }); };
+  if (exactForwardBtn) exactForwardBtn.onclick = function () { if (videoClipExactFrame) requestVideoClipExactFrame({ frameIndex: videoClipExactFrame.frameIndex + 1 }); };
   if (skipBackBtn) skipBackBtn.onclick = function () { stepVideoClipPlayhead(-5); };
   if (skipForwardBtn) skipForwardBtn.onclick = function () { stepVideoClipPlayhead(5); };
   if (skipForward15Btn) skipForward15Btn.onclick = function () { stepVideoClipPlayhead(15); };
@@ -1282,10 +1407,13 @@ function wireVideoClipModal() {
   if (loopPreviewBtn) loopPreviewBtn.onclick = toggleVideoClipLoopPreview;
   if (markStartBtn && startEl && videoEl) {
     markStartBtn.onclick = function () {
+      videoClipExactStart = null;
       startEl.value = formatVideoClipSeekSeconds(videoEl.currentTime || 0);
       syncVideoClipTrimInputs('start');
+      updateVideoClipExactFrameUi();
     };
   }
+  if (useExactStartBtn) useExactStartBtn.onclick = useVideoClipExactStart;
   if (markEndBtn && endEl && videoEl) {
     markEndBtn.onclick = function () {
       endEl.value = formatVideoClipSeekSeconds(videoEl.currentTime || 0);
@@ -1313,10 +1441,16 @@ function wireVideoClipModal() {
 
   if (startEl && videoEl) {
     startEl.addEventListener('change', function () {
+      videoClipExactStart = null;
       var range = syncVideoClipTrimInputs('start');
       if (range) seekVideoClipPlayhead(range.start);
+      updateVideoClipExactFrameUi();
     });
-    startEl.addEventListener('input', updateVideoClipTimelineUi);
+    startEl.addEventListener('input', function () {
+      videoClipExactStart = null;
+      updateVideoClipTimelineUi();
+      updateVideoClipExactFrameUi();
+    });
   }
 
   if (endEl && videoEl) {

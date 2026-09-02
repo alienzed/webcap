@@ -858,7 +858,7 @@ function formatTrainingGpuMemory(value) {
   var mib = Number(value);
   if (!isFinite(mib) || mib < 0) return '';
   var gib = mib / 1024;
-  return (gib >= 10 ? gib.toFixed(0) : gib.toFixed(1)) + ' GB';
+  return gib.toFixed(1) + ' GiB';
 }
 
 function buildTrainingGpuStatusHtml() {

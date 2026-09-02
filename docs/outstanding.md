@@ -4,8 +4,7 @@ Last reviewed: 2026-08-30.
 > Training note: [Training Stabilization](training_stabilization.md) is the current authority for training behavior and deployment. Older profile, immutable-bundle, transcoding, preflight, recovery, and automatic-permission notes below are historical only where they conflict.
 
 ## Enhancements / Ideas
-- [LoRA initializer runs](lora_initializer.md): start a new run from an existing LoRA directory without resuming checkpoint state.
-- Sometimes I want to bump the running training, test/start another, right now I have to Pause, reorder the queue and Resume, which is fine, but in this case what would be cool would be to like, with one button, swap the running process with the one below it. Is this a diminishing returns kind of feature where I just accept Pause, wait, reorder, resume, or do we add a button for this? There's room for more buttons but I am weary of overengineering.
+- Sometimes I want to bump the running training, test/start another, right now I have to Pause, reorder the queue and Resume, which is fine, but in this case what would be cool would be to like, with one button, swap the running process with the one below it. Is this a diminishing returns kind of feature where I just accept Pause, wait, reorder, resume? maybe just the reorder button for the first queued item gets enabled and triggers that swap?
 
 ## Parked Design Notes (Not Current Backlog)
 
@@ -49,7 +48,6 @@ No further persistence implementation is planned unless verification exposes a r
 - Optimize Caption Report responsiveness for large visible sets. Yield after the initial status update so progress paints; avoid repeated visible-row-to-item linear lookups; replace or bound the current all-pairs Levenshtein similarity scan; and avoid duplicating full focus-file lists into many iframe DOM attributes/listeners. Preserve current report findings and focus-set behavior.
 - Optimize H3 envelope-probe preparation without weakening its immutable seed. It currently refreshes metadata for the entire set before copying/transcoding one selected video; inspect only the selected file's cached/stale metadata and expose separate metadata/copy/transcode progress. The full H3 calibration runner remains design-only in `vram_bucket_calibration.md`; benchmark or diagnose actual calibration only on the training machine with supplied logs/telemetry.
 - Verify on the training machine whether direct H3 training safely performs required caching and how cache freshness should be determined before removing the separate WebCap `--cache_only` phase.
-- Add exact Clip frame navigation using asynchronous `ffprobe` frame timestamps with immutable-file caching, previous/next-frame controls, and exact `Mark Start`. Keep it separate from automatic clarity analysis and expose indexing failures visibly.
 - Add an assisted dataset-config editor for changing directories, frames, and compatible higher/lower resolutions, informed by model profiles and calibrated VRAM shapes, while retaining the raw text editor as a fallback.
 - Consider run-owned overrides for queued settings such as learning rate, epochs, dropout, checkpoint frequency, and state-save frequency. Define how changing them interacts with the queued job’s immutable captured bundle before implementation.
 - Expose the last saved checkpoint on a running job if real usage demonstrates enough value; checkpoint discovery already exists.

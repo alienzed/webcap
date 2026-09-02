@@ -42,6 +42,8 @@ These describe implemented features, but they are narrower than `README.md` / `d
 - `docs/face_counts.md` - Face Focus metadata and review reporting
 - `docs/scene_complexity.md` - image scene-complexity metadata
 - `docs/selection_pose_stack.md` - optional MediaPipe selection-pose analysis
+- `docs/lora_initializer.md` - fine-tune-from-saved-LoRA workflow and validation rationale
+- `docs/frame-scrubbing.md` - authoritative decoded-frame navigation and exact clip starts
 
 ## Planning / Direction Docs
 
@@ -53,11 +55,9 @@ These are useful product notes, not authoritative implementation references:
 - `docs/generate_config_mode.md` - POC, Normal, and Quality mode behavior
 - `docs/repeat_targeting.md` - dataset repeat calculation
 - `docs/video_clip.md`
-- `docs/frame-scrubbing.md` - tabled design for authoritative decoded-frame navigation and export starts
 - `docs/vram_bucket_calibration.md` - separate H3 shape-calibration tooling whose safe shapes can clamp generated ceilings
 - `docs/training_run_identity.md` - proposed run names, captured-config visibility, and experiment lineage
 - `docs/training_artifact_cleanup.md` - visible training action layout and clean-break rollout
-- `docs/lora_initializer.md` - proposed fine-tune-from-saved-LoRA workflow
 - `wildcard_template.md` - parked wildcard-template-builder concept
 
 ## Historical / Superseded

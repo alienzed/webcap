@@ -1763,6 +1763,16 @@ body.focused-annotation-open .caption-context-menu {
   color: #9fb0c5;
 }
 
+.video-clip-exact-frame-preview {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  border: 1px solid rgba(96, 165, 250, 0.38);
+  border-radius: 3px;
+  background: #0b1220;
+}
+
 .video-clip-extract-frame-btn,
 .video-clip-inline-btn,
 #video-clip-export-btn,

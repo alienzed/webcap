@@ -86,12 +86,13 @@ def test_review_update_limits_targets_and_reset_replaces_custom_dataset(tmp_path
     assert dataset.read_text(encoding="utf-8").startswith("# webcap_training_review = 1")
 
 
-def test_video_distribution_keeps_temporal_and_detail_roles_independent():
+def test_video_distribution_keeps_h3_roles_independent():
     plan = {
         "profileId": MINIMAX_H3_PROFILE_ID,
         "stages": {"h3": {"imageBuckets": {}}},
         "videoRoles": [
-            {"id": "temporal", "enabled": True, "frames": 68, "weight": 1.0, "buckets": {"square": [[512, 512], [672, 672]]}},
+            {"id": "balanced", "enabled": True, "frames": 34, "weight": 1.0, "buckets": {"square": [[576, 576]]}},
+            {"id": "temporal", "enabled": True, "frames": 68, "weight": 0.5, "buckets": {"square": [[512, 512], [672, 672]]}},
             {"id": "detail", "enabled": True, "frames": 17, "weight": 0.25, "buckets": {"square": [[672, 672]]}},
         ],
     }
@@ -100,12 +101,24 @@ def test_video_distribution_keeps_temporal_and_detail_roles_independent():
     distribution = training_review._distribution_payload(manifest, plan)
 
     temporal = distribution["videos"]["temporal"]["square"]
+    balanced = distribution["videos"]["balanced"]["square"]
     detail = distribution["videos"]["detail"]["square"]
-    assert temporal["frames"] == 68 and detail["frames"] == 17
-    assert temporal["eligibleCount"] == 1 and detail["eligibleCount"] == 1
+    assert (balanced["frames"], temporal["frames"], detail["frames"]) == (34, 68, 17)
+    assert balanced["eligibleCount"] == temporal["eligibleCount"] == detail["eligibleCount"] == 1
+    assert balanced["native"][0]["assignedTarget"] == [576, 576]
     assert temporal["native"][0]["assignedTarget"] == [512, 512]
     assert detail["native"][0]["assignedTarget"] == [672, 672]
     assert distribution["impact"]["videos"]["temporal"] != distribution["impact"]["videos"]["detail"]
+
+
+def test_h3_default_roles_enable_balanced_temporal_and_detail():
+    roles = {role["id"]: role for role in training_review._normal_roles(MINIMAX_H3_PROFILE_ID)}
+
+    assert {name: (role["frames"], role["weight"], role["enabled"]) for name, role in roles.items()} == {
+        "balanced": (34, 1.0, True),
+        "temporal": (68, 0.5, True),
+        "detail": (17, 0.25, True),
+    }
 
 
 def test_h3_review_uses_video_limits_and_rejects_managed_targets_above_them(monkeypatch):
@@ -172,7 +185,8 @@ def test_video_role_metadata_round_trips_without_a_trainable_directory():
         "version": 1,
         "stages": {"h3": {"targetSteps": 20000, "imageBuckets": {}}},
         "videoRoles": [
-            {"id": "temporal", "enabled": True, "frames": 68, "weight": 1.0, "buckets": {"square": [[352, 352]]}},
+            {"id": "balanced", "enabled": True, "frames": 34, "weight": 1.0, "buckets": {"square": [[544, 544]]}},
+            {"id": "temporal", "enabled": True, "frames": 68, "weight": 0.5, "buckets": {"square": [[352, 352]]}},
             {"id": "detail", "enabled": False, "frames": 17, "weight": 0.25, "buckets": {"square": [[672, 672]]}},
         ],
     }
@@ -182,8 +196,31 @@ def test_video_role_metadata_round_trips_without_a_trainable_directory():
     roles = {role["id"]: role for role in imported["videoRoles"]}
 
     assert '# webcap_video_role = ' in text
+    assert roles["balanced"]["buckets"] == {"square": [[544, 544]]}
     assert roles["temporal"]["buckets"] == {"square": [[352, 352]]}
     assert roles["detail"]["enabled"] is False
+
+
+def test_h3_legacy_managed_dataset_keeps_new_balanced_role_disabled():
+    roles = training_review._normal_roles(MINIMAX_H3_PROFILE_ID)
+    next(role for role in roles if role["id"] == "balanced")["buckets"] = {"square": [[544, 544]]}
+    profile_plan = {
+        "version": 1,
+        "stages": {"h3": {"targetSteps": 20000, "imageBuckets": {}}},
+        "videoRoles": roles,
+    }
+    text = "\n".join([
+        '# webcap_video_role = {"id":"temporal","enabled":true,"frames":68,"weight":1.0,"buckets":{"square":[[352,352]]}}',
+        '# webcap_video_role = {"id":"detail","enabled":true,"frames":17,"weight":0.25,"buckets":{"square":[[704,704]]}}',
+    ])
+
+    imported = training_review._import_representable_dataset(text, MINIMAX_H3_PROFILE_ID, "h3", profile_plan)
+    roles = {role["id"]: role for role in imported["videoRoles"]}
+
+    assert roles["balanced"]["enabled"] is False
+    assert roles["balanced"]["buckets"]
+    assert roles["temporal"]["enabled"] is True
+    assert roles["detail"]["enabled"] is True
 
 
 def test_structured_dataset_render_keeps_image_frame_count_and_review_comments():

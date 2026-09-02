@@ -12,18 +12,18 @@ No `image_classes` folders are created. The run bundle captures each selected im
 
 Video roles are declarative:
 
-| Profile/mode | Temporal | Detail |
-| --- | ---: | ---: |
-| Wan2.1/2.2 POC | 33f | — |
-| Wan2.1/2.2 Normal/Quality | 37f | 13f |
-| MiniMax H3 POC | 34f | — |
-| MiniMax H3 Normal/Quality | 68f | 17f |
+| Profile/mode | Balanced | Temporal | Detail |
+| --- | ---: | ---: | ---: |
+| Wan2.1/2.2 POC | — | 33f | — |
+| Wan2.1/2.2 Normal/Quality | — | 37f | 13f |
+| MiniMax H3 POC | — | 34f | — |
+| MiniMax H3 Normal/Quality | 34f | 68f | 17f |
 
-Wan video timing is normalized to 16 fps and H3 timing to 24 fps. A temporal stanza uses all temporal-eligible clips for that AR and the highest common native bucket under the profile/mode ceiling. Its repeat weight is `1.0`.
+Wan video timing is normalized to 16 fps and H3 timing to 24 fps. Full-cohort roles use every clip that reaches their frame count and the highest common native bucket under the profile/mode ceiling. H3 Normal/Quality defaults to Balanced `1.0`, Temporal `0.5`, and Detail `0.25` repeat weights.
 
-Detail is an explicit subset role with repeat weight `0.25`. Clips long enough for detail but shorter than temporal are mandatory detail members and establish the highest common native target they support. Long clips join detail only when they natively support the selected bucket. When there are no mandatory clips, an optional detail stanza is created only if at least two clips support a native bucket.
+Detail is an explicit subset role. Clips long enough for detail but shorter than the next full-cohort role are mandatory detail members and establish the highest common native target they support. Longer clips join detail only when they natively support the selected bucket. H3 permits a one-clip detail subset so newly generated H3 datasets include all three roles; other profiles retain the existing two-clip minimum.
 
-The bundle captures every selected source media item once. It materializes only marked detail stanzas under `media/video_detail/<ar>__<width>x<height>x<frames>`, using hardlinks when possible and copies otherwise. Temporal and image stanzas remain direct paths; there are no general video-class folders. A direct temporal folder may include clips shorter than that stanza's frame count; Diffusion Pipe skips those clips.
+The bundle captures every selected source media item once. It materializes only marked detail stanzas under `media/video_detail/<ar>__<width>x<height>x<frames>`, using hardlinks when possible and copies otherwise. Balanced, Temporal, and image stanzas remain direct paths; there are no general video-class folders. A direct full-cohort video folder may include clips shorter than that stanza's frame count; Diffusion Pipe skips those clips.
 
 Clips with unsupported ARs, missing required metadata, or insufficient role frames are skipped with explicit warnings and do not block a managed launch.
 

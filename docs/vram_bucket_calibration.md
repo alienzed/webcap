@@ -41,7 +41,7 @@ Calibration writes a separate result for inspection and ceiling selection. Newly
 - Aspect families: square, 4:3, 3:4, 16:9, and 9:16.
 - Batch settings: those in the selected H3 Normal config, including micro-batch size, activation checkpointing, dtype, optimizer, and `compile`.
 - Result: explicit tested-safe and recommended-safe shape lists, plus complete measurements for every attempted candidate.
-- Integration: newly created/reset H3 Normal and Quality dataset defaults. POC retains its fixed conservative 34-frame policy in v1.
+- Integration: newly created/reset H3 Normal and Quality datasets enable Balanced 34f, Temporal 68f, and Detail 17f with fixed `1.0 : 0.5 : 0.25` exposure weights. POC retains its fixed conservative 34-frame temporal policy in v1.
 
 Image calibration is a follow-up using the same machinery with `frames = 1`. It should not complicate the first H3 video implementation.
 

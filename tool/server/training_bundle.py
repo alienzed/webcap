@@ -189,6 +189,8 @@ def _materialize_review_stage_dataset(stage, stage_plan, media_root, distributio
         wsl_path = to_wsl_path(target_dir, distribution)
         values = list(bucket) if kind == "video" else [bucket[0], bucket[1], 1]
         lines.extend([""] + _captured_review_comment_lines(entry, kind, values, ladders) + ["[[directory]]", 'path = "' + wsl_path + '"', "num_repeats = " + str(int(entry.get("numRepeats") or 1)), 'group = "' + ("images" if kind == "image" else "videos") + '"'])
+        if kind == "video" and str(entry.get("role") or ""):
+            lines.append("# webcap_dataset_role = " + str(entry.get("role")))
         if bool(entry.get("detailIntent")):
             lines.append("# webcap_detail_subset = true")
         lines.append("size_buckets = [")
@@ -469,6 +471,8 @@ def _build_bundle_summary(selected_profile, selected_mode, manifest, plan, bundl
             group = str(data.get("group") or "")
             kind = "videos" if group == "videos" else "images"
             is_detail = group == "videos" and "video_detail" in path_parts
+            role_match = re.search(r"(?m)^\s*#\s*webcap_dataset_role\s*=\s*([A-Za-z0-9_-]+)\s*$", block["raw"])
+            declared_role = role_match.group(1) if role_match else ""
             detail_count = sum(
                 1
                 for row in manifest.get("videos", [])
@@ -483,7 +487,7 @@ def _build_bundle_summary(selected_profile, selected_mode, manifest, plan, bundl
                 "group": group,
                 "directory": directory,
                 "path": path,
-                "role": "detail" if is_detail else ("temporal" if group == "videos" else "image"),
+                "role": declared_role or ("detail" if is_detail else ("temporal" if group == "videos" else "image")),
                 "mediaCount": detail_count if is_detail else media_by_directory.get(kind + ":" + directory),
                 "numRepeats": int(data.get("num_repeats") or 1),
                 "sizeBuckets": data.get("size_buckets") or [],

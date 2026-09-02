@@ -178,7 +178,7 @@ def _write_h3_video_manifest(set_folder, frames, include_image=False, fps=24, du
     }), encoding="utf-8")
 
 
-def test_h3_uses_temporal_and_detail_roles_then_one_poc_role(tmp_path):
+def test_h3_uses_balanced_temporal_and_detail_roles_then_one_poc_role(tmp_path):
     set_folder = tmp_path / "set"
     _write_h3_video_manifest(set_folder, 136, include_image=True)
     (set_folder / "config.h3.toml").write_text("epochs = 100\n", encoding="utf-8")
@@ -187,15 +187,20 @@ def test_h3_uses_temporal_and_detail_roles_then_one_poc_role(tmp_path):
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
     assert "[320, 320, 68]" in text
-    assert "[768, 768, 17]" not in text
+    assert "[544, 544, 34]" in text
+    assert "[704, 704, 17]" in text
     assert "[512, 512, 1]" in text
-    assert all(f", {frames}]" not in text for frames in (13, 34, 136))
-    assert text.count('group = "videos"') == 1
+    assert all(f", {frames}]" not in text for frames in (13, 136))
+    assert text.count('group = "videos"') == 3
+    assert '# webcap_dataset_role = balanced' in text
+    assert '# webcap_dataset_role = temporal' in text
+    assert '# webcap_dataset_role = detail' in text
     video_blocks = [block for block in text.split("[[directory]]") if 'group = "videos"' in block]
     video_repeats = [int(block.split("num_repeats = ", 1)[1].splitlines()[0]) for block in video_blocks]
     assert video_repeats[0] >= 1
     assert "square: temporal 320x320 @ 68" in report
-    assert "square: detail" not in report
+    assert "square: balanced 544x544 @ 34" in report
+    assert "square: detail 704x704 @ 17" in report
     plan = json.loads((set_folder / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))
     assert set(plan["stages"]) == {"h3"}
     assert plan["stages"]["h3"]["estimatedSteps"] > 0
@@ -244,11 +249,28 @@ def test_h3_dataset_accepts_an_image_only_set(tmp_path):
 
 
 def test_h3_role_ceilings_stay_inside_the_conservative_cell_limit():
-    frames_by_role = {"temporal": 68, "detail": 17}
+    frames_by_role = {"balanced": 34, "temporal": 68, "detail": 17}
     for by_aspect in H3_VIDEO_MODE_CEILINGS.values():
         for ceilings in by_aspect.values():
             for role, (width, height) in ceilings.items():
                 assert mfp(width, height, frames_by_role[role]) <= H3_VIDEO_MFP_LIMIT
+
+
+def test_h3_balanced_role_uses_conservative_ladder_without_calibration(monkeypatch):
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {"training": {}})
+
+    for ar_label, ceiling, default in (
+        ("square", (576, 576), (544, 544)),
+        ("43", (672, 512), (640, 480)),
+        ("34", (512, 672), (480, 640)),
+        ("169", (800, 448), (736, 416)),
+        ("916", (448, 800), (416, 736)),
+    ):
+        ladder = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", ar_label, "balanced", 34)
+        assert ladder["source"] == "baseline"
+        assert ladder["ceiling"] == ceiling
+        assert ladder["selectable"][0] == ceiling
+        assert ladder["defaults"][0] == default
 
 
 def test_model_native_frame_estimates_prefer_duration_then_source_rate_then_raw_frames():
@@ -265,14 +287,17 @@ def test_h3_bucket_timing_uses_24fps_for_legacy_and_high_fps_sources(tmp_path):
     generate_dataset_configs(legacy_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     legacy_text = (legacy_folder / "dataset.train.toml").read_text(encoding="utf-8")
     assert ", 68]" in legacy_text
-    assert all(f", {frames}]" not in legacy_text for frames in (17, 34, 102, 136))
+    assert ", 34]" in legacy_text
+    assert ", 17]" in legacy_text
+    assert all(f", {frames}]" not in legacy_text for frames in (102, 136))
 
     high_fps_folder = tmp_path / "high_fps"
     _write_h3_video_manifest(high_fps_folder, 120, fps=60, duration=2.0)
     generate_dataset_configs(high_fps_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     high_fps_text = (high_fps_folder / "dataset.train.toml").read_text(encoding="utf-8")
     assert ", 17]" in high_fps_text
-    assert all(f", {frames}]" not in high_fps_text for frames in (34, 68, 102, 136))
+    assert ", 34]" in high_fps_text
+    assert all(f", {frames}]" not in high_fps_text for frames in (68, 102, 136))
 
 
 def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
@@ -293,7 +318,9 @@ def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
         width, height, frames = buckets
         assert f"[{width}, {height}, {frames}]" in text
         assert (width // 32) * (height // 32) * frames <= 11_900
-        assert all(f", {other}]" not in text for other in (17, 34, 136))
+        assert ", 34]" in text
+        assert ", 17]" in text
+        assert ", 136]" not in text
 
 
 def test_h3_calibration_clamps_active_role_ceilings(monkeypatch):
@@ -384,6 +411,21 @@ def test_h3_sparse_calibration_uses_exact_entries_and_conservative_fallbacks(mon
     assert detail_four_three["selectable"][0] == (896, 672)
     assert detail_four_three["defaults"][0] == (864, 640)
 
+    balanced_square = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "square", "balanced", 34)
+    assert balanced_square["source"] == "calibration"
+    assert balanced_square["ceiling"] == (704, 704)
+    assert balanced_square["selectable"][0] == (704, 704)
+    assert balanced_square["defaults"][0] == (672, 672)
+
+    balanced_four_three = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "43", "balanced", 34)
+    assert balanced_four_three["source"] == "calibration"
+    assert balanced_four_three["ceiling"] == (800, 608)
+    assert video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "34", "balanced", 34)["ceiling"] == (608, 800)
+
+    balanced_portrait = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "916", "balanced", 34)
+    assert balanced_portrait["source"] == "calibration"
+    assert balanced_portrait["ceiling"] == (512, 896)
+
     for ar_label, ceiling, default in (
         ("square", (448, 448), (416, 416)),
         ("43", (512, 384), (480, 352)),
@@ -407,10 +449,10 @@ def test_h3_calibration_can_lower_a_baseline_and_must_stay_inside_the_model_enve
     assert lowered["defaults"][0] == (608, 608)
 
     monkeypatch.setattr(dataset_config_module.app_config, "config", {
-        "training": {"h3_calibration": {"safe_shapes": {"17": {"169": [1376, 768]}}}},
+        "training": {"h3_calibration": {"safe_shapes": {"34": {"169": [1376, 768]}}}},
     })
     with pytest.raises(ValueError, match="model/probe envelope"):
-        video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "169", "detail", 17)
+        video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "169", "balanced", 34)
 
 
 def test_h3_bucket_selection_tolerates_small_upscale_and_falls_back_for_smaller_sources(tmp_path):
@@ -419,12 +461,14 @@ def test_h3_bucket_selection_tolerates_small_upscale_and_falls_back_for_smaller_
     generate_dataset_configs(tolerated, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     tolerated_text = (tolerated / "dataset.train.toml").read_text(encoding="utf-8")
     assert "[576, 320, 17]" in tolerated_text
+    assert "[576, 320, 34]" in tolerated_text
 
     fallback = tmp_path / "fallback"
     _write_h3_video_manifest(fallback, 34, ar="169", size=(500, 280))
     generate_dataset_configs(fallback, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
     fallback_text = (fallback / "dataset.train.toml").read_text(encoding="utf-8")
     assert "[448, 256, 17]" in fallback_text
+    assert "[448, 256, 34]" in fallback_text
     assert "\n  [576, 320, 17]" not in fallback_text
 
 

@@ -156,8 +156,11 @@ def _cluster_targets(values, candidates):
 def _clustered_buckets(manifest, profile_id, role="", frames=1):
     by_aspect = {label: [] for label in ASPECT_RATIOS}
     key = "videos" if role else "images"
+    model_fps = profile_for_mode(profile_id, "normal").get("videoFps") if role else None
     for row in manifest.get(key, []):
         if not isinstance(row, dict):
+            continue
+        if role and int(coerce_frames(row, model_fps) or 0) < int(frames):
             continue
         ar_label = str(row.get("ar") or "")
         try:
@@ -479,7 +482,7 @@ def _render_stage_dataset(stage_plan, profile_plan, profile_id):
         else:
             rendered = {
                 "kind": "video", "dir_path": (DATASET_ROOT_PLACEHOLDER / str(entry.get("sourceDir") or entry.get("ar") or "videos")).as_posix(),
-                "bucket": (bucket[0], bucket[1], bucket[2]), "detail_intent": entry.get("role") == "detail",
+                "bucket": (bucket[0], bucket[1], bucket[2]), "detail_intent": entry.get("role") == "detail", "role": entry.get("role"),
             }
         blocks.append("\n".join(_review_bucket_comment_lines(entry, profile_id) + [render_dataset_entry(rendered, int(entry.get("numRepeats") or 1))]))
     lines.append(render_dataset_toml(blocks).rstrip())
@@ -525,8 +528,10 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
         return None
     stage_plan["imageBuckets"] = {}
     roles = {item["id"]: item for item in imported.get("videoRoles", [])}
+    default_buckets = {role_id: deepcopy(role.get("buckets") or {}) for role_id, role in roles.items()}
     for role in roles.values():
         role["buckets"] = {}
+    saved_role_ids = set()
     for line in text.splitlines():
         if not line.startswith(VIDEO_ROLE_METADATA_PREFIX):
             continue
@@ -537,6 +542,7 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
         if not isinstance(saved, dict) or str(saved.get("id") or "") not in roles:
             return None
         role = roles[str(saved["id"])]
+        saved_role_ids.add(str(saved["id"]))
         role["enabled"] = bool(saved.get("enabled"))
         role["frames"] = saved.get("frames")
         role["weight"] = saved.get("weight")
@@ -580,6 +586,9 @@ def _import_representable_dataset(text, profile_id, stage, profile_plan):
             selected.append([bucket[0], bucket[1]])
         if len(selected) > 3:
             return None
+    if profile_id == MINIMAX_H3_PROFILE_ID and "balanced" in roles and "balanced" not in saved_role_ids:
+        roles["balanced"]["enabled"] = False
+        roles["balanced"]["buckets"] = default_buckets["balanced"]
     return imported
 
 

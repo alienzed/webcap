@@ -379,17 +379,43 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
   var low = Math.max(0, Math.floor((sourceLow - step * .5) / step) * step);
   var high = Math.ceil((usefulHigh + step) / step) * step;
   if (high - low < step * 3) high = low + step * 3;
-  function position(value) { return Math.max(1.5, Math.min(98.5, ((Number(value) - low) / Math.max(1, high - low)) * 97)); }
+  var aboveCeiling = sourceEdges.filter(function (edge) { return edge > high; }).sort(function (a, b) { return a - b; });
+  var nextPopulation = aboveCeiling[0] || 0;
+  var emptyGap = nextPopulation - high;
+  var fullSpan = Math.max(1, nextPopulation - low);
+  var hasBreak = !!nextPopulation && emptyGap >= Math.max(step * 2, (high - low) * .35) && emptyGap / fullSpan >= .28;
+  var highSource = sourceEdges.length ? Math.max.apply(Math, sourceEdges) : high;
+  var rightStep = tickSteps.filter(function (value) { return value >= Math.max(32, highSource - nextPopulation) / 3; })[0] || 256;
+  var rightLow = hasBreak ? Math.floor(nextPopulation / rightStep) * rightStep : 0;
+  var rightHigh = hasBreak ? Math.ceil((highSource + rightStep * .5) / rightStep) * rightStep : 0;
+  if (hasBreak && rightHigh - rightLow < rightStep * 2) rightHigh = rightLow + rightStep * 2;
+  var segments = hasBreak
+    ? [{ low: low, high: high, start: 1.5, end: 70, bins: 10 }, { low: rightLow, high: rightHigh, start: 76, end: 98.5, bins: 5 }]
+    : [{ low: low, high: high, start: 1.5, end: 98.5, bins: 12 }];
+  function segmentForEdge(edge) { return hasBreak && edge >= rightLow ? segments[1] : segments[0]; }
+  function position(value) {
+    var segment = segmentForEdge(Number(value));
+    return Math.max(segment.start, Math.min(segment.end, segment.start + ((Number(value) - segment.low) / Math.max(1, segment.high - segment.low)) * (segment.end - segment.start)));
+  }
   var ticks = [];
-  for (var tick = low; tick <= high; tick += step) ticks.push(tick);
-  var binCount = 12;
-  var binSpan = (high - low) / binCount;
-  function binForEdge(edge) { return Math.min(binCount - 1, Math.max(0, Math.floor((edge - low) / Math.max(1, binSpan)))); }
-  var inRangeRows = rows.filter(function (row) { return Number(row.nativeShortEdge || row.edge || 0) <= high; });
-  var overflowRows = rows.filter(function (row) { return Number(row.nativeShortEdge || row.edge || 0) > high; });
-  var bins = Array.apply(null, Array(binCount)).map(function () { return 0; });
-  inRangeRows.forEach(function (row) { bins[binForEdge(Number(row.nativeShortEdge || row.edge || 0))] += 1; });
-  var maximum = Math.max.apply(Math, [1].concat(bins));
+  segments.forEach(function (segment) {
+    var tickSize = segment === segments[0] ? step : rightStep;
+    for (var tick = segment.low; tick <= segment.high; tick += tickSize) ticks.push(tick);
+  });
+  function binForEdge(edge) {
+    var segment = segmentForEdge(edge);
+    var index = Math.min(segment.bins - 1, Math.max(0, Math.floor((edge - segment.low) / Math.max(1, (segment.high - segment.low) / segment.bins))));
+    return segments.indexOf(segment) + ':' + index;
+  }
+  function binBounds(key) {
+    var values = key.split(':').map(Number);
+    var segment = segments[values[0]];
+    var width = (segment.high - segment.low) / segment.bins;
+    return [segment.low + values[1] * width, segment.low + (values[1] + 1) * width];
+  }
+  var bins = {};
+  rows.forEach(function (row) { var key = binForEdge(Number(row.nativeShortEdge || row.edge || 0)); bins[key] = Number(bins[key] || 0) + 1; });
+  var maximum = Math.max.apply(Math, [1].concat(Object.keys(bins).map(function (key) { return bins[key]; })));
   var stacks = {};
   var orderedTargets = (group.targets || []).slice().sort(function (a, b) {
     return Math.min(a.shape[0], a.shape[1]) - Math.min(b.shape[0], b.shape[1]);
@@ -403,19 +429,22 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
     return '<i class="training-review-target-zone ' + reviewTargetColor(selected, target.shape) + '" style="left:' + position(start) + '%;width:' + Math.max(0, position(end) - position(start)) + '%"></i>';
   }).join('');
   var gridlines = ticks.map(function (value) { return '<i class="training-review-chart-gridline" style="left:' + position(value) + '%"></i>'; }).join('');
-  var histogram = bins.map(function (count, index) {
-    var start = position(low + index * binSpan);
-    var end = position(low + (index + 1) * binSpan);
+  var histogram = Object.keys(bins).map(function (key) {
+    var count = bins[key];
+    var bounds = binBounds(key);
+    var start = position(bounds[0]);
+    var end = position(bounds[1]);
     return '<i class="training-review-hist-bin" style="left:' + start + '%;width:' + Math.max(0, end - start) + '%;height:' + Math.round((count / maximum) * 72) + '%"></i>';
   }).join('');
-  var dots = inRangeRows.map(function (row) {
+  var dots = rows.map(function (row) {
     var edge = Number(row.nativeShortEdge || row.edge || 0);
     var bin = binForEdge(edge);
     var ordinal = stacks[bin] || 0;
     stacks[bin] = ordinal + 1;
     var target = row.assignedTarget || row.target || [];
-    var binStart = position(low + bin * binSpan);
-    var binEnd = position(low + (bin + 1) * binSpan);
+    var bounds = binBounds(bin);
+    var binStart = position(bounds[0]);
+    var binEnd = position(bounds[1]);
     var lane = ((ordinal % 5) - 2) * .42;
     var dotLeft = Math.max(binStart + .7, Math.min(binEnd - .7, position(edge) + lane));
     var level = Math.floor(ordinal / 5);
@@ -435,7 +464,8 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
   }
   var envelope = view === 'images' ? '' : envelopeMarker('floor', floorEdge, 'Floor', 'Lowest selectable supported rung') + envelopeMarker('default', defaultEdge, defaultEdge === maximumEdge ? 'Default / max' : 'Default', defaultEdge === maximumEdge ? 'Automatic default ceiling and effective maximum' : 'Automatic default ceiling') + (defaultEdge === maximumEdge ? '' : envelopeMarker('maximum', maximumEdge, 'Max', limit && limit.source === 'calibration' ? 'Calibrated maximum' : 'Effective maximum'));
   var tickLabels = ticks.map(function (value) { return '<span style="left:' + position(value) + '%">' + escapeHtml(String(value)) + '</span>'; }).join('');
-  return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Bars group nearby native short edges; each dot is one source file.</span></div><div class="training-review-legend"><span><i class="histogram"></i>Native range</span><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + zones + gridlines + histogram + dots + markers + envelope + (overflowRows.length ? '<span class="training-review-chart-overflow" title="' + overflowRows.length + ' native source' + (overflowRows.length === 1 ? '' : 's') + ' above the plotted training envelope.">' + overflowRows.length + ' above range</span>' : '') + '</div><div class="training-review-chart-axis"><div class="training-review-chart-ticks">' + tickLabels + '</div><span>Native short edge (px)</span></div></section>';
+  var axisBreak = hasBreak ? '<i class="training-review-axis-break" aria-label="Resolution scale skips an empty interval"><b></b><b></b></i>' : '';
+  return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Bars group nearby native short edges; each dot is one source file.</span></div><div class="training-review-legend"><span><i class="histogram"></i>Native range</span><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + zones + gridlines + histogram + dots + markers + envelope + axisBreak + '</div><div class="training-review-chart-axis"><div class="training-review-chart-ticks">' + tickLabels + axisBreak + '</div><span>Native short edge (px)</span></div></section>';
 }
 
 function reviewImpactHtml(payload, view) {

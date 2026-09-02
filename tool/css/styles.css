@@ -2651,7 +2651,7 @@ iframe {
   background: color-mix(in srgb, var(--panel-bg, #20242c) 92%, #253144);
 }
 .training-review-chip-strip { align-items: stretch; }
-.training-review-target-groups { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.training-review-target-groups { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px; }
 .training-review-target-row { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
 .training-review-target-row > span { color: var(--muted-text, #a3adba); font-size: 11px; font-weight: 700; }
 .training-review-empty-selection { color: var(--muted-text, #a3adba); font-size: 12px; font-style: italic; }
@@ -2718,9 +2718,14 @@ iframe {
 .training-review-envelope-marker.default { background: rgba(217, 164, 65, .62); }
 .training-review-envelope-marker.maximum { background: rgba(207, 91, 91, .7); }
 .training-review-chart-overflow { position: absolute; top: 5px; right: 6px; padding: 2px 4px; border-radius: 4px; background: rgba(15, 23, 42, .68); color: var(--muted-text, #a3adba); font-size: 10px; }
+.training-review-axis-break { position: absolute; left: 73%; top: 0; bottom: 0; width: 12px; transform: translateX(-50%); pointer-events: none; }
+.training-review-axis-break b { position: absolute; top: 43%; width: 2px; height: 18px; background: var(--muted-text, #a3adba); transform: rotate(30deg); }
+.training-review-axis-break b:first-child { left: 2px; }.training-review-axis-break b:last-child { right: 2px; }
 .training-review-chart-axis { display: grid; gap: 3px; color: var(--muted-text, #a3adba); font-size: 10px; text-align: center; }
 .training-review-chart-ticks { position: relative; height: 13px; }
 .training-review-chart-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.training-review-chart-ticks .training-review-axis-break { top: -2px; bottom: auto; height: 12px; }
+.training-review-chart-ticks .training-review-axis-break b { top: 0; height: 12px; }
 .training-review-impact-direction { display: flex; justify-content: space-between; color: var(--muted-text, #a3adba); font-size: 10px; }
 .training-review-impact-cells { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .training-review-impact-cell { display: grid; min-height: 66px; align-content: center; justify-items: center; gap: 2px; padding: 7px 4px; border-radius: 5px; color: #18212b; text-align: center; }

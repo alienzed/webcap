@@ -7,7 +7,7 @@ from PIL import Image
 from tool.server import config as app_config
 from tool.server import app as app_module
 from tool.server import run_ops, training_bundle, training_history, training_runner, training_review
-from tool.server.training_action import allocate_action
+from tool.server.training_action import allocate_action, read_action
 from tool.server.training_config_files import reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, profile_for_mode
 from tool.server.training_setup import ensure_training_setup
@@ -301,6 +301,7 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     (managed_run / "global_step1").mkdir(parents=True)
     (managed_run / "latest").write_text("global_step1\n", encoding="utf-8")
     (managed_run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    logical_runs_before = {path.name for path in managed_action.parent.iterdir() if path.is_dir()}
     captured = tmp_path / "manual-capture"
     captured.mkdir()
 
@@ -331,6 +332,8 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     assert managed_response.status_code == 200
     managed_text = managed_response.data.decode("utf-8")
     assert "--resume_from_checkpoint /wsl" + managed_run.as_posix() in managed_text
+    assert {path.name for path in managed_action.parent.iterdir() if path.is_dir()} == logical_runs_before
+    assert "externalOutput" not in read_action(managed_data["actionId"])[1]
 
     custom = tmp_path / "external" / "custom-run"
     (custom / "global_step1").mkdir(parents=True)

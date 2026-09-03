@@ -56,10 +56,14 @@ def train_run_response(
             return Response("[ERROR] A managed resume requires both an action and output selection.\n", status=400, mimetype="text/plain")
         if resume_from_checkpoint and resume_output_id:
             return Response("[ERROR] Choose either a managed checkpoint or a filesystem checkpoint, not both.\n", status=400, mimetype="text/plain")
+        managed_action_root = None
+        managed_action = None
         if resume_output_id:
             resolved = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage or stages)
             resume_from_checkpoint = str(resolved["runPath"])
             resume_stage = str(resolved["stage"])
+            managed_action_root = resolved["actionRoot"]
+            managed_action = resolved["action"]
         elif resume_from_checkpoint:
             validate_resumable_run_for_path(folder_path, resume_stage or stages, resume_from_checkpoint)
         review = None
@@ -78,7 +82,10 @@ def train_run_response(
             initializer["stage"] = initializer_stage
             settings = (((review or {}).get("review") or {}).get("stages", {}).get(initializer_stage, {}).get("settings") or {})
             initializer["forceConstantLr"] = force_constant_lr if force_constant_lr not in (None, "") else settings.get("optimizerLr")
-        action_root, action = allocate_action(folder_path, selected_profile, selected_mode, stage_names, run_name)
+        if managed_action_root is not None:
+            action_root, action = managed_action_root, managed_action
+        else:
+            action_root, action = allocate_action(folder_path, selected_profile, selected_mode, stage_names, run_name)
         output_dirs = {}
         for stage in stage_names:
             meta = config_for_stage(selected_profile["id"], stage, selected_mode)
@@ -104,7 +111,7 @@ def train_run_response(
         def mark_manual(data):
             data["launchType"] = "manual"
             data["observation"] = "unobserved"
-            if resume_from_checkpoint:
+            if resume_from_checkpoint and managed_action_root is None:
                 data["externalOutput"] = {"kind": "external", "resumeStage": str(resume_stage or "")}
             if bundle.get("initializer"):
                 data["initializer"] = bundle["initializer"]

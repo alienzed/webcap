@@ -156,10 +156,71 @@ function openAppSettingsModal() {
       appSettingsLoadedConfig = normalizeAppConfigShape(cfg);
       setRuntimeAppConfig(cfg);
       fillAppSettingsForm(appSettingsLoadedConfig);
+      refreshH3CalibrationSettings();
       setAppSettingsStatus('', false);
     } catch (e) {
       setAppSettingsStatus('Failed to parse settings JSON.', true);
     }
+  });
+}
+
+function refreshH3CalibrationSettings() {
+  var summary = document.getElementById('h3-calibration-summary');
+  var source = document.getElementById('h3-calibration-source');
+  var run = document.getElementById('h3-calibration-run-btn');
+  var stop = document.getElementById('h3-calibration-stop-btn');
+  var reset = document.getElementById('h3-calibration-reset-btn');
+  if (!summary || !source || !run || !stop || !reset) return;
+  var calibration = appSettingsLoadedConfig && appSettingsLoadedConfig.training && appSettingsLoadedConfig.training.h3_calibration;
+  var results = calibration && calibration.results ? calibration.results : {};
+  var hardware = calibration && calibration.hardware;
+  summary.textContent = hardware
+    ? ('Saved hardware: ' + hardware.gpu_model + ' · ' + hardware.total_vram_mib + ' MiB VRAM · ' + Object.keys(results).length + ' tested candidates.')
+    : 'No saved calibration results.';
+  reset.classList.toggle('hidden', !calibration);
+  fetch('/fs/media_metadata?folder=' + encodeURIComponent(state.folder || ''))
+    .then(function (response) { return response.json(); })
+    .then(function (metadataRows) {
+      var metadata = {};
+      (Array.isArray(metadataRows) ? metadataRows : []).forEach(function (row) {
+        metadata[row.file] = { duration: Number(String(row.duration || '').replace('s', '')), frames: Number(row.frames || 0) };
+      });
+      source.innerHTML = '';
+      var choices = (state.items || []).filter(function (item) {
+        var ext = String(item.fileName || '').split('.').pop().toLowerCase();
+        var data = metadata && metadata[item.fileName];
+        return item.hasCaption && ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'avi', 'm4v'].indexOf(ext) !== -1 && data && Number(data.duration) >= 102 / 24;
+      }).sort(function (a, b) {
+        var ad = Number(metadata[a.fileName].duration || 0);
+        var bd = Number(metadata[b.fileName].duration || 0);
+        return bd - ad || String(a.fileName).localeCompare(String(b.fileName));
+      });
+      choices.forEach(function (item) {
+        var option = document.createElement('option');
+        option.value = item.fileName;
+        option.textContent = item.fileName + ' · ' + Number(metadata[item.fileName].duration).toFixed(1) + 's';
+        source.appendChild(option);
+      });
+      run.disabled = !choices.length;
+      if (!choices.length) summary.textContent += ' Choose or prepare a captioned video at least 4.25 seconds long.';
+    })
+    .catch(function (error) { summary.textContent = 'Could not load calibration source metadata: ' + error.message; run.disabled = true; });
+  fetch('/fs/h3_probe/status').then(function (response) { return response.json(); }).then(function (status) {
+    var active = !!(status && status.active);
+    stop.classList.toggle('hidden', !active);
+    run.classList.toggle('hidden', active);
+  });
+}
+
+function resetH3CalibrationSettings() {
+  if (!confirm('Reset saved H3 calibration results? Existing probe logs and dataset TOMLs are unchanged.')) return;
+  var payload = normalizeAppConfigShape(appSettingsLoadedConfig || {});
+  delete payload.training.h3_calibration;
+  HttpModule.postJson('/app/config', payload, function (status, responseText) {
+    if (status !== 200) { setAppSettingsStatus(getErrorMessage(responseText, 'Could not reset H3 calibration.'), true); return; }
+    appSettingsLoadedConfig = normalizeAppConfigShape(JSON.parse(responseText).config || payload);
+    fillAppSettingsForm(appSettingsLoadedConfig);
+    refreshH3CalibrationSettings();
   });
 }
 
@@ -360,6 +421,14 @@ function wireAppSettingsUi() {
   if (ui.appSettingsResetBtn) {
     ui.appSettingsResetBtn.onclick = resetAppSettings;
   }
+  var h3Run = document.getElementById('h3-calibration-run-btn');
+  var h3Stop = document.getElementById('h3-calibration-stop-btn');
+  var h3Reset = document.getElementById('h3-calibration-reset-btn');
+  var h3Console = document.getElementById('h3-calibration-console-btn');
+  if (h3Run) h3Run.onclick = function () { runH3Calibration({ fileName: document.getElementById('h3-calibration-source').value }); };
+  if (h3Stop) h3Stop.onclick = stopH3Calibration;
+  if (h3Reset) h3Reset.onclick = resetH3CalibrationSettings;
+  if (h3Console) h3Console.onclick = showConsolePanel;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
     button.onclick = function () {
       setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);

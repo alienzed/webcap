@@ -2,7 +2,7 @@
 
 Last reviewed against code: 2026-09-03
 
-Status: **MiniMax H3 probe is implemented; persistent result reuse, Training Settings ownership, and simplified calibrated defaults are the next implementation pass.**
+Status: **Implemented for MiniMax H3.** Persistent result reuse, Training Settings ownership, and the two-rung calibrated-default margin are active. Training-machine smoke validation remains required.
 
 This file is the single authoritative specification for WebCap VRAM/bucket calibration. It replaces the older overlapping calibration design, H3 envelope-probe notes, and campaign-resume plan.
 

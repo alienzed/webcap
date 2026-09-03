@@ -91,12 +91,57 @@ def _normalize_wrapper_affix_value(value):
 def _validate_h3_calibration(value):
     if not isinstance(value, dict):
         raise ValueError("Config.training.h3_calibration must be an object.")
-    if int(value.get("version") or 0) != 1:
-        raise ValueError("Config.training.h3_calibration.version must be 1.")
-    campaign = str(value.get("campaign") or "").strip()
-    if not campaign:
-        raise ValueError("Config.training.h3_calibration.campaign is required.")
+    if set(value) - {"hardware", "results", "safe_shapes"}:
+        raise ValueError("Config.training.h3_calibration has unsupported fields.")
+    hardware = value.get("hardware")
+    if not isinstance(hardware, dict) or set(hardware) != {"total_ram_mib", "gpu_model", "total_vram_mib"}:
+        raise ValueError("Config.training.h3_calibration.hardware must contain exactly total_ram_mib, gpu_model, and total_vram_mib.")
+    total_ram = hardware.get("total_ram_mib")
+    total_vram = hardware.get("total_vram_mib")
+    gpu_model = str(hardware.get("gpu_model") or "").strip()
+    if any(isinstance(item, bool) or not isinstance(item, int) or item <= 0 for item in (total_ram, total_vram)) or not gpu_model:
+        raise ValueError("Config.training.h3_calibration.hardware values are invalid.")
+    results = value.get("results")
+    if not isinstance(results, dict):
+        raise ValueError("Config.training.h3_calibration.results must be an object.")
+    plan_path = Path(__file__).resolve().parents[2] / "scripts" / "h3_shape_probe_plan.json"
+    try:
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        valid_keys = {
+            str(ladder["frames"]) + "f/" + str(ladder["aspect"]) + "-" + str(shape[0]) + "x" + str(shape[1])
+            for ladder in plan["ladders"] for shape in ladder["shapes"]
+        }
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise RuntimeError("Could not read the authoritative H3 probe plan for config validation.") from error
+    normalized_results = {}
+    for key, result in results.items():
+        if key not in valid_keys:
+            raise ValueError("Config.training.h3_calibration.results has an unknown candidate: " + str(key))
+        if not isinstance(result, dict) or result.get("status") not in {"completed", "oom", "unsafe_slow", "unsafe_vram"}:
+            raise ValueError("Each persisted H3 calibration result must have a conclusive status.")
+        allowed = {"status", "median_step_seconds", "minimum_gpu_free_mib", "peak_gpu_memory_mib", "spill_evidence"}
+        if set(result) - allowed:
+            raise ValueError("A persisted H3 calibration result has unsupported fields.")
+        normalized = {"status": result["status"]}
+        for field in ("minimum_gpu_free_mib", "peak_gpu_memory_mib"):
+            if field in result:
+                if isinstance(result[field], bool) or not isinstance(result[field], int) or result[field] < 0:
+                    raise ValueError("Persisted H3 calibration measurements must be non-negative integers.")
+                normalized[field] = result[field]
+        if "median_step_seconds" in result:
+            if isinstance(result["median_step_seconds"], bool) or not isinstance(result["median_step_seconds"], (int, float)) or result["median_step_seconds"] <= 0:
+                raise ValueError("Persisted H3 calibration median_step_seconds must be positive.")
+            normalized["median_step_seconds"] = float(result["median_step_seconds"])
+        if result["status"] == "completed" and "median_step_seconds" not in normalized:
+            raise ValueError("Completed H3 calibration results require median_step_seconds.")
+        if "spill_evidence" in result:
+            if not isinstance(result["spill_evidence"], bool):
+                raise ValueError("Persisted H3 calibration spill_evidence must be true or false.")
+            normalized["spill_evidence"] = result["spill_evidence"]
+        normalized_results[key] = normalized
     source_shapes = value.get("safe_shapes")
+    if source_shapes is None:
+        return {"hardware": {"total_ram_mib": total_ram, "gpu_model": gpu_model, "total_vram_mib": total_vram}, "results": normalized_results}
     if not isinstance(source_shapes, dict):
         raise ValueError("Config.training.h3_calibration.safe_shapes must be an object.")
     safe_shapes = {}
@@ -131,7 +176,7 @@ def _validate_h3_calibration(value):
                 )
             normalized_aspects[aspect] = [width, height]
         safe_shapes[frames] = normalized_aspects
-    return {"version": 1, "campaign": campaign, "safe_shapes": safe_shapes}
+    return {"hardware": {"total_ram_mib": total_ram, "gpu_model": gpu_model, "total_vram_mib": total_vram}, "results": normalized_results, "safe_shapes": safe_shapes}
 
 
 def validate_config_payload(payload):

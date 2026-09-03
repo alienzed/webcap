@@ -23,6 +23,7 @@ PLAN_PATH = ROOT / "scripts" / "h3_shape_probe_plan.json"
 SCRIPT_PATH = ROOT / "scripts" / "h3_shape_probe.py"
 PROBE_ROOT_NAME = ".webcap_training"
 RUNTIME_FILE_NAME = "runtime.json"
+H3_CAPTURE_FPS = 24
 
 
 def _utc_now():
@@ -38,6 +39,15 @@ def _safe_media_filename(value):
     if not name or name != Path(name).name or name in (".", ".."):
         raise ValueError("Invalid probe video filename.")
     return name
+
+
+def _required_h3_source_duration_seconds():
+    try:
+        plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
+        frames = max(int(ladder["frames"]) for ladder in plan["ladders"])
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise RuntimeError("Could not read the fixed H3 probe plan for source validation.") from error
+    return float(frames) / H3_CAPTURE_FPS
 
 
 def _seed_relative(path, root):
@@ -127,6 +137,36 @@ def _public_runtime(runtime):
     return {field: runtime.get(field) for field in fields if field in runtime}
 
 
+def _calibration_status_fields():
+    training = app_config.config.get("training") if isinstance(app_config.config, dict) else None
+    calibration = training.get("h3_calibration") if isinstance(training, dict) else None
+    if calibration is None:
+        return {"savedResultCount": 0, "calibrated": False}
+    if not isinstance(calibration, dict):
+        raise ValueError("training.h3_calibration must be an object.")
+    results = calibration.get("results")
+    if not isinstance(results, dict):
+        raise ValueError("training.h3_calibration.results must be an object.")
+    return {"hardware": calibration.get("hardware"), "savedResultCount": len(results), "calibrated": bool(calibration.get("safe_shapes"))}
+
+
+def current_h3_hardware():
+    settings = configured_training_settings()
+    command = "nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits | head -n 1; awk '/MemTotal/ {print $2}' /proc/meminfo"
+    code, stdout, stderr = run_wsl(command, timeout=8, distribution=settings["wslDistribution"])
+    lines = (stdout or "").strip().splitlines()
+    if code != 0 or len(lines) < 2:
+        raise RuntimeError((stderr or "Could not read H3 calibration hardware identity.").strip())
+    try:
+        gpu_model, total_vram = [value.strip() for value in lines[0].split(",", 1)]
+        hardware = {"total_ram_mib": int(lines[1]) // 1024, "gpu_model": gpu_model, "total_vram_mib": int(total_vram)}
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("Could not parse H3 calibration hardware identity.") from error
+    if hardware["total_ram_mib"] <= 0 or hardware["total_vram_mib"] <= 0 or not hardware["gpu_model"]:
+        raise RuntimeError("H3 calibration hardware identity is invalid.")
+    return hardware
+
+
 def prepare_h3_probe(folder, file_name):
     """Capture one selected video and return its external probe command."""
     folder_value = str(folder or "").strip()
@@ -162,10 +202,20 @@ def prepare_h3_probe(folder, file_name):
     normalize_path_permissions(source_root)
     normalize_path_permissions(base_root)
 
-    metadata = update_media_metadata(folder_path)
-    source_fps = (metadata.get(selected_name) or {}).get("fps")
+    metadata = update_media_metadata(folder_path, scoped_filenames=[selected_name])
+    source_metadata = metadata.get(selected_name)
+    if not isinstance(source_metadata, dict):
+        raise RuntimeError("Could not read metadata for the selected H3 probe video.")
+    source_fps = source_metadata.get("fps")
+    duration = source_metadata.get("duration")
+    try:
+        duration = float(duration)
+    except (TypeError, ValueError):
+        raise ValueError("H3 envelope probe requires readable source duration metadata.")
+    if duration < _required_h3_source_duration_seconds():
+        raise ValueError("H3 envelope probe source is too short for the fixed 102-frame plan.")
     captured_video = source_root / source.name
-    capture = _copy_or_convert_bundle_video(source, captured_video, 24, source_fps)
+    capture = _copy_or_convert_bundle_video(source, captured_video, H3_CAPTURE_FPS, source_fps)
     if not capture.get("action"):
         raise RuntimeError("Could not capture selected probe video: " + str(capture.get("error") or "unknown error"))
     write_prepared_caption(source, source_root, caption)
@@ -244,13 +294,13 @@ def start_h3_probe(folder, file_name):
 def h3_probe_status():
     path = _active_runtime_path()
     if path:
-        return {"ok": True, "active": True, **_public_runtime(_read_json(path))}
+        return {"ok": True, "active": True, **_calibration_status_fields(), **_public_runtime(_read_json(path))}
     root = Path(app_config.FS_ROOT) / PROBE_ROOT_NAME / "h3-probes"
     candidates = sorted(root.glob("*/" + RUNTIME_FILE_NAME), key=lambda item: item.stat().st_mtime, reverse=True) if root.is_dir() else []
     if not candidates:
-        return {"ok": True, "active": False}
+        return {"ok": True, "active": False, **_calibration_status_fields()}
     runtime = _refresh_runtime(candidates[0])
-    return {"ok": True, "active": False, **_public_runtime(runtime)}
+    return {"ok": True, "active": False, **_calibration_status_fields(), **_public_runtime(runtime)}
 
 
 def h3_probe_log(offset=0):

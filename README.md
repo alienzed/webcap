@@ -12,6 +12,7 @@ It is built around explicit, reversible mutations, visible training selection, a
 - Make reversible media edits including crop, clip, rotation, flip, blur/remove background, deface, duplicate, prune, and reset from preserved originals.
 - Inspect profile/mode-specific Diffusion Pipe TOMLs, then capture the visible media and saved configuration into an immutable run bundle.
 - Run managed Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, and MiniMax H3 jobs with launch-scoped base36 output identities, model/stage output folders, a queue, per-run progress and checkpoint ETA, output logs, resume paths, diagnostics, history, GPU status, and optional TensorBoard; a manual WSL command remains available when preferred.
+- Calibrate MiniMax H3 video bucket ceilings explicitly from Training Settings. Conclusive per-shape evidence is retained for matching RAM/GPU/VRAM hardware and reused on later launches; existing TOMLs and captured runs remain unchanged.
 - Keep app state and per-set artifacts on disk. WebCap uses Python and the browser only—no database or hosted service is required.
 
 ## Requirements
@@ -364,6 +365,7 @@ Behavior:
 - each Train action owns a separate bundle and cache; Wan2.2 HI and LO from one action share that bundle
 - Krea2 Raw requires image-only media; Wan2.1, Wan2.2, and MiniMax H3 accept images and videos
 - Video timing uses the model's native timebase (16 fps for Wan, 24 fps for MiniMax H3). Wan Normal/Quality use 37f temporal plus 13f detail; H3 Normal/Quality use 68f temporal plus 17f detail. POC uses one temporal role (33f for Wan, 34f for H3).
+- Training Settings owns explicit H3 calibration. It uses one captioned source video long enough for the fixed 102-frame plan, records isolated candidate results, and keeps exact calibrated ceilings selectable while generated defaults retain a two-rung margin.
 - Every generated image or temporal stanza has one explicit bucket. H3 Quality can split still images into as many as three resolution tiers and materializes direct bucket-named sibling folders so smaller stills do not lower an entire aspect-ratio cohort. Other image modes and temporal video point directly to their captured AR folders; the marked video-detail cohort remains materialized under `media/video_detail`.
 - zero visible media and missing required captions or TOML paths fail visibly
 - `Train this set` starts immediately when idle or adds the selected run behind current work; Wan2.2 HI -> LO queues independent HI and LO jobs

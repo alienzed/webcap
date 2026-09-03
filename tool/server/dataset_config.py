@@ -481,6 +481,9 @@ def _h3_calibrated_ceiling(frames: int, ar_label: str):
         return None
     if not isinstance(calibration, dict):
         raise ValueError("training.h3_calibration must be an object.")
+    from .h3_probe import current_h3_hardware
+    if calibration.get("hardware") != current_h3_hardware():
+        raise ValueError("H3 calibrated ceilings do not match the current training hardware. Reset calibration before using them.")
     safe_shapes = calibration.get("safe_shapes")
     if safe_shapes is None:
         return None
@@ -507,17 +510,6 @@ def _h3_calibrated_ceiling(frames: int, ar_label: str):
     return shape[0], shape[1]
 
 
-def _h3_calibration_campaign():
-    runtime_config = app_config.config if isinstance(app_config.config, dict) else {}
-    training = runtime_config.get("training") if isinstance(runtime_config.get("training"), dict) else {}
-    calibration = training.get("h3_calibration")
-    if calibration is None:
-        return ""
-    if not isinstance(calibration, dict):
-        raise ValueError("training.h3_calibration must be an object.")
-    return str(calibration.get("campaign") or "").strip()
-
-
 def _h3_video_limit(profile_id: str, mode: str, ar_label: str, role: str):
     """Return the effective active-role H3 ceiling and its authority."""
     generate_mode = normalize_training_generate_mode(mode)
@@ -536,7 +528,7 @@ def _h3_video_limit(profile_id: str, mode: str, ar_label: str, role: str):
             + str(calibrated[0]) + "x" + str(calibrated[1])
             + " exceeds the H3 model/probe envelope " + str(absolute[0]) + "x" + str(absolute[1]) + "."
         )
-    return {"ceiling": calibrated, "source": "calibration", "campaign": _h3_calibration_campaign()}
+    return {"ceiling": calibrated, "source": "calibration", "campaign": ""}
 
 
 def video_bucket_ladder(profile_id: str, mode: str, ar_label: str, role: str, frames: int):
@@ -565,6 +557,8 @@ def video_bucket_ladder(profile_id: str, mode: str, ar_label: str, role: str, fr
             candidates.append(ceiling)
             candidates.sort(key=lambda shape: shape[0] * shape[1], reverse=True)
         default_candidates = candidates[1:] if len(candidates) > 1 else candidates
+        if limit_info["source"] == "calibration":
+            default_candidates = candidates[2:] if len(candidates) > 2 else candidates[-1:]
         return {
             "selectable": candidates,
             "defaults": default_candidates,

@@ -732,7 +732,103 @@ def _summary_row(candidate, result, terminal_reason=""):
     }
 
 
-def run_campaign(seed):
+CONCLUSIVE_STATUSES = {"completed", "oom", "unsafe_slow", "unsafe_vram"}
+
+
+def current_hardware():
+    meminfo = read_meminfo()
+    try:
+        total_ram_mib = int(meminfo["MemTotal"]) // 1024
+    except (KeyError, TypeError, ValueError) as error:
+        raise RuntimeError("Could not read total RAM for H3 calibration compatibility.") from error
+    try:
+        output = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=8, check=True,
+        ).stdout.strip().splitlines()
+        name, vram = [value.strip() for value in output[0].split(",", 1)]
+        total_vram_mib = int(vram)
+    except (IndexError, OSError, ValueError, subprocess.SubprocessError) as error:
+        raise RuntimeError("Could not read GPU model and total VRAM for H3 calibration compatibility.") from error
+    if total_ram_mib <= 0 or total_vram_mib <= 0 or not name:
+        raise RuntimeError("H3 calibration hardware identity is invalid.")
+    return {"total_ram_mib": total_ram_mib, "gpu_model": name, "total_vram_mib": total_vram_mib}
+
+
+def load_persistent_calibration(config_path, hardware):
+    config = read_json(config_path)
+    training = config.get("training") if isinstance(config.get("training"), dict) else {}
+    calibration = training.get("h3_calibration")
+    if calibration is None:
+        return config, {"hardware": hardware, "results": {}}
+    if not isinstance(calibration, dict) or calibration.get("hardware") != hardware or not isinstance(calibration.get("results"), dict):
+        raise ValueError("H3 calibration hardware differs from Settings; Reset calibration before running on this hardware.")
+    return config, calibration
+
+
+def compact_persistent_result(result):
+    status = result.get("status")
+    if status not in CONCLUSIVE_STATUSES:
+        return None
+    compact = {"status": status}
+    if status == "completed":
+        median = result.get("medianStepSeconds")
+        if median is None or float(median) <= 0:
+            raise ValueError("Completed H3 probe result is missing a valid median step time.")
+        compact["median_step_seconds"] = float(median)
+    telemetry = result.get("telemetry") if isinstance(result.get("telemetry"), dict) else {}
+    minimum = telemetry_minimum_free_mib(telemetry)
+    if minimum is not None:
+        compact["minimum_gpu_free_mib"] = int(minimum)
+    peak = telemetry.get("peakGpuMemoryMiB")
+    if peak is not None:
+        compact["peak_gpu_memory_mib"] = int(peak)
+    if status == "unsafe_slow" and "spillEvidence" in telemetry:
+        compact["spill_evidence"] = bool(telemetry["spillEvidence"])
+    return compact
+
+
+def persist_calibration(config_path, config, calibration):
+    training = config.setdefault("training", {})
+    if not isinstance(training, dict):
+        raise ValueError("WebCap config training section must be an object.")
+    training["h3_calibration"] = calibration
+    write_json(config_path, config)
+
+
+def derived_safe_shapes(ladders, results):
+    safe_shapes = {}
+    settled = 0
+    for ladder in ladders:
+        frames, aspect = int(ladder["frames"]), str(ladder["aspect"])
+        last_safe = None
+        settled_reason = None
+        for index, shape in enumerate(ladder["shapes"]):
+            key = candidate_name(frames, aspect, int(shape[0]), int(shape[1]))
+            saved = results.get(key)
+            if saved is None:
+                break
+            status = saved["status"]
+            if status == "completed":
+                if index == len(ladder["shapes"]) - 1 and ladder["terminal"] == "sentinel":
+                    settled_reason = "ceiling_not_found" if ladder["terminal"] == "sentinel" else "model_cap"
+                else:
+                    last_safe = [int(shape[0]), int(shape[1])]
+                    if index == len(ladder["shapes"]) - 1:
+                        settled_reason = "model_cap"
+                continue
+            settled_reason = status
+            break
+        if settled_reason:
+            settled += 1
+        if frames in (17, 34, 68):
+            if not settled_reason or last_safe is None:
+                return settled, None
+            safe_shapes.setdefault(str(frames), {})[aspect] = last_safe
+    return settled, safe_shapes if settled == len(ladders) else None
+
+
+def run_campaign(seed, config_path=None):
     plan = read_json(seed["plan"])
     ladders = _validate_plan(plan)
     results_root = seed["results"]
@@ -748,10 +844,14 @@ def run_campaign(seed):
         "baseConfig": str(seed["config"]),
         "plan": plan,
     })
+    if not config_path:
+        raise ValueError("H3 calibration requires the WebCap config path for persistent results.")
+    hardware = current_hardware()
+    config, calibration = load_persistent_calibration(config_path, hardware)
+    persist_calibration(config_path, config, calibration)
     campaign_status = "completed"
     ceilings = []
     provisional_safe_shapes = None
-    mixed_validation = None
     try:
         for ladder in ladders:
             baseline = None
@@ -760,7 +860,26 @@ def run_campaign(seed):
             terminal_reason = ""
             result = None
             for candidate_index, shape in enumerate(ladder["shapes"]):
-                candidate = prepare_candidate(seed, ladder, int(shape[0]), int(shape[1]), work_root)
+                width, height = int(shape[0]), int(shape[1])
+                key = candidate_name(int(ladder["frames"]), str(ladder["aspect"]), width, height)
+                saved = calibration["results"].get(key)
+                if saved is not None:
+                    result = {"status": saved["status"], "medianStepSeconds": saved.get("median_step_seconds"), "telemetry": {
+                        "minimumGpuFreeMiB": saved.get("minimum_gpu_free_mib"), "peakGpuMemoryMiB": saved.get("peak_gpu_memory_mib"), "spillEvidence": saved.get("spill_evidence", False),
+                    }}
+                    print("[h3-probe] " + str(ladder["frames"]) + "f " + str(ladder["aspect"]) + " " + str(width) + "x" + str(height) + " reuse " + result["status"], flush=True)
+                    if result["status"] == "completed":
+                        if candidate_index < len(ladder["shapes"]) - 1 or ladder["terminal"] == "model_cap":
+                            last_safe = [width, height, int(ladder["frames"])]
+                        if baseline is None:
+                            baseline = result["medianStepSeconds"]
+                        if candidate_index == len(ladder["shapes"]) - 1:
+                            terminal_reason = "ceiling_not_found" if ladder["terminal"] == "sentinel" else "model_cap"
+                        continue
+                    first_unsafe = [width, height, int(ladder["frames"])]
+                    terminal_reason = result["status"]
+                    break
+                candidate = prepare_candidate(seed, ladder, width, height, work_root)
                 width, height, _frames = candidate["shape"]
                 label = str(candidate["frames"]) + "f " + candidate["aspect"] + " " + str(width) + "x" + str(height)
                 print("[h3-probe] " + label + " cache", flush=True)
@@ -773,16 +892,19 @@ def run_campaign(seed):
                 if peak_mib is not None:
                     details.append("peak_vram=" + format(float(peak_mib) / 1024.0, ".1f") + "GiB")
                 print("[h3-probe] " + label + " " + result["status"] + (" · " + " · ".join(details) if details else ""), flush=True)
+                compact = compact_persistent_result(result)
+                if compact is not None:
+                    calibration["results"][key] = compact
+                    persist_calibration(config_path, config, calibration)
                 if result["status"] == "completed":
-                    last_safe = candidate["shape"]
+                    if candidate_index < len(ladder["shapes"]) - 1 or ladder["terminal"] == "model_cap":
+                        last_safe = candidate["shape"]
                     if baseline is None:
                         baseline = result.get("medianStepSeconds")
                     if candidate_index == len(ladder["shapes"]) - 1:
                         terminal_reason = "ceiling_not_found" if ladder["terminal"] == "sentinel" else "model_cap"
                         result["terminalReason"] = terminal_reason
                         write_result(candidate["resultPath"], **result)
-                        if terminal_reason == "ceiling_not_found":
-                            campaign_status = "inconclusive"
                     append_summary(results_root / "summary.csv", _summary_row(candidate, result, terminal_reason))
                     continue
                 if result["status"] in ("oom", "unsafe_slow", "unsafe_vram"):
@@ -798,7 +920,6 @@ def run_campaign(seed):
                 terminal_reason = str(ladder["terminal"])
                 if terminal_reason == "sentinel":
                     terminal_reason = "ceiling_not_found"
-                    campaign_status = "inconclusive"
             terminal_telemetry = result.get("telemetry") if isinstance(result.get("telemetry"), dict) else {}
             ceilings.append({
                 "frames": int(ladder["frames"]),
@@ -813,13 +934,11 @@ def run_campaign(seed):
                 "hostAvailableDropKiB": terminal_telemetry.get("hostAvailableDropKiB"),
                 "swapFreeDropKiB": terminal_telemetry.get("swapFreeDropKiB"),
             })
-        safe_by_key, provisional = safe_candidates_from_results(seed, ladders, work_root)
-        provisional_safe_shapes = safe_shapes_from_selected(provisional)
-        mixed_validation = run_mixed_validation(seed, safe_by_key, provisional, work_root)
-        if mixed_validation["status"] == "completed":
-            campaign_status = "completed"
-        else:
-            campaign_status = "mixed_failed"
+        _settled, provisional_safe_shapes = derived_safe_shapes(ladders, calibration["results"])
+        if provisional_safe_shapes is None:
+            raise ValueError("H3 calibration did not settle every publishable ladder.")
+        calibration["safe_shapes"] = provisional_safe_shapes
+        persist_calibration(config_path, config, calibration)
     except KeyboardInterrupt:
         campaign_status = "canceled"
         raise
@@ -833,7 +952,6 @@ def run_campaign(seed):
             "minimumGpuFreeMiB": MIN_GPU_FREE_MIB,
             "ceilings": ceilings,
             "provisionalSafeShapes": provisional_safe_shapes,
-            "mixedValidation": mixed_validation,
         })
     return campaign_status
 
@@ -1017,48 +1135,6 @@ def run_mixed_validation(seed, safe_by_key, provisional, work_root):
     return {"status": "failed", "attempts": attempts}
 
 
-def calibration_settings_from_results(seed, require_mixed_validation=False):
-    """Build the compact settings block from raw evidence or a passed mixed check."""
-    plan = read_json(seed["plan"])
-    ladders = _validate_plan(plan)
-    campaign = read_json(seed["results"] / "campaign_result.json")
-    mixed = campaign.get("mixedValidation") if isinstance(campaign.get("mixedValidation"), dict) else None
-    if mixed and mixed.get("status") == "completed":
-        safe_shapes = mixed.get("finalSafeShapes")
-        if not isinstance(safe_shapes, dict):
-            raise ValueError("Completed mixed validation is missing final safe shapes.")
-    else:
-        if require_mixed_validation:
-            raise ValueError("Calibration cannot publish without a completed mixed Quality validation.")
-        print(
-            "[h3-probe] warning: saved campaign has no mixed Quality validation; printing provisional shapes only.",
-            file=sys.stderr,
-            flush=True,
-        )
-        _safe_by_key, provisional = safe_candidates_from_results(seed, ladders, seed["results"].parent / "work")
-        safe_shapes = safe_shapes_from_selected(provisional)
-    return {
-        "version": 1,
-        "campaign": str(seed["seed"].get("id") or seed["seedPath"].parent.name),
-        "safe_shapes": safe_shapes,
-    }
-
-
-def publish_calibration_settings(config_path, calibration):
-    path = Path(config_path)
-    config = read_json(path)
-    if not config:
-        raise ValueError("Could not read WebCap config for calibration publishing: " + str(path))
-    training = config.get("training")
-    if training is None:
-        training = {}
-        config["training"] = training
-    if not isinstance(training, dict):
-        raise ValueError("WebCap config training section must be an object.")
-    training["h3_calibration"] = calibration
-    write_json(path, config)
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Run a prepared MiniMax H3 envelope probe.")
     parser.add_argument("--seed", required=True, help="Path to the WebCap-generated seed.json")
@@ -1067,13 +1143,12 @@ def main(argv=None):
     args = parser.parse_args(argv)
     seed = load_seed(args.seed)
     if args.summarize_results:
-        print(json.dumps(calibration_settings_from_results(seed), indent=2, sort_keys=True))
-        return 0
-    status = run_campaign(seed)
-    if args.publish_config and status in ("completed", "inconclusive"):
-        calibration = calibration_settings_from_results(seed, require_mixed_validation=True)
-        publish_calibration_settings(args.publish_config, calibration)
-        print("[h3-probe] published safe shapes to " + str(args.publish_config), flush=True)
+        raise ValueError("H3 calibration summaries now come from persistent Settings results.")
+    if not args.publish_config:
+        raise ValueError("H3 calibration requires --publish-config for persistent Settings results.")
+    status = run_campaign(seed, args.publish_config)
+    if status == "completed":
+        print("[h3-probe] published H3 calibration results to " + str(args.publish_config), flush=True)
     return 0 if status == "completed" else 1
 
 

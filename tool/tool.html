@@ -1007,6 +1007,15 @@
                                 </div>
                             </div>
                         </section>
+                        <section class="app-settings-section" id="h3-calibration-settings">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">H3 calibration</div>
+                                <div class="app-settings-section-copy">Tests H3 video buckets on this training hardware. Calibration can approach OOM; concurrent GPU work makes results unreliable.</div>
+                            </div>
+                            <div id="h3-calibration-summary" class="app-settings-help">Loading calibration status…</div>
+                            <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Calibration source</span><select id="h3-calibration-source"></select></label>
+                            <div class="app-settings-actions"><button id="h3-calibration-run-btn" type="button">Run calibration</button><button id="h3-calibration-stop-btn" type="button" class="hidden">Stop</button><button id="h3-calibration-reset-btn" type="button" class="hidden">Reset calibration</button><button id="h3-calibration-console-btn" type="button">Show console</button></div>
+                        </section>
                     </div>
                     <div id="app-settings-panel-advanced" class="app-settings-panel hidden" data-app-settings-panel="advanced" role="tabpanel" aria-labelledby="app-settings-tab-advanced">
                         <section class="app-settings-section">

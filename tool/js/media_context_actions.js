@@ -366,7 +366,7 @@ function stopH3Calibration() {
 }
 
 function runH3Calibration(mediaItem) {
-  if (!confirm('Run H3 calibration using this video?\n\nThis is a long, GPU-intensive calibration. Avoid other GPU-heavy applications while it runs. Training remains available, but concurrent GPU work makes the results less reliable.')) return;
+  if (!confirm('Run H3 calibration with the selected source?\n\nThis is a long, GPU-intensive calibration. Avoid other GPU-heavy applications while it runs. Training remains available, but concurrent GPU work makes the results less reliable.')) return;
   showConsolePanel();
   appendToConsolePanel('[h3-probe] Preparing H3 calibration...\n');
   setStatus('Starting H3 calibration...');
@@ -570,16 +570,6 @@ function buildMediaContextMenuActions(mediaItem, key) {
       label: 'Clip...',
       run: function () {
         openVideoClipModal(mediaItem);
-      }
-    });
-    actions.push({
-      label: h3ProbeActive ? 'Stop H3 calibration' : 'Run H3 calibration using this video...',
-      run: function () {
-        if (h3ProbeActive) {
-          stopH3Calibration();
-          return;
-        }
-        runH3Calibration(mediaItem);
       }
     });
   }

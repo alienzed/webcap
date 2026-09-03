@@ -55,8 +55,7 @@ These are useful product notes, not authoritative implementation references:
 - `docs/generate_config_mode.md` - POC, Normal, and Quality mode behavior
 - `docs/repeat_targeting.md` - dataset repeat calculation
 - `docs/video_clip.md`
-- `docs/vram_bucket_calibration.md` - separate H3 shape-calibration tooling whose safe shapes can clamp generated ceilings
-- `docs/h3_calibration_resume_settings_plan.md` - focused plan for continuing partial H3 calibration evidence and moving its controls into Training Settings
+- `docs/vram_bucket_calibration.md` - implemented H3 shape calibration, persistent result reuse, Training Settings controls, and calibrated bucket margins
 - `docs/training_run_identity.md` - proposed run names, captured-config visibility, and experiment lineage
 - `docs/training_artifact_cleanup.md` - visible training action layout and clean-break rollout
 - `docs/stable_set_training_layout_plan.md` - tentative proposal for alphabetical set roots and self-contained training runs
@@ -67,6 +66,7 @@ These are useful product notes, not authoritative implementation references:
 These are intentionally retained for context:
 
 - `docs/archive/ui-revamp-2026-07/` - completed workspace-consolidation planning; use `README.md` and `docs/spec.md` for current behavior
+- `docs/h3_calibration_resume_settings_plan.md` - superseded by `vram_bucket_calibration.md`
 - `docs/archive/`
 - `docs/feature_spec.md`
 - `docs/caption-review.md`

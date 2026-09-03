@@ -54,7 +54,6 @@ Preserve the existing structure unless a localized edit is genuinely required:
   - candidate preparation;
   - cache/train execution;
   - telemetry and classification;
-  - current mixed-validation code to be removed by this pass;
   - current atomic `config.json` publishing path.
 - `scripts/h3_shape_probe_plan.json`
   - authoritative fixed 90-shape H3 plan.

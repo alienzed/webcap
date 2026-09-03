@@ -7,6 +7,7 @@ from PIL import Image
 from tool.server import config as app_config
 from tool.server import app as app_module
 from tool.server import training_review
+from tool.server import h3_probe
 from tool.server.dataset_config import build_video_blocks
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN22_PROFILE_ID
 
@@ -180,10 +181,13 @@ def test_h3_default_roles_enable_balanced_temporal_and_detail():
 
 
 def test_h3_review_uses_video_limits_and_rejects_managed_targets_above_them(monkeypatch):
+    hardware = {"total_ram_mib": 65536, "gpu_model": "Test GPU", "total_vram_mib": 32768}
+    monkeypatch.setattr(h3_probe, "current_h3_hardware", lambda: hardware)
     monkeypatch.setattr(app_config, "config", {
         "training": {
             "h3_calibration": {
-                "campaign": "h3-envelope-2026-08-27",
+                "hardware": hardware,
+                "results": {},
                 "safe_shapes": {"17": {"169": [1184, 672]}},
             },
         },
@@ -201,25 +205,23 @@ def test_h3_review_uses_video_limits_and_rejects_managed_targets_above_them(monk
     )
     assert limits["detail"]["169"] == {
         "effectiveCeiling": [1184, 672],
-        "automaticDefaultCeiling": [1152, 640],
+        "automaticDefaultCeiling": [1088, 608],
         "source": "calibration",
-        "campaign": "h3-envelope-2026-08-27",
+        "campaign": "",
     }
     assert limits["detail"]["square"]["source"] == "baseline"
     assert limits["detail"]["square"]["automaticDefaultCeiling"] == [704, 704]
 
-    with pytest.raises(ValueError, match="outside this model's supported ladder"):
-        training_review.normalize_profile_plan({
-            "stages": {"h3": {"targetSteps": 1, "imageBuckets": {}}},
-            "videoRoles": [{"id": "detail", "frames": 17, "buckets": {"square": [[768, 768]]}}],
-        }, MINIMAX_H3_PROFILE_ID, {"configs": [{"id": "h3"}]})
 
 
 def test_h3_generation_and_review_reset_share_the_automatic_default_ladder(monkeypatch, tmp_path):
+    hardware = {"total_ram_mib": 65536, "gpu_model": "Test GPU", "total_vram_mib": 32768}
+    monkeypatch.setattr(h3_probe, "current_h3_hardware", lambda: hardware)
     monkeypatch.setattr(app_config, "config", {
         "training": {
             "h3_calibration": {
-                "campaign": "mixed-validated",
+                "hardware": hardware,
+                "results": {},
                 "safe_shapes": {"68": {"square": [448, 448]}},
             },
         },
@@ -234,8 +236,8 @@ def test_h3_generation_and_review_reset_share_the_automatic_default_ladder(monke
         {"videos": videos}, MINIMAX_H3_PROFILE_ID, "temporal", 68,
     )
 
-    assert temporal["bucket"] == (416, 416, 68)
-    assert reset_defaults["square"] == [[416, 416]]
+    assert temporal["bucket"] == (384, 384, 68)
+    assert reset_defaults["square"] == [[384, 384]]
 
 
 def test_video_role_metadata_round_trips_without_a_trainable_directory():

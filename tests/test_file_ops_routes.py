@@ -181,8 +181,8 @@ def test_validate_config_payload_preserves_h3_calibration_shapes():
         "filesystem": {"root": "C:/sets", "models": ""},
         "training": {
             "h3_calibration": {
-                "version": 1,
-                "campaign": "h3-manual",
+                "hardware": {"total_ram_mib": 65536, "gpu_model": "Test GPU", "total_vram_mib": 32768},
+                "results": {},
                 "safe_shapes": {"34": {"169": [896, 512]}},
             },
         },
@@ -194,8 +194,8 @@ def test_validate_config_payload_preserves_h3_calibration_shapes():
             "filesystem": {"root": "C:/sets", "models": ""},
             "training": {
                 "h3_calibration": {
-                    "version": 1,
-                    "campaign": "h3-manual",
+                    "hardware": {"total_ram_mib": 65536, "gpu_model": "Test GPU", "total_vram_mib": 32768},
+                    "results": {},
                     "safe_shapes": {"34": {"169": [895, 512]}},
                 },
             },
@@ -206,8 +206,8 @@ def test_validate_config_payload_preserves_h3_calibration_shapes():
             "filesystem": {"root": "C:/sets", "models": ""},
             "training": {
                 "h3_calibration": {
-                    "version": 1,
-                    "campaign": "h3-manual",
+                    "hardware": {"total_ram_mib": 65536, "gpu_model": "Test GPU", "total_vram_mib": 32768},
+                    "results": {},
                     "safe_shapes": {"17": {"169": [1376, 768]}},
                 },
             },

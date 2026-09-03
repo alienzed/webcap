@@ -249,20 +249,6 @@ def test_saved_result_reclassification_marks_single_clear_spill_unsafe():
     assert median == pytest.approx(28.25)
 
 
-def test_publish_calibration_settings_updates_only_the_calibration_block(tmp_path):
-    probe = load_probe_script()
-    config_path = tmp_path / "config.json"
-    config_path.write_text(json.dumps({
-        "filesystem": {"root": "C:/sets", "models": ""},
-        "training": {"conda_environment": "dp"},
-    }), encoding="utf-8")
-    calibration = {"version": 1, "campaign": "h3-test", "safe_shapes": {"34": {"43": [800, 608]}}}
-    probe.publish_calibration_settings(config_path, calibration)
-    saved = json.loads(config_path.read_text(encoding="utf-8"))
-    assert saved["training"]["conda_environment"] == "dp"
-    assert saved["training"]["h3_calibration"] == calibration
-
-
 @pytest.mark.parametrize(("train_log", "expected_status"), [
     ("CUDA out of memory\n", "oom"),
     ("trainer exited unexpectedly\n", "trainer_failed"),
@@ -352,219 +338,88 @@ def test_saved_result_reclassification_enforces_exact_vram_headroom():
     assert probe.classify_saved_result(base, baseline_seconds=2.0)[0] == "telemetry_failed"
 
 
-def _mixed_record(probe, tmp_path, frames, aspect, width, height, free, ladder_order, shape_order):
-    media_dir = tmp_path / "media" / probe.candidate_name(frames, aspect, width, height)
-    media_dir.mkdir(parents=True, exist_ok=True)
-    return {
-        "frames": frames,
-        "aspect": aspect,
-        "shape": [width, height, frames],
-        "mfp": probe.mfp(width, height, frames),
-        "medianSeconds": 2.0,
-        "minimumGpuFreeMiB": free,
-        "mediaDir": media_dir,
-        "ladderOrder": ladder_order,
-        "shapeOrder": shape_order,
-    }
-
-
-def test_mixed_dataset_uses_nine_cached_candidates_and_real_weights(tmp_path):
+def test_persist_calibration_reloads_current_config_and_preserves_unrelated_changes(tmp_path):
     probe = load_probe_script()
-    selected = {}
-    for ladder_order, (frames, _repeats) in enumerate(probe.MIXED_ROLE_SPECS):
-        for shape_order, aspect in enumerate(probe.MIXED_ASPECTS):
-            selected[(frames, aspect)] = _mixed_record(
-                probe, tmp_path, frames, aspect, 320 + frames, 256 + shape_order * 32, 1000, ladder_order, shape_order,
-            )
-    dataset_path = tmp_path / "mixed.toml"
-    probe.write_mixed_dataset(dataset_path, selected)
-    dataset = tomllib.loads(dataset_path.read_text(encoding="utf-8"))
-    assert len(dataset["directory"]) == 9
-    assert [entry["num_repeats"] for entry in dataset["directory"]] == [4, 4, 4, 2, 2, 2, 1, 1, 1]
-    assert all(entry["path"].startswith(str(tmp_path / "media").replace("\\", "/")) for entry in dataset["directory"])
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"training": {"conda_environment": "old"}, "unrelated": {"value": 1}}), encoding="utf-8")
+    calibration = {"hardware": {"total_ram_mib": 1, "gpu_model": "GPU", "total_vram_mib": 1}, "results": {}}
+    _config, loaded = probe.load_persistent_calibration(path, calibration["hardware"])
+    path.write_text(json.dumps({"training": {"conda_environment": "new"}, "unrelated": {"value": 2}}), encoding="utf-8")
+    loaded["results"]["34f/169-736x416"] = {"status": "completed", "median_step_seconds": 2.0}
+    probe.persist_calibration(path, loaded)
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["training"]["conda_environment"] == "new"
+    assert saved["unrelated"] == {"value": 2}
+    assert saved["training"]["h3_calibration"] == loaded
 
 
-def test_mixed_attempt_ignores_first_epoch_and_rejects_two_slow_second_epoch(tmp_path, monkeypatch):
+def test_run_campaign_persists_and_reuses_completed_result_with_baseline(tmp_path, monkeypatch):
     probe = load_probe_script()
-    candidate = {
-        "configPath": tmp_path / "mixed.toml",
-        "trainLog": tmp_path / "mixed.log",
-        "telemetryPath": tmp_path / "mixed.csv",
-        "resultPath": tmp_path / "mixed.json",
-    }
-    candidate["configPath"].write_text(h3_config_text(), encoding="utf-8")
-
-    class FakeSampler:
-        def __init__(self, _path):
-            pass
-
-        def start(self):
-            pass
-
-        def stop(self):
-            pass
-
-    def fake_run(_command, _cwd, log_path, **_kwargs):
-        first_epoch = [80.0] * probe.MIXED_STEPS_PER_EPOCH
-        second_epoch = [2.0] * (probe.MIXED_STEPS_PER_EPOCH - 2) + [20.0, 21.0]
-        Path(log_path).write_text(
-            "\n".join(
-                "step=" + str(index + 1) + ", iter time (s): " + str(value)
-                for index, value in enumerate(first_epoch + second_epoch)
-            ),
-            encoding="utf-8",
-        )
-        return {"exitCode": 0, "timedOut": False, "stoppedFor": ""}
-
-    monkeypatch.setattr(probe, "TelemetrySampler", FakeSampler)
-    monkeypatch.setattr(probe, "run_command", fake_run)
-    monkeypatch.setattr(probe, "telemetry_summary", lambda _path: {"peakGpuMemoryMiB": 32000, "gpuMemoryTotalMiB": 32680})
-    result = probe.execute_mixed_attempt(candidate, baseline_seconds=2.0)
-    assert result["status"] == "unsafe_slow"
-    assert result["slowStepCount"] == 2
-    assert len(result["measuredStepSeconds"]) == probe.MIXED_STEPS_PER_EPOCH
-
-
-def test_mixed_backoff_is_deterministic_and_bounded(tmp_path, monkeypatch):
-    probe = load_probe_script()
-    seed = {"results": tmp_path / "results", "config": tmp_path / "base.toml"}
-    seed["results"].mkdir()
-    seed["config"].write_text(h3_config_text(), encoding="utf-8")
-    safe_by_key = {}
-    provisional = {}
-    for ladder_order, (frames, _repeats) in enumerate(probe.MIXED_ROLE_SPECS):
-        for shape_order, aspect in enumerate(probe.MIXED_ASPECTS):
-            low = _mixed_record(probe, tmp_path, frames, aspect, 320, 256, 1400, ladder_order, 0)
-            high_free = 700 if (frames, aspect) == (68, "square") else 1000
-            high = _mixed_record(probe, tmp_path, frames, aspect, 352, 288, high_free, ladder_order, 1)
-            safe_by_key[(frames, aspect)] = [low, high]
-            provisional[(frames, aspect)] = high
-
-    attempts = []
-    monkeypatch.setattr(probe, "prepare_mixed_attempt", lambda _seed, _selected, index, _work: {"probeDir": _seed["results"] / "mixed" / str(index)})
-
-    def fake_execute(_candidate, _baseline):
-        attempts.append(1)
-        return {
-            "status": "unsafe_vram" if len(attempts) == 1 else "completed",
-            "slowThresholdSeconds": 20.0,
-            "slowStepCount": 0,
-            "medianStepSeconds": 2.0,
-            "telemetry": {"minimumGpuFreeMiB": 600},
-        }
-
-    monkeypatch.setattr(probe, "execute_mixed_attempt", fake_execute)
-    result = probe.run_mixed_validation(seed, safe_by_key, provisional, tmp_path / "work")
-    assert result["status"] == "completed"
-    assert len(result["attempts"]) == 2
-    assert result["attempts"][0]["backoff"] == {"frames": 68, "aspect": "square", "from": [352, 288], "to": [320, 256]}
-
-
-def test_completed_mixed_validation_is_required_for_automatic_publish(tmp_path):
-    probe = load_probe_script()
-    plan_path = tmp_path / "plan.json"
-    shutil.copy2(SCRIPTS_DIR / "h3_shape_probe_plan.json", plan_path)
-    results = tmp_path / "results"
-    results.mkdir()
-    seed_path = tmp_path / "seed.json"
-    seed_path.write_text(json.dumps({"id": "h3-test"}), encoding="utf-8")
-    seed = {"plan": plan_path, "results": results, "seed": {"id": "h3-test"}, "seedPath": seed_path}
-    final_shapes = {
-        "17": {"169": [1088, 608], "square": [736, 736], "43": [928, 704]},
-        "34": {"169": [800, 448], "square": [672, 672], "43": [768, 576]},
-        "68": {"169": [512, 288], "square": [416, 416], "43": [416, 320]},
-    }
-    (results / "campaign_result.json").write_text(json.dumps({
-        "mixedValidation": {"status": "completed", "finalSafeShapes": final_shapes},
-    }), encoding="utf-8")
-    assert probe.calibration_settings_from_results(seed, require_mixed_validation=True)["safe_shapes"] == final_shapes
-    (results / "campaign_result.json").write_text("{}", encoding="utf-8")
-    with pytest.raises(ValueError, match="mixed Quality validation"):
-        probe.calibration_settings_from_results(seed, require_mixed_validation=True)
-
-
-def test_campaign_stops_only_affected_ladder_and_marks_safe_sentinels_inconclusive(tmp_path, monkeypatch):
-    probe = load_probe_script()
-    plan = json.loads((SCRIPTS_DIR / "h3_shape_probe_plan.json").read_text(encoding="utf-8"))
+    plan = {"version": 2, "rungStep": 32, "ladders": [{"frames": 34, "aspect": "169", "terminal": "model_cap", "shapes": [[736, 416], [768, 448]]}]}
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
-    results = tmp_path / "results"
-    seed_path = tmp_path / "seed.json"
-    seed_path.write_text("{}", encoding="utf-8")
-    seed = {"plan": plan_path, "results": results, "seedPath": seed_path, "video": tmp_path / "source.mp4", "caption": tmp_path / "source.txt", "config": tmp_path / "config.toml"}
+    config_path = tmp_path / "config.json"
+    hardware = {"total_ram_mib": 64, "gpu_model": "GPU", "total_vram_mib": 32}
+    config_path.write_text(json.dumps({"training": {"h3_calibration": {"hardware": hardware, "results": {"34f/169-736x416": {"status": "completed", "median_step_seconds": 3.0}}}}}), encoding="utf-8")
+    seed = {"plan": plan_path, "results": tmp_path / "results", "seedPath": tmp_path / "seed.json", "video": tmp_path / "video.mp4", "caption": tmp_path / "video.txt", "config": tmp_path / "base.toml"}
     calls = []
-
-    def fake_prepare(_seed, ladder, width, height, _work_root):
-        probe_dir = results / (str(ladder["frames"]) + "f") / (ladder["aspect"] + "-" + str(width) + "x" + str(height))
-        return {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": probe_dir, "resultPath": probe_dir / "result.json"}
-
-    def fake_execute(candidate, baseline, on_train_start=None):
-        calls.append((candidate["frames"], candidate["shape"][:2], baseline))
-        if on_train_start is not None:
-            on_train_start()
-        status = "oom" if (candidate["frames"], candidate["shape"][:2]) == (34, [800, 448]) else "completed"
-        result = {
-            "status": status,
-            "medianStepSeconds": 2.0 if status == "completed" else None,
-            "baselineSeconds": baseline,
-            "cacheExitCode": 0,
-            "trainExitCode": 1 if status == "oom" else 0,
-            "timedOut": False,
-            "measuredStepSeconds": [2.0, 2.0, 2.0, 2.0],
-            "telemetry": {"peakGpuMemoryMiB": 1000, "gpuMemoryTotalMiB": 4000, "spillEvidence": False},
-        }
-        probe.write_result(candidate["resultPath"], **result)
-        return result
-
-    monkeypatch.setattr(probe, "prepare_candidate", fake_prepare)
-    monkeypatch.setattr(probe, "execute_probe", fake_execute)
-    monkeypatch.setattr(probe, "run_mixed_validation", lambda *_args: {"status": "completed", "attempts": [], "finalSafeShapes": {"17": {"169": [1088, 608], "square": [736, 736], "43": [928, 704]}, "34": {"169": [736, 416], "square": [768, 768], "43": [1024, 768]}, "68": {"169": [896, 512], "square": [672, 672], "43": [768, 576]}}})
-    assert probe.run_campaign(seed) == "completed"
-    assert (34, [864, 480], 2.0) not in calls
-    assert any(frames == 68 for frames, _shape, _baseline in calls)
-    campaign = json.loads((results / "campaign_result.json").read_text(encoding="utf-8"))
-    assert campaign["ceilings"][0]["reason"] == "oom"
-    assert any(item["reason"] == "ceiling_not_found" for item in campaign["ceilings"])
-    assert any(item["reason"] == "model_cap" for item in campaign["ceilings"])
+    monkeypatch.setattr(probe, "_validate_plan", lambda value: value["ladders"])
+    monkeypatch.setattr(probe, "current_hardware", lambda: hardware)
+    monkeypatch.setattr(probe, "derived_safe_shapes", lambda _ladders, _results: (1, {}))
+    def prepare(_seed, ladder, width, height, _work):
+        root = seed["results"] / probe.candidate_name(ladder["frames"], ladder["aspect"], width, height)
+        root.mkdir(parents=True)
+        return {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": root, "resultPath": root / "result.json"}
+    def execute(candidate, baseline, **_kwargs):
+        calls.append((candidate["shape"][:2], baseline))
+        return {"status": "completed", "medianStepSeconds": 4.0, "telemetry": {"minimumGpuFreeMiB": 1000, "peakGpuMemoryMiB": 2000}}
+    monkeypatch.setattr(probe, "prepare_candidate", prepare)
+    monkeypatch.setattr(probe, "execute_probe", execute)
+    assert probe.run_campaign(seed, config_path) == "completed"
+    assert calls == [([768, 448], 3.0)]
+    assert json.loads(config_path.read_text(encoding="utf-8"))["training"]["h3_calibration"]["results"]["34f/169-768x448"]["status"] == "completed"
 
 
-def test_cache_failure_is_fatal_and_does_not_prepare_later_candidates(tmp_path, monkeypatch):
+@pytest.mark.parametrize("status", ["oom", "unsafe_slow", "unsafe_vram"])
+def test_persisted_decisive_result_settles_only_its_ladder(status):
     probe = load_probe_script()
     plan = json.loads((SCRIPTS_DIR / "h3_shape_probe_plan.json").read_text(encoding="utf-8"))
-    plan_path = tmp_path / "plan.json"
-    plan_path.write_text(json.dumps(plan), encoding="utf-8")
-    results = tmp_path / "results"
-    seed = {"plan": plan_path, "results": results, "seedPath": tmp_path / "seed.json", "video": tmp_path / "source.mp4", "caption": tmp_path / "source.txt", "config": tmp_path / "config.toml"}
-
-    prepared = []
-
-    def fake_prepare(_seed, ladder, width, height, _work_root):
-        prepared.append((ladder["frames"], width, height))
-        probe_dir = results / "34f" / ("x-" + str(width) + "x" + str(height))
-        return {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": probe_dir, "resultPath": probe_dir / "result.json"}
-
-    monkeypatch.setattr(probe, "prepare_candidate", fake_prepare)
-    monkeypatch.setattr(probe, "execute_probe", lambda *_args, **_kwargs: {"status": "cache_failed", "medianStepSeconds": None, "trainExitCode": None, "timedOut": False, "telemetry": {}})
-    assert probe.run_campaign(seed) == "cache_failed"
-    campaign = json.loads((results / "campaign_result.json").read_text(encoding="utf-8"))
-    assert "precache" not in campaign
-    assert len(prepared) == 1
-    assert (tmp_path / "work").is_dir()
+    ladders = probe._validate_plan(plan)
+    results = {"34f/169-736x416": {"status": status}}
+    settled, safe_shapes = probe.derived_safe_shapes(ladders, results)
+    assert settled == 1
+    assert safe_shapes is None
 
 
-def test_campaign_records_cancellation(tmp_path, monkeypatch):
+def test_safe_model_cap_and_sentinel_publish_expected_ceiling_without_102f():
     probe = load_probe_script()
-    plan = {"version": 2, "rungStep": 32, "ladders": [{"frames": 34, "aspect": "169", "terminal": "model_cap", "shapes": [[736, 416]]}]}
-    results = tmp_path / "results"
-    seed = {"plan": tmp_path / "plan.json", "results": results, "seedPath": tmp_path / "seed.json", "video": tmp_path / "source.mp4", "caption": tmp_path / "source.txt", "config": tmp_path / "config.toml"}
-    seed["plan"].write_text(json.dumps(plan), encoding="utf-8")
-    monkeypatch.setattr(probe, "_validate_plan", lambda value: value["ladders"])
-    monkeypatch.setattr(probe, "prepare_candidate", lambda _seed, ladder, width, height, _work_root: {"frames": ladder["frames"], "aspect": ladder["aspect"], "shape": [width, height, ladder["frames"]], "mfp": 1.0, "probeDir": results / "34f" / "shape"})
-    monkeypatch.setattr(probe, "execute_probe", lambda *_args, **_kwargs: (_ for _ in ()).throw(KeyboardInterrupt()))
-    with pytest.raises(KeyboardInterrupt):
-        probe.run_campaign(seed)
-    assert json.loads((results / "campaign_result.json").read_text(encoding="utf-8"))["status"] == "canceled"
-    assert (tmp_path / "work").is_dir()
+    ladders = probe._validate_plan(json.loads((SCRIPTS_DIR / "h3_shape_probe_plan.json").read_text(encoding="utf-8")))
+    results = {}
+    for ladder in ladders:
+        for width, height in ladder["shapes"]:
+            results[probe.candidate_name(ladder["frames"], ladder["aspect"], width, height)] = {"status": "completed", "median_step_seconds": 2.0}
+    settled, safe_shapes = probe.derived_safe_shapes(ladders, results)
+    assert settled == 12
+    assert set(safe_shapes) == {"17", "34", "68"}
+    assert safe_shapes["34"]["169"] == [1344, 768]
+    assert safe_shapes["68"]["169"] == [864, 480]
+
+
+def test_hardware_mismatch_and_malformed_persistent_state_fail_loudly(tmp_path):
+    probe = load_probe_script()
+    path = tmp_path / "config.json"
+    hardware = {"total_ram_mib": 64, "gpu_model": "GPU", "total_vram_mib": 32}
+    path.write_text(json.dumps({"training": {"h3_calibration": {"hardware": hardware, "results": {"bad": {"status": "completed"}}}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="hardware differs"):
+        probe.load_persistent_calibration(path, {**hardware, "total_vram_mib": 33})
+    with pytest.raises(ValueError, match="unknown candidate"):
+        config_module._validate_h3_calibration(json.loads(path.read_text(encoding="utf-8"))["training"]["h3_calibration"])
+
+
+@pytest.mark.parametrize("status", ["cache_failed", "trainer_failed", "telemetry_failed"])
+def test_nonconclusive_probe_failures_are_not_persisted(status):
+    probe = load_probe_script()
+    assert probe.compact_persistent_result({"status": status, "telemetry": {}}) is None
 
 
 def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkeypatch):
@@ -576,7 +431,11 @@ def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkey
     source.with_suffix(".txt").write_text("probe caption", encoding="utf-8")
     (folder / "config.h3.toml").write_text(h3_config_text(), encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
-    monkeypatch.setattr(h3_probe_module, "update_media_metadata", lambda _folder: {"probe.mp4": {"fps": 24}})
+    scoped = []
+    def metadata(_folder, scoped_filenames=None):
+        scoped.append(scoped_filenames)
+        return {"probe.mp4": {"fps": 24, "duration": 10.0}}
+    monkeypatch.setattr(h3_probe_module, "update_media_metadata", metadata)
 
     def copy_capture(src, dest, target_fps, source_fps):
         assert target_fps == 24
@@ -597,6 +456,7 @@ def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkey
     assert (seed_path.parent / seed["source"]["caption"]).read_text(encoding="utf-8") == "probe caption."
     assert (seed_path.parent / seed["plan"]).is_file()
     assert "h3_shape_probe.py" in payload["command"]
+    assert scoped == [["probe.mp4"]]
 
 
 def test_prepare_route_uses_canonical_config_when_set_has_none(tmp_path, monkeypatch):
@@ -607,7 +467,7 @@ def test_prepare_route_uses_canonical_config_when_set_has_none(tmp_path, monkeyp
     source.write_bytes(b"video")
     source.with_suffix(".txt").write_text("probe caption", encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
-    monkeypatch.setattr(h3_probe_module, "update_media_metadata", lambda _folder: {"probe.mp4": {"fps": 24}})
+    monkeypatch.setattr(h3_probe_module, "update_media_metadata", lambda _folder, scoped_filenames=None: {"probe.mp4": {"fps": 24, "duration": 10.0}})
 
     def copy_capture(src, dest, _fps, _source_fps):
         shutil.copy2(src, dest)

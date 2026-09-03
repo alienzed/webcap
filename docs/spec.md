@@ -44,15 +44,15 @@ Train saves the open TOML before capture. Captured copies preserve inspected val
 
 ## Run ownership and output
 
-Each Train action reserves a numbered run group under `output/runs/`. Its captured dataset lives under:
+Each Train action reserves a logical run under its deterministic set root:
 
 ```text
-<numbered-action>/record/ and <numbered-action>/input/
+output/runs/<set-slug>--<set-path-hash>/<numbered-logical-run>/captures/
 ```
 
-The bundle contains grouped media, captions, copied TOMLs, `dataset_manifest.json`, and `training_plan.json`. Diffusion Pipe cache files live with the captured media. Bundles remain until the numbered run folder is deleted.
+The logical run also owns `jobs/` and `output/`. The bundle contains grouped media, captions, copied TOMLs, `dataset_manifest.json`, and `training_plan.json`; caches live with captured media.
 
-Managed training provides queue ordering, start/resume control, pause, finish, cancellation, logs, output and captured-file actions, history, checkpoint resume, progress, GPU status, diagnostics, and TensorBoard controls. Managed Resume reuses the original bundle and fails visibly if it is missing. The manual command path uses the same capture materializer but never launches a process.
+Managed Resume is shallow current-set discovery; Custom Resume validates an explicit checkpoint directly and creates a new logical run. The manual command path uses the same capture materializer but never launches a process.
 
 ## Guardrails
 

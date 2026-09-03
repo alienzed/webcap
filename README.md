@@ -170,17 +170,18 @@ The important rule is simple: **what is visible when Train is requested is what 
 
 ## Training capture and output
 
-Each Train/manual action reserves a three-character base-36 run identity under:
+Each Train action reserves a logical run beneath its deterministic set root:
 
 ```text
-<filesystem.root>/output/runs/<id>-<set-name>/
+<filesystem.root>/output/runs/<set-slug>--<set-path-hash>/<sequence>-<model>--<optional-name>/
 ```
 
 The run owns its captured evidence:
 
 ```text
-input/   captured media, captions, manifest, and Diffusion Pipe cache
-record/  immutable inspected TOMLs and training plan
+captures/  captured media, captions, manifest, TOMLs, plan, and cache
+jobs/      runner, log, PID, action, and result evidence
+output/    Diffusion Pipe trainer runs
 ```
 
 Only app-owned runtime paths are rewritten in the captured TOMLs. User-authored training settings remain part of the launch evidence.
@@ -192,10 +193,10 @@ The persistent TOMLs in the source set remain the editable interface for future 
 WebCap distinguishes three starting points for a new managed run:
 
 - **Fresh** — start from the configured base model.
-- **Resume** — choose a discovered compatible checkpoint/run and continue from it.
+- **Resume** — choose a current-set managed checkpoint or enter an explicit custom checkpoint directory.
 - **Initializer** — start a new run using saved LoRA weights or an explicit initializer file/folder.
 
-Resume reuses the original captured bundle/cache associated with the discovered run and fails visibly if required captured material is missing.
+Managed Resume stays in its logical run but captures the current set again. Custom Resume reads the explicit external checkpoint and writes its new capture, job, and output beneath a newly allocated logical run. H3 Resume runs the current capture's cache phase before training.
 
 ## File/state model
 

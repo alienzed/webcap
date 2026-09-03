@@ -14,7 +14,7 @@ import tomllib
 
 from . import config as app_config
 from .training_config_files import output_dir_from_config, training_config_path
-from .training_action import action_paths, managed_action_children, read_action
+from .training_action import managed_actions_for_folder, read_action
 from .training_profiles import config_for_id, config_for_stage
 
 
@@ -271,46 +271,6 @@ def read_history(folder_path):
         return result
 
 
-def _managed_run_metadata(folder, stage):
-    """Map current-set action outputs to metadata without making them authoritative."""
-    folder_key = _folder_key(folder)
-    metadata = {}
-    roots = []
-    for action_root, action in managed_action_children():
-        if str(action.get("folder") or "") != folder_key or stage not in action.get("requestedStages", ()):
-            continue
-        try:
-            meta = config_for_stage(str(action.get("profileId") or ""), stage, str(action.get("mode") or "normal"))
-        except ValueError:
-            continue
-        branch = action_root / "output" / meta["outputSlug"]
-        if not branch.is_dir() or branch.is_symlink():
-            continue
-        roots.append(branch)
-        try:
-            markers = branch.rglob("latest")
-        except OSError as exc:
-            raise RuntimeError("Could not scan managed training output: " + str(branch)) from exc
-        for latest in markers:
-            entry = latest.parent
-            if entry.is_symlink():
-                continue
-            try:
-                relative_output = entry.relative_to(action_root).as_posix()
-                key = entry.resolve()
-            except (OSError, ValueError):
-                continue
-            output_id = hashlib.sha256(
-                (str(action.get("actionId") or "") + "\0" + stage + "\0" + relative_output).encode("utf-8")
-            ).hexdigest()[:24]
-            metadata[key] = {
-                "resumeActionId": str(action.get("actionId") or ""),
-                "resumeOutputId": output_id,
-                "runName": str(action.get("runName") or ""),
-            }
-    return roots, metadata
-
-
 def discover_runs(folder_path, stage=""):
     folder = Path(folder_path)
     if not folder.is_dir():
@@ -329,40 +289,18 @@ def discover_runs(folder_path, stage=""):
     wanted_identity = _model_identity(parsed_source, config_meta["modelIdentityKeys"])
     if wanted_identity is None:
         return []
-    try:
-        source_hash = config_sha256(source_config)
-        configured_root = output_root_for_folder(folder, stage)
-        configured_training_root = output_root_path_for_folder(folder, stage)
-        managed_roots, managed_metadata = _managed_run_metadata(folder, stage)
-    except (OSError, RuntimeError) as exc:
-        app_config.debug_print("[training_history] Could not resolve", stage, "output root for", folder, ":", exc)
-        raise
-    roots = []
-    seen_roots = set()
-    for root, training_root in [(configured_root, configured_training_root)] + [(root, str(root)) for root in managed_roots]:
-        try:
-            key = root.resolve()
-        except OSError:
-            continue
-        if key in seen_roots or not root.is_dir() or root.is_symlink():
-            continue
-        seen_roots.add(key)
-        roots.append((root, training_root))
+    source_hash = config_sha256(source_config)
     runs = []
-    seen_runs = set()
-    for root, training_root in roots:
+    for action_root, action in managed_actions_for_folder(folder):
+        if str(action.get("folder") or "") != _folder_key(folder) or stage not in action.get("requestedStages", ()):
+            continue
         try:
-            app_config.debug_print("[training_history] Scanning", root, "for resumable", stage, "runs.")
-            latest_markers = root.rglob("latest")
-            for latest in latest_markers:
-                entry = latest.parent
-                if ".webcap" in entry.parts or entry.is_symlink() or not _resume_artifacts(entry):
-                    continue
-                try:
-                    entry_key = entry.resolve()
-                except OSError:
-                    continue
-                if entry_key in seen_runs:
+            meta = config_for_stage(str(action.get("profileId") or ""), stage, str(action.get("mode") or "normal"))
+            branch = action_root / "output" / meta["outputSlug"]
+            if not branch.is_dir() or branch.is_symlink():
+                continue
+            for entry in branch.iterdir():
+                if not entry.is_dir() or entry.is_symlink() or not _resume_artifacts(entry):
                     continue
                 saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, wanted_identity)
                 if saved_config is None:
@@ -370,14 +308,13 @@ def discover_runs(folder_path, stage=""):
                     continue
                 try:
                     modified = entry.stat().st_mtime
-                    checkpoint_tag = latest.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+                    checkpoint_tag = (entry / "latest").read_text(encoding="utf-8").strip().splitlines()[0].strip()
                     saved_hash = config_sha256(saved_config)
                 except (OSError, IndexError):
                     continue
                 expected_epochs = _epochs_from_parsed_config(parsed_saved)
                 completed, highest_epoch, highest_step = _run_artifact_state(entry, expected_epochs)
-                training_path = _training_path_for_entry(entry, root, training_root)
-                managed = managed_metadata.get(entry_key, {})
+                training_path = str(entry)
                 runs.append({
                     "path": training_path, "runPath": training_path, "name": entry.name,
                     "setName": _set_name_from_run_config(entry, folder.name), "stage": stage,
@@ -386,11 +323,14 @@ def discover_runs(folder_path, stage=""):
                     "configHash": saved_hash, "modifiedAt": modified,
                     "checkpointAvailable": True, "checkpointName": "latest", "checkpointTag": checkpoint_tag,
                     "completed": completed, "epoch": highest_epoch or None, "steps": highest_step or None,
-                    "expectedEpochs": expected_epochs or None, **managed,
+                    "expectedEpochs": expected_epochs or None,
+                    "resumeActionId": str(action.get("actionId") or ""),
+                    "resumeOutputId": entry.relative_to(action_root).as_posix(),
+                    "runName": str(action.get("runName") or ""),
+                    "logicalRun": action_root.name,
                 })
-                seen_runs.add(entry_key)
         except OSError as exc:
-            app_config.debug_print("[training_history] Could not scan", root, ":", exc)
+            app_config.debug_print("[training_history] Could not scan", action_root, ":", exc)
             raise
     app_config.debug_print("[training_history] Found", len(runs), "resumable run(s) for", folder, "stage", stage or "all")
     return sorted(runs, key=lambda run: run["modifiedAt"], reverse=True)
@@ -405,15 +345,21 @@ def resolve_managed_resume(folder_path, action_id, output_id, stage):
     selected_stage = str(stage or "").strip().lower()
     if selected_stage not in action.get("requestedStages", ()):
         raise ValueError("The selected stage is not part of that training action.")
-    for run in discover_runs(folder, selected_stage):
-        if run.get("resumeActionId") == action_id and run.get("resumeOutputId") == output_id:
-            action_paths(action_id)  # require captured record and input before reusing them
-            return {"actionRoot": root, "action": action, "runPath": Path(run["path"]), "stage": selected_stage, "point": resume_point_from_directory(folder, selected_stage, run["path"])}
-    raise ValueError("The selected managed checkpoint is unavailable or no longer valid.")
+    output = PurePosixPath(str(output_id or ""))
+    if not output_id or output.is_absolute() or ".." in output.parts or len(output.parts) != 3 or output.parts[0] != "output":
+        raise ValueError("Managed training output ID is invalid.")
+    meta = config_for_stage(str(action.get("profileId") or ""), selected_stage, str(action.get("mode") or "normal"))
+    if output.parts[1] != meta["outputSlug"]:
+        raise ValueError("The selected output does not belong to the requested stage.")
+    run_dir = root.joinpath(*output.parts)
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        raise ValueError("The selected managed checkpoint is unavailable or no longer valid.")
+    validated = validate_resumable_run_for_path(folder, selected_stage, str(run_dir))
+    return {"actionRoot": root, "action": action, "runPath": Path(validated["runPath"]), "stage": selected_stage, "point": validated}
 
 
 def validate_resumable_run_for_path(folder_path, stage, run_path):
-    """Validate the exact checkpoint path recorded for an automatic resume."""
+    """Validate one explicit trainer-run directory without managed discovery."""
     raw_path = str(run_path or "").strip()
     if not raw_path:
         raise ValueError("A resume directory is required.")
@@ -423,8 +369,20 @@ def validate_resumable_run_for_path(folder_path, stage, run_path):
     resume_artifacts = _resume_artifacts(directory)
     if not resume_artifacts:
         raise ValueError("Recorded resume directory has no valid latest DeepSpeed checkpoint: " + raw_path)
+    source_config = training_config_path(folder_path, stage)
+    parsed_source = _parsed_config(source_config)
+    if parsed_source is None:
+        raise ValueError("Current training config is unreadable: " + str(source_config))
+    config_meta = config_for_id(stage)
+    wanted_identity = _model_identity(parsed_source, config_meta["modelIdentityKeys"])
+    if wanted_identity is None:
+        raise ValueError("Current training config has no valid model identity.")
+    saved_config, parsed_saved = _saved_config_for_candidate(directory, config_meta, wanted_identity)
+    if saved_config is None:
+        raise ValueError("Resume directory has no readable compatible saved config: " + raw_path)
     point = resume_point_from_directory(folder_path, stage, raw_path)
-    return {"path": raw_path, "runPath": raw_path, "stage": stage, **point}
+    return {"path": raw_path, "runPath": raw_path, "stage": stage,
+            "matchType": "exact" if config_sha256(saved_config) == config_sha256(source_config) else "compatible", **point}
 
 
 def discovered_run_output_path(folder_path, stage, run_path):

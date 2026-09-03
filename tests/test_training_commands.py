@@ -1,5 +1,6 @@
 from tool.server.training_commands import build_h3_command_plan, build_training_command_plan, build_training_launcher_probe
 from tool.server.training_runtime import build_runtime_command, build_training_launcher, training_runtime_settings
+from tool.server import training_runner
 
 
 def test_training_command_plan_uses_the_same_stage_commands_for_handoff():
@@ -44,6 +45,20 @@ def test_h3_command_plan_runs_cache_and_training_in_separate_processes():
     )
     assert "--resume_from_checkpoint" not in resumed["cacheCommand"]
     assert resumed["trainCommand"].endswith("--resume_from_checkpoint /mnt/w/output/run-1 --trust_cache")
+
+
+def test_resumed_h3_runner_caches_the_current_capture_before_training(tmp_path, monkeypatch):
+    config = tmp_path / "config.h3.toml"
+    config.write_text("config", encoding="utf-8")
+    job_dir = tmp_path / "job"
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, _distribution="": str(path).replace("\\", "/"))
+    script, _ = training_runner._build_runner_script(
+        {"id": "job", "stages": "h3", "resumeFromCheckpoint": "/mnt/w/old-run", "resumeStage": "h3", "artifactDir": str(job_dir)},
+        {"cwd": "/mnt/w/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": ""},
+        {"h3Config": config}, job_dir,
+    )
+    assert script.index("--cache_only") < script.index("--resume_from_checkpoint /mnt/w/old-run")
+    assert "--regenerate_cache" not in script
 
 
 def test_conda_runtime_wraps_child_commands_without_shell_activation():

@@ -339,12 +339,14 @@ def terminate_process_group(process):
         process.wait(timeout=15)
 
 
-def run_command(args, cwd, log_path, post_warmup_timeout=None, stop_when=None):
+def run_command(args, cwd, log_path, post_warmup_timeout=None, stop_when=None, cancel_when=None):
     log_path = Path(log_path)
     last_step = None
     last_step_at = time.monotonic()
     timed_out = False
     stopped_for = ""
+    if cancel_when is not None and cancel_when():
+        raise KeyboardInterrupt
     with log_path.open("w", encoding="utf-8") as log_handle:
         try:
             process = subprocess.Popen(
@@ -359,6 +361,9 @@ def run_command(args, cwd, log_path, post_warmup_timeout=None, stop_when=None):
             return {"exitCode": 127, "timedOut": False}
         try:
             while process.poll() is None:
+                if cancel_when is not None and cancel_when():
+                    terminate_process_group(process)
+                    raise KeyboardInterrupt
                 text = read_log(log_path)
                 current_step = latest_step(text)
                 if current_step is not None and current_step != last_step:
@@ -456,13 +461,13 @@ def prepare_candidate(seed, ladder, width, height, work_root):
     return candidate
 
 
-def execute_probe(candidate, baseline_seconds, on_train_start=None):
+def execute_probe(candidate, baseline_seconds, on_train_start=None, cancel_when=None):
     width, height, frames = candidate["shape"]
     cache_command = probe_command(candidate["configPath"], cache_only=True)
     cache_sampler = TelemetrySampler(candidate["cacheTelemetryPath"])
     cache_sampler.start()
     try:
-        cache_result = run_command(cache_command, Path.cwd(), candidate["cacheLog"])
+        cache_result = run_command(cache_command, Path.cwd(), candidate["cacheLog"], cancel_when=cancel_when)
     finally:
         cache_sampler.stop()
     cache_text = read_log(candidate["cacheLog"])
@@ -493,6 +498,8 @@ def execute_probe(candidate, baseline_seconds, on_train_start=None):
         return result
 
     train_command = probe_command(candidate["configPath"], trust_cache=True)
+    if cancel_when is not None and cancel_when():
+        raise KeyboardInterrupt
     if on_train_start is not None:
         on_train_start()
     sampler = TelemetrySampler(candidate["telemetryPath"])
@@ -505,6 +512,7 @@ def execute_probe(candidate, baseline_seconds, on_train_start=None):
             candidate["trainLog"],
             post_warmup_timeout=stall_timeout,
             stop_when=lambda: telemetry_is_below_required_vram_headroom(candidate["telemetryPath"]),
+            cancel_when=cancel_when,
         )
     finally:
         sampler.stop()
@@ -738,6 +746,8 @@ def run_campaign(seed, config_path=None):
     campaign_status = "completed"
     ceilings = []
     provisional_safe_shapes = None
+    cancel_path = Path(seed["seedPath"]).parent / "cancel.request"
+    cancel_requested = lambda: cancel_path.exists()
     try:
         for ladder in ladders:
             baseline = None
@@ -746,6 +756,8 @@ def run_campaign(seed, config_path=None):
             terminal_reason = ""
             result = None
             for candidate_index, shape in enumerate(ladder["shapes"]):
+                if cancel_requested():
+                    raise KeyboardInterrupt
                 width, height = int(shape[0]), int(shape[1])
                 key = candidate_name(int(ladder["frames"]), str(ladder["aspect"]), width, height)
                 saved = calibration["results"].get(key)
@@ -769,7 +781,7 @@ def run_campaign(seed, config_path=None):
                 width, height, _frames = candidate["shape"]
                 label = str(candidate["frames"]) + "f " + candidate["aspect"] + " " + str(width) + "x" + str(height)
                 print("[h3-probe] " + label + " cache", flush=True)
-                result = execute_probe(candidate, baseline, on_train_start=lambda: print("[h3-probe] " + label + " train", flush=True))
+                result = execute_probe(candidate, baseline, on_train_start=lambda: print("[h3-probe] " + label + " train", flush=True), cancel_when=cancel_requested)
                 peak_mib = (result.get("telemetry") or {}).get("peakGpuMemoryMiB")
                 median_seconds = result.get("medianStepSeconds")
                 details = []

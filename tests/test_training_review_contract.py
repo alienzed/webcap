@@ -401,3 +401,15 @@ def test_switching_sets_resets_only_ephemeral_launch_inputs():
         assert field in reset
     assert "resetTrainingReviewBuckets" not in reset
     assert "ensureSelectedTrainingSetup" not in reset
+
+
+def test_custom_resume_is_a_first_class_mutually_exclusive_resume_choice():
+    root = Path(__file__).parents[1]
+    html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    runner = (root / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    workspace = (root / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    resume_fields = html[html.index('id="training-run-resume-fields"'):html.index('id="training-run-initializer-fields"')]
+    diagnostics = html[html.index("Manual command &amp; diagnostics"):]
+    assert 'id="training-run-resume-input"' in resume_fields
+    assert 'id="training-run-resume-input"' not in diagnostics
+    assert "customResumePath" in runner and "if (checkpointSelect.value && resumeInput) resumeInput.value = ''" in workspace

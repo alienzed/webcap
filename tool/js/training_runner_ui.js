@@ -430,15 +430,15 @@ function getManagedTrainingOptions() {
   var usingResume = startingPoint === 'resume';
   var selectedCheckpoint = checkpointEl && checkpointEl.selectedOptions && checkpointEl.selectedOptions[0]
     ? checkpointEl.selectedOptions[0] : null;
-  var resumeActionId = usingResume && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-action-id') || '') : '';
-  var resumeOutputId = usingResume && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-output-id') || '') : '';
-  var discoveredRunPath = usingResume && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-run-path') || '') : '';
+  var customResumePath = manualResumeEl ? String(manualResumeEl.value || '').trim() : '';
+  var resumeActionId = usingResume && !customResumePath && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-action-id') || '') : '';
+  var resumeOutputId = usingResume && !customResumePath && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-output-id') || '') : '';
   return {
     stages: stages,
     profileId: selectedProfile ? selectedProfile.id : '',
     runId: selectedRun ? selectedRun.id : '',
     mode: normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode),
-    resumeFromCheckpoint: usingInitializer || !usingResume ? '' : (resumeActionId ? '' : (discoveredRunPath || (manualResumeEl ? String(manualResumeEl.value || '').trim() : ''))),
+    resumeFromCheckpoint: usingInitializer || !usingResume || resumeActionId ? '' : customResumePath,
     runName: runNameEl ? String(runNameEl.value || '').trim() : '',
     resumeOutputId: resumeOutputId,
     resumeActionId: resumeActionId,

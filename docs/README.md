@@ -56,9 +56,7 @@ These are useful product notes, not authoritative implementation references:
 - `docs/repeat_targeting.md` - dataset repeat calculation
 - `docs/video_clip.md`
 - `docs/vram_bucket_calibration.md` - implemented H3 shape calibration, persistent result reuse, Training Settings controls, and calibrated bucket margins
-- `docs/training_run_identity.md` - proposed run names, captured-config visibility, and experiment lineage
-- `docs/training_artifact_cleanup.md` - visible training action layout and clean-break rollout
-- `docs/stable_set_training_layout_plan.md` - tentative proposal for alphabetical set roots and self-contained training runs
+- `docs/stable_set_training_layout_plan.md` - approved set-root/logical-run layout and Resume implementation record
 - `wildcard_template.md` - parked wildcard-template-builder concept
 
 ## Historical / Superseded

@@ -600,10 +600,20 @@ function wireTrainingWorkspace() {
       resumeStageSelect.value = selectedRun.stage;
     }
     trainingWorkspaceState.reviewStartingPoint = 'resume';
+    if (checkpointSelect.value && resumeInput) resumeInput.value = '';
     syncManagedTrainingResumeUi();
     refreshTrainingReview().catch(function (err) {
       setStatus('Could not load the selected run review: ' + String(err && err.message ? err.message : err));
     });
+  };
+  if (resumeInput) resumeInput.oninput = function () {
+    if (!resumeInput.value.trim()) return;
+    if (checkpointSelect) checkpointSelect.value = '';
+    trainingWorkspaceState.resumeSelectionTouched = true;
+    trainingWorkspaceState.resumeParentJobId = '';
+    trainingWorkspaceState.reviewStartingPoint = 'resume';
+    syncManagedTrainingResumeUi();
+    renderTrainingReview();
   };
   if (resumeStageSelect) resumeStageSelect.onchange = function () {
     renderTrainingHistory();

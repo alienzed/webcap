@@ -119,7 +119,9 @@ function renderTrainingStartingPointControls(payload) {
     trainingWorkspaceState.reviewInitializerExportId = '';
     trainingWorkspaceState.reviewInitializerCustomPath = '';
     var checkpoint = document.getElementById('training-run-checkpoint-select');
+    var customResume = document.getElementById('training-run-resume-input');
     if (select.value !== 'resume' && checkpoint) checkpoint.value = '';
+    if (select.value !== 'resume' && customResume) customResume.value = '';
     syncManagedTrainingResumeUi();
     if (select.value === 'initializer') {
       var stage = reviewInitializerStage();

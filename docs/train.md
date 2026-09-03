@@ -33,7 +33,7 @@ Wan2.2 `HI -> LO` creates two jobs sharing one captured bundle. Every separate T
 - `Finish` intentionally ends the active job and allows queue processing to continue.
 - Canceling a queued item removes that item only; it does not delete its captured bundle.
 - Jobs expose captured files, output folders, logs, history, GPU status, diagnostics, and checkpoint resume. Recent Runs keeps compact rows and offers an expandable facts view for timing, progress, dataset, and output details.
-- Managed Resume reuses the original bundle and cache and fails visibly if the bundle is missing.
+- Managed Resume discovers only version-2 logical runs beneath the current set root and captures the current set again. Custom Resume is an explicit checkpoint directory; it creates a new logical run and never writes beside that source. H3 Resume includes the current capture's cache phase.
 - The Training Queue header checks the configured local TensorBoard port and opens the existing TensorBoard UI in a new tab. It never starts TensorBoard automatically.
 
 ## Manual command handoff
@@ -61,7 +61,7 @@ Disabling a profile only hides it from new-run setup. Existing TOMLs, captured b
 - `.webcap_training/queue.json` contains ordered scheduler work and live fields.
 - `.webcap_training/recent_runs.json` is presentation history and never gates scheduling.
 - Per-set `.webcap_training.json` stores set-local output-group metadata.
-- Captured input lives under the visible `<numbered-action>/input/`, while immutable TOMLs and the plan live under `<numbered-action>/record/`.
+- Queue and Recent Runs are disposable convenience state. New action-owned captures, jobs, logs, and output live under `output/runs/<set-slug>--<hash>/<logical-run>/`.
 
 The persistent set TOMLs remain the editable configuration interface. Only app-owned runtime paths are rewritten in captured copies.
 

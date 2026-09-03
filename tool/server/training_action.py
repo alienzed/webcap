@@ -12,13 +12,13 @@ import re
 import threading
 import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 
 
-ACTION_VERSION = 1
-_ACTION_NAME = re.compile(r"^\d{3,}-.+")
+ACTION_VERSION = 2
+_ACTION_NAME = re.compile(r"^\d{3,}-[A-Za-z0-9._-]+$")
 _SLUG_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 _TRIM_PUNCTUATION = ".-_"
 _action_lock = threading.RLock()
@@ -39,7 +39,7 @@ def normalize_run_name(value):
 
 
 def _folder_slug(folder_path):
-    slug = _SLUG_UNSAFE.sub("-", Path(folder_path).name).strip(_TRIM_PUNCTUATION)[:80].strip(_TRIM_PUNCTUATION)
+    slug = _SLUG_UNSAFE.sub("-", Path(folder_path).name.lower()).strip(_TRIM_PUNCTUATION)[:48].strip(_TRIM_PUNCTUATION)
     if not slug:
         raise ValueError("The set folder name cannot be used for a training action directory.")
     return slug
@@ -48,6 +48,23 @@ def _folder_slug(folder_path):
 def _relative_folder(folder_path):
     root = Path(app_config.FS_ROOT).resolve()
     return Path(folder_path).resolve().relative_to(root).as_posix()
+
+
+def set_root_name(folder_path):
+    relative = _relative_folder(folder_path)
+    digest = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:12]
+    return _folder_slug(folder_path) + "--" + digest
+
+
+def set_root_for_folder(folder_path):
+    return actions_root() / set_root_name(folder_path)
+
+
+def action_id_for_root(action_root):
+    try:
+        return Path(action_root).resolve().relative_to(actions_root().resolve()).as_posix()
+    except ValueError as exc:
+        raise ValueError("Training action is outside the managed actions root.") from exc
 
 
 def _atomic_write(path, payload):
@@ -79,10 +96,11 @@ def _validate_relpath(value, label):
 
 def read_action(action_id):
     name = str(action_id or "").strip()
-    if Path(name).name != name or not _ACTION_NAME.match(name):
+    parts = PurePosixPath(name).parts
+    if not name or name.startswith("/") or "\\" in name or ".." in parts or len(parts) != 2 or not _ACTION_NAME.match(parts[1]):
         raise ValueError("Training action ID is invalid.")
     root = actions_root()
-    path = root / name
+    path = root.joinpath(*parts)
     if not path.is_dir() or path.is_symlink():
         raise ValueError("Training action is unavailable: " + name)
     try:
@@ -109,11 +127,12 @@ def allocate_action(folder_path, profile, mode, stages, run_name=""):
     run_name, run_slug = normalize_run_name(run_name)
     root = actions_root()
     root.mkdir(parents=True, exist_ok=True)
-    set_slug = _folder_slug(folder_path)
+    set_root = set_root_for_folder(folder_path)
+    set_root.mkdir(exist_ok=True)
     with _action_lock:
         highest = 0
         try:
-            children = list(root.iterdir())
+            children = list(set_root.iterdir())
         except OSError as exc:
             raise RuntimeError("Could not inspect the training actions root.") from exc
         for child in children:
@@ -122,10 +141,11 @@ def allocate_action(folder_path, profile, mode, stages, run_name=""):
                 highest = max(highest, int(match.group(1)))
         for sequence in range(highest + 1, highest + 10000):
             model_slug = _SLUG_UNSAFE.sub("-", str(profile.get("slug") or profile.get("id") or "model")).strip(_TRIM_PUNCTUATION)
-            action_id = str(sequence).zfill(max(3, len(str(sequence)))) + "-" + set_slug + "--" + model_slug
+            logical_name = str(sequence).zfill(max(3, len(str(sequence)))) + "-" + model_slug
             if run_slug:
-                action_id += "--" + run_slug
-            action = root / action_id
+                logical_name += "--" + run_slug
+            action_id = (PurePosixPath(set_root.name) / logical_name).as_posix()
+            action = set_root / logical_name
             try:
                 action.mkdir()
             except FileExistsError:
@@ -168,17 +188,17 @@ def fingerprint_files(paths):
     return "sha256:" + digest.hexdigest()
 
 
-def managed_action_children():
-    root = actions_root()
-    if not root.is_dir():
+def managed_actions_for_folder(folder_path):
+    root = set_root_for_folder(folder_path)
+    if not root.is_dir() or root.is_symlink():
         return []
     rows = []
     for path in root.iterdir():
         if not path.is_dir() or path.is_symlink() or not _ACTION_NAME.match(path.name):
             continue
         try:
-            action, data = read_action(path.name)
-        except ValueError:
-            continue
+            action, data = read_action((PurePosixPath(root.name) / path.name).as_posix())
+        except ValueError as exc:
+            raise ValueError("Managed training action is invalid: " + str(path)) from exc
         rows.append((action, data))
     return rows

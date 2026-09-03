@@ -667,6 +667,7 @@
                                             </select>
                                             <div id="training-run-checkpoint-path" class="training-run-checkpoint-path"></div>
                                         </label>
+                                        <label class="training-run-option training-run-custom-checkpoint"><span>Or custom checkpoint directory</span><input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/runs/{run}"></label>
                                         <label id="training-run-resume-stage-option" class="training-run-option training-run-resume-stage-option">
                                             <span>Apply resume to</span>
                                             <select id="training-run-resume-stage-select">
@@ -693,7 +694,6 @@
                                 <summary>Manual command &amp; diagnostics</summary>
                                 <div class="training-run-details-body">
                                     <div id="training-command-status" class="training-command-status">Generate and copy a manual WSL command when you need one.</div>
-                                    <label class="training-run-custom-checkpoint"><span>Custom resume output path <em>(optional)</em></span><input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/runs/{run}"></label>
                                     <pre id="training-command-text" class="training-command-text hidden"></pre>
                                     <div class="training-command-actions">
                                         <button id="training-preview-command-btn" type="button" class="review-captions-btn" title="Generate the manual WSL command, show it here, and copy it to the clipboard.">Generate &amp; Copy Manual Command</button>

@@ -23,7 +23,7 @@ Every capture copies source media byte-for-byte. WebCap does not transcode, sile
 Fresh actions use this layout:
 
 ```text
-runs/<sequence>-<set>--<model>/
+runs/<set-slug>--<set-path-hash>/<sequence>-<model>/
   action.json
   captures/<job-id>/
     config.toml
@@ -41,7 +41,7 @@ The JSON files contain practical paths, model/stage, timestamps, and counts only
 
 The queue and Recent Runs are disposable convenience state. Missing files mean empty state; malformed existing files fail visibly. On restart, an in-progress item becomes the first queued resumable item and the queue stays paused until Resume is pressed. WebCap does not scan training output to reconstruct state.
 
-Resume continues with the original Diffusion Pipe output directory. It captures current set inputs again before queuing, so queued work cannot drift after submission. A custom-output resume stores that fresh capture in a `.webcap-captures/` sibling of the selected output directory and records the direct path in its new action. The explicit Resume and Init LoRA pickers may inspect managed outputs for the current set; this is not startup recovery or broad output reconstruction. Recent Runs is append-only; resumed launches create another row without merging or reconciling history.
+Managed Resume reuses its current-set logical run and captures current inputs again. Custom Resume validates its explicit checkpoint before mutation, then creates a new logical run; it reads the external source without writing beside it. Managed discovery is current-set-only and shallow. H3 Resume runs cache-only against the current capture before resumed training.
 
 Pause, Finish, and Finish After Epoch request a fresh checkpoint. Pause returns resumable work to the front and pauses the queue. Finish records Finished Early and advances it.
 

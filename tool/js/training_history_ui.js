@@ -192,17 +192,14 @@ function renderTrainingHistory() {
   var selectedCheckpoint = String(els.checkpointSelect.value || '');
   var resumeStage = String(trainingWorkspaceState.runStages || '');
   runs = runs.filter(function (run) { return String(run.candidateFor || run.stage || '') === resumeStage; });
-  els.checkpointSelect.innerHTML = '<option value="">Choose a checkpoint…</option>' + runs.map(function (run) {
+  els.checkpointSelect.innerHTML = '<option value="">' + (runs.length ? 'Choose a managed checkpoint…' : 'No managed checkpoints for this set') + '</option>' + runs.map(function (run) {
     var details = [];
     if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
-    var setName = String(run.setName || '').trim();
-    var matchLabel = run.matchType === 'exact' ? 'Exact' : 'Compatible';
-    if (run.resumeActionId && run.resumeOutputId) matchLabel = 'Managed / ' + matchLabel;
+    var matchLabel = run.matchType === 'exact' ? 'exact' : 'compatible';
     var optionValue = String(run.resumeOutputId || run.runPath || '');
     return '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '">' +
-      escapeHtml(matchLabel + ' / ' + String(run.modelLabel || trainingStageLabel(run.stage)) +
-        (setName ? ' / ' + setName : '') + ' / ' + (run.name || run.path || 'run') +
-        (details.length ? ' / ' + details.join(' / ') : '')) + '</option>';
+      escapeHtml(String(run.runName || run.logicalRun || run.name || 'run') + ' - ' + trainingStageLabel(run.stage) +
+        (details.length ? ' - ' + details.join(' / ') : '') + ' - ' + matchLabel) + '</option>';
   }).join('');
   if (selectedCheckpoint && runs.some(function (run) { return String(run.resumeOutputId || run.runPath || '') === selectedCheckpoint; })) {
     els.checkpointSelect.value = selectedCheckpoint;

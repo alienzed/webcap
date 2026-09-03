@@ -5,6 +5,8 @@ Last reviewed: 2026-09-03.
 
 ## Enhancements / Ideas
 
+- The approved training-layout/Resume change is implemented as documented in `stable_set_training_layout_plan.md`.
+
 
 ## Parked Design Notes (Not Current Backlog)
 

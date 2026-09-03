@@ -23,6 +23,7 @@ PLAN_PATH = ROOT / "scripts" / "h3_shape_probe_plan.json"
 SCRIPT_PATH = ROOT / "scripts" / "h3_shape_probe.py"
 PROBE_ROOT_NAME = ".webcap_training"
 RUNTIME_FILE_NAME = "runtime.json"
+CANCEL_FILE_NAME = "cancel.request"
 H3_CAPTURE_FPS = 24
 
 
@@ -323,10 +324,16 @@ def stop_h3_probe():
         raise RuntimeError("No H3 calibration is running.")
     runtime = _read_json(path)
     pid = int(runtime.get("pid") or 0)
+    cancel_path = path.parent / CANCEL_FILE_NAME
+    cancel_path.touch(exist_ok=False)
     code, stdout, stderr = run_wsl(
         "kill -INT -- -" + str(pid), timeout=8, distribution=str(runtime.get("wslDistribution") or "")
     )
     if code != 0:
+        try:
+            cancel_path.unlink()
+        except OSError:
+            pass
         raise RuntimeError((stderr or stdout or "Could not stop H3 calibration.").strip())
     runtime["status"] = "stopping"
     _write_json(path, runtime)

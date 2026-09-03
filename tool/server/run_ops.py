@@ -1,9 +1,10 @@
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from flask import Response, stream_with_context
 
 from . import config as app_config
-from .training_action import allocate_action, update_action
+from .training_action import action_id_for_root, allocate_action, update_action
+from .training_history import validate_resumable_run_for_path
 from .training_profiles import config_for_stage, normalize_mode, profile_run
 from .training_bundle import materialize_training_bundle
 from .training_commands import build_h3_command_plan, build_training_command_plan
@@ -49,6 +50,8 @@ def train_run_response(
         selected_mode = normalize_mode(mode)
         stages = selected_run["stages"][0]
         stage_names = (stages,)
+        if resume_from_checkpoint:
+            validate_resumable_run_for_path(folder_path, resume_stage or stages, resume_from_checkpoint)
         review = None
         initializer = None
         if initializer_action_id or initializer_export_id or initializer_stage or initializer_custom_path:
@@ -69,12 +72,9 @@ def train_run_response(
         output_dirs = {}
         for stage in stage_names:
             meta = config_for_stage(selected_profile["id"], stage, selected_mode)
-            if resume_from_checkpoint and resume_stage == stage:
-                output_dir = str(Path(resume_from_checkpoint).parent) if not str(resume_from_checkpoint).startswith("/") else str(PurePosixPath(resume_from_checkpoint).parent)
-            else:
-                stage_output = action_root / "output" / meta["outputSlug"]
-                stage_output.mkdir(parents=True, exist_ok=True)
-                output_dir = _to_wsl_path(stage_output, runtime_settings["wslDistribution"])
+            stage_output = action_root / "output" / meta["outputSlug"]
+            stage_output.mkdir(parents=True, exist_ok=True)
+            output_dir = _to_wsl_path(stage_output, runtime_settings["wslDistribution"])
             output_dirs[stage] = output_dir
         bundle = materialize_training_bundle(
             folder_path,
@@ -98,7 +98,7 @@ def train_run_response(
                 data["externalOutput"] = {"kind": "external", "resumeStage": str(resume_stage or "")}
             if bundle.get("initializer"):
                 data["initializer"] = bundle["initializer"]
-        update_action(action_root.name, mark_manual)
+        update_action(action_id_for_root(action_root), mark_manual)
         artifacts = bundle["artifacts"]
         stage_configs = {
             stage: _to_wsl_path(artifacts[stage + "Config"], runtime_settings["wslDistribution"])
@@ -127,9 +127,7 @@ def train_run_response(
         elif stages in ("lo", "krea2", "wan21"):
             handoff_cmd = command_plan["loCommand"]
         elif stages == "h3":
-            handoff_cmd = h3_command_plan["trainCommand"] if resume_from_checkpoint else (
-                h3_command_plan["cacheCommand"] + " && " + h3_command_plan["trainCommand"]
-            )
+            handoff_cmd = h3_command_plan["cacheCommand"] + " && " + h3_command_plan["trainCommand"]
         else:
             handoff_cmd = command_plan["handoffCommand"]
         def generate():

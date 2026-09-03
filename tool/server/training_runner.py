@@ -21,7 +21,7 @@ from .training_bundle import materialize_training_bundle
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets_for_mode
 from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume
-from .training_action import allocate_action, action_paths, fingerprint_files, read_action, update_action
+from .training_action import allocate_action, action_id_for_root, action_paths, fingerprint_files, read_action, update_action
 from .training_preflight import (
     build_launch_preflight as _build_launch_preflight,
     gpu_snapshot as _gpu_snapshot,
@@ -599,8 +599,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "if [ \"$" + stage_code + "_CODE\" -ne 0 ]; then echo '[webcap] " + stage_title + " failed'; write_result failed \"$" + stage_code + "_CODE\"; exit \"$" + stage_code + "_CODE\"; fi",
         ])
     if stages == "h3":
-        if not resume_stage:
-            lines.extend([
+        lines.extend([
                 "echo '[webcap] stage=h3-cache'",
                 "printf '%s\\n' " + shlex.quote("[webcap] command h3 cache: " + h3_command_plan["cacheCommand"]),
                 h3_command_plan["cacheCommand"],
@@ -608,7 +607,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
                 "finish_requested_stop",
                 "if [ \"$H3_CACHE_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$H3_CACHE_CODE\"; exit \"$H3_CACHE_CODE\"; fi",
                 "if [ \"$H3_CACHE_CODE\" -ne 0 ]; then echo '[webcap] MiniMax H3 cache failed'; write_result failed \"$H3_CACHE_CODE\"; exit \"$H3_CACHE_CODE\"; fi",
-            ])
+        ])
         lines.extend([
             "echo '[webcap] stage=h3'",
             "printf '%s\\n' " + shlex.quote("[webcap] command h3: " + h3_command_plan["trainCommand"]),
@@ -1006,6 +1005,7 @@ def _queue_paused_job(job):
     if resume_path:
         job["resumeFromCheckpoint"] = resume_path
         job["resumeStage"] = str(job.get("stages") or "")
+        job["outputRunPath"] = ""
     else:
         job.pop("resumeFromCheckpoint", None)
         job.pop("resumeStage", None)
@@ -1288,8 +1288,7 @@ def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage
         resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage) if requested_resume else (
             validate_resumable_run_for_path(folder_path, resume_stage, resume_path) if resume_path else None
         )
-        bundle = _bundle_from_action(resume_action_id, profile_id, selected_mode, stages) if requested_resume else None
-        payload = _preflight_payload(folder, stages, profile_id=profile_id, mode=selected_mode, artifacts_override=bundle["artifacts"] if bundle else None)
+        payload = _preflight_payload(folder, stages, profile_id=profile_id, mode=selected_mode)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}
         blockers = [item for item in payload["checks"] if item["severity"] == "blocker" and not item["ok"]]
@@ -1387,14 +1386,14 @@ def _new_job(
         "input": input_evidence,
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
-        "outputRunPath": resume_path,
+        "outputRunPath": "",
         "resumePoint": {},
         "status": "queued",
         "stage": "queued",
         "createdAt": time.time(),
         "updatedAt": time.time(),
         "snapshot": snapshot,
-        "actionId": action_root.name,
+        "actionId": action_id_for_root(action_root),
         "actionPath": str(action_root),
         "runName": str(run_name or ""),
         "recordPath": str(bundle.get("recordPath") or bundle["path"]),
@@ -1554,11 +1553,17 @@ def start_response(
             initializer["stage"] = initializer_stage
             initializer["forceConstantLr"] = force_constant_lr
         resume_path = str(resume_from_checkpoint or "").strip()
+        if bool(resume_action_id) != bool(resume_output_id):
+            raise ValueError("A managed resume requires both an action and output selection.")
+        if resume_path and resume_output_id:
+            raise ValueError("Choose either a managed checkpoint or a filesystem checkpoint, not both.")
         resume_action = None
         if resume_output_id and not resume_path:
             resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage)
             resume_path = str(resume["runPath"])
             resume_action = resume["actionRoot"]
+        elif resume_path:
+            validate_resumable_run_for_path(folder_path, resume_stage, resume_path)
         if reuse_capture:
             action_root, action = read_action(str(reuse_capture_action_id).strip())
             bundle = _bundle_from_recorded_capture(
@@ -1566,20 +1571,14 @@ def start_response(
                 selected_profile["id"], selected_mode, stages,
             )
         elif resume_action is not None:
-            action_root, action = resume_action, read_action(resume_action.name)[1]
+            action_root = resume_action
+            action = read_action(action_id_for_root(action_root))[1]
         else:
             action_root, action = allocate_action(folder_path, selected_profile, selected_mode, (stages,), run_name)
         distribution = _training_settings()["wslDistribution"]
         meta = config_for_stage(selected_profile["id"], stages, selected_mode)
-        output_root = Path(resume_path).parent if resume_path else action_root / "output" / meta["outputSlug"]
-        if not resume_path:
-            output_root.mkdir(parents=True, exist_ok=True)
-        # A custom wizard resume is deliberately anchored beside the chosen Diffusion
-        # Pipe output. It remains a new WebCap action, but its captured inputs
-        # stay physically adjacent to the run they continue.
-        external_capture_root = None
-        if resume_path and resume_action is None and not reuse_capture:
-            external_capture_root = output_root.parent / ".webcap-captures" / uuid.uuid4().hex
+        output_root = action_root / "output" / meta["outputSlug"]
+        output_root.mkdir(parents=True, exist_ok=True)
         output_dir = _to_wsl_path(output_root, distribution)
         if not reuse_capture:
             bundle = materialize_training_bundle(
@@ -1588,7 +1587,6 @@ def start_response(
                 total_media_count=total_media_count, output_dirs={stages: output_dir},
                 distribution=distribution, review=review if not review.get("customDataset") else None,
                 initializer=initializer,
-                capture_root=external_capture_root,
             )
     except Exception as exc:
         return {"ok": False, "error": "Could not create the training capture: " + str(exc)}, 400
@@ -1616,7 +1614,7 @@ def start_response(
             data.setdefault("jobs", {}).setdefault(job["stages"], []).append({
                 "id": job["id"], "path": (Path("jobs") / job["id"]).as_posix(), "status": "queued", "createdAt": job["createdAt"],
             })
-        update_action(action_root.name, record_capture)
+        update_action(action_id_for_root(action_root), record_capture)
         state["jobs"].append(job)
         if not active and not state.get("queuePaused"):
             _launch_next_queued_job(state)

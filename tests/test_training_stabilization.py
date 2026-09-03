@@ -342,8 +342,10 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
         (folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8"
     )
     custom_response = client.post("/fs/train_run", json={**request, "resumeFromCheckpoint": str(custom)})
+    assert custom_response.status_code == 200
+    assert len({path.name for path in managed_action.parent.iterdir() if path.is_dir()}) == len(logical_runs_before) + 1
     fresh_response = client.post("/fs/train_run", json=request)
-    assert custom_response.status_code == fresh_response.status_code == 200
+    assert fresh_response.status_code == 200
     custom_text = custom_response.data.decode("utf-8")
     fresh_text = fresh_response.data.decode("utf-8")
     assert "--resume_from_checkpoint /wsl" + custom.as_posix() in custom_text

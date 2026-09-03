@@ -61,7 +61,7 @@ Disabling a profile only hides it from new-run setup. Existing TOMLs, captured b
 - `.webcap_training/queue.json` contains ordered scheduler work and live fields.
 - `.webcap_training/recent_runs.json` is presentation history and never gates scheduling.
 - Per-set `.webcap_training.json` stores set-local output-group metadata.
-- Queue and Recent Runs are disposable convenience state. New action-owned captures, jobs, logs, and output live under `output/runs/<set-slug>--<hash>/<logical-run>/`.
+- Queue and Recent Runs are disposable convenience state. New action-owned captures, jobs, logs, and output live under `output/runs/<global-sequence>-<set-slug>--<hash>/<logical-run>/`.
 
 The persistent set TOMLs remain the editable configuration interface. Only app-owned runtime paths are rewritten in captured copies.
 

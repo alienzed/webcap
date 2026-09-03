@@ -57,7 +57,46 @@ def set_root_name(folder_path):
 
 
 def set_root_for_folder(folder_path):
-    return actions_root() / set_root_name(folder_path)
+    """Find the existing prefixed root for a set without mutating the tree."""
+    identity = set_root_name(folder_path)
+    try:
+        with os.scandir(actions_root()) as entries:
+            names = [entry.name for entry in entries if entry.is_dir(follow_symlinks=False)]
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise RuntimeError("Could not inspect the training actions root.") from exc
+    matches = [
+        actions_root() / name for name in names
+        if re.fullmatch(r"\d+-" + re.escape(identity), name)
+    ]
+    if len(matches) > 1:
+        raise RuntimeError("Multiple training set roots claim the same set identity: " + identity)
+    return matches[0] if matches else None
+
+
+def _allocate_set_root(folder_path):
+    identity = set_root_name(folder_path)
+    root = actions_root()
+    root.mkdir(parents=True, exist_ok=True)
+    while True:
+        existing = set_root_for_folder(folder_path)
+        if existing is not None:
+            return existing
+        try:
+            with os.scandir(root) as entries:
+                names = [entry.name for entry in entries if entry.is_dir(follow_symlinks=False)]
+        except OSError as exc:
+            raise RuntimeError("Could not inspect the training actions root.") from exc
+        highest = max((int(match.group(1)) for name in names
+                       for match in [re.match(r"^(\d+)-", name)] if match), default=0)
+        sequence = highest + 1
+        name = str(sequence).zfill(max(3, len(str(sequence)))) + "-" + identity
+        try:
+            (root / name).mkdir()
+        except FileExistsError:
+            continue
+        return root / name
 
 
 def action_id_for_root(action_root):
@@ -125,11 +164,8 @@ def action_paths(action_id):
 def allocate_action(folder_path, profile, mode, stages, run_name=""):
     """Create an empty, visible action parent using mkdir as the allocation lock."""
     run_name, run_slug = normalize_run_name(run_name)
-    root = actions_root()
-    root.mkdir(parents=True, exist_ok=True)
-    set_root = set_root_for_folder(folder_path)
-    set_root.mkdir(exist_ok=True)
     with _action_lock:
+        set_root = _allocate_set_root(folder_path)
         highest = 0
         try:
             children = list(set_root.iterdir())
@@ -190,7 +226,7 @@ def fingerprint_files(paths):
 
 def managed_actions_for_folder(folder_path):
     root = set_root_for_folder(folder_path)
-    if not root.is_dir() or root.is_symlink():
+    if root is None:
         return []
     rows = []
     for path in root.iterdir():

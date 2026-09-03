@@ -55,16 +55,6 @@ Calibrated ceilings affect newly generated/reset H3 video datasets only:
 
 See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md) for the calibration contract.
 
-Before resuming an existing training-machine queue, inspect captured H3 video
-buckets without mutation with:
-
-```text
-python scripts/audit_h3_queue_buckets.py <training-root>/.webcap_training/queue.json
-```
-
-It reports each captured H3 video stanza as `SAFE`, `OFF_LADDER`,
-`ABOVE_CEILING`, or `RAW/UNKNOWN` under the current managed policy.
-
 ## Supported training profiles
 
 Current profiles are app-owned and intentionally finite:
@@ -180,10 +170,10 @@ The important rule is simple: **what is visible when Train is requested is what 
 
 ## Training capture and output
 
-Each Train action reserves a logical run beneath its deterministic set root:
+Each Train action reserves a logical run beneath its stable numbered set root. The slug/hash identity is deterministic; its numeric prefix is allocated once when the set first receives managed training output:
 
 ```text
-<filesystem.root>/output/runs/<set-slug>--<set-path-hash>/<sequence>-<model>--<optional-name>/
+<filesystem.root>/output/runs/<global-sequence>-<set-slug>--<set-path-hash>/<sequence>-<model>--<optional-name>/
 ```
 
 The run owns its captured evidence:

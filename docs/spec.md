@@ -44,10 +44,10 @@ Train saves the open TOML before capture. Captured copies preserve inspected val
 
 ## Run ownership and output
 
-Each Train action reserves a logical run under its deterministic set root:
+Each Train action reserves a logical run under its stable numbered set root. Its slug/hash identity is deterministic; its numeric prefix is allocated once when the set first receives managed training output:
 
 ```text
-output/runs/<set-slug>--<set-path-hash>/<numbered-logical-run>/captures/
+output/runs/<global-sequence>-<set-slug>--<set-path-hash>/<numbered-logical-run>/captures/
 ```
 
 The logical run also owns `jobs/` and `output/`. The bundle contains grouped media, captions, copied TOMLs, `dataset_manifest.json`, and `training_plan.json`; caches live with captured media.

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from tool.server import config as app_config
 from tool.server import training_history
-from tool.server.training_action import allocate_action, read_action, set_root_name
+from tool.server.training_action import allocate_action, managed_actions_for_folder, read_action, set_root_name
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, profile_for_mode
 
 def _configure_root(monkeypatch, root): monkeypatch.setattr(app_config, "FS_ROOT", root)
@@ -16,16 +16,30 @@ def _set(tmp_path, name="subject"):
 def _action(folder, name="managed"):
     return allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",), name)
 
-def test_set_roots_are_deterministic_and_action_ids_are_nested(tmp_path, monkeypatch):
+def test_set_roots_have_global_prefixes_and_action_ids_are_nested(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
+    (tmp_path / "output" / "runs" / "067-existing--123456789abc").mkdir(parents=True)
     first = _set(tmp_path, "Same Name"); second = tmp_path / "other" / "Same Name"; second.mkdir(parents=True)
     a1, data1 = _action(first); a2, data2 = _action(first, "again"); b1, _ = _action(second)
-    assert a1.parent.name == set_root_name(first)
+    assert a1.parent.name == "068-" + set_root_name(first)
+    assert b1.parent.name == "069-" + set_root_name(second)
     assert a1.name.startswith("001-h3") and a2.name.startswith("002-h3") and b1.name.startswith("001-h3")
     assert a1.parent != b1.parent and data1["actionId"] == a1.relative_to(tmp_path / "output" / "runs").as_posix()
     assert data2["actionId"].startswith(a1.parent.name + "/") and read_action(data1["actionId"])[0] == a1
     with pytest.raises(ValueError): read_action(a1.name)
     with pytest.raises(ValueError): read_action("../" + data1["actionId"])
+
+def test_managed_discovery_is_read_only_and_duplicate_set_identity_fails_loudly(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    assert managed_actions_for_folder(folder) == []
+    assert not (tmp_path / "output" / "runs").exists()
+    root = tmp_path / "output" / "runs"; root.mkdir(parents=True)
+    identity = set_root_name(folder)
+    (root / ("001-" + identity)).mkdir()
+    (root / ("002-" + identity)).mkdir()
+    with pytest.raises(RuntimeError, match="Multiple training set roots"):
+        managed_actions_for_folder(folder)
 
 def test_discovery_is_current_set_shallow_and_uses_relative_output_ids(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path); folder = _set(tmp_path); action, data = _action(folder)

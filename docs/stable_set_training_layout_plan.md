@@ -151,11 +151,11 @@ All new managed training lives beneath:
 FS_ROOT/output/runs/
 ```
 
-Each set gets one deterministic set root. Each fresh logical run gets one numbered child:
+Each set gets one stable numbered set root. Its slug/hash identity is deterministic, while its global numeric prefix is allocated once when the set first receives managed training output. Each fresh logical run gets one numbered child:
 
 ```text
 FS_ROOT/output/runs/
-  <set-slug>--<set-path-hash>/
+  <global-sequence>-<set-slug>--<set-path-hash>/
     001-<model-slug>--<optional-run-name>/
       action.json
       captures/
@@ -182,10 +182,10 @@ Example:
 
 ```text
 output/runs/
-  nelly--4a8d91b72c3f/
+  068-nelly--4a8d91b72c3f/
     001-minimax-h3--baseline/
     002-minimax-h3--more-detail/
-  wetsuit--7ce22f4d18a1/
+  069-wetsuit--7ce22f4d18a1/
     001-minimax-h3/
 ```
 
@@ -221,7 +221,7 @@ Example source identity:
 training/characters/Nelly
 ```
 
-could produce:
+identifies the set as:
 
 ```text
 nelly--4a8d91b72c3f
@@ -229,7 +229,7 @@ nelly--4a8d91b72c3f
 
 ### 5.3 No set manifest
 
-Do not add a new `set.json` or registry. The deterministic set-root name plus each logical run's existing `action.json` is enough.
+Do not add a new `set.json` or registry. The slug/hash identity, its allocated filesystem prefix, and each logical run's existing `action.json` are enough.
 
 ---
 
@@ -247,7 +247,7 @@ Fresh actions are numbered independently inside their set root:
 
 Allocation should:
 
-1. derive/create the deterministic set root;
+1. derive the deterministic slug/hash identity and find its existing prefixed set root, or allocate the next global prefix;
 2. inspect only its immediate child directories;
 3. find the highest numeric action prefix;
 4. attempt the next sequence with `mkdir` as the collision lock;
@@ -270,7 +270,7 @@ Keep the current run-name normalization limits unless a direct conflict is found
 The new `actionId` is the POSIX path relative to `FS_ROOT/output/runs`:
 
 ```text
-nelly--4a8d91b72c3f/002-minimax-h3--more-detail
+068-nelly--4a8d91b72c3f/002-minimax-h3--more-detail
 ```
 
 It is not only the final directory basename.
@@ -341,7 +341,7 @@ The UI sends the existing pair:
 
 ```json
 {
-  "resumeActionId": "nelly--4a8d91b72c3f/002-minimax-h3--more-detail",
+  "resumeActionId": "068-nelly--4a8d91b72c3f/002-minimax-h3--more-detail",
   "resumeOutputId": "output/minimax-h3/20260903_14-22-10"
 }
 ```
@@ -431,7 +431,7 @@ External source read only:
 /mnt/w/old-training/nelly/20260822_10-14-08
 
 New WebCap work:
-FS_ROOT/output/runs/nelly--4a8d91b72c3f/004-minimax-h3--resume-old-good/
+FS_ROOT/output/runs/068-nelly--4a8d91b72c3f/004-minimax-h3--resume-old-good/
   action.json
   captures/...
   jobs/...
@@ -507,7 +507,7 @@ The managed picker should become fast because it no longer searches the training
 
 For the current set:
 
-1. derive its deterministic set root;
+1. derive its deterministic slug/hash identity and find its existing prefixed set root;
 2. if the set root does not exist, return no managed runs;
 3. inspect only immediate logical-run children of that set root;
 4. read their version-2 `action.json` manifests;
@@ -529,7 +529,7 @@ Deleting or moving a managed trainer run naturally removes it from managed Resum
 
 ### 11.3 Broken managed actions
 
-Inside the deterministic current-set root:
+Inside the current set's prefixed root:
 
 - ordinary unrelated/non-action directories may be ignored if they do not claim the managed action naming shape;
 - a directory that matches the app-owned logical-run naming shape but has malformed/missing version-2 action metadata is a broken invariant and should fail visibly rather than disappear silently.
@@ -949,7 +949,7 @@ The current resume-discovery tests explicitly require legacy/global discovery. R
 
 Add focused tests proving:
 
-- a set gets a deterministic `<slug>--<hash>` root;
+- a set gets the next global `<sequence>-<slug>--<hash>` root;
 - the same set allocates `001`, then `002` beneath that root;
 - a different set starts its own `001` sequence;
 - two sets with the same basename but different relative paths get different set roots;

@@ -23,7 +23,7 @@ Every capture copies source media byte-for-byte. WebCap does not transcode, sile
 Fresh actions use this layout:
 
 ```text
-runs/<set-slug>--<set-path-hash>/<sequence>-<model>/
+runs/<global-sequence>-<set-slug>--<set-path-hash>/<sequence>-<model>/
   action.json
   captures/<job-id>/
     config.toml
@@ -43,11 +43,6 @@ The queue and Recent Runs are disposable convenience state. Missing files mean e
 
 Managed Resume reuses its current-set logical run and captures current inputs again. Custom Resume validates its explicit checkpoint before mutation, then creates a new logical run; it reads the external source without writing beside it. Managed discovery is current-set-only and shallow. H3 Resume runs cache-only against the current capture before resumed training.
 
-Existing captured jobs are immutable historical intent. Before resuming an older
-H3 queue, run `scripts/audit_h3_queue_buckets.py` against its `queue.json` to
-report the current-policy status of each captured video stanza. The audit is
-read-only and does not repair, cancel, or rewrite jobs.
-
 Pause, Finish, and Finish After Epoch request a fresh checkpoint. Pause returns resumable work to the front and pauses the queue. Finish records Finished Early and advances it.
 
 An Init LoRA is a fresh action. Select a current-set managed epoch export or an explicit `.safetensors` file/initializer directory; WebCap copies it into the capture and lets the actual launch report any incompatibility.
@@ -64,9 +59,7 @@ Do this only after the current old-version training job completes.
 
 1. Stop the old WebCap instance.
 2. Preserve every set, caption, canonical TOML, run/action folder, checkpoint, and Diffusion Pipe output directory.
-3. Inspect the training root and move aside only the queue/history convenience files if they exist:
-   - `.webcap_training/queue.json`
-   - `.webcap_training/recent_runs.json`
+3. Move aside the disposable `.webcap_training` queue/history state.
 4. Deploy this revision. Do not import, migrate, scan, repair, or reconstruct the old runtime state.
 5. Start WebCap. It should treat the missing convenience files as a clean slate.
 6. Run one small MiniMax H3 golden path: capture, queue, launch, checkpoint, Pause, Resume using the same output, then Finish.

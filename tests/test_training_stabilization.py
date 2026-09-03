@@ -165,6 +165,61 @@ def test_train_captures_before_it_writes_the_queue_and_skips_preflight(tmp_path,
     assert Path(state["jobs"][0]["inputPath"]).is_dir()
 
 
+def test_pre_layout_queue_state_uses_recorded_paths_without_action_resolution(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    legacy_root = tmp_path / "output" / "runs" / "001-subject--h3"
+    capture = legacy_root / "captures" / "old-capture"
+    job_dir = legacy_root / "jobs" / "old-job"
+    capture.mkdir(parents=True)
+    job_dir.mkdir(parents=True)
+    config = capture / "config.h3.toml"
+    config.write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    legacy_job = {
+        "id": "old-job", "folder": "sets/subject", "status": "queued", "stages": "h3",
+        "actionId": "001-subject--h3", "actionPath": str(legacy_root), "artifactDir": str(job_dir),
+        "bundleArtifacts": {"h3Config": str(config)}, "outputRoot": str(legacy_root / "output" / "minimax-h3"),
+    }
+    state_path = training_runner._state_path()
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(json.dumps({"version": 3, "activeJobId": "", "jobs": [], "queuePaused": False, "queuePauseReason": ""}), encoding="utf-8")
+    assert training_runner._read_state()["jobs"] == []
+
+    state_path.write_text(json.dumps({"version": 3, "activeJobId": "", "jobs": [legacy_job], "queuePaused": False, "queuePauseReason": ""}), encoding="utf-8")
+    monkeypatch.setattr(training_runner, "read_action", lambda *_args: pytest.fail("legacy queue launch must not resolve actionId"))
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (0, "4242\n", ""))
+    state = training_runner._read_state()
+    training_runner._launch_next_queued_job(state)
+    assert state["activeJobId"] == "old-job"
+    assert state["jobs"][0]["status"] == "starting"
+    assert (job_dir / "runner.sh").is_file()
+
+    state["jobs"][0].update({"status": "running", "runnerScriptWsl": "/runs/runner.sh", "pid": 4242})
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (0, "/bin/bash\n/runs/runner.sh\n", ""))
+    monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
+    training_runner._refresh_state(state)
+    assert state["jobs"][0]["status"] == "running"
+
+
+def test_recent_runs_v1_remains_readable_without_layout_migration(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    recent = tmp_path / ".webcap_training" / "recent_runs.json"
+    recent.parent.mkdir()
+    recent.write_text(json.dumps({"version": 1, "jobs": [{"id": "old", "folder": "sets/subject"}]}), encoding="utf-8")
+    assert training_history.read_history(folder)["jobs"][0]["id"] == "old"
+
+
+def test_additive_queue_v4_state_remains_readable(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    state_path = training_runner._state_path()
+    state_path.parent.mkdir()
+    state_path.write_text(json.dumps({"version": 4, "activeJobId": "", "jobs": [], "queuePaused": False, "queuePauseReason": ""}), encoding="utf-8")
+    assert training_runner._read_state()["version"] == 3
+
+
 def test_recent_run_resume_reuses_its_recorded_capture(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)

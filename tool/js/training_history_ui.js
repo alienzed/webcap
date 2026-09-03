@@ -192,7 +192,10 @@ function renderTrainingHistory() {
   var selectedCheckpoint = String(els.checkpointSelect.value || '');
   var resumeStage = String(trainingWorkspaceState.runStages || '');
   runs = runs.filter(function (run) { return String(run.candidateFor || run.stage || '') === resumeStage; });
-  els.checkpointSelect.innerHTML = '<option value="">' + (runs.length ? 'Choose a managed checkpoint…' : 'No managed checkpoints for this set') + '</option>' + runs.map(function (run) {
+  var checkpointPrompt = trainingWorkspaceState.historyRunsLoading
+    ? 'Loading current-set checkpoints…'
+    : (runs.length ? 'Choose a managed checkpoint…' : 'No managed checkpoints for this set');
+  els.checkpointSelect.innerHTML = '<option value="">' + checkpointPrompt + '</option>' + runs.map(function (run) {
     var details = [];
     if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
     var matchLabel = run.matchType === 'exact' ? 'exact' : 'compatible';
@@ -409,14 +412,21 @@ function refreshTrainingHistory(force) {
     .then(function () {
       renderTrainingHistory();
       if (!folder) return null;
+      trainingWorkspaceState.historyRunsLoading = true;
+      renderTrainingHistory();
       return fetch('/fs/training_history?folder=' + encodeURIComponent(folder)).then(function (response) { return response.json(); }).then(function (setPayload) {
         if (!setPayload.ok) throw new Error(setPayload.error || 'Could not load resumable runs.');
         if (trainingWorkspaceState.history && trainingHistoryScopeFolder() === folder) {
           trainingWorkspaceState.history.runs = (setPayload.history || {}).runs || [];
           trainingWorkspaceState.history.resumeDefaults = (setPayload.history || {}).resumeDefaults || {};
+          trainingWorkspaceState.historyRunsLoading = false;
           renderTrainingHistory();
         }
       });
     })
-    .catch(function (err) { setStatus('Could not load training history: ' + String(err.message || err)); });
+    .catch(function (err) {
+      trainingWorkspaceState.historyRunsLoading = false;
+      renderTrainingHistory();
+      setStatus('Could not load training history: ' + String(err.message || err));
+    });
 }

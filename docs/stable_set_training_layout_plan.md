@@ -1,8 +1,8 @@
 # Stable Set Training Layout and Resume - Implementation Plan
 
-**Status:** Approved implementation target. This document is the single implementation authority for the stable training layout and Resume redesign until the change lands.
+**Status:** Shipped design and acceptance record. This is the single authoritative stable-set layout and Resume document; current operational behavior is documented in the linked current-behavior references.
 
-This plan is intentionally a clean break. It replaces the tentative layout proposal and supersedes the overlapping design intent in `training_artifact_cleanup.md` and `training_run_identity.md` where they discuss action layout, action identity, checkpoint discovery, or Resume behavior.
+This plan intentionally made a clean break from the removed tentative layout proposals and their action identity, checkpoint discovery, and Resume assumptions.
 
 `AGENTS.md` remains the repository working contract. In particular: make the smallest coherent change, keep state file-based and visible, do not add recovery machinery, and fail loudly when app-owned invariants are broken.
 
@@ -1058,24 +1058,7 @@ must pass.
 
 ## 21. Documentation transition
 
-Do not rewrite current-behavior docs to claim this layout is shipped before the code lands.
-
-### Before implementation
-
-This file is the approved implementation target.
-
-The following older planning docs are now redundant and should be deleted once this replacement is committed:
-
-```text
-docs/training_artifact_cleanup.md
-docs/training_run_identity.md
-```
-
-They contain the flat-action design and/or compatibility assumptions that this plan intentionally replaces.
-
-Update `docs/README.md` so it lists this file as the approved training-layout/Resume implementation plan rather than a tentative proposal, and no longer presents the two superseded docs as active planning references.
-
-Update `docs/outstanding.md` with one concise approved-next-work entry pointing here. Do not duplicate the plan there.
+The superseded tentative layout documents were removed when this work landed. `docs/README.md` identifies this file as the design/acceptance record; the current-behavior documents below describe the shipped workflow.
 
 ### In the implementation commit
 

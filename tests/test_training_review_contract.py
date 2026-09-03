@@ -413,3 +413,5 @@ def test_custom_resume_is_a_first_class_mutually_exclusive_resume_choice():
     assert 'id="training-run-resume-input"' in resume_fields
     assert 'id="training-run-resume-input"' not in diagnostics
     assert "customResumePath" in runner and "if (checkpointSelect.value && resumeInput) resumeInput.value = ''" in workspace
+    assert "historyRunsLoading" in (root / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    assert "Loading current-set checkpoints" in (root / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")

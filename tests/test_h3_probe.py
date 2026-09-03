@@ -380,6 +380,55 @@ def test_run_campaign_persists_and_reuses_completed_result_with_baseline(tmp_pat
     assert json.loads(config_path.read_text(encoding="utf-8"))["training"]["h3_calibration"]["results"]["34f/169-768x448"]["status"] == "completed"
 
 
+def test_cancellation_terminates_the_active_candidate_process_group(tmp_path, monkeypatch):
+    probe = load_probe_script()
+    calls = []
+
+    class ActiveProcess:
+        pid = 4242
+        returncode = None
+        def poll(self): return None
+
+    process = ActiveProcess()
+    monkeypatch.setattr(probe.subprocess, "Popen", lambda *_args, **_kwargs: process)
+    monkeypatch.setattr(probe, "terminate_process_group", lambda child: calls.append(child.pid))
+    checks = [0]
+    def canceled():
+        checks[0] += 1
+        return checks[0] > 1
+    with pytest.raises(KeyboardInterrupt):
+        probe.run_command(["deepspeed"], tmp_path, tmp_path / "active.log", cancel_when=canceled)
+    assert calls == [4242]
+
+
+def test_canceled_campaign_keeps_prior_evidence_and_never_starts_next_candidate(tmp_path, monkeypatch):
+    probe = load_probe_script()
+    plan = {"version": 2, "rungStep": 32, "ladders": [{"frames": 34, "aspect": "169", "terminal": "model_cap", "shapes": [[736, 416], [768, 448], [800, 480]]}]}
+    plan_path = tmp_path / "plan.json"; plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    config_path = tmp_path / "config.json"; hardware = {"total_ram_mib": 64, "gpu_model": "GPU", "total_vram_mib": 32}
+    preserved_key = "34f/169-736x416"
+    config_path.write_text(json.dumps({"training": {"h3_calibration": {"hardware": hardware, "results": {preserved_key: {"status": "completed", "median_step_seconds": 3.0}}}}}), encoding="utf-8")
+    seed = {"plan": plan_path, "results": tmp_path / "results", "seedPath": tmp_path / "seed.json", "video": tmp_path / "video.mp4", "caption": tmp_path / "video.txt", "config": tmp_path / "base.toml"}
+    launched = []
+    monkeypatch.setattr(probe, "_validate_plan", lambda value: value["ladders"])
+    monkeypatch.setattr(probe, "current_hardware", lambda: hardware)
+    def prepare(_seed, ladder, width, height, _work):
+        launched.append([width, height])
+        root = seed["results"] / "active"; root.mkdir(parents=True, exist_ok=True)
+        return {"frames": 34, "aspect": "169", "shape": [width, height, 34], "mfp": 1.0, "probeDir": root, "resultPath": root / "result.json"}
+    def cancel_active(*_args, **_kwargs):
+        (tmp_path / "cancel.request").touch()
+        raise KeyboardInterrupt
+    monkeypatch.setattr(probe, "prepare_candidate", prepare)
+    monkeypatch.setattr(probe, "execute_probe", cancel_active)
+    with pytest.raises(KeyboardInterrupt):
+        probe.run_campaign(seed, config_path)
+    assert launched == [[768, 448]]
+    saved = json.loads(config_path.read_text(encoding="utf-8"))["training"]["h3_calibration"]["results"]
+    assert saved[preserved_key]["status"] == "completed"
+    assert json.loads((seed["results"] / "campaign_result.json").read_text(encoding="utf-8"))["status"] == "canceled"
+
+
 @pytest.mark.parametrize("status", ["oom", "unsafe_slow", "unsafe_vram"])
 def test_persisted_decisive_result_settles_only_its_ladder(status):
     probe = load_probe_script()
@@ -531,3 +580,4 @@ def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatc
     stopped = h3_probe_module.stop_h3_probe()
     assert stopped["status"] == "stopping"
     assert any("kill -INT -- -4242" in command for command in launches)
+    assert (probe_root / "cancel.request").is_file()

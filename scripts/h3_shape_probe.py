@@ -345,6 +345,7 @@ def run_command(args, cwd, log_path, post_warmup_timeout=None, stop_when=None, c
     last_step_at = time.monotonic()
     timed_out = False
     stopped_for = ""
+    terminated = False
     if cancel_when is not None and cancel_when():
         raise KeyboardInterrupt
     with log_path.open("w", encoding="utf-8") as log_handle:
@@ -363,6 +364,7 @@ def run_command(args, cwd, log_path, post_warmup_timeout=None, stop_when=None, c
             while process.poll() is None:
                 if cancel_when is not None and cancel_when():
                     terminate_process_group(process)
+                    terminated = True
                     raise KeyboardInterrupt
                 text = read_log(log_path)
                 current_step = latest_step(text)
@@ -380,7 +382,8 @@ def run_command(args, cwd, log_path, post_warmup_timeout=None, stop_when=None, c
                     break
                 time.sleep(POLL_SECONDS)
         except KeyboardInterrupt:
-            terminate_process_group(process)
+            if not terminated:
+                terminate_process_group(process)
             raise
     return {"exitCode": process.returncode, "timedOut": timed_out, "stoppedFor": stopped_for}
 
@@ -467,7 +470,7 @@ def execute_probe(candidate, baseline_seconds, on_train_start=None, cancel_when=
     cache_sampler = TelemetrySampler(candidate["cacheTelemetryPath"])
     cache_sampler.start()
     try:
-        cache_result = run_command(cache_command, Path.cwd(), candidate["cacheLog"], cancel_when=cancel_when)
+        cache_result = run_command(cache_command, Path.cwd(), candidate["cacheLog"], **({"cancel_when": cancel_when} if cancel_when is not None else {}))
     finally:
         cache_sampler.stop()
     cache_text = read_log(candidate["cacheLog"])
@@ -506,14 +509,13 @@ def execute_probe(candidate, baseline_seconds, on_train_start=None, cancel_when=
     sampler.start()
     try:
         stall_timeout = max(120.0, float(baseline_seconds) * 20.0) if baseline_seconds else None
-        train_result = run_command(
-            train_command,
-            Path.cwd(),
-            candidate["trainLog"],
-            post_warmup_timeout=stall_timeout,
-            stop_when=lambda: telemetry_is_below_required_vram_headroom(candidate["telemetryPath"]),
-            cancel_when=cancel_when,
-        )
+        train_kwargs = {
+            "post_warmup_timeout": stall_timeout,
+            "stop_when": lambda: telemetry_is_below_required_vram_headroom(candidate["telemetryPath"]),
+        }
+        if cancel_when is not None:
+            train_kwargs["cancel_when"] = cancel_when
+        train_result = run_command(train_command, Path.cwd(), candidate["trainLog"], **train_kwargs)
     finally:
         sampler.stop()
     train_text = read_log(candidate["trainLog"])

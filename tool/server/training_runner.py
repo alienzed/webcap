@@ -1273,19 +1273,22 @@ def _public_job(job):
 
 def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
     try:
-        if str(resume_from_checkpoint or "").strip():
-            raise ValueError("Managed Train accepts only a selected WebCap action checkpoint.")
         _, selected_run = profile_run(profile_id, run_id)
         stages = selected_run["stages"][0]
         stages = _normalize_training_stages(stages)
         requested_resume = bool(resume_action_id or resume_output_id)
         if bool(resume_action_id) != bool(resume_output_id):
             raise ValueError("A managed resume requires both an action and output selection.")
-        resume_stage = _normalize_resume_stage(stages, "managed" if requested_resume else "", resume_stage)
+        resume_path = str(resume_from_checkpoint or "").strip()
+        if resume_path and requested_resume:
+            raise ValueError("Choose either a managed checkpoint or a filesystem checkpoint, not both.")
+        resume_stage = _normalize_resume_stage(stages, resume_path or ("managed" if requested_resume else ""), resume_stage)
         selected_mode = normalize_mode(mode)
         _, folder_path = _resolve_folder(folder)
-        resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage) if requested_resume else None
-        bundle = _bundle_from_action(resume_action_id, profile_id, selected_mode, stages) if resume else None
+        resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage) if requested_resume else (
+            validate_resumable_run_for_path(folder_path, resume_stage, resume_path) if resume_path else None
+        )
+        bundle = _bundle_from_action(resume_action_id, profile_id, selected_mode, stages) if requested_resume else None
         payload = _preflight_payload(folder, stages, profile_id=profile_id, mode=selected_mode, artifacts_override=bundle["artifacts"] if bundle else None)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}

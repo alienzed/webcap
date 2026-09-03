@@ -594,7 +594,7 @@ function wireTrainingWorkspace() {
     trainingWorkspaceState.resumeSelectionTouched = true;
     trainingWorkspaceState.resumeParentJobId = '';
     var selectedRun = (trainingWorkspaceState.history && trainingWorkspaceState.history.runs || []).filter(function (run) {
-      return String(run.resumeOutputId || '') === String(checkpointSelect.value || '');
+      return String(run.resumeOutputId || run.runPath || '') === String(checkpointSelect.value || '');
     })[0];
     if (selectedRun && (selectedRun.stage === 'hi' || selectedRun.stage === 'lo') && resumeStageSelect) {
       resumeStageSelect.value = selectedRun.stage;

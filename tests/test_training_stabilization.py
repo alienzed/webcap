@@ -228,11 +228,13 @@ def test_custom_resume_keeps_its_new_capture_beside_the_selected_output(tmp_path
 def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
     action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
     meta = config_for_stage(MINIMAX_H3_PROFILE_ID, "h3")
     run = action / "output" / meta["outputSlug"] / "20260831-120000"
     (run / "global_step1").mkdir(parents=True)
     (run / "latest").write_text("global_step1\n", encoding="utf-8")
+    (run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
     epoch = run / "epoch1"
     epoch.mkdir()
     (epoch / "adapter.safetensors").write_bytes(b"weights")

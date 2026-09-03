@@ -395,6 +395,7 @@ function validateTrainingRunner(options) {
       profileId: options && options.profileId ? options.profileId : '',
       runId: options && options.runId ? options.runId : '',
       mode: options && options.mode ? options.mode : 'normal',
+      resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
       resumeStage: options && options.resumeStage ? options.resumeStage : '',
       resumeActionId: options && options.resumeActionId ? options.resumeActionId : '',
       resumeOutputId: options && options.resumeOutputId ? options.resumeOutputId : '',
@@ -427,15 +428,20 @@ function getManagedTrainingOptions() {
   var initializerCustomPath = String(trainingWorkspaceState.reviewInitializerCustomPath || '').trim();
   var usingInitializer = startingPoint === 'initializer' && (initializer || initializerCustomPath);
   var usingResume = startingPoint === 'resume';
+  var selectedCheckpoint = checkpointEl && checkpointEl.selectedOptions && checkpointEl.selectedOptions[0]
+    ? checkpointEl.selectedOptions[0] : null;
+  var resumeActionId = usingResume && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-action-id') || '') : '';
+  var resumeOutputId = usingResume && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-output-id') || '') : '';
+  var discoveredRunPath = usingResume && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-run-path') || '') : '';
   return {
     stages: stages,
     profileId: selectedProfile ? selectedProfile.id : '',
     runId: selectedRun ? selectedRun.id : '',
     mode: normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode),
-    resumeFromCheckpoint: usingInitializer || !usingResume ? '' : (manualResumeEl ? String(manualResumeEl.value || '').trim() : ''),
+    resumeFromCheckpoint: usingInitializer || !usingResume ? '' : (resumeActionId ? '' : (discoveredRunPath || (manualResumeEl ? String(manualResumeEl.value || '').trim() : ''))),
     runName: runNameEl ? String(runNameEl.value || '').trim() : '',
-    resumeOutputId: usingResume ? (checkpointEl && checkpointEl.value ? String(checkpointEl.value).trim() : '') : '',
-    resumeActionId: usingResume ? (checkpointEl && checkpointEl.selectedOptions && checkpointEl.selectedOptions[0] ? String(checkpointEl.selectedOptions[0].getAttribute('data-action-id') || '') : '') : '',
+    resumeOutputId: resumeOutputId,
+    resumeActionId: resumeActionId,
     resumeStage: stages,
     parentJobId: '',
     initializerActionId: initializer ? String(initializer.actionId || '') : '',

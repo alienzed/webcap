@@ -196,13 +196,15 @@ function renderTrainingHistory() {
     var details = [];
     if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
     var setName = String(run.setName || '').trim();
-    var matchLabel = run.matchType === 'managed' ? 'Managed' : 'Compatible';
-    return '<option value="' + escapeHtml(run.resumeOutputId || '') + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '">' +
+    var matchLabel = run.matchType === 'exact' ? 'Exact' : 'Compatible';
+    if (run.resumeActionId && run.resumeOutputId) matchLabel = 'Managed / ' + matchLabel;
+    var optionValue = String(run.resumeOutputId || run.runPath || '');
+    return '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '">' +
       escapeHtml(matchLabel + ' / ' + String(run.modelLabel || trainingStageLabel(run.stage)) +
         (setName ? ' / ' + setName : '') + ' / ' + (run.name || run.path || 'run') +
         (details.length ? ' / ' + details.join(' / ') : '')) + '</option>';
   }).join('');
-  if (selectedCheckpoint && runs.some(function (run) { return String(run.resumeOutputId || '') === selectedCheckpoint; })) {
+  if (selectedCheckpoint && runs.some(function (run) { return String(run.resumeOutputId || run.runPath || '') === selectedCheckpoint; })) {
     els.checkpointSelect.value = selectedCheckpoint;
   }
   syncManagedTrainingResumeUi();

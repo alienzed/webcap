@@ -73,7 +73,6 @@ def ensure_training_setup(
             folder,
             manifest,
             DATASET_ROOT_PLACEHOLDER,
-            mode=selected_mode,
             profile_id=selected["id"],
             config_paths=config_paths,
         )

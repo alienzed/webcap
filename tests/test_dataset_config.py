@@ -11,7 +11,7 @@ import tool.server.dataset_config as dataset_config_module
 import tool.server.h3_probe as h3_probe_module
 import tool.server.run_ops as run_ops_module
 from tool.server.dataset_config import (
-    H3_VIDEO_MODE_CEILINGS,
+    H3_VIDEO_BASELINE_CEILINGS,
     H3_VIDEO_MFP_LIMIT,
     build_video_blocks,
     coerce_frames,
@@ -20,9 +20,8 @@ from tool.server.dataset_config import (
     generate_candidates,
     generate_image_candidates,
     generate_dataset_configs,
-    normalize_training_generate_mode,
     read_epochs_from_training_config,
-    repeat_targets_for_mode,
+    repeat_targets,
     video_bucket_ladder,
     video_role_ceiling,
     mfp,
@@ -107,7 +106,7 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
         encoding="utf-8",
     )
 
-    report = generate_dataset_configs(set_folder, mode="normal")
+    report = generate_dataset_configs(set_folder)
 
     hi_text = (set_folder / "dataset.hi.toml").read_text(encoding="utf-8")
     lo_text = (set_folder / "dataset.lo.toml").read_text(encoding="utf-8")
@@ -124,7 +123,6 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert "num_repeats =" in hi_text
     assert "num_repeats =" in lo_text
     assert "[INFO] Built 1 video directory block(s)." in report
-    assert "[INFO] Training generate mode: normal" in report
     assert "[INFO] square_img: selected HI image bucket: 288x288" in report
     assert "[INFO] square_img: selected LO image bucket: 288x288" in report
     assert "[INFO] Repeat targeting HI: target=5000" in report
@@ -134,7 +132,7 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert training_plan["stages"]["hi"]["estimatedSteps"] > 0
     assert training_plan["stages"]["lo"]["estimatedSteps"] > 0
 
-    krea_report = generate_dataset_configs(set_folder, mode="normal", profile_id=KREA2_PROFILE_ID)
+    krea_report = generate_dataset_configs(set_folder, profile_id=KREA2_PROFILE_ID)
     krea_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
     assert 'group = "videos"' not in krea_text
     assert 'group = "images"' in krea_text
@@ -189,12 +187,12 @@ def _write_h3_video_manifest(set_folder, frames, include_image=False, fps=24, du
     }), encoding="utf-8")
 
 
-def test_h3_uses_balanced_temporal_and_detail_roles_then_one_poc_role(tmp_path):
+def test_h3_uses_balanced_temporal_and_detail_roles(tmp_path):
     set_folder = tmp_path / "set"
     _write_h3_video_manifest(set_folder, 136, include_image=True)
     (set_folder / "config.h3.toml").write_text("epochs = 100\n", encoding="utf-8")
 
-    report = generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    report = generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
     assert "[320, 320, 68]" in text
@@ -216,16 +214,11 @@ def test_h3_uses_balanced_temporal_and_detail_roles_then_one_poc_role(tmp_path):
     assert set(plan["stages"]) == {"h3"}
     assert plan["stages"]["h3"]["estimatedSteps"] > 0
 
-    generate_dataset_configs(set_folder, mode="poc", profile_id=MINIMAX_H3_PROFILE_ID)
-    poc_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
-    assert "[384, 384, 34]" in poc_text
-    assert ", 68]" not in poc_text
-
 def test_h3_dataset_warns_when_a_short_clip_is_excluded_from_a_usable_set(tmp_path):
     set_folder = tmp_path / "set"
     _write_h3_video_manifest(set_folder, 33, include_image=True)
 
-    report = generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    report = generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
     assert "square: detail 704x704 @ 17" in report
@@ -252,7 +245,7 @@ def test_h3_dataset_accepts_an_image_only_set(tmp_path):
         },
     }), encoding="utf-8")
 
-    generate_dataset_configs(set_folder, mode="quality", profile_id=MINIMAX_H3_PROFILE_ID)
+    generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
     assert ", 1]" in text
@@ -261,10 +254,9 @@ def test_h3_dataset_accepts_an_image_only_set(tmp_path):
 
 def test_h3_role_ceilings_stay_inside_the_conservative_cell_limit():
     frames_by_role = {"balanced": 34, "temporal": 68, "detail": 17}
-    for by_aspect in H3_VIDEO_MODE_CEILINGS.values():
-        for ceilings in by_aspect.values():
-            for role, (width, height) in ceilings.items():
-                assert mfp(width, height, frames_by_role[role]) <= H3_VIDEO_MFP_LIMIT
+    for ceilings in H3_VIDEO_BASELINE_CEILINGS.values():
+        for role, (width, height) in ceilings.items():
+            assert mfp(width, height, frames_by_role[role]) <= H3_VIDEO_MFP_LIMIT
 
 
 def test_h3_balanced_role_uses_conservative_ladder_without_calibration(monkeypatch):
@@ -277,7 +269,7 @@ def test_h3_balanced_role_uses_conservative_ladder_without_calibration(monkeypat
         ("169", (800, 448), (736, 416)),
         ("916", (448, 800), (416, 736)),
     ):
-        ladder = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", ar_label, "balanced", 34)
+        ladder = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, ar_label, "balanced", 34)
         assert ladder["source"] == "baseline"
         assert ladder["ceiling"] == ceiling
         assert ladder["selectable"][0] == ceiling
@@ -295,7 +287,7 @@ def test_model_native_frame_estimates_prefer_duration_then_source_rate_then_raw_
 def test_h3_bucket_timing_uses_24fps_for_legacy_and_high_fps_sources(tmp_path):
     legacy_folder = tmp_path / "legacy"
     _write_h3_video_manifest(legacy_folder, 48, fps=16, duration=3.0)
-    generate_dataset_configs(legacy_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    generate_dataset_configs(legacy_folder, profile_id=MINIMAX_H3_PROFILE_ID)
     legacy_text = (legacy_folder / "dataset.train.toml").read_text(encoding="utf-8")
     assert ", 68]" in legacy_text
     assert ", 34]" in legacy_text
@@ -304,7 +296,7 @@ def test_h3_bucket_timing_uses_24fps_for_legacy_and_high_fps_sources(tmp_path):
 
     high_fps_folder = tmp_path / "high_fps"
     _write_h3_video_manifest(high_fps_folder, 120, fps=60, duration=2.0)
-    generate_dataset_configs(high_fps_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    generate_dataset_configs(high_fps_folder, profile_id=MINIMAX_H3_PROFILE_ID)
     high_fps_text = (high_fps_folder / "dataset.train.toml").read_text(encoding="utf-8")
     assert ", 17]" in high_fps_text
     assert ", 34]" in high_fps_text
@@ -323,7 +315,7 @@ def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
         set_folder = tmp_path / ar
         _write_h3_video_manifest(set_folder, 136, ar=ar, size=(1024, 1024))
 
-        generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+        generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
         text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
         width, height, frames = buckets
@@ -337,16 +329,29 @@ def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
 def test_h3_calibration_clamps_active_role_ceilings(monkeypatch):
     set_h3_calibration(monkeypatch, {"17": {"43": [800, 608]}, "34": {"square": [320, 320]}, "68": {"square": [320, 320], "169": [416, 256]}})
 
-    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "normal", "square", "temporal") == (320, 320)
-    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "quality", "916", "temporal") == (256, 416)
-    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "normal", "34", "detail") == (608, 800)
-    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "poc", "square", "temporal") == (320, 320)
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "square", "temporal") == (320, 320)
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "916", "temporal") == (256, 416)
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "34", "detail") == (608, 800)
 
 
 def test_h3_calibration_replaces_the_conservative_ceiling(monkeypatch):
     set_h3_calibration(monkeypatch, {"68": {"square": [768, 768]}})
 
-    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "normal", "square", "temporal") == (768, 768)
+    assert video_role_ceiling(MINIMAX_H3_PROFILE_ID, "square", "temporal") == (768, 768)
+
+
+def test_h3_managed_video_policy_has_only_selectable_defaults_and_ceilings(monkeypatch):
+    set_h3_calibration(monkeypatch, {"68": {"square": [448, 448]}})
+
+    for role, frames in (("balanced", 34), ("temporal", 68), ("detail", 17)):
+        for ar_label in H3_VIDEO_BASELINE_CEILINGS:
+            policy = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, ar_label, role, frames)
+            assert policy["selectable"]
+            assert policy["defaults"]
+            assert set(policy["defaults"]).issubset(policy["selectable"])
+            assert policy["selectable"][0] == policy["ceiling"]
+            assert all(width <= policy["ceiling"][0] and height <= policy["ceiling"][1] for width, height in policy["selectable"])
+    assert video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "square", "temporal", 68)["ceiling"] == (448, 448)
 
 
 def test_h3_dataset_generation_applies_calibrated_ceiling(tmp_path, monkeypatch):
@@ -354,7 +359,7 @@ def test_h3_dataset_generation_applies_calibrated_ceiling(tmp_path, monkeypatch)
     set_folder = tmp_path / "calibrated"
     _write_h3_video_manifest(set_folder, 136, size=(1024, 1024))
 
-    generate_dataset_configs(set_folder, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
     text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
 
     assert "[256, 256, 68]" in text
@@ -364,36 +369,36 @@ def test_h3_dataset_generation_applies_calibrated_ceiling(tmp_path, monkeypatch)
 def test_h3_sparse_calibration_uses_exact_entries_and_conservative_fallbacks(monkeypatch):
     set_h3_calibration(monkeypatch, {"17": {"169": [1184, 672]}, "34": {"43": [800, 608], "169": [896, 512], "square": [704, 704]}, "68": {"43": [512, 384], "169": [576, 320], "square": [448, 448]}})
 
-    detail_square = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "square", "detail", 17)
+    detail_square = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "square", "detail", 17)
     assert detail_square["source"] == "baseline"
     assert detail_square["ceiling"] == (736, 736)
     assert detail_square["selectable"][0] == (736, 736)
     assert detail_square["defaults"][0] == (704, 704)
     assert (768, 768) not in detail_square["selectable"]
 
-    detail_wide = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "169", "detail", 17)
+    detail_wide = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "169", "detail", 17)
     assert detail_wide["source"] == "calibration"
     assert detail_wide["campaign"] == ""
     assert detail_wide["selectable"][0] == (1184, 672)
     assert detail_wide["defaults"][0] == (1088, 608)
 
-    detail_four_three = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "43", "detail", 17)
+    detail_four_three = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "43", "detail", 17)
     assert detail_four_three["source"] == "baseline"
     assert detail_four_three["selectable"][0] == (896, 672)
     assert detail_four_three["defaults"][0] == (864, 640)
 
-    balanced_square = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "square", "balanced", 34)
+    balanced_square = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "square", "balanced", 34)
     assert balanced_square["source"] == "calibration"
     assert balanced_square["ceiling"] == (704, 704)
     assert balanced_square["selectable"][0] == (704, 704)
     assert balanced_square["defaults"][0] == (640, 640)
 
-    balanced_four_three = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "43", "balanced", 34)
+    balanced_four_three = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "43", "balanced", 34)
     assert balanced_four_three["source"] == "calibration"
     assert balanced_four_three["ceiling"] == (800, 608)
-    assert video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "34", "balanced", 34)["ceiling"] == (608, 800)
+    assert video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "34", "balanced", 34)["ceiling"] == (608, 800)
 
-    balanced_portrait = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "916", "balanced", 34)
+    balanced_portrait = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "916", "balanced", 34)
     assert balanced_portrait["source"] == "calibration"
     assert balanced_portrait["ceiling"] == (512, 896)
 
@@ -404,7 +409,7 @@ def test_h3_sparse_calibration_uses_exact_entries_and_conservative_fallbacks(mon
         ("34", (384, 512), (320, 416)),
         ("916", (320, 576), (256, 448)),
     ):
-        ladder = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", ar_label, "temporal", 68)
+        ladder = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, ar_label, "temporal", 68)
         assert ladder["source"] == "calibration"
         assert ladder["selectable"][0] == ceiling
         assert ladder["defaults"][0] == default
@@ -412,27 +417,27 @@ def test_h3_sparse_calibration_uses_exact_entries_and_conservative_fallbacks(mon
 
 def test_h3_calibration_can_lower_a_baseline_and_must_stay_inside_the_model_envelope(monkeypatch):
     set_h3_calibration(monkeypatch, {"17": {"square": [640, 640]}})
-    lowered = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "square", "detail", 17)
+    lowered = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "square", "detail", 17)
     assert lowered["source"] == "calibration"
     assert lowered["selectable"][0] == (640, 640)
     assert lowered["defaults"][0] == (576, 576)
 
     set_h3_calibration(monkeypatch, {"34": {"169": [1376, 768]}})
     with pytest.raises(ValueError, match="model/probe envelope"):
-        video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "normal", "169", "balanced", 34)
+        video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "169", "balanced", 34)
 
 
 def test_h3_bucket_selection_tolerates_small_upscale_and_falls_back_for_smaller_sources(tmp_path):
     tolerated = tmp_path / "tolerated"
     _write_h3_video_manifest(tolerated, 34, ar="169", size=(585, 334))
-    generate_dataset_configs(tolerated, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    generate_dataset_configs(tolerated, profile_id=MINIMAX_H3_PROFILE_ID)
     tolerated_text = (tolerated / "dataset.train.toml").read_text(encoding="utf-8")
     assert "[576, 320, 17]" in tolerated_text
     assert "[576, 320, 34]" in tolerated_text
 
     fallback = tmp_path / "fallback"
     _write_h3_video_manifest(fallback, 34, ar="169", size=(500, 280))
-    generate_dataset_configs(fallback, mode="normal", profile_id=MINIMAX_H3_PROFILE_ID)
+    generate_dataset_configs(fallback, profile_id=MINIMAX_H3_PROFILE_ID)
     fallback_text = (fallback / "dataset.train.toml").read_text(encoding="utf-8")
     assert "[448, 256, 17]" in fallback_text
     assert "[448, 256, 34]" in fallback_text
@@ -495,7 +500,7 @@ def test_generate_dataset_configs_splits_video_temporal_and_detail_stanzas(tmp_p
         encoding="utf-8",
     )
 
-    report = generate_dataset_configs(set_folder, mode="normal")
+    report = generate_dataset_configs(set_folder)
     hi_text = (set_folder / "dataset.hi.toml").read_text(encoding="utf-8")
     lo_text = (set_folder / "dataset.lo.toml").read_text(encoding="utf-8")
 
@@ -510,12 +515,6 @@ def test_generate_dataset_configs_splits_video_temporal_and_detail_stanzas(tmp_p
     assert "[INFO] Built 2 video directory block(s)." in report
     assert "169: temporal 672x384 @ 37" in report
 
-    quality_report = generate_dataset_configs(set_folder, mode="quality")
-    quality_text = (set_folder / "dataset.hi.toml").read_text(encoding="utf-8")
-
-    assert "  [1024, 576, 13]," in quality_text
-    assert "\n  [1184, 672, 13]," not in quality_text
-    assert "169: detail 1024x576 @ 13" in quality_report
 
 
 def test_removed_generate_dataset_config_route_is_not_available(tmp_path, monkeypatch):
@@ -602,7 +601,7 @@ def test_selected_image_bucket_respects_image_mfp_limit():
         ("portrait_c.png", 736, 1312),
     ]
 
-    selection, unsupported = choose_image_bucket("916", images, mode="normal")
+    selection, unsupported = choose_image_bucket("916", images)
 
     assert unsupported == []
     assert selection["bucket"] == (416, 736)
@@ -625,7 +624,7 @@ def test_choose_image_bucket_prefers_full_coverage_then_detail():
         ("018.jpg", 614, 1091),
         ("020.jpg", 607, 1080),
     ]
-    selection_916, unsupported_916 = choose_image_bucket("916", images_916, mode="normal")
+    selection_916, unsupported_916 = choose_image_bucket("916", images_916)
     assert unsupported_916 == []
     assert selection_916["bucket"] == (416, 736)
 
@@ -638,19 +637,15 @@ def test_choose_image_bucket_prefers_full_coverage_then_detail():
         ("015.jpg", 648, 648),
         ("019.jpg", 768, 768),
     ]
-    selection_square, unsupported_square = choose_image_bucket("square", images_square, mode="normal")
+    selection_square, unsupported_square = choose_image_bucket("square", images_square)
     assert unsupported_square == []
     assert selection_square["bucket"] == (512, 512)
-
-    selection_square_poc, _ = choose_image_bucket("square", images_square, mode="poc")
-    assert selection_square_poc["bucket"] == (384, 384)
 
 
 def test_image_cohort_uses_one_bucket_and_allows_448_to_512():
     selection, unsupported = choose_image_bucket(
         "square",
         [("native.png", 768, 768), ("slight_upscale.png", 448, 448)],
-        mode="normal",
         noise_profile="lo",
     )
 
@@ -665,7 +660,6 @@ def test_image_cohort_lowers_bucket_for_a_larger_upscale_violation():
     selection, unsupported = choose_image_bucket(
         "square",
         [("native.png", 768, 768), ("small.png", 400, 400)],
-        mode="normal",
         noise_profile="lo",
     )
 
@@ -673,37 +667,7 @@ def test_image_cohort_lowers_bucket_for_a_larger_upscale_violation():
     assert selection["bucket"] == (448, 448)
 
 
-def test_normalize_training_generate_mode_keeps_quality_mode():
-    assert normalize_training_generate_mode("quality") == "quality"
-    assert normalize_training_generate_mode("poc") == "poc"
-
-
-def test_image_candidates_use_mode_caps():
-    assert generate_image_candidates("169", mode="normal")[0][:2] == (1024, 576)
-    assert generate_image_candidates("169", mode="poc")[0][:2] == (736, 416)
-    assert generate_candidates("169")[0][:2] == (1248, 704)
-
-
-def test_normal_and_quality_image_buckets_stay_separated():
-    images = [
-        ("a.png", 768, 768),
-        ("b.png", 768, 768),
-        ("c.png", 768, 768),
-    ]
-
-    normal_hi, unsupported_normal_hi = choose_image_bucket("square", images, mode="normal", noise_profile="hi")
-    normal_lo, unsupported_normal_lo = choose_image_bucket("square", images, mode="normal", noise_profile="lo")
-    quality_lo, unsupported_quality_lo = choose_image_bucket("square", images, mode="quality", noise_profile="lo")
-
-    assert unsupported_normal_hi == []
-    assert unsupported_normal_lo == []
-    assert unsupported_quality_lo == []
-    assert normal_hi["bucket"] == (480, 480)
-    assert normal_lo["bucket"] == (512, 512)
-    assert quality_lo["bucket"] == (768, 768)
-
-
-def test_h3_quality_images_keep_up_to_three_independent_detail_tiers():
+def test_h3_images_use_the_current_single_cohort_policy():
     images = [
         ("big.png", 2048, 1152),
         ("known_good.png", 1024, 576),
@@ -711,28 +675,18 @@ def test_h3_quality_images_keep_up_to_three_independent_detail_tiers():
     ]
 
     classes, unsupported = choose_image_resolution_classes(
-        "169", images, mode="quality", profile_id=MINIMAX_H3_PROFILE_ID,
+        "169", images, profile_id=MINIMAX_H3_PROFILE_ID,
     )
 
     assert unsupported == []
-    assert len(classes) == 3
-    by_name = {
-        image[0]: item["bucket"]
-        for item in classes
-        for image in item["images"]
-    }
-    assert by_name["big.png"] == (1344, 768)
-    assert by_name["known_good.png"][0] >= 1024
-    assert by_name["known_good.png"][1] >= 576
-    assert by_name["small.png"][0] < by_name["known_good.png"][0]
-    assert all(value % 32 == 0 for bucket in by_name.values() for value in bucket)
+    assert len(classes) == 1
 
 
-def test_non_h3_quality_keeps_the_existing_single_image_cohort():
+def test_non_h3_keeps_the_existing_single_image_cohort():
     images = [("big.png", 2048, 1152), ("small.png", 736, 416)]
 
     classes, unsupported = choose_image_resolution_classes(
-        "169", images, mode="quality", profile_id=KREA2_PROFILE_ID,
+        "169", images, profile_id=KREA2_PROFILE_ID,
     )
 
     assert unsupported == []
@@ -757,21 +711,8 @@ def test_validate_config_payload_does_not_persist_a_global_training_mode():
     assert "mode" not in normalized_quality["training"]
 
 
-def test_poc_mode_selects_one_image_bucket():
-    images = [
-        ("high_a.png", 768, 768),
-        ("high_b.png", 768, 768),
-        ("low.png", 256, 256),
-    ]
-    selection, unsupported = choose_image_bucket("square", images, mode="poc")
-    assert unsupported == []
-    assert selection["bucket"] == (288, 288)
-
-
-def test_repeat_targets_vary_by_mode():
-    assert repeat_targets_for_mode("poc") == (5000, 20000)
-    assert repeat_targets_for_mode("normal") == (5000, 20000)
-    assert repeat_targets_for_mode("quality") == (5000, 20000)
+def test_repeat_targets_are_fixed():
+    assert repeat_targets() == (5000, 20000)
 
 
 def test_read_epochs_from_training_config_handles_non_utf8_bytes(tmp_path):

@@ -6,7 +6,7 @@ Supported aspect ratios are `1:1`, `4:3`, `3:4`, `16:9`, and `9:16`, using the n
 
 ## Selection
 
-WebCap begins with the mode target, aligned to 32 pixels, and walks down the existing ladder until every image is within a 15% per-axis resize allowance. The selected stanza always contains exactly one `size_bucket`.
+WebCap begins with the current model target, aligned to 32 pixels, and walks down the existing ladder until every image is within a 15% per-axis resize allowance. The selected stanza always contains exactly one `size_bucket`.
 
 Wan2.2 HI keeps its target one 32-pixel ladder step below LO. This changes the selected bucket ceiling, not image membership: HI and LO see the same source files.
 

@@ -11,7 +11,7 @@ From WebCap's perspective, the workflow starts when a set folder exists and cont
 1. Open a set folder.
 2. Curate media with explicit, reversible operations.
 3. Caption and review items while filtering or building focus sets.
-4. Open Training and select a model and `POC`, `Normal`, or `Quality` mode.
+4. Open Training and select a model.
 5. Inspect or edit the setup's persistent config and dataset TOMLs.
 6. Leave exactly the desired media visible, then Train, queue, or generate a manual command.
 7. Monitor managed work or run the self-contained command externally, then iterate from the source set as needed.

@@ -10,7 +10,7 @@ This document is the authoritative record for the stabilized training contract a
 - MiniMax H3, Krea2, WAN2.1, WAN2.2 High, and WAN2.2 Low are separate model/stage choices. There are no user-facing training profiles or combined WAN2.2 action.
 - Each set owns one canonical config TOML and dataset TOML for each supported model/stage. They are the source of truth and remain directly editable.
 - A missing canonical TOML is materialized from its template. An existing invalid or unreadable TOML fails visibly and is never replaced automatically. Reset is the explicit regeneration action.
-- The bucket Review is an optional TOML editor/visualizer. If a valid custom dataset TOML cannot be represented, it instructs the user to edit raw TOML and does not block Train.
+- The bucket Review is an optional TOML editor/visualizer. Managed video targets must be exact members of the current model policy; a valid TOML that cannot be represented remains raw/custom, is not rewritten, and does not block Train.
 - Review assigns every valid image once to its closest selected target. Default targets use one, two, or at most three clearly supported native-resolution clusters. It shows native distribution, target assignments, and resize pressure without thumbnails or per-file grids.
 - Video keeps its existing Temporal/Detail roles and fixed frame counts. Its spatial distribution is visible in Review; media can participate in both roles.
 
@@ -42,6 +42,11 @@ The JSON files contain practical paths, model/stage, timestamps, and counts only
 The queue and Recent Runs are disposable convenience state. Missing files mean empty state; malformed existing files fail visibly. On restart, an in-progress item becomes the first queued resumable item and the queue stays paused until Resume is pressed. WebCap does not scan training output to reconstruct state.
 
 Managed Resume reuses its current-set logical run and captures current inputs again. Custom Resume validates its explicit checkpoint before mutation, then creates a new logical run; it reads the external source without writing beside it. Managed discovery is current-set-only and shallow. H3 Resume runs cache-only against the current capture before resumed training.
+
+Existing captured jobs are immutable historical intent. Before resuming an older
+H3 queue, run `scripts/audit_h3_queue_buckets.py` against its `queue.json` to
+report the current-policy status of each captured video stanza. The audit is
+read-only and does not repair, cancel, or rewrite jobs.
 
 Pause, Finish, and Finish After Epoch request a fresh checkpoint. Pause returns resumable work to the front and pauses the queue. Finish records Finished Early and advances it.
 

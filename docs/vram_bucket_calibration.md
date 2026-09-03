@@ -12,7 +12,7 @@ The implementation must follow the repository contract in `AGENTS.md`: prefer th
 
 ## Purpose
 
-WebCap empirically tests `(width, height, frames)` MiniMax H3 training shapes on the actual training hardware and uses the resulting known-safe ceilings to inform newly generated/reset H3 Normal and Quality video buckets.
+WebCap empirically tests `(width, height, frames)` MiniMax H3 training shapes on the actual training hardware and uses the resulting known-safe ceilings to inform newly generated/reset managed H3 video buckets.
 
 Calibration is deliberately best-effort. It measures isolated candidate shapes; it does not attempt to mathematically prove every possible multi-bucket training combination.
 
@@ -535,13 +535,12 @@ The exact calibrated `safe_shapes` remain the **highest tested-safe ceilings**.
 
 Do not reduce the persisted evidence itself merely to create a conservative default.
 
-For newly generated/reset H3 Normal and Quality video buckets:
+For newly generated/reset managed H3 video buckets:
 
 - the exact calibrated ceiling remains selectable;
 - the automatic/default ceiling should be **two 32px candidate rungs below the calibrated ceiling** where at least two lower candidates exist;
 - if fewer than two lower candidates exist in the existing generated candidate ladder, use the lowest available candidate rather than inventing another resolution;
 - no compatible calibration continues to use the existing conservative baseline behavior;
-- POC remains unchanged.
 
 This replaces the current calibrated behavior in `dataset_config.py` that uses one lower candidate (`candidates[1:]`).
 
@@ -751,8 +750,7 @@ Rules:
 - automatic calibrated default -> two candidate rungs below the ceiling where possible;
 - no calibration -> existing conservative H3 defaults;
 - source coverage/upscale selection continues to operate as it does today below the effective ceiling;
-- POC remains unchanged;
-- 102f does not participate in generated Normal/Quality roles;
+- 102f does not participate in generated H3 roles;
 - existing dataset TOMLs are never rewritten automatically;
 - existing captured runs are never reevaluated;
 - WAN, Krea2, images, repeat weighting, and normal training Resume remain unchanged.
@@ -841,7 +839,7 @@ When the ladders settle and the nine published 17f/34f/68f ladders have a known-
 
 In `tool/server/dataset_config.py`, preserve calibrated selectable candidates up to the exact ceiling but change the automatic calibrated default from one lower candidate to two lower candidates where possible.
 
-Do not change uncalibrated, POC, WAN, Krea2, or image behavior.
+Do not change uncalibrated H3, WAN, Krea2, or image behavior.
 
 ### 6. Narrow source metadata work
 
@@ -873,7 +871,7 @@ On the actual training machine:
 7. Allow one ladder to terminate on a decisive unsafe result and confirm higher shapes are skipped on later launches.
 8. Confirm a safe sentinel uses the highest non-sentinel safe rung rather than the sentinel itself.
 9. Complete the full plan and confirm 17/34/68 `safe_shapes` publish without mixed validation.
-10. Generate/reset an H3 Normal or Quality dataset and confirm the exact calibrated ceiling is selectable while the automatic default is two rungs below it.
+10. Generate/reset a managed H3 dataset and confirm the exact calibrated ceiling is selectable while the automatic default is two rungs below it.
 
 ---
 
@@ -957,7 +955,6 @@ Add tests that prove:
 - automatic calibrated default is two candidate rungs below the ceiling where possible;
 - small ladders clamp to the lowest available candidate rather than inventing a resolution;
 - no calibration retains current conservative defaults;
-- POC remains unchanged;
 - WAN/Krea2/image behavior is unchanged;
 - existing dataset TOMLs and captured runs are untouched.
 

@@ -12,12 +12,12 @@ Key set-owned artifacts are:
 - `.webcap_state.json`: per-set state
 - `media_metadata.json`: metadata cache
 - `originals/`: reversible-mutation backing store
-- profile/mode-specific training config and dataset TOMLs
+- model/stage-specific training config and dataset TOMLs
 
 ## Set and training workflow
 
 1. Browse, filter, annotate, review, and curate media in a set folder.
-2. Open Training and select a supported model and `POC`, `Normal`, or `Quality` mode.
+2. Open Training and select a supported model.
 3. Inspect or edit that setup's persistent config and dataset TOMLs. Selecting a setup creates only missing files; **Reset** intentionally replaces one file.
 4. Filter or focus the media grid to the exact items to train.
 5. Train, queue, or generate a manual command. The action captures the visible media, latest captions, exact saved TOMLs, and run plan in an immutable bundle under the numbered output folder.

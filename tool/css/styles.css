@@ -2551,6 +2551,7 @@ iframe {
 }
 .training-review-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .training-review-summary-copy { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
+.training-review-summary-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .training-review-summary-copy strong { font-size: 12px; }
 .training-review-summary-copy span { color: var(--muted-text, #a3adba); font-size: 11px; }
 .training-review-summary-warning { color: #d9a441 !important; }

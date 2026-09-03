@@ -52,7 +52,7 @@ These are useful product notes, not authoritative implementation references:
 - `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
 - `docs/ui_gold_master.md`
 - `docs/qa_panel.md`
-- `docs/generate_config_mode.md` - POC, Normal, and Quality mode behavior
+- `docs/generate_config_mode.md` - current model/stage dataset configuration
 - `docs/repeat_targeting.md` - dataset repeat calculation
 - `docs/video_clip.md`
 - `docs/vram_bucket_calibration.md` - implemented H3 shape calibration, persistent result reuse, Training Settings controls, and calibrated bucket margins

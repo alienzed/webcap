@@ -6,7 +6,7 @@ import tomllib
 import uuid
 from pathlib import Path
 
-from .dataset_config import assign_images_to_resolution_classes, build_dataset_config_artifacts, coerce_frames, video_roles_for_profile
+from .dataset_config import build_dataset_config_artifacts, coerce_frames, video_roles_for_profile
 from .dataset_prep import (
     build_dataset_manifest,
     normalize_fallback_captions,
@@ -16,6 +16,7 @@ from .dataset_prep import (
 from .training_config_files import apply_captured_initializer, with_dataset_path, with_output_dir
 from .training_profiles import config_for_stage, normalize_mode, profile_for_mode
 from .training_runtime import to_wsl_path
+from .training_review import validate_managed_review_stage
 
 
 _DIRECTORY_PATH_PATTERN = re.compile(
@@ -94,22 +95,6 @@ def _valid_video_buckets(value):
         if width <= 0 or height <= 0 or frames <= 1:
             return None
         buckets.append((width, height, frames))
-    return buckets
-
-
-def _valid_image_buckets(value):
-    if not isinstance(value, list) or not value:
-        return None
-    buckets = []
-    for raw in value:
-        if not isinstance(raw, list) or len(raw) != 3:
-            return None
-        width, height, frames = raw
-        if not all(isinstance(item, int) and not isinstance(item, bool) for item in raw):
-            return None
-        if width <= 0 or height <= 0 or frames != 1:
-            return None
-        buckets.append((width, height))
     return buckets
 
 
@@ -244,13 +229,13 @@ def _copy_or_convert_bundle_video(source, destination, target_fps, source_fps):
     return {"action": "copied"}
 
 
-def _detail_subset_members(rows, bucket, profile_id, mode):
-    roles = video_roles_for_profile(profile_id, mode)
+def _detail_subset_members(rows, bucket, profile_id):
+    roles = video_roles_for_profile(profile_id)
     if len(roles) < 2:
         return []
     temporal_frames = int(roles[0][1])
     detail_frames = int(roles[1][1])
-    selected_profile = profile_for_mode(profile_id, mode)
+    selected_profile = profile_for_mode(profile_id)
     members = []
     for row in rows:
         frames = coerce_frames(row, selected_profile.get("videoFps"))
@@ -267,7 +252,7 @@ def _detail_subset_members(rows, bucket, profile_id, mode):
     return members
 
 
-def _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id, mode):
+def _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id):
     """Audit manual/generative direct stanzas without changing their meaning."""
     group = str(data.get("group") or "").strip().lower()
     buckets = data.get("size_buckets")
@@ -281,7 +266,7 @@ def _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id, mode):
     if not source_rows:
         print(f"[WARN] Direct {group} stanza {source_name} has no captured source rows to audit.", flush=True)
         return
-    selected_profile = profile_for_mode(profile_id, mode)
+    selected_profile = profile_for_mode(profile_id)
     for bucket in buckets:
         if not isinstance(bucket, list) or len(bucket) != 3 or not all(isinstance(value, int) for value in bucket):
             print(f"[WARN] Direct {group} stanza {source_name} has an invalid size bucket; preserving it exactly.", flush=True)
@@ -307,7 +292,7 @@ def _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id, mode):
             )
 
 
-def _materialize_dataset_config(text, media_root, distribution, manifest, stage, profile_id="", mode=""):
+def _materialize_dataset_config(text, media_root, distribution, manifest, stage, profile_id=""):
     prefix, blocks = _directory_blocks(text)
     if not blocks:
         return _rewrite_dataset_directories(text, media_root, distribution)
@@ -316,98 +301,14 @@ def _materialize_dataset_config(text, media_root, distribution, manifest, stage,
         if isinstance(row, dict):
             videos_by_dir.setdefault(Path(str(row.get("prepared_path") or "")).parent.name, []).append(row)
 
-    materialize_image_classes = (
-        str(profile_id or "").strip().lower() == "minimax_h3"
-        and str(mode or "").strip().lower() == "quality"
-    )
-    images_by_dir = {}
-    if materialize_image_classes:
-        for row in manifest.get("images", []):
-            if isinstance(row, dict):
-                images_by_dir.setdefault(Path(str(row.get("prepared_path") or "")).parent.name, []).append(row)
-
-    image_block_indexes = set()
-    image_blocks_by_dir = {}
-    for index, block in enumerate(blocks):
-        data = block["data"]
-        if not materialize_image_classes or str(data.get("group") or "").strip().lower() != "images":
-            continue
-        buckets = _valid_image_buckets(data.get("size_buckets"))
-        if not buckets or len(buckets) != 1:
-            # User-edited multi-bucket stanzas retain the existing direct-folder
-            # behavior. Generated H3 Quality stanzas always contain one bucket.
-            materialize_image_classes = False
-            image_block_indexes.clear()
-            image_blocks_by_dir.clear()
-            break
-        source_name = _directory_name(data.get("path"))
-        image_block_indexes.add(index)
-        image_blocks_by_dir.setdefault(source_name, []).append({"index": index, "bucket": buckets[0]})
-
-    rendered_image_dirs = {}
-    for source_name, source_blocks in image_blocks_by_dir.items():
-        rows = images_by_dir.get(source_name)
-        if not rows:
-            raise ValueError("Image directory does not match captured media: " + source_name)
-        owners = {}
-        for source_block in source_blocks:
-            bucket = source_block["bucket"]
-            if bucket in owners:
-                raise ValueError(f"Duplicate image bucket {bucket[0]}x{bucket[1]} for directory: {source_name}")
-            owners[bucket] = source_block["index"]
-        images = []
-        rows_by_name = {}
-        for row in rows:
-            name = Path(str(row.get("prepared_path") or "")).name
-            try:
-                width = int(row.get("width"))
-                height = int(row.get("height"))
-            except (TypeError, ValueError):
-                raise ValueError("Captured image is missing dimensions: " + name)
-            images.append((name, width, height))
-            rows_by_name[name] = row
-        classes, unsupported = assign_images_to_resolution_classes(images, owners.keys())
-        if unsupported:
-            print(
-                f"[WARN] H3 Quality image classes for {source_name} do not cover: "
-                + ", ".join(sorted(unsupported, key=str.lower))
-                + "; preserving the direct captured folder.",
-                flush=True,
-            )
-            image_block_indexes.difference_update(item["index"] for item in source_blocks)
-            continue
-        for item in classes:
-            bucket = item["bucket"]
-            class_dir = media_root / f"{source_name}__{bucket[0]}x{bucket[1]}"
-            for image in item["images"]:
-                source = media_root / source_name / image[0]
-                caption = source.with_suffix(".txt")
-                if not source.is_file() or not caption.is_file():
-                    raise FileNotFoundError("Captured image class source is missing: " + str(source))
-                _link_or_copy(source, class_dir / source.name)
-                _link_or_copy(caption, class_dir / caption.name)
-                compatibility = "native" if image[1] >= bucket[0] and image[2] >= bucket[1] else "slight_upscale"
-                rows_by_name[image[0]].setdefault("imageClassAssignments", {})[str(stage)] = {
-                    "bucket": [bucket[0], bucket[1]],
-                    "membership": compatibility,
-                    "directory": class_dir.relative_to(media_root).as_posix(),
-                }
-            rendered_image_dirs[owners[bucket]] = class_dir
-
     output = [prefix]
     rendered_count = 0
     for index, block in enumerate(blocks):
-        if index in image_block_indexes:
-            class_dir = rendered_image_dirs.get(index)
-            if class_dir is not None:
-                output.append(_rewrite_directory_path(block["raw"], to_wsl_path(class_dir, distribution)))
-                rendered_count += 1
-            continue
         data = block["data"]
         source_name = _directory_name(data.get("path"))
         is_detail = str(data.get("group") or "").strip().lower() == "videos" and "webcap_detail_subset = true" in block["raw"]
         if not is_detail:
-            _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id, mode)
+            _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id)
             output.append(_rewrite_directory_path(block["raw"], to_wsl_path(Path(media_root) / source_name, distribution)))
             rendered_count += 1
             continue
@@ -418,7 +319,7 @@ def _materialize_dataset_config(text, media_root, distribution, manifest, stage,
             rendered_count += 1
             continue
         bucket = buckets[0]
-        members = _detail_subset_members(videos_by_dir.get(source_name, []), bucket, profile_id, mode)
+        members = _detail_subset_members(videos_by_dir.get(source_name, []), bucket, profile_id)
         if not members:
             print(f"[WARN] Detail subset {source_name} {bucket[0]}x{bucket[1]}x{bucket[2]} has no eligible clips; omitting stanza.", flush=True)
             continue
@@ -605,12 +506,14 @@ def materialize_training_bundle(
             raise FileNotFoundError("Missing inspected training TOML for " + stage + ".")
         dataset_target = configs_root / item["dataset"]
         reviewed_stage = ((review or {}).get("review") or {}).get("stages", {}).get(stage) if isinstance(review, dict) else None
+        if isinstance(reviewed_stage, dict):
+            validate_managed_review_stage(profile_id, reviewed_stage)
         dataset_text = (
             _materialize_review_stage_dataset(stage, reviewed_stage, media_root, distribution, (review or {}).get("ladders"))
             if isinstance(reviewed_stage, dict)
             else _materialize_dataset_config(
                 source_dataset.read_text(encoding="utf-8"), media_root, distribution, manifest, stage,
-                profile_id=profile_id, mode=selected_mode,
+                profile_id=profile_id,
             )
         )
         dataset_target.write_text(dataset_text, encoding="utf-8")
@@ -634,7 +537,7 @@ def materialize_training_bundle(
         config_paths[stage] = source_config
 
     plan_artifacts = {"plan": (review or {}).get("review")} if isinstance(review, dict) and isinstance((review or {}).get("review"), dict) else build_dataset_config_artifacts(
-        folder, manifest, media_root, mode=selected_mode, profile_id=profile_id, config_paths=config_paths,
+        folder, manifest, media_root, profile_id=profile_id, config_paths=config_paths,
     )
     summary = _build_bundle_summary(
         selected_profile,

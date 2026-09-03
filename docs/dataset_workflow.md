@@ -6,7 +6,7 @@ Keep intended training media in the set folder, caption it, and use WebCap's rev
 
 ## 2. Choose the training setup
 
-Open **Train**, select a supported model and `POC`, `Normal`, or `Quality` mode. WebCap creates any missing persistent TOMLs for that setup and shows only those files.
+Open **Train** and select a supported model. WebCap creates any missing persistent TOMLs for that setup and shows only those files.
 
 Inspect or edit every relevant config and dataset TOML. Existing files are preserved. **Reset** is the explicit replacement action for one file.
 
@@ -26,6 +26,6 @@ Queued and running jobs no longer depend on source-set media, captions, TOMLs, o
 
 - `originals/`: backups for reversible media mutations.
 - `src_videos/`: optional source-media workspace.
-- set-root profile/mode TOMLs: persistent editable setup.
+- set-root model/stage TOMLs: persistent editable setup.
 - `<numbered-action>/input/`: captured media, captions, manifest, and rebuildable cache owned by that Train action; `record/` holds its compact TOMLs and plan.
 - legacy `auto_dataset/`: ignored by new training and safe to delete manually when no older external workflow needs it.

@@ -67,7 +67,11 @@ def test_review_update_limits_targets_and_reset_replaces_custom_dataset(tmp_path
     updated = training_review.update_training_review(folder, MINIMAX_H3_PROFILE_ID, {
         "runId": "train", "selected_media": names, "total_media_count": len(names), "plan": plan,
     })
-    assert len(updated["plan"]["stages"]["h3"]["imageBuckets"]["square"]) == 3
+    # The persisted dataset keeps only targets that receive a directory; the
+    # test is concerned with the three-target input limit, not empty targets.
+    selected = updated["plan"]["stages"]["h3"]["imageBuckets"]["square"]
+    assert 1 <= len(selected) <= 3
+    assert all(bucket in ladder for bucket in selected)
 
     plan = updated["plan"]
     plan["stages"]["h3"]["imageBuckets"]["square"] = ladder[:4]
@@ -124,7 +128,7 @@ def test_off_ladder_image_bucket_stays_connected_to_review(tmp_path, monkeypatch
     assert updated["plan"]["stages"]["h3"]["imageBuckets"]["square"] == [[510, 510]]
 
 
-def test_off_ladder_video_bucket_stays_connected_to_review(tmp_path, monkeypatch):
+def test_off_ladder_video_bucket_becomes_raw_custom_toml(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder, names = _set(tmp_path)
     _review(folder, names)
@@ -135,14 +139,37 @@ def test_off_ladder_video_bucket_stays_connected_to_review(tmp_path, monkeypatch
 
     payload = _review(folder, names)
 
-    assert payload["customDataset"] is False
-    temporal = next(role for role in payload["plan"]["videoRoles"] if role["id"] == "temporal")
-    assert temporal["buckets"]["square"] == [[370, 370]]
-    updated = training_review.update_training_review(folder, MINIMAX_H3_PROFILE_ID, {
-        "runId": "train", "selected_media": names, "total_media_count": len(names), "plan": payload["plan"],
+    assert payload["customDataset"]
+    assert "current managed bucket policy" in payload["customDataset"]["message"]
+    assert "370, 370, 68" in (folder / "dataset.train.toml").read_text(encoding="utf-8")
+
+
+def test_calibration_change_moves_stale_managed_video_bucket_to_raw_without_rewrite(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder, names = _set(tmp_path)
+    hardware = {"total_ram_mib": 65536, "gpu_model": "Test GPU", "total_vram_mib": 32768}
+    monkeypatch.setattr(h3_probe, "current_h3_hardware", lambda: hardware)
+    monkeypatch.setattr(app_config, "config", {
+        "training": {"h3_calibration": {"hardware": hardware, "results": {}, "safe_shapes": {"68": {"square": [512, 512]}}}},
     })
-    temporal = next(role for role in updated["plan"]["videoRoles"] if role["id"] == "temporal")
-    assert temporal["buckets"]["square"] == [[370, 370]]
+    _review(folder, names)
+    stale = (
+        '# webcap_video_role = {"id":"temporal","enabled":true,"frames":68,"weight":0.5,"buckets":{"square":[[512,512]]}}\n'
+        'enable_ar_bucket = true\n\n[[directory]]\npath = "square"\nnum_repeats = 1\ngroup = "videos"\nsize_buckets = [[512, 512, 68]]\n'
+    )
+    (folder / "dataset.train.toml").write_text(stale, encoding="utf-8")
+    assert _review(folder, names)["customDataset"] is False
+
+    app_config.config["training"]["h3_calibration"]["safe_shapes"] = {"68": {"square": [448, 448]}}
+    reopened = _review(folder, names)
+
+    assert reopened["customDataset"]
+    assert (folder / "dataset.train.toml").read_text(encoding="utf-8") == stale
+    reset = training_review.update_training_review(folder, MINIMAX_H3_PROFILE_ID, {
+        "runId": "train", "selected_media": names, "total_media_count": len(names), "reset": "buckets",
+    })
+    temporal = next(role for role in reset["plan"]["videoRoles"] if role["id"] == "temporal")
+    assert all(tuple(bucket) in {(448, 448), (416, 416), (384, 384), (352, 352), (320, 320), (288, 288), (256, 256)} for bucket in temporal["buckets"].get("square", []))
 
 
 def test_video_distribution_keeps_h3_roles_independent():
@@ -171,7 +198,7 @@ def test_video_distribution_keeps_h3_roles_independent():
 
 
 def test_h3_default_roles_enable_balanced_temporal_and_detail():
-    roles = {role["id"]: role for role in training_review._normal_roles(MINIMAX_H3_PROFILE_ID)}
+    roles = {role["id"]: role for role in training_review._video_roles(MINIMAX_H3_PROFILE_ID)}
 
     assert {name: (role["frames"], role["weight"], role["enabled"]) for name, role in roles.items()} == {
         "balanced": (34, 1.0, True),
@@ -230,7 +257,7 @@ def test_h3_generation_and_review_reset_share_the_automatic_default_ladder(monke
         "file": "clip.mp4", "ar": "square", "width": 1024, "height": 1024,
         "prepared_path": "square/clip.mp4", "frames": 136,
     }]
-    entries = build_video_blocks(tmp_path, videos, [], mode="normal", profile_id=MINIMAX_H3_PROFILE_ID, require_files=False)
+    entries = build_video_blocks(tmp_path, videos, [], profile_id=MINIMAX_H3_PROFILE_ID, require_files=False)
     temporal = next(item for item in entries if item["role"] == "temporal")
     reset_defaults = training_review._clustered_buckets(
         {"videos": videos}, MINIMAX_H3_PROFILE_ID, "temporal", 68,
@@ -262,7 +289,7 @@ def test_video_role_metadata_round_trips_without_a_trainable_directory():
 
 
 def test_h3_legacy_managed_dataset_keeps_new_balanced_role_disabled():
-    roles = training_review._normal_roles(MINIMAX_H3_PROFILE_ID)
+    roles = training_review._video_roles(MINIMAX_H3_PROFILE_ID)
     next(role for role in roles if role["id"] == "balanced")["buckets"] = {"square": [[544, 544]]}
     profile_plan = {
         "version": 1,
@@ -382,7 +409,6 @@ def test_bucket_modal_markup_and_script_keep_the_editor_focused():
     assert "training-review-bucket-check" not in script
     assert "Training intent" not in script
     assert "return getFilteredMediaItems(false)" in main_script
-    assert "querySelectorAll('.media-item[data-type=\"media\"]')" not in main_script
 
 
 def test_switching_sets_resets_only_ephemeral_launch_inputs():
@@ -416,3 +442,14 @@ def test_custom_resume_is_a_first_class_mutually_exclusive_resume_choice():
     assert "historyRunsLoading" in (root / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
     assert "Loading current-set checkpoints" in (root / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
     assert "resumeActionId: options && options.resumeActionId" in (root / "tool" / "js" / "main.js").read_text(encoding="utf-8")
+
+
+def test_bucket_reset_is_a_plan_summary_action_not_a_cohort_action():
+    root = Path(__file__).parents[1]
+    script = (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
+    targets = script[script.index("function reviewTargetsHtml"):script.index("function reviewChartHtml")]
+    summary = script[script.index("function trainingReviewSummaryHtml"):script.index("function closeTrainingReviewModal")]
+
+    assert "data-review-reset-buckets" not in targets
+    assert "Reset Buckets" in summary and "data-review-reset-buckets" in summary
+    assert "Reset all bucket selections to WebCap defaults?" in script

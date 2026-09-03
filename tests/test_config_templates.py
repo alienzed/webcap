@@ -27,7 +27,7 @@ def test_fill_template_placeholders_normalizes_paths(monkeypatch):
 
 
 def test_default_training_epochs_follow_canonical_templates():
-    assert training_config_files_module.default_training_config_epochs() == (50, 90)
+    assert training_config_files_module.default_training_config_epochs() == (60, 90)
 
 
 def test_training_templates_use_the_shared_output_root():

@@ -60,7 +60,7 @@ def _positive_int(value, label):
     return parsed
 
 
-def _normal_setup(folder, profile_id, selected_media, selection_criteria, total_media_count):
+def _review_setup(folder, profile_id, selected_media, selection_criteria, total_media_count):
     ensure_training_setup(
         folder,
         profile_id,
@@ -69,7 +69,7 @@ def _normal_setup(folder, profile_id, selected_media, selection_criteria, total_
         selection_criteria=selection_criteria,
         total_media_count=total_media_count,
     )
-    return profile_for_mode(profile_id, "normal")
+    return profile_for_mode(profile_id)
 
 
 def _setup_for_run(setup, profile_id, run_id):
@@ -85,27 +85,19 @@ def _default_target_steps(stage):
     return 5000 if stage == "hi" else 20000
 
 
-def _normal_roles(profile_id):
+def _video_roles(profile_id):
     return [
         {"id": name, "enabled": True, "frames": int(frames), "weight": float(weight), "buckets": {}}
-        for name, frames, weight in video_roles_for_profile(profile_id, "normal")
+        for name, frames, weight in video_roles_for_profile(profile_id)
     ]
 
 
-def _supported_frames(profile_id, role):
-    values = set()
-    for mode in ("poc", "normal", "quality"):
-        for name, frames, _weight in video_roles_for_profile(profile_id, mode):
-            if name == role:
-                values.add(int(frames))
-    return sorted(values)
+def _role_frames(profile_id, role):
+    return next((int(frames) for name, frames, _weight in video_roles_for_profile(profile_id) if name == role), None)
 
 
 def _candidate_image_buckets(ar_label, profile_id):
-    # Quality supplies the intentionally reachable upper envelope. H3's former
-    # Quality images have a larger landscape/portrait ceiling than the generic
-    # model ladder, so retain its useful explicit maxima.
-    candidates = [(int(w), int(h)) for w, h, _area in generate_image_candidates(ar_label, "quality")]
+    candidates = [(int(w), int(h)) for w, h, _area in generate_image_candidates(ar_label)]
     if profile_id == MINIMAX_H3_PROFILE_ID:
         extra = {
             "square": (768, 768), "43": (1024, 768), "34": (768, 1024),
@@ -116,12 +108,16 @@ def _candidate_image_buckets(ar_label, profile_id):
     return list(dict.fromkeys(candidates))
 
 
+def _video_policy(ar_label, profile_id, role, frames):
+    return video_bucket_ladder(profile_id, ar_label, role, int(frames))
+
+
 def _candidate_video_buckets(ar_label, profile_id, role, frames):
-    return video_bucket_ladder(profile_id, "quality", ar_label, role, int(frames))["selectable"]
+    return _video_policy(ar_label, profile_id, role, frames)["selectable"]
 
 
 def _default_video_buckets(ar_label, profile_id, role, frames):
-    return video_bucket_ladder(profile_id, "quality", ar_label, role, int(frames))["defaults"]
+    return _video_policy(ar_label, profile_id, role, frames)["defaults"]
 
 
 def _cluster_targets(values, candidates):
@@ -157,7 +153,7 @@ def _cluster_targets(values, candidates):
 def _clustered_buckets(manifest, profile_id, role="", frames=1):
     by_aspect = {label: [] for label in ASPECT_RATIOS}
     key = "videos" if role else "images"
-    model_fps = profile_for_mode(profile_id, "normal").get("videoFps") if role else None
+    model_fps = profile_for_mode(profile_id).get("videoFps") if role else None
     for row in manifest.get(key, []):
         if not isinstance(row, dict):
             continue
@@ -185,7 +181,6 @@ def _default_profile_plan(folder, profile_id, manifest, setup):
         folder,
         manifest,
         DATASET_ROOT_PLACEHOLDER,
-        mode="normal",
         profile_id=profile_id,
         config_paths=config_paths,
     )["plan"]
@@ -196,13 +191,13 @@ def _default_profile_plan(folder, profile_id, manifest, setup):
             continue
         images = _clustered_buckets(manifest, profile_id)
         stages[stage] = {"targetSteps": int(data.get("targetSteps") or _default_target_steps(stage)), "imageBuckets": images}
-    roles = _normal_roles(profile_id)
+    roles = _video_roles(profile_id)
     for role in roles:
         role["buckets"] = _clustered_buckets(manifest, profile_id, role["id"], role["frames"])
     return {"version": TRAINING_PLAN_VERSION, "stages": stages, "videoRoles": roles}
 
 
-def _normalize_bucket_list(raw, candidates, label, ar_label):
+def _normalize_image_bucket_list(raw, candidates, label, ar_label):
     source = raw if isinstance(raw, list) else []
     valid = set(candidates)
     output = []
@@ -221,6 +216,23 @@ def _normalize_bucket_list(raw, candidates, label, ar_label):
     return output
 
 
+def _normalize_video_bucket_list(raw, selectable, label):
+    source = raw if isinstance(raw, list) else []
+    valid = set(selectable)
+    output = []
+    for row in source:
+        if not isinstance(row, (list, tuple)) or len(row) != 2:
+            raise ValueError(label + " contains an invalid bucket.")
+        bucket = (_positive_int(row[0], label + " width"), _positive_int(row[1], label + " height"))
+        if bucket not in valid:
+            raise ValueError(label + " contains a bucket outside the current managed video policy.")
+        if list(bucket) not in output:
+            output.append([bucket[0], bucket[1]])
+    if len(output) > 3:
+        raise ValueError(label + " contains more than three targets.")
+    return output
+
+
 def normalize_profile_plan(raw, profile_id, setup):
     source = raw if isinstance(raw, dict) else {}
     valid_stages = [item["id"] for item in setup["configs"]]
@@ -233,7 +245,7 @@ def normalize_profile_plan(raw, profile_id, setup):
         for ar_label in ASPECT_RATIOS:
             if ar_label not in image_buckets:
                 continue
-            normalized_images[ar_label] = _normalize_bucket_list(
+            normalized_images[ar_label] = _normalize_image_bucket_list(
                 image_buckets.get(ar_label), _candidate_image_buckets(ar_label, profile_id), stage + " " + ar_label + " image buckets", ar_label,
             )
         output["stages"][stage] = {
@@ -242,19 +254,19 @@ def normalize_profile_plan(raw, profile_id, setup):
         }
     raw_roles = source.get("videoRoles") if isinstance(source.get("videoRoles"), list) else []
     by_role = {str(item.get("id") or ""): item for item in raw_roles if isinstance(item, dict)}
-    for default in _normal_roles(profile_id):
+    for default in _video_roles(profile_id):
         source_role = by_role.get(default["id"], default)
         role = default["id"]
         frames = _positive_int(source_role.get("frames", default["frames"]), role + " frame count")
-        if frames not in _supported_frames(profile_id, role):
+        if frames != _role_frames(profile_id, role):
             raise ValueError(role + " frame count is not supported by this model.")
         buckets = source_role.get("buckets") if isinstance(source_role.get("buckets"), dict) else {}
         normalized_buckets = {}
         for ar_label in ASPECT_RATIOS:
             if ar_label not in buckets:
                 continue
-            normalized_buckets[ar_label] = _normalize_bucket_list(
-                buckets.get(ar_label), _candidate_video_buckets(ar_label, profile_id, role, frames), role + " " + ar_label + " video buckets", ar_label,
+            normalized_buckets[ar_label] = _normalize_video_bucket_list(
+                buckets.get(ar_label), _candidate_video_buckets(ar_label, profile_id, role, frames), role + " " + ar_label + " video buckets",
             )
         output["videoRoles"].append({
             "id": role,
@@ -323,7 +335,7 @@ def _assign_images(rows, buckets):
 def _build_review_plan(folder, profile_id, setup, manifest, profile_plan):
     image_groups = _image_rows(manifest)
     video_groups = {ar: [] for ar in ASPECT_RATIOS}
-    profile = profile_for_mode(profile_id, "normal")
+    profile = profile_for_mode(profile_id)
     model_fps = profile.get("videoFps")
     for row in manifest.get("videos", []):
         if not isinstance(row, dict):
@@ -623,7 +635,7 @@ def _video_limits(profile_id, review_plan, manifest):
         for ar_label in sorted(present_aspects):
             if ar_label not in ASPECT_RATIOS:
                 continue
-            ladder = video_bucket_ladder(profile_id, "quality", ar_label, name, frames)
+            ladder = _video_policy(ar_label, profile_id, name, frames)
             output[name][ar_label] = {
                 "effectiveCeiling": list(ladder["ceiling"]),
                 "automaticDefaultCeiling": list(ladder["defaultCeiling"]) if ladder["defaultCeiling"] else None,
@@ -631,6 +643,24 @@ def _video_limits(profile_id, review_plan, manifest):
                 "campaign": ladder["campaign"],
             }
     return output
+
+
+def validate_managed_review_stage(profile_id, stage_plan):
+    """Assert the immutable capture still matches current managed video policy."""
+    for entry in (stage_plan or {}).get("datasetEntries") or []:
+        if not isinstance(entry, dict) or str(entry.get("kind") or "") != "video":
+            continue
+        bucket = entry.get("bucket") or []
+        role = str(entry.get("role") or "")
+        if len(bucket) != 3 or not role:
+            raise ValueError("Training Review contains an invalid managed video bucket.")
+        width, height, frames = (int(value) for value in bucket)
+        expected_frames = _role_frames(profile_id, role)
+        aspect = _bucket_aspect((width, height))
+        if expected_frames != frames or not aspect:
+            raise ValueError("Training Review video bucket is outside the current managed policy.")
+        if (width, height) not in _video_policy(aspect, profile_id, role, frames)["selectable"]:
+            raise ValueError("Training Review video bucket is outside the current managed policy.")
 
 
 def discover_saved_initializers(folder, profile_id, stage):
@@ -686,12 +716,12 @@ def resolve_saved_initializer(folder, profile_id, stage, action_id, export_id):
 # canonical dataset TOML is now the only editable authority; these definitions
 # deliberately replace the older state-backed implementation above.
 def _set_toml_review(folder, profile_id, run_id, selected_media, selection_criteria, total_media_count):
-    expected_setup = profile_for_mode(profile_id, "normal")
+    expected_setup = profile_for_mode(profile_id)
     missing_datasets = {
         item["dataset"] for item in expected_setup["configs"]
         if not (Path(folder) / item["dataset"]).is_file()
     }
-    setup = _normal_setup(folder, profile_id, selected_media, selection_criteria, total_media_count)
+    setup = _review_setup(folder, profile_id, selected_media, selection_criteria, total_media_count)
     review_setup = _setup_for_run(setup, profile_id, run_id)
     manifest = build_dataset_manifest(folder, selected_media=selected_media, selection_criteria=selection_criteria, total_media_count=total_media_count)
     plan = _default_profile_plan(folder, profile_id, manifest, review_setup)
@@ -714,7 +744,18 @@ def _set_toml_review(folder, profile_id, run_id, selected_media, selection_crite
             custom = {"stage": config["id"], "datasetName": config["dataset"], "message": dataset_path.name + " is custom. Edit the raw TOML or Reset dataset to return to bucket controls."}
             break
         plan = imported
-    plan = normalize_profile_plan(plan, profile_id, review_setup)
+    try:
+        plan = normalize_profile_plan(plan, profile_id, review_setup)
+    except ValueError as exc:
+        if custom:
+            raise
+        custom = {
+            "stage": review_setup["configs"][0]["id"],
+            "datasetName": review_setup["configs"][0]["dataset"],
+            "message": "The dataset TOML is outside WebCap's current managed bucket policy. Edit the raw TOML or Reset dataset to return to bucket controls.",
+            "reason": str(exc),
+        }
+        plan = _default_profile_plan(folder, profile_id, manifest, review_setup)
     plan["profileId"] = profile_id
     review = _build_review_plan(folder, profile_id, review_setup, manifest, plan)
     if materialized_stages:
@@ -836,7 +877,7 @@ def _distribution_payload(manifest, plan):
         for band, count in group["impact"].items():
             output["impact"]["images"][band] += count
 
-    profile = profile_for_mode(str(plan.get("profileId") or ""), "normal") if plan.get("profileId") else None
+    profile = profile_for_mode(str(plan.get("profileId") or "")) if plan.get("profileId") else None
     model_fps = profile.get("videoFps") if profile else None
     video_rows = {ar_label: [] for ar_label in ASPECT_RATIOS}
     for row in manifest.get("videos") or []:

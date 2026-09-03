@@ -1174,6 +1174,10 @@
   gap: 7px;
 }
 
+.app.shell-revamp .training-run-layout #training-run-resume-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .app.shell-revamp .training-run-setup-actions {
   grid-area: launch;
   align-self: stretch;
@@ -1187,7 +1191,7 @@
 }
 
 .app.shell-revamp .training-run-layout .training-run-custom-checkpoint {
-  grid-area: checkpoint;
+  grid-area: auto;
   align-self: auto;
 }
 
@@ -1299,6 +1303,10 @@
 
   .app.shell-revamp .training-run-layout .training-run-setup-header {
     padding-top: 0;
+  }
+
+  .app.shell-revamp .training-run-layout #training-run-resume-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .app.shell-revamp .training-run-setup-actions .training-launch-btn {

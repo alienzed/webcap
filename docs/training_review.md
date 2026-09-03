@@ -16,7 +16,7 @@ Reset controls—remain under **Advanced configuration**.
 - `Images`, `Balanced`, `Temporal`, and `Detail` tabs when their media exists;
 - the existing populated aspect-ratio cohorts: 4:3, 3:4, 16:9, 9:16, and
   Square;
-- supported target chips for the active cohort;
+- supported target chips from the current model bucket policy for the active cohort;
 - a native-short-edge histogram and source-resolution dots, overlaid with the
   selected target markers and their assignment counts;
 - a five-band scale-impact bar across every cohort of the active media view;
@@ -41,10 +41,17 @@ Missing canonical TOMLs materialize normally. Existing unreadable or invalid
 files fail visibly and are never replaced automatically. **Reset** is the only
 way to regenerate a selected config or dataset default.
 
-If a valid dataset TOML uses stanzas the editor cannot represent, Review shows
-the concise raw-TOML state instead. Bucket controls are disabled, but Fresh,
+If a valid dataset TOML uses stanzas the editor cannot represent exactly—for
+video, any bucket outside the current model ladder—Review shows the concise
+raw-TOML state instead. Bucket controls are disabled, but Fresh,
 Resume, Init LoRA, and Train remain available. The raw dataset can be opened
 directly or explicitly reset from that state.
+
+Managed video targets always come from the same current policy that supplies
+the selectable ladder and the chart's Max. A changed compatible H3 calibration
+can therefore make an old managed TOML raw/custom; opening Review never clamps
+or rewrites that TOML. **Reset Buckets** is the deliberate way back to managed
+targets.
 
 ## Launch interaction
 

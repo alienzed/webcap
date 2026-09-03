@@ -19,7 +19,7 @@ from .training_commands import build_h3_command_plan, build_training_command_pla
 from .training_profiles import config_for_stage, normalize_mode, profile, profile_for_mode, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
 from .training_review import prepare_training_review, resolve_saved_initializer
-from .dataset_config import repeat_targets_for_mode
+from .dataset_config import repeat_targets
 from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume
 from .training_action import allocate_action, action_id_for_root, action_paths, fingerprint_files, read_action, update_action
 from .training_preflight import (
@@ -490,7 +490,7 @@ def _read_training_plan(bundle_path):
 
 
 def _default_progress_plan():
-    hi_steps, lo_steps = repeat_targets_for_mode("normal")
+    hi_steps, lo_steps = repeat_targets()
     return {
         "hi": {"estimatedSteps": hi_steps},
         "lo": {"estimatedSteps": lo_steps},

@@ -9,7 +9,7 @@ WebCap keeps a small app-owned registry of supported Diffusion Pipe profiles. A 
 | Wan2.1 T2V 14B | Images and videos | `config.wan21.toml`, matching dataset file | Train |
 | MiniMax H3 | Images and videos | `config.h3.toml`, matching dataset file | Train |
 
-Krea2 excludes video. Wan profiles normalize bundle videos to 16 fps; H3 normalizes them to 24 fps. Dataset roles are shared and explicit: Wan POC uses 33f temporal; Wan Normal/Quality uses 37f temporal plus 13f detail; H3 POC uses 34f temporal; H3 Normal/Quality uses 34f balanced, 68f temporal, and 17f detail. The default H3 exposure mix is `1.0 : 0.5 : 0.25` balanced/temporal/detail; Detail uses an explicit bundle subset.
+Krea2 excludes video. Wan profiles normalize bundle videos to 16 fps; H3 normalizes them to 24 fps. Dataset roles are explicit: Wan uses 37f temporal plus 13f detail; H3 uses 34f balanced, 68f temporal, and 17f detail. The default H3 exposure mix is `1.0 : 0.5 : 0.25` balanced/temporal/detail; Detail uses an explicit bundle subset.
 
 ## Launch output identity
 
@@ -25,10 +25,10 @@ Managed and manual launches create one visible action directory. Its `input/` ho
 
 ## Dataset calculation and progress
 
-Selecting a profile/mode creates missing TOMLs. Dataset creation and Reset calculate from the current visible media without copying it. Train captures the visible media and captions once into the bundle.
+Selecting a profile creates missing TOMLs. Dataset creation and Reset calculate from the current visible media without copying it. Train captures the visible media and captions once into the bundle.
 
-- Wan2.2 writes separate HI and LO datasets. Krea2, Wan2.1, and H3 write a mode-specific dataset.
+- Wan2.2 writes separate HI and LO datasets. Krea2, Wan2.1, and H3 each write one dataset.
 - Saved video at the target FPS is copied. Other video is converted inside the fresh bundle to constant 16 fps for Wan or 24 fps for H3; a failed conversion warns and falls back to the source copy.
 - Generated stanzas carry one exact bucket. Direct image and temporal stanzas use captured AR folders; only marked detail video stanzas become `media/video_detail/...` subsets.
-- POC, Normal, and Quality affect calculated buckets and template learning rates. Repeat targeting uses configured epochs and actual role membership.
+- Current bucket policy and repeat targeting use configured epochs and actual role membership.
 - H3 envelope probing remains experimental tooling and does not alter the active profile’s role table. Saved safe shapes replace the conservative ceiling for the exact matching frame/aspect entry, expanding or contracting newly generated/reset H3 video datasets within the app-owned model/probe envelope. Missing entries remain conservative.

@@ -21,60 +21,14 @@ MAX_SQUARE_DIM = 768
 MAX_NON_SQUARE_LONG = 1280
 MAX_NON_SQUARE_SHORT = 768
 MAX_IMAGE_MFP = 600
-H3_QUALITY_MAX_IMAGE_MFP = 1008
 IMAGE_BUCKET_MAX_UPSCALE_RATIO = 1.15
 
-TRAINING_MODE_TARGETS = {
-    "poc": {
-        "square": (384, 384),
-        "43": (448, 336),
-        "34": (336, 448),
-        "169": (512, 288),
-        "916": (288, 512),
-    },
-    "normal": {
-        "square": (512, 512),
-        "43": (640, 480),
-        "34": (480, 640),
-        "169": (736, 416),
-        "916": (416, 736),
-    },
-    "quality": {
-        "square": (768, 768),
-        "43": (1024, 768),
-        "34": (768, 1024),
-        "169": (1024, 576),
-        "916": (576, 1024),
-    },
-}
-
-H3_QUALITY_IMAGE_TARGETS = {
-    "square": (768, 768),
-    "43": (1024, 768),
-    "34": (768, 1024),
-    "169": (1344, 768),
-    "916": (768, 1344),
-}
-
-IMAGE_MODE_CAPS = {
-    # Fast, forgiving defaults for quick proofs.
-    "poc": {
-        "square_dim": 512,
-        "non_square_long": 768,
-        "non_square_short": 512,
-    },
-    # Balanced quality while staying within practical local training limits.
-    "normal": {
-        "square_dim": 768,
-        "non_square_long": 1024,
-        "non_square_short": 768,
-    },
-    # Snob mode can stay close to normal; quality bias comes from bucket choice.
-    "quality": {
-        "square_dim": 768,
-        "non_square_long": 1024,
-        "non_square_short": 768,
-    },
+IMAGE_TARGETS = {
+    "square": (512, 512),
+    "43": (640, 480),
+    "34": (480, 640),
+    "169": (736, 416),
+    "916": (416, 736),
 }
 
 PREP_MANIFEST_NAME = "prep_manifest.json"
@@ -83,21 +37,12 @@ VIDEO_MFP_LIMIT = 11000
 H3_VIDEO_MFP_LIMIT = 11900
 # Conservative ceilings for uncalibrated active H3 video roles.  A matching
 # calibration replaces (rather than clamps) the matching role/aspect ceiling.
-H3_VIDEO_MODE_CEILINGS = {
-    "normal": {
-        "square": {"balanced": (576, 576), "temporal": (352, 352), "detail": (736, 736)},
-        "43": {"balanced": (672, 512), "temporal": (416, 320), "detail": (896, 672)},
-        "34": {"balanced": (512, 672), "temporal": (320, 416), "detail": (672, 896)},
-        "169": {"balanced": (800, 448), "temporal": (448, 256), "detail": (1024, 576)},
-        "916": {"balanced": (448, 800), "temporal": (256, 448), "detail": (576, 1024)},
-    },
-    "quality": {
-        "square": {"balanced": (576, 576), "temporal": (352, 352), "detail": (736, 736)},
-        "43": {"balanced": (672, 512), "temporal": (416, 320), "detail": (896, 672)},
-        "34": {"balanced": (512, 672), "temporal": (320, 416), "detail": (672, 896)},
-        "169": {"balanced": (800, 448), "temporal": (448, 256), "detail": (1024, 576)},
-        "916": {"balanced": (448, 800), "temporal": (256, 448), "detail": (576, 1024)},
-    },
+H3_VIDEO_BASELINE_CEILINGS = {
+    "square": {"balanced": (576, 576), "temporal": (352, 352), "detail": (736, 736)},
+    "43": {"balanced": (672, 512), "temporal": (416, 320), "detail": (896, 672)},
+    "34": {"balanced": (512, 672), "temporal": (320, 416), "detail": (672, 896)},
+    "169": {"balanced": (800, 448), "temporal": (448, 256), "detail": (1024, 576)},
+    "916": {"balanced": (448, 800), "temporal": (256, 448), "detail": (576, 1024)},
 }
 # Calibration is only valid inside the model/probe envelope.  These are video
 # limits, not image caps: H3 images retain their existing resolution classes.
@@ -105,49 +50,23 @@ H3_VIDEO_ABSOLUTE_CEILINGS = {
     "square": (768, 768), "43": (1024, 768), "34": (768, 1024),
     "169": (1344, 768), "916": (768, 1344),
 }
-REPEAT_TARGET_STEPS = {
-    "poc": {"hi": 5000, "lo": 20000},
-    "normal": {"hi": 5000, "lo": 20000},
-    "quality": {"hi": 5000, "lo": 20000},
-}
+REPEAT_TARGET_STEPS = {"hi": 5000, "lo": 20000}
 TRAINING_PLAN_FILE_NAME = "training_plan.json"
 VIDEO_TEMPORAL_REPEAT_WEIGHT = 1.0
 VIDEO_BALANCED_REPEAT_WEIGHT = 1.0
 H3_VIDEO_TEMPORAL_REPEAT_WEIGHT = 0.5
 VIDEO_DETAIL_REPEAT_WEIGHT = 0.25
 IMAGE_REPEAT_WEIGHT = 1.0
-# Roles are data, not model-specific selection branches. POC keeps one cheaper
-# temporal role; H3 Normal and Quality use balanced, long-motion, and detail roles.
+# Roles are the complete current managed video policy for each model.
 VIDEO_ROLE_TABLE = {
-    WAN22_PROFILE_ID: {
-        "poc": (("temporal", 33, VIDEO_TEMPORAL_REPEAT_WEIGHT),),
-        "normal": (("temporal", 37, VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 13, VIDEO_DETAIL_REPEAT_WEIGHT)),
-        "quality": (("temporal", 37, VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 13, VIDEO_DETAIL_REPEAT_WEIGHT)),
-    },
-    WAN21_PROFILE_ID: {
-        "poc": (("temporal", 33, VIDEO_TEMPORAL_REPEAT_WEIGHT),),
-        "normal": (("temporal", 37, VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 13, VIDEO_DETAIL_REPEAT_WEIGHT)),
-        "quality": (("temporal", 37, VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 13, VIDEO_DETAIL_REPEAT_WEIGHT)),
-    },
-    MINIMAX_H3_PROFILE_ID: {
-        "poc": (("temporal", 34, VIDEO_TEMPORAL_REPEAT_WEIGHT),),
-        "normal": (("balanced", 34, VIDEO_BALANCED_REPEAT_WEIGHT), ("temporal", 68, H3_VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 17, VIDEO_DETAIL_REPEAT_WEIGHT)),
-        "quality": (("balanced", 34, VIDEO_BALANCED_REPEAT_WEIGHT), ("temporal", 68, H3_VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 17, VIDEO_DETAIL_REPEAT_WEIGHT)),
-    },
+    WAN22_PROFILE_ID: (("temporal", 37, VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 13, VIDEO_DETAIL_REPEAT_WEIGHT)),
+    WAN21_PROFILE_ID: (("temporal", 37, VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 13, VIDEO_DETAIL_REPEAT_WEIGHT)),
+    MINIMAX_H3_PROFILE_ID: (("balanced", 34, VIDEO_BALANCED_REPEAT_WEIGHT), ("temporal", 68, H3_VIDEO_TEMPORAL_REPEAT_WEIGHT), ("detail", 17, VIDEO_DETAIL_REPEAT_WEIGHT)),
 }
 
 
-def normalize_training_generate_mode(mode):
-    text = str(mode or "normal").strip().lower()
-    if text not in TRAINING_MODE_TARGETS:
-        text = "normal"
-    return text
-
-
-def repeat_targets_for_mode(mode: str):
-    normalized = normalize_training_generate_mode(mode)
-    targets = REPEAT_TARGET_STEPS[normalized]
-    return int(targets["hi"]), int(targets["lo"])
+def repeat_targets():
+    return int(REPEAT_TARGET_STEPS["hi"]), int(REPEAT_TARGET_STEPS["lo"])
 
 
 _EPOCHS_PATTERN = re.compile(rb"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
@@ -225,18 +144,15 @@ def training_plan_entries(entries, repeats):
     return output
 
 
-def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Path, mode: str = "normal", profile_id: str = "", config_paths=None, selection_snapshot_lines=None):
+def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Path, profile_id: str = "", config_paths=None, selection_snapshot_lines=None):
     folder = Path(folder_path)
     dataset_root = Path(dataset_root)
-    generate_mode = normalize_training_generate_mode(mode)
     lines = []
-    lines.append(f"[INFO] Training generate mode: {generate_mode}")
 
     video_entries = build_video_blocks(
         dataset_root,
         manifest.get("videos", []),
         lines,
-        mode=generate_mode,
         profile_id=profile_id,
         require_files=False,
     )
@@ -266,10 +182,10 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
             continue
 
         hi_selections, hi_unsupported = choose_image_resolution_classes(
-            ar_label, images, mode=generate_mode, noise_profile="hi", profile_id=profile_id,
+            ar_label, images, noise_profile="hi", profile_id=profile_id,
         )
         lo_selections, lo_unsupported = choose_image_resolution_classes(
-            ar_label, images, mode=generate_mode, noise_profile="lo", profile_id=profile_id,
+            ar_label, images, noise_profile="lo", profile_id=profile_id,
         )
         if hi_unsupported:
             lines.append(f"[WARN] {image_dir.name} (HI): minimum bucket still exceeds the 15% upscale policy: " + ", ".join(hi_unsupported))
@@ -348,14 +264,13 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
         excluded_videos = sum(1 for row in manifest.get("videos", []) if isinstance(row, dict))
         lines.append(f"[INFO] Krea2 Raw: excluded {excluded_videos} prepared video(s).")
     if profile_id == MINIMAX_H3_PROFILE_ID and not lo_run_entries:
-        minimum_h3_frames = 34 if generate_mode == "poc" else 17
-        raise ValueError(f"MiniMax H3 requires at least one prepared image or one video with at least {minimum_h3_frames} frames.")
-    hi_target_steps, lo_target_steps = repeat_targets_for_mode(generate_mode)
+        raise ValueError("MiniMax H3 requires at least one prepared image or one video with at least 17 frames.")
+    hi_target_steps, lo_target_steps = repeat_targets()
     default_hi_epochs, default_lo_epochs = default_training_config_epochs()
     config_paths = dict(config_paths or {})
     hi_config_path = config_paths.get("hi", folder / HI_CONFIG_NAME)
     lo_stage = single_stage_name if single_stage else "lo"
-    lo_config_path = config_paths.get(lo_stage, folder / (config_for_stage(profile_id, lo_stage, generate_mode)["file"] if profile_id else LO_CONFIG_NAME))
+    lo_config_path = config_paths.get(lo_stage, folder / (config_for_stage(profile_id, lo_stage)["file"] if profile_id else LO_CONFIG_NAME))
     hi_epochs = read_epochs_from_training_config(hi_config_path, default_hi_epochs)
     lo_epochs = read_epochs_from_training_config(lo_config_path, default_lo_epochs)
     hi_scalar, hi_base = solve_repeat_scalar(hi_entries, hi_target_steps, hi_epochs)
@@ -378,7 +293,6 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
         }
     training_plan = {
         "version": 2,
-        "mode": generate_mode,
         "profileId": str(profile_id or "wan22_t2v"),
         "stages": training_stages,
     }
@@ -404,7 +318,7 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
     }
 
 
-def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_selection_snapshot_comments: bool = False, profile_id: str = ""):
+def generate_dataset_configs(folder_path: Path, write_selection_snapshot_comments: bool = False, profile_id: str = ""):
     folder = Path(folder_path)
     dataset_root = folder / "auto_dataset"
     manifest_path = dataset_root / PREP_MANIFEST_NAME
@@ -416,7 +330,6 @@ def generate_dataset_configs(folder_path: Path, mode: str = "normal", write_sele
         folder,
         manifest,
         dataset_root,
-        mode=mode,
         profile_id=profile_id,
         selection_snapshot_lines=snapshot_lines,
     )
@@ -467,10 +380,9 @@ def load_prep_manifest(manifest_path: Path):
     return data
 
 
-def video_roles_for_profile(profile_id: str, mode: str):
+def video_roles_for_profile(profile_id: str):
     selected_profile_id = str(profile_id or WAN22_PROFILE_ID).strip().lower()
-    generate_mode = normalize_training_generate_mode(mode)
-    return VIDEO_ROLE_TABLE.get(selected_profile_id, {}).get(generate_mode, ())
+    return VIDEO_ROLE_TABLE.get(selected_profile_id, ())
 
 
 def _h3_calibrated_ceiling(frames: int, ar_label: str):
@@ -510,12 +422,11 @@ def _h3_calibrated_ceiling(frames: int, ar_label: str):
     return shape[0], shape[1]
 
 
-def _h3_video_limit(profile_id: str, mode: str, ar_label: str, role: str):
+def _h3_video_limit(profile_id: str, ar_label: str, role: str):
     """Return the effective active-role H3 ceiling and its authority."""
-    generate_mode = normalize_training_generate_mode(mode)
-    baseline = H3_VIDEO_MODE_CEILINGS[generate_mode][ar_label][role]
+    baseline = H3_VIDEO_BASELINE_CEILINGS[ar_label][role]
     role_frames = next(
-        (frames for name, frames, _weight in video_roles_for_profile(profile_id, generate_mode) if name == role),
+        (frames for name, frames, _weight in video_roles_for_profile(profile_id) if name == role),
         None,
     )
     calibrated = _h3_calibrated_ceiling(role_frames, ar_label) if role_frames else None
@@ -531,13 +442,12 @@ def _h3_video_limit(profile_id: str, mode: str, ar_label: str, role: str):
     return {"ceiling": calibrated, "source": "calibration", "campaign": ""}
 
 
-def video_bucket_ladder(profile_id: str, mode: str, ar_label: str, role: str, frames: int):
+def video_bucket_ladder(profile_id: str, ar_label: str, role: str, frames: int):
     """Return one authoritative selectable/default video ladder for a role."""
-    generate_mode = normalize_training_generate_mode(mode)
     selected_profile_id = str(profile_id or "").strip().lower()
-    active_h3_role = selected_profile_id == MINIMAX_H3_PROFILE_ID and generate_mode != "poc"
+    active_h3_role = selected_profile_id == MINIMAX_H3_PROFILE_ID
     if active_h3_role:
-        limit_info = _h3_video_limit(selected_profile_id, generate_mode, ar_label, role)
+        limit_info = _h3_video_limit(selected_profile_id, ar_label, role)
         ceiling = limit_info["ceiling"]
         absolute = H3_VIDEO_ABSOLUTE_CEILINGS[ar_label]
         candidates = [
@@ -568,12 +478,7 @@ def video_bucket_ladder(profile_id: str, mode: str, ar_label: str, role: str, fr
             "campaign": limit_info["campaign"],
         }
 
-    ceiling = TRAINING_MODE_TARGETS[generate_mode][ar_label]
-    if selected_profile_id == MINIMAX_H3_PROFILE_ID:
-        role_frames = next((value for name, value, _weight in video_roles_for_profile(selected_profile_id, generate_mode) if name == role), None)
-        calibrated = _h3_calibrated_ceiling(role_frames, ar_label) if role_frames else None
-        if calibrated:
-            ceiling = min(ceiling[0], calibrated[0]), min(ceiling[1], calibrated[1])
+    ceiling = IMAGE_TARGETS[ar_label]
     candidates = [
         (w, h) for w, h, _area in generate_candidates(ar_label)
         if w <= ceiling[0] and h <= ceiling[1] and mfp(w, h, frames) <= VIDEO_MFP_LIMIT
@@ -588,20 +493,20 @@ def video_bucket_ladder(profile_id: str, mode: str, ar_label: str, role: str, fr
     }
 
 
-def video_role_ceiling(profile_id: str, mode: str, ar_label: str, role: str):
+def video_role_ceiling(profile_id: str, ar_label: str, role: str):
     frames = next(
-        (value for name, value, _weight in video_roles_for_profile(profile_id, mode) if name == role),
+        (value for name, value, _weight in video_roles_for_profile(profile_id) if name == role),
         1,
     )
-    return video_bucket_ladder(profile_id, mode, ar_label, role, frames)["ceiling"]
+    return video_bucket_ladder(profile_id, ar_label, role, frames)["ceiling"]
 
 
 def _native_video_support(clips, bucket):
     return [clip for clip in clips if clip["width"] >= bucket[0] and clip["height"] >= bucket[1]]
 
 
-def _choose_common_video_bucket(ar_label, clips, frames, profile_id, mode, role):
-    candidates = video_bucket_ladder(profile_id, mode, ar_label, role, frames)["defaults"]
+def _choose_common_video_bucket(ar_label, clips, frames, profile_id, role):
+    candidates = video_bucket_ladder(profile_id, ar_label, role, frames)["defaults"]
     if not candidates:
         return None, []
     for bucket in candidates:
@@ -612,20 +517,19 @@ def _choose_common_video_bucket(ar_label, clips, frames, profile_id, mode, role)
     return bucket, unsupported
 
 
-def _choose_optional_detail_bucket(ar_label, clips, frames, profile_id, mode, role, minimum_members=2):
-    for bucket in video_bucket_ladder(profile_id, mode, ar_label, role, frames)["defaults"]:
+def _choose_optional_detail_bucket(ar_label, clips, frames, profile_id, role, minimum_members=2):
+    for bucket in video_bucket_ladder(profile_id, ar_label, role, frames)["defaults"]:
         members = _native_video_support(clips, bucket)
         if len(members) >= minimum_members:
             return bucket, members
     return None, []
 
 
-def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", profile_id: str = "", require_files=True):
-    generate_mode = normalize_training_generate_mode(mode)
+def build_video_blocks(dataset_root: Path, videos, lines, profile_id: str = "", require_files=True):
     selected_profile_id = str(profile_id or WAN22_PROFILE_ID).strip().lower()
     selected_profile = training_profile(selected_profile_id)
     model_fps = selected_profile.get("videoFps")
-    roles = video_roles_for_profile(selected_profile_id, generate_mode)
+    roles = video_roles_for_profile(selected_profile_id)
     grouped = {key: [] for key in ASPECT_RATIOS}
     for row in videos:
         if not isinstance(row, dict):
@@ -662,7 +566,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
             if not role_clips:
                 continue
             bucket, unsafe = _choose_common_video_bucket(
-                ar_label, role_clips, role_frames, selected_profile_id, generate_mode, role_name,
+                ar_label, role_clips, role_frames, selected_profile_id, role_name,
             )
             if bucket:
                 if unsafe:
@@ -678,7 +582,7 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
         mandatory = [clip for clip in detail_eligible if clip["frames"] < next_role_frames]
         if mandatory:
             bucket, unsafe = _choose_common_video_bucket(
-                ar_label, mandatory, detail_frames, selected_profile_id, generate_mode, detail_name,
+                ar_label, mandatory, detail_frames, selected_profile_id, detail_name,
             )
             if not bucket:
                 continue
@@ -690,7 +594,6 @@ def build_video_blocks(dataset_root: Path, videos, lines, mode: str = "normal", 
                 detail_eligible,
                 detail_frames,
                 selected_profile_id,
-                generate_mode,
                 detail_name,
                 minimum_members=1 if selected_profile_id == MINIMAX_H3_PROFILE_ID else 2,
             )
@@ -761,14 +664,12 @@ def generate_candidates(ar_label: str):
     )
 
 
-def generate_image_candidates(ar_label: str, mode: str = "normal"):
-    generate_mode = normalize_training_generate_mode(mode)
-    caps = IMAGE_MODE_CAPS.get(generate_mode, IMAGE_MODE_CAPS["normal"])
+def generate_image_candidates(ar_label: str):
     return generate_candidates_with_caps(
         ar_label,
-        caps["square_dim"],
-        caps["non_square_long"],
-        caps["non_square_short"],
+        MAX_SQUARE_DIM,
+        MAX_NON_SQUARE_LONG,
+        MAX_NON_SQUARE_SHORT,
     )
 
 
@@ -830,22 +731,20 @@ def target_dimensions_for_short_side(ar_label: str, short_side: int):
     return (max(256, w), max(256, h))
 
 
-def resolve_image_target(ar_label: str, mode: str = "normal", noise_profile: str = "lo"):
-    generate_mode = normalize_training_generate_mode(mode)
-    target_w, target_h = TRAINING_MODE_TARGETS[generate_mode][ar_label]
+def resolve_image_target(ar_label: str, noise_profile: str = "lo"):
+    target_w, target_h = IMAGE_TARGETS[ar_label]
     if str(noise_profile or "lo").strip().lower() != "hi":
         return (target_w, target_h)
     short_side = max(256, min(target_w, target_h) - 32)
     return target_dimensions_for_short_side(ar_label, short_side)
 
 
-def choose_image_bucket(ar_label: str, images, mode: str = "normal", noise_profile: str = "lo"):
+def choose_image_bucket(ar_label: str, images, noise_profile: str = "lo"):
     """Choose one direct-folder image bucket for an entire AR cohort."""
-    generate_mode = normalize_training_generate_mode(mode)
     candidates = [
         (w, h, area)
-        for (w, h, area) in generate_image_candidates(ar_label, mode=generate_mode)
-        if mfp(w, h, 1) <= MAX_IMAGE_MFP and w <= resolve_image_target(ar_label, generate_mode, noise_profile)[0] and h <= resolve_image_target(ar_label, generate_mode, noise_profile)[1]
+        for (w, h, area) in generate_image_candidates(ar_label)
+        if mfp(w, h, 1) <= MAX_IMAGE_MFP and w <= resolve_image_target(ar_label, noise_profile)[0] and h <= resolve_image_target(ar_label, noise_profile)[1]
     ]
     if not candidates:
         raise ValueError(f"No image bucket candidates under image mfp limit for AR={ar_label}")
@@ -917,84 +816,15 @@ def assign_images_to_resolution_classes(images, buckets, max_upscale: float = IM
     return [classes[bucket] for bucket in normalized_buckets if classes[bucket]["images"]], unsupported
 
 
-def _h3_quality_image_candidates(ar_label: str):
-    target_w, target_h = H3_QUALITY_IMAGE_TARGETS[ar_label]
-    candidates = generate_candidates_with_caps(
-        ar_label,
-        target_w if ar_label == "square" else max(target_w, target_h),
-        max(target_w, target_h),
-        min(target_w, target_h),
-    )
-    target = (target_w, target_h, target_w * target_h)
-    if target[:2] not in {(width, height) for width, height, _area in candidates}:
-        candidates.append(target)
-        candidates.sort(key=lambda item: item[2], reverse=True)
-    return [
-        candidate for candidate in candidates
-        if candidate[0] <= target_w
-        and candidate[1] <= target_h
-        and mfp(candidate[0], candidate[1], 1) <= H3_QUALITY_MAX_IMAGE_MFP
-    ]
-
-
 def choose_image_resolution_classes(
     ar_label: str,
     images,
-    mode: str = "normal",
     noise_profile: str = "lo",
     profile_id: str = "",
 ):
-    """Split H3 Quality stills so one small image cannot cap the full AR cohort."""
-    generate_mode = normalize_training_generate_mode(mode)
-    if str(profile_id or "").strip().lower() != MINIMAX_H3_PROFILE_ID or generate_mode != "quality":
-        selection, unsupported = choose_image_bucket(
-            ar_label, images, mode=generate_mode, noise_profile=noise_profile,
-        )
-        return ([selection] if selection else []), unsupported
-
-    candidates = _h3_quality_image_candidates(ar_label)
-    if not candidates:
-        raise ValueError(f"No H3 Quality image bucket candidates for AR={ar_label}")
-    buckets = [(width, height) for width, height, _area in candidates]
-    supported = [
-        image for image in images
-        if any(image_bucket_compatibility(image, bucket) for bucket in buckets)
-    ]
-    unsupported = [image[0] for image in images if image not in supported]
-    if not supported:
-        return [], unsupported
-
-    # Preserve up to three useful resolution tiers. The final tier must cover
-    # everything left so unusual small images cannot silently disappear.
-    selected_buckets = []
-    remaining = list(supported)
-    for class_index in range(3):
-        if not remaining:
-            break
-        final_class = class_index == 2
-        selected = next(
-            (
-                bucket for bucket in buckets
-                if bucket not in selected_buckets
-                and (
-                    all(image_bucket_compatibility(image, bucket) for image in remaining)
-                    if final_class
-                    else any(image_bucket_compatibility(image, bucket) for image in remaining)
-                )
-            ),
-            None,
-        )
-        if selected is None:
-            unsupported.extend(image[0] for image in remaining)
-            break
-        selected_buckets.append(selected)
-        remaining = [image for image in remaining if not image_bucket_compatibility(image, selected)]
-
-    classes, remaining_unsupported = assign_images_to_resolution_classes(supported, selected_buckets)
-    unsupported.extend(remaining_unsupported)
-    unsupported = list(dict.fromkeys(unsupported))
-    classes.sort(key=lambda item: (item["bucket"][0] * item["bucket"][1], item["bucket"][0], item["bucket"][1]))
-    return classes, unsupported
+    """Choose one current image bucket without a training-mode branch."""
+    selection, unsupported = choose_image_bucket(ar_label, images, noise_profile=noise_profile)
+    return ([selection] if selection else []), unsupported
 
 
 def mfp(w: int, h: int, frames: int):

@@ -55,6 +55,16 @@ Calibrated ceilings affect newly generated/reset H3 video datasets only:
 
 See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md) for the calibration contract.
 
+Before resuming an existing training-machine queue, inspect captured H3 video
+buckets without mutation with:
+
+```text
+python scripts/audit_h3_queue_buckets.py <training-root>/.webcap_training/queue.json
+```
+
+It reports each captured H3 video stanza as `SAFE`, `OFF_LADDER`,
+`ABOVE_CEILING`, or `RAW/UNKNOWN` under the current managed policy.
+
 ## Supported training profiles
 
 Current profiles are app-owned and intentionally finite:
@@ -66,7 +76,7 @@ Current profiles are app-owned and intentionally finite:
 | Wan2.1 T2V 14B | Images + videos | `config.wan21.toml`, `dataset.train.toml` | Train |
 | MiniMax H3 | Images + videos | `config.h3.toml`, `dataset.train.toml` | Train |
 
-The current UI uses one canonical setup per profile. Older POC / Normal / Quality setup variants are no longer separate user-facing configurations.
+The current UI uses one canonical setup per profile; it has no training-mode variants.
 
 Wan bundle videos are normalized to 16 fps; MiniMax H3 bundle videos are normalized to 24 fps. Krea2 rejects video capture.
 

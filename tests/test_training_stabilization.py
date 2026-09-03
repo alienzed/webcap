@@ -127,6 +127,23 @@ def test_captured_review_dataset_keeps_image_frame_count_and_bucket_annotations(
     assert "# adjacent supported targets: lower 384 × 384 · higher 768 × 768" in text
 
 
+def test_capture_rejects_an_invalid_managed_video_bucket(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    invalid_review = {"review": {"stages": {"h3": {"datasetEntries": [{
+        "kind": "video", "role": "temporal", "bucket": [400, 400, 68], "sourceDir": "square_video",
+    }]}}}}
+
+    with pytest.raises(ValueError, match="outside the current managed policy"):
+        training_bundle.materialize_training_bundle(
+            folder, action, MINIMAX_H3_PROFILE_ID, "normal", "h3", ["one.png"],
+            output_dirs={"h3": str(action / "output" / "minimax-h3")}, review=invalid_review,
+        )
+
+
 def test_video_capture_is_always_a_direct_copy(tmp_path):
     source = tmp_path / "source.mp4"
     destination = tmp_path / "capture" / "source.mp4"
@@ -537,7 +554,7 @@ def test_finish_after_epoch_does_not_require_a_configured_savepoint(tmp_path, mo
 
     assert status == 200
     assert payload["ok"] is True
-    assert training_runner._read_state()["jobs"][0]["finishAtEpoch"] == 3
+    assert training_runner._read_state()["jobs"][0]["finishAfterEpoch"] == 3
 
 
 def test_missing_history_is_empty_and_invalid_history_is_loud(tmp_path, monkeypatch):

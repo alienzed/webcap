@@ -6,7 +6,7 @@ The runner's ownership and recovery rules are defined in [training_runner_contra
 
 ## Workflow
 
-1. Select a model and `POC`, `Normal`, or `Quality` mode. The model choice is remembered per set.
+1. Select a model. The model choice is remembered per set.
 2. Inspect or edit the setup's config and dataset TOMLs. Selecting the setup creates only missing files.
 3. Use **Reset** only when intentionally restoring one training config or recalculating one dataset TOML from the visible media.
 4. Filter or focus the media grid to the exact items to train.
@@ -40,7 +40,7 @@ Wan2.2 `HI -> LO` creates two jobs sharing one captured bundle. Every separate T
 
 `Generate & Copy Manual Command` uses the same bundle materializer as managed training, so the command is self-contained. It never starts a process.
 
-For MiniMax H3 Quality, still images in one aspect-ratio folder may be divided into as many as three captured resolution folders. Each generated stanza still has one explicit bucket. This preserves useful detail in larger stills without changing the H3 video buckets or the behavior of other profiles and modes.
+Raw/custom dataset TOMLs remain usable through the manual command handoff. Managed Review buckets are captured only when they remain members of the current model policy.
 
 ## Training settings
 

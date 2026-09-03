@@ -359,7 +359,7 @@ function reviewTargetsHtml(payload, view, aspect) {
     return '<span class="training-review-selected-target ' + color + ' ' + reviewBucketPressureLevel(payload, view, aspect, bucket) + '"><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Move target lower"' + (pressure ? ' title="' + escapeHtml(pressure) + '"' : '') + '>‹</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : pressure ? ' title="' + escapeHtml(pressure) + '"' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Move target higher"' + (pressure ? ' title="' + escapeHtml(pressure) + '"' : '') + '>›</button></span>';
   }
   function neutralChip(bucket) { return reviewNeutralTargetChipHtml(payload, view, aspect, selected, bucket); }
-  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><div class="training-review-target-utilities">' + limitNote + '<button type="button" class="training-review-reset-defaults" data-review-reset-buckets>↺ Reset defaults</button></div></div><div class="training-review-target-instructions">Choose up to three. Arrows move a selected target one rung.</div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-add"><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></div></section>';
+  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><div class="training-review-target-utilities">' + limitNote + '</div></div><div class="training-review-target-instructions">Choose up to three. Arrows move a selected target one rung.</div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-add"><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div>' + (remaining.length ? '<details class="training-review-more-targets"><summary>Other supported sizes (' + remaining.length + ')</summary><div class="training-review-chip-strip">' + remaining.map(neutralChip).join('') + '</div></details>' : '') + '</div></div></section>';
 }
 
 function reviewChartHtml(payload, view, group, selected, aspect) {
@@ -575,7 +575,7 @@ function trainingReviewSummaryHtml(payload) {
   if (imageItems || imageTargetCount) planParts.push(imageTargetCount + ' image target' + (imageTargetCount === 1 ? '' : 's') + ' · ' + imageItems + ' image' + (imageItems === 1 ? '' : 's'));
   if (videoItems || videoTargetCount) planParts.push(videoTargetCount + ' video target' + (videoTargetCount === 1 ? '' : 's') + ' · ' + videoItems + ' video' + (videoItems === 1 ? '' : 's'));
   var note = custom ? 'Custom dataset TOML · edit it under Advanced configuration, or Reset dataset.' : blockers.length ? String(blockers[0].message || 'Training Review needs attention.') : (planParts.join(' · ') || 'No visible media in this bucket plan.');
-  return '<div class="training-review-summary"><div class="training-review-summary-copy"><strong>Bucket plan <span class="training-review-saved">' + escapeHtml(trainingWorkspaceState.reviewSaveStatus === 'saving' ? 'Saving…' : trainingWorkspaceState.reviewSaveStatus === 'error' ? 'Save error' : 'Saved') + '</span></strong><span' + (custom || blockers.length || (payload.warnings || []).length ? ' class="training-review-summary-warning"' : '') + '>' + escapeHtml(note) + '</span></div><button type="button" class="review-captions-btn training-review-open-btn" data-open-training-review>Adjust buckets</button></div>';
+  return '<div class="training-review-summary"><div class="training-review-summary-copy"><strong>Bucket plan <span class="training-review-saved">' + escapeHtml(trainingWorkspaceState.reviewSaveStatus === 'saving' ? 'Saving…' : trainingWorkspaceState.reviewSaveStatus === 'error' ? 'Save error' : 'Saved') + '</span></strong><span' + (custom || blockers.length || (payload.warnings || []).length ? ' class="training-review-summary-warning"' : '') + '>' + escapeHtml(note) + '</span></div><div class="training-review-summary-actions">' + (custom ? '' : '<button type="button" class="training-review-reset-defaults" data-review-reset-buckets>Reset Buckets</button>') + '<button type="button" class="review-captions-btn training-review-open-btn" data-open-training-review>Adjust buckets</button></div></div>';
 }
 
 function closeTrainingReviewModal() {
@@ -640,10 +640,6 @@ function bindTrainingReviewModal(payload) {
     var aspect = reviewActiveAspect(payload, view);
     if (stepReviewBucket(payload.plan, payload.ladders || {}, view, aspect, target, -1)) saveTrainingReview({ plan: payload.plan });
   }; });
-  modal.querySelectorAll('[data-review-reset-buckets]').forEach(function (button) { button.onclick = function () {
-    if (!window.confirm('Reset bucket selections to WebCap defaults?')) return;
-    resetTrainingReviewBuckets().then(function () { renderTrainingReview(); }).catch(function (err) { setStatus('Could not reset bucket selections: ' + String(err.message || err)); });
-  }; });
   modal.querySelectorAll('[data-review-open-dataset]').forEach(function (button) { button.onclick = function () { closeTrainingReviewModal(); selectTrainingWorkspaceConfigFile(button.getAttribute('data-review-open-dataset')); }; });
   modal.querySelectorAll('[data-review-reset-dataset]').forEach(function (button) { button.onclick = function () {
     var fileName = button.getAttribute('data-review-reset-dataset');
@@ -677,6 +673,11 @@ function renderTrainingReview() {
   renderTrainingStartingPointControls(payload);
   els.review.innerHTML = trainingReviewSummaryHtml(payload);
   els.review.querySelector('[data-open-training-review]').onclick = openTrainingReviewModal;
+  var resetBuckets = els.review.querySelector('[data-review-reset-buckets]');
+  if (resetBuckets) resetBuckets.onclick = function () {
+    if (!window.confirm('Reset all bucket selections to WebCap defaults?')) return;
+    resetTrainingReviewBuckets().then(function () { renderTrainingReview(); }).catch(function (err) { setStatus('Could not reset bucket selections: ' + String(err.message || err)); });
+  };
   els.reviewModalContent.innerHTML = reviewModalHtml(payload);
   bindTrainingReviewModal(payload);
   reviewTrainButtonState(payload);

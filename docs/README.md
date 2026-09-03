@@ -59,6 +59,7 @@ These are useful product notes, not authoritative implementation references:
 - `docs/h3_calibration_resume_settings_plan.md` - focused plan for continuing partial H3 calibration evidence and moving its controls into Training Settings
 - `docs/training_run_identity.md` - proposed run names, captured-config visibility, and experiment lineage
 - `docs/training_artifact_cleanup.md` - visible training action layout and clean-break rollout
+- `docs/stable_set_training_layout_plan.md` - tentative proposal for alphabetical set roots and self-contained training runs
 - `wildcard_template.md` - parked wildcard-template-builder concept
 
 ## Historical / Superseded

@@ -184,6 +184,12 @@ Only alter the signal/termination implementation if this validation demonstrates
 5. Remove the old media context-menu action.
 6. Run one stop/continue smoke campaign on the training machine before relying on the published calibration.
 
+## Future Scope Beyond H3
+
+This plan is scoped to the existing H3 calibration because that is the currently implemented probe, but calibration should not become permanently H3-only by design. A later pass should allow the same campaign, evidence, stop/continue, source-selection, and Settings patterns to support additional training architectures or model families where shape calibration provides real workflow value.
+
+That future work should keep each calibration type explicit: its own probe plan, compatibility rules, safety thresholds, published settings, and versioned evidence. It must not treat H3 measurements as valid evidence for another architecture, or silently generalize H3-specific limits to a different model.
+
 ## Non-Goals
 
 - Adding calibration to the managed training queue or history.

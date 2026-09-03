@@ -5,7 +5,8 @@ import pytest
 from PIL import Image
 
 from tool.server import config as app_config
-from tool.server import training_bundle, training_history, training_runner, training_review
+from tool.server import app as app_module
+from tool.server import run_ops, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action
 from tool.server.training_config_files import reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, profile_for_mode
@@ -287,6 +288,63 @@ def test_custom_resume_creates_a_new_logical_run_without_writing_beside_source(t
     assert Path(job["outputRoot"]) == action_root / "output" / "minimax-h3"
     assert job["resumeFromCheckpoint"] == str(resumed_run) and job["outputRunPath"] == ""
     assert not (resumed_run.parent / ".webcap-captures").exists()
+
+
+def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    managed_action, managed_data = allocate_action(
+        folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",)
+    )
+    managed_run = managed_action / "output" / "minimax-h3" / "managed-run"
+    (managed_run / "global_step1").mkdir(parents=True)
+    (managed_run / "latest").write_text("global_step1\n", encoding="utf-8")
+    (managed_run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    captured = tmp_path / "manual-capture"
+    captured.mkdir()
+
+    def fake_bundle(_folder, _action, *_args, **_kwargs):
+        return {
+            "path": captured,
+            "inputPath": captured,
+            "capturedItemCount": 1,
+            "summary": {},
+            "artifacts": {"h3Config": folder / "config.h3.toml"},
+        }
+
+    monkeypatch.setattr(run_ops, "materialize_training_bundle", fake_bundle)
+    monkeypatch.setattr(run_ops, "training_runtime_settings", lambda _settings: {
+        "cwd": "/pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
+    })
+    monkeypatch.setattr(run_ops, "_to_wsl_path", lambda path, _distribution="": "/wsl" + Path(path).as_posix())
+    monkeypatch.setattr(run_ops, "stream_with_context", lambda generator: generator)
+
+    client = app_module.app.test_client()
+    request = {
+        "folder": "sets/subject", "stages": "h3", "resumeStage": "h3",
+        "profileId": MINIMAX_H3_PROFILE_ID, "runId": "train", "selected_media": ["one.png"],
+    }
+    managed_response = client.post("/fs/train_run", json={
+        **request, "resumeActionId": managed_data["actionId"], "resumeOutputId": "output/minimax-h3/managed-run",
+    })
+    assert managed_response.status_code == 200
+    managed_text = managed_response.data.decode("utf-8")
+    assert "--resume_from_checkpoint /wsl" + managed_run.as_posix() in managed_text
+
+    custom = tmp_path / "external" / "custom-run"
+    (custom / "global_step1").mkdir(parents=True)
+    (custom / "latest").write_text("global_step1\n", encoding="utf-8")
+    (custom / "config.h3.toml").write_text(
+        (folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    custom_response = client.post("/fs/train_run", json={**request, "resumeFromCheckpoint": str(custom)})
+    fresh_response = client.post("/fs/train_run", json=request)
+    assert custom_response.status_code == fresh_response.status_code == 200
+    custom_text = custom_response.data.decode("utf-8")
+    fresh_text = fresh_response.data.decode("utf-8")
+    assert "--resume_from_checkpoint /wsl" + custom.as_posix() in custom_text
+    assert "--resume_from_checkpoint" not in fresh_text
 
 
 def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_path, monkeypatch):

@@ -141,6 +141,8 @@ function runTrainCommandPreviewForCurrentFolder(options) {
         mode: options && options.mode ? options.mode : getTrainingWorkspaceSelectedProfile(state.folder),
         resumeFromCheckpoint: options && options.resumeFromCheckpoint ? options.resumeFromCheckpoint : '',
         resumeStage: options && options.resumeStage ? options.resumeStage : '',
+        resumeActionId: options && options.resumeActionId ? options.resumeActionId : '',
+        resumeOutputId: options && options.resumeOutputId ? options.resumeOutputId : '',
         runName: options && options.runName ? options.runName : '',
         selected_media: selectedMedia,
         total_media_count: Array.isArray(state.items) ? state.items.length : 0,

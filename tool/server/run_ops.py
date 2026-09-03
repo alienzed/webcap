@@ -4,7 +4,7 @@ from flask import Response, stream_with_context
 
 from . import config as app_config
 from .training_action import action_id_for_root, allocate_action, update_action
-from .training_history import validate_resumable_run_for_path
+from .training_history import resolve_managed_resume, validate_resumable_run_for_path
 from .training_profiles import config_for_stage, normalize_mode, profile_run
 from .training_bundle import materialize_training_bundle
 from .training_commands import build_h3_command_plan, build_training_command_plan
@@ -21,6 +21,8 @@ def train_run_response(
     stages="",
     resume_from_checkpoint="",
     resume_stage="",
+    resume_action_id="",
+    resume_output_id="",
     run_name="",
     profile_id="",
     run_id="",
@@ -50,7 +52,15 @@ def train_run_response(
         selected_mode = normalize_mode(mode)
         stages = selected_run["stages"][0]
         stage_names = (stages,)
-        if resume_from_checkpoint:
+        if bool(resume_action_id) != bool(resume_output_id):
+            return Response("[ERROR] A managed resume requires both an action and output selection.\n", status=400, mimetype="text/plain")
+        if resume_from_checkpoint and resume_output_id:
+            return Response("[ERROR] Choose either a managed checkpoint or a filesystem checkpoint, not both.\n", status=400, mimetype="text/plain")
+        if resume_output_id:
+            resolved = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage or stages)
+            resume_from_checkpoint = str(resolved["runPath"])
+            resume_stage = str(resolved["stage"])
+        elif resume_from_checkpoint:
             validate_resumable_run_for_path(folder_path, resume_stage or stages, resume_from_checkpoint)
         review = None
         initializer = None
@@ -110,17 +120,20 @@ def train_run_response(
         if not diffusion_pipe_wsl:
             diffusion_pipe_wsl = "<set training.diffusion_pipe_wsl>"
 
+        resume_command_path = resume_from_checkpoint if str(resume_from_checkpoint).startswith("/") else (
+            _to_wsl_path(Path(resume_from_checkpoint), runtime_settings["wslDistribution"]) if resume_from_checkpoint else ""
+        )
         command_plan = build_training_command_plan(
             hi_wsl,
             lo_wsl,
             build_training_launcher(runtime_settings),
-            resume_from_checkpoint,
+            resume_command_path,
             resume_stage,
         )
         h3_command_plan = build_h3_command_plan(
             lo_wsl,
             build_training_launcher(runtime_settings),
-            resume_from_checkpoint if stages == "h3" and resume_stage == "h3" else "",
+            resume_command_path if stages == "h3" and resume_stage == "h3" else "",
         ) if stages == "h3" else None
         if stages == "hi":
             handoff_cmd = command_plan["hiCommand"]

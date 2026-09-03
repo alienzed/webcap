@@ -453,12 +453,14 @@ def train_run_route():
     folder = (data.get("folder") or "").strip()
     stages = str(data.get("stages") or "").strip().lower()
     resume_from_checkpoint = str(data.get("resumeFromCheckpoint") or "").strip()
+    resume_action_id = str(data.get("resumeActionId") or "").strip()
+    resume_output_id = str(data.get("resumeOutputId") or "").strip()
     resume_stage = str(data.get("resumeStage") or (stages if stages in ("hi", "lo") else "lo")).strip().lower()
     if resume_from_checkpoint and resume_stage not in ("hi", "lo", "krea2", "wan21", "h3"):
         return Response("[ERROR] Resume stage must be hi, lo, krea2, wan21, or h3.\n", status=400, mimetype="text/plain")
     return train_run_response(
         folder, stages=stages, resume_from_checkpoint=resume_from_checkpoint,
-        resume_stage=resume_stage, run_name=data.get("runName") or "",
+        resume_stage=resume_stage, resume_action_id=resume_action_id, resume_output_id=resume_output_id, run_name=data.get("runName") or "",
         profile_id=data.get("profileId") or "", run_id=data.get("runId") or "",
         mode=data.get("mode") or "normal", selected_media=data.get("selected_media"),
         fallback_captions=data.get("fallback_captions"), selection_criteria=data.get("selection_criteria"),

@@ -302,7 +302,7 @@ def test_custom_resume_creates_a_new_logical_run_without_writing_beside_source(t
     action_root = Path(job["actionPath"])
     capture = Path(job["inputPath"])
     assert capture.parent == action_root / "captures"
-    assert Path(job["outputRoot"]) == action_root / "output" / "minimax-h3"
+    assert Path(job["outputRoot"]) == action_root / "output"
     assert job["resumeFromCheckpoint"] == str(resumed_run) and job["outputRunPath"] == ""
     assert not (resumed_run.parent / ".webcap-captures").exists()
 
@@ -314,7 +314,7 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     managed_action, managed_data = allocate_action(
         folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",)
     )
-    managed_run = managed_action / "output" / "minimax-h3" / "managed-run"
+    managed_run = managed_action / "output" / "managed-run"
     (managed_run / "global_step1").mkdir(parents=True)
     (managed_run / "latest").write_text("global_step1\n", encoding="utf-8")
     (managed_run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
@@ -344,7 +344,7 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
         "profileId": MINIMAX_H3_PROFILE_ID, "runId": "train", "selected_media": ["one.png"],
     }
     managed_response = client.post("/fs/train_run", json={
-        **request, "resumeActionId": managed_data["actionId"], "resumeOutputId": "output/minimax-h3/managed-run",
+        **request, "resumeActionId": managed_data["actionId"], "resumeOutputId": "output/managed-run",
     })
     assert managed_response.status_code == 200
     managed_text = managed_response.data.decode("utf-8")
@@ -374,8 +374,7 @@ def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_pat
     folder = _set(tmp_path)
     ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
     action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
-    meta = config_for_stage(MINIMAX_H3_PROFILE_ID, "h3")
-    run = action / "output" / meta["outputSlug"] / "20260831-120000"
+    run = action / "output" / "20260831-120000"
     (run / "global_step1").mkdir(parents=True)
     (run / "latest").write_text("global_step1\n", encoding="utf-8")
     (run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")

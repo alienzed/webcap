@@ -88,8 +88,7 @@ def train_run_response(
             action_root, action = allocate_action(folder_path, selected_profile, selected_mode, stage_names, run_name)
         output_dirs = {}
         for stage in stage_names:
-            meta = config_for_stage(selected_profile["id"], stage, selected_mode)
-            stage_output = action_root / "output" / meta["outputSlug"]
+            stage_output = action_root / "output"
             stage_output.mkdir(parents=True, exist_ok=True)
             output_dir = _to_wsl_path(stage_output, runtime_settings["wslDistribution"])
             output_dirs[stage] = output_dir

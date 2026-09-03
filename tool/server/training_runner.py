@@ -1575,8 +1575,7 @@ def start_response(
         else:
             action_root, action = allocate_action(folder_path, selected_profile, selected_mode, (stages,), run_name)
         distribution = _training_settings()["wslDistribution"]
-        meta = config_for_stage(selected_profile["id"], stages, selected_mode)
-        output_root = action_root / "output" / meta["outputSlug"]
+        output_root = action_root / "output"
         output_root.mkdir(parents=True, exist_ok=True)
         output_dir = _to_wsl_path(output_root, distribution)
         if not reuse_capture:

@@ -231,6 +231,52 @@ nelly--4a8d91b72c3f
 
 Do not add a new `set.json` or registry. The slug/hash identity, its allocated filesystem prefix, and each logical run's existing `action.json` are enough.
 
+
+### 5.4 Deferred alternative: pointer-first set-root identity
+
+A pointer-based alternative to the visible path hash was considered but not implemented.
+
+The proposed layout was:
+
+    <set>/
+      .webcap_training_root
+
+    output/runs/
+      068-dlu/
+        .webcap-set
+        001-minimax-h3/
+        ...
+
+The set-side `.webcap_training_root` would contain the assigned managed root name:
+
+    068-dlu
+
+The training-root `.webcap-set` marker would contain the set's `FS_ROOT`-relative path.
+
+Lookup would be pointer-first:
+
+1. If `.webcap_training_root` exists, read it and resolve that root directly.
+2. If the pointer exists but is unreadable or invalid, fail loudly. Do not fall back or allocate another root.
+3. If the pointer is genuinely absent, optionally inspect only the immediate children of `output/runs` for a `.webcap-set` marker matching the current set path.
+4. If exactly one reverse marker matches, that root may be reused and the set-side pointer restored.
+5. If no match exists, allocate a new set root.
+6. If multiple roots claim the same set path, fail loudly.
+
+This has several useful properties:
+
+- the visible root can remain human-readable (`068-dlu`) with no opaque hash;
+- the normal lookup path is direct and does not require scanning;
+- because the pointer lives inside the set, a normal filesystem rename or move carries the managed-root association with it;
+- temporary permission problems on the pointer fail visibly instead of silently creating a second root;
+- accidental loss of the set-side pointer can potentially be repaired from the reverse marker while the set path remains unchanged;
+- no central registry, database, background reconciliation, or broad recursive discovery is required.
+
+The reverse marker is secondary metadata, not the primary identity mechanism. Its purpose is limited recovery from a missing pointer; it should never override a valid set-side pointer.
+
+This design was deferred because it introduces two small pieces of persistent association state and corresponding consistency rules. The current path-derived hash requires less code and no stored association state. Since training run trees are generally short-lived and Custom Resume remains available when managed association is lost, that additional complexity is not currently justified.
+
+If managed set-root loss becomes a real workflow problem, this pointer-first design is the preferred alternative to adding broader filesystem rediscovery or a central registry.
+
 ---
 
 ## 6. Logical-run allocation and action identity
@@ -310,7 +356,7 @@ Fresh training is straightforward:
 3. set the captured config's effective output directory to:
 
 ```text
-<logical-run>/output/<output-slug>
+<logical-run>/output
 ```
 
 4. materialize the capture beneath:
@@ -342,7 +388,7 @@ The UI sends the existing pair:
 ```json
 {
   "resumeActionId": "068-nelly--4a8d91b72c3f/002-minimax-h3--more-detail",
-  "resumeOutputId": "output/minimax-h3/20260903_14-22-10"
+  "resumeOutputId": "output/20260903_14-22-10"
 }
 ```
 
@@ -361,7 +407,7 @@ Managed Resume reuses the selected logical-run root:
 - same logical-run name and `actionId`;
 - a new capture beneath that action;
 - a new job beneath that action;
-- new Diffusion Pipe output beneath the same action's `output/<output-slug>` branch.
+- new Diffusion Pipe output directly beneath the same action's `output/` directory.
 
 The selected checkpoint is read in place. It is not copied or moved.
 
@@ -383,7 +429,7 @@ Instead:
 2. verify `action.folder` is the current set's `FS_ROOT`-relative path;
 3. verify the selected stage belongs to the action;
 4. validate `resumeOutputId` as a safe relative path;
-5. require it to be beneath the expected `output/<output-slug>` branch for the action's profile/mode/stage;
+5. require it to be directly beneath the action's `output/` directory;
 6. resolve the real trainer-run directory directly;
 7. run the normal direct checkpoint validation described below.
 
@@ -435,7 +481,7 @@ FS_ROOT/output/runs/068-nelly--4a8d91b72c3f/004-minimax-h3--resume-old-good/
   action.json
   captures/...
   jobs/...
-  output/minimax-h3/<new-diffusion-pipe-run>/...
+  output/<new-diffusion-pipe-run>/...
 ```
 
 The custom checkpoint is never copied, moved, renamed, adopted, or written into.
@@ -445,7 +491,7 @@ The custom checkpoint is never copied, moved, renamed, adopted, or written into.
 For custom Resume, the captured config's `output_dir` must be the new action's normal output branch:
 
 ```text
-<new-logical-run>/output/<output-slug>
+<new-logical-run>/output
 ```
 
 Do **not** set output to the parent of the external checkpoint.
@@ -511,7 +557,7 @@ For the current set:
 2. if the set root does not exist, return no managed runs;
 3. inspect only immediate logical-run children of that set root;
 4. read their version-2 `action.json` manifests;
-5. for actions that include the selected stage, derive the expected `output/<output-slug>` branch;
+5. for actions that include the selected stage, inspect its `output/` directory;
 6. inspect only immediate trainer-run children of that branch;
 7. validate candidate checkpoint evidence.
 
@@ -564,7 +610,7 @@ Stop generating the 24-character hash for new managed candidates.
 Use the trainer-run path relative to the action root, for example:
 
 ```text
-output/minimax-h3/20260903_14-22-10
+output/20260903_14-22-10
 ```
 
 The backend validates it as an action-contained relative path before use.
@@ -762,7 +808,7 @@ Keep the existing route families and payload fields.
 ```json
 {
   "resumeActionId": "<set-root>/<logical-run>",
-  "resumeOutputId": "output/<output-slug>/<trainer-run>",
+  "resumeOutputId": "output/<trainer-run>",
   "resumeFromCheckpoint": ""
 }
 ```
@@ -882,7 +928,7 @@ Adjust launch semantics:
 - validate custom Resume directly before action/capture/output allocation;
 - managed Resume reuses its action root;
 - custom Resume allocates a fresh current-set logical run;
-- all new output roots are `action_root/output/<output-slug>`;
+- all new output roots are `action_root/output`;
 - remove custom `.webcap-captures` placement;
 - all ordinary captures stay under `action_root/captures`;
 - keep `resumeFromCheckpoint` as source evidence;

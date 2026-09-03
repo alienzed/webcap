@@ -295,8 +295,7 @@ def discover_runs(folder_path, stage=""):
         if str(action.get("folder") or "") != _folder_key(folder) or stage not in action.get("requestedStages", ()):
             continue
         try:
-            meta = config_for_stage(str(action.get("profileId") or ""), stage, str(action.get("mode") or "normal"))
-            branch = action_root / "output" / meta["outputSlug"]
+            branch = action_root / "output"
             if not branch.is_dir() or branch.is_symlink():
                 continue
             for entry in branch.iterdir():
@@ -346,11 +345,8 @@ def resolve_managed_resume(folder_path, action_id, output_id, stage):
     if selected_stage not in action.get("requestedStages", ()):
         raise ValueError("The selected stage is not part of that training action.")
     output = PurePosixPath(str(output_id or ""))
-    if not output_id or output.is_absolute() or ".." in output.parts or len(output.parts) != 3 or output.parts[0] != "output":
+    if not output_id or output.is_absolute() or ".." in output.parts or len(output.parts) != 2 or output.parts[0] != "output":
         raise ValueError("Managed training output ID is invalid.")
-    meta = config_for_stage(str(action.get("profileId") or ""), selected_stage, str(action.get("mode") or "normal"))
-    if output.parts[1] != meta["outputSlug"]:
-        raise ValueError("The selected output does not belong to the requested stage.")
     run_dir = root.joinpath(*output.parts)
     if not run_dir.is_dir() or run_dir.is_symlink():
         raise ValueError("The selected managed checkpoint is unavailable or no longer valid.")

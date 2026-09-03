@@ -43,30 +43,30 @@ def test_managed_discovery_is_read_only_and_duplicate_set_identity_fails_loudly(
 
 def test_discovery_is_current_set_shallow_and_uses_relative_output_ids(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path); folder = _set(tmp_path); action, data = _action(folder)
-    source = folder / "config.h3.toml"; _write_h3_config(source, action / "output" / "minimax-h3")
-    run = _checkpoint(action / "output" / "minimax-h3", "managed-run", source.read_text(encoding="utf-8"))
+    source = folder / "config.h3.toml"; _write_h3_config(source, action / "output")
+    run = _checkpoint(action / "output", "managed-run", source.read_text(encoding="utf-8"))
     other = _set(tmp_path, "other"); other_action, _ = _action(other)
-    _checkpoint(other_action / "output" / "minimax-h3", "other-run", source.read_text(encoding="utf-8"))
+    _checkpoint(other_action / "output", "other-run", source.read_text(encoding="utf-8"))
     _checkpoint(tmp_path / "output" / "runs" / "099-old-flat" / "output", "old-run", source.read_text(encoding="utf-8"))
     _checkpoint(action / "captures" / "junk", "nested-run", source.read_text(encoding="utf-8"))
     runs = training_history.discover_runs(folder, "h3")
     assert [item["path"] for item in runs] == [str(run)]
-    assert runs[0]["resumeActionId"] == data["actionId"] and runs[0]["resumeOutputId"] == "output/minimax-h3/managed-run" and runs[0]["matchType"] == "exact"
+    assert runs[0]["resumeActionId"] == data["actionId"] and runs[0]["resumeOutputId"] == "output/managed-run" and runs[0]["matchType"] == "exact"
 
 def test_direct_custom_validation_and_managed_resolution(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path); folder = _set(tmp_path); source = folder / "config.h3.toml"; _write_h3_config(source, tmp_path / "configured-out")
     external = _checkpoint(tmp_path / "external", "run", source.read_text(encoding="utf-8").replace("epochs = 3", "epochs = 5"))
     assert training_history.validate_resumable_run_for_path(folder, "h3", str(external))["matchType"] == "compatible"
     with pytest.raises(ValueError): training_history.validate_resumable_run_for_path(folder, "h3", str(tmp_path / "missing"))
-    action, data = _action(folder); managed = _checkpoint(action / "output" / "minimax-h3", "run", source.read_text(encoding="utf-8"))
-    assert training_history.resolve_managed_resume(folder, data["actionId"], "output/minimax-h3/run", "h3")["runPath"] == managed
+    action, data = _action(folder); managed = _checkpoint(action / "output", "run", source.read_text(encoding="utf-8"))
+    assert training_history.resolve_managed_resume(folder, data["actionId"], "output/run", "h3")["runPath"] == managed
     with pytest.raises(ValueError): training_history.resolve_managed_resume(folder, data["actionId"], "../run", "h3")
     with pytest.raises(ValueError): training_history.resolve_managed_resume(folder, data["actionId"], "output/wrong/run", "h3")
 
 def test_discovery_excludes_wrong_model_invalid_latest_and_sorts(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path); folder = _set(tmp_path); action, _ = _action(folder)
-    source = folder / "config.h3.toml"; _write_h3_config(source, action / "output" / "minimax-h3")
-    older = _checkpoint(action / "output" / "minimax-h3", "older", source.read_text(encoding="utf-8")); newer = _checkpoint(action / "output" / "minimax-h3", "newer", source.read_text(encoding="utf-8").replace("epochs = 3", "epochs = 5"))
-    _checkpoint(action / "output" / "minimax-h3", "wrong", source.read_text(encoding="utf-8").replace("minimax-h3", "other")); _checkpoint(action / "output" / "minimax-h3", "bad", source.read_text(encoding="utf-8"), "not-a-step")
+    source = folder / "config.h3.toml"; _write_h3_config(source, action / "output")
+    older = _checkpoint(action / "output", "older", source.read_text(encoding="utf-8")); newer = _checkpoint(action / "output", "newer", source.read_text(encoding="utf-8").replace("epochs = 3", "epochs = 5"))
+    _checkpoint(action / "output", "wrong", source.read_text(encoding="utf-8").replace("minimax-h3", "other")); _checkpoint(action / "output", "bad", source.read_text(encoding="utf-8"), "not-a-step")
     os.utime(older, (100, 100)); os.utime(newer, (200, 200)); runs = training_history.discover_runs(folder, "h3")
     assert [run["name"] for run in runs] == ["newer", "older"] and runs[0]["matchType"] == "compatible"

@@ -291,6 +291,118 @@ function reviewProjectedTarget(view, row, targets) {
   return ordered.filter(function (target) { return Number(row.width) >= target[0] && Number(row.height) >= target[1]; })[0] || ordered[ordered.length - 1] || null;
 }
 
+function reviewEmptyImpactCounts() {
+  return { down20: 0, down: 0, near: 0, up: 0, up20: 0 };
+}
+
+function reviewImpactBand(scaleRatio) {
+  if (scaleRatio < 0.80) return 'down20';
+  if (scaleRatio < 0.95) return 'down';
+  if (scaleRatio <= 1.05) return 'near';
+  if (scaleRatio <= 1.20) return 'up';
+  return 'up20';
+}
+
+function reviewDistributionGroup(rows, targets, view, prior) {
+  var assignedCounts = targets.map(function () { return 0; });
+  var impact = reviewEmptyImpactCounts();
+  var native = (rows || []).map(function (source) {
+    var row = Object.assign({}, source);
+    var target = row.eligible ? reviewProjectedTarget(view, row, targets) : null;
+    var nativeShortEdge = Number(row.nativeShortEdge || row.edge || Math.min(Number(row.width), Number(row.height)) || 0);
+    var scaleRatio = target && nativeShortEdge ? Math.min(Number(target[0]), Number(target[1])) / nativeShortEdge : 1;
+    var impactBand = reviewImpactBand(scaleRatio);
+    row.edge = nativeShortEdge;
+    row.nativeShortEdge = nativeShortEdge;
+    row.target = target ? [Number(target[0]), Number(target[1])] : [];
+    row.assignedTarget = row.target.slice();
+    row.scaleRatio = scaleRatio;
+    row.impactBand = impactBand;
+    if (target) {
+      var index = targets.findIndex(function (candidate) { return sameReviewBucket(candidate, target); });
+      if (index >= 0) assignedCounts[index] += 1;
+      impact[impactBand] += 1;
+    }
+    return row;
+  });
+  var group = Object.assign({}, prior || {});
+  group.count = native.length;
+  group.eligibleCount = native.filter(function (row) { return row.eligible; }).length;
+  group.native = native;
+  group.targets = targets.map(function (target, index) {
+    return { shape: [Number(target[0]), Number(target[1])], assignedCount: assignedCounts[index] };
+  });
+  group.impact = impact;
+  return group;
+}
+
+function reviewAssignmentWarnings(distribution, existingWarnings) {
+  var warnings = (existingWarnings || []).filter(function (warning) {
+    return warning.code !== 'substantial_upscale' && warning.code !== 'small_bucket';
+  });
+  var views = [{ view: 'images', groups: distribution.images || {} }];
+  Object.keys(distribution.videos || {}).forEach(function (role) {
+    views.push({ view: role, groups: distribution.videos[role] || {} });
+  });
+  views.forEach(function (entry) {
+    Object.keys(entry.groups).forEach(function (aspect) {
+      var group = entry.groups[aspect] || {};
+      var eligible = (group.native || []).filter(function (row) { return row.eligible && (row.target || []).length; });
+      var substantialUpscale = eligible.filter(function (row) { return row.impactBand === 'up20'; }).length;
+      if (substantialUpscale) {
+        var label = entry.view === 'images' ? 'image' : entry.view + ' video';
+        warnings.push({
+          code: 'substantial_upscale', view: entry.view, ar: aspect,
+          message: substantialUpscale + ' of ' + eligible.length + ' ' + label + ' item(s) in ' + formatReviewAspect(aspect) + ' need more than 20% enlargement.', files: []
+        });
+      }
+      if (eligible.length >= 8) (group.targets || []).forEach(function (target) {
+        var assigned = Number(target.assignedCount || 0);
+        if (!assigned || assigned > Math.max(2, Math.floor(eligible.length * 0.10))) return;
+        var shape = target.shape || [];
+        warnings.push({
+          code: 'small_bucket', view: entry.view, ar: aspect,
+          message: shape[0] + '×' + shape[1] + ' receives only ' + assigned + ' item(s) in ' + formatReviewAspect(aspect) + '.', files: []
+        });
+      });
+    });
+  });
+  return warnings;
+}
+
+function recomputeTrainingReviewDistribution(payload) {
+  var distribution = payload.distribution || { images: {}, videos: {}, impact: { images: {}, videos: {} } };
+  distribution.images = distribution.images || {};
+  distribution.videos = distribution.videos || {};
+  var impact = { images: reviewEmptyImpactCounts(), videos: {} };
+  Object.keys(distribution.images).forEach(function (aspect) {
+    var prior = distribution.images[aspect] || {};
+    var group = reviewDistributionGroup(prior.native, reviewSelectedBuckets(payload.plan || {}, 'images', aspect), 'images', prior);
+    distribution.images[aspect] = group;
+    TRAINING_REVIEW_IMPACT_BANDS.forEach(function (band) { impact.images[band[0]] += Number(group.impact[band[0]] || 0); });
+  });
+  Object.keys(distribution.videos).forEach(function (roleId) {
+    impact.videos[roleId] = reviewEmptyImpactCounts();
+    Object.keys(distribution.videos[roleId] || {}).forEach(function (aspect) {
+      var prior = distribution.videos[roleId][aspect] || {};
+      var group = reviewDistributionGroup(prior.native, reviewSelectedBuckets(payload.plan || {}, roleId, aspect), roleId, prior);
+      distribution.videos[roleId][aspect] = group;
+      TRAINING_REVIEW_IMPACT_BANDS.forEach(function (band) { impact.videos[roleId][band[0]] += Number(group.impact[band[0]] || 0); });
+    });
+  });
+  distribution.impact = impact;
+  payload.distribution = distribution;
+  payload.warnings = reviewAssignmentWarnings(distribution, payload.warnings);
+}
+
+function updateTrainingReviewDraft(change) {
+  var draft = trainingWorkspaceState.reviewDraft;
+  if (!draft || !change(draft.plan)) return;
+  trainingWorkspaceState.reviewDraftDirty = true;
+  recomputeTrainingReviewDistribution(draft);
+  renderTrainingReview();
+}
+
 function reviewCandidateImpactTitle(payload, view, aspect, selected, candidate) {
   var changed = 0;
   var closer = 0;
@@ -580,7 +692,10 @@ function trainingReviewSummaryHtml(payload) {
 
 function closeTrainingReviewModal() {
   var els = getTrainingWorkspaceEls();
+  if (trainingWorkspaceState.reviewSavePending) return;
   trainingWorkspaceState.reviewModalOpen = false;
+  trainingWorkspaceState.reviewDraft = null;
+  trainingWorkspaceState.reviewDraftDirty = false;
   els.reviewModal.classList.add('hidden');
   els.reviewModal.setAttribute('aria-hidden', 'true');
   var button = els.review.querySelector('[data-open-training-review]');
@@ -589,13 +704,53 @@ function closeTrainingReviewModal() {
 
 function openTrainingReviewModal() {
   var els = getTrainingWorkspaceEls();
+  if (!trainingWorkspaceState.review || trainingWorkspaceState.reviewModalOpen) return;
+  trainingWorkspaceState.reviewDraft = JSON.parse(JSON.stringify(trainingWorkspaceState.review));
+  trainingWorkspaceState.reviewDraftDirty = false;
   trainingWorkspaceState.reviewModalOpen = true;
   els.reviewModal.classList.remove('hidden');
   els.reviewModal.setAttribute('aria-hidden', 'false');
   els.reviewModalClose.onclick = closeTrainingReviewModal;
-  els.reviewModalDone.onclick = closeTrainingReviewModal;
+  els.reviewModalDone.onclick = saveTrainingReviewDraft;
   renderTrainingReview();
   els.reviewModalClose.focus();
+}
+
+function saveTrainingReviewDraft() {
+  var draft = trainingWorkspaceState.reviewDraft;
+  if (!draft || !trainingWorkspaceState.reviewDraftDirty) {
+    closeTrainingReviewModal();
+    renderTrainingReview();
+    return;
+  }
+  if (trainingWorkspaceState.reviewSavePending) return;
+  var folder = state.folder;
+  var request = trainingReviewPayload();
+  request.plan = JSON.parse(JSON.stringify(draft.plan));
+  trainingWorkspaceState.reviewSavePending = 1;
+  trainingWorkspaceState.reviewSaveStatus = 'saving';
+  renderTrainingReviewSaveStatus();
+  var els = getTrainingWorkspaceEls();
+  if (els.reviewModalDone) els.reviewModalDone.disabled = true;
+  trainingReviewRequest('/fs/training_review/update', request).then(function (payload) {
+    if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
+    trainingWorkspaceState.review = payload;
+    trainingWorkspaceState.reviewDraft = null;
+    trainingWorkspaceState.reviewDraftDirty = false;
+    trainingWorkspaceState.reviewModalOpen = false;
+    els.reviewModal.classList.add('hidden');
+    els.reviewModal.setAttribute('aria-hidden', 'true');
+    trainingWorkspaceState.reviewSaveStatus = 'saved';
+    renderTrainingReview();
+  }).catch(function (err) {
+    if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
+    trainingWorkspaceState.reviewSaveStatus = 'error';
+    setStatus('Could not save Training Review: ' + String(err && err.message ? err.message : err));
+    renderTrainingReview();
+  }).finally(function () {
+    trainingWorkspaceState.reviewSavePending = 0;
+    renderTrainingReview();
+  });
 }
 
 function bindTrainingReviewModal(payload) {
@@ -608,25 +763,28 @@ function bindTrainingReviewModal(payload) {
     var view = reviewActiveView(payload);
     var aspect = reviewActiveAspect(payload, view);
     var selected = hasReviewBucket(payload.plan, view, aspect, target);
-    if (setReviewBucket(payload.plan, view, aspect, target, !selected)) saveTrainingReview({ plan: payload.plan });
+    updateTrainingReviewDraft(function (plan) { return setReviewBucket(plan, view, aspect, target, !selected); });
   }; });
   modal.querySelectorAll('[data-review-step]').forEach(function (button) { button.onclick = function () {
     var target = String(button.getAttribute('data-review-target') || '').split(',').map(Number);
     var view = reviewActiveView(payload);
     var aspect = reviewActiveAspect(payload, view);
-    if (stepReviewBucket(payload.plan, payload.ladders || {}, view, aspect, target, Number(button.getAttribute('data-review-step')))) saveTrainingReview({ plan: payload.plan });
+    updateTrainingReviewDraft(function (plan) { return stepReviewBucket(plan, payload.ladders || {}, view, aspect, target, Number(button.getAttribute('data-review-step'))); });
   }; });
   modal.querySelectorAll('[data-review-role-enabled]').forEach(function (input) { input.onchange = function () {
-    var role = reviewRole(payload.plan, input.getAttribute('data-review-role-enabled'));
-    role.enabled = input.checked;
-    if (!input.checked && trainingWorkspaceState.reviewMediaView === role.id) {
-      trainingWorkspaceState.reviewMediaView = reviewAvailableViews(payload).filter(function (candidate) {
-        var candidateRole = candidate === 'images' ? null : reviewRole(payload.plan, candidate);
-        return candidate !== role.id && (!candidateRole || candidateRole.enabled);
-      })[0] || 'images';
-      trainingWorkspaceState.reviewAspect = '';
-    }
-    saveTrainingReview({ plan: payload.plan });
+    var roleId = input.getAttribute('data-review-role-enabled');
+    updateTrainingReviewDraft(function (plan) {
+      var role = reviewRole(plan, roleId);
+      role.enabled = input.checked;
+      if (!input.checked && trainingWorkspaceState.reviewMediaView === role.id) {
+        trainingWorkspaceState.reviewMediaView = reviewAvailableViews({ plan: plan, distribution: payload.distribution }).filter(function (candidate) {
+          var candidateRole = candidate === 'images' ? null : reviewRole(plan, candidate);
+          return candidate !== role.id && (!candidateRole || candidateRole.enabled);
+        })[0] || 'images';
+        trainingWorkspaceState.reviewAspect = '';
+      }
+      return true;
+    });
   }; });
   modal.querySelectorAll('[data-review-show-upscale]').forEach(function (button) { button.onclick = function () {
     var view = reviewActiveView(payload);
@@ -638,7 +796,7 @@ function bindTrainingReviewModal(payload) {
     var target = String(button.getAttribute('data-review-lower-upscale-target') || '').split(',').map(Number);
     var view = reviewActiveView(payload);
     var aspect = reviewActiveAspect(payload, view);
-    if (stepReviewBucket(payload.plan, payload.ladders || {}, view, aspect, target, -1)) saveTrainingReview({ plan: payload.plan });
+    updateTrainingReviewDraft(function (plan) { return stepReviewBucket(plan, payload.ladders || {}, view, aspect, target, -1); });
   }; });
   modal.querySelectorAll('[data-review-open-dataset]').forEach(function (button) { button.onclick = function () { closeTrainingReviewModal(); selectTrainingWorkspaceConfigFile(button.getAttribute('data-review-open-dataset')); }; });
   modal.querySelectorAll('[data-review-reset-dataset]').forEach(function (button) { button.onclick = function () {
@@ -661,8 +819,8 @@ function reviewTrainButtonState(payload) {
 function renderTrainingReview() {
   var els = getTrainingWorkspaceEls();
   if (!els.review || !els.reviewModalContent) return;
-  var payload = trainingWorkspaceState.review;
-  if (!payload) {
+  var canonicalPayload = trainingWorkspaceState.review;
+  if (!canonicalPayload) {
     var message = trainingWorkspaceState.reviewError ? '<section class="training-review-error">' + escapeHtml(trainingWorkspaceState.reviewError) + '<button type="button" class="review-captions-btn" data-review-retry>Retry</button></section>' : 'Preparing bucket plan…';
     els.review.innerHTML = message;
     els.reviewModalContent.innerHTML = message;
@@ -670,17 +828,18 @@ function renderTrainingReview() {
     els.reviewModalContent.querySelectorAll('[data-review-retry]').forEach(function (button) { button.onclick = function () { refreshTrainingReview().catch(function () {}); }; });
     return;
   }
-  renderTrainingStartingPointControls(payload);
-  els.review.innerHTML = trainingReviewSummaryHtml(payload);
+  renderTrainingStartingPointControls(canonicalPayload);
+  els.review.innerHTML = trainingReviewSummaryHtml(canonicalPayload);
   els.review.querySelector('[data-open-training-review]').onclick = openTrainingReviewModal;
   var resetBuckets = els.review.querySelector('[data-review-reset-buckets]');
   if (resetBuckets) resetBuckets.onclick = function () {
     if (!window.confirm('Reset all bucket selections to WebCap defaults?')) return;
     resetTrainingReviewBuckets().then(function () { renderTrainingReview(); }).catch(function (err) { setStatus('Could not reset bucket selections: ' + String(err.message || err)); });
   };
-  els.reviewModalContent.innerHTML = reviewModalHtml(payload);
-  bindTrainingReviewModal(payload);
-  reviewTrainButtonState(payload);
+  var modalPayload = trainingWorkspaceState.reviewModalOpen && trainingWorkspaceState.reviewDraft ? trainingWorkspaceState.reviewDraft : canonicalPayload;
+  els.reviewModalContent.innerHTML = reviewModalHtml(modalPayload);
+  bindTrainingReviewModal(modalPayload);
+  reviewTrainButtonState(canonicalPayload);
 }
 
 function renderTrainingReviewSaveStatus() {
@@ -711,39 +870,6 @@ function refreshTrainingReview() {
     renderTrainingReview();
     throw err;
   });
-}
-
-function saveTrainingReview(change) {
-  var current = trainingWorkspaceState.review;
-  if (!current || current.customDataset) return Promise.resolve(null);
-  var folder = state.folder;
-  var baseRequest = trainingReviewPayload();
-  var snapshot = JSON.parse(JSON.stringify({ plan: change.plan || current.plan, reset: change.reset || '' }));
-  trainingWorkspaceState.reviewSavePending += 1;
-  trainingWorkspaceState.reviewSaveStatus = 'saving';
-  renderTrainingReviewSaveStatus();
-  var prior = trainingWorkspaceState.reviewSaveQueue || Promise.resolve();
-  var task = prior.catch(function () {}).then(function () {
-    var request = JSON.parse(JSON.stringify(baseRequest));
-    request.plan = snapshot.plan;
-    if (snapshot.reset) request.reset = snapshot.reset;
-    return trainingReviewRequest('/fs/training_review/update', request);
-  }).then(function (payload) {
-    if (state.folder !== folder || !isTrainingWorkspaceActive()) return null;
-    trainingWorkspaceState.review = payload;
-    return payload;
-  }).catch(function (err) {
-    if (state.folder !== folder || !isTrainingWorkspaceActive()) return null;
-    trainingWorkspaceState.reviewSaveStatus = 'error';
-    setStatus('Could not save Training Review: ' + String(err && err.message ? err.message : err));
-    return refreshTrainingReview().then(function () { return null; }, function () { return null; });
-  }).finally(function () {
-    trainingWorkspaceState.reviewSavePending = Math.max(0, trainingWorkspaceState.reviewSavePending - 1);
-    if (!trainingWorkspaceState.reviewSavePending && trainingWorkspaceState.reviewSaveStatus !== 'error') trainingWorkspaceState.reviewSaveStatus = 'saved';
-    renderTrainingReview();
-  });
-  trainingWorkspaceState.reviewSaveQueue = task;
-  return task;
 }
 
 function resetTrainingReviewBuckets() {

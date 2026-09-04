@@ -51,10 +51,11 @@ var trainingWorkspaceState = {
   reviewInitializerExportId: '',
   reviewInitializerCustomPath: '',
   reviewForceConstantLr: '',
-  reviewSaveQueue: null,
   reviewSavePending: 0,
   reviewSaveStatus: 'saved',
   reviewModalOpen: false,
+  reviewDraft: null,
+  reviewDraftDirty: false,
   reviewMediaView: 'images',
   reviewAspect: '',
   runSetupFolder: ''

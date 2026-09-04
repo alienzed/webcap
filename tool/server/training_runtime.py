@@ -17,6 +17,7 @@ def training_runtime_settings(training):
         "wslDistribution": str(source.get("wsl_distribution") or "").strip(),
         "condaExecutable": str(source.get("conda_executable") or "").strip(),
         "condaEnvironment": str(source.get("conda_environment") or "").strip(),
+        "h3SplitCachePhase": bool(source.get("h3_split_cache_phase", False)),
     }
 
 

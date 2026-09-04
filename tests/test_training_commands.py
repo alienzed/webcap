@@ -31,9 +31,13 @@ def test_training_command_plan_appends_a_quoted_resume_checkpoint_only_to_its_se
 def test_h3_command_plan_runs_cache_and_training_in_separate_processes():
     plan = build_h3_command_plan("/mnt/w/sets/one/config.h3.toml")
 
+    assert plan["singleCommand"] == (
+        'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed '
+        '--config /mnt/w/sets/one/config.h3.toml'
+    )
     assert plan["cacheCommand"] == (
         'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed '
-        '--config /mnt/w/sets/one/config.h3.toml --trust_cache --cache_only'
+        '--config /mnt/w/sets/one/config.h3.toml --cache_only'
     )
     assert plan["trainCommand"] == (
         'NCCL_P2P_DISABLE="1" NCCL_IB_DISABLE="1" deepspeed --num_gpus=1 train.py --deepspeed '
@@ -42,12 +46,18 @@ def test_h3_command_plan_runs_cache_and_training_in_separate_processes():
     resumed = build_h3_command_plan(
         "/mnt/w/sets/one/config.h3.toml",
         resume_from_checkpoint="/mnt/w/output/run-1",
+        reset_dataloader=True,
     )
+    assert resumed["singleCommand"].endswith("--resume_from_checkpoint /mnt/w/output/run-1 --reset_dataloader")
+    assert "--cache_only" not in resumed["singleCommand"]
+    assert "--trust_cache" not in resumed["singleCommand"]
     assert "--resume_from_checkpoint" not in resumed["cacheCommand"]
-    assert resumed["trainCommand"].endswith("--resume_from_checkpoint /mnt/w/output/run-1 --trust_cache")
+    assert "--reset_dataloader" not in resumed["cacheCommand"]
+    assert "--trust_cache" not in resumed["cacheCommand"]
+    assert resumed["trainCommand"].endswith("--resume_from_checkpoint /mnt/w/output/run-1 --reset_dataloader --trust_cache")
 
 
-def test_resumed_h3_runner_caches_the_current_capture_before_training(tmp_path, monkeypatch):
+def test_resumed_h3_runner_uses_one_default_command_without_trust_cache(tmp_path, monkeypatch):
     config = tmp_path / "config.h3.toml"
     config.write_text("config", encoding="utf-8")
     job_dir = tmp_path / "job"
@@ -57,27 +67,47 @@ def test_resumed_h3_runner_caches_the_current_capture_before_training(tmp_path, 
         {"cwd": "/mnt/w/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": ""},
         {"h3Config": config}, job_dir,
     )
-    assert script.index("--cache_only") < script.index("--resume_from_checkpoint /mnt/w/old-run")
+    assert "stage=h3-cache" not in script
+    assert "--cache_only" not in script
+    assert "--trust_cache" not in script
+    assert "--resume_from_checkpoint /mnt/w/old-run" in script
     assert "--regenerate_cache" not in script
 
 
-def test_custom_resume_runner_resets_its_dataloader_but_managed_resume_does_not(tmp_path, monkeypatch):
+def test_h3_split_runner_caches_before_training(tmp_path, monkeypatch):
     config = tmp_path / "config.h3.toml"
     config.write_text("config", encoding="utf-8")
     job_dir = tmp_path / "job"
     monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, _distribution="": str(path).replace("\\", "/"))
-    settings = {"cwd": "/mnt/w/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": ""}
-    custom_script, _ = training_runner._build_runner_script(
-        {"id": "custom", "stages": "h3", "resumeFromCheckpoint": "/mnt/w/external-run", "resumeStage": "h3", "artifactDir": str(job_dir)},
-        settings, {"h3Config": config}, job_dir,
-    )
-    managed_script, _ = training_runner._build_runner_script(
-        {"id": "managed", "stages": "h3", "resumeFromCheckpoint": "/mnt/w/local-run", "resumeStage": "h3", "resumeOutputId": "output/local-run", "artifactDir": str(job_dir)},
-        settings, {"h3Config": config}, job_dir,
+    script, _ = training_runner._build_runner_script(
+        {"id": "job", "stages": "h3", "artifactDir": str(job_dir)},
+        {"cwd": "/mnt/w/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "", "h3SplitCachePhase": True},
+        {"h3Config": config}, job_dir,
     )
 
-    assert "--resume_from_checkpoint /mnt/w/external-run --reset_dataloader --trust_cache" in custom_script
-    assert "--reset_dataloader" not in managed_script
+    assert script.index("echo '[webcap] stage=h3-cache'") < script.index("echo '[webcap] stage=h3'")
+    assert script.index("--cache_only") < script.rindex("--trust_cache")
+
+
+def test_custom_resume_runner_resets_its_dataloader_but_managed_resume_does_not_in_both_h3_modes(tmp_path, monkeypatch):
+    config = tmp_path / "config.h3.toml"
+    config.write_text("config", encoding="utf-8")
+    job_dir = tmp_path / "job"
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, _distribution="": str(path).replace("\\", "/"))
+    for split_phase in (False, True):
+        settings = {"cwd": "/mnt/w/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "", "h3SplitCachePhase": split_phase}
+        custom_script, _ = training_runner._build_runner_script(
+            {"id": "custom", "stages": "h3", "resumeFromCheckpoint": "/mnt/w/external-run", "resumeStage": "h3", "artifactDir": str(job_dir)},
+            settings, {"h3Config": config}, job_dir,
+        )
+        managed_script, _ = training_runner._build_runner_script(
+            {"id": "managed", "stages": "h3", "resumeFromCheckpoint": "/mnt/w/local-run", "resumeStage": "h3", "resumeOutputId": "output/local-run", "artifactDir": str(job_dir)},
+            settings, {"h3Config": config}, job_dir,
+        )
+
+        assert "--resume_from_checkpoint /mnt/w/external-run --reset_dataloader" in custom_script
+        assert "--reset_dataloader" not in managed_script
+        assert ("--trust_cache" in custom_script) is split_phase
 
 
 def test_conda_runtime_wraps_child_commands_without_shell_activation():

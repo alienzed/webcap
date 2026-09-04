@@ -222,6 +222,10 @@ def validate_config_payload(payload):
     if not isinstance(tensorboard_control, bool):
         raise ValueError("Config.training.tensorboard_bruteforce_control must be true or false.")
     normalized_training["tensorboard_bruteforce_control"] = tensorboard_control
+    h3_split_cache_phase = training.get("h3_split_cache_phase", False)
+    if not isinstance(h3_split_cache_phase, bool):
+        raise ValueError("Config.training.h3_split_cache_phase must be true or false.")
+    normalized_training["h3_split_cache_phase"] = h3_split_cache_phase
     enabled_profiles = training.get("enabled_profiles", list(PROFILE_IDS))
     if not isinstance(enabled_profiles, list):
         raise ValueError("Config.training.enabled_profiles must be an array.")

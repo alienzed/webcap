@@ -600,7 +600,8 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "if [ \"$" + stage_code + "_CODE\" -ne 0 ]; then echo '[webcap] " + stage_title + " failed'; write_result failed \"$" + stage_code + "_CODE\"; exit \"$" + stage_code + "_CODE\"; fi",
         ])
     if stages == "h3":
-        lines.extend([
+        if settings.get("h3SplitCachePhase", False):
+            lines.extend([
                 "echo '[webcap] stage=h3-cache'",
                 "printf '%s\\n' " + shlex.quote("[webcap] command h3 cache: " + h3_command_plan["cacheCommand"]),
                 h3_command_plan["cacheCommand"],
@@ -608,11 +609,12 @@ def _build_runner_script(job, settings, artifacts, job_dir):
                 "finish_requested_stop",
                 "if [ \"$H3_CACHE_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$H3_CACHE_CODE\"; exit \"$H3_CACHE_CODE\"; fi",
                 "if [ \"$H3_CACHE_CODE\" -ne 0 ]; then echo '[webcap] MiniMax H3 cache failed'; write_result failed \"$H3_CACHE_CODE\"; exit \"$H3_CACHE_CODE\"; fi",
-        ])
+            ])
+        h3_command = h3_command_plan["trainCommand"] if settings.get("h3SplitCachePhase", False) else h3_command_plan["singleCommand"]
         lines.extend([
             "echo '[webcap] stage=h3'",
-            "printf '%s\\n' " + shlex.quote("[webcap] command h3: " + h3_command_plan["trainCommand"]),
-            h3_command_plan["trainCommand"],
+            "printf '%s\\n' " + shlex.quote("[webcap] command h3: " + h3_command),
+            h3_command,
             "H3_CODE=$?",
             "finish_requested_stop",
             "if [ \"$H3_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$H3_CODE\"; exit \"$H3_CODE\"; fi",

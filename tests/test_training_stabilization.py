@@ -528,9 +528,11 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
         }
 
     monkeypatch.setattr(run_ops, "materialize_training_bundle", fake_bundle)
-    monkeypatch.setattr(run_ops, "training_runtime_settings", lambda _settings: {
+    runtime_settings = {
         "cwd": "/pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
-    })
+        "h3SplitCachePhase": False,
+    }
+    monkeypatch.setattr(run_ops, "training_runtime_settings", lambda _settings: runtime_settings)
     monkeypatch.setattr(run_ops, "_to_wsl_path", lambda path, _distribution="": "/wsl" + Path(path).as_posix())
     monkeypatch.setattr(run_ops, "stream_with_context", lambda generator: generator)
 
@@ -546,6 +548,8 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     managed_text = managed_response.data.decode("utf-8")
     assert "--resume_from_checkpoint /wsl" + managed_run.as_posix() in managed_text
     assert "--reset_dataloader" not in managed_text
+    assert "--cache_only" not in managed_text
+    assert "--trust_cache" not in managed_text
     assert {path.name for path in managed_action.parent.iterdir() if path.is_dir()} == logical_runs_before
     assert "externalOutput" not in read_action(managed_data["actionId"])[1]
 
@@ -564,7 +568,16 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     fresh_text = fresh_response.data.decode("utf-8")
     assert "--resume_from_checkpoint /wsl" + custom.as_posix() in custom_text
     assert "--reset_dataloader" in custom_text
+    assert "--cache_only" not in custom_text
+    assert "--trust_cache" not in custom_text
     assert "--resume_from_checkpoint" not in fresh_text
+
+    runtime_settings["h3SplitCachePhase"] = True
+    split_response = client.post("/fs/train_run", json={**request, "resumeFromCheckpoint": str(custom)})
+    assert split_response.status_code == 200
+    split_text = split_response.data.decode("utf-8")
+    assert split_text.index("--cache_only") < split_text.rindex("--trust_cache")
+    assert "--resume_from_checkpoint /wsl" + custom.as_posix() + " --reset_dataloader --trust_cache" in split_text
 
 
 def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_path, monkeypatch):

@@ -1,6 +1,11 @@
 from tool.server import training_runtime
 
 
+def test_training_runtime_h3_split_cache_phase_defaults_false_and_maps_true():
+    assert training_runtime.training_runtime_settings({})["h3SplitCachePhase"] is False
+    assert training_runtime.training_runtime_settings({"h3_split_cache_phase": True})["h3SplitCachePhase"] is True
+
+
 def test_wsl_path_conversion_keeps_existing_wsl_paths(monkeypatch):
     monkeypatch.setattr(training_runtime, "run_wsl", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("wslpath should not run")))
 

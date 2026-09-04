@@ -43,7 +43,8 @@ def build_h3_command_plan(config_path, launcher=DEEPSPEED_LAUNCHER, resume_from_
         reset_dataloader=reset_dataloader,
     )
     return {
-        "cacheCommand": base_plan["loCommand"] + " --trust_cache --cache_only",
+        "singleCommand": train_plan["loCommand"],
+        "cacheCommand": base_plan["loCommand"] + " --cache_only",
         "trainCommand": train_plan["loCommand"] + " --trust_cache",
     }
 

@@ -151,7 +151,8 @@ def train_run_response(
         elif stages in ("lo", "krea2", "wan21"):
             handoff_cmd = command_plan["loCommand"]
         elif stages == "h3":
-            handoff_cmd = h3_command_plan["cacheCommand"] + " && " + h3_command_plan["trainCommand"]
+            handoff_cmd = (h3_command_plan["cacheCommand"] + " && " + h3_command_plan["trainCommand"]
+                if runtime_settings.get("h3SplitCachePhase", False) else h3_command_plan["singleCommand"])
         else:
             handoff_cmd = command_plan["handoffCommand"]
         def generate():

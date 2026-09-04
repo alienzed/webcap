@@ -132,6 +132,7 @@ ui = {
   appSettingsTrainingActivateScriptEl: document.getElementById('app-settings-training-activate-script'),
   appSettingsTrainingTensorboardPortEl: document.getElementById('app-settings-training-tensorboard-port'),
   appSettingsTrainingTensorboardBruteforceControlEl: document.getElementById('app-settings-training-tensorboard-bruteforce-control'),
+  appSettingsTrainingH3SplitCachePhaseEl: document.getElementById('app-settings-training-h3-split-cache-phase'),
   appSettingsTrainingProfileWan22El: document.getElementById('app-settings-training-profile-wan22'),
   appSettingsTrainingProfileKrea2El: document.getElementById('app-settings-training-profile-krea2'),
   appSettingsTrainingProfileWan21El: document.getElementById('app-settings-training-profile-wan21'),

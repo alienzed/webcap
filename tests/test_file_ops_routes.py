@@ -119,6 +119,7 @@ def test_app_config_save_persists_enabled_training_profiles(tmp_path, monkeypatc
                 "conda_executable": "/home/user/miniconda3/bin/conda",
                 "conda_environment": "dp-clean",
                 "activate_script": "dp-clean/bin/activate",
+                "h3_split_cache_phase": True,
                 "enabled_profiles": ["wan22_t2v", "minimax_h3"],
             },
             "primer": {
@@ -132,10 +133,12 @@ def test_app_config_save_persists_enabled_training_profiles(tmp_path, monkeypatc
     assert payload["config"]["training"]["enabled_profiles"] == ["wan22_t2v", "minimax_h3"]
     assert payload["config"]["training"]["wsl_distribution"] == "Ubuntu_W"
     assert payload["config"]["training"]["conda_environment"] == "dp-clean"
+    assert payload["config"]["training"]["h3_split_cache_phase"] is True
     assert payload["config"]["primer"]["template"] == "{subject}\n{view}\n{lighting}"
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     assert saved["training"]["enabled_profiles"] == ["wan22_t2v", "minimax_h3"]
     assert saved["training"]["conda_executable"] == "/home/user/miniconda3/bin/conda"
+    assert saved["training"]["h3_split_cache_phase"] is True
     assert saved["primer"]["template"] == "{subject}\n{view}\n{lighting}"
 
 
@@ -164,6 +167,7 @@ def test_validate_config_payload_defaults_all_training_profiles_and_rejects_none
         "wan21_t2v_14b",
         "minimax_h3",
     ]
+    assert normalized["training"]["h3_split_cache_phase"] is False
 
     try:
         config_module.validate_config_payload({
@@ -174,6 +178,18 @@ def test_validate_config_payload_defaults_all_training_profiles_and_rejects_none
         assert "At least one training profile" in str(exc)
     else:
         raise AssertionError("An empty enabled training profile list should fail loudly.")
+
+
+def test_validate_config_payload_rejects_non_boolean_h3_split_cache_phase():
+    try:
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/sets", "models": ""},
+            "training": {"h3_split_cache_phase": "true"},
+        })
+    except ValueError as exc:
+        assert "h3_split_cache_phase must be true or false" in str(exc)
+    else:
+        raise AssertionError("A non-boolean H3 split cache setting should fail loudly.")
 
 
 def test_validate_config_payload_preserves_h3_calibration_shapes():

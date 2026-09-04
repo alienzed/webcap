@@ -50,6 +50,7 @@ function normalizeAppConfigShape(cfg) {
     out.training.tensorboard_port = 6006;
   }
   if (typeof out.training.tensorboard_bruteforce_control !== 'boolean') out.training.tensorboard_bruteforce_control = false;
+  if (typeof out.training.h3_split_cache_phase !== 'boolean') out.training.h3_split_cache_phase = false;
   delete out.training.mode;
   delete out.training.write_selection_snapshot_comments;
   if (!Array.isArray(out.training.enabled_profiles)) {
@@ -96,6 +97,7 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
   if (ui.appSettingsTrainingTensorboardPortEl) ui.appSettingsTrainingTensorboardPortEl.value = c.training.tensorboard_port;
   if (ui.appSettingsTrainingTensorboardBruteforceControlEl) ui.appSettingsTrainingTensorboardBruteforceControlEl.checked = !!c.training.tensorboard_bruteforce_control;
+  if (ui.appSettingsTrainingH3SplitCachePhaseEl) ui.appSettingsTrainingH3SplitCachePhaseEl.checked = !!c.training.h3_split_cache_phase;
   appSettingsTrainingProfiles.forEach(function (profile) {
     var el = ui[profile.uiKey];
     if (el) el.checked = c.training.enabled_profiles.indexOf(profile.id) !== -1;
@@ -119,6 +121,7 @@ function collectAppSettingsFormConfig() {
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
   base.training.tensorboard_port = ui.appSettingsTrainingTensorboardPortEl ? Number(ui.appSettingsTrainingTensorboardPortEl.value) : 6006;
   base.training.tensorboard_bruteforce_control = !!(ui.appSettingsTrainingTensorboardBruteforceControlEl && ui.appSettingsTrainingTensorboardBruteforceControlEl.checked);
+  base.training.h3_split_cache_phase = !!(ui.appSettingsTrainingH3SplitCachePhaseEl && ui.appSettingsTrainingH3SplitCachePhaseEl.checked);
   base.training.enabled_profiles = appSettingsTrainingProfiles.filter(function (profile) {
     var el = ui[profile.uiKey];
     return !!(el && el.checked);
@@ -470,6 +473,7 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingCondaEnvironmentEl,
     ui.appSettingsTrainingTensorboardPortEl,
     ui.appSettingsTrainingTensorboardBruteforceControlEl,
+    ui.appSettingsTrainingH3SplitCachePhaseEl,
     ui.appSettingsTrainingProfileWan22El,
     ui.appSettingsTrainingProfileKrea2El,
     ui.appSettingsTrainingProfileWan21El,

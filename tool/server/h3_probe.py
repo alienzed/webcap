@@ -127,7 +127,11 @@ def _active_runtime_path():
     if not root.is_dir():
         return None
     for path in root.glob("*/" + RUNTIME_FILE_NAME):
-        runtime = _refresh_runtime(path)
+        try:
+            runtime = _refresh_runtime(path)
+        except FileNotFoundError:
+            print("[WARN] Ignoring stale H3 calibration runtime state: " + str(path), flush=True)
+            continue
         if runtime.get("status") in ("running", "stopping"):
             return path
     return None

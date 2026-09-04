@@ -550,6 +550,9 @@ def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatc
     fs_root = tmp_path / "fs"
     probe_root = fs_root / ".webcap_training" / "h3-probes" / "h3-test"
     probe_root.mkdir(parents=True)
+    stale_runtime = fs_root / ".webcap_training" / "h3-probes" / "h3-stale" / "runtime.json"
+    stale_runtime.parent.mkdir()
+    stale_runtime.write_text("not valid JSON", encoding="utf-8")
     seed_path = probe_root / "seed.json"
     seed_path.write_text("{}", encoding="utf-8")
     config_path = tmp_path / "config.json"

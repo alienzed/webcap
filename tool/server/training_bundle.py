@@ -292,6 +292,18 @@ def _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id):
             )
 
 
+def _materialize_direct_stanza_view(media_root, source_name, stage, index):
+    """Give repeated raw stanzas separate Diffusion Pipe cache namespaces."""
+    source_dir = Path(media_root) / source_name
+    if not source_dir.is_dir():
+        raise FileNotFoundError("Captured direct source is missing: " + str(source_dir))
+    target_dir = Path(media_root) / "stanza_views" / str(stage) / (str(index).zfill(3) + "-" + source_name)
+    for source in source_dir.iterdir():
+        if source.is_file():
+            _link_or_copy(source, target_dir / source.name)
+    return target_dir
+
+
 def _materialize_dataset_config(text, media_root, distribution, manifest, stage, profile_id=""):
     prefix, blocks = _directory_blocks(text)
     if not blocks:
@@ -301,6 +313,14 @@ def _materialize_dataset_config(text, media_root, distribution, manifest, stage,
         if isinstance(row, dict):
             videos_by_dir.setdefault(Path(str(row.get("prepared_path") or "")).parent.name, []).append(row)
 
+    direct_source_counts = {}
+    for block in blocks:
+        data = block["data"]
+        is_detail = str(data.get("group") or "").strip().lower() == "videos" and "webcap_detail_subset = true" in block["raw"]
+        if not is_detail:
+            source_name = _directory_name(data.get("path"))
+            direct_source_counts[source_name] = direct_source_counts.get(source_name, 0) + 1
+
     output = [prefix]
     rendered_count = 0
     for index, block in enumerate(blocks):
@@ -309,7 +329,12 @@ def _materialize_dataset_config(text, media_root, distribution, manifest, stage,
         is_detail = str(data.get("group") or "").strip().lower() == "videos" and "webcap_detail_subset = true" in block["raw"]
         if not is_detail:
             _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id)
-            output.append(_rewrite_directory_path(block["raw"], to_wsl_path(Path(media_root) / source_name, distribution)))
+            target_dir = (
+                _materialize_direct_stanza_view(media_root, source_name, stage, index)
+                if direct_source_counts[source_name] > 1
+                else Path(media_root) / source_name
+            )
+            output.append(_rewrite_directory_path(block["raw"], to_wsl_path(target_dir, distribution)))
             rendered_count += 1
             continue
         buckets = _valid_video_buckets(data.get("size_buckets"))

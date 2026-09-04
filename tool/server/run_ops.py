@@ -8,7 +8,7 @@ from .training_history import resolve_managed_resume, validate_resumable_run_for
 from .training_profiles import config_for_stage, normalize_mode, profile_run
 from .training_bundle import materialize_training_bundle
 from .training_commands import build_h3_command_plan, build_training_command_plan
-from .training_review import resolve_saved_initializer
+from .training_review import prepare_training_review, resolve_saved_initializer
 from .training_runtime import build_training_launcher, to_wsl_path, training_runtime_settings
 
 
@@ -66,7 +66,10 @@ def train_run_response(
             managed_action = resolved["action"]
         elif resume_from_checkpoint:
             validate_resumable_run_for_path(folder_path, resume_stage or stages, resume_from_checkpoint)
-        review = None
+        review = prepare_training_review(
+            folder_path, selected_profile["id"], selected_run["id"], selected_media,
+            selection_criteria, total_media_count, fallback_captions, persist=False,
+        )
         initializer = None
         if initializer_action_id or initializer_export_id or initializer_stage or initializer_custom_path:
             if resume_from_checkpoint:
@@ -104,7 +107,7 @@ def train_run_response(
             total_media_count=total_media_count,
             output_dirs=output_dirs,
             distribution=runtime_settings["wslDistribution"],
-            review=review,
+            review=review if not review.get("customDataset") else None,
             initializer=initializer,
         )
         def mark_manual(data):

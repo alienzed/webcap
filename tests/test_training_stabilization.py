@@ -1,4 +1,5 @@
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -125,6 +126,201 @@ def test_captured_review_dataset_keeps_image_frame_count_and_bucket_annotations(
     assert "# bucket: 512 × 512 × 1 frame" in text
     assert "# assigned: 1 item · 1 near/native · 0 resized" in text
     assert "# adjacent supported targets: lower 384 × 384 · higher 768 × 768" in text
+
+
+def _h3_video_review_stage():
+    entries = []
+    for role, frames, repeats in (("balanced", 34, 3), ("temporal", 68, 6), ("detail", 17, 2)):
+        width, height = training_review._video_policy(
+            "square", MINIMAX_H3_PROFILE_ID, role, frames,
+        )["selectable"][0]
+        entries.append({
+            "kind": "video", "role": role, "ar": "square", "bucket": [width, height, frames],
+            "sourceDir": "square", "files": ["clip.mp4"], "eligibleCount": 1,
+            "nativeCount": 1, "upscaledCount": 0, "numRepeats": repeats,
+            "detailIntent": role == "detail",
+        })
+    return {"datasetEntries": entries}
+
+
+def test_managed_h3_review_capture_isolates_balanced_temporal_and_detail_directories(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    folder = _set(tmp_path)
+    (folder / "clip.mp4").write_bytes(b"captured-video")
+    (folder / "clip.txt").write_text("clip caption", encoding="utf-8")
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    manifest = {
+        "version": 2, "images": [], "skipped": [], "selection": {},
+        "videos": [{
+            "file": "clip.mp4", "ar": "square", "width": 768, "height": 768, "fps": 24,
+            "frames": 100, "duration": 4.2, "prepared_path": "square/clip.mp4",
+        }],
+    }
+    monkeypatch.setattr(training_bundle, "build_dataset_manifest", lambda *_args, **_kwargs: manifest)
+    action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    review = {"review": {"stages": {"h3": _h3_video_review_stage()}}, "ladders": {}}
+
+    bundle = training_bundle.materialize_training_bundle(
+        folder, action, MINIMAX_H3_PROFILE_ID, "normal", "h3", ["clip.mp4"],
+        output_dirs={"h3": str(action / "output")}, review=review,
+    )
+
+    directories = tomllib.loads(Path(bundle["artifacts"]["h3Dataset"]).read_text(encoding="utf-8"))["directory"]
+    paths = [Path(item["path"]) for item in directories]
+    assert [item["size_buckets"][0][2] for item in directories] == [34, 68, 17]
+    assert len({str(path) for path in paths}) == 3
+    assert all("/media/review/h3/" in path.as_posix() for path in paths)
+    assert all(not path.as_posix().endswith("/media/square") for path in paths)
+    assert all((path / "clip.mp4").read_bytes() == b"captured-video" for path in paths)
+
+
+def test_manual_h3_command_materializes_the_managed_review_into_isolated_directories(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    folder = _set(tmp_path)
+    (folder / "clip.mp4").write_bytes(b"manual-video")
+    (folder / "clip.txt").write_text("clip caption", encoding="utf-8")
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    manifest = {
+        "version": 2, "images": [], "skipped": [], "selection": {},
+        "videos": [{
+            "file": "clip.mp4", "ar": "square", "width": 768, "height": 768, "fps": 24,
+            "frames": 100, "duration": 4.2, "prepared_path": "square/clip.mp4",
+        }],
+    }
+    review = {"review": {"stages": {"h3": _h3_video_review_stage()}}, "ladders": {}, "customDataset": False}
+    captured = []
+    actual_materialize = training_bundle.materialize_training_bundle
+
+    def capture_materialize(*args, **kwargs):
+        bundle = actual_materialize(*args, **kwargs)
+        captured.append(bundle)
+        return bundle
+
+    monkeypatch.setattr(training_bundle, "build_dataset_manifest", lambda *_args, **_kwargs: manifest)
+    monkeypatch.setattr(run_ops, "prepare_training_review", lambda *_args, **_kwargs: review)
+    monkeypatch.setattr(run_ops, "materialize_training_bundle", capture_materialize)
+    monkeypatch.setattr(run_ops, "training_runtime_settings", lambda _settings: {
+        "cwd": "/pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
+    })
+    monkeypatch.setattr(run_ops, "_to_wsl_path", lambda path, _distribution="": Path(path).as_posix())
+    monkeypatch.setattr(run_ops, "stream_with_context", lambda generator: generator)
+
+    response = run_ops.train_run_response(
+        "sets/subject", profile_id=MINIMAX_H3_PROFILE_ID, run_id="train", selected_media=["clip.mp4"],
+    )
+
+    assert response.status_code == 200
+    directories = tomllib.loads(Path(captured[0]["artifacts"]["h3Dataset"]).read_text(encoding="utf-8"))["directory"]
+    assert [item["size_buckets"][0][2] for item in directories] == [34, 68, 17]
+    assert len({item["path"] for item in directories}) == 3
+    assert all("/media/review/h3/" in item["path"] for item in directories)
+
+
+def test_queue_and_manual_pass_the_same_managed_review_to_materialization(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    review = {"review": {"stages": {"h3": {"datasetEntries": []}}}, "ladders": {}, "customDataset": False}
+    seen = []
+
+    def stop_after_capture(*args, **kwargs):
+        seen.append(kwargs["review"])
+        raise RuntimeError("stop after review capture")
+
+    monkeypatch.setattr(run_ops, "prepare_training_review", lambda *_args, **_kwargs: review)
+    monkeypatch.setattr(training_runner, "prepare_training_review", lambda *_args, **_kwargs: review)
+    monkeypatch.setattr(run_ops, "materialize_training_bundle", stop_after_capture)
+    monkeypatch.setattr(training_runner, "materialize_training_bundle", stop_after_capture)
+    monkeypatch.setattr(run_ops, "training_runtime_settings", lambda _settings: {
+        "cwd": "/pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
+    })
+    monkeypatch.setattr(run_ops, "_to_wsl_path", lambda path, _distribution="": Path(path).as_posix())
+
+    manual = run_ops.train_run_response(
+        "sets/subject", profile_id=MINIMAX_H3_PROFILE_ID, run_id="train", selected_media=["one.png"],
+    )
+    queued, queued_status = training_runner.start_response(
+        "sets/subject", queue=True, stages="h3", profile_id=MINIMAX_H3_PROFILE_ID, run_id="train", selected_media=["one.png"],
+    )
+
+    assert manual.status_code == 500
+    assert queued_status == 400 and queued["ok"] is False
+    assert seen == [review, review]
+
+
+def test_repeated_raw_direct_stanzas_get_isolated_captured_views_and_keep_toml_values(tmp_path, monkeypatch):
+    monkeypatch.setattr(training_bundle, "to_wsl_path", lambda path, distribution="": Path(path).as_posix())
+    media_root = tmp_path / "capture" / "media"
+    source = media_root / "square"
+    source.mkdir(parents=True)
+    (source / "one.png").write_bytes(b"image-bytes")
+    (source / "one.txt").write_text("caption bytes", encoding="utf-8")
+    text = (
+        "[[directory]]\npath = \"square\" # balanced\nnum_repeats = 34\ngroup = \"images\"\n"
+        "size_buckets = [[512, 512, 1], [448, 448, 1]]\n\n"
+        "[[directory]]\npath = \"square\" # temporal\nnum_repeats = 68\ngroup = \"images\"\n"
+        "size_buckets = [[384, 384, 1]]\n"
+    )
+
+    rendered = training_bundle._materialize_dataset_config(text, media_root, "", {"images": [], "videos": []}, "h3")
+
+    directories = tomllib.loads(rendered)["directory"]
+    paths = [Path(item["path"]) for item in directories]
+    assert len({str(path) for path in paths}) == 2
+    assert all("/media/stanza_views/h3/" in path.as_posix() for path in paths)
+    assert [item["num_repeats"] for item in directories] == [34, 68]
+    assert directories[0]["size_buckets"] == [[512, 512, 1], [448, 448, 1]]
+    assert directories[1]["size_buckets"] == [[384, 384, 1]]
+    assert "# balanced" in rendered and "# temporal" in rendered
+    assert all((path / "one.png").read_bytes() == b"image-bytes" for path in paths)
+    assert all((path / "one.txt").read_text(encoding="utf-8") == "caption bytes" for path in paths)
+
+
+def test_single_raw_direct_stanza_stays_direct_and_keeps_multiple_buckets_together(tmp_path, monkeypatch):
+    monkeypatch.setattr(training_bundle, "to_wsl_path", lambda path, distribution="": Path(path).as_posix())
+    media_root = tmp_path / "capture" / "media"
+    (media_root / "square").mkdir(parents=True)
+    text = (
+        "[[directory]]\npath = \"square\"\nnum_repeats = 5\ngroup = \"images\"\n"
+        "size_buckets = [[512, 512, 1], [448, 448, 1]]\n"
+    )
+
+    rendered = training_bundle._materialize_dataset_config(text, media_root, "", {"images": [], "videos": []}, "h3")
+
+    directory = tomllib.loads(rendered)["directory"][0]
+    assert Path(directory["path"]) == media_root / "square"
+    assert directory["size_buckets"] == [[512, 512, 1], [448, 448, 1]]
+    assert directory["num_repeats"] == 5
+    assert not (media_root / "stanza_views").exists()
+
+
+def test_existing_detail_subset_materialization_stays_isolated(tmp_path, monkeypatch):
+    monkeypatch.setattr(training_bundle, "to_wsl_path", lambda path, distribution="": Path(path).as_posix())
+    media_root = tmp_path / "capture" / "media"
+    source = media_root / "square"
+    source.mkdir(parents=True)
+    (source / "clip.mp4").write_bytes(b"video-bytes")
+    (source / "clip.txt").write_text("caption", encoding="utf-8")
+    width, height = training_review._video_policy(
+        "square", MINIMAX_H3_PROFILE_ID, "detail", 17,
+    )["selectable"][0]
+    text = (
+        "[[directory]]\npath = \"square\"\nnum_repeats = 17\ngroup = \"videos\"\n"
+        "# webcap_detail_subset = true\nsize_buckets = [[" + str(width) + ", " + str(height) + ", 17]]\n"
+    )
+    manifest = {"images": [], "videos": [{
+        "prepared_path": "square/clip.mp4", "width": 1024, "height": 1024, "frames": 100, "fps": 24,
+    }]}
+
+    rendered = training_bundle._materialize_dataset_config(text, media_root, "", manifest, "h3", MINIMAX_H3_PROFILE_ID)
+
+    directory = Path(tomllib.loads(rendered)["directory"][0]["path"])
+    assert "video_detail" in directory.parts
+    assert (directory / "clip.mp4").read_bytes() == b"video-bytes"
+    assert not (media_root / "stanza_views").exists()
 
 
 def test_capture_rejects_an_invalid_managed_video_bucket(tmp_path, monkeypatch):

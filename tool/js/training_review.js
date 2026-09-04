@@ -712,6 +712,7 @@ function openTrainingReviewModal() {
   els.reviewModal.setAttribute('aria-hidden', 'false');
   els.reviewModalClose.onclick = closeTrainingReviewModal;
   els.reviewModalDone.onclick = saveTrainingReviewDraft;
+  els.reviewModalDone.disabled = false;
   renderTrainingReview();
   els.reviewModalClose.focus();
 }
@@ -732,7 +733,7 @@ function saveTrainingReviewDraft() {
   renderTrainingReviewSaveStatus();
   var els = getTrainingWorkspaceEls();
   if (els.reviewModalDone) els.reviewModalDone.disabled = true;
-  trainingReviewRequest('/fs/training_review/update', request).then(function (payload) {
+  return trainingReviewRequest('/fs/training_review/update', request).then(function (payload) {
     if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
     trainingWorkspaceState.review = payload;
     trainingWorkspaceState.reviewDraft = null;
@@ -750,6 +751,7 @@ function saveTrainingReviewDraft() {
   }).finally(function () {
     trainingWorkspaceState.reviewSavePending = 0;
     renderTrainingReview();
+    if (trainingWorkspaceState.reviewModalOpen) els.reviewModalDone.disabled = false;
   });
 }
 

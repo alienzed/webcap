@@ -138,11 +138,13 @@ def train_run_response(
             build_training_launcher(runtime_settings),
             resume_command_path,
             resume_stage,
+            reset_dataloader=bool(resume_from_checkpoint and managed_action_root is None),
         )
         h3_command_plan = build_h3_command_plan(
             lo_wsl,
             build_training_launcher(runtime_settings),
             resume_command_path if stages == "h3" and resume_stage == "h3" else "",
+            reset_dataloader=bool(resume_from_checkpoint and managed_action_root is None),
         ) if stages == "h3" else None
         if stages == "hi":
             handoff_cmd = command_plan["hiCommand"]

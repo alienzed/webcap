@@ -61,6 +61,25 @@ def test_resumed_h3_runner_caches_the_current_capture_before_training(tmp_path, 
     assert "--regenerate_cache" not in script
 
 
+def test_custom_resume_runner_resets_its_dataloader_but_managed_resume_does_not(tmp_path, monkeypatch):
+    config = tmp_path / "config.h3.toml"
+    config.write_text("config", encoding="utf-8")
+    job_dir = tmp_path / "job"
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, _distribution="": str(path).replace("\\", "/"))
+    settings = {"cwd": "/mnt/w/diffusion-pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": ""}
+    custom_script, _ = training_runner._build_runner_script(
+        {"id": "custom", "stages": "h3", "resumeFromCheckpoint": "/mnt/w/external-run", "resumeStage": "h3", "artifactDir": str(job_dir)},
+        settings, {"h3Config": config}, job_dir,
+    )
+    managed_script, _ = training_runner._build_runner_script(
+        {"id": "managed", "stages": "h3", "resumeFromCheckpoint": "/mnt/w/local-run", "resumeStage": "h3", "resumeOutputId": "output/local-run", "artifactDir": str(job_dir)},
+        settings, {"h3Config": config}, job_dir,
+    )
+
+    assert "--resume_from_checkpoint /mnt/w/external-run --reset_dataloader --trust_cache" in custom_script
+    assert "--reset_dataloader" not in managed_script
+
+
 def test_conda_runtime_wraps_child_commands_without_shell_activation():
     settings = training_runtime_settings({
         "conda_executable": "/home/user/miniconda3/bin/conda",

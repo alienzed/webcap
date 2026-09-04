@@ -538,11 +538,13 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         build_training_launcher(settings),
         resume_path,
         resume_stage,
+        reset_dataloader=bool(resume_path and not job.get("resumeOutputId")),
     )
     h3_command_plan = build_h3_command_plan(
         lo_wsl,
         build_training_launcher(settings),
         resume_path if resume_stage == "h3" else "",
+        reset_dataloader=bool(resume_path and not job.get("resumeOutputId")),
     ) if stages == "h3" else None
     result_wsl = _to_wsl_path(job_dir / "result.json", distribution)
     pid_wsl = _to_wsl_path(job_dir / "pid", distribution)

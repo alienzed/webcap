@@ -545,6 +545,7 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     assert managed_response.status_code == 200
     managed_text = managed_response.data.decode("utf-8")
     assert "--resume_from_checkpoint /wsl" + managed_run.as_posix() in managed_text
+    assert "--reset_dataloader" not in managed_text
     assert {path.name for path in managed_action.parent.iterdir() if path.is_dir()} == logical_runs_before
     assert "externalOutput" not in read_action(managed_data["actionId"])[1]
 
@@ -562,6 +563,7 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     custom_text = custom_response.data.decode("utf-8")
     fresh_text = fresh_response.data.decode("utf-8")
     assert "--resume_from_checkpoint /wsl" + custom.as_posix() in custom_text
+    assert "--reset_dataloader" in custom_text
     assert "--resume_from_checkpoint" not in fresh_text
 
 

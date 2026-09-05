@@ -177,6 +177,72 @@ assert(html.indexOf('>736 × 416</button>') < html.indexOf('>608 × 352</button>
     assert ".training-review-cohort-row" in styles
 
 
+def test_cohorts_can_skip_targets_and_notices_and_control_tones_are_semantic():
+    root = Path(__file__).parents[1]
+    script_path = root / "tool" / "js" / "training_review.js"
+    styles = (root / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    harness = r'''
+const fs = require('fs');
+const vm = require('vm');
+const context = { JSON, Promise, document: { addEventListener() {} }, trainingWorkspaceState: { reviewMediaView: 'detail', reviewAspect: '169' } };
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+context.escapeHtml = (value) => String(value);
+context.setStatus = () => {};
+function assert(value, message) { if (!value) throw new Error(message); }
+let plan = { stages: { h3: { imageBuckets: { square: [[512, 512]] } } }, videoRoles: [] };
+assert(context.setReviewBucket(plan, 'images', 'square', [512, 512], false), 'the final target must be removable');
+assert(plan.stages.h3.imageBuckets.square.length === 0, 'an AR must retain its existing empty bucket array');
+assert(context.setReviewBucket(plan, 'images', 'square', [512, 512], true), 'a target must be addable after skipping the cohort');
+const imageSource = { file: 'still.jpg', width: 512, height: 512, nativeShortEdge: 512, edge: 512, eligible: true };
+const skippedImage = context.reviewDistributionGroup([imageSource], [], 'images', {});
+assert(skippedImage.eligibleCount === 0 && skippedImage.targets.length === 0 && skippedImage.native[0].assignedTarget.length === 0, 'a skipped cohort must have no local assignments or target markers');
+assert(skippedImage.native[0].eligibilityReason === 'No enabled bucket for this cohort.', 'skipped images must use the no-enabled-bucket reason');
+const restoredImage = context.reviewDistributionGroup(skippedImage.native, [[512, 512]], 'images', skippedImage);
+assert(restoredImage.eligibleCount === 1 && restoredImage.native[0].assignedTarget.join(',') === '512,512', 'adding a target back must restore local image assignments');
+const skippedChart = context.reviewChartHtml({ plan: { stages: { h3: { imageBuckets: { square: [] } } }, videoRoles: [] }, ladders: { images: { square: [[512, 512]] }, videos: {} }, distribution: { images: { square: skippedImage }, videos: {} } }, 'images', skippedImage, [], 'square');
+assert(!skippedChart.includes('training-review-chart-marker') && !skippedChart.includes('training-review-target-zone'), 'a skipped cohort must render no target markers or zones');
+const detailSource = { file: 'detail.mp4', width: 1024, height: 576, frames: 40, nativeShortEdge: 576, edge: 576, eligible: true };
+const skippedDetail = context.reviewDistributionGroup([detailSource], [], 'detail', { frames: 17 });
+assert(skippedDetail.eligibleCount === 0 && skippedDetail.native[0].assignedTarget.length === 0, 'skipped Detail must have no local assignments');
+assert(skippedDetail.native[0].eligibilityReason.indexOf('No enabled bucket') !== -1 && skippedDetail.native[0].eligibilityReason.indexOf('lowest selected Detail') === -1, 'skipped Detail must not be described as below its floor');
+assert(context.reviewAssignmentWarnings({ images: { square: skippedImage }, videos: { detail: { '169': skippedDetail } } }, []).length === 0, 'skipped cohorts must not create assignment warnings');
+const payload = {
+  plan: { stages: { h3: { imageBuckets: { square: [[512, 512]] } } }, videoRoles: [{ id: 'detail', enabled: true, frames: 17, buckets: { '169': [[1024, 576], [896, 504], [768, 432]] } }] },
+  ladders: { images: { square: [[512, 512]] }, videos: { detail: { '169': [[1024, 576], [896, 504], [768, 432]] } } },
+  videoLimits: { detail: { '169': { effectiveCeiling: [1024, 576] } } },
+  distribution: { images: { square: { native: [imageSource], targets: [{ shape: [512, 512], assignedCount: 3 }] } }, videos: { detail: { '169': {
+    native: [{ file: 'upscale.mp4', width: 700, height: 400, frames: 40, eligible: true, impactBand: 'up20', assignedTarget: [1024, 576] }],
+    targets: [{ shape: [1024, 576], assignedCount: 1 }, { shape: [896, 504], assignedCount: 2 }, { shape: [768, 432], assignedCount: 0 }]
+  } } } }, warnings: []
+};
+const notices = context.reviewRailNotices(payload);
+assert(notices.some((notice) => notice.type === 'large-upscale'), 'large upscale must remain actionable');
+assert(notices.some((notice) => notice.type === 'at-tested-limit'), 'only exact tested limits must remain actionable');
+assert(notices.filter((notice) => notice.type === 'lightly-used-target').length === 2, 'one and two assignments must be lightly used');
+assert(notices.some((notice) => notice.type === 'unused-target'), 'zero assignments must be unused');
+const rail = context.reviewRailHtml(payload);
+assert(rail.includes('Large upscale · 1') && rail.includes('At tested limit · 1') && rail.includes('Lightly used targets · 2') && rail.includes('Unused targets · 1'), 'repeated actionable notices must render in compact groups');
+assert(!rail.includes('Near tested limit') && !rail.includes('Detail sources excluded') && !rail.includes('Very low Detail target'), 'normal behavior must not appear in Worth noticing');
+let targetHtml = context.reviewTargetsHtml(payload, 'detail', '169');
+assert(targetHtml.includes('control-pressure-high') && targetHtml.includes('control-pressure-medium'), 'selected controls must expose pressure semantics');
+const imageHtml = context.reviewTargetsHtml(payload, 'images', 'square');
+assert(imageHtml.includes('control-normal') && !imageHtml.includes('training-review-selected-target target-'), 'normal selected controls must be semantic rather than selection-order colored');
+'''
+    result = subprocess.run(
+        ["node", "-e", harness, str(script_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert ".training-review-selected-target { --review-control: #4f9bdf;" in styles
+    assert ".training-review-selected-target.control-pressure-medium { --review-control: #d9a441; }" in styles
+    assert ".training-review-selected-target.control-pressure-high { --review-control: #cf5b5b; }" in styles
+    assert ".training-review-chart-dot.target-1 { background: #a671e5; }" in styles
+    assert ".training-review-chart-marker.target-2 { background: #d96e55; }" in styles
+
+
 def test_review_rail_uses_the_draft_and_dot_inspection_stays_local():
     root = Path(__file__).parents[1]
     script_path = root / "tool" / "js" / "training_review.js"
@@ -210,8 +276,6 @@ draft.plan.videoRoles[0].buckets['916'] = [[256, 448]];
 const rail = context.reviewRailHtml(draft);
 assert(rail.includes('256'), 'rail must render the current draft target');
 assert(!rail.includes('384 × 672'), 'rail must not render the stale canonical target');
-assert(rail.includes('Very low Detail target'), 'rail must surface deterministic Detail floor notice');
-assert(rail.includes('Detail sources excluded'), 'rail must surface current Detail eligibility notice');
 const modalHtml = context.reviewModalHtml(draft);
 assert(modalHtml.includes('training-review-layout') && modalHtml.includes('training-review-rail'), 'modal must render the rail beside the workbench');
 assert(!modalHtml.includes('training-review-warnings'), 'warning content must not remain below the main workbench');
@@ -239,7 +303,6 @@ assert(renderCalls === 1 && saveCalls === 0 && closeCalls === 0, 'rail navigatio
   assert(inspectedRail.includes('Source inspector') && inspectedRail.includes('clip.mp4') && inspectedRail.includes('Target'), 'selected dot facts must render in the source inspector');
   assert(inspectedRail.includes('/caption/media?folder=set&media=clip.mp4') && inspectedRail.includes('<video controls playsinline preload="metadata"'), 'video source inspection must reuse the normal media route with native controls');
   assert(inspectedRail.includes('Keep the movement clean.'), 'source inspection must show an existing caption read-only');
-  assert(inspectedRail.includes('Worth noticing ·'), 'source inspection must collapse notices to a compact summary');
   assert(saveCalls === 0 && closeCalls === 0, 'dot inspection must not save, close, or navigate');
 '''
     result = subprocess.run(
@@ -267,7 +330,7 @@ assert(renderCalls === 1 && saveCalls === 0 && closeCalls === 0, 'rail navigatio
     assert "align-items: flex-start" in modal_styles
     assert "width: min(1620px, calc(100vw - 36px));" in styles
     assert "grid-template-columns: minmax(0, 1fr) minmax(320px, 400px)" in styles
-    assert ".training-review-selected-target .training-review-target-chip.selected:disabled { opacity: 1; cursor: default; }" in styles
+    assert "removeDisabled" not in script
 
 
 def test_scale_impact_scope_chart_floor_and_source_refresh_keep_the_draft():

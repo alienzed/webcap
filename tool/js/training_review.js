@@ -159,9 +159,6 @@ function setReviewBucket(plan, view, aspect, bucket, enabled) {
   if (enabled) {
     if (next.length >= 3) { setStatus('Use at most three targets in one aspect-ratio cohort.'); return false; }
     next.push([Number(bucket[0]), Number(bucket[1])]);
-  } else if (!next.length) {
-    setStatus('Keep one target selected for this cohort.');
-    return false;
   }
   if (view === 'images') {
     var stage = reviewStageId(plan);
@@ -335,9 +332,17 @@ function reviewDistributionGroup(rows, targets, view, prior) {
   var impact = reviewEmptyImpactCounts();
   var native = (rows || []).map(function (source) {
     var row = Object.assign({}, source);
+    var baseEligible = typeof row._reviewBaseEligible === 'boolean' ? row._reviewBaseEligible : !!row.eligible;
+    var baseReason = row._reviewBaseEligibilityReason !== undefined ? row._reviewBaseEligibilityReason : (row.eligibilityReason || '');
+    row._reviewBaseEligible = baseEligible;
+    row._reviewBaseEligibilityReason = baseReason;
     var detailEligibility = view === 'detail' ? reviewDetailEligibility(row, targets, prior && prior.frames) : null;
-    row.eligible = detailEligibility ? detailEligibility.eligible : !!row.eligible;
-    if (detailEligibility) row.eligibilityReason = detailEligibility.reason;
+    row.eligible = detailEligibility ? detailEligibility.eligible : baseEligible;
+    row.eligibilityReason = detailEligibility ? detailEligibility.reason : baseReason;
+    if (!targets.length && row.eligible) {
+      row.eligible = false;
+      row.eligibilityReason = 'No enabled bucket for this cohort.';
+    }
     var target = row.eligible ? reviewProjectedTarget(view, row, targets) : null;
     var nativeShortEdge = Number(row.nativeShortEdge || row.edge || Math.min(Number(row.width), Number(row.height)) || 0);
     var scaleRatio = target && nativeShortEdge ? Math.min(Number(target[0]), Number(target[1])) / nativeShortEdge : 1;
@@ -386,13 +391,13 @@ function reviewAssignmentWarnings(distribution, existingWarnings) {
           message: substantialUpscale + ' of ' + eligible.length + ' ' + label + ' item(s) in ' + formatReviewAspect(aspect) + ' need more than 20% enlargement.', files: []
         });
       }
-      if (eligible.length >= 8) (group.targets || []).forEach(function (target) {
+      (group.targets || []).forEach(function (target) {
         var assigned = Number(target.assignedCount || 0);
-        if (!assigned || assigned > Math.max(2, Math.floor(eligible.length * 0.10))) return;
+        if (assigned > 2) return;
         var shape = target.shape || [];
         warnings.push({
           code: 'small_bucket', view: entry.view, ar: aspect,
-          message: shape[0] + '×' + shape[1] + ' receives only ' + assigned + ' item(s) in ' + formatReviewAspect(aspect) + '.', files: []
+          message: shape[0] + '×' + shape[1] + ' receives ' + (assigned ? assigned + ' item(s)' : 'no items') + ' in ' + formatReviewAspect(aspect) + '.', files: []
         });
       });
     });
@@ -499,15 +504,15 @@ function reviewTargetsHtml(payload, view, aspect) {
     return candidates.findIndex(function (item) { return sameReviewBucket(item, a); }) - candidates.findIndex(function (item) { return sameReviewBucket(item, b); });
   }).slice(0, 4);
   function selectedChip(bucket) {
-    var color = reviewTargetColor(selected, bucket);
-    var removeDisabled = selected.length <= 1;
+    var pressureLevel = reviewBucketPressureLevel(payload, view, aspect, bucket);
+    var controlTone = pressureLevel === 'pressure-high' ? 'control-pressure-high' : pressureLevel === 'pressure-medium' ? 'control-pressure-medium' : 'control-normal';
     var pressure = reviewBucketPressureNote(payload, view, aspect, bucket);
     var decreaseTitle = 'Decrease one rung' + (pressure ? '. ' + pressure : '');
     var increaseTitle = 'Increase one rung' + (pressure ? '. ' + pressure : '');
-    return '<span class="training-review-selected-target ' + color + ' ' + reviewBucketPressureLevel(payload, view, aspect, bucket) + '"><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Decrease one rung" title="' + escapeHtml(decreaseTitle) + '">−</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (removeDisabled ? ' disabled title="Choose another target before removing this one."' : pressure ? ' title="' + escapeHtml(pressure) + '"' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Increase one rung" title="' + escapeHtml(increaseTitle) + '">+</button></span>';
+    return '<span class="training-review-selected-target ' + controlTone + '"><button type="button" class="training-review-step" data-review-step="1" data-review-target="' + bucket.join(',') + '" aria-label="Decrease one rung" title="' + escapeHtml(decreaseTitle) + '">−</button><button type="button" class="training-review-target-chip selected" data-review-target="' + bucket.join(',') + '"' + (pressure ? ' title="' + escapeHtml(pressure) + '"' : '') + '>' + escapeHtml(bucket[0] + ' × ' + bucket[1]) + '</button><button type="button" class="training-review-step" data-review-step="-1" data-review-target="' + bucket.join(',') + '" aria-label="Increase one rung" title="' + escapeHtml(increaseTitle) + '">+</button></span>';
   }
   function neutralChip(bucket) { return reviewNeutralTargetChipHtml(payload, view, aspect, selected, bucket); }
-  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><div class="training-review-target-utilities">' + limitNote + '</div></div><div class="training-review-target-instructions">Choose up to three. +/− moves a selected target one rung.</div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-add"><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div></div></div></section>';
+  return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><div class="training-review-target-utilities">' + limitNote + '</div></div><div class="training-review-target-instructions">Choose up to three. +/− moves a selected target one rung.</div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected — this cohort will be skipped.</span>') + '</div></div><div class="training-review-target-add"><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div></div></div></section>';
 }
 
 function reviewInspectedSource(payload) {
@@ -695,36 +700,26 @@ function reviewRailNotices(payload) {
       var targets = upscaleRows.map(function (row) { return row.assignedTarget || row.target || []; });
       var commonTarget = targets.length && targets.every(function (target) { return sameReviewBucket(target, targets[0]); }) ? targets[0] : null;
       if (upscaleRows.length) notices.push({
-        view: view, aspect: aspect, title: 'Substantial upscale',
-        message: upscaleRows.length + ' eligible item' + (upscaleRows.length === 1 ? '' : 's') + ' need more than 20% enlargement.',
+        type: 'large-upscale', view: view, aspect: aspect,
+        message: upscaleRows.length + ' source' + (upscaleRows.length === 1 ? '' : 's') + ' >20%',
         lowerTarget: commonTarget && reviewCanStepBucket(payload, view, aspect, commonTarget, 1) ? commonTarget : null
       });
       selected.forEach(function (target) {
         var pressure = reviewBucketPressureLevel(payload, view, aspect, target);
-        if (pressure !== 'pressure-high' && pressure !== 'pressure-medium') return;
+        if (pressure !== 'pressure-high') return;
         notices.push({
-          view: view, aspect: aspect, title: pressure === 'pressure-high' ? 'At tested limit' : 'Near tested limit',
-          message: target[0] + ' × ' + target[1] + ' · ' + reviewBucketPressureNote(payload, view, aspect, target)
+          type: 'at-tested-limit', view: view, aspect: aspect,
+          message: target[0] + ' × ' + target[1]
         });
       });
-      if (view === 'detail') {
-        var resolutionExcluded = (group.native || []).filter(function (row) { return !row.eligible && reviewDetailFrameEligible(row, group.frames); }).length;
-        if (resolutionExcluded) notices.push({
-          view: view, aspect: aspect, title: 'Detail sources excluded',
-          message: resolutionExcluded + ' source' + (resolutionExcluded === 1 ? '' : 's') + ' fall below the selected Detail floor.'
+      (group.targets || []).forEach(function (target) {
+        var assigned = Number(target.assignedCount || 0);
+        if (assigned > 2) return;
+        var shape = target.shape || [];
+        notices.push({
+          type: assigned ? 'lightly-used-target' : 'unused-target', view: view, aspect: aspect,
+          message: shape[0] + ' × ' + shape[1] + ' · ' + (assigned ? assigned + ' item' + (assigned === 1 ? '' : 's') : 'No items')
         });
-        var ladder = reviewCandidates(payload, view, aspect);
-        selected.forEach(function (target) {
-          if (ladder.length > 1 && sameReviewBucket(target, ladder[ladder.length - 1])) notices.push({
-            view: view, aspect: aspect, title: 'Very low Detail target',
-            message: target[0] + ' × ' + target[1] + ' is at the bottom of the supported ladder and may work against Detail’s higher-resolution purpose.'
-          });
-        });
-      }
-      (payload.warnings || []).filter(function (warning) {
-        return warning.code !== 'substantial_upscale' && warning.view === view && warning.ar === aspect;
-      }).forEach(function (warning) {
-        notices.push({ view: view, aspect: aspect, title: warning.code === 'small_bucket' ? 'Lightly used target' : 'Worth noticing', message: warning.message || '' });
       });
     });
   });
@@ -776,11 +771,22 @@ function reviewRailHtml(payload) {
     }).join('');
     return rows ? '<section class="training-review-rail-plan-group"><strong>' + escapeHtml(reviewRailLabel(view)) + '</strong>' + rows + '</section>' : '';
   }).join('');
+  var noticeGroups = [
+    { type: 'large-upscale', title: 'Large upscale' },
+    { type: 'at-tested-limit', title: 'At tested limit' },
+    { type: 'lightly-used-target', title: 'Lightly used targets' },
+    { type: 'unused-target', title: 'Unused targets' }
+  ].map(function (group) {
+    group.items = notices.filter(function (notice) { return notice.type === group.type; });
+    return group;
+  }).filter(function (group) { return group.items.length; });
   var noticeHtml = notices.length ? (sourceHtml
     ? '<section class="training-review-rail-section training-review-rail-notice-summary"><strong>Worth noticing · ' + notices.length + '</strong></section>'
-    : '<section class="training-review-rail-section training-review-rail-notices"><strong>Worth noticing</strong><div class="training-review-rail-notice-list">' + notices.map(function (notice) {
-    return '<div class="training-review-rail-notice"><span>' + escapeHtml(reviewRailLabel(notice.view) + ' · ' + formatReviewAspect(notice.aspect)) + '</span><b>' + escapeHtml(notice.title) + '</b><p>' + escapeHtml(notice.message) + '</p><div><button type="button" class="training-review-rail-review" data-review-rail-view="' + escapeHtml(notice.view) + '" data-review-rail-aspect="' + escapeHtml(notice.aspect) + '">Review</button>' + (notice.lowerTarget ? '<button type="button" class="training-review-rail-review" data-review-lower-upscale-target="' + escapeHtml(notice.lowerTarget.join(',')) + '">Lower one rung</button>' : '') + '</div></div>';
-  }).join('') + '</div></section>') : '';
+    : '<section class="training-review-rail-section training-review-rail-notices"><strong>Worth noticing</strong><div class="training-review-rail-notice-list">' + noticeGroups.map(function (group) {
+      return '<section class="training-review-rail-notice-group"><strong>' + escapeHtml(group.title) + ' · ' + group.items.length + '</strong>' + group.items.map(function (notice) {
+        return '<div class="training-review-rail-notice-compact"><span>' + escapeHtml(reviewRailLabel(notice.view) + ' · ' + formatReviewAspect(notice.aspect)) + '</span><b>' + escapeHtml(notice.message) + '</b><div><button type="button" class="training-review-rail-review" data-review-rail-view="' + escapeHtml(notice.view) + '" data-review-rail-aspect="' + escapeHtml(notice.aspect) + '">Review</button>' + (notice.lowerTarget ? '<button type="button" class="training-review-rail-review" data-review-lower-upscale-target="' + escapeHtml(notice.lowerTarget.join(',')) + '">Lower one rung</button>' : '') + '</div></div>';
+      }).join('') + '</section>';
+    }).join('') + '</div></section>') : '';
   return '<aside class="training-review-rail">' + sourceHtml + noticeHtml + '<section class="training-review-rail-section training-review-selected-plan"><strong>Selected plan</strong><div class="training-review-rail-plan-list">' + (planGroups || '<span class="training-review-muted">No enabled categories.</span>') + '</div></section></aside>';
 }
 

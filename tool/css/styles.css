@@ -2662,6 +2662,7 @@ iframe {
 .training-review-more-targets[open] { display: grid; gap: 8px; }
 .training-review-target-chip { min-height: 34px; padding: 5px 10px; }
 .training-review-target-chip.neutral { color: var(--muted-text, #a3adba); }
+.training-review-target-chip.neutral:not(:disabled) { color: var(--text, #e5e7eb); }
 .training-review-target-chip:hover:not(:disabled), .training-review-step:hover { border-color: var(--accent, #f59e0b); }
 .training-review-target-chip:disabled { cursor: not-allowed; opacity: .52; }
 .training-review-selected-target { display: inline-flex; align-items: stretch; border-radius: 6px; }
@@ -2674,7 +2675,7 @@ iframe {
 .target-2 { --review-target: #d96e55; }
 .training-review-selected-target.target-0 > *, .training-review-selected-target.target-1 > *, .training-review-selected-target.target-2 > * { border-color: var(--review-target); }
 .training-review-selected-target.target-0 .training-review-target-chip, .training-review-selected-target.target-1 .training-review-target-chip, .training-review-selected-target.target-2 .training-review-target-chip { color: var(--review-target); font-weight: 700; background: color-mix(in srgb, var(--review-target) 20%, var(--panel-soft, #1a2230)); }
-.training-review-selected-target .training-review-target-chip.selected { color: var(--text, #e5e7eb); }
+.training-review-selected-target .training-review-target-chip.selected { color: var(--text, #e5e7eb); background: color-mix(in srgb, var(--accent, #f59e0b) 16%, var(--panel-soft, #1a2230)); box-shadow: inset 0 -2px 0 var(--accent, #f59e0b); }
 .training-review-target-chip.neutral.pressure-high { border-color: rgba(207, 91, 91, .72); color: #d88b8b; background: rgba(207, 91, 91, .10); }
 .training-review-target-chip.neutral.pressure-medium { border-color: rgba(217, 164, 65, .72); color: #dfb66d; background: rgba(217, 164, 65, .09); }
 .training-review-target-chip.neutral.pressure-low { border-color: rgba(218, 195, 102, .64); color: #d8ca82; background: rgba(218, 195, 102, .08); }

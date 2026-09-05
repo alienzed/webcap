@@ -18,7 +18,7 @@ This document is the authoritative record for the stabilized training contract a
 
 Clicking Train flushes the set TOMLs and synchronously captures the current media, captions, TOMLs, and optional initializer before a queue row is written. A failed capture is loud and creates no queue item. A partial capture directory is intentionally left for manual inspection or deletion.
 
-Every capture copies source media byte-for-byte. WebCap does not transcode, silently skip media, normalize training permissions, run environment preflight, or clean up action folders.
+Every capture currently materializes source media byte-for-byte. WebCap does not currently transcode, silently skip media, normalize training permissions, run environment preflight, or clean up action folders. A proposed advanced, default-off model-native FPS option would be the narrow exception: it would transcode only isolated run/capture video; see `training_profiles.md`.
 
 Fresh actions use this layout:
 

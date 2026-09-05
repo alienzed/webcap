@@ -1,96 +1,26 @@
 # Authoritative Frame Scrubbing
 
-## Status
-
-Implemented Clip workflow. Browser-based frame-sized nudging remains available
-for quick orientation; the explicit exact-frame controls provide the
-authoritative selection/export path described below.
-
-## Implemented Behavior
-
-- **Check Frame** resolves the first decoded source frame at or after the
-  browser playhead through `ffprobe`, displays an FFmpeg-decoded PNG preview,
-  and records its zero-based decoded-frame index and presentation timestamp.
-- **Exact Prev** and **Exact Next** navigate by decoded-frame index. Frame
-  timestamp lists are cached only in memory, keyed by the source's normalized
-  path, size, and high-resolution modification time, and retain at most eight
-  source files.
-- **Use Exact Start** attaches the selected frame index and opaque fingerprint
-  to the pending export. The export worker rechecks the fingerprint immediately
-  before it runs; a changed source fails visibly and must be checked again.
-- Exact export trims video with `trim=start_frame=N`, resets timestamps, then
-  applies the crop. Audio is trimmed from the selected frame timestamp and
-  re-encoded for alignment. Ordinary timestamp-based exports remain available.
-
-## Problem
-
-An HTML video element can only seek by time. Using the reported frame rate to move `currentTime` by one nominal frame is useful for navigation, but it cannot prove which decoded source frame is displayed or guarantee that an export begins with that frame. Variable-frame-rate media makes an FPS-derived calculation especially unsuitable as an authoritative frame identity.
-
-The desired workflow is:
-
-- Check the frame near the browser's current position.
-- Show the exact frame decoded from the source file.
-- Move backward or forward by exactly one decoded frame at a time.
-- Select that frame as the clip start.
-- Guarantee that the selected frame is the first video frame in the export.
-
-## Implementation Boundary
-
-Keep the browser player as the fast, approximate navigation surface. Make ffprobe/FFmpeg authoritative only after the user chooses `Check Frame`.
-
-The client should not attempt to prove frame identity. It should retain and return an opaque server result containing at least:
-
-- decoded frame index
-- presentation timestamp
-- source fingerprint
-
-The source fingerprint should identify the unchanged source file, initially with normalized path, size, and high-resolution modification time. Export must fail loudly and require another frame check if the source no longer matches.
+The Clip modal combines normal HTML video playback with server-resolved decoded frames. Browser playback and its native scrubber are the quick, approximate navigation path; WebCap only resolves an exact frame when the user asks for precision.
 
 ## Workflow
 
-1. `Check Frame` sends the browser's approximate time to the backend.
-2. The backend uses ffprobe frame data to resolve that time to a decoded frame, then uses FFmpeg to return a PNG preview plus its frame index and presentation timestamp.
-3. Previous and Next request frame index `N - 1` or `N + 1`. The backend returns the exact decoded frame and updated identity.
-4. `Use as Start` copies that authoritative identity into the pending clip export. The browser may seek to its timestamp for orientation, but the video element remains only a preview.
-5. Export verifies the source fingerprint and trims video by frame index, not only by timestamp.
+1. Use the video player or `-5s` / `+5s` to navigate approximately.
+2. **Preview Frame** resolves the decoded source frame at the browser playhead. WebCap displays its FFmpeg-decoded PNG directly over the main video stage and aligns the player to that frame's presentation timestamp.
+3. `◀ 1f` and `1f ▶` move by authoritative decoded frame index. From normal video mode, they first resolve the current playhead, then step from that decoded frame.
+4. **Mark Start** commits the current exact frame. Stepping to another candidate frame does not clear the committed start; manually changing the start boundary does.
+5. Exact export verifies the source fingerprint, trims with `trim=start_frame=N`, resets timestamps with `setpts=PTS-STARTPTS`, then crops. The committed source frame `N` is therefore output video frame 0.
 
-No persistent directory of extracted frames is required. Individual previews can be piped from FFmpeg on demand. A short-lived frame timestamp/index cache keyed by source fingerprint may make repeated navigation practical without changing the file-based product model.
+## Current Frame extraction
 
-## Export Guarantee
+**Extract Frame** becomes available only while an exact frame is active. It saves the authoritative, native-resolution source PNG—not the browser image, stage preview, or Clip crop—as an ordinary set image. The source video caption sidecar is copied when present.
 
-The current timestamp-based `-ss startSec` export path is not sufficient to guarantee the first decoded output frame.
+When the video is open from a direct `src_videos` child, the new image is added to its parent set folder, matching Clip export behavior. Otherwise it is added to the current folder. Existing image names are rejected rather than overwritten.
 
-For an authoritative start, the video filter chain should trim by decoded input frame index, conceptually:
+Frame identity includes a source fingerprint based on the normalized path, size, and modification time. A changed source invalidates an inspected frame: Preview, extraction, and exact export fail visibly until the frame is resolved again.
 
-```text
-trim=start_frame=N,setpts=PTS-STARTPTS
-```
+## Non-goals
 
-Crop and other video filters would follow that trim. This favors correctness over seek speed and may require decoding from earlier in a long source. Timestamp-assisted optimization should only be added if it preserves and verifies the selected frame identity.
-
-Audio cannot share a video frame index. It should be trimmed from the selected frame's real presentation timestamp and have its timestamps reset. Exact video-frame start and audio alignment are separate guarantees; retaining stream-copy audio may not be compatible with precise alignment, so this path may require audio re-encoding.
-
-## Backend Shape
-
-Keep the feature localized:
-
-- A helper in `tool/server/` owns frame inspection and normalized results.
-- One route checks an approximate time or an explicit adjacent frame index and returns the preview and authoritative identity.
-- The existing clip export accepts the authoritative frame identity when present and uses the exact trim path.
-- Backend errors, stale fingerprints, out-of-range frame requests, and FFmpeg failures remain visible failures.
-
-The backend response should be app-shaped rather than exposing raw ffprobe records.
-
-## Deferred Questions
-
-- Whether the initial time maps to the nearest frame or the first frame whose presentation timestamp is at or after that time.
-- Whether an in-memory frame index is sufficient for very long sources or a small sidecar cache is justified.
-- Which audio codec and alignment policy should replace stream copy for authoritative exports.
-- Whether authoritative start selection should remain an explicit opt-in or eventually replace the normal start control.
-
-## Non-Goals
-
-- Extracting the entire video into individual frame files.
-- Pretending browser `currentTime` is frame-accurate.
-- Building a general-purpose video editor.
-- Adding frame-analysis infrastructure before this workflow is resumed.
+- Browser-FPS-derived frame identity or stepping.
+- A second decoded-frame preview outside the main video stage.
+- Frame-rate normalization, model-specific video handling, or training-bundle changes.
+- Bulk frame extraction or automatic best-frame selection.

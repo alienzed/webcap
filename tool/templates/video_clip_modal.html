@@ -5,6 +5,7 @@
                 <span class="video-clip-kicker">Video clipper</span>
                 <strong id="video-clip-title">Clip video</strong>
             </div>
+            <span id="video-clip-source-meta" class="video-clip-source-meta"></span>
             <button id="video-clip-cancel-x" type="button" title="Close" aria-label="Close video clip modal">x</button>
         </div>
 
@@ -29,38 +30,33 @@
                     </div>
                 </div>
                 <div class="video-clip-transport-row">
-                    <div class="video-clip-time-pill">
-                        <span>Playhead</span>
-                        <strong><span id="video-clip-current-time">0.000</span>s</strong>
-                    </div>
                     <div class="video-clip-transport-controls">
-                        <button id="video-clip-exact-back-btn" type="button" class="video-clip-inline-btn" title="Previous decoded frame" disabled>Prev Frame</button>
-                        <button id="video-clip-exact-forward-btn" type="button" class="video-clip-inline-btn" title="Next decoded frame">Next Frame</button>
-                        <span class="video-clip-transport-separator" aria-hidden="true"></span>
                         <button id="video-clip-skip-back-btn" type="button" class="video-clip-inline-btn">-5s</button>
+                        <button id="video-clip-exact-back-btn" type="button" class="video-clip-inline-btn" title="Previous decoded frame">◀ 1f</button>
+                        <button id="video-clip-exact-forward-btn" type="button" class="video-clip-inline-btn" title="Next decoded frame">1f ▶</button>
                         <button id="video-clip-skip-forward-btn" type="button" class="video-clip-inline-btn">+5s</button>
-                        <button id="video-clip-skip-forward-15-btn" type="button" class="video-clip-inline-btn">+15s</button>
                         <span class="video-clip-transport-separator" aria-hidden="true"></span>
-                        <div class="video-clip-rate-row" role="group" aria-label="Playback rate">
-                            <button type="button" class="video-clip-rate-btn active" data-rate="1">1x</button>
-                            <button type="button" class="video-clip-rate-btn" data-rate="2">2x</button>
-                            <button type="button" class="video-clip-rate-btn" data-rate="4">4x</button>
-                            <button type="button" class="video-clip-rate-btn" data-rate="8">8x</button>
-                        </div>
-                        <button id="video-clip-loop-preview-btn" type="button" class="video-clip-inline-btn">Loop Preview</button>
-                    </div>
-                    <div class="video-clip-time-pill">
-                        <span>End</span>
-                        <strong><span id="video-clip-end-time">2.000</span>s</strong>
+                        <label for="video-clip-rate-select" class="video-clip-accessible-label">Speed</label>
+                        <select id="video-clip-rate-select" class="video-clip-rate-select" aria-label="Playback speed">
+                            <option value="1">Speed 1x</option>
+                            <option value="2">Speed 2x</option>
+                            <option value="4">Speed 4x</option>
+                            <option value="8">Speed 8x</option>
+                        </select>
+                        <button id="video-clip-loop-preview-btn" type="button" class="video-clip-inline-btn">Loop</button>
                     </div>
                 </div>
-                <div class="video-clip-timeline" aria-hidden="true">
+                <div class="video-clip-timeline">
                     <div class="video-clip-timeline-track">
                         <div id="video-clip-selection-range" class="video-clip-selection-range">
                             <span class="video-clip-range-handle video-clip-range-handle--start" data-video-clip-range-handle="start"></span>
                             <span class="video-clip-range-handle video-clip-range-handle--end" data-video-clip-range-handle="end"></span>
                         </div>
                         <div id="video-clip-playhead" class="video-clip-playhead"></div>
+                    </div>
+                    <div class="video-clip-timeline-labels" aria-live="polite">
+                        <span id="video-clip-timeline-start-label">Start 0.000s</span>
+                        <span id="video-clip-timeline-end-label">End 2.000s</span>
                     </div>
                     <div class="video-clip-timeline-ticks">
                         <span></span>
@@ -73,6 +69,22 @@
             </div>
 
             <div class="video-clip-settings-panel">
+                <div class="video-clip-setting-group">
+                    <div class="video-clip-form-label">Current Frame</div>
+                    <div id="video-clip-current-frame-status" class="video-clip-section-note">No exact frame selected.</div>
+                    <div class="video-clip-frame-actions">
+                        <button id="video-clip-preview-frame-btn" type="button" class="video-clip-inline-btn">Preview Frame</button>
+                        <button id="video-clip-extract-frame-btn" type="button" class="video-clip-inline-btn" disabled>Extract Frame…</button>
+                    </div>
+                    <div id="video-clip-extract-frame-confirm" class="video-clip-extract-frame-confirm hidden">
+                        <label for="video-clip-extract-name-input" class="video-clip-field-label">Frame filename</label>
+                        <input id="video-clip-extract-name-input" type="text" value="">
+                        <div class="video-clip-frame-actions">
+                            <button id="video-clip-extract-save-btn" type="button" class="video-clip-inline-btn">Add to Set</button>
+                            <button id="video-clip-extract-cancel-btn" type="button" class="video-clip-inline-btn">Cancel</button>
+                        </div>
+                    </div>
+                </div>
                 <div class="video-clip-setting-group">
                     <div class="video-clip-form-label">Trim</div>
                     <div class="video-clip-trim-grid">

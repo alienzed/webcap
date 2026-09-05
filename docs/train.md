@@ -22,7 +22,7 @@ Training keeps its numbered setup, queue, GPU status, and recent runs in the cen
 
 The compact chevron in Items only collapses the tile overview; it does not alter the visible-media selection that will be captured.
 
-Train saves the open TOML before capture. It then creates a run-owned bundle containing the visible media, latest captions, exact saved TOMLs, and training plan. For video-capable profiles, off-target video FPS is normalized only in that bundle; a failed conversion logs a warning and keeps an unchanged copy. The job enters the queue only after the bundle is complete.
+Train saves the open TOML before capture. It then creates a run-owned bundle containing the visible media, latest captions, exact saved TOMLs, and training plan. Capture materializes source media byte-for-byte; it does not currently normalize video FPS. The job enters the queue only after the bundle is complete. The proposed advanced, per-run model-native FPS option is documented in [training_profiles.md](training_profiles.md).
 
 Wan2.2 `HI -> LO` creates two jobs sharing one captured bundle. Every separate Train action creates a separate bundle.
 

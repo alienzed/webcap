@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import math
+import shutil
 import subprocess
 import threading
 import time
@@ -10,6 +11,7 @@ from pathlib import Path
 from flask import jsonify
 
 from . import config as app_config
+from .permissions import normalize_path_permissions
 
 
 VIDEO_EXTS = {".mp4", ".webm", ".ogg", ".mov", ".mkv", ".avi", ".m4v", ".wmv", ".mpg", ".mpeg"}
@@ -180,6 +182,48 @@ def resolve_exact_start(source_path, frame_index, source_fingerprint):
     return {"frameIndex": index, "timestampSec": timestamps[index], "sourceFingerprint": fingerprint}
 
 
+def _safe_frame_output_name(name):
+    value = str(name or "").strip()
+    if not value:
+        raise RuntimeError("Output image name is required")
+    if Path(value).name != value or "/" in value or "\\" in value or ".." in value:
+        raise RuntimeError("Invalid output image name")
+    stem = Path(value).stem
+    if not stem:
+        raise RuntimeError("Output image name is required")
+    if Path(value).suffix.lower() != ".png":
+        raise RuntimeError("Output image must use the .png extension")
+    return value
+
+
+def _set_media_folder(source_folder):
+    return source_folder.parent if source_folder.name.lower() == "src_videos" else source_folder
+
+
+def extract_video_frame(source_path, frame_index, source_fingerprint, output_path):
+    resolved = resolve_exact_start(source_path, frame_index, source_fingerprint)
+    output_path = Path(output_path)
+    if output_path.exists():
+        raise RuntimeError("Output image already exists")
+    caption_source = source_path.with_suffix(".txt")
+    caption_output = output_path.with_suffix(".txt")
+    if caption_output.exists():
+        raise RuntimeError("Output caption already exists")
+    png = _extract_frame_png(source_path, resolved["frameIndex"])
+    try:
+        with output_path.open("xb") as handle:
+            handle.write(png)
+        normalize_path_permissions(output_path)
+        if caption_source.exists():
+            shutil.copyfile(caption_source, caption_output)
+            normalize_path_permissions(caption_output)
+    except Exception:
+        if output_path.exists():
+            output_path.unlink()
+        raise
+    return resolved
+
+
 def inspect_video_frame_response(data):
     data = data or {}
     folder = str(data.get("folder") or "").strip()
@@ -199,5 +243,36 @@ def inspect_video_frame_response(data):
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         app_config.debug_print("[video_frame] ERROR:", exc)
+        app_config.debug_traceback()
+        return jsonify({"error": str(exc)}), 400
+
+
+def extract_video_frame_response(data):
+    data = data or {}
+    folder = str(data.get("folder") or "").strip()
+    if not folder:
+        return jsonify({"error": "Missing folder"}), 400
+    try:
+        source_folder = app_config.safe_join_fs_root(folder)
+        if not source_folder.exists() or not source_folder.is_dir():
+            return jsonify({"error": "Source folder does not exist"}), 404
+        source_path = source_folder / _safe_media_name(data.get("fileName") or data.get("media") or "")
+        destination_folder = _set_media_folder(source_folder)
+        if not destination_folder.exists() or not destination_folder.is_dir():
+            raise RuntimeError("Set media folder does not exist")
+        output_name = _safe_frame_output_name(data.get("outputName"))
+        output_path = destination_folder / output_name
+        extract_video_frame(source_path, data.get("frameIndex"), data.get("sourceFingerprint"), output_path)
+        return jsonify({
+            "ok": True,
+            "outputName": output_name,
+            "destinationFolder": str(Path(folder).parent) if destination_folder != source_folder else folder,
+            "destinationIsCurrentFolder": destination_folder == source_folder,
+        })
+    except RuntimeError as exc:
+        message = str(exc)
+        return jsonify({"error": message}), 409 if "already exists" in message else 400
+    except Exception as exc:
+        app_config.debug_print("[video_frame_extract] ERROR:", exc)
         app_config.debug_traceback()
         return jsonify({"error": str(exc)}), 400

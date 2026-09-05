@@ -13,7 +13,7 @@ from .originals import copy_media_to_originals, media_mutation_status_by_hash, i
 from .file_ops import duplicate_folder_response, duplicate_image_response, open_in_explorer_response, open_path_in_explorer_response, open_in_vscode_response, rename_response
 from .media import media_blur_background_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
-from .video_frame_ops import inspect_video_frame_response
+from .video_frame_ops import extract_video_frame_response, inspect_video_frame_response
 from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
 from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, tensorboard_status_response as training_runner_tensorboard_status_response, tensorboard_control_response as training_runner_tensorboard_control_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, clear_history_response as training_runner_clear_history_response, history_metrics_response as training_runner_history_metrics_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses, start_observer as start_training_runner_observer
@@ -323,6 +323,12 @@ def media_video_clip():
 def media_video_clip_frame():
     data = request.get_json(silent=True) or {}
     return inspect_video_frame_response(data)
+
+
+@app.route("/media/video_clip_extract_frame", methods=["POST"])
+def media_video_clip_extract_frame():
+    data = request.get_json(silent=True) or {}
+    return extract_video_frame_response(data)
 
 
 @app.route("/media/video_clip_status", methods=["GET"])

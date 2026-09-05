@@ -68,7 +68,7 @@ Current profiles are app-owned and intentionally finite:
 
 The current UI uses one canonical setup per profile; it has no training-mode variants.
 
-Wan bundle videos are normalized to 16 fps; MiniMax H3 bundle videos are normalized to 24 fps. Krea2 rejects video capture.
+Captured videos currently remain byte-for-byte source copies. A future advanced, default-off option may normalize only isolated run media to Wan 16 fps or MiniMax H3 24 fps; it will not alter source-set media. Krea2 rejects video capture.
 
 Profiles can be hidden from new-run selection in App Settings without deleting their existing TOMLs, captured runs, or history.
 

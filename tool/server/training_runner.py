@@ -1038,6 +1038,16 @@ def _record_unverified_runner(job, detail):
     return {"holdReason": ""}
 
 
+def _recover_dead_runner(job, detail):
+    """Return a positively absent runner to an explicit paused resume state."""
+    _queue_paused_job(job)
+    job["error"] = str(detail or "The recorded runner is no longer active and did not write a result record.").strip()
+    return {
+        "holdReason": "Previous runner ended without a result. Resume or restart the first item.",
+        "recovered": True,
+    }
+
+
 def _distributed_socket_hold_reason(log_text):
     text = str(log_text or "").lower()
     has_distributed_context = "torch.distributed" in text or "_create_c10d_store" in text
@@ -1146,7 +1156,7 @@ def _refresh_job(job):
             return _record_unverified_runner(job, result_error or process_detail)
         return {"holdReason": ""}
     if prior_status in ACTIVE_STATUSES and not job.get("actionRequested"):
-        return _record_unverified_runner(
+        return _recover_dead_runner(
             job,
             result_error or "The recorded runner is no longer active and did not write a result record.",
         )
@@ -1201,6 +1211,7 @@ def _refresh_state(state):
     global _startup_reconciled
     hold_reason = ""
     pause_requested = False
+    recovered_jobs = []
     for job in state.get("jobs", []):
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
@@ -1211,6 +1222,11 @@ def _refresh_state(state):
             hold_reason = outcome["holdReason"]
         if outcome and outcome.get("pauseQueue"):
             pause_requested = True
+        if outcome and outcome.get("recovered"):
+            recovered_jobs.append(job)
+    if recovered_jobs:
+        recovered_ids = {job["id"] for job in recovered_jobs}
+        state["jobs"] = recovered_jobs + [job for job in state["jobs"] if job.get("id") not in recovered_ids]
     active_jobs = [job for job in state.get("jobs", []) if job.get("status") in ACTIVE_STATUSES]
     state["activeJobId"] = active_jobs[0]["id"] if active_jobs else ""
     if len(active_jobs) > 1:

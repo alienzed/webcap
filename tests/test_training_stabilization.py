@@ -653,9 +653,10 @@ def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     assert active["runnerVerified"] is True
 
 
-def test_restart_preserves_missing_runner_state_and_blocks_queue(tmp_path, monkeypatch):
+def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (3, "", ""))
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("must not launch during restart recovery"))
     state = {
         "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
         "jobs": [
@@ -672,15 +673,17 @@ def test_restart_preserves_missing_runner_state_and_blocks_queue(tmp_path, monke
     training_runner._write_state(state)
     restored = training_runner._read_state()
 
-    assert restored["queuePaused"] is False
-    assert [job["id"] for job in restored["jobs"]] == ["later", "active"]
-    active = restored["jobs"][1]
-    assert restored["activeJobId"] == "active"
-    assert active["status"] == "running"
-    assert active["pid"] == 4242
-    assert "runnerVerified" not in active
-    assert "resumeFromCheckpoint" not in active
-    assert "no longer active" in active["error"]
+    assert [job["id"] for job in restored["jobs"]] == ["active", "later"]
+    recovered = restored["jobs"][0]
+    assert restored["activeJobId"] == ""
+    assert recovered["status"] == "queued"
+    assert recovered["resumeFromCheckpoint"] == "/runs/original"
+    assert recovered["resumeStage"] == "h3"
+    assert "pid" not in recovered
+    assert "runnerVerified" not in recovered
+    assert "no longer active" in recovered["error"]
+    assert restored["queuePaused"] is True
+    assert restored["queuePauseReason"] == "Previous runner ended without a result. Resume or restart the first item."
 
 
 def test_restart_preserves_unverifiable_runner_until_exact_process_verifies(tmp_path, monkeypatch):

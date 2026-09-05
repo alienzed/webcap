@@ -143,6 +143,10 @@ function seekVideoClipPlayhead(time, options) {
   var currentTime = Number(videoEl.currentTime || 0);
   if (!isFinite(currentTime) || currentTime < 0) currentTime = 0;
   var changed = Math.abs(currentTime - nextTime) > 0.000001;
+  if (!changed) {
+    updateVideoClipTimelineUi();
+    return;
+  }
   videoClipExactFrameSeekPending = !!(changed && options && options.preserveExactFrame);
   try { videoEl.currentTime = nextTime; } catch (e) {}
   updateVideoClipTimelineUi();
@@ -256,7 +260,7 @@ function setVideoClipExactFrame(frame) {
   updateVideoClipExactFrameUi();
 }
 
-function requestVideoClipExactFrame(request, onResolved) {
+function requestVideoClipExactFrame(request, onResolved, options) {
   if (!videoClipTargetItem || !videoClipTargetItem.fileName || videoClipExactFrameRequestPending) return;
   var videoEl = getVideoClipEl('video-clip-video');
   if (!videoEl) throw new Error('Video clip player is missing');
@@ -286,7 +290,9 @@ function requestVideoClipExactFrame(request, onResolved) {
     }
     try {
       setVideoClipExactFrame(response.frame);
-      seekVideoClipPlayhead(videoClipExactFrame.timestampSec, { preserveExactFrame: true });
+      if (!options || options.align !== false) {
+        seekVideoClipPlayhead(videoClipExactFrame.timestampSec, { preserveExactFrame: true });
+      }
       setVideoClipStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' resolved.', { kind: 'success' });
       setStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' resolved.');
       if (onResolved) onResolved(videoClipExactFrame);
@@ -378,7 +384,7 @@ function stepVideoClipExactFrame(direction) {
   requestVideoClipExactFrame(null, function (frame) {
     if (stepDirection < 0 && Number(frame.frameIndex) <= 0) return;
     requestVideoClipExactFrame({ frameIndex: frame.frameIndex + stepDirection });
-  });
+  }, { align: false });
 }
 
 function setVideoClipPlaybackRate(rate) {

@@ -158,6 +158,8 @@ def test_exact_frame_controls_and_payload_are_wired_for_clip_modal():
 
     assert "function stepVideoClipExactFrame(direction)" in script
     assert "frameIndex: videoClipExactFrame.frameIndex + stepDirection" in script
+    assert "if (!changed) {\n    updateVideoClipTimelineUi();\n    return;\n  }" in script
+    assert "}, { align: false });" in script
     assert "function stepVideoClipFrame(direction)" not in script
     assert "requestVideoClipExactFrame(null, function () { commitVideoClipExactStart(); })" in script
     assert "function commitVideoClipExactStart()" in script

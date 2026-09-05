@@ -18,6 +18,8 @@
                             playsinline
                             preload="metadata"
                         ></video>
+                        <img id="video-clip-exact-frame-preview" class="video-clip-exact-frame-preview hidden" alt="Exact decoded video frame preview">
+                        <div id="video-clip-exact-frame-note" class="video-clip-exact-frame-note hidden" aria-live="polite"></div>
                         <div id="video-clip-crop-edit-layer" class="video-clip-crop-edit-layer hidden" aria-hidden="true">
                             <img id="video-clip-crop-edit-image" alt="Video crop edit frame">
                         </div>
@@ -30,6 +32,22 @@
                     <div class="video-clip-time-pill">
                         <span>Playhead</span>
                         <strong><span id="video-clip-current-time">0.000</span>s</strong>
+                    </div>
+                    <div class="video-clip-transport-controls">
+                        <button id="video-clip-exact-back-btn" type="button" class="video-clip-inline-btn" title="Previous decoded frame" disabled>Prev Frame</button>
+                        <button id="video-clip-exact-forward-btn" type="button" class="video-clip-inline-btn" title="Next decoded frame">Next Frame</button>
+                        <span class="video-clip-transport-separator" aria-hidden="true"></span>
+                        <button id="video-clip-skip-back-btn" type="button" class="video-clip-inline-btn">-5s</button>
+                        <button id="video-clip-skip-forward-btn" type="button" class="video-clip-inline-btn">+5s</button>
+                        <button id="video-clip-skip-forward-15-btn" type="button" class="video-clip-inline-btn">+15s</button>
+                        <span class="video-clip-transport-separator" aria-hidden="true"></span>
+                        <div class="video-clip-rate-row" role="group" aria-label="Playback rate">
+                            <button type="button" class="video-clip-rate-btn active" data-rate="1">1x</button>
+                            <button type="button" class="video-clip-rate-btn" data-rate="2">2x</button>
+                            <button type="button" class="video-clip-rate-btn" data-rate="4">4x</button>
+                            <button type="button" class="video-clip-rate-btn" data-rate="8">8x</button>
+                        </div>
+                        <button id="video-clip-loop-preview-btn" type="button" class="video-clip-inline-btn">Loop Preview</button>
                     </div>
                     <div class="video-clip-time-pill">
                         <span>End</span>
@@ -55,36 +73,6 @@
             </div>
 
             <div class="video-clip-settings-panel">
-                <div class="video-clip-setting-group">
-                    <div class="video-clip-form-label">Navigation</div>
-                    <div class="video-clip-nav-grid">
-                        <button id="video-clip-frame-back-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn" title="Step backward by one frame-sized interval using reported FPS">-1f</button>
-                        <button id="video-clip-frame-forward-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn" title="Step forward by one frame-sized interval using reported FPS">+1f</button>
-                        <button id="video-clip-skip-back-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">-5s</button>
-                        <button id="video-clip-skip-forward-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">+5s</button>
-                        <button id="video-clip-skip-forward-15-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">+15s</button>
-                        <button id="video-clip-skip-forward-30-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">+30s</button>
-                    </div>
-                    <div id="video-clip-frame-step-note" class="video-clip-section-note"></div>
-                    <div class="video-clip-nav-row">
-                        <button id="video-clip-check-frame-btn" type="button" class="video-clip-inline-btn">Check Frame</button>
-                        <button id="video-clip-exact-back-btn" type="button" class="video-clip-inline-btn" disabled>Exact Prev</button>
-                        <button id="video-clip-exact-forward-btn" type="button" class="video-clip-inline-btn" disabled>Exact Next</button>
-                    </div>
-                    <div id="video-clip-exact-frame-note" class="video-clip-section-note">Check Frame resolves the decoded source frame at the playhead.</div>
-                    <img id="video-clip-exact-frame-preview" class="video-clip-exact-frame-preview hidden" alt="Exact decoded video frame preview">
-                    <div class="video-clip-nav-row">
-                        <span class="video-clip-field-label">Scan Speed</span>
-                        <div class="video-clip-rate-row" role="group" aria-label="Playback rate">
-                            <button type="button" class="video-clip-rate-btn active" data-rate="1">1x</button>
-                            <button type="button" class="video-clip-rate-btn" data-rate="2">2x</button>
-                            <button type="button" class="video-clip-rate-btn" data-rate="4">4x</button>
-                            <button type="button" class="video-clip-rate-btn" data-rate="8">8x</button>
-                        </div>
-                    </div>
-                    <button id="video-clip-loop-preview-btn" type="button" class="video-clip-inline-btn video-clip-nav-btn">Loop Preview</button>
-                </div>
-
                 <div class="video-clip-setting-group">
                     <div class="video-clip-form-label">Trim</div>
                     <div class="video-clip-trim-grid">
@@ -121,7 +109,6 @@
                     </div>
                     <div class="video-clip-trim-actions">
                         <button id="video-clip-mark-start-btn" type="button" class="video-clip-inline-btn video-clip-mark-btn">Mark Start</button>
-                        <button id="video-clip-use-exact-start-btn" type="button" class="video-clip-inline-btn video-clip-mark-btn" disabled>Use Exact Start</button>
                         <button id="video-clip-mark-end-btn" type="button" class="video-clip-inline-btn video-clip-mark-btn">Mark End</button>
                     </div>
                 </div>
@@ -136,10 +123,8 @@
                         <button type="button" class="video-clip-ratio-btn" data-ratio="1.7777778">16:9</button>
                     </div>
                     <div class="video-clip-crop-actions">
-                        <button id="video-clip-crop-frame-btn" type="button" class="video-clip-extract-frame-btn">Place Crop</button>
                         <button id="video-clip-crop-apply-btn" type="button" class="video-clip-inline-btn hidden">Apply Crop</button>
                         <button id="video-clip-crop-cancel-btn" type="button" class="video-clip-inline-btn hidden">Cancel</button>
-                        <button id="video-clip-crop-clear-btn" type="button" class="video-clip-inline-btn hidden">Clear</button>
                         <span id="video-clip-size-readout" class="video-clip-size-readout">Full frame</span>
                     </div>
                 </div>

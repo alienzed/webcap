@@ -80,12 +80,31 @@ def test_exact_export_uses_frame_trim_and_aligned_reencoded_audio(tmp_path, monk
     assert "aac" in command
 
 
-def test_exact_frame_controls_and_payload_are_wired():
+def test_exact_frame_controls_and_payload_are_wired_for_clip_modal():
     root = Path(__file__).parents[1]
     html = (root / "tool" / "templates" / "video_clip_modal.html").read_text(encoding="utf-8")
     script = (root / "tool" / "js" / "video_clip.js").read_text(encoding="utf-8")
 
-    assert 'id="video-clip-check-frame-btn"' in html
-    assert 'id="video-clip-use-exact-start-btn"' in html
     assert "'/media/video_clip_frame'" in script
     assert "payload.exactStart" in script
+    assert 'id="video-clip-check-frame-btn"' not in html
+    assert 'id="video-clip-use-exact-start-btn"' not in html
+    assert 'id="video-clip-frame-back-btn"' not in html
+    assert 'id="video-clip-frame-forward-btn"' not in html
+    assert '+30s' not in html
+
+    stage_start = html.index('id="video-clip-preview-stage"')
+    exact_preview = html.index('id="video-clip-exact-frame-preview"')
+    crop_layer = html.index('id="video-clip-crop-edit-layer"')
+    assert stage_start < exact_preview < crop_layer
+
+    assert "function stepVideoClipExactFrame(direction)" in script
+    assert "frameIndex: videoClipExactFrame.frameIndex + stepDirection" in script
+    assert "function stepVideoClipFrame(direction)" not in script
+    assert "requestVideoClipExactFrame(null, function () { commitVideoClipExactStart(); })" in script
+    assert "function commitVideoClipExactStart()" in script
+
+    exact_frame_setter = script[script.index("function setVideoClipExactFrame"):script.index("function requestVideoClipExactFrame")]
+    assert "videoClipExactStart = null" not in exact_frame_setter
+    assert "startEl.addEventListener('change', function () {\n      videoClipExactStart = null;" in script
+    assert "if (!videoClipCropEditActive) beginVideoClipCropEdit();" in script

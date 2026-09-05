@@ -12,10 +12,11 @@ var videoClipCropEditActive = false;
 var videoClipLoopPreviewActive = false;
 var videoClipPlaybackRate = 1;
 var videoClipRangeDrag = null;
-var videoClipFrameSeekPending = false;
 var videoClipExactFrame = null;
 var videoClipExactStart = null;
 var videoClipExactFrameRequestPending = false;
+var videoClipExactFrameSeekPending = false;
+var videoClipExactFrameRequestGeneration = 0;
 
 function clearVideoClipStatusPoll() {
   if (videoClipStatusPollTimer) {
@@ -131,7 +132,7 @@ function syncVideoClipTrimInputs(authority) {
   return range;
 }
 
-function seekVideoClipPlayhead(time) {
+function seekVideoClipPlayhead(time, options) {
   var videoEl = getVideoClipEl('video-clip-video');
   if (!videoEl) return;
   var sourceDuration = getVideoClipSourceDuration();
@@ -140,10 +141,8 @@ function seekVideoClipPlayhead(time) {
   if (sourceDuration > 0 && nextTime > sourceDuration) nextTime = sourceDuration;
   var currentTime = Number(videoEl.currentTime || 0);
   if (!isFinite(currentTime) || currentTime < 0) currentTime = 0;
-  if (Math.abs(currentTime - nextTime) > 0.000001) {
-    videoClipFrameSeekPending = true;
-    updateVideoClipCropFrameAvailability();
-  }
+  var changed = Math.abs(currentTime - nextTime) > 0.000001;
+  videoClipExactFrameSeekPending = !!(changed && options && options.preserveExactFrame);
   try { videoEl.currentTime = nextTime; } catch (e) {}
   updateVideoClipTimelineUi();
 }
@@ -153,75 +152,46 @@ function stepVideoClipPlayhead(delta) {
   if (!videoEl) return;
   var currentTime = Number(videoEl.currentTime || 0);
   if (!isFinite(currentTime) || currentTime < 0) currentTime = 0;
+  clearVideoClipExactFrame();
   seekVideoClipPlayhead(currentTime + Number(delta || 0));
 }
 
-function getVideoClipReportedFps() {
-  if (!videoClipTargetItem || !videoClipTargetItem.fileName) return 0;
-  var metadata = getMetadataForMedia(videoClipTargetItem.fileName);
-  var fps = Number(metadata && metadata.fps);
-  return isFinite(fps) && fps > 0 ? fps : 0;
-}
-
-function getVideoClipReportedFrameCount() {
-  if (!videoClipTargetItem || !videoClipTargetItem.fileName) return 0;
-  var metadata = getMetadataForMedia(videoClipTargetItem.fileName);
-  var frames = Number(metadata && metadata.frames);
-  return isFinite(frames) && frames > 0 ? Math.round(frames) : 0;
-}
-
-function updateVideoClipFrameStepUi() {
-  var fps = getVideoClipReportedFps();
-  var noteEl = getVideoClipEl('video-clip-frame-step-note');
-  var buttons = [
-    getVideoClipEl('video-clip-frame-back-btn'),
-    getVideoClipEl('video-clip-frame-forward-btn')
-  ];
-  buttons.forEach(function (button) {
-    if (!button) return;
-    button.disabled = !fps;
-    button.title = fps
-      ? ('Step by one frame-sized interval at the reported ' + fps.toFixed(2) + ' FPS')
-      : 'Frame-sized stepping is unavailable because FPS metadata is missing';
-  });
-  if (noteEl) {
-    noteEl.textContent = fps
-      ? ('Frame step uses the reported ' + fps.toFixed(2) + ' FPS and browser timestamp seeking.')
-      : 'FPS unavailable; Left/Right fall back to 0.05-second steps.';
-  }
-}
-
 function updateVideoClipExactFrameUi() {
-  var checkBtn = getVideoClipEl('video-clip-check-frame-btn');
   var backBtn = getVideoClipEl('video-clip-exact-back-btn');
   var forwardBtn = getVideoClipEl('video-clip-exact-forward-btn');
-  var useStartBtn = getVideoClipEl('video-clip-use-exact-start-btn');
   var noteEl = getVideoClipEl('video-clip-exact-frame-note');
   var previewEl = getVideoClipEl('video-clip-exact-frame-preview');
-  if (!checkBtn || !backBtn || !forwardBtn || !useStartBtn || !noteEl || !previewEl) {
+  if (!backBtn || !forwardBtn || !noteEl || !previewEl) {
     throw new Error('Video clip exact-frame controls are missing');
   }
-  checkBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
   backBtn.disabled = videoClipExactFrameRequestPending || !videoClipExactFrame || Number(videoClipExactFrame.frameIndex) <= 0;
   forwardBtn.disabled = videoClipExactFrameRequestPending || !videoClipExactFrame;
-  useStartBtn.disabled = videoClipExactFrameRequestPending || !videoClipExactFrame;
   if (videoClipExactFrameRequestPending) {
-    noteEl.textContent = 'Resolving the decoded source frame...';
+    noteEl.textContent = 'Resolving exact frame...';
+    noteEl.classList.remove('hidden');
   } else if (videoClipExactFrame) {
-    noteEl.textContent = 'Exact frame ' + videoClipExactFrame.frameIndex + ' at ' + formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec) + 's.' + (videoClipExactStart ? ' Export will begin at this frame.' : ' Use Exact Start to make export authoritative.');
+    noteEl.textContent = 'Exact frame ' + videoClipExactFrame.frameIndex + ' \u00b7 ' + formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec) + 's';
+    noteEl.classList.remove('hidden');
     previewEl.classList.remove('hidden');
   } else {
-    noteEl.textContent = 'Check Frame resolves the decoded source frame at the playhead.';
+    noteEl.textContent = '';
+    noteEl.classList.add('hidden');
     previewEl.classList.add('hidden');
     previewEl.removeAttribute('src');
   }
+}
+
+function clearVideoClipExactFrame() {
+  videoClipExactFrameRequestGeneration += 1;
+  videoClipExactFrameRequestPending = false;
+  videoClipExactFrame = null;
+  updateVideoClipExactFrameUi();
 }
 
 function setVideoClipExactFrame(frame) {
   if (!frame || !isFinite(Number(frame.frameIndex)) || !isFinite(Number(frame.timestampSec)) || !String(frame.sourceFingerprint || '') || !String(frame.previewDataUrl || '')) {
     throw new Error('Frame inspection returned an invalid exact frame');
   }
-  videoClipExactStart = null;
   videoClipExactFrame = {
     frameIndex: Math.round(Number(frame.frameIndex)),
     timestampSec: Number(frame.timestampSec),
@@ -234,12 +204,14 @@ function setVideoClipExactFrame(frame) {
   updateVideoClipExactFrameUi();
 }
 
-function requestVideoClipExactFrame(request) {
+function requestVideoClipExactFrame(request, onResolved) {
   if (!videoClipTargetItem || !videoClipTargetItem.fileName || videoClipExactFrameRequestPending) return;
   var videoEl = getVideoClipEl('video-clip-video');
   if (!videoEl) throw new Error('Video clip player is missing');
   stopVideoClipLoopPreview();
   try { videoEl.pause(); } catch (e) {}
+  var requestGeneration = videoClipExactFrameRequestGeneration + 1;
+  videoClipExactFrameRequestGeneration = requestGeneration;
   videoClipExactFrameRequestPending = true;
   updateVideoClipExactFrameUi();
   var payload = {
@@ -249,6 +221,7 @@ function requestVideoClipExactFrame(request) {
   if (request && request.frameIndex !== undefined) payload.frameIndex = request.frameIndex;
   else payload.approximateTimeSec = Number(videoEl.currentTime || 0);
   HttpModule.postJson('/media/video_clip_frame', payload, function (status, responseText) {
+    if (requestGeneration !== videoClipExactFrameRequestGeneration) return;
     videoClipExactFrameRequestPending = false;
     var response = null;
     try { response = JSON.parse(responseText); } catch (e) {}
@@ -261,9 +234,10 @@ function requestVideoClipExactFrame(request) {
     }
     try {
       setVideoClipExactFrame(response.frame);
-      seekVideoClipPlayhead(videoClipExactFrame.timestampSec);
-      setVideoClipStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' checked.', { kind: 'success' });
-      setStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' checked.');
+      seekVideoClipPlayhead(videoClipExactFrame.timestampSec, { preserveExactFrame: true });
+      setVideoClipStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' resolved.', { kind: 'success' });
+      setStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' resolved.');
+      if (onResolved) onResolved(videoClipExactFrame);
     } catch (err) {
       updateVideoClipExactFrameUi();
       setVideoClipStatus(String(err && err.message ? err.message : err), { kind: 'error' });
@@ -272,14 +246,15 @@ function requestVideoClipExactFrame(request) {
   });
 }
 
-function useVideoClipExactStart() {
+function commitVideoClipExactStart() {
   if (!videoClipExactFrame) {
-    throw new Error('Check an exact frame before using it as the start');
+    throw new Error('Resolve an exact frame before using it as the start');
   }
   var startEl = getVideoClipEl('video-clip-start-input');
   if (!startEl) throw new Error('Video clip start input is missing');
   startEl.value = formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec);
   syncVideoClipTrimInputs('start');
+  startEl.value = formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec);
   videoClipExactStart = {
     frameIndex: videoClipExactFrame.frameIndex,
     sourceFingerprint: videoClipExactFrame.sourceFingerprint
@@ -288,34 +263,17 @@ function useVideoClipExactStart() {
   updateVideoClipExportSummary();
 }
 
-function updateVideoClipCropFrameAvailability() {
-  var btn = getVideoClipEl('video-clip-crop-frame-btn');
-  var videoEl = getVideoClipEl('video-clip-video');
-  if (!btn || !videoEl) return;
-  btn.disabled = videoClipFrameSeekPending || videoEl.readyState < 1;
-}
-
-function stepVideoClipFrame(direction) {
-  var videoEl = getVideoClipEl('video-clip-video');
-  if (!videoEl) return;
+function stepVideoClipExactFrame(direction) {
   var stepDirection = Number(direction || 0) < 0 ? -1 : 1;
-  var fps = getVideoClipReportedFps();
-  if (!fps) {
-    stepVideoClipPlayhead(stepDirection * 0.05);
+  if (videoClipExactFrame) {
+    if (stepDirection < 0 && Number(videoClipExactFrame.frameIndex) <= 0) return;
+    requestVideoClipExactFrame({ frameIndex: videoClipExactFrame.frameIndex + stepDirection });
     return;
   }
-  stopVideoClipLoopPreview();
-  try { videoEl.pause(); } catch (e) {}
-  var currentTime = Number(videoEl.currentTime || 0);
-  if (!isFinite(currentTime) || currentTime < 0) currentTime = 0;
-  var sourceDuration = getVideoClipSourceDuration();
-  var reportedFrames = getVideoClipReportedFrameCount();
-  var maxFrame = reportedFrames > 0
-    ? reportedFrames - 1
-    : Math.max(0, Math.ceil(sourceDuration * fps) - 1);
-  var currentFrame = Math.max(0, Math.min(maxFrame, Math.round(currentTime * fps)));
-  var nextFrame = Math.max(0, Math.min(maxFrame, currentFrame + stepDirection));
-  seekVideoClipPlayhead(nextFrame / fps);
+  requestVideoClipExactFrame(null, function (frame) {
+    if (stepDirection < 0 && Number(frame.frameIndex) <= 0) return;
+    requestVideoClipExactFrame({ frameIndex: frame.frameIndex + stepDirection });
+  });
 }
 
 function setVideoClipPlaybackRate(rate) {
@@ -606,18 +564,10 @@ function updateVideoClipCropOverlay() {
 }
 
 function updateVideoClipCropButtons() {
-  var editBtn = getVideoClipEl('video-clip-crop-frame-btn');
   var applyBtn = getVideoClipEl('video-clip-crop-apply-btn');
   var cancelBtn = getVideoClipEl('video-clip-crop-cancel-btn');
-  var clearBtn = getVideoClipEl('video-clip-crop-clear-btn');
-  var hasCrop = !!getVideoClipCurrentCrop();
-  if (editBtn) {
-    editBtn.textContent = hasCrop ? 'Edit Crop' : 'Place Crop';
-    editBtn.classList.toggle('hidden', videoClipCropEditActive);
-  }
   if (applyBtn) applyBtn.classList.toggle('hidden', !videoClipCropEditActive);
   if (cancelBtn) cancelBtn.classList.toggle('hidden', !videoClipCropEditActive);
-  if (clearBtn) clearBtn.classList.toggle('hidden', videoClipCropEditActive || !hasCrop);
   updateVideoClipExportAvailability();
 }
 
@@ -832,7 +782,9 @@ function closeVideoClipModal() {
   videoClipOverwriteSourceMode = false;
   videoClipLastExportSignature = '';
   videoClipPlaybackRate = 1;
-  videoClipFrameSeekPending = false;
+  videoClipExactFrameSeekPending = false;
+  videoClipExactFrameRequestGeneration += 1;
+  videoClipExactFrameRequestPending = false;
   destroyVideoClipInlineCropper();
   setVideoClipPendingCrop(null);
   setVideoClipBusy(false);
@@ -864,8 +816,6 @@ function closeVideoClipModal() {
     editLayerEl.classList.add('hidden');
     editLayerEl.setAttribute('aria-hidden', 'true');
   }
-  var cropFrameBtn = getVideoClipEl('video-clip-crop-frame-btn');
-  if (cropFrameBtn) cropFrameBtn.disabled = true;
   updateVideoClipLoopPreviewButton();
   setVideoClipPlaybackRate(1);
   updateVideoClipCropButtons();
@@ -887,8 +837,6 @@ function openVideoClipModal(mediaItem) {
   var durationEl = getVideoClipEl('video-clip-duration-input');
   var currentTimeEl = getVideoClipEl('video-clip-current-time');
   var endTimeEl = getVideoClipEl('video-clip-end-time');
-  var cropFrameBtn = getVideoClipEl('video-clip-crop-frame-btn');
-
   if (!modal || !titleEl || !videoEl || !outputEl || !startEl || !trimEndEl || !durationEl || !currentTimeEl) {
     throw new Error('Video clip modal is missing required elements');
   }
@@ -898,10 +846,11 @@ function openVideoClipModal(mediaItem) {
   videoClipSourceResolution = null;
   videoClipLastExportSignature = '';
   videoClipLoopPreviewActive = false;
-  videoClipFrameSeekPending = false;
+  videoClipExactFrameSeekPending = false;
   videoClipExactFrame = null;
   videoClipExactStart = null;
   videoClipExactFrameRequestPending = false;
+  videoClipExactFrameRequestGeneration += 1;
   setVideoClipBusy(false);
   setVideoClipStatus('');
   setStatus('');
@@ -910,7 +859,6 @@ function openVideoClipModal(mediaItem) {
   setVideoClipPlaybackRate(1);
   updateVideoClipLoopPreviewButton();
   updateVideoClipCropButtons();
-  updateVideoClipFrameStepUi();
   updateVideoClipExactFrameUi();
 
   var stem = mediaItem.fileName.replace(/\.[^.]+$/, '');
@@ -921,7 +869,6 @@ function openVideoClipModal(mediaItem) {
   durationEl.value = '2.0';
   currentTimeEl.textContent = '0.000';
   if (endTimeEl) endTimeEl.textContent = '2.000';
-  if (cropFrameBtn) cropFrameBtn.disabled = true;
   syncVideoClipTrimInputs('duration');
 
   syncVideoClipOutputMode();
@@ -943,9 +890,7 @@ function openVideoClipModal(mediaItem) {
       videoClipSourceResolution = { width: Math.round(vw), height: Math.round(vh) };
     }
     updateVideoClipStageLayout();
-    videoClipFrameSeekPending = false;
-    updateVideoClipCropFrameAvailability();
-    updateVideoClipFrameStepUi();
+    videoClipExactFrameSeekPending = false;
     updateVideoClipExactFrameUi();
     syncVideoClipTrimInputs('end');
     setVideoClipPlaybackRate(1);
@@ -1242,14 +1187,6 @@ function cancelVideoClipCropEdit(restoreStatus) {
   }
 }
 
-function clearVideoClipCrop() {
-  if (videoClipCropEditActive) {
-    cancelVideoClipCropEdit(false);
-  }
-  setVideoClipPendingCrop(null);
-  setStatus('Crop cleared. Export will use the full frame.');
-}
-
 function applyVideoClip(overwrite, skipRepeatConfirm) {
   if (videoClipCropBusy) return;
   stopVideoClipLoopPreview();
@@ -1334,32 +1271,18 @@ function applyVideoClip(overwrite, skipRepeatConfirm) {
   });
 }
 
-function wireCropThisFrameButton() {
-  var btn = getVideoClipEl('video-clip-crop-frame-btn');
-  if (!btn) throw new Error('Missing required element: video-clip-crop-frame-btn');
-  btn.disabled = true;
-  btn.onclick = beginVideoClipCropEdit;
-
+function wireVideoClipStage() {
   var videoEl = getVideoClipEl('video-clip-video');
   if (!videoEl) throw new Error('Missing required element: video-clip-video');
-  videoEl.addEventListener('loadedmetadata', function() {
-    videoClipFrameSeekPending = false;
-    updateVideoClipCropFrameAvailability();
-    updateVideoClipCropOverlay();
-  });
   videoEl.addEventListener('seeking', function() {
-    videoClipFrameSeekPending = true;
-    updateVideoClipCropFrameAvailability();
+    if (!videoClipExactFrameSeekPending) clearVideoClipExactFrame();
   });
   videoEl.addEventListener('seeked', function() {
-    videoClipFrameSeekPending = false;
-    updateVideoClipCropFrameAvailability();
+    videoClipExactFrameSeekPending = false;
     updateVideoClipTimelineUi();
     updateVideoClipCropOverlay();
   });
-  if (videoEl.readyState >= 1) {
-    updateVideoClipCropFrameAvailability();
-  }
+  videoEl.addEventListener('play', function() { clearVideoClipExactFrame(); });
 }
 
 function wireVideoClipModal() {
@@ -1368,19 +1291,13 @@ function wireVideoClipModal() {
   var cancelX = getVideoClipEl('video-clip-cancel-x');
   var cropApplyBtn = getVideoClipEl('video-clip-crop-apply-btn');
   var cropCancelBtn = getVideoClipEl('video-clip-crop-cancel-btn');
-  var cropClearBtn = getVideoClipEl('video-clip-crop-clear-btn');
-  var frameBackBtn = getVideoClipEl('video-clip-frame-back-btn');
-  var frameForwardBtn = getVideoClipEl('video-clip-frame-forward-btn');
-  var checkFrameBtn = getVideoClipEl('video-clip-check-frame-btn');
   var exactBackBtn = getVideoClipEl('video-clip-exact-back-btn');
   var exactForwardBtn = getVideoClipEl('video-clip-exact-forward-btn');
   var skipBackBtn = getVideoClipEl('video-clip-skip-back-btn');
   var skipForwardBtn = getVideoClipEl('video-clip-skip-forward-btn');
   var skipForward15Btn = getVideoClipEl('video-clip-skip-forward-15-btn');
-  var skipForward30Btn = getVideoClipEl('video-clip-skip-forward-30-btn');
   var loopPreviewBtn = getVideoClipEl('video-clip-loop-preview-btn');
   var markStartBtn = getVideoClipEl('video-clip-mark-start-btn');
-  var useExactStartBtn = getVideoClipEl('video-clip-use-exact-start-btn');
   var markEndBtn = getVideoClipEl('video-clip-mark-end-btn');
   var startEl = getVideoClipEl('video-clip-start-input');
   var endEl = getVideoClipEl('video-clip-end-input');
@@ -1394,26 +1311,21 @@ function wireVideoClipModal() {
   if (cancelX) cancelX.onclick = closeVideoClipModal;
   if (cropApplyBtn) cropApplyBtn.onclick = applyVideoClipCropEdit;
   if (cropCancelBtn) cropCancelBtn.onclick = function () { cancelVideoClipCropEdit(true); };
-  if (cropClearBtn) cropClearBtn.onclick = clearVideoClipCrop;
-  if (frameBackBtn) frameBackBtn.onclick = function () { stepVideoClipFrame(-1); };
-  if (frameForwardBtn) frameForwardBtn.onclick = function () { stepVideoClipFrame(1); };
-  if (checkFrameBtn) checkFrameBtn.onclick = function () { requestVideoClipExactFrame(null); };
-  if (exactBackBtn) exactBackBtn.onclick = function () { if (videoClipExactFrame) requestVideoClipExactFrame({ frameIndex: videoClipExactFrame.frameIndex - 1 }); };
-  if (exactForwardBtn) exactForwardBtn.onclick = function () { if (videoClipExactFrame) requestVideoClipExactFrame({ frameIndex: videoClipExactFrame.frameIndex + 1 }); };
+  if (exactBackBtn) exactBackBtn.onclick = function () { stepVideoClipExactFrame(-1); };
+  if (exactForwardBtn) exactForwardBtn.onclick = function () { stepVideoClipExactFrame(1); };
   if (skipBackBtn) skipBackBtn.onclick = function () { stepVideoClipPlayhead(-5); };
   if (skipForwardBtn) skipForwardBtn.onclick = function () { stepVideoClipPlayhead(5); };
   if (skipForward15Btn) skipForward15Btn.onclick = function () { stepVideoClipPlayhead(15); };
-  if (skipForward30Btn) skipForward30Btn.onclick = function () { stepVideoClipPlayhead(30); };
   if (loopPreviewBtn) loopPreviewBtn.onclick = toggleVideoClipLoopPreview;
   if (markStartBtn && startEl && videoEl) {
     markStartBtn.onclick = function () {
-      videoClipExactStart = null;
-      startEl.value = formatVideoClipSeekSeconds(videoEl.currentTime || 0);
-      syncVideoClipTrimInputs('start');
-      updateVideoClipExactFrameUi();
+      if (videoClipExactFrame) {
+        commitVideoClipExactStart();
+      } else {
+        requestVideoClipExactFrame(null, function () { commitVideoClipExactStart(); });
+      }
     };
   }
-  if (useExactStartBtn) useExactStartBtn.onclick = useVideoClipExactStart;
   if (markEndBtn && endEl && videoEl) {
     markEndBtn.onclick = function () {
       endEl.value = formatVideoClipSeekSeconds(videoEl.currentTime || 0);
@@ -1477,6 +1389,7 @@ function wireVideoClipModal() {
   Array.prototype.forEach.call(document.querySelectorAll('.video-clip-ratio-btn'), function (btn) {
     btn.onclick = function () {
       setVideoClipRatio(Number(btn.getAttribute('data-ratio')) || 1);
+      if (!videoClipCropEditActive) beginVideoClipCropEdit();
     };
   });
 
@@ -1505,14 +1418,14 @@ function wireVideoClipModal() {
       if (!videoEl) return;
 
       e.preventDefault();
-      stepVideoClipFrame(e.key === 'ArrowRight' ? 1 : -1);
+      stepVideoClipExactFrame(e.key === 'ArrowRight' ? 1 : -1);
     }
   });
 }
 
 addEventListener('DOMContentLoaded', function() {
   wireVideoClipModal();
-  wireCropThisFrameButton();
+  wireVideoClipStage();
   updateVideoClipLoopPreviewButton();
   setVideoClipPlaybackRate(1);
   updateVideoClipCropButtons();

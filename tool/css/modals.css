@@ -1501,6 +1501,31 @@ body.focused-annotation-open .caption-context-menu {
   z-index: 1;
 }
 
+.video-clip-exact-frame-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.video-clip-exact-frame-note {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  padding: 3px 6px;
+  border-radius: 3px;
+  background: rgba(2, 6, 23, 0.82);
+  color: #dbeafe;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 .video-clip-crop-edit-layer {
   position: absolute;
   inset: 0;
@@ -1570,6 +1595,21 @@ body.focused-annotation-open .caption-context-menu {
   justify-content: space-between;
   gap: 8px;
   min-height: 30px;
+}
+
+.video-clip-transport-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.video-clip-transport-separator {
+  width: 1px;
+  height: 22px;
+  background: rgba(148, 163, 184, 0.32);
 }
 
 .video-clip-time-pill {
@@ -1676,12 +1716,14 @@ body.focused-annotation-open .caption-context-menu {
 
 .video-clip-settings-panel {
   min-width: 0;
+  min-height: 0;
   padding: 14px;
   border-left: 1px solid rgba(148, 163, 184, 0.24);
   background: #151e2f;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
 }
 
 .video-clip-setting-group {
@@ -1694,20 +1736,6 @@ body.focused-annotation-open .caption-context-menu {
   background: rgba(15, 23, 42, 0.72);
 }
 
-.video-clip-nav-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.video-clip-nav-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: nowrap;
-}
-
 .video-clip-rate-row,
 .video-clip-trim-actions {
   display: flex;
@@ -1718,11 +1746,6 @@ body.focused-annotation-open .caption-context-menu {
 
 .video-clip-rate-row {
   flex-wrap: nowrap;
-}
-
-.video-clip-nav-btn {
-  width: 100%;
-  min-width: 0;
 }
 
 .video-clip-rate-btn {
@@ -1761,16 +1784,6 @@ body.focused-annotation-open .caption-context-menu {
   font-size: 11px;
   line-height: 1.35;
   color: #9fb0c5;
-}
-
-.video-clip-exact-frame-preview {
-  display: block;
-  width: 100%;
-  max-height: 180px;
-  object-fit: contain;
-  border: 1px solid rgba(96, 165, 250, 0.38);
-  border-radius: 3px;
-  background: #0b1220;
 }
 
 .video-clip-extract-frame-btn,
@@ -1943,9 +1956,8 @@ body.focused-annotation-open .caption-context-menu {
     grid-template-columns: 1fr;
   }
 
-  .video-clip-nav-row {
-    align-items: center;
-    flex-direction: row;
+  .video-clip-transport-row {
+    align-items: flex-start;
   }
 }
 

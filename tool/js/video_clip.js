@@ -1,6 +1,6 @@
 var videoClipTargetItem = null;
 var videoClipCropBusy = false;
-var videoClipCropRatio = 1;
+var videoClipCropRatio = null;
 var videoClipSourceResolution = null;
 var videoClipPendingCrop = null;
 var videoClipOverwriteSourceMode = false;
@@ -196,42 +196,38 @@ function updateVideoClipHeaderMeta() {
 
 function resetVideoClipFrameExtraction() {
   videoClipFrameExtractionOpen = false;
-  var inputEl = getVideoClipEl('video-clip-extract-name-input');
-  if (inputEl) inputEl.value = '';
 }
 
 function updateVideoClipExactFrameUi() {
   var backBtn = getVideoClipEl('video-clip-exact-back-btn');
   var forwardBtn = getVideoClipEl('video-clip-exact-forward-btn');
-  var previewBtn = getVideoClipEl('video-clip-preview-frame-btn');
   var extractBtn = getVideoClipEl('video-clip-extract-frame-btn');
-  var currentStatusEl = getVideoClipEl('video-clip-current-frame-status');
   var extractConfirmEl = getVideoClipEl('video-clip-extract-frame-confirm');
+  var extractCandidateEl = getVideoClipEl('video-clip-extract-frame-candidate');
   var noteEl = getVideoClipEl('video-clip-exact-frame-note');
   var previewEl = getVideoClipEl('video-clip-exact-frame-preview');
-  if (!backBtn || !forwardBtn || !previewBtn || !extractBtn || !currentStatusEl || !extractConfirmEl || !noteEl || !previewEl) {
+  if (!backBtn || !forwardBtn || !extractBtn || !extractConfirmEl || !extractCandidateEl || !noteEl || !previewEl) {
     throw new Error('Video clip exact-frame controls are missing');
   }
   backBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem || (videoClipExactFrame && Number(videoClipExactFrame.frameIndex) <= 0);
   forwardBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
-  previewBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
-  extractBtn.disabled = videoClipExactFrameRequestPending || !videoClipExactFrame;
+  extractBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
+  extractBtn.classList.toggle('hidden', videoClipFrameExtractionOpen && !!videoClipExactFrame);
   extractConfirmEl.classList.toggle('hidden', !videoClipFrameExtractionOpen || !videoClipExactFrame);
   if (videoClipExactFrameRequestPending) {
     noteEl.textContent = 'Resolving exact frame...';
     noteEl.classList.remove('hidden');
-    currentStatusEl.textContent = 'Resolving authoritative frame...';
   } else if (videoClipExactFrame) {
     noteEl.textContent = 'Exact frame ' + videoClipExactFrame.frameIndex + ' \u00b7 ' + formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec) + 's';
     noteEl.classList.remove('hidden');
     previewEl.classList.remove('hidden');
-    currentStatusEl.textContent = noteEl.textContent;
+    extractCandidateEl.textContent = 'Frame ' + videoClipExactFrame.frameIndex + ' \u00b7 ' + formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec) + 's';
   } else {
     noteEl.textContent = '';
     noteEl.classList.add('hidden');
     previewEl.classList.add('hidden');
     previewEl.removeAttribute('src');
-    currentStatusEl.textContent = 'No exact frame selected.';
+    extractCandidateEl.textContent = '';
   }
 }
 
@@ -253,7 +249,6 @@ function setVideoClipExactFrame(frame) {
     sourceFingerprint: String(frame.sourceFingerprint),
     previewDataUrl: String(frame.previewDataUrl)
   };
-  resetVideoClipFrameExtraction();
   var previewEl = getVideoClipEl('video-clip-exact-frame-preview');
   if (!previewEl) throw new Error('Video clip exact-frame preview is missing');
   previewEl.src = videoClipExactFrame.previewDataUrl;
@@ -293,8 +288,6 @@ function requestVideoClipExactFrame(request, onResolved, options) {
       if (!options || options.align !== false) {
         seekVideoClipPlayhead(videoClipExactFrame.timestampSec, { preserveExactFrame: true });
       }
-      setVideoClipStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' resolved.', { kind: 'success' });
-      setStatus('Exact frame ' + videoClipExactFrame.frameIndex + ' resolved.');
       if (onResolved) onResolved(videoClipExactFrame);
     } catch (err) {
       updateVideoClipExactFrameUi();
@@ -329,23 +322,16 @@ function getVideoClipDefaultExtractName() {
 }
 
 function beginVideoClipFrameExtraction() {
-  if (!videoClipExactFrame) throw new Error('Resolve an exact frame before extracting it');
-  var inputEl = getVideoClipEl('video-clip-extract-name-input');
-  if (!inputEl) throw new Error('Video clip extract filename input is missing');
-  videoClipFrameExtractionOpen = true;
-  inputEl.value = getVideoClipDefaultExtractName();
-  updateVideoClipExactFrameUi();
-  inputEl.focus();
-  inputEl.select();
+  requestVideoClipExactFrame(null, function () {
+    videoClipFrameExtractionOpen = true;
+    updateVideoClipExactFrameUi();
+  });
 }
 
 function saveVideoClipExtractedFrame() {
   if (!videoClipExactFrame) throw new Error('Resolve an exact frame before extracting it');
-  var inputEl = getVideoClipEl('video-clip-extract-name-input');
-  if (!inputEl) throw new Error('Video clip extract filename input is missing');
   var frame = videoClipExactFrame;
-  var requestedName = String(inputEl.value || '').trim();
-  if (!requestedName) throw new Error('Frame filename is required');
+  var requestedName = getVideoClipDefaultExtractName();
   HttpModule.postJson('/media/video_clip_extract_frame', {
     folder: state.folder || '',
     fileName: videoClipTargetItem.fileName,
@@ -546,16 +532,12 @@ function isVideoClipInSrcVideosFolder() {
   return /\bsrc_videos(\\|\/|$)/i.test(folder);
 }
 
-function setVideoClipSizeReadout(width, height) {
-  var readoutEl = getVideoClipEl('video-clip-size-readout');
-  if (!readoutEl) return;
-  var w = Number(width);
-  var h = Number(height);
-  if (!isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) {
-    readoutEl.textContent = 'Full frame';
-    return;
-  }
-  readoutEl.textContent = Math.round(w) + ' x ' + Math.round(h) + ' px';
+function updateVideoClipSourceTransport() {
+  var showSourceSkips = isVideoClipInSrcVideosFolder();
+  ['video-clip-source-skip-controls', 'video-clip-source-skip-controls-end'].forEach(function (id) {
+    var el = getVideoClipEl(id);
+    if (el) el.classList.toggle('hidden', !showSourceSkips);
+  });
 }
 
 function getVideoClipRatioLabel(ratio) {
@@ -672,30 +654,34 @@ function updateVideoClipCropOverlay() {
 }
 
 function updateVideoClipCropButtons() {
-  var applyBtn = getVideoClipEl('video-clip-crop-apply-btn');
-  var cancelBtn = getVideoClipEl('video-clip-crop-cancel-btn');
-  if (applyBtn) applyBtn.classList.toggle('hidden', !videoClipCropEditActive);
-  if (cancelBtn) cancelBtn.classList.toggle('hidden', !videoClipCropEditActive);
+  var resolution = getVideoClipResolution(videoClipTargetItem && videoClipTargetItem.fileName);
+  var sourceRatio = resolution ? resolution.width / resolution.height : 0;
+  Array.prototype.forEach.call(document.querySelectorAll('.video-clip-ratio-btn'), function (btn) {
+    var ratio = Number(btn.getAttribute('data-ratio'));
+    var selected = videoClipCropRatio !== null && matchesVideoClipRatio(ratio, videoClipCropRatio);
+    var nativeMatch = sourceRatio > 0 && matchesVideoClipRatio(ratio, sourceRatio);
+    btn.classList.toggle('active', selected);
+    btn.classList.toggle('native-match', nativeMatch && !selected);
+    if (selected) {
+      btn.title = videoClipCropEditActive ? 'Finish crop placement' : 'Edit ' + getVideoClipRatioLabel(ratio) + ' crop';
+    } else if (nativeMatch) {
+      btn.title = 'Matches the source aspect ratio. Select to place this output crop';
+    } else {
+      btn.title = 'Select ' + getVideoClipRatioLabel(ratio) + ' output crop';
+    }
+  });
   updateVideoClipExportAvailability();
 }
 
 function updateVideoClipCropSummary() {
-  var summaryEl = getVideoClipEl('video-clip-crop-summary');
+  var summaryEl = getVideoClipEl('video-clip-size-readout');
   if (!summaryEl) return;
   var crop = getVideoClipCurrentCrop();
-  var label = getVideoClipRatioLabel(videoClipCropRatio);
-  if (videoClipCropEditActive) {
-    summaryEl.textContent = 'Editing ' + label + ' crop on the preview stage. Apply or cancel when it looks right.';
-    summaryEl.classList.remove('hidden');
+  if (videoClipCropRatio === null || !crop) {
+    summaryEl.textContent = 'Choose output ratio';
     return;
   }
-  if (crop) {
-    summaryEl.textContent = 'Applied ' + label + ' crop at ' + Math.round(crop.width) + ' x ' + Math.round(crop.height) + ' px.';
-    summaryEl.classList.remove('hidden');
-    return;
-  }
-  summaryEl.textContent = '';
-  summaryEl.classList.add('hidden');
+  summaryEl.textContent = (videoClipCropEditActive ? 'Editing ' : '') + getVideoClipRatioLabel(videoClipCropRatio) + ' \u00b7 ' + Math.round(crop.width) + ' × ' + Math.round(crop.height);
 }
 
 function updateVideoClipExportSummary() {
@@ -720,7 +706,6 @@ function updateVideoClipExportSummary() {
 function setVideoClipPendingCrop(crop) {
   if (!crop) {
     videoClipPendingCrop = null;
-    setVideoClipSizeReadout(0, 0);
     updateVideoClipCropButtons();
     updateVideoClipCropSummary();
     updateVideoClipExportSummary();
@@ -734,7 +719,6 @@ function setVideoClipPendingCrop(crop) {
     width: Math.round(Number(crop.width || 0)),
     height: Math.round(Number(crop.height || 0))
   };
-  setVideoClipSizeReadout(videoClipPendingCrop.width, videoClipPendingCrop.height);
   updateVideoClipCropButtons();
   updateVideoClipCropSummary();
   updateVideoClipExportSummary();
@@ -847,24 +831,26 @@ function isVideoFileName(fileName) {
 
 function setVideoClipRatio(ratio, options) {
   options = options || {};
-  var nextRatio = Number(ratio || 1);
+  var nextRatio = ratio === null ? null : Number(ratio);
+  if (nextRatio !== null && (!isFinite(nextRatio) || nextRatio <= 0)) {
+    throw new Error('Crop ratio is invalid');
+  }
   var previousRatio = Number(videoClipCropRatio || 1);
   videoClipCropRatio = nextRatio;
-  Array.prototype.forEach.call(document.querySelectorAll('.video-clip-ratio-btn'), function (btn) {
-    btn.classList.toggle('active', matchesVideoClipRatio(btn.getAttribute('data-ratio'), videoClipCropRatio));
-  });
   if (videoClipCropEditActive && videoClipInlineCropper) {
     videoClipInlineCropper.setAspectRatio(videoClipCropRatio);
     var liveData = videoClipInlineCropper.getData(true);
-    setVideoClipSizeReadout(liveData.width, liveData.height);
+    setVideoClipPendingCrop(liveData);
+    updateVideoClipCropButtons();
     updateVideoClipCropSummary();
     updateVideoClipExportSummary();
     return;
   }
-  if (!options.preserveCrop && getVideoClipCurrentCrop() && !matchesVideoClipRatio(previousRatio, nextRatio)) {
+  if (!options.preserveCrop && getVideoClipCurrentCrop() && (nextRatio === null || !matchesVideoClipRatio(previousRatio, nextRatio))) {
     setVideoClipPendingCrop(null);
     return;
   }
+  updateVideoClipCropButtons();
   updateVideoClipCropSummary();
   updateVideoClipExportSummary();
 }
@@ -967,11 +953,12 @@ function openVideoClipModal(mediaItem) {
   setVideoClipBusy(false);
   setVideoClipStatus('');
   setStatus('');
-  setVideoClipRatio(1, { preserveCrop: true });
+  setVideoClipRatio(null, { preserveCrop: true });
   setVideoClipPendingCrop(null);
   setVideoClipPlaybackRate(1);
   updateVideoClipLoopPreviewButton();
   updateVideoClipCropButtons();
+  updateVideoClipSourceTransport();
   updateVideoClipExactFrameUi();
 
   var stem = mediaItem.fileName.replace(/\.[^.]+$/, '');
@@ -1002,6 +989,8 @@ function openVideoClipModal(mediaItem) {
     }
     updateVideoClipStageLayout();
     updateVideoClipHeaderMeta();
+    updateVideoClipCropButtons();
+    updateVideoClipCropSummary();
     videoClipExactFrameSeekPending = false;
     updateVideoClipExactFrameUi();
     syncVideoClipTrimInputs('end');
@@ -1249,34 +1238,25 @@ function beginVideoClipCropEdit() {
       ready: function () {
         var initialCrop = getVideoClipCurrentCrop() || getVideoClipDefaultRatioCrop();
         videoClipInlineCropper.setData(initialCrop);
-        setVideoClipSizeReadout(initialCrop.width, initialCrop.height);
+        setVideoClipPendingCrop(initialCrop);
       },
       crop: function (event) {
         var detail = event && event.detail ? event.detail : {};
-        setVideoClipSizeReadout(detail.width, detail.height);
+        setVideoClipPendingCrop({
+          x: detail.x,
+          y: detail.y,
+          width: detail.width,
+          height: detail.height
+        });
       }
     });
   };
   editImageEl.src = canvas.toDataURL('image/png');
 }
 
-function applyVideoClipCropEdit() {
-  if (!videoClipCropEditActive || !videoClipInlineCropper) return;
-  var crop = videoClipInlineCropper.getData(true);
-  setVideoClipPendingCrop({
-    x: crop.x,
-    y: crop.y,
-    width: crop.width,
-    height: crop.height
-  });
-  cancelVideoClipCropEdit(false);
-  setStatus('Crop updated.');
-}
-
-function cancelVideoClipCropEdit(restoreStatus) {
+function finishVideoClipCropEdit() {
   var videoEl = getVideoClipEl('video-clip-video');
   var editLayerEl = getVideoClipEl('video-clip-crop-edit-layer');
-  var currentCrop = getVideoClipCurrentCrop();
   destroyVideoClipInlineCropper();
   videoClipCropEditActive = false;
   if (videoEl) videoEl.controls = true;
@@ -1284,18 +1264,10 @@ function cancelVideoClipCropEdit(restoreStatus) {
     editLayerEl.classList.add('hidden');
     editLayerEl.setAttribute('aria-hidden', 'true');
   }
-  if (currentCrop) {
-    setVideoClipSizeReadout(currentCrop.width, currentCrop.height);
-  } else {
-    setVideoClipSizeReadout(0, 0);
-  }
   updateVideoClipCropButtons();
   updateVideoClipCropSummary();
   updateVideoClipExportSummary();
   updateVideoClipCropOverlay();
-  if (restoreStatus !== false) {
-    setStatus('Crop edit cancelled.');
-  }
 }
 
 function applyVideoClip(overwrite, skipRepeatConfirm) {
@@ -1313,14 +1285,10 @@ function applyVideoClip(overwrite, skipRepeatConfirm) {
 
   if (videoClipLastExportSignature && getVideoClipPayloadSignature(payload) === videoClipLastExportSignature) {
     updateVideoClipExportSummary();
-    setVideoClipStatus('No changes since the last export in this modal.');
-    setStatus('No changes since the last export in this modal.');
     return;
   }
 
   if (!skipRepeatConfirm && !confirmRepeatedVideoClipExport(payload)) {
-    setVideoClipStatus('Export cancelled.');
-    setStatus('Export cancelled.');
     return;
   }
 
@@ -1368,13 +1336,9 @@ function applyVideoClip(overwrite, skipRepeatConfirm) {
         applyVideoClip(true, true);
         return;
       }
-      setVideoClipStatus('Export cancelled.');
-      setStatus('Export cancelled.');
       return;
     }
     if (status === 409 && data && data.duplicateRequest) {
-      setVideoClipStatus('That same clip is already queued or was just exported.');
-      setStatus('That same clip is already queued or was just exported.');
       return;
     }
     setVideoClipStatus('Clip export failed: ' + message, { kind: 'error' });
@@ -1400,11 +1364,8 @@ function wireVideoClipModal() {
   var exportBtn = getVideoClipEl('video-clip-export-btn');
   var cancelBtn = getVideoClipEl('video-clip-cancel-btn');
   var cancelX = getVideoClipEl('video-clip-cancel-x');
-  var cropApplyBtn = getVideoClipEl('video-clip-crop-apply-btn');
-  var cropCancelBtn = getVideoClipEl('video-clip-crop-cancel-btn');
   var exactBackBtn = getVideoClipEl('video-clip-exact-back-btn');
   var exactForwardBtn = getVideoClipEl('video-clip-exact-forward-btn');
-  var previewFrameBtn = getVideoClipEl('video-clip-preview-frame-btn');
   var extractFrameBtn = getVideoClipEl('video-clip-extract-frame-btn');
   var extractSaveBtn = getVideoClipEl('video-clip-extract-save-btn');
   var extractCancelBtn = getVideoClipEl('video-clip-extract-cancel-btn');
@@ -1424,11 +1385,8 @@ function wireVideoClipModal() {
   if (exportBtn) exportBtn.onclick = function () { applyVideoClip(false, false); };
   if (cancelBtn) cancelBtn.onclick = closeVideoClipModal;
   if (cancelX) cancelX.onclick = closeVideoClipModal;
-  if (cropApplyBtn) cropApplyBtn.onclick = applyVideoClipCropEdit;
-  if (cropCancelBtn) cropCancelBtn.onclick = function () { cancelVideoClipCropEdit(true); };
   if (exactBackBtn) exactBackBtn.onclick = function () { stepVideoClipExactFrame(-1); };
   if (exactForwardBtn) exactForwardBtn.onclick = function () { stepVideoClipExactFrame(1); };
-  if (previewFrameBtn) previewFrameBtn.onclick = function () { requestVideoClipExactFrame(null); };
   if (extractFrameBtn) extractFrameBtn.onclick = beginVideoClipFrameExtraction;
   if (extractSaveBtn) extractSaveBtn.onclick = saveVideoClipExtractedFrame;
   if (extractCancelBtn) extractCancelBtn.onclick = function () { resetVideoClipFrameExtraction(); updateVideoClipExactFrameUi(); };
@@ -1502,8 +1460,15 @@ function wireVideoClipModal() {
 
   Array.prototype.forEach.call(document.querySelectorAll('.video-clip-ratio-btn'), function (btn) {
     btn.onclick = function () {
-      setVideoClipRatio(Number(btn.getAttribute('data-ratio')) || 1);
-      if (!videoClipCropEditActive) beginVideoClipCropEdit();
+      var ratio = Number(btn.getAttribute('data-ratio'));
+      if (videoClipCropRatio !== null && matchesVideoClipRatio(ratio, videoClipCropRatio)) {
+        if (videoClipCropEditActive) finishVideoClipCropEdit();
+        else beginVideoClipCropEdit();
+        return;
+      }
+      setVideoClipRatio(ratio);
+      setVideoClipPendingCrop(getVideoClipDefaultRatioCrop());
+      beginVideoClipCropEdit();
     };
   });
 
@@ -1518,7 +1483,7 @@ function wireVideoClipModal() {
 
     if (e.key === 'Escape') {
       if (videoClipCropEditActive) {
-        cancelVideoClipCropEdit(true);
+        finishVideoClipCropEdit();
         return;
       }
       closeVideoClipModal();

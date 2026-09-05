@@ -129,6 +129,7 @@ def test_exact_frame_controls_and_payload_are_wired_for_clip_modal():
     root = Path(__file__).parents[1]
     html = (root / "tool" / "templates" / "video_clip_modal.html").read_text(encoding="utf-8")
     script = (root / "tool" / "js" / "video_clip.js").read_text(encoding="utf-8")
+    styles = (root / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
 
     assert "'/media/video_clip_frame'" in script
     assert "payload.exactStart" in script
@@ -136,6 +137,8 @@ def test_exact_frame_controls_and_payload_are_wired_for_clip_modal():
     assert 'id="video-clip-use-exact-start-btn"' not in html
     assert 'id="video-clip-frame-back-btn"' not in html
     assert 'id="video-clip-frame-forward-btn"' not in html
+    assert 'id="video-clip-preview-frame-btn"' not in html
+    assert 'id="video-clip-current-frame-status"' not in html
     assert '+30s' not in html
     assert '+15s' not in html
     assert 'video-clip-time-pill' not in html
@@ -144,8 +147,8 @@ def test_exact_frame_controls_and_payload_are_wired_for_clip_modal():
     assert '>Loop<' in html
     assert '>-5s<' in html
     assert '>+5s<' in html
-    assert 'id="video-clip-preview-frame-btn"' in html
     assert 'id="video-clip-extract-frame-btn"' in html
+    assert 'id="video-clip-extract-frame-candidate"' in html
     assert 'id="video-clip-timeline-start-label"' in html
     assert 'id="video-clip-timeline-end-label"' in html
     assert '◀ 1f' in html
@@ -160,17 +163,31 @@ def test_exact_frame_controls_and_payload_are_wired_for_clip_modal():
     assert "frameIndex: videoClipExactFrame.frameIndex + stepDirection" in script
     assert "if (!changed) {\n    updateVideoClipTimelineUi();\n    return;\n  }" in script
     assert "}, { align: false });" in script
+    assert "function updateVideoClipSourceTransport()" in script
+    assert "isVideoClipInSrcVideosFolder()" in script
     assert "function stepVideoClipFrame(direction)" not in script
     assert "requestVideoClipExactFrame(null, function () { commitVideoClipExactStart(); })" in script
     assert "function commitVideoClipExactStart()" in script
     assert "'/media/video_clip_extract_frame'" in script
     assert "videoClipFrameExtractionOpen" in script
     assert "frameIndex: frame.frameIndex" in script
-    assert "extractBtn.disabled = videoClipExactFrameRequestPending || !videoClipExactFrame;" in script
+    assert "extractBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;" in script
+    assert "function beginVideoClipFrameExtraction() {\n  requestVideoClipExactFrame(null" in script
+    assert "getVideoClipDefaultExtractName()" in script
 
     exact_frame_setter = script[script.index("function setVideoClipExactFrame"):script.index("function requestVideoClipExactFrame")]
     assert "videoClipExactStart = null" not in exact_frame_setter
+    assert "resetVideoClipFrameExtraction()" not in exact_frame_setter
     assert "startEl.addEventListener('change', function () {\n      videoClipExactStart = null;" in script
-    assert "if (!videoClipCropEditActive) beginVideoClipCropEdit();" in script
+    assert "function finishVideoClipCropEdit()" in script
+    assert "video-clip-crop-apply" not in html
+    assert "video-clip-crop-cancel" not in html
+    assert "Full frame" not in html
     assert "video-clip-skip-forward-15-btn" not in script
     assert "video-clip-rate-btn" not in script
+    assert "video-clip-crop-apply" not in script
+    assert "video-clip-crop-cancel" not in script
+    assert "video-clip-crop-apply" not in styles
+    assert "video-clip-crop-cancel" not in styles
+    assert "video-clip-extract-name-input" not in styles
+    assert html.index('class="video-clip-transport-extract"') < html.index('class="video-clip-settings-panel"')

@@ -189,12 +189,14 @@ const context = {
   JSON, Promise,
   document: { addEventListener() {} },
   trainingWorkspaceState: { reviewMediaView: 'detail', reviewAspect: '916', reviewInspectedSource: null },
-  state: { items: [], ratings: {} }
+  state: { folder: 'set', items: [], ratings: {} },
+  IMAGE_EXTENSIONS: {}
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 context.escapeHtml = (value) => String(value);
 context.getRatingForMediaKey = (key) => context.state.ratings[key] || 0;
+context.getFileExtension = (name) => '.' + String(name).split('.').pop();
 function assert(value, message) { if (!value) throw new Error(message); }
 const canonical = {
   plan: { stages: { h3: { imageBuckets: {} } }, videoRoles: [{ id: 'detail', enabled: true, frames: 17, buckets: { '916': [[384, 672]] } }] },
@@ -231,10 +233,12 @@ assert(renderCalls === 1 && saveCalls === 0 && closeCalls === 0, 'rail navigatio
   draft.distribution.videos.detail['916'].native[0].eligible = true;
   draft.distribution.videos.detail['916'].native[0].target = [256, 448];
   draft.distribution.videos.detail['916'].native[0].assignedTarget = [256, 448];
-  context.state.items = [{ key: 'clip.mp4', fileName: 'clip.mp4' }];
+  context.state.items = [{ key: 'clip.mp4', fileName: 'clip.mp4', caption: 'Keep the movement clean.' }];
   context.trainingWorkspaceState.reviewInspectedSource = { view: 'detail', aspect: '916', file: 'clip.mp4' };
   const inspectedRail = context.reviewRailHtml(draft);
   assert(inspectedRail.includes('Source inspector') && inspectedRail.includes('clip.mp4') && inspectedRail.includes('Target'), 'selected dot facts must render in the source inspector');
+  assert(inspectedRail.includes('/caption/media?folder=set&media=clip.mp4') && inspectedRail.includes('<video controls playsinline preload="metadata"'), 'video source inspection must reuse the normal media route with native controls');
+  assert(inspectedRail.includes('Keep the movement clean.'), 'source inspection must show an existing caption read-only');
   assert(inspectedRail.includes('Worth noticing ·'), 'source inspection must collapse notices to a compact summary');
   assert(saveCalls === 0 && closeCalls === 0, 'dot inspection must not save, close, or navigate');
 '''
@@ -255,11 +259,15 @@ assert(renderCalls === 1 && saveCalls === 0 && closeCalls === 0, 'rail navigatio
     assert "trainingWorkspaceState.reviewInspectedSource" in bindings
     assert "setRatingForMediaKey" in bindings
     assert "pruneMedia(source.mediaItem, { selectReplacement: false })" in bindings
+    assert "data-review-close-source" in bindings
     assert "event.key === 'Escape'" in script
     assert "@media (max-width: 980px)" in styles
     assert ".training-review-layout { grid-template-columns: 1fr; }" in styles
     modal_styles = styles[styles.index(".training-review-modal {"):styles.index(".training-review-modal.hidden")]
     assert "align-items: flex-start" in modal_styles
+    assert "width: min(1620px, calc(100vw - 36px));" in styles
+    assert "grid-template-columns: minmax(0, 1fr) minmax(320px, 400px)" in styles
+    assert ".training-review-selected-target .training-review-target-chip.selected:disabled { opacity: 1; cursor: default; }" in styles
 
 
 def test_scale_impact_scope_chart_floor_and_source_refresh_keep_the_draft():
@@ -292,12 +300,16 @@ const payload = {
 };
 let impactHtml = context.reviewImpactHtml(payload, 'temporal', '916');
 assert(impactHtml.includes('data-review-impact-scope="aspect"') && impactHtml.includes('>1</b>'), 'impact defaults to the active aspect group');
+const emptyImpact = JSON.parse(JSON.stringify(payload));
+emptyImpact.distribution.videos.temporal['916'].impact = { down20: 0, down: 0, near: 0, up: 0, up20: 0 };
+assert(context.reviewImpactHtml(emptyImpact, 'temporal', '916').includes('No eligible items in this scope.'), 'empty aspect impact must retain its scope control');
 context.trainingWorkspaceState.reviewImpactScope = 'all';
 impactHtml = context.reviewImpactHtml(payload, 'temporal', '916');
 assert(impactHtml.includes('All ratios') && impactHtml.includes('>3</b>'), 'all ratios uses the role aggregate');
 const chart = context.reviewChartHtml(payload, 'temporal', group, [[256, 455]], '916');
 assert(chart.includes('>256</span>'), 'the first labelled video tick is the floor');
 assert(!chart.includes('>192</span>'), 'no artificial pre-floor tick is added when no source is below the floor');
+assert(chart.includes('training-review-hist-count') && chart.includes('>1</span>'), 'each populated histogram bar must expose its exact count');
 const draft = JSON.parse(JSON.stringify(payload));
 draft.plan.videoRoles[0].buckets['916'] = [[384, 682]];
 context.trainingWorkspaceState.reviewModalOpen = true;
@@ -317,6 +329,40 @@ context.renderTrainingReview = () => {};
   assert(!context.reviewRailHtml(context.trainingWorkspaceState.reviewDraft).includes('Source inspector'), 'a filtered-away source must disappear after refresh');
   assert(context.trainingWorkspaceState.reviewInspectedSource === null, 'a filtered-away source selection must clear');
 })().catch((error) => { console.error(error.stack); process.exit(1); });
+'''
+    result = subprocess.run(
+        ["node", "-e", harness, str(script_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_source_inspector_uses_image_markup_for_images():
+    root = Path(__file__).parents[1]
+    script_path = root / "tool" / "js" / "training_review.js"
+    harness = r'''
+const fs = require('fs');
+const vm = require('vm');
+const context = {
+  JSON, Promise,
+  document: { addEventListener() {} },
+  trainingWorkspaceState: { reviewInspectedSource: { view: 'images', aspect: '43', file: 'still.jpg' } },
+  state: { folder: 'set folder', items: [{ key: 'still.jpg', fileName: 'still.jpg' }], ratings: {} },
+  IMAGE_EXTENSIONS: { '.jpg': true }
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+context.escapeHtml = (value) => String(value);
+context.getRatingForMediaKey = () => 0;
+context.getFileExtension = (name) => '.' + String(name).split('.').pop();
+const payload = {
+  plan: { stages: { h3: { imageBuckets: { '43': [[512, 384]] } } }, videoRoles: [] },
+  distribution: { images: { '43': { native: [{ file: 'still.jpg', width: 512, height: 384, eligible: true, assignedTarget: [512, 384] }] } }, videos: {} }
+};
+const html = context.reviewSourceRailHtml(payload);
+if (!html.includes('<img src="/caption/media?folder=set%20folder&media=still.jpg') || html.includes('<video controls')) throw new Error('image source inspection must use image markup and the existing media route');
 '''
     result = subprocess.run(
         ["node", "-e", harness, str(script_path)],

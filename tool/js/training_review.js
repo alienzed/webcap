@@ -602,7 +602,8 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
     var bounds = binBounds(key);
     var start = position(bounds[0]);
     var end = position(bounds[1]);
-    return '<i class="training-review-hist-bin" style="left:' + start + '%;width:' + Math.max(0, end - start) + '%;height:' + Math.round((count / maximum) * 72) + '%"></i>';
+    var height = Math.round((count / maximum) * 72);
+    return '<i class="training-review-hist-bin" style="left:' + start + '%;width:' + Math.max(0, end - start) + '%;height:' + height + '%"></i><span class="training-review-hist-count" style="left:' + ((start + end) / 2) + '%;bottom:calc(' + Math.max(2, height) + '% + 3px)">' + count + '</span>';
   }).join('');
   var inspected = reviewInspectedSource(payload);
   var dots = rows.map(function (row, rowIndex) {
@@ -614,14 +615,16 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
     var bounds = binBounds(bin);
     var binStart = position(bounds[0]);
     var binEnd = position(bounds[1]);
-    var lane = ((ordinal % 5) - 2) * .42;
-    var dotLeft = Math.max(binStart + .7, Math.min(binEnd - .7, position(edge) + lane));
+    var pack = ordinal % 5;
+    var laneX = [-1.2, -.6, 0, .6, 1.2][pack];
+    var laneY = [0, 11, 5, 16, 8][pack];
+    var dotLeft = Math.max(binStart + .9, Math.min(binEnd - .9, position(edge) + laneX));
     var level = Math.floor(ordinal / 5);
     var scaleRatio = Number(row.scaleRatio || 1);
     var scale = Math.round((scaleRatio - 1) * 100);
     var resize = Math.abs(scale) < 1 ? 'No meaningful resize · 1.00×' : (scale > 0 ? 'Upscale ' : 'Downscale ') + scaleRatio.toFixed(2) + '× · ' + (scale > 0 ? '+' : '') + scale + '%';
     var resolutionExcluded = view === 'detail' && !row.eligible && reviewDetailFrameEligible(row, group.frames);
-    return '<button type="button" class="training-review-chart-dot ' + reviewTargetColor(selected, target) + ' impact-' + escapeHtml(row.impactBand || 'near') + (resolutionExcluded ? ' detail-resolution-ineligible' : '') + (inspected && inspected.view === view && inspected.aspect === aspect && inspected.row.file === row.file ? ' selected' : '') + '" style="left:' + dotLeft + '%;bottom:' + (11 + level * 15) + 'px" data-review-dot-index="' + rowIndex + '" aria-label="Inspect ' + escapeHtml(row.file || 'source media') + '"></button>';
+    return '<button type="button" class="training-review-chart-dot ' + reviewTargetColor(selected, target) + ' impact-' + escapeHtml(row.impactBand || 'near') + (resolutionExcluded ? ' detail-resolution-ineligible' : '') + (inspected && inspected.view === view && inspected.aspect === aspect && inspected.row.file === row.file ? ' selected' : '') + '" style="left:' + dotLeft + '%;bottom:' + (11 + laneY + level * 22) + 'px" data-review-dot-index="' + rowIndex + '" aria-label="Inspect ' + escapeHtml(row.file || 'source media') + '"></button>';
   }).join('');
   var markers = (group.targets || []).map(function (target, index) {
     var shape = target.shape || [];
@@ -648,8 +651,9 @@ function reviewImpactHtml(payload, view, aspect) {
     ? (view === 'images' ? (((payload.distribution || {}).impact || {}).images || {}) : (((((payload.distribution || {}).impact || {}).videos || {})[view]) || {}))
     : ((reviewViewGroups(payload, view)[aspect] || {}).impact || {});
   var total = TRAINING_REVIEW_IMPACT_BANDS.reduce(function (sum, item) { return sum + Number(impact[item[0]] || 0); }, 0);
-  if (!total) return '';
-  return '<section class="training-review-impact"><div class="training-review-label-row"><strong>Scale impact</strong><div class="training-review-impact-scope" role="group" aria-label="Scale impact scope"><button type="button" class="' + (scope === 'aspect' ? 'active' : '') + '" data-review-impact-scope="aspect">' + escapeHtml(formatReviewAspect(aspect)) + '</button><button type="button" class="' + (scope === 'all' ? 'active' : '') + '" data-review-impact-scope="all">All ratios</button></div><span>' + total + ' eligible item' + (total === 1 ? '' : 's') + '</span></div><div class="training-review-impact-direction"><span>Smaller target</span><span>Larger target</span></div><div class="training-review-impact-cells">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { var count = Number(impact[item[0]] || 0); var percent = Math.round(count / total * 100); return '<div class="training-review-impact-cell impact-' + item[0] + (count ? '' : ' is-empty') + '" title="' + count + ' of ' + total + ' eligible items"><b>' + count + '</b><em>' + percent + '%</em><span>' + escapeHtml(item[1]) + '</span></div>'; }).join('') + '</div></section>';
+  var header = '<div class="training-review-label-row"><strong>Scale impact</strong><div class="training-review-impact-scope" role="group" aria-label="Scale impact scope"><button type="button" class="' + (scope === 'aspect' ? 'active' : '') + '" data-review-impact-scope="aspect">' + escapeHtml(formatReviewAspect(aspect)) + '</button><button type="button" class="' + (scope === 'all' ? 'active' : '') + '" data-review-impact-scope="all">All ratios</button></div><span>' + total + ' eligible item' + (total === 1 ? '' : 's') + '</span></div>';
+  if (!total) return '<section class="training-review-impact">' + header + '<div class="training-review-impact-empty">No eligible items in this scope.</div></section>';
+  return '<section class="training-review-impact">' + header + '<div class="training-review-impact-direction"><span>Smaller target</span><span>Larger target</span></div><div class="training-review-impact-cells">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { var count = Number(impact[item[0]] || 0); var percent = Math.round(count / total * 100); return '<div class="training-review-impact-cell impact-' + item[0] + (count ? '' : ' is-empty') + '" title="' + count + ' of ' + total + ' eligible items"><b>' + count + '</b><em>' + percent + '%</em><span>' + escapeHtml(item[1]) + '</span></div>'; }).join('') + '</div></section>';
 }
 
 function reviewSubstantialUpscaleRows(payload, view, aspect) {
@@ -731,6 +735,9 @@ function reviewSourceRailHtml(payload) {
   var source = reviewInspectedSource(payload);
   if (!source) return '';
   var row = source.row;
+  var mediaName = (source.mediaItem && (source.mediaItem.fileName || source.mediaItem.key)) || row.file;
+  var mediaUrl = '/caption/media?folder=' + encodeURIComponent(state.folder) + '&media=' + encodeURIComponent(mediaName) + '&t=' + Date.now();
+  var isImage = !!IMAGE_EXTENSIONS[getFileExtension(mediaName)];
   var target = row.assignedTarget || row.target || [];
   var scaleRatio = Number(row.scaleRatio || 1);
   var scale = Math.round((scaleRatio - 1) * 100);
@@ -744,10 +751,17 @@ function reviewSourceRailHtml(payload) {
       return '<button type="button" class="preview-header-star' + (value <= rating ? ' active' : '') + '" data-review-source-rating="' + value + '" aria-label="Set rating to ' + value + ' stars" title="Set rating to ' + value + ' stars">' + (value <= rating ? '★' : '☆') + '</button>';
     }).join('') + '</span><button type="button" class="training-review-source-prune" data-review-source-prune>Prune</button></div>';
   }
-  return '<section class="training-review-rail-section training-review-source"><strong>Source inspector</strong><b>' + escapeHtml(row.file || 'Source media') + '</b><div class="training-review-source-facts"><span>Native · ' + escapeHtml(row.width + ' × ' + row.height) + '</span>' +
+  var preview = '<div class="training-review-source-preview">' + (isImage
+    ? '<img src="' + mediaUrl + '" alt="' + escapeHtml(mediaName || 'Source media') + '" data-review-source-preview-image>'
+    : '<video controls playsinline preload="metadata" data-review-source-preview-video><source src="' + mediaUrl + '"></video>') +
+    '<div class="training-review-source-preview-error hidden" data-review-source-preview-error>' + (isImage ? 'Image failed to load in browser preview.' : 'Video failed to load in browser preview. The codec may be unsupported.') + '</div></div>';
+  var description = source.mediaItem && String(source.mediaItem.caption || '').trim()
+    ? '<div class="training-review-source-description"><span>Description</span><p>' + escapeHtml(String(source.mediaItem.caption).trim()) + '</p></div>'
+    : '';
+  return '<section class="training-review-rail-section training-review-source"><div class="training-review-source-heading"><strong>Source inspector</strong><button type="button" class="training-review-source-close" data-review-close-source aria-label="Close source inspector" title="Close source inspector">×</button></div><b>' + escapeHtml(row.file || 'Source media') + '</b>' + preview + '<div class="training-review-source-facts"><span>Native · ' + escapeHtml(row.width + ' × ' + row.height) + '</span>' +
     (Number(row.frames || 0) ? '<span>' + escapeHtml(String(row.frames)) + ' frames</span>' : '') +
     (target.length ? '<span>Target · ' + escapeHtml(target[0] + ' × ' + target[1]) + '</span><span>' + escapeHtml(scaleText) + (impact ? ' · ' + escapeHtml(impact[1]) : '') + '</span>' : '') +
-    '<span>' + (row.eligible ? 'Eligible' : 'Not eligible') + (row.eligibilityReason ? ' · ' + escapeHtml(row.eligibilityReason) : '') + '</span></div>' + curation + '</section>';
+    '<span>' + (row.eligible ? 'Eligible' : 'Not eligible') + (row.eligibilityReason ? ' · ' + escapeHtml(row.eligibilityReason) : '') + '</span></div>' + description + curation + '</section>';
 }
 
 function reviewRailHtml(payload) {
@@ -908,12 +922,13 @@ function saveTrainingReviewDraft() {
 function bindTrainingReviewModal(payload) {
   var els = getTrainingWorkspaceEls();
   var modal = els.reviewModalContent;
-  modal.querySelectorAll('[data-review-view]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewMediaView = button.getAttribute('data-review-view'); trainingWorkspaceState.reviewAspect = ''; renderTrainingReview(); }; });
-  modal.querySelectorAll('[data-review-aspect]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewAspect = button.getAttribute('data-review-aspect'); renderTrainingReview(); }; });
+  modal.querySelectorAll('[data-review-view]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewMediaView = button.getAttribute('data-review-view'); trainingWorkspaceState.reviewAspect = ''; trainingWorkspaceState.reviewInspectedSource = null; renderTrainingReview(); }; });
+  modal.querySelectorAll('[data-review-aspect]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewAspect = button.getAttribute('data-review-aspect'); trainingWorkspaceState.reviewInspectedSource = null; renderTrainingReview(); }; });
   modal.querySelectorAll('[data-review-impact-scope]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewImpactScope = button.getAttribute('data-review-impact-scope') === 'all' ? 'all' : 'aspect'; renderTrainingReview(); }; });
   modal.querySelectorAll('[data-review-rail-view]').forEach(function (button) { button.onclick = function () {
     trainingWorkspaceState.reviewMediaView = button.getAttribute('data-review-rail-view');
     trainingWorkspaceState.reviewAspect = button.getAttribute('data-review-rail-aspect');
+    trainingWorkspaceState.reviewInspectedSource = null;
     renderTrainingReview();
   }; });
   modal.querySelectorAll('[data-review-target]').forEach(function (button) { button.onclick = function () {
@@ -941,6 +956,7 @@ function bindTrainingReviewModal(payload) {
           return candidate !== role.id && (!candidateRole || candidateRole.enabled);
         })[0] || 'images';
         trainingWorkspaceState.reviewAspect = '';
+        trainingWorkspaceState.reviewInspectedSource = null;
       }
       return true;
     });
@@ -974,6 +990,18 @@ function bindTrainingReviewModal(payload) {
     pruneMedia(source.mediaItem, { selectReplacement: false }).then(function (pruned) {
       if (pruned) return refreshTrainingReviewFactsKeepingDraft();
     }).catch(function (err) { setStatus('Could not prune Training Review source: ' + String(err && err.message ? err.message : err)); });
+  }; });
+  modal.querySelectorAll('[data-review-close-source]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewInspectedSource = null; renderTrainingReview(); }; });
+  modal.querySelectorAll('[data-review-source-preview-image], [data-review-source-preview-video]').forEach(function (preview) { preview.onerror = function () {
+    var error = modal.querySelector('[data-review-source-preview-error]');
+    if (!error) throw new Error('Training Review source preview is missing its error message.');
+    preview.classList.add('hidden');
+    error.classList.remove('hidden');
+  }; });
+  modal.querySelectorAll('[data-review-source-preview-video] source').forEach(function (source) { source.onerror = function () {
+    var error = modal.querySelector('[data-review-source-preview-error]');
+    if (!error) throw new Error('Training Review source preview is missing its error message.');
+    error.classList.remove('hidden');
   }; });
   modal.querySelectorAll('[data-review-open-dataset]').forEach(function (button) { button.onclick = function () { closeTrainingReviewModal(); selectTrainingWorkspaceConfigFile(button.getAttribute('data-review-open-dataset')); }; });
   modal.querySelectorAll('[data-review-reset-dataset]').forEach(function (button) { button.onclick = function () {

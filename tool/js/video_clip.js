@@ -136,6 +136,7 @@ function syncVideoClipTrimInputs(authority) {
 function seekVideoClipPlayhead(time, options) {
   var videoEl = getVideoClipEl('video-clip-video');
   if (!videoEl) return;
+  yieldVideoClipCropEdit();
   var sourceDuration = getVideoClipSourceDuration();
   var nextTime = Number(time || 0);
   if (!isFinite(nextTime) || nextTime < 0) nextTime = 0;
@@ -237,6 +238,7 @@ function clearVideoClipExactFrame() {
   videoClipExactFrame = null;
   resetVideoClipFrameExtraction();
   updateVideoClipExactFrameUi();
+  updateVideoClipCropOverlay();
 }
 
 function setVideoClipExactFrame(frame) {
@@ -259,6 +261,7 @@ function requestVideoClipExactFrame(request, onResolved, options) {
   if (!videoClipTargetItem || !videoClipTargetItem.fileName || videoClipExactFrameRequestPending) return;
   var videoEl = getVideoClipEl('video-clip-video');
   if (!videoEl) throw new Error('Video clip player is missing');
+  yieldVideoClipCropEdit();
   stopVideoClipLoopPreview();
   try { videoEl.pause(); } catch (e) {}
   var requestGeneration = videoClipExactFrameRequestGeneration + 1;
@@ -510,7 +513,7 @@ function updateVideoClipExportAvailability() {
       unchanged = false;
     }
   }
-  btn.disabled = videoClipCropBusy || videoClipCropEditActive || unchanged;
+  btn.disabled = videoClipCropBusy || unchanged;
   btn.textContent = videoClipCropBusy ? 'Exporting...' : 'Export';
 }
 
@@ -641,7 +644,7 @@ function updateVideoClipCropOverlay() {
   var overlayEl = getVideoClipEl('video-clip-crop-overlay');
   var crop = getVideoClipCurrentCrop();
   var layout = getVideoClipStageLayout();
-  if (!overlayEl || !crop || !layout || videoClipCropEditActive) {
+  if (!overlayEl || !crop || !layout || videoClipCropEditActive || videoClipExactFrame) {
     if (overlayEl) overlayEl.classList.add('hidden');
     return;
   }
@@ -653,16 +656,29 @@ function updateVideoClipCropOverlay() {
   overlayEl.style.height = ((crop.height / layout.naturalHeight) * layout.height).toFixed(3) + 'px';
 }
 
-function updateVideoClipCropButtons() {
+function getVideoClipNativeRatio() {
   var resolution = getVideoClipResolution(videoClipTargetItem && videoClipTargetItem.fileName);
   var sourceRatio = resolution ? resolution.width / resolution.height : 0;
+  if (!sourceRatio) return null;
+  var nativeRatio = null;
+  Array.prototype.forEach.call(document.querySelectorAll('.video-clip-ratio-btn'), function (btn) {
+    var ratio = Number(btn.getAttribute('data-ratio'));
+    if (matchesVideoClipRatio(ratio, sourceRatio)) nativeRatio = ratio;
+  });
+  return nativeRatio;
+}
+
+function updateVideoClipCropButtons() {
+  var nativeRatio = getVideoClipNativeRatio();
   Array.prototype.forEach.call(document.querySelectorAll('.video-clip-ratio-btn'), function (btn) {
     var ratio = Number(btn.getAttribute('data-ratio'));
     var selected = videoClipCropRatio !== null && matchesVideoClipRatio(ratio, videoClipCropRatio);
-    var nativeMatch = sourceRatio > 0 && matchesVideoClipRatio(ratio, sourceRatio);
+    var nativeMatch = nativeRatio !== null && matchesVideoClipRatio(ratio, nativeRatio);
     btn.classList.toggle('active', selected);
-    btn.classList.toggle('native-match', nativeMatch && !selected);
-    if (selected) {
+    btn.classList.toggle('native-match', nativeMatch);
+    if (selected && nativeMatch) {
+      btn.title = videoClipCropEditActive ? 'Finish crop placement' : 'Source-native output ratio. Click to edit it';
+    } else if (selected) {
       btn.title = videoClipCropEditActive ? 'Finish crop placement' : 'Edit ' + getVideoClipRatioLabel(ratio) + ' crop';
     } else if (nativeMatch) {
       btn.title = 'Matches the source aspect ratio. Select to place this output crop';
@@ -677,11 +693,18 @@ function updateVideoClipCropSummary() {
   var summaryEl = getVideoClipEl('video-clip-size-readout');
   if (!summaryEl) return;
   var crop = getVideoClipCurrentCrop();
-  if (videoClipCropRatio === null || !crop) {
+  if (videoClipCropRatio === null) {
     summaryEl.textContent = 'Choose output ratio';
     return;
   }
-  summaryEl.textContent = (videoClipCropEditActive ? 'Editing ' : '') + getVideoClipRatioLabel(videoClipCropRatio) + ' \u00b7 ' + Math.round(crop.width) + ' × ' + Math.round(crop.height);
+  var resolution = getVideoClipResolution(videoClipTargetItem && videoClipTargetItem.fileName);
+  var width = crop ? crop.width : (resolution && resolution.width);
+  var height = crop ? crop.height : (resolution && resolution.height);
+  if (!width || !height) {
+    summaryEl.textContent = 'Choose output ratio';
+    return;
+  }
+  summaryEl.textContent = (videoClipCropEditActive ? 'Editing ' : '') + getVideoClipRatioLabel(videoClipCropRatio) + ' \u00b7 ' + Math.round(width) + ' × ' + Math.round(height);
 }
 
 function updateVideoClipExportSummary() {
@@ -987,6 +1010,7 @@ function openVideoClipModal(mediaItem) {
     if (isFinite(vw) && isFinite(vh) && vw > 0 && vh > 0) {
       videoClipSourceResolution = { width: Math.round(vw), height: Math.round(vh) };
     }
+    setVideoClipRatio(getVideoClipNativeRatio(), { preserveCrop: true });
     updateVideoClipStageLayout();
     updateVideoClipHeaderMeta();
     updateVideoClipCropButtons();
@@ -1257,6 +1281,9 @@ function beginVideoClipCropEdit() {
 function finishVideoClipCropEdit() {
   var videoEl = getVideoClipEl('video-clip-video');
   var editLayerEl = getVideoClipEl('video-clip-crop-edit-layer');
+  if (videoClipInlineCropper) {
+    setVideoClipPendingCrop(videoClipInlineCropper.getData(true));
+  }
   destroyVideoClipInlineCropper();
   videoClipCropEditActive = false;
   if (videoEl) videoEl.controls = true;
@@ -1270,8 +1297,13 @@ function finishVideoClipCropEdit() {
   updateVideoClipCropOverlay();
 }
 
+function yieldVideoClipCropEdit() {
+  if (videoClipCropEditActive) finishVideoClipCropEdit();
+}
+
 function applyVideoClip(overwrite, skipRepeatConfirm) {
   if (videoClipCropBusy) return;
+  yieldVideoClipCropEdit();
   stopVideoClipLoopPreview();
 
   var payload;
@@ -1350,6 +1382,7 @@ function wireVideoClipStage() {
   var videoEl = getVideoClipEl('video-clip-video');
   if (!videoEl) throw new Error('Missing required element: video-clip-video');
   videoEl.addEventListener('seeking', function() {
+    yieldVideoClipCropEdit();
     if (!videoClipExactFrameSeekPending) clearVideoClipExactFrame();
   });
   videoEl.addEventListener('seeked', function() {
@@ -1357,7 +1390,10 @@ function wireVideoClipStage() {
     updateVideoClipTimelineUi();
     updateVideoClipCropOverlay();
   });
-  videoEl.addEventListener('play', function() { clearVideoClipExactFrame(); });
+  videoEl.addEventListener('play', function() {
+    yieldVideoClipCropEdit();
+    clearVideoClipExactFrame();
+  });
 }
 
 function wireVideoClipModal() {

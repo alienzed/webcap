@@ -180,6 +180,16 @@ def test_exact_frame_controls_and_payload_are_wired_for_clip_modal():
     assert "resetVideoClipFrameExtraction()" not in exact_frame_setter
     assert "startEl.addEventListener('change', function () {\n      videoClipExactStart = null;" in script
     assert "function finishVideoClipCropEdit()" in script
+    assert "function yieldVideoClipCropEdit()" in script
+    assert "yieldVideoClipCropEdit();\n  stopVideoClipLoopPreview();" in script
+    assert "yieldVideoClipCropEdit();\n  var sourceDuration" in script
+    assert "yieldVideoClipCropEdit();\n  stopVideoClipLoopPreview();\n  try { videoEl.pause(); }" in script
+    assert "videoClipInlineCropper.getData(true)" in script
+    assert "setVideoClipRatio(getVideoClipNativeRatio(), { preserveCrop: true });" in script
+    assert "function getVideoClipNativeRatio()" in script
+    assert "btn.classList.toggle('native-match', nativeMatch);" in script
+    assert "btn.disabled = videoClipCropBusy || unchanged;" in script
+    assert "videoClipCropEditActive || videoClipExactFrame" in script
     assert "video-clip-crop-apply" not in html
     assert "video-clip-crop-cancel" not in html
     assert "Full frame" not in html

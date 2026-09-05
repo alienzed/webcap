@@ -2613,11 +2613,6 @@ iframe {
 .training-review-rail-notices { border-left: 3px solid #d9a441; background: rgba(217,164,65,.1); }
 .training-review-rail-notice-summary { padding: 8px 11px; color: var(--muted-text, #a3adba); font-size: 12px; }
 .training-review-rail-notice-list, .training-review-rail-plan-list { display: grid; gap: 7px; }
-.training-review-rail-notice { display: grid; gap: 3px; padding-bottom: 7px; border-bottom: 1px solid var(--border-color, #3d4452); }
-.training-review-rail-notice:last-child { padding-bottom: 0; border-bottom: 0; }
-.training-review-rail-notice > span, .training-review-rail-notice p { margin: 0; color: var(--muted-text, #a3adba); font-size: 11px; line-height: 1.35; }
-.training-review-rail-notice > b { font-size: 12px; }
-.training-review-rail-notice > div { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
 .training-review-rail-notice-group { display: grid; gap: 5px; padding-bottom: 7px; border-bottom: 1px solid var(--border-color, #3d4452); }
 .training-review-rail-notice-group:last-child { padding-bottom: 0; border-bottom: 0; }
 .training-review-rail-notice-group > strong { font-size: 12px; }

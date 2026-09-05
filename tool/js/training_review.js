@@ -287,8 +287,35 @@ function reviewProjectedTarget(view, row, targets) {
       return !closest || Math.abs(Math.log(Math.min(target[0], target[1]) / Math.min(row.width, row.height))) < Math.abs(Math.log(Math.min(closest[0], closest[1]) / Math.min(row.width, row.height))) ? target : closest;
     }, null);
   }
+  var native = reviewNativeVideoTarget(row, targets);
+  if (native || view === 'detail') return native;
   var ordered = targets.slice().sort(function (a, b) { return b[0] * b[1] - a[0] * a[1]; });
-  return ordered.filter(function (target) { return Number(row.width) >= target[0] && Number(row.height) >= target[1]; })[0] || ordered[ordered.length - 1] || null;
+  return ordered[ordered.length - 1] || null;
+}
+
+function reviewNativeVideoTarget(row, targets) {
+  var ordered = targets.slice().sort(function (a, b) { return b[0] * b[1] - a[0] * a[1]; });
+  return ordered.filter(function (target) { return Number(row.width) >= target[0] && Number(row.height) >= target[1]; })[0] || null;
+}
+
+function reviewDetailFrameEligible(row, frames) {
+  return Number(row.frames || 0) >= Number(frames || 0);
+}
+
+function reviewDetailEligibility(row, targets, frames) {
+  if (!reviewDetailFrameEligible(row, frames)) {
+    return {
+      eligible: false,
+      reason: Number(row.frames || 0) ? Number(row.frames || 0) + ' frames; this role requires ' + Number(frames || 0) + '.' : 'Frame count unavailable.'
+    };
+  }
+  if (targets.length && !reviewNativeVideoTarget(row, targets)) {
+    var floor = targets.reduce(function (lowest, target) {
+      return !lowest || target[0] * target[1] < lowest[0] * lowest[1] ? target : lowest;
+    }, null);
+    return { eligible: false, reason: 'Native resolution is below the lowest selected Detail target ' + floor[0] + ' × ' + floor[1] + '; Detail does not upscale source video.' };
+  }
+  return { eligible: true, reason: '' };
 }
 
 function reviewEmptyImpactCounts() {
@@ -308,6 +335,9 @@ function reviewDistributionGroup(rows, targets, view, prior) {
   var impact = reviewEmptyImpactCounts();
   var native = (rows || []).map(function (source) {
     var row = Object.assign({}, source);
+    var detailEligibility = view === 'detail' ? reviewDetailEligibility(row, targets, prior && prior.frames) : null;
+    row.eligible = detailEligibility ? detailEligibility.eligible : !!row.eligible;
+    if (detailEligibility) row.eligibilityReason = detailEligibility.reason;
     var target = row.eligible ? reviewProjectedTarget(view, row, targets) : null;
     var nativeShortEdge = Number(row.nativeShortEdge || row.edge || Math.min(Number(row.width), Number(row.height)) || 0);
     var scaleRatio = target && nativeShortEdge ? Math.min(Number(target[0]), Number(target[1])) / nativeShortEdge : 1;
@@ -409,13 +439,16 @@ function reviewCandidateImpactTitle(payload, view, aspect, selected, candidate) 
   var majorUpscaleReduced = 0;
   var eligible = 0;
   var projectedTargets = selected.concat([candidate]);
-  (((reviewViewGroups(payload, view)[aspect] || {}).native) || []).forEach(function (row) {
-    if (!row.eligible) return;
+  var group = (reviewViewGroups(payload, view)[aspect] || {});
+  (((group || {}).native) || []).forEach(function (row) {
+    var projectedEligibility = view === 'detail' ? reviewDetailEligibility(row, projectedTargets, group.frames) : { eligible: row.eligible };
+    if (!projectedEligibility.eligible) return;
     eligible += 1;
     var current = row.assignedTarget || row.target || [];
     var projected = reviewProjectedTarget(view, row, projectedTargets);
     if (!projected || sameReviewBucket(current, projected)) return;
     changed += 1;
+    if (!current.length) return;
     var edge = Math.min(Number(row.width), Number(row.height));
     var currentDistance = Math.abs(Math.log(Math.min(current[0], current[1]) / edge));
     var projectedDistance = Math.abs(Math.log(Math.min(projected[0], projected[1]) / edge));
@@ -570,7 +603,8 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
     var scale = Math.round((scaleRatio - 1) * 100);
     var resize = Math.abs(scale) < 1 ? 'No meaningful resize · 1.00×' : (scale > 0 ? 'Upscale ' : 'Downscale ') + scaleRatio.toFixed(2) + '× · ' + (scale > 0 ? '+' : '') + scale + '%';
     var detail = (row.file || 'Source media') + '\nNative: ' + row.width + ' × ' + row.height + ' · short edge ' + edge + ' px' + (target.length ? '\nTarget: ' + target[0] + ' × ' + target[1] + '\n' + resize : '\nNot eligible for this role' + (row.eligibilityReason ? ': ' + row.eligibilityReason : ''));
-    return '<i class="training-review-chart-dot ' + reviewTargetColor(selected, target) + ' impact-' + escapeHtml(row.impactBand || 'near') + '" style="left:' + dotLeft + '%;bottom:' + (11 + level * 15) + 'px" title="' + escapeHtml(detail) + '"></i>';
+    var resolutionExcluded = view === 'detail' && !row.eligible && reviewDetailFrameEligible(row, group.frames);
+    return '<i class="training-review-chart-dot ' + reviewTargetColor(selected, target) + ' impact-' + escapeHtml(row.impactBand || 'near') + (resolutionExcluded ? ' detail-resolution-ineligible' : '') + '" style="left:' + dotLeft + '%;bottom:' + (11 + level * 15) + 'px" title="' + escapeHtml(detail) + '"></i>';
   }).join('');
   var markers = (group.targets || []).map(function (target) {
     var shape = target.shape || [];
@@ -583,7 +617,12 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
   var envelope = view === 'images' ? '' : envelopeMarker('floor', floorEdge, 'Floor', 'Lowest selectable supported rung') + envelopeMarker('default', defaultEdge, defaultEdge === maximumEdge ? 'Default / max' : 'Default', defaultEdge === maximumEdge ? 'Automatic default ceiling and effective maximum' : 'Automatic default ceiling') + (defaultEdge === maximumEdge ? '' : envelopeMarker('maximum', maximumEdge, 'Max', limit && limit.source === 'calibration' ? 'Calibrated maximum' : 'Effective maximum'));
   var tickLabels = ticks.map(function (value) { return '<span style="left:' + position(value) + '%">' + escapeHtml(String(value)) + '</span>'; }).join('');
   var axisBreak = hasBreak ? '<i class="training-review-axis-break" style="left:' + ((segments[0].end + segments[1].start) / 2) + '%" aria-label="Resolution scale skips an empty interval"><b></b><b></b></i>' : '';
-  return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Bars group nearby native short edges; each dot is one source file.</span></div><div class="training-review-legend"><span><i class="histogram"></i>Native range</span><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + zones + gridlines + histogram + dots + markers + envelope + axisBreak + '</div><div class="training-review-chart-axis"><div class="training-review-chart-ticks">' + tickLabels + axisBreak + '</div><span>Native short edge (px)</span></div></section>';
+  var detailFloor = view === 'detail' && selected.length ? selected.reduce(function (lowest, target) {
+    return !lowest || target[0] * target[1] < lowest[0] * lowest[1] ? target : lowest;
+  }, null) : null;
+  var detailExcluded = detailFloor ? rows.filter(function (row) { return !row.eligible && reviewDetailFrameEligible(row, group.frames); }).length : 0;
+  var detailHint = detailFloor ? '<span class="training-review-detail-floor">Detail floor: ' + escapeHtml(detailFloor[0] + ' × ' + detailFloor[1]) + ' · sources below the lowest selected target are excluded; Detail never upscales.' + (detailExcluded ? ' ' + detailExcluded + ' excluded.' : '') + '</span>' : '';
+  return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Bars group nearby native short edges; each dot is one source file.</span>' + detailHint + '</div><div class="training-review-legend"><span><i class="histogram"></i>Native range</span><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + zones + gridlines + histogram + dots + markers + envelope + axisBreak + '</div><div class="training-review-chart-axis"><div class="training-review-chart-ticks">' + tickLabels + axisBreak + '</div><span>Native short edge (px)</span></div></section>';
 }
 
 function reviewImpactHtml(payload, view) {

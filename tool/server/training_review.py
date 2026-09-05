@@ -393,7 +393,10 @@ def _build_review_plan(folder, profile_id, setup, manifest, profile_plan):
                     if not buckets:
                         excluded.append({"file": clip["file"], "kind": "video", "ar": ar_label, "role": role_name, "reason": "no_enabled_bucket"})
                         continue
-                    native = next((bucket for bucket in buckets if clip["width"] >= bucket[0] and clip["height"] >= bucket[1]), None)
+                    native = _native_video_assignment(clip["width"], clip["height"], buckets)
+                    if role_name == "detail" and not native:
+                        excluded.append({"file": clip["file"], "kind": "video", "ar": ar_label, "role": role_name, "reason": "below_detail_floor"})
+                        continue
                     bucket = native or buckets[-1]
                     assignments[bucket].append((clip, bool(native)))
                 for bucket, members in assignments.items():
@@ -793,10 +796,18 @@ def _closest_target(short_edge, targets):
     return min(targets, key=lambda target: abs(math.log(min(target) / float(short_edge))))
 
 
-def _video_assignment(width, height, targets):
-    """Match the existing Temporal/Detail bucket-selection semantics."""
+def _native_video_assignment(width, height, targets):
     ordered = sorted(targets, key=lambda target: target[0] * target[1], reverse=True)
-    return next((target for target in ordered if width >= target[0] and height >= target[1]), ordered[-1] if ordered else ())
+    return next((target for target in ordered if width >= target[0] and height >= target[1]), ())
+
+
+def _video_assignment(width, height, targets):
+    """Keep the existing Balanced/Temporal fallback assignment semantics."""
+    native = _native_video_assignment(width, height, targets)
+    if native:
+        return native
+    ordered = sorted(targets, key=lambda target: target[0] * target[1], reverse=True)
+    return ordered[-1] if ordered else ()
 
 
 def _distribution_group(rows, targets, frames=None, assign_target=None):
@@ -806,7 +817,8 @@ def _distribution_group(rows, targets, frames=None, assign_target=None):
     for row in rows:
         width, height = int(row["width"]), int(row["height"])
         short_edge = min(width, height)
-        target = (assign_target(width, height, targets) if assign_target else _closest_target(short_edge, targets)) if row.get("eligible", True) else ()
+        eligible = bool(row.get("eligible", True))
+        target = (assign_target(width, height, targets) if assign_target else _closest_target(short_edge, targets)) if eligible else ()
         scale_ratio = min(target) / float(short_edge) if target else 1.0
         band = _impact_band(scale_ratio)
         if target:
@@ -823,13 +835,13 @@ def _distribution_group(rows, targets, frames=None, assign_target=None):
             "assignedTarget": list(target),
             "scaleRatio": scale_ratio,
             "impactBand": band,
-            "eligible": bool(row.get("eligible", True)),
-            "eligibilityReason": (
+            "eligible": eligible,
+            "eligibilityReason": str(row.get("eligibilityReason") or "") or (
                 "Frame count unavailable."
-                if frames is not None and not row.get("eligible", True) and not int(row.get("frames") or 0)
+                if frames is not None and not eligible and not int(row.get("frames") or 0)
                 else (
                     str(int(row.get("frames") or 0)) + " frames; this role requires " + str(int(frames)) + "."
-                    if frames is not None and not row.get("eligible", True)
+                    if frames is not None and not eligible
                     else ""
                 )
             ),
@@ -844,7 +856,7 @@ def _distribution_group(rows, targets, frames=None, assign_target=None):
     if frames is not None:
         group["frames"] = int(frames)
         group["missingFrameCount"] = sum(1 for row in native if not row["frames"])
-        group["shortFrameCount"] = sum(1 for row in native if row["frames"] and not row["eligible"])
+        group["shortFrameCount"] = sum(1 for row in native if row["frames"] and row["frames"] < int(frames))
     return group
 
 
@@ -901,12 +913,21 @@ def _distribution_payload(manifest, plan):
         for ar_label, rows in video_rows.items():
             if not rows:
                 continue
-            eligible_rows = [dict(row, eligible=int(row["frames"]) >= frames) for row in rows]
+            targets = _selected_targets((role.get("buckets") or {}).get(ar_label, []))
+            eligible_rows = []
+            for row in rows:
+                eligible = int(row["frames"]) >= frames
+                reason = ""
+                if role_name == "detail" and eligible and targets and not _native_video_assignment(row["width"], row["height"], targets):
+                    eligible = False
+                    floor = min(targets, key=lambda target: target[0] * target[1])
+                    reason = "Native resolution is below the lowest selected Detail target " + str(floor[0]) + " × " + str(floor[1]) + "; Detail does not upscale source video."
+                eligible_rows.append(dict(row, eligible=eligible, eligibilityReason=reason))
             group = _distribution_group(
                 eligible_rows,
-                _selected_targets((role.get("buckets") or {}).get(ar_label, [])),
+                targets,
                 frames,
-                assign_target=_video_assignment,
+                assign_target=_native_video_assignment if role_name == "detail" else _video_assignment,
             )
             role_groups[ar_label] = group
             for band, count in group["impact"].items():

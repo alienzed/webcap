@@ -2700,6 +2700,8 @@ iframe {
 .training-review-chart-dot.impact-up { width: 12px; height: 12px; border-width: 2px; z-index: 1; }
 .training-review-chart-dot.impact-down { opacity: .68; }
 .training-review-chart-dot.impact-down20 { width: 9px; height: 9px; opacity: .42; }
+.training-review-chart-dot.detail-resolution-ineligible { background: transparent; border-color: rgba(163,173,186,.72); box-shadow: none; opacity: .52; }
+.training-review-detail-floor { color: var(--muted-text, #a3adba); font-size: 11px; }
 .training-review-chart-dot.target-0 { background: #4f9bdf; }
 .training-review-chart-dot.target-1 { background: #a671e5; }
 .training-review-chart-dot.target-2 { background: #d96e55; }

@@ -9,7 +9,8 @@ from tool.server import app as app_module
 from tool.server import training_review
 from tool.server import h3_probe
 from tool.server.dataset_config import build_video_blocks
-from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN22_PROFILE_ID
+from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN22_PROFILE_ID, profile_for_mode
+from tool.server.training_setup import ensure_training_setup
 
 
 def _configure_root(monkeypatch, root):
@@ -190,11 +191,53 @@ def test_video_distribution_keeps_h3_roles_independent():
     balanced = distribution["videos"]["balanced"]["square"]
     detail = distribution["videos"]["detail"]["square"]
     assert (balanced["frames"], temporal["frames"], detail["frames"]) == (34, 68, 17)
-    assert balanced["eligibleCount"] == temporal["eligibleCount"] == detail["eligibleCount"] == 1
+    assert balanced["eligibleCount"] == temporal["eligibleCount"] == 1
+    assert detail["eligibleCount"] == 0
     assert balanced["native"][0]["assignedTarget"] == [576, 576]
     assert temporal["native"][0]["assignedTarget"] == [512, 512]
-    assert detail["native"][0]["assignedTarget"] == [672, 672]
+    assert detail["native"][0]["assignedTarget"] == []
     assert distribution["impact"]["videos"]["temporal"] != distribution["impact"]["videos"]["detail"]
+
+
+def test_detail_requires_native_target_fit_without_changing_other_video_roles(tmp_path):
+    plan = {
+        "profileId": MINIMAX_H3_PROFILE_ID,
+        "stages": {"h3": {"targetSteps": 100, "imageBuckets": {}}},
+        "videoRoles": [
+            {"id": "balanced", "enabled": True, "frames": 34, "weight": 1.0, "buckets": {"square": [[704, 704]]}},
+            {"id": "temporal", "enabled": True, "frames": 68, "weight": 0.5, "buckets": {"square": [[704, 704]]}},
+            {"id": "detail", "enabled": True, "frames": 17, "weight": 0.25, "buckets": {"square": [[704, 704]]}},
+        ],
+    }
+    manifest = {"images": [], "videos": [
+        {"file": "high.mp4", "prepared_path": "square/high.mp4", "ar": "square", "width": 768, "height": 768, "frames": 80},
+        {"file": "low.mp4", "prepared_path": "square/low.mp4", "ar": "square", "width": 640, "height": 640, "frames": 80},
+    ]}
+
+    distribution = training_review._distribution_payload(manifest, plan)
+    detail = distribution["videos"]["detail"]["square"]
+    detail_rows = {row["file"]: row for row in detail["native"]}
+
+    assert detail["eligibleCount"] == 1
+    assert detail_rows["high.mp4"]["assignedTarget"] == [704, 704]
+    assert detail_rows["low.mp4"]["assignedTarget"] == []
+    assert detail_rows["low.mp4"]["eligible"] is False
+    assert detail_rows["low.mp4"]["eligibilityReason"] == "Native resolution is below the lowest selected Detail target 704 × 704; Detail does not upscale source video."
+    assert detail["shortFrameCount"] == 0
+    assert detail["impact"]["up20"] == 0
+    assert distribution["videos"]["balanced"]["square"]["native"][1]["assignedTarget"] == [704, 704]
+    assert distribution["videos"]["temporal"]["square"]["native"][1]["assignedTarget"] == [704, 704]
+
+    folder = tmp_path / "set"
+    folder.mkdir()
+    Image.new("RGB", (512, 512)).save(folder / "setup.png")
+    (folder / "setup.txt").write_text("setup", encoding="utf-8")
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal")
+    setup = training_review._setup_for_run(profile_for_mode(MINIMAX_H3_PROFILE_ID), MINIMAX_H3_PROFILE_ID, "train")
+    review = training_review._build_review_plan(folder, MINIMAX_H3_PROFILE_ID, setup, manifest, plan)
+    detail_entries = [entry for entry in review["stages"]["h3"]["datasetEntries"] if entry["role"] == "detail"]
+    assert len(detail_entries) == 1
+    assert detail_entries[0]["files"] == ["high.mp4"]
 
 
 def test_h3_default_roles_enable_balanced_temporal_and_detail():

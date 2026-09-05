@@ -93,3 +93,36 @@ function assert(value, message) { if (!value) throw new Error(message); }
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_detail_draft_recomputes_native_fit_and_chart_state_locally():
+    root = Path(__file__).parents[1]
+    script_path = root / "tool" / "js" / "training_review.js"
+    styles = (root / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    harness = r'''
+const fs = require('fs');
+const vm = require('vm');
+const context = { JSON, Promise, document: { addEventListener() {} } };
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+function assert(value, message) { if (!value) throw new Error(message); }
+const source = { file: 'clip.mp4', width: 640, height: 640, frames: 80, nativeShortEdge: 640, edge: 640, eligible: false };
+const prior = { frames: 17 };
+let group = context.reviewDistributionGroup([source], [[704, 704]], 'detail', prior);
+assert(group.eligibleCount === 0 && group.native[0].assignedTarget.length === 0, '704-only Detail must exclude 640 source');
+assert(group.native[0].eligibilityReason.indexOf('Detail does not upscale') !== -1, 'excluded Detail source needs a clear reason');
+group = context.reviewDistributionGroup([source], [[704, 704], [512, 512]], 'detail', prior);
+assert(group.eligibleCount === 1 && group.native[0].assignedTarget.join(',') === '512,512', 'adding 512 must immediately admit the source');
+group = context.reviewDistributionGroup([source], [[704, 704]], 'detail', prior);
+assert(group.eligibleCount === 0 && group.native[0].assignedTarget.length === 0, 'removing 512 must immediately exclude the source again');
+assert(context.reviewProjectedTarget('temporal', source, [[704, 704]]).join(',') === '704,704', 'non-Detail video fallback must remain');
+'''
+    result = subprocess.run(
+        ["node", "-e", harness, str(script_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "training-review-detail-floor" in (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
+    assert ".detail-resolution-ineligible" in styles

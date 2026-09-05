@@ -175,6 +175,25 @@ def test_managed_h3_review_capture_isolates_balanced_temporal_and_detail_directo
     assert all((path / "clip.mp4").read_bytes() == b"captured-video" for path in paths)
 
 
+def test_managed_detail_capture_uses_only_reviewed_detail_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(training_bundle, "to_wsl_path", lambda path, distribution="": Path(path).as_posix())
+    media_root = tmp_path / "capture" / "media"
+    source = media_root / "square"
+    source.mkdir(parents=True)
+    for name in ("high.mp4", "low.mp4"):
+        (source / name).write_bytes(name.encode("utf-8"))
+        (source / Path(name).with_suffix(".txt").name).write_text("caption", encoding="utf-8")
+
+    rendered = training_bundle._materialize_review_stage_dataset("h3", {"datasetEntries": [{
+        "kind": "video", "role": "detail", "bucket": [704, 704, 17], "sourceDir": "square",
+        "files": ["high.mp4"], "numRepeats": 1, "detailIntent": True,
+    }]}, media_root, "")
+
+    detail_dir = Path(tomllib.loads(rendered)["directory"][0]["path"])
+    assert (detail_dir / "high.mp4").is_file()
+    assert not (detail_dir / "low.mp4").exists()
+
+
 def test_manual_h3_command_materializes_the_managed_review_into_isolated_directories(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)

@@ -296,6 +296,51 @@ function buildPreviewHeaderStars(mediaKey, rating) {
   return wrap;
 }
 
+function getPreviewHeaderResolution(resolution) {
+  var match = String(resolution || '').match(/^(\d+)\s*[x×]\s*(\d+)$/i);
+  if (!match) return null;
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+function appendPreviewHeaderMetaField(container, text, className) {
+  if (!text) return;
+  if (container.childNodes.length) {
+    var separator = document.createElement('span');
+    separator.className = 'preview-header-meta-separator';
+    separator.textContent = '·';
+    container.appendChild(separator);
+  }
+  var field = document.createElement('span');
+  field.className = 'preview-header-meta-field ' + className;
+  field.textContent = text;
+  container.appendChild(field);
+}
+
+function renderPreviewHeaderMetadata(container, fileName, resolution, metadata) {
+  container.innerHTML = '';
+  var dimensions = getPreviewHeaderResolution(resolution);
+  var aspect = String(metadata.aspect || metadata.aspect_ratio || '').trim();
+  var isVideo = isPreviewVideoFileName(fileName);
+  var fields = [];
+  if (dimensions) fields.push({ text: dimensions.width + ' × ' + dimensions.height, className: 'preview-header-meta-resolution' });
+  if (aspect && aspect !== '-') fields.push({ text: aspect, className: 'preview-header-meta-aspect' });
+  if (isVideo) {
+    var fps = parseFloat(metadata.fps);
+    var duration = parseFloat(metadata.duration);
+    var frames = parseFloat(metadata.frames || metadata.frame_count);
+    if (isFinite(fps) && fps > 0) fields.push({ text: fps.toFixed(2) + ' fps', className: 'preview-header-meta-fps' });
+    if (isFinite(duration) && duration > 0) fields.push({ text: duration.toFixed(2) + 's', className: 'preview-header-meta-duration' });
+    if (isFinite(frames) && frames > 0) fields.push({ text: Math.round(frames) + 'f', className: 'preview-header-meta-frames' });
+  } else if (dimensions) {
+    fields.push({ text: ((dimensions.width * dimensions.height) / 1000000).toFixed(1) + ' MP', className: 'preview-header-meta-megapixels' });
+  }
+  fields.forEach(function (field) {
+    appendPreviewHeaderMetaField(container, field.text, field.className);
+  });
+  container.classList.toggle('hidden', !fields.length);
+  return fields.map(function (field) { return field.text; }).join(' · ');
+}
+
 function renderPreviewHeaderMeta() {
   if (!ui || !ui.previewHeaderEl || !ui.previewHeaderPositionEl) return;
   var previewShellEl = document.getElementById('preview-shell');
@@ -304,6 +349,7 @@ function renderPreviewHeaderMeta() {
   var overlayStatusEl = ui.previewStageStatusEl || document.getElementById('preview-stage-status');
   var workflowActionsEl = ui.previewWorkflowActionsEl || document.getElementById('preview-workflow-actions');
   var ratingEl = ui.previewActionRatingEl || document.getElementById('preview-action-rating');
+  var metadataEl = document.getElementById('preview-header-meta');
   var gridOpen = typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen();
   var visibleMedia = typeof getFilteredMediaItems === 'function' ? getFilteredMediaItems(false) : [];
   var hasItem = !!(state.currentItem && state.currentItem.fileName);
@@ -321,6 +367,10 @@ function renderPreviewHeaderMeta() {
   function clearPreviewHeaderUi() {
     positionEl.textContent = '';
     positionEl.classList.add('hidden');
+    if (metadataEl) {
+      metadataEl.innerHTML = '';
+      metadataEl.classList.add('hidden');
+    }
     clearPreviewTooltip();
     if (overlayStatusEl) {
       overlayStatusEl.innerHTML = '';
@@ -384,7 +434,7 @@ function renderPreviewHeaderMeta() {
     }
   }
   if (currentIndex >= 0 && visibleMedia.length > 0) {
-    positionEl.textContent = 'Item ' + (currentIndex + 1) + '/' + visibleMedia.length;
+    positionEl.textContent = 'Item ' + (currentIndex + 1) + ' / ' + visibleMedia.length;
     positionEl.classList.remove('hidden');
   }
   if (aspect && typeof hasSupportedAspectBucket === 'function' && !hasSupportedAspectBucket(aspect)) {
@@ -394,8 +444,10 @@ function renderPreviewHeaderMeta() {
     ratingEl.appendChild(buildPreviewHeaderStars(currentMediaKey, rating));
     ratingEl.classList.remove('hidden');
   }
+  var metadataText = metadataEl ? renderPreviewHeaderMetadata(metadataEl, currentItem.fileName, resolution, metadata) : '';
   var tooltipLines = [currentItem.fileName];
-  if (resolution) tooltipLines.push(resolution);
+  if (metadataText) tooltipLines.push(metadataText);
+  else if (resolution) tooltipLines.push(resolution);
   setPreviewTooltip(tooltipLines.join('\n'));
   if (previewShellEl) previewShellEl.classList.add('preview-header-active');
   ui.previewHeaderEl.classList.remove('hidden');

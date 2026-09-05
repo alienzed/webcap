@@ -62,12 +62,12 @@
   position: static;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   max-width: none;
-  min-height: 40px;
-  padding: 6px;
+  min-height: 36px;
+  padding: 3px 6px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -89,6 +89,42 @@
   padding: 0;
   justify-content: flex-end;
   justify-self: end;
+}
+
+.app.shell-revamp .preview-header-position {
+  justify-self: start;
+}
+
+.app.shell-revamp .preview-header-meta {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-self: stretch;
+  color: #9fb0c5;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.app.shell-revamp .preview-header-meta.hidden {
+  display: none !important;
+}
+
+.app.shell-revamp .preview-header-meta-field {
+  flex: 0 0 auto;
+}
+
+.app.shell-revamp .preview-header-meta-resolution {
+  color: #dbe8f8;
+  font-weight: 700;
+}
+
+.app.shell-revamp .preview-header-meta-separator {
+  flex: 0 0 auto;
+  margin: 0 5px;
+  color: #64748b;
 }
 
 .app.shell-revamp .preview-header-actions {

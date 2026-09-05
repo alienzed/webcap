@@ -75,7 +75,7 @@ def duplicate_folder_response(src_rel):
     return jsonify({"success": True, "dst": str(dst_path)})
 
 
-def duplicate_image_response(src_rel):
+def duplicate_media_response(src_rel):
     src_rel = (src_rel or "").strip()
     if not src_rel:
         return jsonify({"error": "Missing source path"}), 400
@@ -85,14 +85,15 @@ def duplicate_image_response(src_rel):
         return jsonify({"error": f"Invalid source path: {e}"}), 400
 
     if not src_path.exists() or not src_path.is_file():
-        return jsonify({"error": "Source image does not exist"}), 404
+        return jsonify({"error": "Source media file does not exist"}), 404
     if src_path.parent.name.lower() == "originals":
-        return jsonify({"error": "Duplicate Image is not allowed in originals folder"}), 400
+        return jsonify({"error": "Duplicate is not allowed in originals folder"}), 400
 
     image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+    video_exts = {".mp4", ".webm", ".ogg", ".mov", ".mkv", ".avi", ".m4v"}
     ext = src_path.suffix.lower()
-    if ext not in image_exts:
-        return jsonify({"error": "Duplicate Image only supports still image files"}), 400
+    if ext not in image_exts | video_exts:
+        return jsonify({"error": "Duplicate only supports image and video media files"}), 400
 
     stem = src_path.stem
     parent = src_path.parent

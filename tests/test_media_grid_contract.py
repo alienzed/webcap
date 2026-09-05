@@ -56,3 +56,22 @@ def test_only_the_surface_grid_and_viewer_remain():
     assert "mediaGridBuildFilterControls" not in filters
     assert "media-grid-left-rail" not in css
     assert "media-grid-modal" not in css
+
+
+def test_single_item_preview_header_renders_existing_media_metadata():
+    html = _read("tool/tool.html")
+    script = _read("tool/js/item_details.js")
+    css = _read("tool/css/workspace_shell.css")
+
+    assert 'id="preview-header-position"' in html
+    assert 'id="preview-header-meta"' in html
+    assert html.index('id="preview-header-position"') < html.index('id="preview-header-meta"') < html.index('class="preview-header-copy"')
+    assert "function renderPreviewHeaderMetadata" in script
+    assert "'Item ' + (currentIndex + 1) + ' / ' + visibleMedia.length" in script
+    assert "fps.toFixed(2) + ' fps'" in script
+    assert "duration.toFixed(2) + 's'" in script
+    assert "Math.round(frames) + 'f'" in script
+    assert "' MP'" in script
+    assert "grid-template-columns: auto minmax(0, 1fr) auto;" in css
+    assert ".preview-header-meta-resolution" in css
+    assert "overflow: hidden;" in css

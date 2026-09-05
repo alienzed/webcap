@@ -335,7 +335,7 @@ def test_reset_app_restores_stock_requirements(tmp_path, monkeypatch):
     assert saved["requirements"]["keywordsByItem"]["Caption"] == "caption"
 
 
-def test_duplicate_image_route_copies_caption(tmp_path, monkeypatch):
+def test_duplicate_media_route_copies_caption(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_b"
     set_dir.mkdir(parents=True)
@@ -351,7 +351,7 @@ def test_duplicate_image_route_copies_caption(tmp_path, monkeypatch):
     monkeypatch.setattr(file_ops_module, "safe_join_fs_root", safe_join)
 
     client = app_module.app.test_client()
-    response = client.post("/fs/duplicate_image", json={"src": "set_b/photo.png"})
+    response = client.post("/fs/duplicate_media", json={"src": "set_b/photo.png"})
 
     assert response.status_code == 200
     payload = response.get_json()
@@ -360,7 +360,31 @@ def test_duplicate_image_route_copies_caption(tmp_path, monkeypatch):
     assert (set_dir / "photo copy.txt").read_text(encoding="utf-8") == "caption text"
 
 
-def test_duplicate_image_route_blocks_originals(tmp_path, monkeypatch):
+def test_duplicate_media_route_copies_video_caption(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_video"
+    set_dir.mkdir(parents=True)
+    (set_dir / "clip.mp4").write_bytes(b"video")
+    write_text(set_dir / "clip.txt", "video caption")
+
+    def safe_join(rel_path):
+        rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
+        if rel.startswith("/"):
+            rel = rel[1:]
+        return (fs_root / rel).resolve()
+
+    monkeypatch.setattr(file_ops_module, "safe_join_fs_root", safe_join)
+
+    client = app_module.app.test_client()
+    response = client.post("/fs/duplicate_media", json={"src": "set_video/clip.mp4"})
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    assert (set_dir / "clip copy.mp4").read_bytes() == b"video"
+    assert (set_dir / "clip copy.txt").read_text(encoding="utf-8") == "video caption"
+
+
+def test_duplicate_media_route_blocks_originals(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     originals_dir = fs_root / "set_c" / "originals"
     originals_dir.mkdir(parents=True)
@@ -375,7 +399,7 @@ def test_duplicate_image_route_blocks_originals(tmp_path, monkeypatch):
     monkeypatch.setattr(file_ops_module, "safe_join_fs_root", safe_join)
 
     client = app_module.app.test_client()
-    response = client.post("/fs/duplicate_image", json={"src": "set_c/originals/img.png"})
+    response = client.post("/fs/duplicate_media", json={"src": "set_c/originals/img.png"})
 
     assert response.status_code == 400
     payload = response.get_json()

@@ -1,5 +1,5 @@
 // media_actions.js
-// Global functions: pruneMedia, duplicateImageItem, restoreMediaItem, resetMediaItem, promptRenameMedia, renameMedia
+// Global functions: pruneMedia, duplicateMediaItem, restoreMediaItem, resetMediaItem, promptRenameMedia, renameMedia
 
 pruneMedia = async function (mediaItem, options) {
   var opts = options || {};
@@ -65,14 +65,14 @@ pruneMedia = async function (mediaItem, options) {
   }
 };
 
-function duplicateImageItem(mediaItem) {
+function duplicateMediaItem(mediaItem) {
   if (!state.folder || !mediaItem || !mediaItem.fileName) {
-    setStatus('No image selected for duplicate');
+    setStatus('No media selected for duplicate');
     return;
   }
-  setStatus('Duplicating image: ' + mediaItem.fileName + ' ...');
+  setStatus('Duplicating: ' + mediaItem.fileName + ' ...');
   var srcPath = (state.folder ? state.folder + '/' : '') + mediaItem.fileName;
-  fetch('/fs/duplicate_image', {
+  fetch('/fs/duplicate_media', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ src: srcPath })
@@ -87,17 +87,17 @@ function duplicateImageItem(mediaItem) {
         var newName = (res.data && res.data.dstName) ? res.data.dstName : '';
         if (newName) {
           state.pendingSelectFileName = newName;
-          setStatus('Duplicated image: ' + mediaItem.fileName + ' -> ' + newName);
+          setStatus('Duplicated: ' + mediaItem.fileName + ' -> ' + newName);
         } else {
-          setStatus('Duplicated image: ' + mediaItem.fileName);
+          setStatus('Duplicated: ' + mediaItem.fileName);
         }
         refreshCurrentDirectory();
         return;
       }
-      setStatus((res.data && res.data.error) ? res.data.error : 'Duplicate image failed');
+      setStatus((res.data && res.data.error) ? res.data.error : 'Duplicate failed');
     })
     .catch(function (err) {
-      setStatus('Duplicate image failed: ' + (err && err.message ? err.message : err));
+      setStatus('Duplicate failed: ' + (err && err.message ? err.message : err));
     });
 }
 

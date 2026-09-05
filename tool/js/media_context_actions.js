@@ -581,11 +581,11 @@ function buildMediaContextMenuActions(mediaItem, key) {
       promptRenameMedia(mediaItem, ui, state);
     }
   });
-  if (isImageFile) {
+  if (isImageFile || isVideoFile) {
     actions.push({
-      label: 'Duplicate Image',
+      label: 'Duplicate',
       run: function () {
-        duplicateImageItem(mediaItem);
+        duplicateMediaItem(mediaItem);
       }
     });
   }

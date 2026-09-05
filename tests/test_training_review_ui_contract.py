@@ -126,3 +126,133 @@ assert(context.reviewProjectedTarget('temporal', source, [[704, 704]]).join(',')
     assert result.returncode == 0, result.stderr
     assert "training-review-detail-floor" in (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
     assert ".detail-resolution-ineligible" in styles
+
+
+def test_bucket_workbench_keeps_category_ratios_nested_and_rung_actions_semantic():
+    root = Path(__file__).parents[1]
+    script_path = root / "tool" / "js" / "training_review.js"
+    script = script_path.read_text(encoding="utf-8")
+    styles = (root / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    harness = r'''
+const fs = require('fs');
+const vm = require('vm');
+const context = { JSON, Promise, document: { addEventListener() {} } };
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+context.escapeHtml = (value) => String(value);
+function assert(value, message) { if (!value) throw new Error(message); }
+const ladders = { images: { square: [[736, 416], [672, 384], [608, 352]] }, videos: {} };
+let plan = { stages: { h3: { imageBuckets: { square: [[672, 384]] } } }, videoRoles: [] };
+assert(context.stepReviewBucket(plan, ladders, 'images', 'square', [672, 384], 1), 'smaller rung must be available');
+assert(plan.stages.h3.imageBuckets.square[0].join(',') === '608,352', '+1 must move to the smaller descending-ladder rung');
+plan = { stages: { h3: { imageBuckets: { square: [[672, 384]] } } }, videoRoles: [] };
+assert(context.stepReviewBucket(plan, ladders, 'images', 'square', [672, 384], -1), 'larger rung must be available');
+assert(plan.stages.h3.imageBuckets.square[0].join(',') === '736,416', '-1 must move to the larger descending-ladder rung');
+const payload = {
+  plan: { stages: { h3: { imageBuckets: { square: [[672, 384]] } } }, videoRoles: [] },
+  ladders: ladders,
+  distribution: { images: { square: { native: [{ width: 672, height: 384, nativeShortEdge: 384, edge: 384, eligible: true }] } }, videos: {} }
+};
+const html = context.reviewTargetsHtml(payload, 'images', 'square');
+assert(html.includes('aria-label="Decrease one rung"') && html.includes('data-review-step="1"'), 'minus control must decrease to the smaller rung');
+assert(html.includes('aria-label="Increase one rung"') && html.includes('data-review-step="-1"'), 'plus control must increase to the larger rung');
+assert(!html.includes('Other supported sizes'), 'Add target must not expose the rest of the ladder');
+assert((html.match(/training-review-target-chip neutral/g) || []).length <= 4, 'Add target must expose at most four alternatives');
+assert(html.indexOf('>736 × 416</button>') < html.indexOf('>608 × 352</button>'), 'Add target must retain canonical descending ladder order');
+'''
+    result = subprocess.run(
+        ["node", "-e", harness, str(script_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "training-review-cohort-row" in script
+    assert "training-review-scope-separator" not in script
+    assert "Choose up to three. +/− moves a selected target one rung." in script
+    assert "reviewCanStepBucket(payload, view, aspect, commonTarget, 1)" in script
+    assert "data-review-lower-upscale-target" in script
+    assert "stepReviewBucket(plan, payload.ladders || {}, view, aspect, target, 1)" in script
+    assert ".training-review-tabs > .training-review-role-pill" in styles
+    assert ".training-review-cohort-row" in styles
+
+
+def test_review_rail_uses_the_draft_and_dot_inspection_stays_local():
+    root = Path(__file__).parents[1]
+    script_path = root / "tool" / "js" / "training_review.js"
+    script = script_path.read_text(encoding="utf-8")
+    styles = (root / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    harness = r'''
+const fs = require('fs');
+const vm = require('vm');
+const context = {
+  JSON, Promise,
+  document: { addEventListener() {} },
+  trainingWorkspaceState: { reviewMediaView: 'detail', reviewAspect: '916' }
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+context.escapeHtml = (value) => String(value);
+function assert(value, message) { if (!value) throw new Error(message); }
+const canonical = {
+  plan: { stages: { h3: { imageBuckets: {} } }, videoRoles: [{ id: 'detail', enabled: true, frames: 17, buckets: { '916': [[384, 672]] } }] },
+  ladders: { images: {}, videos: { detail: { '916': [[416, 736], [384, 672], [256, 448]] } } },
+  videoLimits: { detail: { '916': { effectiveCeiling: [416, 736], automaticDefaultCeiling: [384, 672] } } },
+  distribution: { images: {}, videos: { detail: { '916': { frames: 17, native: [{ file: 'clip.mp4', width: 300, height: 400, frames: 20, nativeShortEdge: 300, edge: 300, eligible: false, eligibilityReason: 'Native resolution is below the selected Detail target.' }] } } } },
+  warnings: []
+};
+const draft = JSON.parse(JSON.stringify(canonical));
+draft.plan.videoRoles[0].buckets['916'] = [[256, 448]];
+const rail = context.reviewRailHtml(draft);
+assert(rail.includes('256'), 'rail must render the current draft target');
+assert(!rail.includes('384 × 672'), 'rail must not render the stale canonical target');
+assert(rail.includes('Very low Detail target'), 'rail must surface deterministic Detail floor notice');
+assert(rail.includes('Detail sources excluded'), 'rail must surface current Detail eligibility notice');
+const modalHtml = context.reviewModalHtml(draft);
+assert(modalHtml.includes('training-review-layout') && modalHtml.includes('training-review-rail'), 'modal must render the rail beside the workbench');
+assert(!modalHtml.includes('training-review-warnings'), 'warning content must not remain below the main workbench');
+let renderCalls = 0;
+let saveCalls = 0;
+let closeCalls = 0;
+const railButton = { getAttribute(name) { return name === 'data-review-rail-view' ? 'detail' : '916'; } };
+const modal = { querySelectorAll(selector) { return selector === '[data-review-rail-view]' ? [railButton] : []; } };
+context.getTrainingWorkspaceEls = () => ({ reviewModal: {}, reviewModalContent: modal });
+context.renderTrainingReview = () => { renderCalls += 1; };
+context.trainingReviewRequest = () => { saveCalls += 1; };
+context.closeTrainingReviewModal = () => { closeCalls += 1; };
+context.bindTrainingReviewModal(draft);
+context.trainingWorkspaceState.reviewMediaView = 'images';
+context.trainingWorkspaceState.reviewAspect = 'square';
+railButton.onclick();
+assert(context.trainingWorkspaceState.reviewMediaView === 'detail' && context.trainingWorkspaceState.reviewAspect === '916', 'rail Review and plan rows must navigate to their cohort');
+assert(renderCalls === 1 && saveCalls === 0 && closeCalls === 0, 'rail navigation must remain draft-only');
+const popover = { innerHTML: '', style: {}, classList: { remove() {} }, setAttribute() {} };
+const plot = { querySelector() { return popover; } };
+const dot = { style: { left: '50%', bottom: '11px' }, getAttribute() { return '0'; }, closest() { return plot; } };
+const dotPayload = JSON.parse(JSON.stringify(draft));
+dotPayload.distribution.videos.detail['916'].native[0].eligible = true;
+dotPayload.distribution.videos.detail['916'].native[0].target = [256, 448];
+dotPayload.distribution.videos.detail['916'].native[0].assignedTarget = [256, 448];
+context.showReviewDotPopover(modal, dotPayload, dot);
+assert(popover.innerHTML.includes('clip.mp4') && popover.innerHTML.includes('Native') && popover.innerHTML.includes('Target'), 'dot popover must expose existing source facts');
+assert(saveCalls === 0 && closeCalls === 0, 'dot inspection must not save, close, or navigate');
+'''
+    result = subprocess.run(
+        ["node", "-e", harness, str(script_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    bindings = script[script.index("function bindTrainingReviewModal"):script.index("function reviewTrainButtonState")]
+    dot_bindings = bindings[bindings.index("[data-review-dot-index]"):bindings.index("[data-review-open-dataset]")]
+    assert "data-review-rail-view" in bindings
+    assert "trainingReviewRequest" not in dot_bindings
+    assert "closeTrainingReviewModal" not in dot_bindings
+    assert "selectByFileName" not in dot_bindings
+    assert "hideReviewDotPopover" in script
+    assert "event.key === 'Escape'" in script
+    assert "@media (max-width: 980px)" in styles
+    assert ".training-review-layout { grid-template-columns: 1fr; }" in styles
+    modal_styles = styles[styles.index(".training-review-modal {"):styles.index(".training-review-modal.hidden")]
+    assert "align-items: flex-start" in modal_styles

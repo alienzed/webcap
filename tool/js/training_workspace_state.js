@@ -58,6 +58,8 @@ var trainingWorkspaceState = {
   reviewDraftDirty: false,
   reviewMediaView: 'images',
   reviewAspect: '',
+  reviewImpactScope: 'aspect',
+  reviewInspectedSource: null,
   runSetupFolder: ''
 };
 var utilityTrainingTurtleTimer = 0;

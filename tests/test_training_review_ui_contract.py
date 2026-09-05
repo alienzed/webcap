@@ -188,11 +188,13 @@ const vm = require('vm');
 const context = {
   JSON, Promise,
   document: { addEventListener() {} },
-  trainingWorkspaceState: { reviewMediaView: 'detail', reviewAspect: '916' }
+  trainingWorkspaceState: { reviewMediaView: 'detail', reviewAspect: '916', reviewInspectedSource: null },
+  state: { items: [], ratings: {} }
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 context.escapeHtml = (value) => String(value);
+context.getRatingForMediaKey = (key) => context.state.ratings[key] || 0;
 function assert(value, message) { if (!value) throw new Error(message); }
 const canonical = {
   plan: { stages: { h3: { imageBuckets: {} } }, videoRoles: [{ id: 'detail', enabled: true, frames: 17, buckets: { '916': [[384, 672]] } }] },
@@ -226,16 +228,15 @@ context.trainingWorkspaceState.reviewAspect = 'square';
 railButton.onclick();
 assert(context.trainingWorkspaceState.reviewMediaView === 'detail' && context.trainingWorkspaceState.reviewAspect === '916', 'rail Review and plan rows must navigate to their cohort');
 assert(renderCalls === 1 && saveCalls === 0 && closeCalls === 0, 'rail navigation must remain draft-only');
-const popover = { innerHTML: '', style: {}, classList: { remove() {} }, setAttribute() {} };
-const plot = { querySelector() { return popover; } };
-const dot = { style: { left: '50%', bottom: '11px' }, getAttribute() { return '0'; }, closest() { return plot; } };
-const dotPayload = JSON.parse(JSON.stringify(draft));
-dotPayload.distribution.videos.detail['916'].native[0].eligible = true;
-dotPayload.distribution.videos.detail['916'].native[0].target = [256, 448];
-dotPayload.distribution.videos.detail['916'].native[0].assignedTarget = [256, 448];
-context.showReviewDotPopover(modal, dotPayload, dot);
-assert(popover.innerHTML.includes('clip.mp4') && popover.innerHTML.includes('Native') && popover.innerHTML.includes('Target'), 'dot popover must expose existing source facts');
-assert(saveCalls === 0 && closeCalls === 0, 'dot inspection must not save, close, or navigate');
+  draft.distribution.videos.detail['916'].native[0].eligible = true;
+  draft.distribution.videos.detail['916'].native[0].target = [256, 448];
+  draft.distribution.videos.detail['916'].native[0].assignedTarget = [256, 448];
+  context.state.items = [{ key: 'clip.mp4', fileName: 'clip.mp4' }];
+  context.trainingWorkspaceState.reviewInspectedSource = { view: 'detail', aspect: '916', file: 'clip.mp4' };
+  const inspectedRail = context.reviewRailHtml(draft);
+  assert(inspectedRail.includes('Source inspector') && inspectedRail.includes('clip.mp4') && inspectedRail.includes('Target'), 'selected dot facts must render in the source inspector');
+  assert(inspectedRail.includes('Worth noticing ·'), 'source inspection must collapse notices to a compact summary');
+  assert(saveCalls === 0 && closeCalls === 0, 'dot inspection must not save, close, or navigate');
 '''
     result = subprocess.run(
         ["node", "-e", harness, str(script_path)],
@@ -250,9 +251,77 @@ assert(saveCalls === 0 && closeCalls === 0, 'dot inspection must not save, close
     assert "trainingReviewRequest" not in dot_bindings
     assert "closeTrainingReviewModal" not in dot_bindings
     assert "selectByFileName" not in dot_bindings
-    assert "hideReviewDotPopover" in script
+    assert "training-review-dot-popover" not in script
+    assert "trainingWorkspaceState.reviewInspectedSource" in bindings
+    assert "setRatingForMediaKey" in bindings
+    assert "pruneMedia(source.mediaItem, { selectReplacement: false })" in bindings
     assert "event.key === 'Escape'" in script
     assert "@media (max-width: 980px)" in styles
     assert ".training-review-layout { grid-template-columns: 1fr; }" in styles
     modal_styles = styles[styles.index(".training-review-modal {"):styles.index(".training-review-modal.hidden")]
     assert "align-items: flex-start" in modal_styles
+
+
+def test_scale_impact_scope_chart_floor_and_source_refresh_keep_the_draft():
+    root = Path(__file__).parents[1]
+    script_path = root / "tool" / "js" / "training_review.js"
+    harness = r'''
+const fs = require('fs');
+const vm = require('vm');
+const context = {
+  JSON, Promise,
+  document: { addEventListener() {} },
+  trainingWorkspaceState: { reviewMediaView: 'temporal', reviewAspect: '916', reviewImpactScope: 'aspect', reviewInspectedSource: null },
+  state: { items: [], ratings: {} }
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+context.escapeHtml = (value) => String(value);
+function assert(value, message) { if (!value) throw new Error(message); }
+const group = {
+  impact: { down20: 0, down: 0, near: 1, up: 0, up20: 0 },
+  native: [{ file: 'floor.mp4', width: 256, height: 455, nativeShortEdge: 256, edge: 256, eligible: true, assignedTarget: [256, 455] }],
+  targets: [{ shape: [256, 455], assignedCount: 1 }]
+};
+const payload = {
+  plan: { stages: { h3: { imageBuckets: {} } }, videoRoles: [{ id: 'temporal', enabled: true, frames: 17, buckets: { '916': [[256, 455]] } }] },
+  ladders: { images: {}, videos: { temporal: { '916': [[512, 910], [384, 682], [256, 455]] } } },
+  videoLimits: { temporal: { '916': { effectiveCeiling: [512, 910], automaticDefaultCeiling: [384, 682] } } },
+  distribution: { images: {}, videos: { temporal: { '916': group } }, impact: { videos: { temporal: { down20: 0, down: 0, near: 3, up: 1, up20: 0 } } } },
+  warnings: []
+};
+let impactHtml = context.reviewImpactHtml(payload, 'temporal', '916');
+assert(impactHtml.includes('data-review-impact-scope="aspect"') && impactHtml.includes('>1</b>'), 'impact defaults to the active aspect group');
+context.trainingWorkspaceState.reviewImpactScope = 'all';
+impactHtml = context.reviewImpactHtml(payload, 'temporal', '916');
+assert(impactHtml.includes('All ratios') && impactHtml.includes('>3</b>'), 'all ratios uses the role aggregate');
+const chart = context.reviewChartHtml(payload, 'temporal', group, [[256, 455]], '916');
+assert(chart.includes('>256</span>'), 'the first labelled video tick is the floor');
+assert(!chart.includes('>192</span>'), 'no artificial pre-floor tick is added when no source is below the floor');
+const draft = JSON.parse(JSON.stringify(payload));
+draft.plan.videoRoles[0].buckets['916'] = [[384, 682]];
+context.trainingWorkspaceState.reviewModalOpen = true;
+context.trainingWorkspaceState.reviewDraft = draft;
+context.trainingWorkspaceState.reviewDraftDirty = true;
+context.trainingWorkspaceState.reviewInspectedSource = { view: 'temporal', aspect: '916', file: 'floor.mp4' };
+const refreshed = JSON.parse(JSON.stringify(payload));
+refreshed.distribution.videos.temporal['916'].native = [];
+context.refreshTrainingReview = () => Promise.resolve(refreshed);
+context.recomputeTrainingReviewDistribution = (next) => { next.recomputed = true; };
+context.renderTrainingReview = () => {};
+(async () => {
+  await context.refreshTrainingReviewFactsKeepingDraft();
+  assert(context.trainingWorkspaceState.reviewDraft.plan.videoRoles[0].buckets['916'][0].join(',') === '384,682', 'source refresh must preserve the current draft plan');
+  assert(context.trainingWorkspaceState.reviewDraft.recomputed, 'source refresh must recompute draft facts');
+  assert(context.trainingWorkspaceState.reviewDraftDirty, 'source refresh must preserve unsaved draft state');
+  assert(!context.reviewRailHtml(context.trainingWorkspaceState.reviewDraft).includes('Source inspector'), 'a filtered-away source must disappear after refresh');
+  assert(context.trainingWorkspaceState.reviewInspectedSource === null, 'a filtered-away source selection must clear');
+})().catch((error) => { console.error(error.stack); process.exit(1); });
+'''
+    result = subprocess.run(
+        ["node", "-e", harness, str(script_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

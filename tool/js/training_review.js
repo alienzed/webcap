@@ -510,38 +510,17 @@ function reviewTargetsHtml(payload, view, aspect) {
   return '<section class="training-review-targets"><div class="training-review-label-row"><strong>Training targets</strong><div class="training-review-target-utilities">' + limitNote + '</div></div><div class="training-review-target-instructions">Choose up to three. +/− moves a selected target one rung.</div><div class="training-review-target-groups"><div class="training-review-target-row"><span>Selected</span><div class="training-review-chip-strip">' + (selected.length ? selected.map(selectedChip).join('') : '<span class="training-review-empty-selection">No target selected.</span>') + '</div></div><div class="training-review-target-add"><div class="training-review-target-row"><span>Add target</span><div class="training-review-chip-strip">' + visible.map(neutralChip).join('') + '</div></div></div></div></section>';
 }
 
-function reviewDotPopoverHtml(row) {
-  var target = row.assignedTarget || row.target || [];
-  var scaleRatio = Number(row.scaleRatio || 1);
-  var scale = Math.round((scaleRatio - 1) * 100);
-  var resize = Math.abs(scale) < 1 ? 'No meaningful resize · 1.00×' : (scale > 0 ? 'Upscale ' : 'Downscale ') + scaleRatio.toFixed(2) + '× · ' + (scale > 0 ? '+' : '') + scale + '%';
-  var impact = TRAINING_REVIEW_IMPACT_BANDS.filter(function (item) { return item[0] === row.impactBand; })[0];
-  return '<strong>' + escapeHtml(row.file || 'Source media') + '</strong><span>Native · ' + escapeHtml(row.width + ' × ' + row.height) + '</span>' +
-    (target.length ? '<span>Target · ' + escapeHtml(target[0] + ' × ' + target[1]) + '</span><span>' + escapeHtml(resize) + (impact ? ' · ' + escapeHtml(impact[1]) : '') + '</span>' : '') +
-    (Number(row.frames || 0) ? '<span>' + escapeHtml(String(row.frames)) + ' frames</span>' : '') +
-    '<span>' + (row.eligible ? 'Eligible' : 'Not eligible') + (row.eligibilityReason ? ' · ' + escapeHtml(row.eligibilityReason) : '') + '</span>';
-}
-
-function hideReviewDotPopover(modal) {
-  var popover = modal.querySelector('.training-review-dot-popover');
-  if (!popover || popover.classList.contains('hidden')) return false;
-  popover.classList.add('hidden');
-  popover.setAttribute('aria-hidden', 'true');
-  return true;
-}
-
-function showReviewDotPopover(modal, payload, dot) {
-  var view = reviewActiveView(payload);
-  var aspect = reviewActiveAspect(payload, view);
-  var row = ((reviewViewGroups(payload, view)[aspect] || {}).native || [])[Number(dot.getAttribute('data-review-dot-index'))];
-  var plot = dot.closest('.training-review-plot');
-  var popover = plot.querySelector('.training-review-dot-popover');
-  if (!row) throw new Error('Training Review dot has no matching source row.');
-  popover.innerHTML = reviewDotPopoverHtml(row);
-  popover.style.left = dot.style.left;
-  popover.style.bottom = (Number(String(dot.style.bottom || '').replace('px', '')) + 18) + 'px';
-  popover.classList.remove('hidden');
-  popover.setAttribute('aria-hidden', 'false');
+function reviewInspectedSource(payload) {
+  var source = trainingWorkspaceState.reviewInspectedSource;
+  if (!source) return null;
+  var group = reviewViewGroups(payload, source.view)[source.aspect] || {};
+  var row = (group.native || []).filter(function (item) { return item.file === source.file; })[0];
+  if (!row) {
+    trainingWorkspaceState.reviewInspectedSource = null;
+    return null;
+  }
+  var mediaItem = (state.items || []).filter(function (item) { return item && (item.key === row.file || item.fileName === row.file); })[0] || null;
+  return { view: source.view, aspect: source.aspect, row: row, mediaItem: mediaItem };
 }
 
 function reviewChartHtml(payload, view, group, selected, aspect) {
@@ -561,8 +540,9 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
   var leftSpan = Math.max(64, maximumEdge - sourceLow);
   var tickSteps = [32, 64, 96, 128, 160, 192, 256];
   var step = tickSteps.filter(function (value) { return value >= leftSpan / 5; })[0] || 256;
-  var low = Math.max(0, Math.floor((sourceLow - step * .5) / step) * step);
-  if (maximumEdge - low < step * 3) low = Math.max(0, maximumEdge - step * 3);
+  var startsAtVideoFloor = view !== 'images' && floorEdge && !sourceEdges.some(function (edge) { return edge < floorEdge; });
+  var low = startsAtVideoFloor ? floorEdge : Math.max(0, Math.floor((sourceLow - step * .5) / step) * step);
+  if (!startsAtVideoFloor && maximumEdge - low < step * 3) low = Math.max(0, maximumEdge - step * 3);
   var aboveMaximum = sourceEdges.filter(function (edge) { return edge > maximumEdge; }).sort(function (a, b) { return a - b; });
   var nextPopulation = aboveMaximum[0] || 0;
   var emptyGap = nextPopulation - maximumEdge;
@@ -577,8 +557,8 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
   if (!hasBreak && normalHigh - low < step * 3) normalHigh = low + step * 3;
   var high = hasBreak ? maximumEdge : normalHigh;
   var segments = hasBreak
-    ? [{ low: low, high: high, start: 1.5, end: 70, bins: 10 }, { low: rightLow, high: rightHigh, start: 76, end: 98.5, bins: 5 }]
-    : [{ low: low, high: high, start: 1.5, end: 98.5, bins: 12 }];
+    ? [{ low: low, high: high, start: startsAtVideoFloor ? 4.5 : 1.5, end: 70, bins: 10 }, { low: rightLow, high: rightHigh, start: 76, end: 98.5, bins: 5 }]
+    : [{ low: low, high: high, start: startsAtVideoFloor ? 4.5 : 1.5, end: 98.5, bins: 12 }];
   function segmentForEdge(edge) { return hasBreak && Number(edge) > maximumEdge ? segments[1] : segments[0]; }
   function position(value) {
     var segment = segmentForEdge(Number(value));
@@ -624,6 +604,7 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
     var end = position(bounds[1]);
     return '<i class="training-review-hist-bin" style="left:' + start + '%;width:' + Math.max(0, end - start) + '%;height:' + Math.round((count / maximum) * 72) + '%"></i>';
   }).join('');
+  var inspected = reviewInspectedSource(payload);
   var dots = rows.map(function (row, rowIndex) {
     var edge = Number(row.nativeShortEdge || row.edge || 0);
     var bin = binForEdge(edge);
@@ -640,17 +621,17 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
     var scale = Math.round((scaleRatio - 1) * 100);
     var resize = Math.abs(scale) < 1 ? 'No meaningful resize · 1.00×' : (scale > 0 ? 'Upscale ' : 'Downscale ') + scaleRatio.toFixed(2) + '× · ' + (scale > 0 ? '+' : '') + scale + '%';
     var resolutionExcluded = view === 'detail' && !row.eligible && reviewDetailFrameEligible(row, group.frames);
-    return '<button type="button" class="training-review-chart-dot ' + reviewTargetColor(selected, target) + ' impact-' + escapeHtml(row.impactBand || 'near') + (resolutionExcluded ? ' detail-resolution-ineligible' : '') + '" style="left:' + dotLeft + '%;bottom:' + (11 + level * 15) + 'px" data-review-dot-index="' + rowIndex + '" aria-label="Inspect ' + escapeHtml(row.file || 'source media') + '"></button>';
+    return '<button type="button" class="training-review-chart-dot ' + reviewTargetColor(selected, target) + ' impact-' + escapeHtml(row.impactBand || 'near') + (resolutionExcluded ? ' detail-resolution-ineligible' : '') + (inspected && inspected.view === view && inspected.aspect === aspect && inspected.row.file === row.file ? ' selected' : '') + '" style="left:' + dotLeft + '%;bottom:' + (11 + level * 15) + 'px" data-review-dot-index="' + rowIndex + '" aria-label="Inspect ' + escapeHtml(row.file || 'source media') + '"></button>';
   }).join('');
-  var markers = (group.targets || []).map(function (target) {
+  var markers = (group.targets || []).map(function (target, index) {
     var shape = target.shape || [];
     var edge = Math.min(Number(shape[0]), Number(shape[1]));
-    return '<b class="training-review-chart-marker ' + reviewTargetColor(selected, shape) + ' ' + reviewBucketPressureLevel(payload, view, aspect, shape) + '" style="left:' + position(edge) + '%"><span>' + escapeHtml(shape[0] + ' × ' + shape[1]) + '</span><em>' + escapeHtml(String(target.assignedCount || 0)) + '</em></b>';
+    return '<b class="training-review-chart-marker annotation-lane-' + (index % 3) + ' ' + reviewTargetColor(selected, shape) + ' ' + reviewBucketPressureLevel(payload, view, aspect, shape) + '" style="left:' + position(edge) + '%"><span>' + escapeHtml(shape[0] + ' × ' + shape[1]) + '</span><em>' + escapeHtml(String(target.assignedCount || 0)) + '</em></b>';
   }).join('');
-  function envelopeMarker(kind, edge, label, title) {
-    return edge ? '<b class="training-review-envelope-marker ' + kind + '" style="left:' + position(edge) + '%" title="' + escapeHtml(title) + '"><span>' + escapeHtml(label) + '</span></b>' : '';
+  function envelopeMarker(kind, edge, label, title, lane) {
+    return edge ? '<b class="training-review-envelope-marker annotation-lane-' + lane + ' ' + kind + '" style="left:' + position(edge) + '%" title="' + escapeHtml(title) + '"><span>' + escapeHtml(label) + '</span></b>' : '';
   }
-  var envelope = view === 'images' ? '' : envelopeMarker('floor', floorEdge, 'Floor', 'Lowest selectable supported rung') + envelopeMarker('default', defaultEdge, defaultEdge === maximumEdge ? 'Default / max' : 'Default', defaultEdge === maximumEdge ? 'Automatic default ceiling and effective maximum' : 'Automatic default ceiling') + (defaultEdge === maximumEdge ? '' : envelopeMarker('maximum', maximumEdge, 'Max', limit && limit.source === 'calibration' ? 'Calibrated maximum' : 'Effective maximum'));
+  var envelope = view === 'images' ? '' : envelopeMarker('floor', floorEdge, 'Floor', 'Lowest selectable supported rung', 0) + envelopeMarker('default', defaultEdge, defaultEdge === maximumEdge ? 'Default / max' : 'Default', defaultEdge === maximumEdge ? 'Automatic default ceiling and effective maximum' : 'Automatic default ceiling', 1) + (defaultEdge === maximumEdge ? '' : envelopeMarker('maximum', maximumEdge, 'Max', limit && limit.source === 'calibration' ? 'Calibrated maximum' : 'Effective maximum', 2));
   var tickLabels = ticks.map(function (value) { return '<span style="left:' + position(value) + '%">' + escapeHtml(String(value)) + '</span>'; }).join('');
   var axisBreak = hasBreak ? '<i class="training-review-axis-break" style="left:' + ((segments[0].end + segments[1].start) / 2) + '%" aria-label="Resolution scale skips an empty interval"><b></b><b></b></i>' : '';
   var detailFloor = view === 'detail' && selected.length ? selected.reduce(function (lowest, target) {
@@ -658,14 +639,17 @@ function reviewChartHtml(payload, view, group, selected, aspect) {
   }, null) : null;
   var detailExcluded = detailFloor ? rows.filter(function (row) { return !row.eligible && reviewDetailFrameEligible(row, group.frames); }).length : 0;
   var detailHint = detailFloor ? '<span class="training-review-detail-floor">Detail floor: ' + escapeHtml(detailFloor[0] + ' × ' + detailFloor[1]) + ' · sources below the lowest selected target are excluded; Detail never upscales.' + (detailExcluded ? ' ' + detailExcluded + ' excluded.' : '') + '</span>' : '';
-  return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Bars group nearby native short edges; each dot is one source file.</span>' + detailHint + '</div><div class="training-review-legend"><span><i class="histogram"></i>Native range</span><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + zones + gridlines + histogram + dots + markers + envelope + axisBreak + '<div class="training-review-dot-popover hidden" role="status" aria-live="polite" aria-hidden="true"></div></div><div class="training-review-chart-axis"><div class="training-review-chart-ticks">' + tickLabels + axisBreak + '</div><span>Native short edge (px)</span></div></section>';
+  return '<section class="training-review-chart"><div class="training-review-chart-heading"><div><strong>Native fit for ' + escapeHtml(formatReviewAspect(aspect)) + '</strong><span>Bars group nearby native short edges; each dot is one source file.</span>' + detailHint + '</div><div class="training-review-legend"><span><i class="histogram"></i>Native range</span><span><i class="native"></i>Native media</span><span><i class="target"></i>Bucket target</span></div></div><div class="training-review-plot">' + zones + gridlines + histogram + dots + markers + envelope + axisBreak + '</div><div class="training-review-chart-axis"><div class="training-review-chart-ticks">' + tickLabels + axisBreak + '</div><span>Native short edge (px)</span></div></section>';
 }
 
-function reviewImpactHtml(payload, view) {
-  var impact = view === 'images' ? (((payload.distribution || {}).impact || {}).images || {}) : (((((payload.distribution || {}).impact || {}).videos || {})[view]) || {});
+function reviewImpactHtml(payload, view, aspect) {
+  var scope = trainingWorkspaceState.reviewImpactScope === 'all' ? 'all' : 'aspect';
+  var impact = scope === 'all'
+    ? (view === 'images' ? (((payload.distribution || {}).impact || {}).images || {}) : (((((payload.distribution || {}).impact || {}).videos || {})[view]) || {}))
+    : ((reviewViewGroups(payload, view)[aspect] || {}).impact || {});
   var total = TRAINING_REVIEW_IMPACT_BANDS.reduce(function (sum, item) { return sum + Number(impact[item[0]] || 0); }, 0);
   if (!total) return '';
-  return '<section class="training-review-impact"><div class="training-review-label-row"><strong>Scale impact · all cohort tabs</strong><span>' + total + ' eligible item' + (total === 1 ? '' : 's') + '</span></div><div class="training-review-impact-direction"><span>Smaller target</span><span>Larger target</span></div><div class="training-review-impact-cells">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { var count = Number(impact[item[0]] || 0); var percent = Math.round(count / total * 100); return '<div class="training-review-impact-cell impact-' + item[0] + (count ? '' : ' is-empty') + '" title="' + count + ' of ' + total + ' eligible items"><b>' + count + '</b><em>' + percent + '%</em><span>' + escapeHtml(item[1]) + '</span></div>'; }).join('') + '</div></section>';
+  return '<section class="training-review-impact"><div class="training-review-label-row"><strong>Scale impact</strong><div class="training-review-impact-scope" role="group" aria-label="Scale impact scope"><button type="button" class="' + (scope === 'aspect' ? 'active' : '') + '" data-review-impact-scope="aspect">' + escapeHtml(formatReviewAspect(aspect)) + '</button><button type="button" class="' + (scope === 'all' ? 'active' : '') + '" data-review-impact-scope="all">All ratios</button></div><span>' + total + ' eligible item' + (total === 1 ? '' : 's') + '</span></div><div class="training-review-impact-direction"><span>Smaller target</span><span>Larger target</span></div><div class="training-review-impact-cells">' + TRAINING_REVIEW_IMPACT_BANDS.map(function (item) { var count = Number(impact[item[0]] || 0); var percent = Math.round(count / total * 100); return '<div class="training-review-impact-cell impact-' + item[0] + (count ? '' : ' is-empty') + '" title="' + count + ' of ' + total + ' eligible items"><b>' + count + '</b><em>' + percent + '%</em><span>' + escapeHtml(item[1]) + '</span></div>'; }).join('') + '</div></section>';
 }
 
 function reviewSubstantialUpscaleRows(payload, view, aspect) {
@@ -743,8 +727,32 @@ function reviewRailNotices(payload) {
   return notices;
 }
 
+function reviewSourceRailHtml(payload) {
+  var source = reviewInspectedSource(payload);
+  if (!source) return '';
+  var row = source.row;
+  var target = row.assignedTarget || row.target || [];
+  var scaleRatio = Number(row.scaleRatio || 1);
+  var scale = Math.round((scaleRatio - 1) * 100);
+  var scaleText = Math.abs(scale) < 1 ? 'No meaningful resize · 1.00×' : (scale > 0 ? 'Upscale ' : 'Downscale ') + scaleRatio.toFixed(2) + '× · ' + (scale > 0 ? '+' : '') + scale + '%';
+  var impact = TRAINING_REVIEW_IMPACT_BANDS.filter(function (item) { return item[0] === row.impactBand; })[0];
+  var curation = '';
+  if (source.mediaItem) {
+    var mediaKey = source.mediaItem.key || source.mediaItem.fileName;
+    var rating = getRatingForMediaKey(mediaKey);
+    curation = '<div class="training-review-source-actions"><span class="preview-header-stars" aria-label="' + (rating ? rating + ' out of 5 stars' : 'Unrated') + '">' + [1, 2, 3, 4, 5].map(function (value) {
+      return '<button type="button" class="preview-header-star' + (value <= rating ? ' active' : '') + '" data-review-source-rating="' + value + '" aria-label="Set rating to ' + value + ' stars" title="Set rating to ' + value + ' stars">' + (value <= rating ? '★' : '☆') + '</button>';
+    }).join('') + '</span><button type="button" class="training-review-source-prune" data-review-source-prune>Prune</button></div>';
+  }
+  return '<section class="training-review-rail-section training-review-source"><strong>Source inspector</strong><b>' + escapeHtml(row.file || 'Source media') + '</b><div class="training-review-source-facts"><span>Native · ' + escapeHtml(row.width + ' × ' + row.height) + '</span>' +
+    (Number(row.frames || 0) ? '<span>' + escapeHtml(String(row.frames)) + ' frames</span>' : '') +
+    (target.length ? '<span>Target · ' + escapeHtml(target[0] + ' × ' + target[1]) + '</span><span>' + escapeHtml(scaleText) + (impact ? ' · ' + escapeHtml(impact[1]) : '') + '</span>' : '') +
+    '<span>' + (row.eligible ? 'Eligible' : 'Not eligible') + (row.eligibilityReason ? ' · ' + escapeHtml(row.eligibilityReason) : '') + '</span></div>' + curation + '</section>';
+}
+
 function reviewRailHtml(payload) {
   var notices = reviewRailNotices(payload);
+  var sourceHtml = reviewSourceRailHtml(payload);
   var planGroups = reviewRailViews(payload).map(function (item) {
     var view = item.id;
     var groups = reviewViewGroups(payload, view);
@@ -754,10 +762,12 @@ function reviewRailHtml(payload) {
     }).join('');
     return rows ? '<section class="training-review-rail-plan-group"><strong>' + escapeHtml(reviewRailLabel(view)) + '</strong>' + rows + '</section>' : '';
   }).join('');
-  var noticeHtml = notices.length ? '<section class="training-review-rail-section training-review-rail-notices"><strong>Worth noticing</strong><div class="training-review-rail-notice-list">' + notices.map(function (notice) {
+  var noticeHtml = notices.length ? (sourceHtml
+    ? '<section class="training-review-rail-section training-review-rail-notice-summary"><strong>Worth noticing · ' + notices.length + '</strong></section>'
+    : '<section class="training-review-rail-section training-review-rail-notices"><strong>Worth noticing</strong><div class="training-review-rail-notice-list">' + notices.map(function (notice) {
     return '<div class="training-review-rail-notice"><span>' + escapeHtml(reviewRailLabel(notice.view) + ' · ' + formatReviewAspect(notice.aspect)) + '</span><b>' + escapeHtml(notice.title) + '</b><p>' + escapeHtml(notice.message) + '</p><div><button type="button" class="training-review-rail-review" data-review-rail-view="' + escapeHtml(notice.view) + '" data-review-rail-aspect="' + escapeHtml(notice.aspect) + '">Review</button>' + (notice.lowerTarget ? '<button type="button" class="training-review-rail-review" data-review-lower-upscale-target="' + escapeHtml(notice.lowerTarget.join(',')) + '">Lower one rung</button>' : '') + '</div></div>';
-  }).join('') + '</div></section>' : '';
-  return '<aside class="training-review-rail">' + noticeHtml + '<section class="training-review-rail-section training-review-selected-plan"><strong>Selected plan</strong><div class="training-review-rail-plan-list">' + (planGroups || '<span class="training-review-muted">No enabled categories.</span>') + '</div></section></aside>';
+  }).join('') + '</div></section>') : '';
+  return '<aside class="training-review-rail">' + sourceHtml + noticeHtml + '<section class="training-review-rail-section training-review-selected-plan"><strong>Selected plan</strong><div class="training-review-rail-plan-list">' + (planGroups || '<span class="training-review-muted">No enabled categories.</span>') + '</div></section></aside>';
 }
 
 function reviewModalHtml(payload) {
@@ -791,7 +801,7 @@ function reviewModalHtml(payload) {
     var tiny = cohortEligible < 4;
     return '<button type="button" class="training-review-cohort-tab' + (id === aspect ? ' active' : '') + '" data-review-aspect="' + escapeHtml(id) + '" aria-selected="' + (id === aspect ? 'true' : 'false') + '"' + (tiny ? ' title="Only ' + cohortEligible + ' eligible items in this cohort."' : '') + '>' + escapeHtml(formatReviewAspect(id)) + ' <span>· ' + cohortEligible + '</span>' + (tiny ? ' <b class="training-review-tiny-cohort" aria-label="Only ' + cohortEligible + ' eligible items in this cohort.">!</b>' : '') + '</button>';
   }).join('') + '</div></div></div>' +
-    reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(payload, view, groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect), aspect) + reviewImpactHtml(payload, view) + '</section>' + reviewRailHtml(payload) + '</section>';
+    reviewTargetsHtml(payload, view, aspect) + reviewChartHtml(payload, view, groups[aspect] || {}, reviewSelectedBuckets(plan, view, aspect), aspect) + reviewImpactHtml(payload, view, aspect) + '</section>' + reviewRailHtml(payload) + '</section>';
 }
 
 function trainingReviewSummaryHtml(payload) {
@@ -833,6 +843,7 @@ function closeTrainingReviewModal() {
   trainingWorkspaceState.reviewModalOpen = false;
   trainingWorkspaceState.reviewDraft = null;
   trainingWorkspaceState.reviewDraftDirty = false;
+  trainingWorkspaceState.reviewInspectedSource = null;
   els.reviewModal.classList.add('hidden');
   els.reviewModal.setAttribute('aria-hidden', 'true');
   var button = els.review.querySelector('[data-open-training-review]');
@@ -844,6 +855,8 @@ function openTrainingReviewModal() {
   if (!trainingWorkspaceState.review || trainingWorkspaceState.reviewModalOpen) return;
   trainingWorkspaceState.reviewDraft = JSON.parse(JSON.stringify(trainingWorkspaceState.review));
   trainingWorkspaceState.reviewDraftDirty = false;
+  trainingWorkspaceState.reviewImpactScope = 'aspect';
+  trainingWorkspaceState.reviewInspectedSource = null;
   trainingWorkspaceState.reviewModalOpen = true;
   els.reviewModal.classList.remove('hidden');
   els.reviewModal.setAttribute('aria-hidden', 'false');
@@ -897,6 +910,7 @@ function bindTrainingReviewModal(payload) {
   var modal = els.reviewModalContent;
   modal.querySelectorAll('[data-review-view]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewMediaView = button.getAttribute('data-review-view'); trainingWorkspaceState.reviewAspect = ''; renderTrainingReview(); }; });
   modal.querySelectorAll('[data-review-aspect]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewAspect = button.getAttribute('data-review-aspect'); renderTrainingReview(); }; });
+  modal.querySelectorAll('[data-review-impact-scope]').forEach(function (button) { button.onclick = function () { trainingWorkspaceState.reviewImpactScope = button.getAttribute('data-review-impact-scope') === 'all' ? 'all' : 'aspect'; renderTrainingReview(); }; });
   modal.querySelectorAll('[data-review-rail-view]').forEach(function (button) { button.onclick = function () {
     trainingWorkspaceState.reviewMediaView = button.getAttribute('data-review-rail-view');
     trainingWorkspaceState.reviewAspect = button.getAttribute('data-review-rail-aspect');
@@ -938,12 +952,29 @@ function bindTrainingReviewModal(payload) {
     updateTrainingReviewDraft(function (plan) { return stepReviewBucket(plan, payload.ladders || {}, view, aspect, target, 1); });
   }; });
   modal.querySelectorAll('[data-review-dot-index]').forEach(function (dot) {
-    dot.onclick = function () { showReviewDotPopover(modal, payload, dot); };
-    dot.onfocus = function () { showReviewDotPopover(modal, payload, dot); };
+    dot.onclick = function () {
+      var view = reviewActiveView(payload);
+      var aspect = reviewActiveAspect(payload, view);
+      var row = ((reviewViewGroups(payload, view)[aspect] || {}).native || [])[Number(dot.getAttribute('data-review-dot-index'))];
+      if (!row) throw new Error('Training Review dot has no matching source row.');
+      var current = trainingWorkspaceState.reviewInspectedSource;
+      trainingWorkspaceState.reviewInspectedSource = current && current.view === view && current.aspect === aspect && current.file === row.file ? null : { view: view, aspect: aspect, file: row.file };
+      renderTrainingReview();
+    };
   });
-  els.reviewModal.onclick = function (event) {
-    if (!event.target.closest('[data-review-dot-index]') && !event.target.closest('.training-review-dot-popover')) hideReviewDotPopover(modal);
-  };
+  modal.querySelectorAll('[data-review-source-rating]').forEach(function (button) { button.onclick = function () {
+    var source = reviewInspectedSource(payload);
+    if (!source || !source.mediaItem) throw new Error('Training Review source has no matching media item.');
+    setRatingForMediaKey(source.mediaItem.key || source.mediaItem.fileName, Number(button.getAttribute('data-review-source-rating')));
+    refreshTrainingReviewFactsKeepingDraft().catch(function (err) { setStatus('Could not refresh Training Review: ' + String(err && err.message ? err.message : err)); });
+  }; });
+  modal.querySelectorAll('[data-review-source-prune]').forEach(function (button) { button.onclick = function () {
+    var source = reviewInspectedSource(payload);
+    if (!source || !source.mediaItem) throw new Error('Training Review source has no matching media item.');
+    pruneMedia(source.mediaItem, { selectReplacement: false }).then(function (pruned) {
+      if (pruned) return refreshTrainingReviewFactsKeepingDraft();
+    }).catch(function (err) { setStatus('Could not prune Training Review source: ' + String(err && err.message ? err.message : err)); });
+  }; });
   modal.querySelectorAll('[data-review-open-dataset]').forEach(function (button) { button.onclick = function () { closeTrainingReviewModal(); selectTrainingWorkspaceConfigFile(button.getAttribute('data-review-open-dataset')); }; });
   modal.querySelectorAll('[data-review-reset-dataset]').forEach(function (button) { button.onclick = function () {
     var fileName = button.getAttribute('data-review-reset-dataset');
@@ -1018,6 +1049,21 @@ function refreshTrainingReview() {
   });
 }
 
+function refreshTrainingReviewFactsKeepingDraft() {
+  var draft = trainingWorkspaceState.reviewDraft;
+  if (!trainingWorkspaceState.reviewModalOpen || !draft) return refreshTrainingReview();
+  return refreshTrainingReview().then(function (payload) {
+    if (!payload || !trainingWorkspaceState.reviewModalOpen) return payload;
+    var currentDraft = trainingWorkspaceState.reviewDraft || draft;
+    var refreshedDraft = JSON.parse(JSON.stringify(payload));
+    refreshedDraft.plan = JSON.parse(JSON.stringify(currentDraft.plan));
+    recomputeTrainingReviewDistribution(refreshedDraft);
+    trainingWorkspaceState.reviewDraft = refreshedDraft;
+    renderTrainingReview();
+    return refreshedDraft;
+  });
+}
+
 function resetTrainingReviewBuckets() {
   var request = trainingReviewPayload();
   request.reset = 'buckets';
@@ -1029,7 +1075,9 @@ function resetTrainingReviewBuckets() {
 
 document.addEventListener('keydown', function (event) {
   if (event.key === 'Escape' && trainingWorkspaceState.reviewModalOpen) {
-    if (hideReviewDotPopover(getTrainingWorkspaceEls().reviewModalContent)) {
+    if (trainingWorkspaceState.reviewInspectedSource) {
+      trainingWorkspaceState.reviewInspectedSource = null;
+      renderTrainingReview();
       event.preventDefault();
       return;
     }

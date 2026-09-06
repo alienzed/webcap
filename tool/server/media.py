@@ -1,8 +1,10 @@
 import json
 import logging
+import math
 import os
 import shutil
 import subprocess
+import tempfile
 import traceback
 from pathlib import Path
 
@@ -11,7 +13,7 @@ from flask import jsonify
 from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
 from .face_focus import FACE_FOCUS_VERSION, analyze_image_face_focus, get_face_focus_detector, is_face_focus_image
-from .originals import MEDIA_ALL_EXTS, is_transient_media_name, restore_original_media, restore_original_media_video_only
+from .originals import MEDIA_ALL_EXTS, ensure_original_by_hash, ensure_originals_folder, is_transient_media_name, restore_original_media, restore_original_media_video_only
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .rembg_ops import blur_background_in_place, remove_background_in_place
 from .scene_complexity import SCENE_COMPLEXITY_METHOD, SCENE_COMPLEXITY_VERSION, analyze_image_scene_complexity, is_scene_complexity_image
@@ -20,6 +22,165 @@ from .selection_pose import SELECTION_POSE_VERSION, analyze_image_selection_pose
 logger = logging.getLogger(__name__)
 
 safe_join_fs_root = app_config.safe_join_fs_root
+
+VIDEO_EXTS = {".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v", ".ogg", ".wmv", ".mpg", ".mpeg"}
+
+
+def _parse_target_fps(value):
+    try:
+        fps = float(value)
+    except (TypeError, ValueError):
+        raise RuntimeError("Target FPS must be a number")
+    if not math.isfinite(fps):
+        raise RuntimeError("Target FPS must be finite")
+    if fps <= 0:
+        raise RuntimeError("Target FPS must be greater than zero")
+    return fps
+
+
+def _safe_media_file_name(value):
+    file_name = str(value or "").strip()
+    if not file_name:
+        raise RuntimeError("Missing media filename")
+    if Path(file_name).name != file_name:
+        raise RuntimeError("Invalid media filename")
+    return file_name
+
+
+def _parse_fps_value(value):
+    text = str(value or "").strip()
+    if not text or text == "0/0":
+        return None
+    try:
+        if "/" in text:
+            numerator, denominator = text.split("/", 1)
+            return float(numerator) / float(denominator)
+        return float(text)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _probe_video_stream(path):
+    cmd = [
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "stream=width,height,avg_frame_rate",
+        "-of", "json", str(path),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError("ffprobe failed: " + (proc.stderr or proc.stdout or "").strip())
+    try:
+        streams = json.loads(proc.stdout).get("streams") or []
+        stream = streams[0]
+        width = int(stream["width"])
+        height = int(stream["height"])
+        fps = _parse_fps_value(stream.get("avg_frame_rate"))
+    except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Could not read video stream: " + str(exc))
+    if width <= 0 or height <= 0 or fps is None or fps <= 0:
+        raise RuntimeError("Could not read video stream metadata")
+    return {"width": width, "height": height, "fps": fps}
+
+
+def _media_has_audio(path):
+    cmd = [
+        "ffprobe", "-v", "error", "-select_streams", "a:0",
+        "-show_entries", "stream=codec_type", "-of", "json", str(path),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError("ffprobe failed while checking audio: " + (proc.stderr or proc.stdout or "").strip())
+    try:
+        return bool((json.loads(proc.stdout).get("streams") or []))
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Could not read audio stream metadata: " + str(exc))
+
+
+def _format_target_fps(fps):
+    return format(float(fps), ".12g")
+
+
+def _run_video_fps_ffmpeg(source_path, output_path, target_fps):
+    cmd = [
+        "ffmpeg", "-y", "-i", str(source_path),
+        "-map", "0:v:0", "-map", "0:a?",
+        "-vf", "fps=fps={}:round=near".format(_format_target_fps(target_fps)),
+        "-c:v", "libx264", "-preset", "slow", "-crf", "12",
+        "-pix_fmt", "yuv420p", "-c:a", "copy",
+        "-movflags", "+faststart", str(output_path),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError("ffmpeg failed: " + (proc.stderr or proc.stdout or "").strip())
+
+
+def _validate_converted_video(source_info, output_path, target_fps, source_has_audio):
+    if not output_path.exists() or output_path.stat().st_size <= 0:
+        raise RuntimeError("Converted video output is empty")
+    output_info = _probe_video_stream(output_path)
+    if (output_info["width"], output_info["height"]) != (source_info["width"], source_info["height"]):
+        raise RuntimeError("Converted video resolution changed unexpectedly")
+    if abs(output_info["fps"] - target_fps) > max(0.05, target_fps * 0.001):
+        raise RuntimeError("Converted video FPS does not match requested FPS")
+    if source_has_audio and not _media_has_audio(output_path):
+        raise RuntimeError("Converted video is missing its original audio stream")
+
+
+def _convert_video_fps_in_place(source_path, target_fps):
+    source_info = _probe_video_stream(source_path)
+    source_has_audio = _media_has_audio(source_path)
+    originals_dir = ensure_originals_folder(source_path.parent)
+    if originals_dir is None:
+        raise RuntimeError("Cannot overwrite source in this folder")
+    ensure_original_by_hash(source_path, originals_dir)
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix="." + source_path.stem + ".convert-",
+        suffix=source_path.suffix or ".mp4",
+        dir=str(source_path.parent),
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        _run_video_fps_ffmpeg(source_path, tmp_path, target_fps)
+        _validate_converted_video(source_info, tmp_path, target_fps, source_has_audio)
+        os.replace(tmp_path, source_path)
+        normalize_path_permissions(source_path)
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+
+
+def media_convert_fps_response(data):
+    data = data or {}
+    folder = str(data.get("folder") or "").strip()
+    if not folder:
+        return jsonify({"error": "Missing folder"}), 400
+    try:
+        file_name = _safe_media_file_name(data.get("fileName") or data.get("media"))
+        target_fps = _parse_target_fps(data.get("fps"))
+        folder_path = safe_join_fs_root(folder)
+        if not folder_path.exists() or not folder_path.is_dir():
+            return jsonify({"error": "Source folder does not exist"}), 404
+        source_path = (folder_path / file_name).resolve()
+        if source_path.parent != folder_path.resolve():
+            return jsonify({"error": "Invalid media filename"}), 400
+        if not source_path.exists() or not source_path.is_file():
+            return jsonify({"error": "Media file not found"}), 404
+        if source_path.suffix.lower() not in VIDEO_EXTS:
+            return jsonify({"error": "FPS conversion is only available for video files"}), 400
+        _convert_video_fps_in_place(source_path, target_fps)
+        update_media_metadata(folder_path, scoped_filenames=[file_name])
+        return jsonify({"ok": True, "fps": target_fps})
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        app_config.debug_print("[media_convert_fps] ERROR:", exc)
+        app_config.debug_traceback()
+        return jsonify({"error": str(exc)}), 400
 
 
 def media_flip_horizontal_response(data):

@@ -11,7 +11,7 @@ from . import config as app_config
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .originals import copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_media_response, open_in_explorer_response, open_path_in_explorer_response, open_in_vscode_response, rename_response
-from .media import media_blur_background_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
+from .media import media_blur_background_response, media_convert_fps_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .video_frame_ops import extract_video_frame_response, inspect_video_frame_response
 from .run_ops import train_run_response
@@ -291,6 +291,13 @@ def media_crop():
 def media_flip_horizontal():
     data = request.get_json(silent=True) or {}
     return media_flip_horizontal_response(data)
+
+
+@app.route("/media/convert_fps", methods=["POST"])
+def media_convert_fps():
+    data = request.get_json(silent=True) or {}
+    return media_convert_fps_response(data)
+
 
 @app.route("/media/image_transform", methods=["POST"])
 def media_image_transform():

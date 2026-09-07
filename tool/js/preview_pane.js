@@ -155,19 +155,40 @@ function renderMediaMetadataPanel(folder, doc, scopedFileNames, includeFaceFocus
           return '<td>' + escapeHtml(val) + '</td>';
         }
 
+        function getMetadataFocusContext(fileName) {
+          var focusFiles = [fileName];
+          var focusSource = 'Media Metadata';
+          if (!reviewMetadataTableState.grouped) {
+            return { files: focusFiles, source: focusSource };
+          }
+          var selectedRow = scopedRows.filter(function (row) { return String((row && row.file) || '') === fileName; })[0];
+          if (!selectedRow) {
+            return { files: focusFiles, source: focusSource };
+          }
+          var bucket = mapAspectRatioToBucket(selectedRow.aspect);
+          focusFiles = scopedRows.filter(function (row) {
+            return mapAspectRatioToBucket(row && row.aspect) === bucket;
+          }).map(function (row) { return String(row.file || ''); }).filter(Boolean);
+          return {
+            files: focusFiles.length ? focusFiles : [fileName],
+            source: 'Media Metadata · Aspect Ratio ' + bucket
+          };
+        }
+
         function wireMetadataFileLinks() {
           Array.prototype.forEach.call(tableDiv.querySelectorAll('.metadata-file-link'), function(btn) {
             btn.onclick = function () {
               var fileName = decodeURIComponent(btn.getAttribute('data-file') || '');
               if (!fileName) return;
+              var focusContext = getMetadataFocusContext(fileName);
               if (doc === document) {
-                selectByFileName(fileName, [fileName], 'Media Metadata', 'review');
+                selectByFileName(fileName, focusContext.files, focusContext.source, 'review');
               } else if (window.parent && window.parent.postMessage) {
                 window.parent.postMessage({
                   type: 'caption-review-select',
                   fileName: fileName,
-                  focusFiles: [fileName],
-                  focusSource: 'Media Metadata',
+                  focusFiles: focusContext.files,
+                  focusSource: focusContext.source,
                   reportType: 'review'
                 }, '*');
               }

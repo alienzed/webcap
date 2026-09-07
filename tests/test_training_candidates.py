@@ -24,6 +24,19 @@ def _epoch_events(values, start_epoch=1, samples_per_epoch=5):
     return detailed, boundaries
 
 
+def _detailed_epoch_events(samples_by_epoch, start_epoch=1):
+    detailed, boundaries, axis, order = [], [], 0, 0
+    for offset, samples in enumerate(samples_by_epoch):
+        epoch = start_epoch + offset
+        boundary_time = float(epoch * 100)
+        for sample, value in enumerate(samples):
+            detailed.append({"axis": axis, "loss": value, "wallTime": boundary_time - len(samples) + sample, "order": order})
+            axis += 1
+            order += 1
+        boundaries.append({"axis": epoch, "loss": training_candidates._median(samples), "wallTime": boundary_time, "order": offset})
+    return detailed, boundaries
+
+
 def _robust(values, start_epoch=1):
     return [{"epoch": start_epoch + index, "loss": value} for index, value in enumerate(values)]
 
@@ -106,24 +119,62 @@ def test_representative_uses_displayed_trend_then_raw_loss_then_earlier_epoch():
     assert exact_tie[training_candidates._representative_index(exact_tie, tied_trend, 0, 3)]["epoch"] == 2
 
 
-def test_exceptional_recovered_disturbance_splits_two_settled_regions_independently():
-    trend = _robust([1.000, 1.004, 1.002, 1.050, 1.049, .990, .995, .994])
-    intervals = training_candidates._split_disturbed_interval(trend, 0, len(trend) - 1, .01)
-    assert intervals == [(0, 2), (5, 7)]
-    representatives = [
-        training_candidates._representative_index(trend, trend, start, end)
-        for start, end in intervals
+def _quiet_detailed_samples(base):
+    return [base - .0003, base - .0001, base, base + .0001, base + .0003, base - .0002, base, base + .0002, base]
+
+
+def test_detailed_disturbance_splits_an_otherwise_broad_settled_region():
+    samples = [
+        _quiet_detailed_samples(.200),
+        _quiet_detailed_samples(.2002),
+        [.2001] * 5 + [.240, .241, .239, .240],
+        [.240, .241, .239, .240] + [.2002] * 5,
+        _quiet_detailed_samples(.2001),
+        _quiet_detailed_samples(.2002),
+        _quiet_detailed_samples(.2001),
     ]
-    assert [trend[index]["epoch"] for index in representatives] == [1, 6]
+    detailed, boundaries = _detailed_epoch_events(samples)
+    mapped = training_candidates.map_detailed_loss_to_epochs(detailed, boundaries)
+    disturbances = training_candidates._detect_detailed_disturbances(mapped)
+    robust = training_candidates.aggregate_detailed_loss_by_epoch(mapped, boundaries)
+    _, unsplit = training_candidates.detect_settled_regions(robust)
+    regions = training_candidates.analyze_loss_points(detailed, boundaries)["regions"]
+    assert disturbances == [{"startEpoch": 3, "endEpoch": 4}]
+    assert len(unsplit) == 1
+    assert [(region["startEpoch"], region["endEpoch"], region["kind"]) for region in regions] == [
+        (1, 2, "stable_region"),
+        (5, 7, "post_disturbance_recovery"),
+    ]
+    assert regions[1]["label"] == "Current stable region · Post-disturbance recovery"
 
 
-def test_small_wobble_or_disturbance_without_settled_recovery_does_not_split():
-    small_wobble = _robust([1.000, 1.004, 1.002, 1.016, 1.015, 1.003, 1.005, 1.004])
-    unresolved_tail = _robust([1.000, 1.004, 1.002, 1.050, 1.049])
-    descending_recovery = _robust([1.000, 1.004, 1.002, 1.050, 1.049, 1.010, .990, .970])
-    assert training_candidates._split_disturbed_interval(small_wobble, 0, len(small_wobble) - 1, .01) == [(0, len(small_wobble) - 1)]
-    assert training_candidates._split_disturbed_interval(unresolved_tail, 0, len(unresolved_tail) - 1, .01) == [(0, len(unresolved_tail) - 1)]
-    assert training_candidates._split_disturbed_interval(descending_recovery, 0, len(descending_recovery) - 1, .01) == [(0, len(descending_recovery) - 1)]
+def test_single_spike_and_short_detailed_wobble_do_not_create_disturbances():
+    single_spike = [_quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2)]
+    single_spike[2][4] = .24
+    short_wobble = [_quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2)]
+    short_wobble[2][-2:] = [.24, .24]
+    for samples in (single_spike, short_wobble):
+        detailed, boundaries = _detailed_epoch_events(samples)
+        mapped = training_candidates.map_detailed_loss_to_epochs(detailed, boundaries)
+        assert training_candidates._detect_detailed_disturbances(mapped) == []
+
+
+def test_unrecovered_detailed_disturbance_and_monotonic_descent_create_no_new_candidates():
+    unrecovered = [
+        _quiet_detailed_samples(.200),
+        _quiet_detailed_samples(.2002),
+        [.2001] * 5 + [.240, .241, .239, .240],
+        [.240, .241, .239, .240] + [.240, .241, .239, .240, .240],
+        [.240, .241, .239, .240, .240, .241, .239, .240, .240],
+    ]
+    detailed, boundaries = _detailed_epoch_events(unrecovered)
+    mapped = training_candidates.map_detailed_loss_to_epochs(detailed, boundaries)
+    robust = training_candidates.aggregate_detailed_loss_by_epoch(mapped, boundaries)
+    assert training_candidates._detect_detailed_disturbances(mapped) == []
+    assert training_candidates.detect_settled_regions(robust, training_candidates._detect_detailed_disturbances(mapped))[1] == training_candidates.detect_settled_regions(robust)[1]
+
+    descending, descending_boundaries = _epoch_events([1.0, .9, .8, .7, .6, .5, .4], samples_per_epoch=7)
+    assert training_candidates.analyze_loss_points(descending, descending_boundaries)["candidates"] == []
 
 
 def test_region_explanations_describe_existing_evidence_without_affecting_selection():
@@ -134,12 +185,12 @@ def test_region_explanations_describe_existing_evidence_without_affecting_select
     assert training_candidates._region_explanation(plateau, [1, 2, 3], .1, 0, 4, 0, False, False) == ("settled_plateau", "Settled plateau")
     assert training_candidates._region_explanation(fallback, [], .1, 0, 2, 0, False, False) == ("stable_region", "Stable region")
     assert training_candidates._region_explanation(local_minimum, [1], .1, 0, 2, 1, False, True) == ("post_disturbance_recovery", "Post-disturbance recovery")
-    assert training_candidates._region_explanation(local_minimum, [1], .1, 0, 2, 1, True, True) == ("current_stable_region", "Current stable region")
+    assert training_candidates._region_explanation(local_minimum, [1], .1, 0, 2, 1, True, True) == ("post_disturbance_recovery", "Current stable region · Post-disturbance recovery")
 
 
 def test_region_saved_epoch_coverage_is_descriptive_and_omits_ambiguous_exports(tmp_path, monkeypatch):
     region = {"startEpoch": 2, "endEpoch": 5, "representativeEpoch": 2, "current": False, "kind": "stable_region", "label": "Stable region"}
-    monkeypatch.setattr(training_candidates, "detect_settled_regions", lambda _points: ([], [region.copy()]))
+    monkeypatch.setattr(training_candidates, "detect_settled_regions", lambda _points, _disturbances=None: ([], [region.copy()]))
     monkeypatch.setattr(training_candidates, "saved_artifacts_for_run", lambda _run: [
         {"epoch": 3, "fileName": "adapter-3.safetensors", "status": "available"},
         {"epoch": 4, "status": "ambiguous"},

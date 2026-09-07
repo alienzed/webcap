@@ -204,7 +204,11 @@ def _split_disturbed_interval(trend, start, end, scale):
 
 def _split_disturbed_intervals(trend, intervals, scale):
     """Post-process settled intervals without changing how their anchors were formed."""
-    return [split for start, end in intervals for split in _split_disturbed_interval(trend, start, end, scale)]
+    result = []
+    for start, end in intervals:
+        splits = _split_disturbed_interval(trend, start, end, scale)
+        result.extend((split_start, split_end, len(splits) > 1 and index == 1) for index, (split_start, split_end) in enumerate(splits))
+    return result
 
 
 def _representative_index(robust_points, trend, start, end):
@@ -215,20 +219,44 @@ def _representative_index(robust_points, trend, start, end):
     )
 
 
+def _region_explanation(trend, anchors, scale, start, end, representative, current, recovered):
+    """Describe detector evidence without feeding it back into candidate selection."""
+    if current:
+        return "current_stable_region", "Current stable region"
+    if recovered:
+        return "post_disturbance_recovery", "Post-disturbance recovery"
+    values = [float(point["loss"]) for point in trend]
+    if 0 < representative < len(values) - 1 and values[representative] <= values[representative - 1] and values[representative] <= values[representative + 1] and (values[representative] < values[representative - 1] or values[representative] < values[representative + 1]):
+        return "local_minimum", "Local minimum"
+    quiet = scale * 0.75
+    flat_anchors = [
+        index for index in anchors if start <= index <= end and 0 < index < len(values) - 1
+        and abs(values[index] - values[index - 1]) <= quiet
+        and abs(values[index + 1] - values[index]) <= quiet
+    ]
+    if len(flat_anchors) >= 2:
+        return "settled_plateau", "Settled plateau"
+    return "stable_region", "Stable region"
+
+
 def detect_settled_regions(robust_points):
     """Group locally low or flat robust epochs into candidate-worthy regions."""
     trend = _centered_median(robust_points)
     scale = _movement_scale(trend)
-    intervals = _region_intervals(trend, _settled_anchor_indexes(trend, scale), scale)
-    intervals = _split_disturbed_intervals(trend, intervals, scale)
+    anchors = _settled_anchor_indexes(trend, scale)
+    intervals = _split_disturbed_intervals(trend, _region_intervals(trend, anchors, scale), scale)
     regions = []
-    for start, end in intervals:
+    for start, end, recovered in intervals:
         representative = _representative_index(robust_points, trend, start, end)
+        current = end == len(robust_points) - 1
+        kind, label = _region_explanation(trend, anchors, scale, start, end, representative, current, recovered)
         regions.append({
             "startEpoch": int(robust_points[start]["epoch"]),
             "endEpoch": int(robust_points[end]["epoch"]),
             "representativeEpoch": int(robust_points[representative]["epoch"]),
-            "current": end == len(robust_points) - 1,
+            "current": current,
+            "kind": kind,
+            "label": label,
         })
     return trend, regions
 
@@ -266,10 +294,19 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
     mapped = map_detailed_loss_to_epochs(detailed_events, epoch_events)
     robust_points = aggregate_detailed_loss_by_epoch(mapped, epoch_events)
     analysis_points, regions = detect_settled_regions(robust_points)
+    saved_artifacts = saved_artifacts_for_run(run_dir) if run_dir is not None else []
+    for region in regions:
+        region["savedEpochs"] = [
+            artifact["epoch"] for artifact in saved_artifacts
+            if artifact["status"] == "available" and region["startEpoch"] <= artifact["epoch"] <= region["endEpoch"]
+        ]
     candidates = [{
         "epoch": region["representativeEpoch"],
         "startEpoch": region["startEpoch"],
         "endEpoch": region["endEpoch"],
+        "kind": region["kind"],
+        "label": region["label"],
+        "savedEpochs": region["savedEpochs"],
         "reason": "Current stable region." if region["current"] else "Stable region.",
         "artifact": artifact_for_epoch(run_dir, region["representativeEpoch"]) if run_dir is not None else {"available": False, "status": "not_checked"},
     } for region in regions]
@@ -279,7 +316,7 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
         "analysisPoints": analysis_points,
         "regions": regions,
         "candidates": candidates,
-        "savedArtifacts": saved_artifacts_for_run(run_dir) if run_dir is not None else [],
+        "savedArtifacts": saved_artifacts,
     }
 
 

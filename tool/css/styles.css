@@ -2668,7 +2668,12 @@ iframe {
 .training-candidates-legend i.basin { height: 10px; background: rgba(94, 177, 137, .3); }
 .training-candidates-list { display: grid; gap: 8px; }
 .training-candidates-list h3 { margin: 0; font-size: 13px; }
-.training-candidates-card { display: grid; grid-template-columns: minmax(90px, auto) minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--border-color, #3d4452); border-radius: 7px; background: color-mix(in srgb, var(--panel-bg, #20242c) 92%, #253144); font-size: 12px; }
+.training-candidates-card { display: grid; grid-template-columns: minmax(90px, auto) minmax(0, 1fr) auto auto; grid-template-areas: "epoch summary artifact action" "epoch coverage artifact action"; align-items: center; column-gap: 10px; row-gap: 3px; padding: 10px; border: 1px solid var(--border-color, #3d4452); border-radius: 7px; background: color-mix(in srgb, var(--panel-bg, #20242c) 92%, #253144); font-size: 12px; }
+.training-candidates-card strong { grid-area: epoch; }
+.training-candidates-region-summary { grid-area: summary; }
+.training-candidates-region-coverage { grid-area: coverage; font-size: 11px; }
+.training-candidates-card em { grid-area: artifact; }
+.training-candidates-open-epoch { grid-area: action; }
 .training-candidates-open-epoch { padding: 4px 7px; font-size: 11px; white-space: nowrap; }
 .training-candidates-card span { color: var(--muted-text, #a3adba); }
 .training-candidates-card em { font-style: normal; font-size: 11px; white-space: nowrap; }
@@ -2681,8 +2686,8 @@ iframe {
   .training-candidates-modal { padding: 10px; }
   .training-candidates-modal-header { align-items: flex-start; }
   .training-candidates-modal-actions { flex-wrap: wrap; justify-content: flex-end; }
-  .training-candidates-card { grid-template-columns: minmax(78px, auto) minmax(0, 1fr); }
-  .training-candidates-card em, .training-candidates-open-epoch { grid-column: 2; justify-self: start; }
+  .training-candidates-card { grid-template-columns: minmax(78px, auto) minmax(0, 1fr); grid-template-areas: "epoch summary" "epoch coverage" ". artifact" ". action"; }
+  .training-candidates-card em, .training-candidates-open-epoch { justify-self: start; }
 }
 .training-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); align-items: start; gap: 14px; }
 .training-review-workbench { display: grid; gap: 14px; min-width: 0; }

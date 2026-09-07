@@ -126,6 +126,32 @@ def test_small_wobble_or_disturbance_without_settled_recovery_does_not_split():
     assert training_candidates._split_disturbed_interval(descending_recovery, 0, len(descending_recovery) - 1, .01) == [(0, len(descending_recovery) - 1)]
 
 
+def test_region_explanations_describe_existing_evidence_without_affecting_selection():
+    local_minimum = _robust([.5, .3, .4])
+    plateau = _robust([1.0, .95, .95, .95, 1.0])
+    fallback = _robust([1.0, .9, .8])
+    assert training_candidates._region_explanation(local_minimum, [1], .1, 0, 2, 1, False, False) == ("local_minimum", "Local minimum")
+    assert training_candidates._region_explanation(plateau, [1, 2, 3], .1, 0, 4, 0, False, False) == ("settled_plateau", "Settled plateau")
+    assert training_candidates._region_explanation(fallback, [], .1, 0, 2, 0, False, False) == ("stable_region", "Stable region")
+    assert training_candidates._region_explanation(local_minimum, [1], .1, 0, 2, 1, False, True) == ("post_disturbance_recovery", "Post-disturbance recovery")
+    assert training_candidates._region_explanation(local_minimum, [1], .1, 0, 2, 1, True, True) == ("current_stable_region", "Current stable region")
+
+
+def test_region_saved_epoch_coverage_is_descriptive_and_omits_ambiguous_exports(tmp_path, monkeypatch):
+    region = {"startEpoch": 2, "endEpoch": 5, "representativeEpoch": 2, "current": False, "kind": "stable_region", "label": "Stable region"}
+    monkeypatch.setattr(training_candidates, "detect_settled_regions", lambda _points: ([], [region.copy()]))
+    monkeypatch.setattr(training_candidates, "saved_artifacts_for_run", lambda _run: [
+        {"epoch": 3, "fileName": "adapter-3.safetensors", "status": "available"},
+        {"epoch": 4, "status": "ambiguous"},
+        {"epoch": 6, "fileName": "adapter-6.safetensors", "status": "available"},
+    ])
+    analysis = training_candidates.analyze_loss_points([], [{"axis": 2, "loss": .2, "wallTime": 2, "order": 0}], run_dir=tmp_path)
+    assert analysis["regions"][0]["savedEpochs"] == [3]
+    assert analysis["candidates"][0]["savedEpochs"] == [3]
+    assert analysis["candidates"][0]["epoch"] == 2
+    assert analysis["candidates"][0]["artifact"]["status"] == "not_saved"
+
+
 def test_real_50_epoch_regression_produces_small_distinct_settled_regions():
     values = [
         .244616, .192672, .201754, .200584, .186273, .194946, .181427, .175269, .184652, .189563,
@@ -137,6 +163,10 @@ def test_real_50_epoch_regression_produces_small_distinct_settled_regions():
     detailed, boundaries = _epoch_events(values, samples_per_epoch=7)
     analysis = training_candidates.analyze_loss_points(detailed, boundaries)
     regions = analysis["regions"]
+    assert [
+        (region["startEpoch"], region["endEpoch"], region["representativeEpoch"], region["current"])
+        for region in regions
+    ] == [(2, 5, 5, False), (6, 18, 16, False), (22, 32, 24, False), (33, 40, 40, False), (44, 50, 50, True)]
     assert any(region["startEpoch"] <= 40 <= region["endEpoch"] for region in regions)
     assert any(region["current"] and region["startEpoch"] <= 50 for region in regions)
     assert not any(region["startEpoch"] <= 41 <= region["endEpoch"] and region["startEpoch"] <= 44 <= region["endEpoch"] for region in regions)

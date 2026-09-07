@@ -80,7 +80,11 @@ function trainingCandidatesTooltipHtml(epoch, data) {
   if (raw) lines.push('Epoch loss: ' + escapeHtml(Number(raw.loss).toFixed(4)));
   if (robust) lines.push('Robust loss: ' + escapeHtml(Number(robust.loss).toFixed(4)));
   lines.push('Saved: ' + escapeHtml(saved ? (saved.status === 'available' ? saved.fileName : 'ambiguous exports') : 'no'));
-  if (region) lines.push('Candidate region: ' + escapeHtml(String(region.startEpoch) + '–' + String(region.endEpoch)) + (representative ? ' · representative' : ''));
+  if (region) {
+    lines.push('Candidate region: ' + escapeHtml(String(region.startEpoch) + '–' + String(region.endEpoch)) + (representative ? ' · representative' : ''));
+    lines.push(escapeHtml(String(region.label || 'Stable region')));
+    lines.push(escapeHtml(trainingCandidatesRegionCoverage(region, data.savedArtifacts)));
+  }
   return lines.map(function (line) { return '<div>' + line + '</div>'; }).join('');
 }
 
@@ -110,7 +114,7 @@ function wireTrainingCandidatesChart() {
     pointMarker.setAttribute('cx', x.toFixed(2)); pointMarker.setAttribute('cy', y.toFixed(2)); pointMarker.classList.remove('hidden');
     tooltip.innerHTML = trainingCandidatesTooltipHtml(epoch, data);
     tooltip.style.left = Math.max(4, Math.min(wrap.clientWidth - 210, event.clientX - rect.left + 12)) + 'px';
-    tooltip.style.top = Math.max(4, Math.min(rect.height - 98, event.clientY - rect.top + 10)) + 'px';
+    tooltip.style.top = Math.max(4, Math.min(rect.height - 132, event.clientY - rect.top + 10)) + 'px';
     tooltip.classList.remove('hidden');
   });
 }
@@ -121,13 +125,35 @@ function trainingCandidatesArtifactLabel(artifact) {
   return 'No matching saved LoRA';
 }
 
+function trainingCandidatesEpochList(epochs) {
+  var values = (Array.isArray(epochs) ? epochs : []).map(Number).filter(isFinite).sort(function (a, b) { return a - b; });
+  if (values.length <= 8) return values.join(', ');
+  var stride = values[1] - values[0];
+  var regular = stride > 0 && values.every(function (epoch, index) { return !index || epoch - values[index - 1] === stride; });
+  if (regular) return values[0] + '–' + values[values.length - 1] + ' every ' + stride + ' epochs';
+  return values.slice(0, 8).join(', ') + ' +' + (values.length - 8);
+}
+
+function trainingCandidatesRegionCoverage(region, savedArtifacts) {
+  var saved = Array.isArray(region && region.savedEpochs) ? region.savedEpochs : [];
+  var ambiguous = (Array.isArray(savedArtifacts) ? savedArtifacts : []).filter(function (artifact) {
+    return artifact.status === 'ambiguous' && Number(artifact.epoch) >= Number(region.startEpoch) && Number(artifact.epoch) <= Number(region.endEpoch);
+  }).map(function (artifact) { return artifact.epoch; });
+  var text = saved.length ? 'Saved in region: ' + trainingCandidatesEpochList(saved) : (ambiguous.length ? 'No unambiguous saved LoRAs in region' : 'No saved LoRAs in region');
+  return text + (ambiguous.length ? ' · Ambiguous exports: ' + trainingCandidatesEpochList(ambiguous) : '');
+}
+
+function trainingCandidatesRegionSummary(region) {
+  return String(region.label || 'Stable region') + ' · Region ' + String(region.startEpoch) + '–' + String(region.endEpoch);
+}
+
 function trainingCandidatesContentHtml(payload) {
   var analysis = payload && payload.analysis ? payload.analysis : null;
   if (!analysis) return '<div class="training-candidates-empty">Loading loss curve…</div>';
   var candidates = Array.isArray(analysis.candidates) ? analysis.candidates : [];
   var list = candidates.length ? candidates.map(function (candidate) {
     var openAction = candidate.artifact && candidate.artifact.available ? '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapeHtml(String(candidate.epoch)) + '">Open Folder</button>' : '';
-    return '<article class="training-candidates-card"><strong>Epoch ' + escapeHtml(String(candidate.epoch)) + '</strong><span>' + escapeHtml(String(candidate.reason || 'Stable region.')) + '</span><em class="' + (candidate.artifact && candidate.artifact.available ? 'available' : 'missing') + '">' + escapeHtml(trainingCandidatesArtifactLabel(candidate.artifact)) + '</em>' + openAction + '</article>';
+    return '<article class="training-candidates-card"><strong>Epoch ' + escapeHtml(String(candidate.epoch)) + '</strong><span class="training-candidates-region-summary">' + escapeHtml(trainingCandidatesRegionSummary(candidate)) + '</span><span class="training-candidates-region-coverage">' + escapeHtml(trainingCandidatesRegionCoverage(candidate, analysis.savedArtifacts)) + '</span><em class="' + (candidate.artifact && candidate.artifact.available ? 'available' : 'missing') + '">' + escapeHtml(trainingCandidatesArtifactLabel(candidate.artifact)) + '</em>' + openAction + '</article>';
   }).join('') : '<div class="training-candidates-empty">No candidate regions identified yet. The current trend has not settled enough to suggest a saved epoch.</div>';
   return '<section class="training-candidates-analysis">' + trainingCandidatesSvg(analysis) + '<section class="training-candidates-list"><h3>Suggested epochs</h3>' + list + '</section></section>';
 }

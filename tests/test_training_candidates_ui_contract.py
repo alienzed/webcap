@@ -35,7 +35,13 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "training-candidates-hover-layer" in script
     assert "training-candidates-tooltip" in script
     assert "training-candidates-open-epoch" in script
+    assert "training-candidates-region-summary" in script
+    assert "training-candidates-region-coverage" in script
+    assert "Saved in region:" in script
+    assert "Open Folder" in script
     assert "No confirmed valleys" not in script
+    assert "confidence" not in script.lower()
+    assert "detector controls" not in script.lower()
     assert "setTimeout" not in script
     assert "training-candidates-modal" in css
     assert "width: min(95vw, 1800px)" in css

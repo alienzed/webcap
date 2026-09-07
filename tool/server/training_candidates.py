@@ -134,9 +134,20 @@ def smooth_epoch_loss_points(points, radius=2):
     return _rolling_median(list(points or []), radius)
 
 
+def _detailed_smoothing_radii(points):
+    counts = {}
+    for point in points:
+        counts[int(point["epoch"])] = counts.get(int(point["epoch"]), 0) + 1
+    typical_samples = max(1, int(round(_median(list(counts.values())))))
+    # About half an epoch for robust smoothing, followed by a lighter pass.
+    return max(1, int(round(typical_samples / 4.0))), max(1, int(round(typical_samples / 8.0))), typical_samples
+
+
 def smooth_detailed_loss_points(points):
-    """Robust 9-sample median followed by a light 5-sample centered mean."""
-    return _rolling_mean(_rolling_median(list(points or []), 4), 2)
+    """Use a deterministic sub-epoch robust smoother sized from event density."""
+    normalized = list(points or [])
+    median_radius, mean_radius, _ = _detailed_smoothing_radii(normalized)
+    return _rolling_mean(_rolling_median(normalized, median_radius), mean_radius)
 
 
 def _noise_band(raw_points, smoothed_points):
@@ -145,12 +156,12 @@ def _noise_band(raw_points, smoothed_points):
     residuals = [abs(raw[index] - smooth[index]) for index in range(len(raw))]
     deltas = [abs(smooth[index] - smooth[index - 1]) for index in range(1, len(smooth))]
     spread = max(smooth) - min(smooth) if smooth else 0.0
-    return max(_median_absolute_deviation(residuals) * 2.0, _median(deltas) * 0.75, spread * 0.02, 1e-12)
+    return max(_median_absolute_deviation(residuals), _median(deltas) * 0.25, spread * 0.02, 1e-12)
 
 
 def _expand_basin(values, center, band):
     floor, start, end = values[center], center, center
-    lower, upper = floor - band * 2.0, floor + band * 2.0
+    lower, upper = floor - band * 1.5, floor + band * 1.5
     while start > 0 and lower <= values[start - 1] <= upper:
         start -= 1
     while end + 1 < len(values) and lower <= values[end + 1] <= upper:
@@ -178,14 +189,19 @@ def _merge_basin_intervals(intervals, values, band):
     return [tuple(interval) for interval in merged]
 
 
-def _resolved_exit(values, end, floor, band):
-    """Return the sustained exit kind after a basin, if the curve leaves it."""
-    upper, lower = floor + band * 2.0, floor - band * 2.0
+def _right_hand_median(values, radius):
+    return [_median(values[max(0, index - radius):index + 1]) for index in range(len(values))]
+
+
+def _resolved_exit(values, end, floor, band, sustained_samples):
+    """Return a sustained exit from right-hand robust evidence, never future bleed."""
+    upper, lower = floor + band * 1.5, floor - band * 1.5
     later = values[end + 1:]
-    for index in range(len(later) - 1):
-        if later[index] > upper and later[index + 1] > upper:
+    for index in range(len(later) - sustained_samples + 1):
+        window = later[index:index + sustained_samples]
+        if all(value > upper for value in window):
             return "upward"
-        if later[index] < lower and later[index + 1] < lower:
+        if all(value < lower for value in window):
             return "lower"
     return ""
 
@@ -203,6 +219,9 @@ def detect_loss_basins(points, smoothed_points):
         return []
     values = [float(point["loss"]) for point in smoothed_points]
     band = _noise_band(points, smoothed_points)
+    median_radius, _, typical_samples = _detailed_smoothing_radii(points)
+    right_hand_values = _right_hand_median([float(point["loss"]) for point in points], max(0, median_radius - 1))
+    sustained_samples = max(2, int(round(typical_samples / 4.0)))
     intervals = []
     for index in _local_minima(values):
         start, end = _expand_basin(values, index, band)
@@ -216,7 +235,7 @@ def detect_loss_basins(points, smoothed_points):
     basins = []
     for start, end in _merge_basin_intervals(intervals, values, band):
         floor_index = min(range(start, end + 1), key=lambda item: (values[item], item))
-        exit_kind = _resolved_exit(values, end, values[floor_index], band)
+        exit_kind = _resolved_exit(right_hand_values, end, values[floor_index], band, sustained_samples)
         epochs = [int(point["epoch"]) for point in smoothed_points[start:end + 1]]
         basins.append({"startIndex": start, "endIndex": end, "startEpoch": min(epochs), "endEpoch": max(epochs), "representativeEpoch": _representative_epoch(smoothed_points, start, end), "confirmed": bool(exit_kind), "exitKind": exit_kind, "floor": values[floor_index]})
     return basins

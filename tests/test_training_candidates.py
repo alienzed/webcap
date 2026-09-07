@@ -91,9 +91,10 @@ def test_detailed_smoother_rejects_isolated_upward_and_downward_raw_spikes():
 def test_basin_exit_supports_upward_and_later_lower_regimes_without_selecting_the_tail():
     upward = _mapped_points([1.0, .9, .7, .5, .5, .5, .5, .7, .9])
     lower = _mapped_points([1.0, .9, .7, .5, .5, .5, .5, .3, .3, .3, .3])
-    assert training_candidates._resolved_exit([point["loss"] for point in upward], 6, .5, .05) == "upward"
-    assert training_candidates._resolved_exit([point["loss"] for point in lower], 6, .5, .05) == "lower"
+    up_basins = training_candidates.detect_loss_basins(upward, upward)
+    assert any(basin["confirmed"] and basin["exitKind"] == "upward" for basin in up_basins), up_basins
     lower_basins = training_candidates.detect_loss_basins(lower, lower)
+    assert any(basin["confirmed"] and basin["exitKind"] == "lower" for basin in lower_basins)
     assert not lower_basins or lower_basins[-1]["confirmed"] is False
 
 
@@ -112,6 +113,20 @@ def test_unresolved_final_descent_or_plateau_is_not_a_candidate():
     plateau = _mapped_points([1.0, .9, .7, .5, .5, .5, .5])
     assert not [basin for basin in training_candidates.detect_loss_basins(descent, descent) if basin["confirmed"]]
     assert not [basin for basin in training_candidates.detect_loss_basins(plateau, plateau) if basin["confirmed"]]
+
+
+def test_real_epoch_loss_region_keeps_earlier_basin_after_a_later_lower_regime():
+    values = [
+        .152046, .159221, .160112, .160943, .164999, .153819, .146868,
+        .169877, .182762, .173788,
+        .151289, .155444, .160209, .158670, .158595, .151187, .155247,
+    ]
+    epochs = list(range(34, 51))
+    detailed = [{"axis": epoch, "loss": loss, "wallTime": float(epoch), "order": index} for index, (epoch, loss) in enumerate(zip(epochs, values))]
+    epoch_boundaries = [{"axis": epoch, "loss": loss, "wallTime": float(epoch), "order": index} for index, (epoch, loss) in enumerate(zip(epochs, values))]
+    analysis = training_candidates.analyze_loss_points(detailed, epoch_boundaries)
+    assert any(candidate["endEpoch"] <= 43 for candidate in analysis["candidates"])
+    assert analysis["analysisVersion"] == 2
 
 
 def test_artifact_status_is_separate_and_read_only(tmp_path):

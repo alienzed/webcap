@@ -824,6 +824,21 @@
                         </footer>
                     </section>
                 </div>
+                <div id="training-candidates-modal" class="training-candidates-modal hidden" aria-hidden="true">
+                    <section class="training-candidates-dialog" role="dialog" aria-modal="true" aria-labelledby="training-candidates-modal-title">
+                        <header class="training-candidates-modal-header">
+                            <div>
+                                <h2 id="training-candidates-modal-title">LoRA Candidates</h2>
+                                <p id="training-candidates-modal-summary">Read-only loss-curve analysis.</p>
+                            </div>
+                            <div class="training-candidates-modal-actions">
+                                <button id="training-candidates-refresh" type="button" class="review-captions-btn">Refresh</button>
+                                <button id="training-candidates-modal-close" type="button" class="training-review-modal-close" aria-label="Close candidate analysis">&times;</button>
+                            </div>
+                        </header>
+                        <div id="training-candidates-modal-content" class="training-candidates-modal-content"></div>
+                    </section>
+                </div>
             </div>
         </div>
         <div id="media-grid-viewer-modal" class="media-grid-viewer-modal hidden" aria-hidden="true">
@@ -1298,6 +1313,7 @@
         <script src="/static/js/training_review.js"></script>
         <script src="/static/js/training_runner_ui.js"></script>
         <script src="/static/js/training_history_ui.js"></script>
+        <script src="/static/js/training_candidates.js"></script>
         <script src="/static/js/training_workspace.js"></script>
         <script src="/static/js/workspace_shell.js"></script>
         <script src="/static/js/main.js"></script>

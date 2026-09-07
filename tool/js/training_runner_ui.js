@@ -1041,8 +1041,12 @@ function renderTrainingRunner() {
   var finishScheduleButton = canScheduleFinish
     ? '<button type="button" class="training-runner-output-action training-runner-finish-schedule' + (isFinite(finishAfterEpoch) && finishAfterEpoch > 0 ? ' is-armed' : '') + '" data-training-finish-schedule="' + escapeHtml(job.id || '') + '" title="' + escapeHtml(finishScheduleTitle) + '" aria-label="' + escapeHtml(finishScheduleTitle) + '">&#9201;' + (isFinite(finishAfterEpoch) && finishAfterEpoch > 0 ? '<span>' + Math.round(finishAfterEpoch) + '</span>' : '') + '</button>'
     : '';
-  var rowActions = finishScheduleButton || trainingOutputIdentity(job) || job.actionPath
+  var candidateButton = runOutputPath
+    ? '<button type="button" class="training-runner-output-action" data-training-candidates="' + escapeHtml(job.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>'
+    : '';
+  var rowActions = finishScheduleButton || candidateButton || trainingOutputIdentity(job) || job.actionPath
     ? '<span class="training-runner-row-actions">' + finishScheduleButton +
+      candidateButton +
       (trainingOutputIdentity(job) ? '<button type="button" class="training-runner-output-action" data-training-job-output="' + escapeHtml(job.id || '') + '" title="Open ' + (runOutputPath ? 'run output: ' + escapeHtml(runOutputPath) : 'output root: ' + escapeHtml(job.effectiveOutputDir || job.outputRoot || '')) + '" aria-label="Open training output folder">&#128193;</button>' : '') +
       (job.actionPath ? '<button type="button" class="training-runner-output-action" data-training-job-action="' + escapeHtml(job.id || '') + '" title="Open action folder" aria-label="Open action folder">&#128451;</button>' : '') +
       '</span>'

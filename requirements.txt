@@ -5,3 +5,4 @@ deface
 mediapipe==0.10.35
 rembg
 onnxruntime
+tensorboard>=2.21,<3

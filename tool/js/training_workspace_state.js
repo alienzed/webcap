@@ -60,6 +60,12 @@ var trainingWorkspaceState = {
   reviewAspect: '',
   reviewImpactScope: 'aspect',
   reviewInspectedSource: null,
+  candidateModalOpen: false,
+  candidateJobId: '',
+  candidateFolder: '',
+  candidatePayload: null,
+  candidatePending: false,
+  candidateRequestVersion: 0,
   runSetupFolder: ''
 };
 var utilityTrainingTurtleTimer = 0;

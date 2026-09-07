@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Last reviewed against code: 2026-08-30
+Last reviewed against code: 2026-09-06
 
 This folder mixes three different kinds of documents:
 
@@ -57,6 +57,8 @@ These are useful product notes, not authoritative implementation references:
 - `docs/video_clip.md`
 - `docs/vram_bucket_calibration.md` - implemented H3 shape calibration, persistent result reuse, Training Settings controls, and calibrated bucket margins
 - `docs/stable_set_training_layout_plan.md` - approved set-root/logical-run layout and Resume implementation record
+- `docs/webcap-lora-valley-candidate-detection.md` - retrospective TensorBoard valley selection and staged LoRA candidates
+- `docs/high_confidence_analysis_scanner.md` - future confirmed-signal scanner boundaries and evidence rules
 - `wildcard_template.md` - parked wildcard-template-builder concept
 
 ## Historical / Superseded

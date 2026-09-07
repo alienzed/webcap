@@ -51,6 +51,7 @@ from .training_runtime import (
     uses_native_wsl_shell as _uses_native_wsl_shell,
     wsl_executable as _wsl_executable,
 )
+from .training_candidates import analyze_run_directory as _analyze_run_directory
 
 
 RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
@@ -154,6 +155,22 @@ def _read_state():
     _state_job_ids(parsed, path)
     _persisted_managed_job_ids = _managed_job_ids(parsed)
     _state_file_seen = path
+    return parsed
+
+
+def _read_state_readonly():
+    """Read queue state without creating the runtime directory or changing globals."""
+    path = _state_path()
+    if not path.exists():
+        return _default_state()
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise TrainingStateError("Could not read the existing training queue state: " + str(path)) from exc
+    if not isinstance(parsed, dict) or parsed.get("version") not in (3, 4):
+        raise TrainingStateError("Existing training queue state is invalid: " + str(path))
+    parsed.setdefault("jobs", [])
+    _state_job_ids(parsed, path)
     return parsed
 
 
@@ -366,6 +383,51 @@ def history_metrics_response(folder, job_id):
         "ok": True,
         "metrics": {"activeTrainingSeconds": round(metrics) if metrics is not None else None},
     }, 200
+
+
+def candidate_analysis_response(folder, job_id):
+    """Analyze one recorded run without accepting a client filesystem path."""
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    wanted = str(job_id or "").strip()
+    if not folder_text or not wanted:
+        return {"ok": False, "error": "Folder and job ID are required."}, 400
+    with _lock:
+        try:
+            app_config.safe_join_fs_root(folder_text)
+            state = _read_state_readonly()
+        except (TrainingStateError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}, 400
+        job = _find_job(state, wanted)
+        if job and str(job.get("folder") or "").strip().replace("\\", "/").strip("/") != folder_text:
+            job = None
+        if not job:
+            job = _find_history_job(folder_text, wanted)
+        if not job:
+            return {"ok": False, "error": "Training job not found."}, 404
+        raw_run_path = str(job.get("outputRunPath") or "").strip()
+        if not raw_run_path:
+            return {"ok": False, "error": "This training job has no recorded run directory yet."}, 409
+        try:
+            run_dir = host_path_for_training_path(raw_run_path)
+            if not run_dir.is_dir():
+                raise FileNotFoundError("Recorded training run directory is unavailable.")
+            analysis = _analyze_run_directory(run_dir)
+        except (OSError, RuntimeError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}, 422
+        progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+        return {
+            "ok": True,
+            "run": {
+                "id": str(job.get("id") or ""),
+                "folder": folder_text,
+                "runName": str(job.get("runName") or ""),
+                "stage": str(job.get("stage") or job.get("stages") or ""),
+                "status": str(job.get("status") or "unknown"),
+                "currentEpoch": progress.get("epoch"),
+                "plannedEpochs": progress.get("epochs"),
+            },
+            "analysis": analysis,
+        }, 200
 
 
 def _start_active_training_session(job, started_at=None):

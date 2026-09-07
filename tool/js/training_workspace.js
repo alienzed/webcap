@@ -656,6 +656,11 @@ function wireTrainingWorkspace() {
       scheduleManagedTrainingFinish(finishScheduleButton.getAttribute('data-training-finish-schedule'));
       return;
     }
+    var candidateButton = event.target.closest('[data-training-candidates]');
+    if (candidateButton) {
+      openTrainingCandidates(getTrainingRunnerJobById(candidateButton.getAttribute('data-training-candidates')));
+      return;
+    }
     var outputId = event.target.getAttribute('data-training-job-output');
     if (outputId) openTrainingJobOutput(outputId);
     var actionId = event.target.getAttribute('data-training-job-action');
@@ -683,6 +688,11 @@ function wireTrainingWorkspace() {
     var outputId = event.target.getAttribute('data-training-job-output');
     if (outputId) {
       openTrainingJobOutput(outputId);
+      return;
+    }
+    var candidateButton = event.target.closest('[data-training-candidates]');
+    if (candidateButton) {
+      openTrainingCandidates(getTrainingRunnerJobById(candidateButton.getAttribute('data-training-candidates')));
       return;
     }
     var actionId = event.target.getAttribute('data-training-job-action');
@@ -730,10 +740,15 @@ function wireTrainingWorkspace() {
       historyMoreMenu.removeAttribute('open');
     }
     var logId = event.target.getAttribute('data-training-history-log');
+    var candidateId = event.target.getAttribute('data-training-history-candidates');
     var outputJobId = event.target.getAttribute('data-training-history-output');
     var runJobId = event.target.getAttribute('data-training-history-run');
     var actionJobId = event.target.getAttribute('data-training-history-action');
     var clearId = event.target.getAttribute('data-training-history-clear');
+    if (candidateId) {
+      openTrainingCandidates(getTrainingRunnerJobById(candidateId));
+      return;
+    }
     if (outputJobId) {
       var outputJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === outputJobId; })[0];
       openTrainingHistoryOutput(outputJob && outputJob.folder, outputJobId);

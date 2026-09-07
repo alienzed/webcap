@@ -43,3 +43,14 @@ When enabled, the materializer would use the selected model's native training FP
 - If a video already matches the target FPS, retain the normal cheap materialization path instead of transcoding it.
 - Make the extra preparation cost explicit: large sets, especially hundreds of videos, may take substantially longer to materialize.
 - Do not add derivative caching or reuse yet; revisit only if conversion cost proves to be a real workflow problem.
+
+## Future: LoRA-type-aware overrides
+
+The selected model profile and its default TOMLs remain the canonical baseline. A future LoRA type—such as identity, clothing/object, style, motion/action, or general concept—may apply a small explicit override map only where that type has a deliberate, reviewed difference.
+
+- Do not fork complete TOMLs or duplicate whole profile configurations.
+- Preserve every baseline value unless a named override is justified for that LoRA type.
+- Keep the override set visible in the captured run evidence.
+- Scanner and dataset expectations may use the same declared type only for narrow, evidence-based rules.
+
+The type is not a generic optimizer or dataset-tuning surface.

@@ -1,5 +1,5 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-09-03.
+Last reviewed: 2026-09-06.
 
 > Training note: [Training Stabilization](training_stabilization.md) is the current authority for training behavior and deployment. Older profile, immutable-bundle, transcoding, preflight, recovery, and automatic-permission notes below are historical only where they conflict.
 
@@ -49,6 +49,7 @@ No further persistence implementation is planned unless verification exposes a r
 - Broader permission-repair changes. The current automatic full-training-root `chmod -R` is too broad to expand, but it is not a direct deletion/truncation path for set state.
 
 ## Backlog (Do Not Implement Yet)
+- Before revisiting storage management, inspect the removed `docs/training_artifact_cleanup.md` in commit `40dbd16` and its action-directory layout. Do not reinvent it or introduce automatic deletion without a new, explicit retention/recovery design.
 - Optional model-native video FPS normalization during training capture/materialization: an advanced, default-off per-run option that converts only isolated capture media to Wan 16 fps or MiniMax H3 24 fps while preserving duration and audio. Keep reusable set-folder media model-neutral; see `training_profiles.md`.
 - Sometimes I want to bump the running training, test/start another, right now I have to Pause, reorder the queue and Resume, which is fine, but in this case what would be cool would be to like, with one button, swap the running process with the one below it. Is this a diminishing returns kind of feature where I just accept Pause, wait, reorder, resume? maybe just the reorder button for the first queued item gets enabled and triggers that swap?
 - Background captured-run preparation before training. A Train request should persist an immutable preparation intent immediately, then show a distinct `preparing` queue state while a single, low-priority background worker builds the captured bundle (metadata scan, copy/transcode, captions, configs, manifests). Preparation must not claim the active GPU-training slot or block normal UI/API operations, but it should be serialized by default to avoid competing disk/CPU/WSL I/O with interactive work. Snapshot the selected files, fallback captions, config/model/stage, and source fingerprints at submission; fail visibly if source inputs change before or during capture rather than creating an ambiguous bundle. Support cancel/reorder/restart reconciliation and clean up incomplete bundle directories; only a fully materialized immutable bundle becomes `queued` and eligible to launch in FIFO order. Expose explicit phase/progress (`scanning`, `copying`, `transcoding`, `writing configs`, `ready`) and preserve a completed bundle exactly as today.

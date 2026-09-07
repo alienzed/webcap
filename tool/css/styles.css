@@ -2606,6 +2606,67 @@ iframe {
 .training-review-modal-content { min-height: 0; overflow: auto; padding: 16px; }
 .training-review-modal-content .training-review { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .training-review-modal-footer { justify-content: flex-end; border-top: 1px solid var(--border-color, #3d4452); }
+.training-candidates-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3300;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(7, 12, 19, .72);
+}
+.training-candidates-modal.hidden { display: none; }
+.training-candidates-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  overflow: hidden;
+  border: 1px solid var(--border-color, #3d4452);
+  border-radius: 10px;
+  background: var(--panel-bg, #20242c);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, .42);
+}
+.training-candidates-modal-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border-color, #3d4452);
+}
+.training-candidates-modal-header h2 { margin: 0; font-size: 16px; }
+.training-candidates-modal-header p { margin: 3px 0 0; color: var(--muted-text, #a3adba); font-size: 12px; }
+.training-candidates-modal-actions { display: flex; align-items: center; gap: 8px; }
+.training-candidates-modal-content { min-height: 0; overflow: auto; padding: 16px; }
+.training-candidates-analysis { display: grid; gap: 16px; }
+.training-candidates-chart-wrap { display: grid; gap: 8px; }
+.training-candidates-chart { display: block; width: 100%; min-height: 280px; overflow: visible; border: 1px solid var(--border-color, #3d4452); border-radius: 8px; background: color-mix(in srgb, var(--panel-bg, #20242c) 86%, #172333); }
+.training-candidates-axis { stroke: rgba(174, 189, 202, .34); stroke-width: 1; }
+.training-candidates-axis-label { fill: var(--muted-text, #a3adba); font-size: 10px; }
+.training-candidates-raw { fill: none; stroke: rgba(152, 178, 198, .5); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.training-candidates-smoothed { fill: none; stroke: var(--accent, #f59e0b); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.training-candidates-basin { fill: rgba(94, 177, 137, .11); }
+.training-candidates-basin.tentative { fill: rgba(217, 164, 65, .09); }
+.training-candidates-marker line { stroke: #62bc8c; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.training-candidates-marker circle { fill: #62bc8c; stroke: var(--panel-bg, #20242c); stroke-width: 2; }
+.training-candidates-marker text { fill: #9ee0b8; font-size: 11px; font-weight: 700; text-anchor: middle; }
+.training-candidates-legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted-text, #a3adba); font-size: 11px; }
+.training-candidates-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.training-candidates-legend i { width: 16px; height: 3px; border-radius: 3px; background: rgba(152, 178, 198, .5); }
+.training-candidates-legend i.smooth { background: var(--accent, #f59e0b); }
+.training-candidates-legend i.basin { height: 10px; background: rgba(94, 177, 137, .3); }
+.training-candidates-list { display: grid; gap: 8px; }
+.training-candidates-list h3 { margin: 0; font-size: 13px; }
+.training-candidates-card { display: grid; grid-template-columns: minmax(90px, auto) minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--border-color, #3d4452); border-radius: 7px; background: color-mix(in srgb, var(--panel-bg, #20242c) 92%, #253144); font-size: 12px; }
+.training-candidates-card span { color: var(--muted-text, #a3adba); }
+.training-candidates-card em { font-style: normal; font-size: 11px; white-space: nowrap; }
+.training-candidates-card em.available { color: #62bc8c; }
+.training-candidates-card em.missing { color: #d9a441; }
+.training-candidates-empty { padding: 26px 16px; color: var(--muted-text, #a3adba); text-align: center; }
+.training-candidates-empty.is-error { color: #c75a5a; }
 .training-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); align-items: start; gap: 14px; }
 .training-review-workbench { display: grid; gap: 14px; min-width: 0; }
 .training-review-rail { position: sticky; top: 0; display: grid; gap: 10px; }

@@ -1,29 +1,21 @@
 # WebCap: LoRA Candidate Analysis
 
-## Implemented v2
+## Implemented v3
 
-WebCap can inspect a recorded training run on demand from its Candidates action. The modal reads both TensorBoard streams directly from that run:
+Candidates is a manual, read-only inspection of one recorded run. It reads `train/loss` and `train/epoch_loss` directly from TensorBoard. The modal shows raw epoch loss, a robust detailed-loss trend, candidate regions, and saved-artifact status.
 
-- `train/loss` is the detailed analytical signal, smoothed with a centered robust median and light mean whose sub-epoch windows derive from the run's typical detailed samples per completed epoch;
-- `train/epoch_loss` provides the epoch-level raw/trend display and epoch boundaries;
-- only confirmed broad low-loss basins are shaded and marked;
-- one representative epoch for each confirmed basin;
-- whether the corresponding `epochN` directory has one unambiguous `.safetensors` export.
+## Analysis
 
-The curve is always shown when scalar data exists. Candidate detection has no epoch gate, top-N quota, score UI, background worker, polling, cache, or persisted result. Reopening or refreshing the modal recomputes from the run directory.
+`train/epoch_loss` wall times mark completed-epoch boundaries. After latest-wall-time scalar deduplication, each `train/loss` event is assigned to the first completion boundary at or after it. The median of the detailed samples in each completed epoch becomes the robust analytical series; events after the final completion belong to the open next epoch and are not analyzed.
 
-## Detection boundary
+The analytical series receives only a three-epoch centered median. WebCap derives a relative movement scale from its adjacent epoch-to-epoch changes. A settled region is a contiguous group of local minima or locally quiet points whose trend values remain close on that scale. This groups wobble within one shelf, separates a meaningful departure into another regime, and does not require an exit before recommending a region. A current tail is a candidate only when its recent movement is quiet; a continuing descent is not.
 
-The detector is deliberately small and deterministic. Scalar x values are not assumed to be optimizer steps: after latest-wall-time deduplication, detailed events are ordered by wall time and assigned to the first `train/epoch_loss` event at or after them. Events after the last completed epoch belong to the next, open epoch.
-
-Basins are low stable detailed-loss regimes. Their membership has both upper and lower bounds around the local floor, so a sustained lower regime does not become part of the old basin. Overlapping intervals, and directly adjacent intervals from the same regime, are merged before choosing one representative. Confirmation uses right-hand robust detailed-loss evidence rather than a future-bleeding centered trend: a basin confirms only after sustained upward departure or entry into a distinctly lower regime. A later lower confirmed regime supersedes an older lower-exit shelf. A steadily descending or unresolved final tail remains visible but is not promoted.
-
-The representative is the epoch with the lowest median detailed smoothed loss within that basin. Curve selection is independent of file availability: missing or ambiguous exports are reported and never substituted.
+One candidate is selected per region: the epoch with the lowest robust detailed-loss median, with epoch number breaking an exact tie. Artifact availability never changes that mathematical choice.
 
 ## Read-only guarantee
 
-Candidate analysis never copies, moves, deletes, stages, renames, caches, or writes run artifacts, manifests, settings, checkpoints, or TensorBoard data. The server resolves the run from WebCap's recorded `folder` and `jobId`; the browser never supplies a filesystem path. It holds the runner lock only long enough to validate and copy recorded job metadata; TensorBoard parsing happens after release.
+Analysis never writes, copies, moves, stages, renames, caches, or deletes run files. The server resolves the run only from its recorded `folder` and `jobId`; TensorBoard parsing occurs after the runner lock is released.
 
 ## Future work
 
-Candidate testing may later gain its own explicit copy action. It must copy, never move, the selected `.safetensors` files into a configured test location. Controlled ComfyUI comparison remains separate future work: a fixed workflow, seed, prompt, and strength with only the candidate LoRA changing.
+Candidate testing may later gain an explicit copy action. It must copy, never move, selected `.safetensors` files to a configured test location. Controlled ComfyUI comparison remains separate future work.

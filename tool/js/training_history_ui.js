@@ -95,7 +95,11 @@ function renderTrainingHistory() {
     var modelLabel = trainingModelLabel(job);
     if (job.model && typeof job.model === 'object') job.model.label = modelLabel;
     else job.modelLabel = modelLabel;
+    var epoch = Number(progress.epoch);
+    var epochs = Number(progress.epochs);
     var finalStep = Number(progress.step);
+    var plannedSteps = Number(progress.plannedSteps);
+    var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
     var hasStarted = Number(job.startedAt || 0) > 0;
     var hasFinished = Number(job.finishedAt || 0) > 0;
     var details = [];
@@ -103,7 +107,8 @@ function renderTrainingHistory() {
     var timingError = hasFinished && !hasStarted ? 'Timing invariant error: terminal job has no start time.' : '';
     var timestamp = job.finishedAt || job.startedAt || job.createdAt;
     var timestampKind = trainingHistoryTimestampKind(job);
-    if (isFinite(finalStep) && finalStep >= 0) details.push('Final step ' + Math.round(finalStep).toLocaleString());
+    if (isFinite(epoch) && epoch >= 0) details.push('Epoch ' + Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : ''));
+    if (isFinite(finalStep) && finalStep >= 0) details.push('Step ' + Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : ''));
     if (activeTime) details.push('Active ' + activeTime);
     var resumePath = String(job.outputRunPath || job.resumeCheckpoint || '');
     var resumeStage = String(job.resumeStage || job.stages || '');
@@ -115,10 +120,6 @@ function renderTrainingHistory() {
     var status = String(job.status || 'unknown');
     var detailsOpen = !!trainingWorkspaceState.historyDetailOpen[String(job.id || '')];
     var metricPending = !!trainingWorkspaceState.historyMetricRequests[String(job.id || '')];
-    var epoch = Number(progress.epoch);
-    var epochs = Number(progress.epochs);
-    var plannedSteps = Number(progress.plannedSteps);
-    var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
     var modelSourcePath = String(job.model && job.model.source || '');
     var modelSource = modelSourcePath.split(/[\\/]/).pop();
     var stageLabel = trainingStageLabel(job.stages || '');

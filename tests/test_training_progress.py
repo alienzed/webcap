@@ -110,6 +110,7 @@ def test_runner_progress_uses_epoch_progress_and_a_rolling_step_eta(tmp_path):
         "epoch": 85,
         "epochs": 90,
         "step": 9410,
+        "plannedSteps": 20000,
         "stagePercent": 94.4,
         "overallPercent": 94.4,
         "estimated": False,

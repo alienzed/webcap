@@ -115,8 +115,9 @@ def sync_job_progress(job, log_text):
         "overallPercent": round(overall_fraction * 100, 1),
         "estimated": use_steps,
     }
-    if use_steps:
+    if planned_steps > 0:
         progress["plannedSteps"] = planned_steps
+    if use_steps:
         progress["source"] = "steps"
     else:
         progress["source"] = "epochs"

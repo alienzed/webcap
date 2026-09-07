@@ -39,4 +39,4 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "setTimeout" not in script
     assert "training-candidates-modal" in css
     assert "width: min(95vw, 1800px)" in css
-    assert ".training-candidates-chart text { font-family: inherit; }" in css
+    assert '.training-candidates-chart text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }' in css

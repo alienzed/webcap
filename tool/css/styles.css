@@ -1860,7 +1860,7 @@ iframe {
   }
 }
 
-@media (max-width: 720px) {
+@container (max-width: 720px) {
   .training-run-setup-header {
     display: grid;
   }
@@ -2644,7 +2644,7 @@ iframe {
 .training-candidates-analysis { display: grid; gap: 16px; }
 .training-candidates-chart-wrap { position: relative; display: grid; gap: 8px; }
 .training-candidates-chart { display: block; width: 100%; min-height: 280px; overflow: visible; border: 1px solid var(--border-color, #3d4452); border-radius: 8px; background: color-mix(in srgb, var(--panel-bg, #20242c) 86%, #172333); }
-.training-candidates-chart text { font-family: inherit; }
+.training-candidates-chart text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .training-candidates-axis { stroke: rgba(174, 189, 202, .34); stroke-width: 1; }
 .training-candidates-axis-label { fill: var(--muted-text, #a3adba); font-size: 10px; }
 .training-candidates-raw { fill: none; stroke: rgba(152, 178, 198, .5); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }

@@ -1,6 +1,7 @@
 """Read-only settled-region analysis for one recorded LoRA training run."""
 
 import math
+import re
 import statistics
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from pathlib import Path
 ANALYSIS_VERSION = 3
 DETAILED_LOSS_TAG = "train/loss"
 EPOCH_LOSS_TAG = "train/epoch_loss"
+_EPOCH_DIRECTORY_PATTERN = re.compile(r"^epoch(\d+)$")
 
 
 def _median(values):
@@ -192,6 +194,21 @@ def artifact_for_epoch(run_dir, epoch):
     return {"available": False, "status": "not_saved"}
 
 
+def saved_artifacts_for_run(run_dir):
+    """Describe saved epoch adapters without treating them as candidates."""
+    artifacts = []
+    for directory in sorted(Path(run_dir).iterdir(), key=lambda path: path.name):
+        match = _EPOCH_DIRECTORY_PATTERN.fullmatch(directory.name)
+        if not match or not directory.is_dir() or directory.is_symlink():
+            continue
+        files = sorted(path for path in directory.iterdir() if path.is_file() and path.suffix.lower() == ".safetensors")
+        if len(files) == 1:
+            artifacts.append({"epoch": int(match.group(1)), "fileName": files[0].name, "status": "available"})
+        elif len(files) > 1:
+            artifacts.append({"epoch": int(match.group(1)), "status": "ambiguous"})
+    return sorted(artifacts, key=lambda item: item["epoch"])
+
+
 def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
     """Analyze robust detailed loss by completed epoch; never modify the run."""
     epoch_loss_points = [{"epoch": int(point["axis"]), "loss": float(point["loss"])} for point in sorted(epoch_events, key=lambda point: point["axis"])]
@@ -211,6 +228,7 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
         "analysisPoints": analysis_points,
         "regions": regions,
         "candidates": candidates,
+        "savedArtifacts": saved_artifacts_for_run(run_dir) if run_dir is not None else [],
     }
 
 

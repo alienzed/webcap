@@ -2,6 +2,7 @@ import json
 import sys
 import types
 from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
 
@@ -117,6 +118,29 @@ def test_artifact_status_is_separate_and_read_only(tmp_path):
     assert training_candidates.artifact_for_epoch(run, 5) == {"available": False, "status": "ambiguous"}
 
 
+def test_saved_artifact_enumeration_describes_only_real_epoch_directories(tmp_path, monkeypatch):
+    run = tmp_path / "run"
+    available = run / "epoch11"
+    ambiguous = run / "epoch18"
+    empty = run / "epoch22"
+    available.mkdir(parents=True)
+    ambiguous.mkdir()
+    empty.mkdir()
+    (available / "adapter.safetensors").write_bytes(b"weights")
+    (ambiguous / "one.safetensors").write_bytes(b"weights")
+    (ambiguous / "two.safetensors").write_bytes(b"weights")
+    (run / "epoch-not-a-number").mkdir()
+    symlinked = run / "epoch29"
+    symlinked.mkdir()
+    (symlinked / "ignored.safetensors").write_bytes(b"weights")
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda path: path.name == "epoch29" or original_is_symlink(path))
+    assert training_candidates.saved_artifacts_for_run(run) == [
+        {"epoch": 11, "fileName": "adapter.safetensors", "status": "available"},
+        {"epoch": 18, "status": "ambiguous"},
+    ]
+
+
 def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path, monkeypatch):
     root, folder, run = tmp_path / "root", tmp_path / "root" / "sets" / "subject", tmp_path / "root" / "runs" / "one"
     folder.mkdir(parents=True)
@@ -125,8 +149,20 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     state_path.parent.mkdir()
     state_path.write_text(json.dumps({"version": 3, "activeJobId": "job-1", "jobs": [{"id": "job-1", "folder": "sets/subject", "outputRunPath": str(run), "status": "running", "progress": {"epoch": 12, "epochs": 70}}]}), encoding="utf-8")
     monkeypatch.setattr(app_config, "FS_ROOT", root)
-    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path: {"analysisVersion": 3, "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": []})
+    epoch_directory = run / "epoch12"
+    epoch_directory.mkdir()
+    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path: {"analysisVersion": 3, "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
     before = state_path.read_bytes()
-    response = app_module.app.test_client().get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
+    client = app_module.app.test_client()
+    response = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
     assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 3
+    assert state_path.read_bytes() == before
+    opened = []
+    monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))
+    assert client.post("/fs/training_candidates/open_run", json={"folder": "sets/subject", "jobId": "job-1"}).status_code == 200
+    assert client.post("/fs/training_candidates/open_epoch", json={"folder": "sets/subject", "jobId": "job-1", "epoch": "12"}).status_code == 200
+    assert opened == [run, epoch_directory]
+    assert client.post("/fs/training_candidates/open_epoch", json={"folder": "sets/subject", "jobId": "job-1", "epoch": "../12"}).status_code == 400
+    assert client.post("/fs/training_candidates/open_epoch", json={"folder": "sets/subject", "jobId": "job-1", "epoch": "0"}).status_code == 400
+    assert client.post("/fs/training_candidates/open_epoch", json={"folder": "sets/subject", "jobId": "job-1", "epoch": "99"}).status_code == 422
     assert state_path.read_bytes() == before

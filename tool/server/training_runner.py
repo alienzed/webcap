@@ -385,30 +385,27 @@ def history_metrics_response(folder, job_id):
     }, 200
 
 
-def candidate_analysis_response(folder, job_id):
-    """Analyze one recorded run without accepting a client filesystem path."""
+def _candidate_run_snapshot(folder, job_id):
+    """Copy recorded candidate-run metadata while holding the runner lock briefly."""
     folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
     wanted = str(job_id or "").strip()
     if not folder_text or not wanted:
-        return {"ok": False, "error": "Folder and job ID are required."}, 400
+        raise ValueError("Folder and job ID are required.")
     with _lock:
-        try:
-            app_config.safe_join_fs_root(folder_text)
-            state = _read_state_readonly()
-        except (TrainingStateError, ValueError) as exc:
-            return {"ok": False, "error": str(exc)}, 400
+        app_config.safe_join_fs_root(folder_text)
+        state = _read_state_readonly()
         job = _find_job(state, wanted)
         if job and str(job.get("folder") or "").strip().replace("\\", "/").strip("/") != folder_text:
             job = None
         if not job:
             job = _find_history_job(folder_text, wanted)
         if not job:
-            return {"ok": False, "error": "Training job not found."}, 404
+            raise LookupError("Training job not found.")
         raw_run_path = str(job.get("outputRunPath") or "").strip()
         if not raw_run_path:
-            return {"ok": False, "error": "This training job has no recorded run directory yet."}, 409
+            raise RuntimeError("This training job has no recorded run directory yet.")
         progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
-        run = {
+        return raw_run_path, {
             "id": str(job.get("id") or ""),
             "folder": folder_text,
             "runName": str(job.get("runName") or ""),
@@ -417,6 +414,38 @@ def candidate_analysis_response(folder, job_id):
             "currentEpoch": progress.get("epoch"),
             "plannedEpochs": progress.get("epochs"),
         }
+
+
+def candidate_run_folder_path(folder, job_id):
+    """Resolve an existing recorded run directory without accepting a client path."""
+    raw_run_path, _ = _candidate_run_snapshot(folder, job_id)
+    run_dir = host_path_for_training_path(raw_run_path)
+    if not run_dir.is_dir():
+        raise FileNotFoundError("Recorded training run directory is unavailable.")
+    return run_dir
+
+
+def candidate_epoch_folder_path(folder, job_id, epoch):
+    """Resolve one existing epoch directory beneath the recorded run."""
+    epoch_text = str(epoch or "").strip()
+    if not epoch_text.isdigit() or int(epoch_text) <= 0:
+        raise ValueError("Epoch must be a positive whole number.")
+    directory = candidate_run_folder_path(folder, job_id) / ("epoch" + str(int(epoch_text)))
+    if not directory.is_dir() or directory.is_symlink():
+        raise FileNotFoundError("Saved epoch directory is unavailable.")
+    return directory
+
+
+def candidate_analysis_response(folder, job_id):
+    """Analyze one recorded run without accepting a client filesystem path."""
+    try:
+        raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except RuntimeError as exc:
+        return {"ok": False, "error": str(exc)}, 409
     try:
         run_dir = host_path_for_training_path(raw_run_path)
         if not run_dir.is_dir():

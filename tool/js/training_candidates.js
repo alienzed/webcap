@@ -15,10 +15,11 @@ function trainingCandidatesNumber(value, fallback) {
 }
 
 function trainingCandidatesSvg(data) {
-  var points = data && Array.isArray(data.points) ? data.points : [];
-  var smoothed = data && Array.isArray(data.smoothedPoints) ? data.smoothedPoints : [];
+  var points = data && Array.isArray(data.epochLossPoints) ? data.epochLossPoints : [];
+  var smoothed = data && Array.isArray(data.epochSmoothedPoints) ? data.epochSmoothedPoints : [];
+  var detailed = data && Array.isArray(data.detailedSmoothedPoints) ? data.detailedSmoothedPoints : [];
   if (!points.length) return '<div class="training-candidates-empty">No epoch-loss points are available.</div>';
-  var allLosses = points.concat(smoothed).map(function (point) { return trainingCandidatesNumber(point.loss, 0); });
+  var allLosses = points.concat(smoothed, detailed).map(function (point) { return trainingCandidatesNumber(point.loss, 0); });
   var minEpoch = Math.min.apply(Math, points.map(function (point) { return trainingCandidatesNumber(point.epoch, 0); }));
   var maxEpoch = Math.max.apply(Math, points.map(function (point) { return trainingCandidatesNumber(point.epoch, 0); }));
   var minLoss = Math.min.apply(Math, allLosses);
@@ -37,14 +38,14 @@ function trainingCandidatesSvg(data) {
     return series.map(function (point) { return x(point.epoch).toFixed(2) + ',' + y(point.loss).toFixed(2); }).join(' ');
   }
   var basins = Array.isArray(data.basins) ? data.basins : [];
-  var basinRects = basins.map(function (basin) {
+  var basinRects = basins.filter(function (basin) { return basin.confirmed; }).map(function (basin) {
     var left = x(basin.startEpoch);
     var right = x(basin.endEpoch);
-    return '<rect class="training-candidates-basin ' + (basin.confirmed ? 'confirmed' : 'tentative') + '" x="' + left.toFixed(2) + '" y="20" width="' + Math.max(4, right - left).toFixed(2) + '" height="250"></rect>';
+    return '<rect class="training-candidates-basin confirmed" x="' + left.toFixed(2) + '" y="20" width="' + Math.max(4, right - left).toFixed(2) + '" height="250"></rect>';
   }).join('');
   var candidates = Array.isArray(data.candidates) ? data.candidates : [];
   var markers = candidates.map(function (candidate) {
-    var point = smoothed.filter(function (item) { return Number(item.epoch) === Number(candidate.epoch); })[0] || points.filter(function (item) { return Number(item.epoch) === Number(candidate.epoch); })[0];
+    var point = detailed.filter(function (item) { return Number(item.epoch) === Number(candidate.epoch); })[0] || smoothed.filter(function (item) { return Number(item.epoch) === Number(candidate.epoch); })[0] || points.filter(function (item) { return Number(item.epoch) === Number(candidate.epoch); })[0];
     if (!point) return '';
     return '<g class="training-candidates-marker"><line x1="' + x(candidate.epoch).toFixed(2) + '" y1="20" x2="' + x(candidate.epoch).toFixed(2) + '" y2="270"></line><circle cx="' + x(candidate.epoch).toFixed(2) + '" cy="' + y(point.loss).toFixed(2) + '" r="5"></circle><text x="' + x(candidate.epoch).toFixed(2) + '" y="14">' + escapeHtml(String(candidate.epoch)) + '</text></g>';
   }).join('');
@@ -53,10 +54,11 @@ function trainingCandidatesSvg(data) {
     basinRects +
     '<polyline class="training-candidates-raw" points="' + polyline(points) + '"></polyline>' +
     '<polyline class="training-candidates-smoothed" points="' + polyline(smoothed) + '"></polyline>' +
+    (detailed.length ? '<polyline class="training-candidates-detailed" points="' + polyline(detailed) + '"></polyline>' : '') +
     markers +
     '<text class="training-candidates-axis-label" x="46" y="289">epoch ' + escapeHtml(String(minEpoch)) + '</text><text class="training-candidates-axis-label" x="960" y="289" text-anchor="end">epoch ' + escapeHtml(String(maxEpoch)) + '</text>' +
     '<text class="training-candidates-axis-label" x="40" y="25" text-anchor="end">' + escapeHtml(maxLoss.toFixed(4)) + '</text><text class="training-candidates-axis-label" x="40" y="270" text-anchor="end">' + escapeHtml(minLoss.toFixed(4)) + '</text>' +
-    '</svg><div class="training-candidates-legend"><span><i class="raw"></i>Epoch loss</span><span><i class="smooth"></i>Smoothed</span><span><i class="basin"></i>Valley</span></div></div>';
+    '</svg><div class="training-candidates-legend"><span><i class="raw"></i>Epoch average</span><span><i class="smooth"></i>Epoch trend</span><span><i class="detailed"></i>Detailed trend</span><span><i class="basin"></i>Confirmed valley</span></div></div>';
 }
 
 function trainingCandidatesArtifactLabel(artifact) {
@@ -100,7 +102,7 @@ function refreshTrainingCandidates() {
       trainingWorkspaceState.candidatePayload = payload;
       var run = payload.run || {};
       var analysis = payload.analysis || {};
-      var points = Array.isArray(analysis.points) ? analysis.points : [];
+      var points = Array.isArray(analysis.epochLossPoints) ? analysis.epochLossPoints : [];
       var pointCount = points.length;
       var epochRange = pointCount ? 'epochs ' + points[0].epoch + (pointCount > 1 ? '–' + points[pointCount - 1].epoch : '') : '';
       var summary = trainingCandidatesElements().summary;

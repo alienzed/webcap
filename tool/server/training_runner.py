@@ -407,27 +407,24 @@ def candidate_analysis_response(folder, job_id):
         raw_run_path = str(job.get("outputRunPath") or "").strip()
         if not raw_run_path:
             return {"ok": False, "error": "This training job has no recorded run directory yet."}, 409
-        try:
-            run_dir = host_path_for_training_path(raw_run_path)
-            if not run_dir.is_dir():
-                raise FileNotFoundError("Recorded training run directory is unavailable.")
-            analysis = _analyze_run_directory(run_dir)
-        except (OSError, RuntimeError, ValueError) as exc:
-            return {"ok": False, "error": str(exc)}, 422
         progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
-        return {
-            "ok": True,
-            "run": {
-                "id": str(job.get("id") or ""),
-                "folder": folder_text,
-                "runName": str(job.get("runName") or ""),
-                "stage": str(job.get("stage") or job.get("stages") or ""),
-                "status": str(job.get("status") or "unknown"),
-                "currentEpoch": progress.get("epoch"),
-                "plannedEpochs": progress.get("epochs"),
-            },
-            "analysis": analysis,
-        }, 200
+        run = {
+            "id": str(job.get("id") or ""),
+            "folder": folder_text,
+            "runName": str(job.get("runName") or ""),
+            "stage": str(job.get("stage") or job.get("stages") or ""),
+            "status": str(job.get("status") or "unknown"),
+            "currentEpoch": progress.get("epoch"),
+            "plannedEpochs": progress.get("epochs"),
+        }
+    try:
+        run_dir = host_path_for_training_path(raw_run_path)
+        if not run_dir.is_dir():
+            raise FileNotFoundError("Recorded training run directory is unavailable.")
+        analysis = _analyze_run_directory(run_dir)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    return {"ok": True, "run": run, "analysis": analysis}, 200
 
 
 def _start_active_training_session(job, started_at=None):

@@ -218,8 +218,19 @@ def detect_loss_basins(points, smoothed_points):
         floor_index = min(range(start, end + 1), key=lambda item: (values[item], item))
         exit_kind = _resolved_exit(values, end, values[floor_index], band)
         epochs = [int(point["epoch"]) for point in smoothed_points[start:end + 1]]
-        basins.append({"startIndex": start, "endIndex": end, "startEpoch": min(epochs), "endEpoch": max(epochs), "representativeEpoch": _representative_epoch(smoothed_points, start, end), "confirmed": bool(exit_kind), "exitKind": exit_kind})
+        basins.append({"startIndex": start, "endIndex": end, "startEpoch": min(epochs), "endEpoch": max(epochs), "representativeEpoch": _representative_epoch(smoothed_points, start, end), "confirmed": bool(exit_kind), "exitKind": exit_kind, "floor": values[floor_index]})
     return basins
+
+
+def _discard_dominated_lower_basins(basins):
+    """A later, lower confirmed regime supersedes earlier lower-exit shelves."""
+    retained = []
+    for index, basin in enumerate(basins):
+        later_lower = any(later["confirmed"] and later["floor"] < basin["floor"] and later["startIndex"] > basin["endIndex"] for later in basins[index + 1:])
+        if basin["exitKind"] == "lower" and later_lower:
+            continue
+        retained.append(basin)
+    return retained
 
 
 def artifact_for_epoch(run_dir, epoch):
@@ -240,8 +251,8 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
     detailed_loss = map_detailed_loss_to_epochs(detailed_events, epoch_events)
     epoch_smoothed = smooth_epoch_loss_points(epoch_loss)
     detailed_smoothed = smooth_detailed_loss_points(detailed_loss)
-    raw_basins = detect_loss_basins(detailed_loss, detailed_smoothed)
-    basins = [{key: value for key, value in basin.items() if key not in {"startIndex", "endIndex", "exitKind"}} for basin in raw_basins]
+    raw_basins = _discard_dominated_lower_basins(detect_loss_basins(detailed_loss, detailed_smoothed))
+    basins = [{key: value for key, value in basin.items() if key not in {"startIndex", "endIndex", "exitKind", "floor"}} for basin in raw_basins]
     candidates = []
     for basin, raw_basin in zip(basins, raw_basins):
         if basin["confirmed"]:

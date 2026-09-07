@@ -25,6 +25,10 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "/fs/training_candidates?folder=" in script
     assert "training-candidates-raw" in script
     assert "training-candidates-smoothed" in script
+    assert "training-candidates-detailed" in script
     assert "training-candidates-basin" in script
+    assert "filter(function (basin) { return basin.confirmed; })" in script
+    assert "detailedSmoothedPoints" in script
+    assert "epochLossPoints" in script
     assert "setTimeout" not in script
     assert "training-candidates-modal" in css

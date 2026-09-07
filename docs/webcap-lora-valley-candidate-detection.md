@@ -1,11 +1,12 @@
 # WebCap: LoRA Candidate Analysis
 
-## Implemented v1
+## Implemented v2
 
-WebCap can inspect a recorded training run on demand from its Candidates action. The modal reads `train/epoch_loss` directly from that run's TensorBoard event files and shows:
+WebCap can inspect a recorded training run on demand from its Candidates action. The modal reads both TensorBoard streams directly from that run:
 
-- raw epoch loss and a five-epoch rolling median;
-- broad low-loss basins, with unresolved trailing basins kept tentative;
+- `train/loss` is the detailed analytical signal, smoothed with a centered nine-sample rolling median followed by a five-sample rolling mean;
+- `train/epoch_loss` provides the epoch-level raw/trend display and epoch boundaries;
+- only confirmed broad low-loss basins are shaded and marked;
 - one representative epoch for each confirmed basin;
 - whether the corresponding `epochN` directory has one unambiguous `.safetensors` export.
 
@@ -13,13 +14,15 @@ The curve is always shown when scalar data exists. Candidate detection has no ep
 
 ## Detection boundary
 
-The detector is deliberately small and deterministic. It smooths isolated noise, groups neighbouring minima into a stable basin, requires a basin to be broad, and confirms it only after the curve has clearly exited. A steadily descending final tail is therefore visible but not promoted as a candidate.
+The detector is deliberately small and deterministic. Scalar x values are not assumed to be optimizer steps: after latest-wall-time deduplication, detailed events are ordered by wall time and assigned to the first `train/epoch_loss` event at or after them. Events after the last completed epoch belong to the next, open epoch.
 
-The curve selects the epoch independently of file availability. Missing or ambiguous exports are reported; WebCap does not substitute a different epoch.
+Basins are low stable detailed-loss regimes. Their membership has both upper and lower bounds around the local floor, so a sustained lower regime does not become part of the old basin. Overlapping intervals, and directly adjacent intervals from the same regime, are merged before choosing one representative. A basin confirms only after sustained upward departure or entry into a distinctly lower regime; a later lower confirmed regime supersedes an older lower-exit shelf. A steadily descending or unresolved final tail remains visible but is not promoted.
+
+The representative is the epoch with the lowest median detailed smoothed loss within that basin. Curve selection is independent of file availability: missing or ambiguous exports are reported and never substituted.
 
 ## Read-only guarantee
 
-Candidate analysis never copies, moves, deletes, stages, renames, caches, or writes run artifacts, manifests, settings, checkpoints, or TensorBoard data. The server resolves the run from WebCap's recorded `folder` and `jobId`; the browser never supplies a filesystem path.
+Candidate analysis never copies, moves, deletes, stages, renames, caches, or writes run artifacts, manifests, settings, checkpoints, or TensorBoard data. The server resolves the run from WebCap's recorded `folder` and `jobId`; the browser never supplies a filesystem path. It holds the runner lock only long enough to validate and copy recorded job metadata; TensorBoard parsing happens after release.
 
 ## Future work
 

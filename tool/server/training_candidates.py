@@ -164,19 +164,70 @@ def _region_intervals(trend, anchors, scale):
     return [tuple(interval) for interval in merged if interval[1] - interval[0] + 1 >= 2]
 
 
+def _is_locally_settled(values, scale):
+    """Require a compact, quiet section before treating it as a recovered shelf."""
+    if len(values) < 2 or scale <= 0:
+        return False
+    quiet = scale * 0.75
+    return max(values) - min(values) <= scale and all(
+        abs(values[index] - values[index - 1]) <= quiet for index in range(1, len(values))
+    )
+
+
+def _split_disturbed_interval(trend, start, end, scale):
+    """Split one broad settled interval only around an exceptional recovered excursion."""
+    if scale <= 0 or end - start + 1 < 6:
+        return [(start, end)]
+    values = [float(point["loss"]) for point in trend]
+    threshold = scale * 2.0
+    split = None
+    for disturbance_start in range(start + 2, end - 3 + 1):
+        for disturbance_end in range(disturbance_start + 1, end - 2 + 1):
+            left = values[start:disturbance_start]
+            disturbance = values[disturbance_start:disturbance_end + 1]
+            right = values[disturbance_end + 1:end + 1]
+            if not _is_locally_settled(left, scale) or not _is_locally_settled(right, scale):
+                continue
+            floor, ceiling = min(_median(left), _median(right)), max(_median(left), _median(right))
+            above = all(value >= ceiling + threshold for value in disturbance)
+            below = all(value <= floor - threshold for value in disturbance)
+            if above or below:
+                score = min((value - ceiling) if above else (floor - value) for value in disturbance)
+                candidate = (score, -disturbance_start, -disturbance_end, disturbance_start, disturbance_end)
+                if split is None or candidate > split:
+                    split = candidate
+    if split is None:
+        return [(start, end)]
+    disturbance_start, disturbance_end = split[-2:]
+    return [(start, disturbance_start - 1), (disturbance_end + 1, end)]
+
+
+def _split_disturbed_intervals(trend, intervals, scale):
+    """Post-process settled intervals without changing how their anchors were formed."""
+    return [split for start, end in intervals for split in _split_disturbed_interval(trend, start, end, scale)]
+
+
+def _representative_index(robust_points, trend, start, end):
+    """Choose the low point from the displayed trend, with deterministic raw ties."""
+    return min(
+        range(start, end + 1),
+        key=lambda index: (float(trend[index]["loss"]), float(robust_points[index]["loss"]), int(robust_points[index]["epoch"])),
+    )
+
+
 def detect_settled_regions(robust_points):
     """Group locally low or flat robust epochs into candidate-worthy regions."""
     trend = _centered_median(robust_points)
     scale = _movement_scale(trend)
     intervals = _region_intervals(trend, _settled_anchor_indexes(trend, scale), scale)
+    intervals = _split_disturbed_intervals(trend, intervals, scale)
     regions = []
     for start, end in intervals:
-        values = robust_points[start:end + 1]
-        representative = min(values, key=lambda point: (float(point["loss"]), int(point["epoch"])))
+        representative = _representative_index(robust_points, trend, start, end)
         regions.append({
             "startEpoch": int(robust_points[start]["epoch"]),
             "endEpoch": int(robust_points[end]["epoch"]),
-            "representativeEpoch": int(representative["epoch"]),
+            "representativeEpoch": int(robust_points[representative]["epoch"]),
             "current": end == len(robust_points) - 1,
         })
     return trend, regions

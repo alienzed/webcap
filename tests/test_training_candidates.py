@@ -90,6 +90,42 @@ def test_one_region_groups_small_minima_but_separate_plateaus_remain_separate():
     assert regions[0]["endEpoch"] < regions[1]["startEpoch"]
 
 
+def test_representative_uses_displayed_trend_then_raw_loss_then_earlier_epoch():
+    robust = _robust([.20, .16, .14, .13, .125, .128, .12, .15])
+    trend = training_candidates._centered_median(robust)
+    # The raw low is epoch 7, but its neighbors lift the displayed trend above
+    # epoch 6, whose centered-median value is the lowest plotted point.
+    assert min(robust, key=lambda point: point["loss"])["epoch"] == 7
+    selected = training_candidates._representative_index(robust, trend, 0, len(robust) - 1)
+    assert robust[selected]["epoch"] == 6
+
+    tied_trend = _robust([.4, .1, .1, .4])
+    raw_tie_break = _robust([.4, .15, .12, .4])
+    exact_tie = _robust([.4, .12, .12, .4])
+    assert raw_tie_break[training_candidates._representative_index(raw_tie_break, tied_trend, 0, 3)]["epoch"] == 3
+    assert exact_tie[training_candidates._representative_index(exact_tie, tied_trend, 0, 3)]["epoch"] == 2
+
+
+def test_exceptional_recovered_disturbance_splits_two_settled_regions_independently():
+    trend = _robust([1.000, 1.004, 1.002, 1.050, 1.049, .990, .995, .994])
+    intervals = training_candidates._split_disturbed_interval(trend, 0, len(trend) - 1, .01)
+    assert intervals == [(0, 2), (5, 7)]
+    representatives = [
+        training_candidates._representative_index(trend, trend, start, end)
+        for start, end in intervals
+    ]
+    assert [trend[index]["epoch"] for index in representatives] == [1, 6]
+
+
+def test_small_wobble_or_disturbance_without_settled_recovery_does_not_split():
+    small_wobble = _robust([1.000, 1.004, 1.002, 1.016, 1.015, 1.003, 1.005, 1.004])
+    unresolved_tail = _robust([1.000, 1.004, 1.002, 1.050, 1.049])
+    descending_recovery = _robust([1.000, 1.004, 1.002, 1.050, 1.049, 1.010, .990, .970])
+    assert training_candidates._split_disturbed_interval(small_wobble, 0, len(small_wobble) - 1, .01) == [(0, len(small_wobble) - 1)]
+    assert training_candidates._split_disturbed_interval(unresolved_tail, 0, len(unresolved_tail) - 1, .01) == [(0, len(unresolved_tail) - 1)]
+    assert training_candidates._split_disturbed_interval(descending_recovery, 0, len(descending_recovery) - 1, .01) == [(0, len(descending_recovery) - 1)]
+
+
 def test_real_50_epoch_regression_produces_small_distinct_settled_regions():
     values = [
         .244616, .192672, .201754, .200584, .186273, .194946, .181427, .175269, .184652, .189563,

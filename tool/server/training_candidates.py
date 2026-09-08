@@ -209,7 +209,20 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
     # The legacy startup cutoff belongs only to v1's preserved behavior.
     eligible_points = [point for point in robust_points if point["endStep"] >= MIN_CANDIDATE_STEP] if algorithm == "v1" else robust_points
     eligible_step_points = step_loss_points
-    detector_result = ALGORITHMS[algorithm](eligible_step_points, eligible_points)
+    # Score Scalars was originally written for train/epoch_loss: its x-axis is
+    # the epoch number, while the optimizer end step remains display metadata.
+    detector_points = eligible_step_points
+    if algorithm == "v3":
+        detector_points = [
+            {
+                "step": point["epoch"],
+                "epoch": point["epoch"],
+                "optimizerStep": point["step"],
+                "loss": point["loss"],
+            }
+            for point in epoch_loss_points
+        ]
+    detector_result = ALGORITHMS[algorithm](detector_points, eligible_points)
     regions = detector_result["regions"]
     if algorithm == "v1":
         display_trend = training_candidate_v1_epoch_regions.centered_median(robust_points)

@@ -1,6 +1,7 @@
 import json
 import math
 import sys
+import time
 import types
 from types import SimpleNamespace
 from pathlib import Path
@@ -195,6 +196,39 @@ def test_algorithm_dispatch_is_explicit_and_unknown_algorithms_fail_loudly(monke
     assert seen == ["v1", "v2", "v3", "v4", "v5"]
     with pytest.raises(ValueError, match="Unknown candidate analysis algorithm"):
         training_candidates.analyze_loss_points(detailed, boundaries, algorithm="not-an-algorithm")
+
+
+def test_v3_receives_epoch_loss_on_the_epoch_axis(monkeypatch):
+    detailed, boundaries = _epoch_events([9.0, 8.0, 7.0, 6.0], samples_per_epoch=3)
+    captured = {}
+
+    def detector(points, _checkpoints):
+        captured["points"] = points
+        return {"analysisPoints": [], "regions": []}
+
+    monkeypatch.setitem(training_candidates.ALGORITHMS, "v3", detector)
+    training_candidates.analyze_loss_points(detailed, boundaries, algorithm="v3")
+    assert [(point["step"], point["epoch"], point["loss"]) for point in captured["points"]] == [
+        (1, 1, 9.0), (2, 2, 8.0), (3, 3, 7.0), (4, 4, 6.0),
+    ]
+    assert [point["optimizerStep"] for point in captured["points"]] == [902, 905, 908, 911]
+
+
+@pytest.mark.parametrize("algorithm", ["v1", "v2", "v4", "v5"])
+def test_non_v3_detectors_still_receive_detailed_step_loss_points(monkeypatch, algorithm):
+    detailed, boundaries = _epoch_events([1.0, .8, .7, .69], samples_per_epoch=3)
+    captured = {}
+
+    def detector(points, checkpoints):
+        captured["points"] = points
+        captured["checkpoints"] = checkpoints
+        return {"analysisPoints": [], "regions": []}
+
+    monkeypatch.setitem(training_candidates.ALGORITHMS, algorithm, detector)
+    result = training_candidates.analyze_loss_points(detailed, boundaries, algorithm=algorithm)
+    assert captured["points"] == result["stepLossPoints"]
+    mapped = training_candidates.map_detailed_loss_to_epochs(detailed, boundaries)
+    assert captured["checkpoints"] == training_candidates.aggregate_detailed_loss_by_epoch(mapped, boundaries)
 
 
 def test_v2_artifact_availability_does_not_change_the_mathematical_selection(tmp_path):
@@ -514,7 +548,7 @@ def test_density_invariance_in_physical_step_space(algorithm):
     assert abs(sparse[0]["representativeEpoch"] - dense[0]["representativeEpoch"]) <= 1
 
 
-def test_v3_preserves_the_canonical_raw_score_scalars_formula():
+def test_v3_preserves_the_canonical_epoch_score_scalars_formula():
     points = [{"step": index, "epoch": 1, "loss": loss} for index, loss in enumerate(
         [1.0] * 8 + [.5] * 8
     )]
@@ -546,7 +580,7 @@ def test_v3_preregime_minima_cannot_create_groups():
     assert v3._groups(points, scores, first_step) == []
 
 
-def test_v3_groups_raw_eligible_candidates_by_original_region_distance():
+def test_v3_groups_eligible_epoch_candidates_by_original_region_distance():
     points = [{"step": index * 10, "epoch": 1, "loss": loss} for index, loss in enumerate(
         [1.0, .8, 1.0, .8, 1.0, .8, 1.0, .8, 1.0, .8, 1.0]
     )]
@@ -555,61 +589,106 @@ def test_v3_groups_raw_eligible_candidates_by_original_region_distance():
     assert all(len(group["members"]) <= v3.MAX_PER_REGION for group in groups)
 
 
-def test_v3_maps_ranked_raw_centers_to_webcap_checkpoints():
-    detailed, checkpoints = _curve(shape=lambda step: 1 - .0004 * step + .05 * math.sin(step / 120))
-    regions = v3.detect(detailed, checkpoints)["regions"]
+def test_v3_epoch_spacing_is_independent_of_nonuniform_optimizer_steps():
+    points = []
+    for epoch in range(1, 32):
+        optimizer_step = epoch if epoch <= 10 else 100 + epoch if epoch < 13 else 9000 + epoch
+        loss = .1 if epoch == 10 else .2 if epoch == 13 else .8 + epoch * .01
+        points.append({"step": epoch, "epoch": epoch, "optimizerStep": optimizer_step, "loss": loss})
+    _scores, first_regime_step = v3._score_details(points)
+    candidate_scores = [
+        0 if point["epoch"] not in {10, 13} else .9 if point["epoch"] == 10 else .8
+        for point in points
+    ]
+    groups = v3._groups(points, candidate_scores, first_regime_step)
+    assert first_regime_step == 8
+    assert len(groups) == 1
+    assert [member["epoch"] for member in groups[0]["members"]] == [10, 13]
+
+
+def test_v3_maps_ranked_epoch_centers_to_webcap_checkpoints():
+    losses = [1.0] * 8 + [.5] * 8
+    checkpoints = _robust(losses, step_stride=137)
+    epoch_loss = [{"step": point["epoch"], "epoch": point["epoch"], "optimizerStep": point["endStep"], "loss": point["loss"]} for point in checkpoints]
+    result = v3.detect(epoch_loss, checkpoints)
+    regions = result["regions"]
     assert 1 <= len(regions) <= v3.MAX_REGIONS
     assert all(region["kind"] == "ranked_score_region" for region in regions)
     assert all(region["representativeEpoch"] in {point["epoch"] for point in checkpoints} for region in regions)
+    assert [point["step"] for point in result["analysisPoints"]] == [point["endStep"] for point in checkpoints]
 
 
-def test_v5_seed_expands_a_physical_flat_zone_past_150_steps():
-    def shape(step):
-        return 1 - step * .001 if step < 400 else .6
-    regions = v5.detect(*_curve(shape=shape, end=1200))["regions"]
+def test_v5_returns_the_fixed_ema_it_analyzes():
+    points = [
+        {"step": 0, "epoch": 1, "loss": 1.0},
+        {"step": 1, "epoch": 1, "loss": .5},
+        {"step": 2, "epoch": 1, "loss": .5},
+    ]
+    checkpoints = [{"epoch": 1, "startStep": 0, "endStep": 2, "step": 2, "loss": .5}]
+    analysis = v5.detect(points, checkpoints)["analysisPoints"]
+    assert [point["loss"] for point in analysis] == pytest.approx([1.0, .99, .9802])
+
+
+def test_v5_isolated_raw_spike_does_not_split_a_stable_ema_regime():
+    points, checkpoints = _curve(shape=lambda _step: .6, end=1200)
+    points[500]["loss"] += .05
+    regions = v5.detect(points, checkpoints)["regions"]
     assert len(regions) == 1
-    assert regions[0]["startStep"] >= 380
-    assert regions[0]["endStep"] - regions[0]["startStep"] >= 150
+    assert regions[0]["startStep"] == 0 and regions[0]["endStep"] == points[-1]["step"]
 
 
-def test_v5_rejects_short_stable_patch_and_steep_continuous_descent():
+def test_v5_sustained_ema_departure_closes_the_first_floor_and_starts_a_new_one():
+    def shape(step):
+        if step < 500:
+            return .6
+        if step < 750:
+            return .6 - (step - 500) * .001
+        return .35
+
+    regions = v5.detect(*_curve(shape=shape, end=1500))["regions"]
+    assert len(regions) == 2
+    assert regions[0]["endStep"] < 500
+    assert regions[1]["startStep"] > 750
+    assert all(region["endStep"] < 500 or region["startStep"] >= 750 for region in regions)
+
+
+def test_v5_rejects_continuous_descent_and_short_flat_patch():
     def short_patch(step):
         if step < 400:
             return 1 - step * .001
-        if step < 525:
+        if step < 480:
             return .6
-        return .6 - (step - 525) * .002
-    assert v5.detect(*_curve(shape=short_patch, end=1200))["regions"] == []
+        return .6 - (step - 480) * .001
+
     assert v5.detect(*_curve(shape=lambda step: 2 - step * .001, end=1200))["regions"] == []
+    assert v5.detect(*_curve(shape=short_patch, end=1200))["regions"] == []
 
 
-def test_v5_accepts_gentle_downward_and_prefers_early_gentle_upward_checkpoint():
-    downward = v5.detect(*_curve(shape=lambda step: .8 - step * .00002, end=1200))["regions"]
-    upward = v5.detect(*_curve(shape=lambda step: .5 + step * .00002, end=1200))["regions"]
-    assert len(downward) == 1
-    assert len(upward) == 1
-    assert upward[0]["representativeEpoch"] == 1
+def test_v5_accepts_long_flat_and_gentle_downward_ema_regimes():
+    flat = v5.detect(*_curve(shape=lambda _step: .6, end=1200))["regions"]
+    gentle_down = v5.detect(*_curve(shape=lambda step: .8 - step * .00002, end=1200))["regions"]
+    assert len(flat) == len(gentle_down) == 1
+    assert flat[0]["endStep"] - flat[0]["startStep"] >= 100
+    assert gentle_down[0]["endStep"] - gentle_down[0]["startStep"] >= 100
 
 
-def test_v5_keeps_disturbed_stable_zones_separate_and_step_density_invariant():
-    def shape(step):
-        if step < 400:
-            return 1 - step * .001
-        if step < 800:
-            return .6
-        if step < 1000:
-            return .6 - (step - 800) * .002
-        return .2
-    dense = v5.detect(*_curve(shape=shape, end=1800))["regions"]
-    spacing_three = v5.detect(*_curve(spacing=3, shape=shape, end=1800))["regions"]
-    spacing_seven = v5.detect(*_curve(spacing=7, shape=shape, end=1800))["regions"]
-    assert len(dense) == len(spacing_three) == len(spacing_seven) == 2
-    assert dense[0]["endStep"] < dense[1]["startStep"]
-    for sampled in (spacing_three, spacing_seven):
-        assert abs(dense[0]["startStep"] - sampled[0]["startStep"]) <= 14
-        assert abs(dense[0]["endStep"] - sampled[0]["endStep"]) <= 14
-        assert abs(dense[1]["startStep"] - sampled[1]["startStep"]) <= 14
-        assert abs(dense[1]["endStep"] - sampled[1]["endStep"]) <= 14
+def test_v5_rejects_wandering_ema_behavior():
+    regions = v5.detect(*_curve(shape=lambda step: .6 + .04 * math.sin(step * .2), end=1200))["regions"]
+    assert regions == []
+
+
+def test_v5_is_practical_on_twenty_thousand_detailed_points():
+    points = [{"step": step, "epoch": step // 200 + 1, "loss": .6} for step in range(20_000)]
+    checkpoints = [
+        {"epoch": epoch, "startStep": (epoch - 1) * 200, "endStep": epoch * 200 - 1,
+         "step": epoch * 200 - 1, "loss": .6}
+        for epoch in range(1, 101)
+    ]
+    started = time.perf_counter()
+    result = v5.detect(points, checkpoints)
+    assert time.perf_counter() - started < 3
+    assert len(result["analysisPoints"]) == 20_000
+    assert len(result["regions"]) == 1
 
 
 @pytest.mark.parametrize("algorithm", ["v2", "v4"])

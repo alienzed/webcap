@@ -1,4 +1,4 @@
-"""V3: plain-Python port of the original score-scalars candidate ranking."""
+"""V3: plain-Python port of the original epoch-loss score-scalars ranking."""
 
 import statistics
 
@@ -21,7 +21,7 @@ def _mean(values):
 
 
 def _public(points):
-    return [{"step": point["step"], "epoch": point["epoch"], "loss": point["loss"]} for point in points]
+    return [{"step": point.get("optimizerStep", point["step"]), "epoch": point["epoch"], "loss": point["loss"]} for point in points]
 
 
 def _trend_bonus(losses):
@@ -32,7 +32,7 @@ def _trend_bonus(losses):
 
 
 def _score_details(points):
-    """Original score-scalars.py formula, evaluated over raw step-loss points."""
+    """Original score-scalars.py formula, evaluated over epoch-loss points."""
     losses = [point["loss"] for point in points]
     if len(losses) < 3:
         return []
@@ -109,12 +109,12 @@ def _groups(points, scores, first_regime_step=None):
     return groups
 
 
-def _nearest_checkpoint(step, checkpoints):
-    return min(checkpoints, key=lambda checkpoint: (abs(checkpoint["endStep"] - step), checkpoint["epoch"]))
+def _nearest_checkpoint(epoch, checkpoints):
+    return min(checkpoints, key=lambda checkpoint: (abs(checkpoint["epoch"] - epoch), checkpoint["epoch"]))
 
 
-def detect(detailed_points, checkpoint_points):
-    points = sorted(detailed_points, key=lambda point: point["step"])
+def detect(epoch_loss_points, checkpoint_points):
+    points = sorted(epoch_loss_points, key=lambda point: point["step"])
     if len(points) < 3 or not checkpoint_points:
         return {"analysisPoints": _public(points), "regions": []}
     scores, first_regime_step = _score_details(points)
@@ -123,7 +123,7 @@ def detect(detailed_points, checkpoint_points):
         center = group["center"]
         representative = _nearest_checkpoint(center["step"], checkpoint_points)
         selected = [_nearest_checkpoint(member["step"], checkpoint_points) for member in group["members"]]
-        selected_steps = [member["step"] for member in group["members"]] + [checkpoint["endStep"] for checkpoint in selected]
+        selected_steps = [checkpoint["endStep"] for checkpoint in selected]
         left, right = min(selected_steps), max(selected_steps)
         covered = sorted({checkpoint["epoch"]: checkpoint for checkpoint in selected}.values(), key=lambda checkpoint: checkpoint["epoch"])
         regions.append({
@@ -132,7 +132,7 @@ def detect(detailed_points, checkpoint_points):
             "startEpoch": covered[0]["epoch"] if covered else representative["epoch"],
             "endEpoch": covered[-1]["epoch"] if covered else representative["epoch"],
             "representativeEpoch": representative["epoch"],
-            "current": right >= points[-1]["step"],
+            "current": max(member["step"] for member in group["members"]) >= points[-1]["step"],
             "kind": "ranked_score_region",
             "label": "Ranked score region",
         })

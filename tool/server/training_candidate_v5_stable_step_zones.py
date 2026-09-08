@@ -1,119 +1,143 @@
-"""V5: physical-step stable zones from local lines and robust residual bands."""
-
-import statistics
+"""V5: physical-step stable regimes measured from a fixed EMA loss trajectory."""
 
 
-SEED_STEPS = 100
-MIN_ZONE_STEPS = 150
+EMA_RETENTION = .98
+EVIDENCE_STEPS = 100
+CHANGE_CONFIRM_STEPS = 30
+MAX_DOWNWARD_CHANGE = .01
+MAX_UPWARD_CHANGE = .005
+MAX_MEAN_ABSOLUTE_RESIDUAL = .001
+GENTLE_DIRECTION_CHANGE = .001
+MAX_STABLE_SLOPE_CHANGE = .004
 
 
-def _median(values):
-    return statistics.median(values) if values else 0.0
+def _ema_points(points):
+    previous = None
+    result = []
+    for point in points:
+        loss = float(point["loss"])
+        previous = loss if previous is None else EMA_RETENTION * previous + (1 - EMA_RETENTION) * loss
+        result.append({"step": point["step"], "epoch": point["epoch"], "loss": previous})
+    return result
 
 
-def _fit(points):
-    xs = [point["step"] for point in points]
-    ys = [point["loss"] for point in points]
-    mean_x, mean_y = sum(xs) / len(xs), sum(ys) / len(ys)
-    variance = sum((value - mean_x) ** 2 for value in xs)
-    slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / variance if variance else 0.0
+def _local_line(points, start, end):
+    """Fit one bounded physical-step window and return slope plus mean residual."""
+    window = points[start:end + 1]
+    count = len(window)
+    mean_x = sum(point["step"] for point in window) / count
+    mean_y = sum(point["loss"] for point in window) / count
+    variance = sum((point["step"] - mean_x) ** 2 for point in window)
+    slope = (sum((point["step"] - mean_x) * (point["loss"] - mean_y) for point in window) / variance
+             if variance else 0.0)
     intercept = mean_y - slope * mean_x
-    residuals = [y - (intercept + slope * x) for x, y in zip(xs, ys)]
-    residual_center = _median(residuals)
-    return slope, intercept, _median([abs(value - residual_center) for value in residuals])
+    mean_residual = sum(abs(point["loss"] - (intercept + slope * point["step"])) for point in window) / count
+    return slope, mean_residual
 
 
-def _seed_windows(points):
-    seeds = []
-    for start, point in enumerate(points):
-        end = start + 1
-        while end < len(points) and points[end]["step"] - point["step"] < SEED_STEPS:
-            end += 1
-        if end < len(points):
-            window = points[start:end + 1]
-            if len(window) >= 3:
-                slope, intercept, spread = _fit(window)
-                seeds.append({"start": start, "end": end, "slope": slope, "intercept": intercept, "spread": spread})
-    return seeds
+def _state(slope, mean_residual):
+    change = slope * EVIDENCE_STEPS
+    if mean_residual > MAX_MEAN_ABSOLUTE_RESIDUAL:
+        return "wandering", change
+    if change < -MAX_DOWNWARD_CHANGE:
+        return "down", change
+    if change > MAX_UPWARD_CHANGE:
+        return "up", change
+    if change < -GENTLE_DIRECTION_CHANGE:
+        return "gentle_down", change
+    if change > GENTLE_DIRECTION_CHANGE:
+        return "gentle_up", change
+    return "flat", change
 
 
-def _grade(slope, loss_span, noise):
-    change = slope * SEED_STEPS
-    gentle_change = max(noise * 6, loss_span * .05)
-    flat_change = max(noise * 2, loss_span * .005)
-    if change <= -gentle_change:
-        return "steep_down"
-    if change < -flat_change:
-        return "gentle_down"
-    if change <= flat_change:
-        return "flat"
-    if change < gentle_change:
-        return "gentle_up"
-    return "steep_up"
+def _is_stable(state):
+    return state in ("flat", "gentle_down", "gentle_up")
 
 
-def _representative(zone, checkpoints):
+def _representative(start_step, end_step, checkpoints):
     inside = [checkpoint for checkpoint in checkpoints
-              if zone["startStep"] <= checkpoint["endStep"] <= zone["endStep"]]
+              if start_step <= checkpoint["endStep"] <= end_step]
     if not inside:
-        return None
-    if zone["grade"] == "gentle_up":
-        return min(inside, key=lambda checkpoint: (checkpoint["endStep"], checkpoint["epoch"]))
-    center = (zone["startStep"] + zone["endStep"]) / 2
-    return max(inside, key=lambda checkpoint: (
-        1 - abs(checkpoint["endStep"] - center) / max(1, (zone["endStep"] - zone["startStep"]) / 2),
-        -checkpoint["epoch"],
-    ))
+        return None, inside
+    midpoint = (start_step + end_step) / 2
+    return min(inside, key=lambda checkpoint: (abs(checkpoint["endStep"] - midpoint), checkpoint["epoch"])), inside
+
+
+def _append_region(regions, points, start, end, checkpoints, current):
+    if end < start or points[end]["step"] - points[start]["step"] < EVIDENCE_STEPS:
+        return
+    representative, inside = _representative(points[start]["step"], points[end]["step"], checkpoints)
+    if representative is None:
+        return
+    regions.append({
+        "startStep": points[start]["step"],
+        "endStep": points[end]["step"],
+        "startEpoch": inside[0]["epoch"],
+        "endEpoch": inside[-1]["epoch"],
+        "representativeEpoch": representative["epoch"],
+        "current": current,
+        "kind": "stable_step_zone",
+        "label": "Stable step zone",
+    })
 
 
 def detect(detailed_points, checkpoint_points):
-    points = sorted(detailed_points, key=lambda point: point["step"])
-    public = [{key: point[key] for key in ("step", "epoch", "loss")} for point in points]
+    raw_points = sorted(detailed_points, key=lambda point: point["step"])
+    points = _ema_points(raw_points)
     if len(points) < 3 or not checkpoint_points:
-        return {"analysisPoints": public, "regions": []}
-    seeds = _seed_windows(points)
-    if not seeds:
-        return {"analysisPoints": public, "regions": []}
-    loss_span = max(point["loss"] for point in points) - min(point["loss"] for point in points)
-    observed_noise = _median([seed["spread"] for seed in seeds])
-    noise = max(observed_noise, loss_span * 1e-6, 1e-12)
-    band = noise * 2
-    regions, seed_index = [], 0
-    while seed_index < len(seeds):
-        seed = seeds[seed_index]
-        grade = _grade(seed["slope"], loss_span, noise)
-        if seed["spread"] > band or grade in ("steep_down", "steep_up"):
-            seed_index += 1
+        return {"analysisPoints": points, "regions": []}
+
+    regions = []
+    window_start = 0
+    active_start = None
+    active_state = None
+    active_change = None
+    pending_break = None
+    pending_window_start = None
+    pending_state = None
+    for index, point in enumerate(points):
+        while points[window_start]["step"] < point["step"] - EVIDENCE_STEPS:
+            window_start += 1
+        if point["step"] - points[window_start]["step"] < EVIDENCE_STEPS:
             continue
-        end = seed["end"]
-        zone_slope, zone_grade = seed["slope"], grade
-        while end + 1 < len(points):
-            point = points[end + 1]
-            expected = seed["intercept"] + seed["slope"] * point["step"]
-            refit_slope, _refit_intercept, refit_spread = _fit(points[seed["start"]:end + 2])
-            refit_grade = _grade(refit_slope, loss_span, noise)
-            if (abs(point["loss"] - expected) > band
-                    and (refit_spread > band or refit_grade in ("steep_down", "steep_up"))):
-                break
-            end += 1
-            zone_slope, zone_grade = refit_slope, refit_grade
-        start_point, end_point = points[seed["start"]], points[end]
-        if end_point["step"] - start_point["step"] < MIN_ZONE_STEPS:
-            seed_index += 1
+        slope, mean_residual = _local_line(points, window_start, index)
+        state, change = _state(slope, mean_residual)
+        if _is_stable(state) and active_start is None:
+            active_start = window_start
+            active_state = state
+            active_change = change
+            pending_break = None
+            pending_window_start = None
+            pending_state = None
             continue
-        zone = {"startStep": start_point["step"], "endStep": end_point["step"], "grade": zone_grade}
-        representative = _representative(zone, checkpoint_points)
-        if representative is None:
-            seed_index += 1
+        if _is_stable(state) and state == active_state and abs(change - active_change) <= MAX_STABLE_SLOPE_CHANGE:
+            pending_break = None
+            pending_window_start = None
+            pending_state = None
             continue
-        inside = [checkpoint for checkpoint in checkpoint_points
-                  if zone["startStep"] <= checkpoint["endStep"] <= zone["endStep"]]
-        regions.append({
-            "startStep": zone["startStep"], "endStep": zone["endStep"],
-            "startEpoch": inside[0]["epoch"], "endEpoch": inside[-1]["epoch"],
-            "representativeEpoch": representative["epoch"], "current": zone["endStep"] == points[-1]["step"],
-            "kind": "stable_step_zone", "label": "Stable step zone",
-        })
-        seed_index = next((index for index, candidate in enumerate(seeds)
-                           if candidate["start"] > end), len(seeds))
-    return {"analysisPoints": public, "regions": regions}
+        if _is_stable(state):
+            state = "regime_change:" + state
+        if active_start is None:
+            continue
+        if pending_break is None or pending_state != state:
+            pending_break = index
+            pending_window_start = window_start
+            pending_state = state
+            continue
+        if point["step"] - points[pending_break]["step"] < CHANGE_CONFIRM_STEPS:
+            continue
+        # A confirmed departure never belongs to either region. The old run
+        # closes before its first unstable EMA window; any later shelf must
+        # earn a fresh 100-step window before it can become a new region.
+        _append_region(regions, points, active_start, pending_window_start - 1, checkpoint_points, False)
+        active_start = None
+        active_state = None
+        active_change = None
+        pending_break = None
+        pending_window_start = None
+        pending_state = None
+
+    if active_start is not None:
+        end = (pending_window_start - 1) if pending_break is not None else len(points) - 1
+        _append_region(regions, points, active_start, end, checkpoint_points, pending_break is None and end == len(points) - 1)
+    return {"analysisPoints": points, "regions": regions}

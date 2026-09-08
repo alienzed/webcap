@@ -6,7 +6,7 @@ Candidates is a manual, read-only inspection of one recorded run. V1 remains the
 
 - **v1 · Epoch Regions:** unchanged baseline using detailed-loss epoch medians and a centered three-epoch trend. Its 800-step startup eligibility rule applies only to v1.
 - **v2 · Step Stable Ranges:** the restored baseline: robust equal-step cells are locally low, quiet, and flat; one compatible interruption may bridge; anchored level/spread changes split ranges; whole-range drift rejects continuing movement.
-- **v3 · Score Scalars:** the original raw-step score scalar calculation. It ranks local minima/plateaus by depth, local standard deviation, early-regime weighting, and a preceding eight-point trend bonus. Eligible candidates are grouped by a 15%-of-run non-maximum-suppression distance; that distance does not define the displayed region width.
+- **v3 · Score Scalars:** the original `train/epoch_loss` score scalar calculation. It ranks epoch-loss local minima/plateaus by depth, local standard deviation, early-regime weighting, and a preceding eight-point trend bonus. Epoch number is its x-axis for regime detection, progress, and 15%-of-run grouping; optimizer end steps are retained only for display and checkpoint mapping.
 - **v4 · Convergence Regimes:** macro trailing-versus-leading windows establish sustained descent followed by a sustained settled shelf. Brief pauses within continuing descent are rejected.
 - **v5 · Stable Step Zones:** 100-optimizer-step local-line seeds use robust residual spread and a data-derived tight band. Flat, gentle downward, and gentle upward seeds may expand to actual sampled boundaries; steep slopes and zones shorter than 150 optimizer steps are rejected. These physical scales never depend on run length or epoch width.
 

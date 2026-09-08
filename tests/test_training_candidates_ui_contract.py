@@ -15,7 +15,9 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
     assert 'id="training-candidates-open-run"' in html
     assert 'id="training-candidates-algorithm"' in html
     assert 'v2 · Step Stable Ranges (experimental)' in html
-    for algorithm in ("v1", "v2", "v3", "v4"):
+    assert 'v3 · Score Scalars' in html
+    assert 'v5 · Stable Step Zones (experimental)' in html
+    for algorithm in ("v1", "v2", "v3", "v4", "v5"):
         assert 'value="' + algorithm + '"' in html
     assert '/static/js/training_candidates.js' in html
     assert 'data-training-candidates=' in runner
@@ -51,6 +53,7 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "training-candidates-tooltip" in script
     assert "training-candidates-open-epoch" in script
     assert "training-candidates-region-summary" in script
+    assert "training-candidates-region-type" in script
     assert "training-candidates-region-coverage" in script
     assert "Saved in region:" in script
     assert "Open Folder" in script
@@ -100,10 +103,17 @@ assert.equal(elements['training-candidates-smoothing-number'].value,'0.95');
 elements['training-candidates-smoothing-number'].value='.97';
 elements['training-candidates-smoothing-number'].onchange();
 assert.equal(context.trainingCandidatesDisplayState().smoothing,.97);
+elements['training-candidates-smoothing-number'].value='.50';
+elements['training-candidates-smoothing-number'].onchange();
+assert.equal(elements['training-candidates-smoothing-number'].value,'0.97');
 elements['training-candidates-y-min'].value='.12';
 elements['training-candidates-y-min'].onchange();
 elements['training-candidates-y-max'].value='.28';
 elements['training-candidates-y-max'].onchange();
+assert.equal(context.trainingCandidatesDisplayState().yMin,.12);
+assert.equal(context.trainingCandidatesDisplayState().yMax,.28);
+elements['training-candidates-y-min'].value='.30';
+elements['training-candidates-y-min'].onchange();
 assert.equal(context.trainingCandidatesDisplayState().yMin,.12);
 assert.equal(context.trainingCandidatesDisplayState().yMax,.28);
 elements['training-candidates-y-auto'].onclick();
@@ -127,7 +137,7 @@ const tooltipData = {points:data.epochLossPoints,analysis:data.analysisPoints,sm
 assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipData).includes('Robust loss: 0.2000'));
 assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));
 (async () => {
-  for (const algorithm of ['v1','v2','v3','v4']) {
+  for (const algorithm of ['v1','v2','v3','v4','v5']) {
     elements['training-candidates-algorithm'].value=algorithm;
     elements['training-candidates-algorithm'].onchange();
     await new Promise(setImmediate);

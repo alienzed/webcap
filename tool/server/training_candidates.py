@@ -8,10 +8,11 @@ from pathlib import Path
 from . import (
     training_candidate_v1_epoch_regions, training_candidate_v2_step_ranges,
     training_candidate_v3_score_regions, training_candidate_v4_convergence_regimes,
+    training_candidate_v5_stable_step_zones,
 )
 
 
-ANALYSIS_VERSION = 8
+ANALYSIS_VERSION = 9
 DETAILED_LOSS_TAG = "train/loss"
 EPOCH_LOSS_TAG = "train/epoch_loss"
 MIN_CANDIDATE_STEP = 800
@@ -19,8 +20,9 @@ _EPOCH_DIRECTORY_PATTERN = re.compile(r"^epoch(\d+)$")
 ALGORITHM_LABELS = {
     "v1": "v1 · Epoch Regions",
     "v2": "v2 · Step Stable Ranges (experimental)",
-    "v3": "v3 · Ranked Score Regions (experimental)",
+    "v3": "v3 · Score Scalars",
     "v4": "v4 · Convergence Regimes (experimental)",
+    "v5": "v5 · Stable Step Zones (experimental)",
 }
 
 
@@ -150,6 +152,7 @@ ALGORITHMS = {
     "v2": training_candidate_v2_step_ranges.detect,
     "v3": training_candidate_v3_score_regions.detect,
     "v4": training_candidate_v4_convergence_regimes.detect,
+    "v5": training_candidate_v5_stable_step_zones.detect,
 }
 
 

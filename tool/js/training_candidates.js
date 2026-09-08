@@ -206,7 +206,7 @@ function trainingCandidatesRegionCoverage(region, savedArtifacts) {
 }
 
 function trainingCandidatesRegionSummary(region) {
-  return String(region.label || 'Stable region') + ' · Region ' + String(region.startEpoch) + '–' + String(region.endEpoch);
+  return 'Region ' + String(region.startEpoch) + '–' + String(region.endEpoch);
 }
 
 function trainingCandidatesContentHtml(payload) {
@@ -215,7 +215,7 @@ function trainingCandidatesContentHtml(payload) {
   var candidates = Array.isArray(analysis.candidates) ? analysis.candidates : [];
   var list = candidates.length ? candidates.map(function (candidate) {
     var openAction = candidate.artifact && candidate.artifact.available ? '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapeHtml(String(candidate.epoch)) + '">Open Folder</button>' : '';
-    return '<article class="training-candidates-card"><strong>Epoch ' + escapeHtml(String(candidate.epoch)) + '</strong><span class="training-candidates-region-summary">' + escapeHtml(trainingCandidatesRegionSummary(candidate)) + '</span><span class="training-candidates-region-coverage">' + escapeHtml(trainingCandidatesRegionCoverage(candidate, analysis.savedArtifacts)) + '</span><em class="' + (candidate.artifact && candidate.artifact.available ? 'available' : 'missing') + '">' + escapeHtml(trainingCandidatesArtifactLabel(candidate.artifact)) + '</em>' + openAction + '</article>';
+    return '<article class="training-candidates-card"><strong>Epoch ' + escapeHtml(String(candidate.epoch)) + '</strong><span class="training-candidates-region-summary">' + escapeHtml(trainingCandidatesRegionSummary(candidate)) + '</span><span class="training-candidates-region-type">' + escapeHtml(String(candidate.label || 'Stable region')) + '</span><span class="training-candidates-region-coverage">' + escapeHtml(trainingCandidatesRegionCoverage(candidate, analysis.savedArtifacts)) + '</span><em class="' + (candidate.artifact && candidate.artifact.available ? 'available' : 'missing') + '">' + escapeHtml(trainingCandidatesArtifactLabel(candidate.artifact)) + '</em>' + openAction + '</article>';
   }).join('') : '<div class="training-candidates-empty">No candidate regions with a completed checkpoint identified by this algorithm.</div>';
   return '<section class="training-candidates-analysis">' + trainingCandidatesSvg(analysis) + '<section class="training-candidates-list"><h3>Suggested epochs</h3>' + list + '</section></section>';
 }
@@ -335,6 +335,8 @@ function wireTrainingCandidatesModal() {
       trainingCandidatesDisplayState().smoothing = value;
       syncTrainingCandidatesDisplayControls();
       renderTrainingCandidates();
+    } else {
+      syncTrainingCandidatesDisplayControls();
     }
   }
   els.smoothingNumber.onchange = commitSmoothingNumber;
@@ -344,12 +346,11 @@ function wireTrainingCandidatesModal() {
     var min = trainingCandidatesRangeValue(els.yMin.value);
     var max = trainingCandidatesRangeValue(els.yMax.value);
     if (min !== null && max !== null && min >= max) {
-      display.yMin = null;
-      display.yMax = null;
-    } else {
-      display.yMin = min;
-      display.yMax = max;
+      syncTrainingCandidatesDisplayControls();
+      return;
     }
+    display.yMin = min;
+    display.yMax = max;
     syncTrainingCandidatesDisplayControls();
     renderTrainingCandidates();
   }

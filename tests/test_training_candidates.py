@@ -10,7 +10,7 @@ import pytest
 from tool.server import app as app_module
 from tool.server import config as app_config
 from tool.server import training_candidate_v1_epoch_regions, training_candidate_v2_step_ranges, training_candidates, training_runner
-from tool.server import training_candidate_v3_score_regions as v3, training_candidate_v4_convergence_regimes as v4
+from tool.server import training_candidate_v3_score_regions as v3, training_candidate_v4_convergence_regimes as v4, training_candidate_v5_stable_step_zones as v5
 
 
 def _epoch_events(values, start_epoch=1, samples_per_epoch=5, start_step=900, step_stride=1):
@@ -188,11 +188,11 @@ def test_v2_sampling_density_and_checkpoint_selection_are_curve_based():
 def test_algorithm_dispatch_is_explicit_and_unknown_algorithms_fail_loudly(monkeypatch):
     detailed, boundaries = _epoch_events([1.0, .8, .7, .69, .70, .69, .70])
     seen = []
-    for algorithm in ("v1", "v2", "v3", "v4"):
+    for algorithm in ("v1", "v2", "v3", "v4", "v5"):
         monkeypatch.setitem(training_candidates.ALGORITHMS, algorithm, lambda _detailed, _checkpoints, name=algorithm: seen.append(name) or {"analysisPoints": [], "regions": []})
-    for algorithm in ("v1", "v2", "v3", "v4"):
+    for algorithm in ("v1", "v2", "v3", "v4", "v5"):
         training_candidates.analyze_loss_points(detailed, boundaries, algorithm=algorithm)
-    assert seen == ["v1", "v2", "v3", "v4"]
+    assert seen == ["v1", "v2", "v3", "v4", "v5"]
     with pytest.raises(ValueError, match="Unknown candidate analysis algorithm"):
         training_candidates.analyze_loss_points(detailed, boundaries, algorithm="not-an-algorithm")
 
@@ -370,13 +370,13 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     monkeypatch.setattr(app_config, "FS_ROOT", root)
     epoch_directory = run / "epoch12"
     epoch_directory.mkdir()
-    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 8, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
+    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 9, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
     before = state_path.read_bytes()
     client = app_module.app.test_client()
     response = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
-    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 8
+    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 9
     assert response.get_json()["analysis"]["algorithm"] == "v1"
-    for algorithm in ("v2", "v3", "v4"):
+    for algorithm in ("v2", "v3", "v4", "v5"):
         switched = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1&algorithm=" + algorithm)
         assert switched.status_code == 200
         assert switched.get_json()["analysis"]["algorithm"] == algorithm
@@ -516,14 +516,34 @@ def test_density_invariance_in_physical_step_space(algorithm):
 
 def test_v3_preserves_the_canonical_raw_score_scalars_formula():
     points = [{"step": index, "epoch": 1, "loss": loss} for index, loss in enumerate(
-        [1.0, 1.0, 1.0, 1.0, .7, .7, .7, .7, .7, .7, .7, .7]
+        [1.0] * 8 + [.5] * 8
     )]
     scores = v3._scores(points)
     assert (v3.WINDOW, v3.ALPHA, v3.TREND_WINDOW, v3.TREND_WEIGHT) == (5, .3, 8, .4)
     assert (v3.REGIME_CONFIRM_STEPS, v3.REGIME_DROP_FRAC, v3.REGIME_MIN_STEP_FRAC) == (3, .15, .15)
     assert (v3.DEPTH_GATE, v3.REGION_STEP_FRAC, v3.MAX_PER_REGION, v3.MAX_REGIONS) == (.5, .15, 5, 6)
-    assert scores[:6] == [0] * 6
-    assert scores[6] > scores[7] > 0
+    assert scores[:8] == [0] * 8
+    assert scores[8] > scores[9] > 0
+
+
+def test_v3_trend_bonus_is_zero_before_the_full_trend_window():
+    bonus = v3._trend_bonus([1 - index * .03 for index in range(16)])
+    assert bonus[:v3.TREND_WINDOW] == [0] * v3.TREND_WINDOW
+    assert bonus[v3.TREND_WINDOW] > 0
+
+
+def test_v3_confirmed_regime_starts_at_the_first_confirmation_point():
+    points = [{"step": index, "epoch": 1, "loss": loss} for index, loss in enumerate([1.0] * 8 + [.5] * 8)]
+    _scores, first_step = v3._score_details(points)
+    assert first_step == 8
+
+
+def test_v3_preregime_minima_cannot_create_groups():
+    points = [{"step": index, "epoch": 1, "loss": loss} for index, loss in enumerate(
+        [1.0, .1, 1.0, .2, .3, .4, .5, .6, .7, .8, .9, 1.0, 1.1, 1.2, 1.3, 1.4]
+    )]
+    scores, first_step = v3._score_details(points)
+    assert v3._groups(points, scores, first_step) == []
 
 
 def test_v3_groups_raw_eligible_candidates_by_original_region_distance():
@@ -543,6 +563,51 @@ def test_v3_maps_ranked_raw_centers_to_webcap_checkpoints():
     assert all(region["representativeEpoch"] in {point["epoch"] for point in checkpoints} for region in regions)
 
 
+def test_v5_seed_expands_a_physical_flat_zone_past_150_steps():
+    def shape(step):
+        return 1 - step * .001 if step < 400 else .6
+    regions = v5.detect(*_curve(shape=shape, end=1200))["regions"]
+    assert len(regions) == 1
+    assert regions[0]["startStep"] >= 380
+    assert regions[0]["endStep"] - regions[0]["startStep"] >= 150
+
+
+def test_v5_rejects_short_stable_patch_and_steep_continuous_descent():
+    def short_patch(step):
+        if step < 400:
+            return 1 - step * .001
+        if step < 525:
+            return .6
+        return .6 - (step - 525) * .002
+    assert v5.detect(*_curve(shape=short_patch, end=1200))["regions"] == []
+    assert v5.detect(*_curve(shape=lambda step: 2 - step * .001, end=1200))["regions"] == []
+
+
+def test_v5_accepts_gentle_downward_and_prefers_early_gentle_upward_checkpoint():
+    downward = v5.detect(*_curve(shape=lambda step: .8 - step * .00002, end=1200))["regions"]
+    upward = v5.detect(*_curve(shape=lambda step: .5 + step * .00002, end=1200))["regions"]
+    assert len(downward) == 1
+    assert len(upward) == 1
+    assert upward[0]["representativeEpoch"] == 1
+
+
+def test_v5_keeps_disturbed_stable_zones_separate_and_step_density_invariant():
+    def shape(step):
+        if step < 400:
+            return 1 - step * .001
+        if step < 800:
+            return .6
+        if step < 1000:
+            return .6 - (step - 800) * .002
+        return .2
+    dense = v5.detect(*_curve(shape=shape, end=1800))["regions"]
+    sparse = v5.detect(*_curve(spacing=5, shape=shape, end=1800))["regions"]
+    assert len(dense) == len(sparse) == 2
+    assert dense[0]["endStep"] < dense[1]["startStep"]
+    assert abs(dense[0]["startStep"] - sparse[0]["startStep"]) <= 10
+    assert abs(dense[1]["startStep"] - sparse[1]["startStep"]) <= 10
+
+
 @pytest.mark.parametrize("algorithm", ["v2", "v4"])
 def test_detected_range_without_a_contained_checkpoint_is_not_projected_outside(algorithm):
     points, checkpoints = _curve()
@@ -551,13 +616,13 @@ def test_detected_range_without_a_contained_checkpoint_is_not_projected_outside(
     assert result["regions"] == []
 
 
-@pytest.mark.parametrize("algorithm", ["v1", "v2", "v3", "v4"])
+@pytest.mark.parametrize("algorithm", ["v1", "v2", "v3", "v4", "v5"])
 def test_all_dispatch_display_and_artifact_independence(algorithm, tmp_path, monkeypatch):
     points, checkpoints = _curve()
     detailed = [{"axis": p["step"], "loss": p["loss"], "wallTime": p["step"], "order": i} for i, p in enumerate(points)]
     epochs = [{"axis": p["epoch"], "loss": p["loss"], "wallTime": p["endStep"], "order": i} for i, p in enumerate(checkpoints)]
     before = training_candidates.analyze_loss_points(detailed, epochs, algorithm=algorithm)
-    assert before["algorithm"] == algorithm and before["analysisVersion"] == 8
+    assert before["algorithm"] == algorithm and before["analysisVersion"] == 9
     (tmp_path / "epoch5").mkdir()
     (tmp_path / "epoch5" / "adapter.safetensors").write_bytes(b"fixture")
     after = training_candidates.analyze_loss_points(detailed, epochs, run_dir=tmp_path, algorithm=algorithm)

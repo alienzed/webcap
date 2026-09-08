@@ -5,6 +5,11 @@ function trainingCandidatesElements() {
     summary: document.getElementById('training-candidates-modal-summary'),
     content: document.getElementById('training-candidates-modal-content'),
     algorithm: document.getElementById('training-candidates-algorithm'),
+    smoothing: document.getElementById('training-candidates-smoothing'),
+    smoothingValue: document.getElementById('training-candidates-smoothing-value'),
+    yMin: document.getElementById('training-candidates-y-min'),
+    yMax: document.getElementById('training-candidates-y-max'),
+    yAuto: document.getElementById('training-candidates-y-auto'),
     refresh: document.getElementById('training-candidates-refresh'),
     openRun: document.getElementById('training-candidates-open-run'),
     close: document.getElementById('training-candidates-modal-close')
@@ -14,6 +19,25 @@ function trainingCandidatesElements() {
 function trainingCandidatesNumber(value, fallback) {
   var number = Number(value);
   return isFinite(number) ? number : fallback;
+}
+
+function trainingCandidatesDisplayState() {
+  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .96, yMin: null, yMax: null };
+  return trainingWorkspaceState.candidateDisplay;
+}
+
+function trainingCandidatesEma(points, smoothing) {
+  var retained = Math.max(0, Math.min(.99, trainingCandidatesNumber(smoothing, .96)));
+  var previous = null;
+  return points.map(function (point) {
+    var loss = trainingCandidatesNumber(point.loss, 0);
+    previous = previous === null ? loss : retained * previous + (1 - retained) * loss;
+    return { step: point.step, epoch: point.epoch, loss: previous };
+  });
+}
+
+function trainingCandidatesRangeValue(value) {
+  return value === '' || value === null || value === undefined || !isFinite(Number(value)) ? null : Number(value);
 }
 
 function trainingCandidatesPointForEpoch(epoch, analysis, points) {
@@ -34,7 +58,8 @@ function trainingCandidatesSvg(data) {
   var plotBottom = plotTop + plotHeight;
   var points = data && Array.isArray(data.epochLossPoints) ? data.epochLossPoints : [];
   var stepPoints = data && Array.isArray(data.stepLossPoints) ? data.stepLossPoints : [];
-  var smoothedStepPoints = data && Array.isArray(data.smoothedStepLossPoints) ? data.smoothedStepLossPoints : [];
+  var display = trainingCandidatesDisplayState();
+  var smoothedStepPoints = trainingCandidatesEma(stepPoints, display.smoothing);
   var analysis = data && Array.isArray(data.analysisPoints) ? data.analysisPoints : [];
   if (!points.length || !stepPoints.length) return '<div class="training-candidates-empty">No completed TensorBoard loss points are available.</div>';
   var allLosses = points.concat(smoothedStepPoints).map(function (point) { return trainingCandidatesNumber(point.loss, 0); });
@@ -52,6 +77,16 @@ function trainingCandidatesSvg(data) {
   var lossPadding = (maxLoss - minLoss) * 0.08;
   minLoss -= lossPadding;
   maxLoss += lossPadding;
+  var requestedMin = trainingCandidatesRangeValue(display.yMin);
+  var requestedMax = trainingCandidatesRangeValue(display.yMax);
+  if (requestedMin !== null && requestedMax !== null && requestedMin < requestedMax) {
+    minLoss = requestedMin;
+    maxLoss = requestedMax;
+  } else if (requestedMin !== null && requestedMin < maxLoss) {
+    minLoss = requestedMin;
+  } else if (requestedMax !== null && requestedMax > minLoss) {
+    maxLoss = requestedMax;
+  }
   function x(step) { return 46 + (trainingCandidatesNumber(step, minStep) - minStep) / (maxStep - minStep) * 914; }
   function y(loss) { return plotTop + (maxLoss - trainingCandidatesNumber(loss, minLoss)) / (maxLoss - minLoss) * plotHeight; }
   function polyline(series) { return series.map(function (point) { return x(point.step).toFixed(2) + ',' + y(point.loss).toFixed(2); }).join(' '); }
@@ -210,6 +245,15 @@ function renderTrainingCandidates() {
   });
 }
 
+function syncTrainingCandidatesDisplayControls() {
+  var els = trainingCandidatesElements();
+  var display = trainingCandidatesDisplayState();
+  if (els.smoothing) els.smoothing.value = String(display.smoothing);
+  if (els.smoothingValue) els.smoothingValue.textContent = Number(display.smoothing).toFixed(2);
+  if (els.yMin) els.yMin.value = display.yMin === null ? '' : String(display.yMin);
+  if (els.yMax) els.yMax.value = display.yMax === null ? '' : String(display.yMax);
+}
+
 function refreshTrainingCandidates() {
   var folder = String(trainingWorkspaceState.candidateFolder || '');
   var jobId = String(trainingWorkspaceState.candidateJobId || '');
@@ -257,8 +301,10 @@ function openTrainingCandidates(job) {
   trainingWorkspaceState.candidateFolder = String(job.folder);
   trainingWorkspaceState.candidateAlgorithm = 'v1';
   trainingWorkspaceState.candidatePayload = null;
+  trainingWorkspaceState.candidateDisplay = { smoothing: .96, yMin: null, yMax: null };
   trainingWorkspaceState.candidateModalOpen = true;
   els.algorithm.value = trainingWorkspaceState.candidateAlgorithm;
+  syncTrainingCandidatesDisplayControls();
   if (els.modal) { els.modal.classList.remove('hidden'); els.modal.setAttribute('aria-hidden', 'false'); }
   refreshTrainingCandidates().catch(function (err) {
     if (!trainingWorkspaceState.candidateModalOpen) return;
@@ -277,6 +323,33 @@ function wireTrainingCandidatesModal() {
   els.algorithm.onchange = function () {
     trainingWorkspaceState.candidateAlgorithm = els.algorithm.value;
     refreshTrainingCandidates().catch(function (err) { setStatus('Could not refresh LoRA candidates: ' + String(err.message || err)); });
+  };
+  els.smoothing.oninput = function () {
+    trainingCandidatesDisplayState().smoothing = trainingCandidatesNumber(els.smoothing.value, .96);
+    syncTrainingCandidatesDisplayControls();
+    renderTrainingCandidates();
+  };
+  function updateYRange() {
+    var display = trainingCandidatesDisplayState();
+    var min = trainingCandidatesRangeValue(els.yMin.value);
+    var max = trainingCandidatesRangeValue(els.yMax.value);
+    if (min !== null && max !== null && min >= max) {
+      display.yMin = null;
+      display.yMax = null;
+    } else {
+      display.yMin = min;
+      display.yMax = max;
+    }
+    syncTrainingCandidatesDisplayControls();
+    renderTrainingCandidates();
+  }
+  els.yMin.oninput = updateYRange;
+  els.yMax.oninput = updateYRange;
+  els.yAuto.onclick = function () {
+    trainingCandidatesDisplayState().yMin = null;
+    trainingCandidatesDisplayState().yMax = null;
+    syncTrainingCandidatesDisplayControls();
+    renderTrainingCandidates();
   };
   els.openRun.onclick = function () { openTrainingCandidatesFolder().catch(function (err) { setStatus('Could not open training run folder: ' + String(err.message || err)); }); };
   els.modal.onclick = function (event) { if (event.target === els.modal) closeTrainingCandidates(); };

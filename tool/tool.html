@@ -839,6 +839,12 @@
                                     <option value="v3">v3 · Ranked Score Regions (experimental)</option>
                                     <option value="v4">v4 · Convergence Regimes (experimental)</option>
                                 </select>
+                                <div class="training-candidates-display-controls" aria-label="Chart display controls">
+                                    <label>Smoothing <input id="training-candidates-smoothing" type="range" min="0" max="0.99" step="0.01" value="0.96"><output id="training-candidates-smoothing-value">0.96</output></label>
+                                    <label>Y min <input id="training-candidates-y-min" type="number" step="any" placeholder="Auto"></label>
+                                    <label>Y max <input id="training-candidates-y-max" type="number" step="any" placeholder="Auto"></label>
+                                    <button id="training-candidates-y-auto" type="button" class="review-captions-btn">Auto</button>
+                                </div>
                                 <button id="training-candidates-open-run" type="button" class="review-captions-btn">Open Run Folder</button>
                                 <button id="training-candidates-refresh" type="button" class="review-captions-btn">Refresh</button>
                                 <button id="training-candidates-modal-close" type="button" class="training-review-modal-close" aria-label="Close candidate analysis">&times;</button>

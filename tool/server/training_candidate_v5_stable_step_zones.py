@@ -4,6 +4,8 @@ from bisect import bisect_left, bisect_right
 from collections import deque
 from statistics import median
 
+from matplotlib.pylab import normal
+
 
 EMA_RETENTION = .98
 TREND_WIDTHS = (100, 250, 500, 1000)
@@ -231,9 +233,15 @@ def _floor_center(hypothesis, minima_by_width):
 
 def _representative(floor_center, checkpoints, trend_250):
     nearby = [checkpoint for checkpoint in checkpoints
-              if abs(checkpoint["endStep"] - floor_center["step"]) <= SUPPORT_RADIUS]
-    candidates = nearby or checkpoints
-    return min(candidates, key=lambda checkpoint: (
+          if abs(checkpoint["endStep"] - floor_center["step"]) <= SUPPORT_RADIUS]
+
+    if not nearby:
+        return min(checkpoints, key=lambda checkpoint: (
+            abs(checkpoint["endStep"] - floor_center["step"]),
+            -checkpoint["epoch"],
+        ))
+
+    return min(nearby, key=lambda checkpoint: (
         _nearest_trend_loss(trend_250, checkpoint["endStep"]),
         abs(checkpoint["endStep"] - floor_center["step"]),
         -checkpoint["epoch"],
@@ -296,11 +304,7 @@ def detect(detailed_points, checkpoint_points):
     _apply_floor_compatibility(hypotheses)
     normal = [item for item in hypotheses if item["supportedScaleCount"] >= 3 and item["floorCompatible"]]
     selected = []
-    early = next((item for item in sorted(normal, key=lambda candidate: candidate["anchor"]["step"])
-                  if item["prominenceScore"] >= .75 and item["persistenceScore"] >= .75), None)
-    if early is not None:
-        selected.append(early)
-    _accept(selected, [item for item in _ranked(normal) if item is not early], MAX_REGIONS)
+    _accept(selected, _ranked(normal), MAX_REGIONS)
     if len(selected) < MIN_FALLBACK_REGIONS:
         fallback = [item for item in hypotheses if item["supportedScaleCount"] >= 2 and item not in selected]
         _accept(selected, _ranked(fallback), MIN_FALLBACK_REGIONS)

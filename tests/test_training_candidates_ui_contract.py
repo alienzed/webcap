@@ -41,7 +41,9 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "regions" in script
     assert "epochLossPoints" in script
     assert "stepLossPoints" in script
-    assert "smoothedStepLossPoints" in script
+    assert "function trainingCandidatesEma" in script
+    assert "training-candidates-smoothing-number" in script
+    assert "training-candidates-y-auto" in script
     assert "detailedSmoothedPoints" not in script
     assert "training-candidates-hover-layer" in script
     assert "Step loss:" in script
@@ -66,10 +68,10 @@ def test_chart_geometry_step_lookup_and_algorithm_switching():
     harness = r"""
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 const elements = {};
-for (const name of ['modal', 'modal-summary', 'modal-content', 'algorithm', 'refresh', 'open-run', 'modal-close']) {
+for (const name of ['modal', 'modal-summary', 'modal-content', 'algorithm', 'smoothing', 'smoothing-number', 'y-min', 'y-max', 'y-auto', 'refresh', 'open-run', 'modal-close']) {
   elements['training-candidates-' + name] = {
     classList: { add() {}, remove() {} }, setAttribute() {},
-    querySelectorAll() { return []; }, value: 'v1'
+    querySelectorAll() { return []; }, blur() {}, value: 'v1'
   };
 }
 const requests = [];
@@ -90,6 +92,23 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+assert.deepEqual(context.trainingCandidatesDisplayState(),{smoothing:.99,yMin:.10,yMax:.30});
+elements['training-candidates-smoothing'].value='.95';
+elements['training-candidates-smoothing'].oninput();
+assert.equal(context.trainingCandidatesDisplayState().smoothing,.95);
+assert.equal(elements['training-candidates-smoothing-number'].value,'0.95');
+elements['training-candidates-smoothing-number'].value='.97';
+elements['training-candidates-smoothing-number'].onchange();
+assert.equal(context.trainingCandidatesDisplayState().smoothing,.97);
+elements['training-candidates-y-min'].value='.12';
+elements['training-candidates-y-min'].onchange();
+elements['training-candidates-y-max'].value='.28';
+elements['training-candidates-y-max'].onchange();
+assert.equal(context.trainingCandidatesDisplayState().yMin,.12);
+assert.equal(context.trainingCandidatesDisplayState().yMax,.28);
+elements['training-candidates-y-auto'].onclick();
+assert.equal(context.trainingCandidatesDisplayState().yMin,null);
+assert.equal(context.trainingCandidatesDisplayState().yMax,null);
 const svg = context.trainingCandidatesSvg(data);
 assert(svg.includes('viewBox="0 0 1000 400"'));
 const chart = JSON.parse(svg.match(/data-training-candidates-chart="([^"]+)"/)[1].replaceAll('&quot;','"').replaceAll('&amp;','&'));

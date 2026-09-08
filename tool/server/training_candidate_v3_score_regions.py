@@ -1,154 +1,128 @@
-"""V3: rank scalar promise, then select a checkpoint from settled evidence."""
+"""V3: plain-Python port of the original score-scalars candidate ranking."""
 
 import statistics
 
 
-def _median(values):
-    return statistics.median(values) if values else 0.0
+WINDOW = 5
+ALPHA = 0.3
+TREND_WINDOW = 8
+TREND_WEIGHT = 0.4
+REGIME_CONFIRM_STEPS = 3
+REGIME_DROP_FRAC = 0.15
+REGIME_MIN_STEP_FRAC = 0.15
+DEPTH_GATE = 0.5
+REGION_STEP_FRAC = 0.15
+MAX_PER_REGION = 5
+MAX_REGIONS = 6
 
 
-def _prepare(detailed, checkpoints):
-    ordered = sorted(detailed, key=lambda point: point["step"])
-    if not ordered or not checkpoints:
-        return [], 1.0
-    gaps = [b["step"] - a["step"] for a, b in zip(ordered, ordered[1:]) if b["step"] > a["step"]]
-    spacing = _median(gaps) or 1.0
-    epoch_steps = _median([point["endStep"] - point["startStep"] + spacing for point in checkpoints])
-    width = max(spacing * 3, epoch_steps / 8)
-    buckets, origin = {}, ordered[0]["step"]
-    for point in ordered:
-        buckets.setdefault(int((point["step"] - origin) / width), []).append(point)
-    cells = []
-    for bucket, points in sorted(buckets.items()):
-        losses = [point["loss"] for point in points]
-        level = _median(losses)
-        cells.append({
-            "step": points[len(points) // 2]["step"], "epoch": points[len(points) // 2]["epoch"],
-            "startStep": points[0]["step"], "endStep": points[-1]["step"], "loss": level,
-            "spread": _median([abs(value - level) for value in losses]), "bucket": bucket,
-        })
-    return cells, width
+def _mean(values):
+    return sum(values) / len(values) if values else 0.0
 
 
-def _public(cells):
-    return [{key: point[key] for key in ("step", "epoch", "loss")} for point in cells]
+def _public(points):
+    return [{"step": point["step"], "epoch": point["epoch"], "loss": point["loss"]} for point in points]
 
 
-def _noise(cells):
-    levels = [point["loss"] for point in cells]
-    curvature = [abs(c - 2 * b + a) for a, b, c in zip(levels, levels[1:], levels[2:])]
-    return max(_median([point["spread"] for point in cells]), _median(curvature) / 2,
-               max((abs(value) for value in levels), default=1) * 1e-10, 1e-12)
-
-
-def _scores(cells):
-    levels = [point["loss"] for point in cells]
-    if len(levels) < 5:
+def _scores(points):
+    """Original score-scalars.py formula, evaluated over raw step-loss points."""
+    losses = [point["loss"] for point in points]
+    if len(losses) < 3:
         return []
-    ordered = sorted(levels)
-    low, high = ordered[int((len(ordered) - 1) * .05)], ordered[int((len(ordered) - 1) * .95)]
-    span = high - low
-    if span <= _noise(cells):
-        return []
-    first = next((index for index in range(max(1, int(len(cells) * .15)), len(cells) - 2)
-                  if all(high - levels[position] >= span * .15 for position in range(index, index + 3))), None)
-    if first is None:
-        return []
-    bonuses = [max(0, _median(levels[max(0, index - 8):index]) - level) for index, level in enumerate(levels)]
-    bonus_scale = max(bonuses) or 1
+    minimum, maximum = min(losses), max(losses)
+    depth_scores = [(maximum - loss) / (maximum - minimum + 1e-12) for loss in losses]
+    stability_scores = [
+        1 / (1 + statistics.pstdev(losses[max(0, index - WINDOW):index + WINDOW + 1]))
+        for index in range(len(losses))
+    ]
+    trend_bonus = [max(0, _mean(losses[max(0, index - TREND_WINDOW):index]) - loss)
+                   for index, loss in enumerate(losses)]
+    maximum_bonus = max(trend_bonus)
+    if maximum_bonus:
+        trend_bonus = [value / maximum_bonus for value in trend_bonus]
+    rolling_mean = [_mean(losses[max(0, index - TREND_WINDOW + 1):index + 1]) for index in range(len(losses))]
+    min_step, max_step = points[0]["step"], points[-1]["step"]
+    run_span = max_step - min_step
+    regime_start = min_step + REGIME_MIN_STEP_FRAC * run_span
+    confirmed, first_regime_index = 0, None
+    for index, point in enumerate(points):
+        if point["step"] < regime_start or not rolling_mean[index]:
+            confirmed = 0
+            continue
+        if (rolling_mean[index] - losses[index]) / rolling_mean[index] > REGIME_DROP_FRAC:
+            confirmed += 1
+            if confirmed >= REGIME_CONFIRM_STEPS:
+                first_regime_index = index
+                break
+        else:
+            confirmed = 0
+    if first_regime_index is None:
+        first_regime_index = int(len(points) * .25)
+    first_regime_step = points[first_regime_index]["step"]
+    denominator = max_step - first_regime_step
     scores = []
-    for index, level in enumerate(levels):
-        depth = min(1, max(0, (high - level) / span))
-        stability = 1 / (1 + statistics.pstdev(levels[max(0, index - 2):min(len(levels), index + 3)]) / span)
-        progress = max(0, (cells[index]["step"] - cells[first]["step"]) / max(1, cells[-1]["step"] - cells[first]["step"]))
-        scores.append(depth * stability * min(1, depth / .5) * (1 - progress) ** .3 * (1 + .4 * bonuses[index] / bonus_scale) if index >= first else 0)
+    for index, point in enumerate(points):
+        progress = (point["step"] - first_regime_step) / denominator if denominator else 0
+        early_weight = (1 - min(1, max(0, progress))) ** ALPHA
+        stability = stability_scores[index] * min(1, max(0, depth_scores[index] / DEPTH_GATE))
+        score = depth_scores[index] * stability * early_weight * (1 + TREND_WEIGHT * trend_bonus[index])
+        scores.append(score if point["step"] >= first_regime_step else 0)
     return scores
 
 
-def _score_regions(scores):
-    """Peaks merge across shallow valleys; a deep score valley is a boundary."""
-    peaks = [index for index in range(1, len(scores) - 1) if scores[index] > 0 and scores[index] >= scores[index - 1] and scores[index] >= scores[index + 1]]
-    if not peaks:
-        return []
-    groups = [[peak] for peak in peaks]
-    merged = []
-    for group in groups:
-        if not merged:
-            merged.append(group)
-            continue
-        prior = merged[-1]
-        left, right = prior[-1], group[0]
-        if min(scores[left:right + 1]) >= min(scores[left], scores[right]) * .55:
-            prior.extend(group)
-        else:
-            merged.append(group)
-    result = []
-    for group in sorted(merged, key=lambda item: max(scores[index] for index in item), reverse=True)[:6]:
-        peak = max(group, key=lambda index: scores[index])
-        threshold, start, end = scores[peak] * .25, peak, peak
-        while start > 0 and scores[start - 1] >= threshold:
-            start -= 1
-        while end + 1 < len(scores) and scores[end + 1] >= threshold:
-            end += 1
-        result.append((start, end, peak))
-    return sorted(result)
+def _eligible_indexes(points):
+    losses = [point["loss"] for point in points]
+    indexes = []
+    for index in range(1, len(points) - 1):
+        sharp_min = losses[index] < losses[index - 1] and losses[index] < losses[index + 1]
+        plateau = abs(losses[index] - losses[index - 1]) < .002 and abs(losses[index] - losses[index + 1]) < .002
+        if sharp_min or plateau:
+            indexes.append(index)
+    return indexes
 
 
-def _representative(cells, start, end, checkpoints):
-    section = cells[start:end + 1]
-    inside = [point for point in checkpoints if section[0]["startStep"] <= point["endStep"] <= section[-1]["endStep"]]
-    if not inside:
-        return None
-    noise, settled = _noise(section), []
-    for index, point in enumerate(section):
-        before, after = section[max(0, index - 2):index], section[index + 1:min(len(section), index + 3)]
-        slope = _median([cell["loss"] for cell in after]) - _median([cell["loss"] for cell in before]) if before and after else 0
-        if abs(slope) <= 2 * noise:
-            settled.append(point)
-    settled_runs, run_start = [], None
-    for index in range(len(section) + 1):
-        is_settled = index < len(section) and section[index] in settled
-        if is_settled and run_start is None:
-            run_start = index
-        elif not is_settled and run_start is not None:
-            if index - run_start >= 3:
-                settled_runs.append((section[run_start]["startStep"], section[index - 1]["endStep"]))
-            run_start = None
-    # A score neighborhood may start on an attractive downslope. A checkpoint
-    # is eligible only when its entire saved epoch lies in settled evidence.
-    candidates = [point for point in inside if any(
-        run_start <= point["startStep"] and point["endStep"] <= run_end
-        for run_start, run_end in settled_runs
-    )] or inside
-    center, half = (section[0]["startStep"] + section[-1]["endStep"]) / 2, max((section[-1]["endStep"] - section[0]["startStep"]) / 2, 1)
-    floor, span = min(point["loss"] for point in section), max(max(point["loss"] for point in section) - min(point["loss"] for point in section), noise * 4)
-    spread_span = max(max(point["spread"] for point in section), noise * 4)
-    def score(checkpoint):
-        point = min(section, key=lambda cell: abs(cell["step"] - checkpoint["endStep"]))
-        return (
-            1 if any(cell is point for cell in settled) else 0,
-            -.40 * point["spread"] / spread_span + .35 * (1 - abs(checkpoint["endStep"] - center) / half) - .25 * (point["loss"] - floor) / span,
-            -checkpoint["epoch"],
-        )
-    return max(candidates, key=score)
+def _groups(points, scores):
+    run_span = points[-1]["step"] - points[0]["step"]
+    region_min_dist = REGION_STEP_FRAC * run_span
+    groups = []
+    candidates = sorted(_eligible_indexes(points), key=lambda index: scores[index], reverse=True)
+    for index in candidates:
+        point = points[index]
+        matching = next((group for group in groups if abs(point["step"] - group["center"]["step"]) < region_min_dist), None)
+        if matching:
+            if len(matching["members"]) < MAX_PER_REGION:
+                matching["members"].append(point)
+        elif len(groups) < MAX_REGIONS and all(abs(point["step"] - group["center"]["step"]) >= region_min_dist for group in groups):
+            groups.append({"center": point, "members": [point]})
+    return groups
+
+
+def _nearest_checkpoint(step, checkpoints):
+    return min(checkpoints, key=lambda checkpoint: (abs(checkpoint["endStep"] - step), checkpoint["epoch"]))
 
 
 def detect(detailed_points, checkpoint_points):
-    cells, _ = _prepare(detailed_points, checkpoint_points)
-    scores = _scores(cells)
-    if not scores:
-        return {"analysisPoints": _public(cells), "regions": []}
+    points = sorted(detailed_points, key=lambda point: point["step"])
+    if len(points) < 3 or not checkpoint_points:
+        return {"analysisPoints": _public(points), "regions": []}
+    scores = _scores(points)
+    run_span = points[-1]["step"] - points[0]["step"]
+    half_region = REGION_STEP_FRAC * run_span / 2
     regions = []
-    for start, end, _peak in _score_regions(scores):
-        representative = _representative(cells, start, end, checkpoint_points)
-        if representative is None:
-            continue
-        section = cells[start:end + 1]
-        inside = [point for point in checkpoint_points if section[0]["startStep"] <= point["endStep"] <= section[-1]["endStep"]]
+    for group in _groups(points, scores):
+        center = group["center"]
+        representative = _nearest_checkpoint(center["step"], checkpoint_points)
+        left = max(points[0]["step"], center["step"] - half_region)
+        right = min(points[-1]["step"], center["step"] + half_region)
+        covered = [checkpoint for checkpoint in checkpoint_points if left <= checkpoint["endStep"] <= right]
         regions.append({
-            "startStep": section[0]["startStep"], "endStep": section[-1]["endStep"],
-            "startEpoch": inside[0]["epoch"], "endEpoch": inside[-1]["epoch"],
-            "representativeEpoch": representative["epoch"], "current": end == len(cells) - 1,
-            "kind": "ranked_score_region", "label": "Ranked score region",
+            "startStep": left,
+            "endStep": right,
+            "startEpoch": covered[0]["epoch"] if covered else representative["epoch"],
+            "endEpoch": covered[-1]["epoch"] if covered else representative["epoch"],
+            "representativeEpoch": representative["epoch"],
+            "current": right == points[-1]["step"],
+            "kind": "ranked_score_region",
+            "label": "Ranked score region",
         })
-    return {"analysisPoints": _public(cells), "regions": regions}
+    return {"analysisPoints": _public(points), "regions": regions}

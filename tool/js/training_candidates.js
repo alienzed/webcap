@@ -6,7 +6,7 @@ function trainingCandidatesElements() {
     content: document.getElementById('training-candidates-modal-content'),
     algorithm: document.getElementById('training-candidates-algorithm'),
     smoothing: document.getElementById('training-candidates-smoothing'),
-    smoothingValue: document.getElementById('training-candidates-smoothing-value'),
+    smoothingNumber: document.getElementById('training-candidates-smoothing-number'),
     yMin: document.getElementById('training-candidates-y-min'),
     yMax: document.getElementById('training-candidates-y-max'),
     yAuto: document.getElementById('training-candidates-y-auto'),
@@ -22,12 +22,12 @@ function trainingCandidatesNumber(value, fallback) {
 }
 
 function trainingCandidatesDisplayState() {
-  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .96, yMin: null, yMax: null };
+  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30 };
   return trainingWorkspaceState.candidateDisplay;
 }
 
 function trainingCandidatesEma(points, smoothing) {
-  var retained = Math.max(0, Math.min(.99, trainingCandidatesNumber(smoothing, .96)));
+  var retained = Math.max(0, Math.min(.99, trainingCandidatesNumber(smoothing, .99)));
   var previous = null;
   return points.map(function (point) {
     var loss = trainingCandidatesNumber(point.loss, 0);
@@ -249,7 +249,7 @@ function syncTrainingCandidatesDisplayControls() {
   var els = trainingCandidatesElements();
   var display = trainingCandidatesDisplayState();
   if (els.smoothing) els.smoothing.value = String(display.smoothing);
-  if (els.smoothingValue) els.smoothingValue.textContent = Number(display.smoothing).toFixed(2);
+  if (els.smoothingNumber) els.smoothingNumber.value = Number(display.smoothing).toFixed(2);
   if (els.yMin) els.yMin.value = display.yMin === null ? '' : String(display.yMin);
   if (els.yMax) els.yMax.value = display.yMax === null ? '' : String(display.yMax);
 }
@@ -301,7 +301,7 @@ function openTrainingCandidates(job) {
   trainingWorkspaceState.candidateFolder = String(job.folder);
   trainingWorkspaceState.candidateAlgorithm = 'v1';
   trainingWorkspaceState.candidatePayload = null;
-  trainingWorkspaceState.candidateDisplay = { smoothing: .96, yMin: null, yMax: null };
+  trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30 };
   trainingWorkspaceState.candidateModalOpen = true;
   els.algorithm.value = trainingWorkspaceState.candidateAlgorithm;
   syncTrainingCandidatesDisplayControls();
@@ -325,10 +325,20 @@ function wireTrainingCandidatesModal() {
     refreshTrainingCandidates().catch(function (err) { setStatus('Could not refresh LoRA candidates: ' + String(err.message || err)); });
   };
   els.smoothing.oninput = function () {
-    trainingCandidatesDisplayState().smoothing = trainingCandidatesNumber(els.smoothing.value, .96);
+    trainingCandidatesDisplayState().smoothing = trainingCandidatesNumber(els.smoothing.value, .99);
     syncTrainingCandidatesDisplayControls();
     renderTrainingCandidates();
   };
+  function commitSmoothingNumber() {
+    var value = trainingCandidatesNumber(els.smoothingNumber.value, NaN);
+    if (value >= .90 && value <= .99) {
+      trainingCandidatesDisplayState().smoothing = value;
+      syncTrainingCandidatesDisplayControls();
+      renderTrainingCandidates();
+    }
+  }
+  els.smoothingNumber.onchange = commitSmoothingNumber;
+  els.smoothingNumber.onkeydown = function (event) { if (event.key === 'Enter') els.smoothingNumber.blur(); };
   function updateYRange() {
     var display = trainingCandidatesDisplayState();
     var min = trainingCandidatesRangeValue(els.yMin.value);
@@ -343,8 +353,10 @@ function wireTrainingCandidatesModal() {
     syncTrainingCandidatesDisplayControls();
     renderTrainingCandidates();
   }
-  els.yMin.oninput = updateYRange;
-  els.yMax.oninput = updateYRange;
+  els.yMin.onchange = updateYRange;
+  els.yMax.onchange = updateYRange;
+  els.yMin.onkeydown = function (event) { if (event.key === 'Enter') els.yMin.blur(); };
+  els.yMax.onkeydown = function (event) { if (event.key === 'Enter') els.yMax.blur(); };
   els.yAuto.onclick = function () {
     trainingCandidatesDisplayState().yMin = null;
     trainingCandidatesDisplayState().yMax = null;

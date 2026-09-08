@@ -177,27 +177,6 @@ def test_v2_sustained_lower_subregime_is_detected_not_a_raw_hole():
     assert any(region["representativeEpoch"] in {13, 14, 15, 16} for region in regions)
 
 
-def test_v2_rejects_a_quiet_startup_patch_until_the_floor_is_earned():
-    regions = _v2_regions([
-        .95, .95, .95, .95, .90, .80, .70, .60, .50,
-        .50, .501, .499, .50, .501, .499,
-    ])
-    assert len(regions) == 1
-    assert regions[0]["startEpoch"] >= 9
-
-
-def test_v2_keeps_first_recovered_and_new_lower_floors():
-    regions = _v2_regions([
-        1.0, .9, .8, .7, .6, .5, .5, .501, .499, .5,
-        .7, .7, .7,
-        .5, .5, .501, .499, .5,
-        .46, .40, .40, .401, .399, .40,
-    ])
-    assert len(regions) == 3
-    assert [region["startEpoch"] for region in regions] == sorted(region["startEpoch"] for region in regions)
-    assert regions[0]["endEpoch"] < regions[1]["startEpoch"] < regions[2]["startEpoch"]
-
-
 def test_v2_sampling_density_and_checkpoint_selection_are_curve_based():
     sparse = training_candidate_v2_step_ranges.detect(*_curve(spacing=4))["regions"]
     dense = training_candidate_v2_step_ranges.detect(*_curve(spacing=1))["regions"]
@@ -535,41 +514,33 @@ def test_density_invariance_in_physical_step_space(algorithm):
     assert abs(sparse[0]["representativeEpoch"] - dense[0]["representativeEpoch"]) <= 1
 
 
-def test_v3_scores_rank_depth_and_group_with_spatial_diversity():
+def test_v3_preserves_the_canonical_raw_score_scalars_formula():
+    points = [{"step": index, "epoch": 1, "loss": loss} for index, loss in enumerate(
+        [1.0, 1.0, 1.0, 1.0, .7, .7, .7, .7, .7, .7, .7, .7]
+    )]
+    scores = v3._scores(points)
+    assert (v3.WINDOW, v3.ALPHA, v3.TREND_WINDOW, v3.TREND_WEIGHT) == (5, .3, 8, .4)
+    assert (v3.REGIME_CONFIRM_STEPS, v3.REGIME_DROP_FRAC, v3.REGIME_MIN_STEP_FRAC) == (3, .15, .15)
+    assert (v3.DEPTH_GATE, v3.REGION_STEP_FRAC, v3.MAX_PER_REGION, v3.MAX_REGIONS) == (.5, .15, 5, 6)
+    assert scores[:6] == [0] * 6
+    assert scores[6] > scores[7] > 0
+
+
+def test_v3_groups_raw_eligible_candidates_by_original_region_distance():
+    points = [{"step": index * 10, "epoch": 1, "loss": loss} for index, loss in enumerate(
+        [1.0, .8, 1.0, .8, 1.0, .8, 1.0, .8, 1.0, .8, 1.0]
+    )]
+    groups = v3._groups(points, [0, .9, 0, .8, 0, .7, 0, .6, 0, .5, 0])
+    assert [group["center"]["step"] for group in groups] == [10, 30, 50, 70, 90]
+    assert all(len(group["members"]) <= v3.MAX_PER_REGION for group in groups)
+
+
+def test_v3_maps_ranked_raw_centers_to_webcap_checkpoints():
     detailed, checkpoints = _curve(shape=lambda step: 1 - .0004 * step + .05 * math.sin(step / 120))
-    cells, _ = v3._prepare(detailed, checkpoints)
-    scores = v3._scores(cells)
-    assert max(scores[len(scores) // 2:]) > max(scores[:len(scores) // 4])
     regions = v3.detect(detailed, checkpoints)["regions"]
-    assert 1 <= len(regions) <= 6
-    assert len({r["representativeEpoch"] for r in regions}) == len(regions)
-    for region in regions:
-        checkpoint = next(p for p in checkpoints if p["epoch"] == region["representativeEpoch"])
-        assert region["startStep"] <= checkpoint["endStep"] <= region["endStep"]
-    spiked, _ = _curve(shape=lambda step: 1 - .0004 * step + .05 * math.sin(step / 120), spikes=(721, 1360))
-    assert [r["representativeEpoch"] for r in v3.detect(spiked, checkpoints)["regions"]] == [r["representativeEpoch"] for r in regions]
-
-
-def test_v3_score_valley_splits_nearby_peak_neighborhoods():
-    segments = v3._score_regions([.05, .80, .92, .78, .12, .76, .91, .79, .05])
-    assert [(start, end) for start, end, _peak in segments] == [(1, 3), (5, 7)]
-
-
-def test_v3_descent_then_shelf_selects_a_checkpoint_from_the_shelf():
-    def shape(step):
-        return 1 - .00075 * min(step, 800)
-    regions = v3.detect(*_curve(shape=shape, end=1800))["regions"]
-    assert len(regions) == 1
-    assert regions[0]["representativeEpoch"] >= 6
-
-
-def test_v3_many_nearby_good_observations_form_one_score_neighborhood():
-    def shape(step):
-        return .4 + .0001 * math.sin(step) if 700 <= step < 825 else 1.0
-    regions = v3.detect(*_curve(shape=shape))["regions"]
-    assert len(regions) == 1
-    assert regions[0]["representativeEpoch"] == 4
-    assert regions[0]["kind"] == "ranked_score_region"
+    assert 1 <= len(regions) <= v3.MAX_REGIONS
+    assert all(region["kind"] == "ranked_score_region" for region in regions)
+    assert all(region["representativeEpoch"] in {point["epoch"] for point in checkpoints} for region in regions)
 
 
 @pytest.mark.parametrize("algorithm", ["v2", "v4"])

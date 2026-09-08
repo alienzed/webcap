@@ -12,7 +12,7 @@ from . import (
 )
 
 
-ANALYSIS_VERSION = 9
+ANALYSIS_VERSION = 10
 DETAILED_LOSS_TAG = "train/loss"
 EPOCH_LOSS_TAG = "train/epoch_loss"
 MIN_CANDIDATE_STEP = 800
@@ -22,7 +22,7 @@ ALGORITHM_LABELS = {
     "v2": "v2 · Step Stable Ranges (experimental)",
     "v3": "v3 · Score Scalars",
     "v4": "v4 · Convergence Regimes (experimental)",
-    "v5": "v5 · Stable Step Zones (experimental)",
+    "v5": "v5 · Multiscale Loss Basins (experimental)",
 }
 
 

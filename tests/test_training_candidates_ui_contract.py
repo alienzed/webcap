@@ -16,7 +16,7 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
     assert 'id="training-candidates-algorithm"' in html
     assert 'v2 · Step Stable Ranges (experimental)' in html
     assert 'v3 · Score Scalars' in html
-    assert 'v5 · Stable Step Zones (experimental)' in html
+    assert 'v5 · Multiscale Loss Basins (experimental)' in html
     for algorithm in ("v1", "v2", "v3", "v4", "v5"):
         assert 'value="' + algorithm + '"' in html
     assert '/static/js/training_candidates.js' in html

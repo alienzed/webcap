@@ -1,6 +1,6 @@
 # WebCap: LoRA Candidate Analysis
 
-Candidates is a manual, read-only inspection of one recorded run. V1 remains the default whenever the modal opens, and selection is not saved to application settings. Analysis version 9 identifies the selected algorithm explicitly.
+Candidates is a manual, read-only inspection of one recorded run. V1 remains the default whenever the modal opens, and selection is not saved to application settings. Analysis version 10 identifies the selected algorithm explicitly.
 
 ## Five hypotheses
 
@@ -8,7 +8,7 @@ Candidates is a manual, read-only inspection of one recorded run. V1 remains the
 - **v2 · Step Stable Ranges:** the restored baseline: robust equal-step cells are locally low, quiet, and flat; one compatible interruption may bridge; anchored level/spread changes split ranges; whole-range drift rejects continuing movement.
 - **v3 · Score Scalars:** the original `train/epoch_loss` score scalar calculation. It ranks epoch-loss local minima/plateaus by depth, local standard deviation, early-regime weighting, and a preceding eight-point trend bonus. Epoch number is its x-axis for regime detection, progress, and 15%-of-run grouping; optimizer end steps are retained only for display and checkpoint mapping.
 - **v4 · Convergence Regimes:** macro trailing-versus-leading windows establish sustained descent followed by a sustained settled shelf. Brief pauses within continuing descent are rejected.
-- **v5 · Stable Step Zones:** 100-optimizer-step local-line seeds use robust residual spread and a data-derived tight band. Flat, gentle downward, and gentle upward seeds may expand to actual sampled boundaries; steep slopes and zones shorter than 150 optimizer steps are rejected. These physical scales never depend on run length or epoch width.
+- **v5 · Multiscale Loss Basins:** a fixed .98 EMA is averaged at 100, 250, 500, and 1000 physical optimizer-step widths. Persistent, locally prominent basins are ranked by cross-scale support, floor depth, alignment, and historical-floor competitiveness; checkpoint projection uses the smoothed basin floor rather than a region midpoint.
 
 ## Checkpoint projection and display
 

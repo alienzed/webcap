@@ -404,11 +404,11 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     monkeypatch.setattr(app_config, "FS_ROOT", root)
     epoch_directory = run / "epoch12"
     epoch_directory.mkdir()
-    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 9, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
+    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 10, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
     before = state_path.read_bytes()
     client = app_module.app.test_client()
     response = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
-    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 9
+    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 10
     assert response.get_json()["analysis"]["algorithm"] == "v1"
     for algorithm in ("v2", "v3", "v4", "v5"):
         switched = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1&algorithm=" + algorithm)
@@ -618,6 +618,20 @@ def test_v3_maps_ranked_epoch_centers_to_webcap_checkpoints():
     assert [point["step"] for point in result["analysisPoints"]] == [point["endStep"] for point in checkpoints]
 
 
+def _v5_curve(end, basins=(), base=1.0):
+    def loss(step):
+        return base - sum(depth * max(0.0, 1 - abs(step - center) / radius)
+                          for center, depth, radius in basins)
+
+    points = [{"step": step, "epoch": step // 200 + 1, "loss": loss(step)} for step in range(end)]
+    checkpoints = [
+        {"epoch": epoch, "startStep": (epoch - 1) * 200, "endStep": min(end - 1, epoch * 200 - 1),
+         "step": min(end - 1, epoch * 200 - 1), "loss": loss(min(end - 1, epoch * 200 - 1))}
+        for epoch in range(1, (end - 1) // 200 + 2)
+    ]
+    return points, checkpoints
+
+
 def test_v5_returns_the_fixed_ema_it_analyzes():
     points = [
         {"step": 0, "epoch": 1, "loss": 1.0},
@@ -629,66 +643,93 @@ def test_v5_returns_the_fixed_ema_it_analyzes():
     assert [point["loss"] for point in analysis] == pytest.approx([1.0, .99, .9802])
 
 
-def test_v5_isolated_raw_spike_does_not_split_a_stable_ema_regime():
-    points, checkpoints = _curve(shape=lambda _step: .6, end=1200)
-    points[500]["loss"] += .05
+def test_v5_centered_trends_use_optimizer_steps_not_array_indexes():
+    points = [{"step": step, "epoch": 1, "loss": loss} for step, loss in [
+        (0, 0.0), (1, 0.0), (2, 0.0), (100, 10.0), (150, 20.0), (200, 30.0),
+    ]]
+    trend = v5._centered_trend(points, 100)
+    assert trend["values"][3] == pytest.approx(15.0)
+
+
+def test_v5_raw_peak_does_not_create_a_basin_by_itself():
+    points, checkpoints = _v5_curve(7_000, [(3_000, .35, 900)])
+    points[5_500]["loss"] += 10
     regions = v5.detect(points, checkpoints)["regions"]
-    assert len(regions) == 1
-    assert regions[0]["startStep"] == 0 and regions[0]["endStep"] == points[-1]["step"]
+    assert regions
+    assert all(abs(region["floorCenterStep"] - 5_500) > 500 for region in regions)
 
 
-def test_v5_sustained_ema_departure_closes_the_first_floor_and_starts_a_new_one():
-    def shape(step):
-        if step < 500:
-            return .6
-        if step < 750:
-            return .6 - (step - 500) * .001
-        return .35
-
-    regions = v5.detect(*_curve(shape=shape, end=1500))["regions"]
-    assert len(regions) == 2
-    assert regions[0]["endStep"] < 500
-    assert regions[1]["startStep"] > 750
-    assert all(region["endStep"] < 500 or region["startStep"] >= 750 for region in regions)
+def test_v5_short_scale_only_dip_cannot_enter_the_normal_pool():
+    points, _checkpoints = _v5_curve(6_000)
+    for point in points:
+        step = point["step"]
+        point["loss"] = 1.0 - step * .00005 - .02 * max(0.0, 1 - abs(step - 3_000) / 50)
+    ema = v5._ema_points(points)
+    minima = {width: v5._nms_minima(v5._raw_minima(v5._centered_trend(ema, width)), width)
+              for width in v5.TREND_WIDTHS}
+    assert any(abs(item["step"] - 3_000) < 100 for item in minima[100])
+    assert all(not any(abs(item["step"] - 3_000) < 100 for item in minima[width])
+               for width in (250, 500, 1000))
 
 
-def test_v5_rejects_continuous_descent_and_short_flat_patch():
-    def short_patch(step):
-        if step < 400:
-            return 1 - step * .001
-        if step < 480:
-            return .6
-        return .6 - (step - 480) * .001
-
-    assert v5.detect(*_curve(shape=lambda step: 2 - step * .001, end=1200))["regions"] == []
-    assert v5.detect(*_curve(shape=short_patch, end=1200))["regions"] == []
+def test_v5_persistent_basin_and_recovered_floor_produce_separate_regions():
+    points, checkpoints = _v5_curve(8_500, [(2_500, .35, 900), (5_500, .33, 900)])
+    regions = v5.detect(points, checkpoints)["regions"]
+    centers = [region["floorCenterStep"] for region in regions]
+    anchors = [region["anchorStep"] for region in regions]
+    assert any(abs(center - 2_500) < 500 for center in centers)
+    assert any(abs(center - 5_500) < 500 for center in centers)
+    assert all(abs(left - right) >= v5.FINAL_NMS_STEPS for left in anchors for right in anchors if left != right)
 
 
-def test_v5_accepts_long_flat_and_gentle_downward_ema_regimes():
-    flat = v5.detect(*_curve(shape=lambda _step: .6, end=1200))["regions"]
-    gentle_down = v5.detect(*_curve(shape=lambda step: .8 - step * .00002, end=1200))["regions"]
-    assert len(flat) == len(gentle_down) == 1
-    assert flat[0]["endStep"] - flat[0]["startStep"] >= 100
-    assert gentle_down[0]["endStep"] - gentle_down[0]["startStep"] >= 100
+def test_v5_historical_floor_rejects_a_materially_inferior_later_shelf():
+    hypotheses = [
+        {"anchor": {"step": 1_000, "loss": .2, "prominence": .02}},
+        {"anchor": {"step": 3_000, "loss": .8, "prominence": .02}},
+    ]
+    assert v5._apply_floor_compatibility(hypotheses) == pytest.approx(.04)
+    assert hypotheses[0]["floorCompatible"] is True
+    assert hypotheses[1]["floorCompatible"] is False
 
 
-def test_v5_rejects_wandering_ema_behavior():
-    regions = v5.detect(*_curve(shape=lambda step: .6 + .04 * math.sin(step * .2), end=1200))["regions"]
-    assert regions == []
+def test_v5_nms_drops_a_weak_neighboring_dip_and_rep_uses_the_smoothed_floor():
+    points, checkpoints = _v5_curve(7_000, [(3_000, .4, 900), (3_550, .08, 200)])
+    checkpoints.extend([
+        {"epoch": 99, "startStep": 2_900, "endStep": 3_000, "step": 3_000, "loss": .6},
+        {"epoch": 100, "startStep": 3_450, "endStep": 3_500, "step": 3_500, "loss": .8},
+    ])
+    checkpoints.sort(key=lambda point: point["endStep"])
+    regions = v5.detect(points, checkpoints)["regions"]
+    nearby = [region for region in regions if 2_000 < region["anchorStep"] < 4_000]
+    assert len(nearby) == 1
+    assert nearby[0]["representativeEpoch"] == 99
+
+
+def test_v5_reserves_the_first_credible_basin_before_global_ranking():
+    def hypothesis(step, basin_score, loss, prominent):
+        return {"anchor": {"step": step, "loss": loss}, "basinScore": basin_score,
+                "prominenceScore": .8 if prominent else .2, "persistenceScore": .75 if prominent else .5}
+
+    early = hypothesis(1_000, .1, .6, True)
+    normal = [early] + [hypothesis(3_000 + index * 800, .9, .5 - index * .01, False) for index in range(10)]
+    selected = [early]
+    v5._accept(selected, [item for item in v5._ranked(normal) if item is not early], v5.MAX_REGIONS)
+    assert early in selected and len(selected) == v5.MAX_REGIONS
+
+
+def test_v5_fallback_is_nonempty_and_result_count_is_bounded():
+    points, checkpoints = _v5_curve(5_000)
+    regions = v5.detect(points, checkpoints)["regions"]
+    assert 1 <= len(regions) <= v5.MAX_REGIONS
 
 
 def test_v5_is_practical_on_twenty_thousand_detailed_points():
-    points = [{"step": step, "epoch": step // 200 + 1, "loss": .6} for step in range(20_000)]
-    checkpoints = [
-        {"epoch": epoch, "startStep": (epoch - 1) * 200, "endStep": epoch * 200 - 1,
-         "step": epoch * 200 - 1, "loss": .6}
-        for epoch in range(1, 101)
-    ]
+    points, checkpoints = _v5_curve(20_000, [(4_000, .3, 900), (10_000, .35, 900), (16_000, .4, 900)])
     started = time.perf_counter()
     result = v5.detect(points, checkpoints)
     assert time.perf_counter() - started < 3
     assert len(result["analysisPoints"]) == 20_000
-    assert len(result["regions"]) == 1
+    assert 1 <= len(result["regions"]) <= v5.MAX_REGIONS
 
 
 @pytest.mark.parametrize("algorithm", ["v2", "v4"])
@@ -705,7 +746,7 @@ def test_all_dispatch_display_and_artifact_independence(algorithm, tmp_path, mon
     detailed = [{"axis": p["step"], "loss": p["loss"], "wallTime": p["step"], "order": i} for i, p in enumerate(points)]
     epochs = [{"axis": p["epoch"], "loss": p["loss"], "wallTime": p["endStep"], "order": i} for i, p in enumerate(checkpoints)]
     before = training_candidates.analyze_loss_points(detailed, epochs, algorithm=algorithm)
-    assert before["algorithm"] == algorithm and before["analysisVersion"] == 9
+    assert before["algorithm"] == algorithm and before["analysisVersion"] == 10
     (tmp_path / "epoch5").mkdir()
     (tmp_path / "epoch5" / "adapter.safetensors").write_bytes(b"fixture")
     after = training_candidates.analyze_loss_points(detailed, epochs, run_dir=tmp_path, algorithm=algorithm)

@@ -5,20 +5,24 @@ import re
 import statistics
 from pathlib import Path
 
-from . import training_candidate_v1_epoch_regions, training_candidate_v2_step_ranges
+from . import (
+    training_candidate_v1_epoch_regions, training_candidate_v2_step_ranges,
+    training_candidate_v3_score_regions, training_candidate_v4_convergence_regimes,
+    training_candidate_v5_multiscale_stationarity,
+)
 
 
-ANALYSIS_VERSION = 6
+ANALYSIS_VERSION = 7
 DETAILED_LOSS_TAG = "train/loss"
 EPOCH_LOSS_TAG = "train/epoch_loss"
 MIN_CANDIDATE_STEP = 800
-# A roughly 69-sample half-life: enough to expose sustained detailed-loss
-# regimes without letting isolated TensorBoard samples dominate the display.
-DISPLAY_STEP_LOSS_EMA_ALPHA = 0.01
 _EPOCH_DIRECTORY_PATTERN = re.compile(r"^epoch(\d+)$")
 ALGORITHM_LABELS = {
     "v1": "v1 · Epoch Regions",
     "v2": "v2 · Step Stable Ranges (experimental)",
+    "v3": "v3 · Ranked Score Regions (experimental)",
+    "v4": "v4 · Convergence Regimes (experimental)",
+    "v5": "v5 · Multiscale Stationarity (experimental)",
 }
 
 
@@ -110,35 +114,45 @@ def aggregate_detailed_loss_by_epoch(mapped_points, completed_epochs):
     return result
 
 
-def smooth_step_loss_ema(points, alpha=DISPLAY_STEP_LOSS_EMA_ALPHA):
-    """Return a display-only EMA over detailed TensorBoard samples in step order."""
-    ordered = sorted(points, key=lambda point: int(point["step"]))
+def smooth_step_loss(points):
+    """Common centered median (quarter epoch), then mean (eighth epoch).
+
+    Step windows retain their physical width as scalar logging density changes.
+    No detector receives this display-only series.
+    """
+    from bisect import bisect_left, bisect_right
+
+    ordered = sorted(points, key=lambda point: point["step"])
     if not ordered:
         return []
-    ema = float(ordered[0]["loss"])
-    result = [{"step": int(ordered[0]["step"]), "epoch": int(ordered[0]["epoch"]), "loss": ema}]
-    for point in ordered[1:]:
-        ema = alpha * float(point["loss"]) + (1.0 - alpha) * ema
-        result.append({"step": int(point["step"]), "epoch": int(point["epoch"]), "loss": ema})
+    steps = [p["step"] for p in ordered]
+    gaps = [b - a for a, b in zip(steps, steps[1:]) if b > a]
+    spacing = _median(gaps) or 1
+    epochs = {}
+    for point in ordered:
+        epochs.setdefault(point["epoch"], []).append(point["step"])
+    epoch_width = _median([max(values) - min(values) + spacing for values in epochs.values()])
+    radius = max(spacing, epoch_width / 8)
+    medians = [_median([p["loss"] for p in ordered[bisect_left(steps, step - radius):bisect_right(steps, step + radius)]])
+               for step in steps]
+    prefix = [0.0]
+    for value in medians:
+        prefix.append(prefix[-1] + value)
+    result = []
+    for point in ordered:
+        left = bisect_left(steps, point["step"] - radius / 2)
+        right = bisect_right(steps, point["step"] + radius / 2)
+        result.append({"step": point["step"], "epoch": point["epoch"],
+                       "loss": (prefix[right] - prefix[left]) / (right - left)})
     return result
 
 
-_centered_median = training_candidate_v1_epoch_regions.centered_median
-_representative_index = training_candidate_v1_epoch_regions._representative_index
-_region_explanation = training_candidate_v1_epoch_regions._region_explanation
-detect_settled_regions = training_candidate_v1_epoch_regions.detect_settled_regions
-
-
-def _detect_v1(detailed_points, checkpoint_points):
-    # Keep this thin adapter so v1's long-standing helper remains easy to
-    # exercise directly while all detector calculations live in its module.
-    trend, regions = detect_settled_regions(checkpoint_points)
-    return {"analysisPoints": trend, "regions": regions}
-
-
 ALGORITHMS = {
-    "v1": _detect_v1,
+    "v1": training_candidate_v1_epoch_regions.detect,
     "v2": training_candidate_v2_step_ranges.detect,
+    "v3": training_candidate_v3_score_regions.detect,
+    "v4": training_candidate_v4_convergence_regimes.detect,
+    "v5": training_candidate_v5_multiscale_stationarity.detect,
 }
 
 
@@ -191,13 +205,14 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
         for point in mapped
         if point["epoch"] in completed_epochs
     ], key=lambda point: point["step"])
-    smoothed_step_loss_points = smooth_step_loss_ema(step_loss_points)
-    eligible_points = [point for point in robust_points if point["endStep"] >= MIN_CANDIDATE_STEP]
-    eligible_step_points = [point for point in step_loss_points if point["step"] >= MIN_CANDIDATE_STEP]
+    smoothed_step_loss_points = smooth_step_loss(step_loss_points)
+    # The legacy startup cutoff belongs only to v1's preserved behavior.
+    eligible_points = [point for point in robust_points if point["endStep"] >= MIN_CANDIDATE_STEP] if algorithm == "v1" else robust_points
+    eligible_step_points = step_loss_points
     detector_result = ALGORITHMS[algorithm](eligible_step_points, eligible_points)
     regions = detector_result["regions"]
     if algorithm == "v1":
-        display_trend = _centered_median(robust_points)
+        display_trend = training_candidate_v1_epoch_regions.centered_median(robust_points)
         eligible_trend_by_epoch = {point["epoch"]: point for point in detector_result["analysisPoints"]}
         analysis_points = [
             dict(point, loss=eligible_trend_by_epoch.get(point["epoch"], point)["loss"])
@@ -219,7 +234,7 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
         "kind": region["kind"],
         "label": region["label"],
         "savedEpochs": region["savedEpochs"],
-        "reason": "Current stable region." if region["current"] else "Stable region.",
+        "reason": ("Current stable region." if region["current"] else "Stable region.") if algorithm == "v1" else region["label"] + ".",
         "artifact": artifact_for_epoch(run_dir, region["representativeEpoch"]) if run_dir is not None else {"available": False, "status": "not_checked"},
     } for region in regions]
     return {
@@ -237,5 +252,7 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
 
 
 def analyze_run_directory(run_dir, algorithm="v1"):
+    if algorithm not in ALGORITHMS:
+        raise ValueError("Unknown candidate analysis algorithm: " + str(algorithm))
     detailed_events, epoch_events = read_loss_events(run_dir)
     return analyze_loss_points(detailed_events, epoch_events, run_dir=run_dir, algorithm=algorithm)

@@ -1,4 +1,4 @@
-"""V2: locally low/quiet step ranges with anchored regime segmentation."""
+"""V3: scalar desirability ranking and spatially diverse score neighborhoods."""
 
 import math
 import statistics
@@ -89,51 +89,75 @@ def _region(cells, start, end, checkpoints, kind, label, weights=(.55, .35, .10)
     }
 
 
+def _scores(cells):
+    levels = [p["loss"] for p in cells]
+    if len(levels) < 5:
+        return []
+    # Robust cells already remove individual raw spikes; percentile limits
+    # prevent a single remaining extreme cell controlling depth normalization.
+    ordered = sorted(levels)
+    low, high = ordered[int((len(ordered) - 1) * .05)], ordered[int((len(ordered) - 1) * .95)]
+    span = high - low
+    if span <= _noise(cells):
+        return []
+    first = None
+    for i in range(max(1, int(len(cells) * .15)), len(cells) - 2):
+        if all(high - levels[j] >= span * .15 for j in range(i, i + 3)):
+            first = i
+            break
+    if first is None:
+        return []
+    bonuses = [max(0, _median(levels[max(0, i - 8):i]) - level) for i, level in enumerate(levels)]
+    bonus_scale = max(bonuses) or 1
+    result = []
+    for i, level in enumerate(levels):
+        depth = min(1, max(0, (high - level) / span))
+        window = levels[max(0, i - 2):min(len(levels), i + 3)]
+        stability = 1 / (1 + statistics.pstdev(window) / span)
+        gate = min(1, depth / .5)
+        progress = max(0, (cells[i]["step"] - cells[first]["step"]) /
+                       max(1, cells[-1]["step"] - cells[first]["step"]))
+        early = max(0, 1 - progress) ** .3
+        result.append(depth * stability * gate * early * (1 + .4 * bonuses[i] / bonus_scale) if i >= first else 0)
+    return result
+
+
 def detect(detailed_points, checkpoint_points):
     cells, width = _prepare(detailed_points, checkpoint_points)
-    if len(cells) < 4:
+    scores = _scores(cells)
+    if not scores:
         return {"analysisPoints": _public(cells), "regions": []}
     noise = _noise(cells)
-    flags = []
-    for i, point in enumerate(cells):
-        local = cells[max(0, i - 2):min(len(cells), i + 3)]
-        broader = cells[max(0, i - 16):min(len(cells), i + 17)]
-        before = cells[max(0, i - 2):i]
-        after = cells[i + 1:min(len(cells), i + 3)]
-        movement = (_median([p["loss"] for p in after]) - _median([p["loss"] for p in before])
-                    if before and after else local[-1]["loss"] - local[0]["loss"])
-        local_noise = max(noise, _median([p["spread"] for p in local]))
-        flags.append(point["loss"] <= _median([p["loss"] for p in broader]) + 2 * noise
-                     and point["spread"] <= 3 * noise
-                     and abs(movement) <= 2 * local_noise)
-    # Bridge just one cell, and only when both sides agree in level/stability.
-    for i in range(1, len(flags) - 1):
-        if not flags[i] and flags[i - 1] and flags[i + 1]:
-            if (abs(cells[i - 1]["loss"] - cells[i + 1]["loss"]) <= 2 * noise
-                    and cells[i]["spread"] <= 3 * noise
-                    and cells[i - 1]["bucket"] + 2 == cells[i + 1]["bucket"]):
-                flags[i] = True
-    segments = []
-    for start, end in _runs(flags, cells):
-        anchor = start
-        for i in range(start + 2, end):
-            baseline = cells[anchor:min(anchor + 3, i)]
-            following = cells[i:min(i + 3, end + 1)]
-            changed_level = abs(_median([p["loss"] for p in following]) - _median([p["loss"] for p in baseline])) > 4 * noise
-            changed_spread = abs(_median([p["spread"] for p in following]) - _median([p["spread"] for p in baseline])) > 2 * noise
-            if changed_level or changed_spread:
-                segments.append((anchor, i - 1))
-                anchor = i
-        segments.append((anchor, end))
+    promising = [i for i in range(1, len(cells) - 1) if scores[i] > 0
+                 and cells[i]["loss"] <= cells[i - 1]["loss"] + noise
+                 and cells[i]["loss"] <= cells[i + 1]["loss"] + noise]
+    separation = max(width * 2, (cells[-1]["step"] - cells[0]["step"]) * .15)
+    groups = []
+    for i in sorted(promising, key=lambda j: (-scores[j], cells[j]["step"])):
+        group = next((g for g in groups if abs(cells[i]["step"] - cells[g[0]]["step"]) <= separation / 2), None)
+        if group is not None:
+            if len(group) < 5:
+                group.append(i)
+        elif all(abs(cells[i]["step"] - cells[g[0]]["step"]) >= separation for g in groups) and len(groups) < 6:
+            groups.append([i])
     regions = []
-    for start, end in segments:
-        section = cells[start:end + 1]
-        if len(section) < 4 or section[-1]["endStep"] - section[0]["startStep"] + width / 3 < 3 * width:
+    used = set()
+    for group in groups:
+        peak = group[0]
+        left, right = cells[peak]["step"] - separation / 2, cells[peak]["step"] + separation / 2
+        indexes = [i for i, p in enumerate(cells) if left <= p["step"] <= right]
+        start, end = indexes[0], indexes[-1]
+        region = _region(cells, start, end, checkpoint_points, "ranked_score_region", "Ranked score region")
+        if region is None:
             continue
-        # A small coherent drift over the entire region is still a descent/rise.
-        if abs(_median([p["loss"] for p in section[-2:]]) - _median([p["loss"] for p in section[:2]])) > 3 * noise:
+        inside = [p for p in checkpoint_points if region["startStep"] <= p["endStep"] <= region["endStep"] and p["epoch"] not in used]
+        if not inside:
             continue
-        region = _region(cells, start, end, checkpoint_points, "step_stable_range", "Step stable range")
-        if region:
-            regions.append(region)
+        # Project onto robust score evidence, never an individual raw minimum.
+        chosen = max(inside, key=lambda p: (
+            scores[min(indexes, key=lambda i: abs(cells[i]["step"] - p["endStep"]))],
+            -abs(p["endStep"] - cells[peak]["step"]), -p["epoch"]))
+        region["representativeEpoch"] = chosen["epoch"]
+        used.add(chosen["epoch"])
+        regions.append(region)
     return {"analysisPoints": _public(cells), "regions": regions}

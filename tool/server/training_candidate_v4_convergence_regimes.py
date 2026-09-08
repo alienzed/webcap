@@ -1,4 +1,4 @@
-"""V2: locally low/quiet step ranges with anchored regime segmentation."""
+"""V4: sustained descent followed by a sustained flatter regime."""
 
 import math
 import statistics
@@ -91,49 +91,40 @@ def _region(cells, start, end, checkpoints, kind, label, weights=(.55, .35, .10)
 
 def detect(detailed_points, checkpoint_points):
     cells, width = _prepare(detailed_points, checkpoint_points)
-    if len(cells) < 4:
+    if len(cells) < 8:
         return {"analysisPoints": _public(cells), "regions": []}
     noise = _noise(cells)
-    flags = []
-    for i, point in enumerate(cells):
-        local = cells[max(0, i - 2):min(len(cells), i + 3)]
-        broader = cells[max(0, i - 16):min(len(cells), i + 17)]
-        before = cells[max(0, i - 2):i]
-        after = cells[i + 1:min(len(cells), i + 3)]
-        movement = (_median([p["loss"] for p in after]) - _median([p["loss"] for p in before])
-                    if before and after else local[-1]["loss"] - local[0]["loss"])
-        local_noise = max(noise, _median([p["spread"] for p in local]))
-        flags.append(point["loss"] <= _median([p["loss"] for p in broader]) + 2 * noise
-                     and point["spread"] <= 3 * noise
-                     and abs(movement) <= 2 * local_noise)
-    # Bridge just one cell, and only when both sides agree in level/stability.
-    for i in range(1, len(flags) - 1):
-        if not flags[i] and flags[i - 1] and flags[i + 1]:
-            if (abs(cells[i - 1]["loss"] - cells[i + 1]["loss"]) <= 2 * noise
-                    and cells[i]["spread"] <= 3 * noise
-                    and cells[i - 1]["bucket"] + 2 == cells[i + 1]["bucket"]):
-                flags[i] = True
-    segments = []
-    for start, end in _runs(flags, cells):
-        anchor = start
-        for i in range(start + 2, end):
-            baseline = cells[anchor:min(anchor + 3, i)]
-            following = cells[i:min(i + 3, end + 1)]
-            changed_level = abs(_median([p["loss"] for p in following]) - _median([p["loss"] for p in baseline])) > 4 * noise
-            changed_spread = abs(_median([p["spread"] for p in following]) - _median([p["spread"] for p in baseline])) > 2 * noise
-            if changed_level or changed_spread:
-                segments.append((anchor, i - 1))
-                anchor = i
-        segments.append((anchor, end))
+    # Adjacent robust-cell movement is normalized to observed noise.
+    deltas = [0.0] + [b["loss"] - a["loss"] for a, b in zip(cells, cells[1:])]
     regions = []
-    for start, end in segments:
-        section = cells[start:end + 1]
-        if len(section) < 4 or section[-1]["endStep"] - section[0]["startStep"] + width / 3 < 3 * width:
-            continue
-        # A small coherent drift over the entire region is still a descent/rise.
-        if abs(_median([p["loss"] for p in section[-2:]]) - _median([p["loss"] for p in section[:2]])) > 3 * noise:
-            continue
-        region = _region(cells, start, end, checkpoint_points, "step_stable_range", "Step stable range")
-        if region:
-            regions.append(region)
+    descent_start = None
+    flat_start = None
+    for i in range(1, len(cells) + 1):
+        gap = i < len(cells) and cells[i]["bucket"] != cells[i - 1]["bucket"] + 1
+        threshold = max(noise, cells[min(i, len(cells) - 1)]["spread"]) * 2
+        movement = deltas[i] if i < len(cells) else float("inf")
+        flat = abs(movement) <= threshold and not gap
+        if flat_start is not None and (not flat or i == len(cells)):
+            end = i - 1
+            section = cells[flat_start:end + 1]
+            drift = abs(_median([p["loss"] for p in section[-2:]]) - _median([p["loss"] for p in section[:2]]))
+            if len(section) >= 4 and drift <= 3 * noise:
+                region = _region(cells, flat_start, end, checkpoint_points, "convergence_regime", "Convergence regime", (.65, .30, .05))
+                if region:
+                    regions.append(region)
+            flat_start = None
+            descent_start = None
+        if i == len(cells):
+            break
+        if gap or movement > threshold:
+            descent_start = None
+        elif movement < -threshold:
+            if descent_start is None:
+                descent_start = i - 1
+        elif flat and descent_start is not None and flat_start is None:
+            descent = cells[descent_start]["loss"] - cells[i - 1]["loss"]
+            if i - 1 - descent_start >= 3 and descent > 6 * noise:
+                flat_start = i - 1
+            else:
+                descent_start = None
     return {"analysisPoints": _public(cells), "regions": regions}

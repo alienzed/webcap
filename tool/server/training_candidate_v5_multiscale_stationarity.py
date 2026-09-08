@@ -1,4 +1,4 @@
-"""V2: locally low/quiet step ranges with anchored regime segmentation."""
+"""V5: nested-window stationarity agreement, without a low-loss/prior-descent gate."""
 
 import math
 import statistics
@@ -9,7 +9,7 @@ def _median(values):
 
 
 def _prepare(detailed, checkpoints):
-    """Robust, equal-step cells (one eighth of a typical completed epoch).
+    """Robust, equal-step cells (one sixteenth of a typical completed epoch).
 
     Cells use actual optimizer steps, so denser logging doesn't stretch time.
     Median/MAD reject isolated extremes before any scoring or segmentation.
@@ -20,7 +20,7 @@ def _prepare(detailed, checkpoints):
     gaps = [b["step"] - a["step"] for a, b in zip(ordered, ordered[1:]) if b["step"] > a["step"]]
     spacing = _median(gaps) or 1.0
     epoch_steps = _median([p["endStep"] - p["startStep"] + spacing for p in checkpoints])
-    width = max(spacing * 3, epoch_steps / 8)
+    width = max(spacing * 3, epoch_steps / 16)
     buckets = {}
     origin = ordered[0]["step"]
     for point in ordered:
@@ -89,51 +89,42 @@ def _region(cells, start, end, checkpoints, kind, label, weights=(.55, .35, .10)
     }
 
 
+def _stationary(section, noise):
+    """Equivalent quarter levels and spreads at this scale, not a p-value test."""
+    if len(section) < 4:
+        return False
+    size = max(1, len(section) // 4)
+    quarters = [section[i * size:(i + 1) * size] for i in range(3)] + [section[3 * size:]]
+    levels = [_median([p["loss"] for p in q]) for q in quarters]
+    spreads = [_median([p["spread"] for p in q]) for q in quarters]
+    # Both level equivalence and variance equivalence must hold.
+    tolerance = max(noise * 3, _median(spreads) * 2)
+    return max(levels) - min(levels) <= tolerance and max(spreads) - min(spreads) <= 3 * noise
+
+
 def detect(detailed_points, checkpoint_points):
     cells, width = _prepare(detailed_points, checkpoint_points)
-    if len(cells) < 4:
+    if len(cells) < 8:
         return {"analysisPoints": _public(cells), "regions": []}
     noise = _noise(cells)
-    flags = []
-    for i, point in enumerate(cells):
-        local = cells[max(0, i - 2):min(len(cells), i + 3)]
-        broader = cells[max(0, i - 16):min(len(cells), i + 17)]
-        before = cells[max(0, i - 2):i]
-        after = cells[i + 1:min(len(cells), i + 3)]
-        movement = (_median([p["loss"] for p in after]) - _median([p["loss"] for p in before])
-                    if before and after else local[-1]["loss"] - local[0]["loss"])
-        local_noise = max(noise, _median([p["spread"] for p in local]))
-        flags.append(point["loss"] <= _median([p["loss"] for p in broader]) + 2 * noise
-                     and point["spread"] <= 3 * noise
-                     and abs(movement) <= 2 * local_noise)
-    # Bridge just one cell, and only when both sides agree in level/stability.
-    for i in range(1, len(flags) - 1):
-        if not flags[i] and flags[i - 1] and flags[i + 1]:
-            if (abs(cells[i - 1]["loss"] - cells[i + 1]["loss"]) <= 2 * noise
-                    and cells[i]["spread"] <= 3 * noise
-                    and cells[i - 1]["bucket"] + 2 == cells[i + 1]["bucket"]):
-                flags[i] = True
-    segments = []
-    for start, end in _runs(flags, cells):
-        anchor = start
-        for i in range(start + 2, end):
-            baseline = cells[anchor:min(anchor + 3, i)]
-            following = cells[i:min(i + 3, end + 1)]
-            changed_level = abs(_median([p["loss"] for p in following]) - _median([p["loss"] for p in baseline])) > 4 * noise
-            changed_spread = abs(_median([p["spread"] for p in following]) - _median([p["spread"] for p in baseline])) > 2 * noise
-            if changed_level or changed_spread:
-                segments.append((anchor, i - 1))
-                anchor = i
-        segments.append((anchor, end))
+    flags = [False] * len(cells)
+    for start in range(len(cells) - 7):
+        short, longer = cells[start:start + 4], cells[start:start + 8]
+        if longer[-1]["bucket"] - longer[0]["bucket"] != 7:
+            continue
+        if _stationary(short, noise) and _stationary(longer, noise):
+            flags[start:start + 8] = [True] * 8
     regions = []
-    for start, end in segments:
-        section = cells[start:end + 1]
-        if len(section) < 4 or section[-1]["endStep"] - section[0]["startStep"] + width / 3 < 3 * width:
-            continue
-        # A small coherent drift over the entire region is still a descent/rise.
-        if abs(_median([p["loss"] for p in section[-2:]]) - _median([p["loss"] for p in section[:2]])) > 3 * noise:
-            continue
-        region = _region(cells, start, end, checkpoint_points, "step_stable_range", "Step stable range")
-        if region:
-            regions.append(region)
+    for start, end in _runs(flags, cells):
+        # Anchor agreement prevents many individually acceptable windows from
+        # chaining into a long slowly drifting interval.
+        anchor = start
+        for stop in range(start + 8, end + 2):
+            if stop == end + 1 or not _stationary(cells[anchor:anchor + 4] + cells[stop - 3:stop + 1], noise):
+                last = stop if stop == end + 1 else stop - 1
+                if last - anchor >= 8:
+                    region = _region(cells, anchor, last - 1, checkpoint_points, "multiscale_stationarity", "Multiscale stationarity", (.65, .35, 0))
+                    if region:
+                        regions.append(region)
+                anchor = stop
     return {"analysisPoints": _public(cells), "regions": regions}

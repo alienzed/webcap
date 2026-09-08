@@ -404,6 +404,11 @@
   padding: 8px;
 }
 
+#h3-calibration-results { display: grid; gap: 12px; overflow-x: auto; padding-top: 12px; }
+#h3-calibration-results table { width: 100%; border-collapse: collapse; font-size: 12px; }
+#h3-calibration-results caption { text-align: left; font-weight: 600; padding-bottom: 6px; }
+#h3-calibration-results th, #h3-calibration-results td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border-soft); }
+
 .app-settings-advanced > summary {
   cursor: pointer;
   font-size: 12px;

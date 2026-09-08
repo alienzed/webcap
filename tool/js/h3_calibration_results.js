@@ -16,22 +16,23 @@ function renderH3CalibrationResults(calibration) {
   Object.keys(safeShapes).forEach(function (frames) {
     Object.keys(safeShapes[frames]).forEach(function (aspect) {
       var shape = safeShapes[frames][aspect];
-      maximums.push(frames + ' frames · ' + (aspects[aspect] || aspect) + ' · ' + shape[0] + ' × ' + shape[1]);
+      maximums.push('<tr><td>' + escapeHtml(frames) + '</td><td>' + escapeHtml(aspects[aspect] || aspect) +
+        '</td><td>' + escapeHtml(shape[0] + ' × ' + shape[1]) + '</td></tr>');
     });
   });
   if (maximums.length) {
-    html += '<p class="app-settings-help">Saved maximum buckets</p><ul class="app-settings-help">' +
-      maximums.map(function (text) { return '<li>' + escapeHtml(text) + '</li>'; }).join('') + '</ul>';
+    html += '<table><caption>Saved maximum buckets</caption><thead><tr><th scope="col">Frames</th><th scope="col">Aspect</th><th scope="col">Maximum bucket</th></tr></thead><tbody>' +
+      maximums.join('') + '</tbody></table>';
   }
   var keys = Object.keys(results);
   if (keys.length) {
-    html += '<p class="app-settings-help">Tested buckets</p><ul class="app-settings-help">' + keys.map(function (key) {
+    html += '<table><caption>Tested buckets</caption><thead><tr><th scope="col">Frames</th><th scope="col">Aspect</th><th scope="col">Resolution</th><th scope="col">Result</th></tr></thead><tbody>' + keys.map(function (key) {
       // Config validation owns this key format: e.g. 34f/169-736x416.
       var parts = /^(\d+)f\/([^-]+)-(\d+)x(\d+)$/.exec(key);
-      var bucket = parts[1] + ' frames · ' + (aspects[parts[2]] || parts[2]) + ' · ' + parts[3] + ' × ' + parts[4];
       var status = results[key].status;
-      return '<li>' + escapeHtml(bucket + ' · ' + (statuses[status] || status)) + '</li>';
-    }).join('') + '</ul>';
+      return '<tr><td>' + escapeHtml(parts[1]) + '</td><td>' + escapeHtml(aspects[parts[2]] || parts[2]) +
+        '</td><td>' + escapeHtml(parts[3] + ' × ' + parts[4]) + '</td><td>' + escapeHtml(statuses[status] || status) + '</td></tr>';
+    }).join('') + '</tbody></table>';
   } else if (!maximums.length) {
     html += '<p class="app-settings-help">No saved calibration results.</p>';
   }

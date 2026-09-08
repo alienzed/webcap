@@ -175,6 +175,7 @@ function refreshH3CalibrationSettings() {
   var reset = document.getElementById('h3-calibration-reset-btn');
   if (!summary || !source || !run || !stop || !reset) return;
   var calibration = appSettingsLoadedConfig && appSettingsLoadedConfig.training && appSettingsLoadedConfig.training.h3_calibration;
+  renderH3CalibrationResults(calibration);
   var results = calibration && calibration.results ? calibration.results : {};
   var hardware = calibration && calibration.hardware;
   summary.textContent = hardware

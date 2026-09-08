@@ -86,6 +86,25 @@ def test_epoch_median_aggregation_rejects_isolated_step_spikes():
     assert training_candidates.aggregate_detailed_loss_by_epoch(mapped, complete) == [{"epoch": 7, "step": 904, "startStep": 900, "endStep": 904, "loss": .2}]
 
 
+def test_display_ema_preserves_detailed_metadata_and_damps_short_noise():
+    points = [
+        {"step": 10, "epoch": 1, "loss": 0.0},
+        {"step": 11, "epoch": 1, "loss": 1.0},
+        {"step": 12, "epoch": 1, "loss": 0.0},
+    ]
+    smoothed = training_candidates.smooth_step_loss_ema(points)
+    assert len(smoothed) == len(points)
+    assert [(point["step"], point["epoch"]) for point in smoothed] == [(10, 1), (11, 1), (12, 1)]
+    assert smoothed[0]["loss"] == points[0]["loss"]
+    assert 0 < smoothed[1]["loss"] < points[1]["loss"]
+
+    sustained = training_candidates.smooth_step_loss_ema([
+        {"step": index, "epoch": 2, "loss": 0.0 if index < 100 else 1.0}
+        for index in range(600)
+    ])
+    assert sustained[-1]["loss"] > .99
+
+
 def test_settled_detector_handles_valley_shelf_and_current_tail_without_monotonic_descent():
     valley_trend, valley = training_candidates.detect_settled_regions(_robust([1.0, .8, .6, .5, .5, .5, .7, .9]))
     shelf_trend, shelf = training_candidates.detect_settled_regions(_robust([1.0, .8, .7, .69, .70, .69, .70]))
@@ -132,6 +151,8 @@ def test_detailed_stream_is_observational_and_preserves_step_mapping():
     assert analysis["regions"] == noisy_analysis["regions"]
     assert analysis["candidates"] == noisy_analysis["candidates"]
     assert analysis["stepLossPoints"] != noisy_analysis["stepLossPoints"]
+    assert len(analysis["smoothedStepLossPoints"]) == len(analysis["stepLossPoints"])
+    assert [point["step"] for point in analysis["smoothedStepLossPoints"]] == [point["step"] for point in analysis["stepLossPoints"]]
     assert all({"step", "epoch", "loss"} <= point.keys() for point in analysis["stepLossPoints"])
     assert all(point["step"] == next(item["endStep"] for item in training_candidates.aggregate_detailed_loss_by_epoch(training_candidates.map_detailed_loss_to_epochs(detailed, boundaries), boundaries) if item["epoch"] == point["epoch"]) for point in analysis["epochLossPoints"])
 
@@ -142,6 +163,7 @@ def test_startup_epochs_are_displayed_but_cannot_change_candidate_math():
     analysis = training_candidates.analyze_loss_points(base, boundaries)
     changed_analysis = training_candidates.analyze_loss_points(changed, changed_boundaries)
     assert analysis["stepLossPoints"][0]["step"] == 0
+    assert analysis["smoothedStepLossPoints"][0]["step"] == 0
     assert analysis["epochLossPoints"][0]["epoch"] == 1
     assert analysis["regions"] == changed_analysis["regions"]
     assert analysis["candidates"] == changed_analysis["candidates"]
@@ -153,6 +175,15 @@ def test_strong_descent_after_startup_has_no_candidates_but_gentle_shelf_can_set
     shelf, shelf_boundaries = _epoch_events([1.0, .8, .7, .69, .70, .69, .70])
     assert training_candidates.analyze_loss_points(descending, descending_boundaries)["candidates"] == []
     assert len(training_candidates.analyze_loss_points(shelf, shelf_boundaries)["candidates"]) == 1
+
+
+def test_display_ema_payload_does_not_change_candidate_decisions(monkeypatch):
+    detailed, boundaries = _epoch_events([1.0, .8, .7, .69, .70, .69, .70])
+    with_overlay = training_candidates.analyze_loss_points(detailed, boundaries)
+    monkeypatch.setattr(training_candidates, "smooth_step_loss_ema", lambda _points: [])
+    without_overlay = training_candidates.analyze_loss_points(detailed, boundaries)
+    assert with_overlay["regions"] == without_overlay["regions"]
+    assert with_overlay["candidates"] == without_overlay["candidates"]
 
 
 def test_region_explanations_describe_existing_evidence_without_affecting_selection():
@@ -243,11 +274,11 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     monkeypatch.setattr(app_config, "FS_ROOT", root)
     epoch_directory = run / "epoch12"
     epoch_directory.mkdir()
-    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path: {"analysisVersion": 4, "stepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
+    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path: {"analysisVersion": 5, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
     before = state_path.read_bytes()
     client = app_module.app.test_client()
     response = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
-    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 4
+    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 5
     assert state_path.read_bytes() == before
     opened = []
     monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))

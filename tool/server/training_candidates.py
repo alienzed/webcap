@@ -6,10 +6,13 @@ import statistics
 from pathlib import Path
 
 
-ANALYSIS_VERSION = 4
+ANALYSIS_VERSION = 5
 DETAILED_LOSS_TAG = "train/loss"
 EPOCH_LOSS_TAG = "train/epoch_loss"
 MIN_CANDIDATE_STEP = 800
+# A roughly 69-sample half-life: enough to expose sustained detailed-loss
+# regimes without letting isolated TensorBoard samples dominate the display.
+DISPLAY_STEP_LOSS_EMA_ALPHA = 0.01
 _EPOCH_DIRECTORY_PATTERN = re.compile(r"^epoch(\d+)$")
 
 
@@ -98,6 +101,19 @@ def aggregate_detailed_loss_by_epoch(mapped_points, completed_epochs):
                 "endStep": max(steps[epoch]),
                 "loss": _median(samples[epoch]),
             })
+    return result
+
+
+def smooth_step_loss_ema(points, alpha=DISPLAY_STEP_LOSS_EMA_ALPHA):
+    """Return a display-only EMA over detailed TensorBoard samples in step order."""
+    ordered = sorted(points, key=lambda point: int(point["step"]))
+    if not ordered:
+        return []
+    ema = float(ordered[0]["loss"])
+    result = [{"step": int(ordered[0]["step"]), "epoch": int(ordered[0]["epoch"]), "loss": ema}]
+    for point in ordered[1:]:
+        ema = alpha * float(point["loss"]) + (1.0 - alpha) * ema
+        result.append({"step": int(point["step"]), "epoch": int(point["epoch"]), "loss": ema})
     return result
 
 
@@ -330,11 +346,12 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
         for point in sorted(epoch_events, key=lambda point: point["axis"])
         if int(point["axis"]) in completed_epochs
     ]
-    step_loss_points = [
+    step_loss_points = sorted([
         {"step": int(point["step"]), "epoch": int(point["epoch"]), "loss": float(point["loss"])}
         for point in mapped
         if point["epoch"] in completed_epochs
-    ]
+    ], key=lambda point: point["step"])
+    smoothed_step_loss_points = smooth_step_loss_ema(step_loss_points)
     display_trend = _centered_median(robust_points)
     eligible_points = [point for point in robust_points if point["endStep"] >= MIN_CANDIDATE_STEP]
     eligible_trend, regions = detect_settled_regions(eligible_points)
@@ -363,6 +380,7 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
     return {
         "analysisVersion": ANALYSIS_VERSION,
         "stepLossPoints": step_loss_points,
+        "smoothedStepLossPoints": smoothed_step_loss_points,
         "epochLossPoints": epoch_loss_points,
         "analysisPoints": analysis_points,
         "regions": regions,

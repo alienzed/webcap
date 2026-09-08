@@ -26,6 +26,7 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "/fs/training_candidates?folder=" in script
     assert "training-candidates-raw" in script
     assert "training-candidates-step-loss" in script
+    assert "training-candidates-step-loss-smoothed" in script
     assert "training-candidates-analysis" in script
     assert "training-candidates-basin" in script
     assert "analysisPoints" in script
@@ -33,9 +34,11 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "regions" in script
     assert "epochLossPoints" in script
     assert "stepLossPoints" in script
+    assert "smoothedStepLossPoints" in script
     assert "detailedSmoothedPoints" not in script
     assert "training-candidates-hover-layer" in script
     assert "Step loss:" in script
+    assert "Smoothed step loss:" in script
     assert "training-candidates-tooltip" in script
     assert "training-candidates-open-epoch" in script
     assert "training-candidates-region-summary" in script
@@ -49,3 +52,4 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "training-candidates-modal" in css
     assert "width: min(95vw, 1800px)" in css
     assert '.training-candidates-chart text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }' in css
+    assert ".training-candidates-step-loss-smoothed" in css

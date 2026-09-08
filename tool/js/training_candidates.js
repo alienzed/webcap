@@ -22,6 +22,7 @@ function trainingCandidatesPointForEpoch(epoch, analysis, points) {
 function trainingCandidatesSvg(data) {
   var points = data && Array.isArray(data.epochLossPoints) ? data.epochLossPoints : [];
   var stepPoints = data && Array.isArray(data.stepLossPoints) ? data.stepLossPoints : [];
+  var smoothedStepPoints = data && Array.isArray(data.smoothedStepLossPoints) ? data.smoothedStepLossPoints : [];
   var analysis = data && Array.isArray(data.analysisPoints) ? data.analysisPoints : [];
   if (!points.length || !stepPoints.length) return '<div class="training-candidates-empty">No completed TensorBoard loss points are available.</div>';
   var allLosses = points.concat(analysis).map(function (point) { return trainingCandidatesNumber(point.loss, 0); });
@@ -61,21 +62,24 @@ function trainingCandidatesSvg(data) {
     if (!point) return '';
     return '<g class="training-candidates-marker"><line x1="' + x(point.step).toFixed(2) + '" y1="20" x2="' + x(point.step).toFixed(2) + '" y2="270"></line><circle cx="' + x(point.step).toFixed(2) + '" cy="' + y(point.loss).toFixed(2) + '" r="5"></circle><text x="' + x(point.step).toFixed(2) + '" y="14">' + escapeHtml(String(candidate.epoch)) + '</text></g>';
   }).join('');
-  var chartData = escapeHtml(JSON.stringify({ points: points, stepPoints: stepPoints, analysis: analysis, regions: regions, candidates: candidates, savedArtifacts: savedArtifacts, minStep: minStep, maxStep: maxStep, minLoss: minLoss, maxLoss: maxLoss }));
+  var chartData = escapeHtml(JSON.stringify({ points: points, stepPoints: stepPoints, smoothedStepPoints: smoothedStepPoints, analysis: analysis, regions: regions, candidates: candidates, savedArtifacts: savedArtifacts, minStep: minStep, maxStep: maxStep, minLoss: minLoss, maxLoss: maxLoss }));
   return '<div class="training-candidates-chart-wrap">' +
     '<svg class="training-candidates-chart" viewBox="0 0 1000 300" role="img" aria-label="TensorBoard step loss and epoch loss curve" data-training-candidates-chart="' + chartData + '">' +
       '<defs><clipPath id="training-candidates-plot-clip"><rect x="46" y="20" width="914" height="250"></rect></clipPath></defs>' +
       '<line class="training-candidates-axis" x1="46" y1="270" x2="960" y2="270"></line><line class="training-candidates-axis" x1="46" y1="20" x2="46" y2="270"></line>' +
-      '<polyline class="training-candidates-step-loss" clip-path="url(#training-candidates-plot-clip)" points="' + polyline(stepPoints) + '"></polyline>' + regionRects + '<polyline class="training-candidates-raw" points="' + polyline(points) + '"></polyline>' +
+      '<polyline class="training-candidates-step-loss" clip-path="url(#training-candidates-plot-clip)" points="' + polyline(stepPoints) + '"></polyline>' +
+      (smoothedStepPoints.length ? '<polyline class="training-candidates-step-loss-smoothed" clip-path="url(#training-candidates-plot-clip)" points="' + polyline(smoothedStepPoints) + '"></polyline>' : '') +
+      regionRects + '<polyline class="training-candidates-raw" points="' + polyline(points) + '"></polyline>' +
       (analysis.length ? '<polyline class="training-candidates-analysis" points="' + polyline(analysis) + '"></polyline>' : '') + savedMarkers + candidateMarkers +
       '<line class="training-candidates-hover-guide hidden" x1="0" y1="20" x2="0" y2="270"></line><circle class="training-candidates-hover-point hidden" cx="0" cy="0" r="4"></circle><rect class="training-candidates-hover-layer" x="46" y="20" width="914" height="250"></rect>' +
       '<text class="training-candidates-axis-label" x="46" y="289">step ' + escapeHtml(String(minStep)) + ' · epoch ' + escapeHtml(String(minStepPoint.epoch)) + '</text><text class="training-candidates-axis-label" x="960" y="289" text-anchor="end">step ' + escapeHtml(String(maxStep)) + ' · epoch ' + escapeHtml(String(maxStepPoint.epoch)) + '</text>' +
       '<text class="training-candidates-axis-label" x="40" y="25" text-anchor="end">' + escapeHtml(maxLoss.toFixed(4)) + '</text><text class="training-candidates-axis-label" x="40" y="270" text-anchor="end">' + escapeHtml(minLoss.toFixed(4)) + '</text>' +
-    '</svg><div class="training-candidates-tooltip hidden"></div><div class="training-candidates-legend"><span><i class="step"></i>Step loss</span><span><i class="raw"></i>Epoch loss</span><span><i class="analysis"></i>Robust trend</span><span><i class="saved"></i>Saved LoRA</span><span><i class="basin"></i>Candidate region</span></div></div>';
+    '</svg><div class="training-candidates-tooltip hidden"></div><div class="training-candidates-legend"><span><i class="step"></i>Raw step loss</span><span><i class="step-smoothed"></i>Smoothed step loss</span><span><i class="raw"></i>Epoch loss</span><span><i class="analysis"></i>Robust trend</span><span><i class="saved"></i>Saved LoRA</span><span><i class="basin"></i>Candidate region</span></div></div>';
 }
 
 function trainingCandidatesTooltipHtml(stepPoint, data) {
   var epoch = Number(stepPoint.epoch);
+  var smoothed = data.smoothedStepPoints.filter(function (point) { return Number(point.step) === Number(stepPoint.step); })[0];
   var raw = data.points.filter(function (point) { return Number(point.epoch) === epoch; })[0];
   var robust = data.analysis.filter(function (point) { return Number(point.epoch) === epoch; })[0];
   var saved = data.savedArtifacts.filter(function (artifact) { return Number(artifact.epoch) === epoch; })[0];
@@ -83,6 +87,7 @@ function trainingCandidatesTooltipHtml(stepPoint, data) {
   var representative = region && Number(region.representativeEpoch) === epoch;
   var lines = ['<strong>Step ' + escapeHtml(String(stepPoint.step)) + ' · Epoch ' + escapeHtml(String(epoch)) + '</strong>'];
   lines.push('Step loss: ' + escapeHtml(Number(stepPoint.loss).toFixed(4)));
+  if (smoothed) lines.push('Smoothed step loss: ' + escapeHtml(Number(smoothed.loss).toFixed(4)));
   if (raw) lines.push('Epoch loss: ' + escapeHtml(Number(raw.loss).toFixed(4)));
   if (robust) lines.push('Robust loss: ' + escapeHtml(Number(robust.loss).toFixed(4)));
   lines.push('Saved: ' + escapeHtml(saved ? (saved.status === 'available' ? saved.fileName : 'ambiguous exports') : 'no'));
@@ -104,6 +109,7 @@ function wireTrainingCandidatesChart() {
   if (!chart || !tooltip || !guide || !pointMarker) return;
   wrap.__trainingCandidatesChartWired = true;
   var data = JSON.parse(chart.getAttribute('data-training-candidates-chart') || '{}');
+  data.smoothedStepPoints = data.smoothedStepPoints || [];
   function hide() { tooltip.classList.add('hidden'); guide.classList.add('hidden'); pointMarker.classList.add('hidden'); }
   chart.addEventListener('mouseleave', hide);
   chart.addEventListener('mousemove', function (event) {

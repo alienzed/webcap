@@ -2648,6 +2648,7 @@ iframe {
 .training-candidates-axis { stroke: rgba(174, 189, 202, .34); stroke-width: 1; }
 .training-candidates-axis-label { fill: var(--muted-text, #a3adba); font-size: 10px; }
 .training-candidates-step-loss { fill: none; stroke: rgba(152, 178, 198, .24); stroke-width: 1; stroke-linejoin: round; stroke-linecap: round; }
+.training-candidates-step-loss-smoothed { fill: none; stroke: rgba(152, 178, 198, .7); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
 .training-candidates-raw { fill: none; stroke: rgba(152, 178, 198, .5); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .training-candidates-analysis { fill: none; stroke: #62bc8c; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
 .training-candidates-basin { fill: rgba(94, 177, 137, .11); }
@@ -2665,6 +2666,7 @@ iframe {
 .training-candidates-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .training-candidates-legend i { width: 16px; height: 3px; border-radius: 3px; background: rgba(152, 178, 198, .5); }
 .training-candidates-legend i.step { height: 1px; background: rgba(152, 178, 198, .24); }
+.training-candidates-legend i.step-smoothed { height: 2px; background: rgba(152, 178, 198, .7); }
 .training-candidates-legend i.analysis { background: #62bc8c; }
 .training-candidates-legend i.saved { width: 6px; height: 6px; margin: 0 5px; background: #b3c5d4; border-radius: 50%; }
 .training-candidates-legend i.basin { height: 10px; background: rgba(94, 177, 137, .3); }

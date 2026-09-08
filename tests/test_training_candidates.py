@@ -8,7 +8,7 @@ import pytest
 
 from tool.server import app as app_module
 from tool.server import config as app_config
-from tool.server import training_candidates, training_runner
+from tool.server import training_candidate_v1_epoch_regions, training_candidate_v2_step_ranges, training_candidates, training_runner
 
 
 def _epoch_events(values, start_epoch=1, samples_per_epoch=5, start_step=900, step_stride=1):
@@ -37,6 +37,21 @@ def _detailed_epoch_events(samples_by_epoch, start_epoch=1, start_step=900, step
 
 def _robust(values, start_epoch=1, start_step=900, step_stride=100):
     return [{"epoch": start_epoch + index, "startStep": start_step + index * step_stride, "endStep": start_step + (index + 1) * step_stride - 1, "step": start_step + (index + 1) * step_stride - 1, "loss": value} for index, value in enumerate(values)]
+
+
+def _step_detector_points(values, samples_per_epoch=12, spike_indexes=()):
+    detailed, checkpoints = [], _robust(values, step_stride=samples_per_epoch)
+    for epoch_index, value in enumerate(values):
+        for sample in range(samples_per_epoch):
+            index = epoch_index * samples_per_epoch + sample
+            noise = (-.002, -.001, 0, .001, .002)[sample % 5]
+            detailed.append({"step": 900 + index, "epoch": epoch_index + 1, "loss": value + noise + (1.0 if index in spike_indexes else 0)})
+    return detailed, checkpoints
+
+
+def _v2_regions(values, samples_per_epoch=12, spike_indexes=()):
+    detailed, checkpoints = _step_detector_points(values, samples_per_epoch, spike_indexes)
+    return training_candidate_v2_step_ranges.detect(detailed, checkpoints)["regions"]
 
 
 def _fake_tensorboard(monkeypatch, streams):
@@ -112,6 +127,87 @@ def test_settled_detector_handles_valley_shelf_and_current_tail_without_monotoni
     assert valley_trend and len(valley) == 1 and valley[0]["current"] is False
     assert shelf_trend and len(shelf) == 1 and shelf[0]["current"] is True
     assert descent == []
+
+
+def test_v1_module_preserves_the_epoch_region_detector_contract():
+    points = _robust([1.0, .8, .62, .60, .61, .60, .62, .61, .62, .8, .55, .54, .55, .54, .55])
+    expected = training_candidates.detect_settled_regions(points)
+    assert training_candidate_v1_epoch_regions.detect_settled_regions(points) == expected
+    assert training_candidate_v1_epoch_regions.detect([], points) == {"analysisPoints": expected[0], "regions": expected[1]}
+
+
+def test_v2_step_shelf_excludes_descent_and_ignores_isolated_spikes():
+    values = [1.0, .9, .8, .7, .62, .56, .52, .50] + [.50, .501, .499, .50, .501, .50, .499, .50]
+    regions = _v2_regions(values, spike_indexes=(8 * 12 + 3, 11 * 12 + 7))
+    assert len(regions) == 1
+    region = regions[0]
+    assert region["startEpoch"] >= 8
+    assert region["endEpoch"] == len(values)
+    assert region["startStep"] <= _robust(values, step_stride=12)[region["representativeEpoch"] - 1]["endStep"] <= region["endStep"]
+    assert 11 <= region["representativeEpoch"] <= 14
+
+
+def test_v2_rejects_continuous_descent_but_accepts_only_a_flattened_tail():
+    assert _v2_regions([1.0 - index * .05 for index in range(16)]) == []
+    flattened = _v2_regions([1.0, .9, .8, .7, .62, .56, .52, .50] + [.50, .501, .499, .50, .501, .50, .499, .50])
+    still_descending = _v2_regions([1.0, .9, .8, .7, .62, .56, .52, .50] + [.48, .46, .44, .42, .40, .38, .36, .34])
+    assert len(flattened) == 1 and flattened[0]["current"] is True
+    assert still_descending == []
+
+
+def test_v2_merges_internal_wiggles_and_can_keep_two_separate_stable_regimes():
+    one_shelf = _v2_regions([1.0, .9, .8, .7, .62, .56] + [.50, .505, .497, .503, .496, .504, .498, .502, .499, .501])
+    two_shelves = _v2_regions([
+        1.0, .9, .8, .7, .62, .56, .50, .501, .499, .50, .501, .499,
+        .65, .58, .48, .42, .40, .401, .399, .40, .401, .399, .40,
+    ])
+    assert len(one_shelf) == 1
+    assert len(two_shelves) == 2
+    assert two_shelves[0]["endEpoch"] < two_shelves[1]["startEpoch"]
+
+
+def test_v2_long_imperfect_shelf_favors_its_quieter_lower_middle_not_a_raw_hole():
+    values = [1.0, .9, .8, .7, .62, .56, .52, .50] + [.50, .505, .495, .50, .48, .48, .48, .48, .50, .505, .495, .50]
+    detailed, checkpoints = _step_detector_points(values)
+    detailed[8 * 12 + 3]["loss"] = .1
+    regions = training_candidate_v2_step_ranges.detect(detailed, checkpoints)["regions"]
+    assert len(regions) == 1
+    assert regions[0]["representativeEpoch"] in {13, 14, 15, 16}
+    assert regions[0]["representativeEpoch"] != 9
+
+
+def test_v2_sampling_density_and_checkpoint_selection_are_curve_based():
+    values = [1.0, .9, .8, .7, .62, .56, .52, .50] + [.50, .502, .498, .50, .502, .498, .50, .502, .498, .50]
+    sparse = _v2_regions(values, samples_per_epoch=6)
+    dense = _v2_regions(values, samples_per_epoch=24)
+    assert len(sparse) == len(dense) == 1
+    assert abs(sparse[0]["startEpoch"] - dense[0]["startEpoch"]) <= 1
+    assert abs(sparse[0]["representativeEpoch"] - dense[0]["representativeEpoch"]) <= 1
+
+
+def test_algorithm_dispatch_is_explicit_and_unknown_algorithms_fail_loudly(monkeypatch):
+    detailed, boundaries = _epoch_events([1.0, .8, .7, .69, .70, .69, .70])
+    seen = []
+    monkeypatch.setitem(training_candidates.ALGORITHMS, "v1", lambda _detailed, _checkpoints: seen.append("v1") or {"analysisPoints": [], "regions": []})
+    monkeypatch.setitem(training_candidates.ALGORITHMS, "v2", lambda _detailed, _checkpoints: seen.append("v2") or {"analysisPoints": [], "regions": []})
+    training_candidates.analyze_loss_points(detailed, boundaries, algorithm="v1")
+    training_candidates.analyze_loss_points(detailed, boundaries, algorithm="v2")
+    assert seen == ["v1", "v2"]
+    with pytest.raises(ValueError, match="Unknown candidate analysis algorithm"):
+        training_candidates.analyze_loss_points(detailed, boundaries, algorithm="not-an-algorithm")
+
+
+def test_v2_artifact_availability_does_not_change_the_mathematical_selection(tmp_path):
+    values = [1.0, .9, .8, .7, .62, .56, .52, .50] + [.50, .501, .499, .50, .501, .50, .499, .50]
+    detailed, boundaries = _epoch_events(values, samples_per_epoch=12)
+    without_artifacts = training_candidates.analyze_loss_points(detailed, boundaries, algorithm="v2")
+    run = tmp_path / "run"
+    (run / "epoch12").mkdir(parents=True)
+    (run / "epoch12" / "adapter.safetensors").write_bytes(b"weights")
+    with_artifacts = training_candidates.analyze_loss_points(detailed, boundaries, run_dir=run, algorithm="v2")
+    assert with_artifacts["regions"] != []
+    assert [{key: value for key, value in region.items() if key != "savedEpochs"} for region in with_artifacts["regions"]] == [{key: value for key, value in region.items() if key != "savedEpochs"} for region in without_artifacts["regions"]]
+    assert [candidate["epoch"] for candidate in with_artifacts["candidates"]] == [candidate["epoch"] for candidate in without_artifacts["candidates"]]
 
 
 def test_one_region_groups_small_minima_but_separate_plateaus_remain_separate():
@@ -274,11 +370,13 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     monkeypatch.setattr(app_config, "FS_ROOT", root)
     epoch_directory = run / "epoch12"
     epoch_directory.mkdir()
-    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path: {"analysisVersion": 5, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
+    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 6, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
     before = state_path.read_bytes()
     client = app_module.app.test_client()
     response = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
-    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 5
+    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 6
+    assert response.get_json()["analysis"]["algorithm"] == "v1"
+    assert client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1&algorithm=nope").status_code == 422
     assert state_path.read_bytes() == before
     opened = []
     monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))

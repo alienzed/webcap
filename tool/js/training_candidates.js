@@ -4,6 +4,7 @@ function trainingCandidatesElements() {
     modal: document.getElementById('training-candidates-modal'),
     summary: document.getElementById('training-candidates-modal-summary'),
     content: document.getElementById('training-candidates-modal-content'),
+    algorithm: document.getElementById('training-candidates-algorithm'),
     refresh: document.getElementById('training-candidates-refresh'),
     openRun: document.getElementById('training-candidates-open-run'),
     close: document.getElementById('training-candidates-modal-close')
@@ -58,7 +59,7 @@ function trainingCandidatesSvg(data) {
     return point ? '<circle class="training-candidates-saved-marker ' + escapeHtml(String(artifact.status || '')) + '" cx="' + x(point.step).toFixed(2) + '" cy="' + y(point.loss).toFixed(2) + '" r="3"></circle>' : '';
   }).join('');
   var candidateMarkers = candidates.map(function (candidate) {
-    var point = trainingCandidatesPointForEpoch(candidate.epoch, analysis, points);
+    var point = analysis.filter(function (item) { return Number(item.step) === Number(candidate.step); })[0] || trainingCandidatesPointForEpoch(candidate.epoch, analysis, points);
     if (!point) return '';
     return '<g class="training-candidates-marker"><line x1="' + x(point.step).toFixed(2) + '" y1="20" x2="' + x(point.step).toFixed(2) + '" y2="270"></line><circle cx="' + x(point.step).toFixed(2) + '" cy="' + y(point.loss).toFixed(2) + '" r="5"></circle><text x="' + x(point.step).toFixed(2) + '" y="14">' + escapeHtml(String(candidate.epoch)) + '</text></g>';
   }).join('');
@@ -199,9 +200,10 @@ function refreshTrainingCandidates() {
   var jobId = String(trainingWorkspaceState.candidateJobId || '');
   if (!folder || !jobId) throw new Error('Candidate analysis has no selected training run.');
   var requestVersion = ++trainingWorkspaceState.candidateRequestVersion;
+  var algorithm = String(trainingWorkspaceState.candidateAlgorithm || 'v1');
   trainingWorkspaceState.candidatePending = true;
   renderTrainingCandidates();
-  return trainingRunnerRequest('/fs/training_candidates?folder=' + encodeURIComponent(folder) + '&jobId=' + encodeURIComponent(jobId))
+  return trainingRunnerRequest('/fs/training_candidates?folder=' + encodeURIComponent(folder) + '&jobId=' + encodeURIComponent(jobId) + '&algorithm=' + encodeURIComponent(algorithm))
     .then(function (payload) {
       if (requestVersion !== trainingWorkspaceState.candidateRequestVersion) return;
       trainingWorkspaceState.candidatePayload = payload;
@@ -231,8 +233,10 @@ function openTrainingCandidates(job) {
   var els = trainingCandidatesElements();
   trainingWorkspaceState.candidateJobId = String(job.id);
   trainingWorkspaceState.candidateFolder = String(job.folder);
+  trainingWorkspaceState.candidateAlgorithm = 'v1';
   trainingWorkspaceState.candidatePayload = null;
   trainingWorkspaceState.candidateModalOpen = true;
+  els.algorithm.value = trainingWorkspaceState.candidateAlgorithm;
   if (els.modal) { els.modal.classList.remove('hidden'); els.modal.setAttribute('aria-hidden', 'false'); }
   refreshTrainingCandidates().catch(function (err) {
     if (!trainingWorkspaceState.candidateModalOpen) return;
@@ -248,6 +252,10 @@ function wireTrainingCandidatesModal() {
   els.modal.__trainingCandidatesWired = true;
   els.close.onclick = closeTrainingCandidates;
   els.refresh.onclick = function () { refreshTrainingCandidates().catch(function (err) { setStatus('Could not refresh LoRA candidates: ' + String(err.message || err)); }); };
+  els.algorithm.onchange = function () {
+    trainingWorkspaceState.candidateAlgorithm = els.algorithm.value;
+    refreshTrainingCandidates().catch(function (err) { setStatus('Could not refresh LoRA candidates: ' + String(err.message || err)); });
+  };
   els.openRun.onclick = function () { openTrainingCandidatesFolder().catch(function (err) { setStatus('Could not open training run folder: ' + String(err.message || err)); }); };
   els.modal.onclick = function (event) { if (event.target === els.modal) closeTrainingCandidates(); };
 }

@@ -12,6 +12,8 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
 
     assert 'id="training-candidates-modal"' in html
     assert 'id="training-candidates-open-run"' in html
+    assert 'id="training-candidates-algorithm"' in html
+    assert 'v2 · Step Stable Ranges (experimental)' in html
     assert '/static/js/training_candidates.js' in html
     assert 'data-training-candidates=' in runner
     assert 'data-training-history-candidates=' in history
@@ -24,6 +26,8 @@ def test_candidate_ui_is_manual_read_only_charting():
 
     assert "function refreshTrainingCandidates()" in script
     assert "/fs/training_candidates?folder=" in script
+    assert "candidateAlgorithm" in script
+    assert "&algorithm=" in script
     assert "training-candidates-raw" in script
     assert "training-candidates-step-loss" in script
     assert "training-candidates-step-loss-smoothed" in script

@@ -66,6 +66,7 @@ var trainingWorkspaceState = {
   candidatePayload: null,
   candidatePending: false,
   candidateRequestVersion: 0,
+  candidateAlgorithm: 'v1',
   runSetupFolder: ''
 };
 var utilityTrainingTurtleTimer = 0;

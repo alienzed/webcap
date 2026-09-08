@@ -692,7 +692,8 @@ def training_history_job_metrics_route():
 def training_candidates_route():
     folder = request.args.get("folder", "").strip()
     job_id = request.args.get("jobId", "").strip()
-    payload, status = training_runner_candidate_analysis_response(folder, job_id)
+    algorithm = request.args.get("algorithm", "v1").strip()
+    payload, status = training_runner_candidate_analysis_response(folder, job_id, algorithm)
     return jsonify(payload), status
 
 

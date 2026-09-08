@@ -5,8 +5,10 @@ import re
 import statistics
 from pathlib import Path
 
+from . import training_candidate_v1_epoch_regions, training_candidate_v2_step_ranges
 
-ANALYSIS_VERSION = 5
+
+ANALYSIS_VERSION = 6
 DETAILED_LOSS_TAG = "train/loss"
 EPOCH_LOSS_TAG = "train/epoch_loss"
 MIN_CANDIDATE_STEP = 800
@@ -14,6 +16,10 @@ MIN_CANDIDATE_STEP = 800
 # regimes without letting isolated TensorBoard samples dominate the display.
 DISPLAY_STEP_LOSS_EMA_ALPHA = 0.01
 _EPOCH_DIRECTORY_PATTERN = re.compile(r"^epoch(\d+)$")
+ALGORITHM_LABELS = {
+    "v1": "v1 · Epoch Regions",
+    "v2": "v2 · Step Stable Ranges (experimental)",
+}
 
 
 def _median(values):
@@ -117,191 +123,23 @@ def smooth_step_loss_ema(points, alpha=DISPLAY_STEP_LOSS_EMA_ALPHA):
     return result
 
 
-def _centered_median(points, radius=1):
-    values = [float(point["loss"]) for point in points]
-    result = []
-    for index, point in enumerate(points):
-        result.append({
-            "epoch": int(point["epoch"]),
-            "step": int(point.get("step", point["epoch"])),
-            "startStep": int(point.get("startStep", point.get("step", point["epoch"]))),
-            "endStep": int(point.get("endStep", point.get("step", point["epoch"]))),
-            "loss": _median(values[max(0, index - radius):min(len(values), index + radius + 1)]),
-        })
-    return result
+_centered_median = training_candidate_v1_epoch_regions.centered_median
+_representative_index = training_candidate_v1_epoch_regions._representative_index
+_region_explanation = training_candidate_v1_epoch_regions._region_explanation
+detect_settled_regions = training_candidate_v1_epoch_regions.detect_settled_regions
 
 
-def _movement_scale(points):
-    values = [float(point["loss"]) for point in points]
-    movements = [abs(values[index] - values[index - 1]) for index in range(1, len(values))]
-    nonzero = [value for value in movements if value > 0]
-    return _median(nonzero) if nonzero else 0.0
+def _detect_v1(detailed_points, checkpoint_points):
+    # Keep this thin adapter so v1's long-standing helper remains easy to
+    # exercise directly while all detector calculations live in its module.
+    trend, regions = detect_settled_regions(checkpoint_points)
+    return {"analysisPoints": trend, "regions": regions}
 
 
-def _has_strong_recent_descent(values, index, quiet):
-    start = max(1, index - 3)
-    deltas = [values[position] - values[position - 1] for position in range(start, index + 1)]
-    return len(deltas) == 4 and _median(deltas) < -quiet
-
-
-def _settled_anchor_indexes(trend, scale):
-    """Find local minima and locally flat points, excluding a steady descent."""
-    values = [float(point["loss"]) for point in trend]
-    if len(values) < 3 or scale <= 0:
-        return []
-    quiet = scale * 0.75
-    anchors = []
-    for index in range(1, len(values) - 1):
-        local_minimum = values[index] <= values[index - 1] and values[index] <= values[index + 1]
-        locally_flat = abs(values[index] - values[index - 1]) <= quiet and abs(values[index + 1] - values[index]) <= quiet
-        if (local_minimum or locally_flat) and not _has_strong_recent_descent(values, index, quiet):
-            anchors.append(index)
-    # A tail is useful only when its recent movement is quieter than the run's
-    # typical epoch-to-epoch movement; a monotonic descending tail is not flat.
-    if abs(values[-1] - values[-2]) <= quiet and abs(values[-2] - values[-3]) <= quiet:
-        for index in (len(values) - 2, len(values) - 1):
-            if not _has_strong_recent_descent(values, index, quiet):
-                anchors.append(index)
-    return sorted(set(anchors))
-
-
-def _region_intervals(trend, anchors, scale):
-    """Expand and merge nearby settled evidence using only the epoch-level trend."""
-    values = [float(point["loss"]) for point in trend]
-    tolerance = scale * 1.5
-    intervals = []
-    for anchor in anchors:
-        center, start, end = values[anchor], anchor, anchor
-        while start > 0 and center - tolerance <= values[start - 1] <= center + tolerance:
-            start -= 1
-        while end + 1 < len(values) and center - tolerance <= values[end + 1] <= center + tolerance:
-            end += 1
-        intervals.append((start, end))
-    merged = []
-    for start, end in sorted(intervals):
-        prior_floor = min(values[merged[-1][0]:merged[-1][1] + 1]) if merged else None
-        current_floor = min(values[start:end + 1])
-        same_region = prior_floor is not None and abs(prior_floor - current_floor) <= tolerance
-        if not merged:
-            merged.append([start, end])
-        elif same_region and start <= merged[-1][1] + 1:
-            merged[-1][1] = max(merged[-1][1], end)
-        elif start <= merged[-1][1]:
-            # Overlap from a genuinely lower later regime marks a boundary,
-            # not a transitive bridge between two shelves.
-            if current_floor < prior_floor:
-                merged[-1][1] = start - 1
-                if merged[-1][1] < merged[-1][0]:
-                    merged.pop()
-                merged.append([start, end])
-            else:
-                trimmed_start = merged[-1][1] + 1
-                if trimmed_start <= end:
-                    merged.append([trimmed_start, end])
-        else:
-            merged.append([start, end])
-    return [tuple(interval) for interval in merged if interval[1] - interval[0] + 1 >= 2]
-
-
-def _is_locally_settled(values, scale):
-    """Require a compact, quiet section before treating it as a recovered shelf."""
-    if len(values) < 2 or scale <= 0:
-        return False
-    quiet = scale * 0.75
-    return max(values) - min(values) <= scale and all(
-        abs(values[index] - values[index - 1]) <= quiet for index in range(1, len(values))
-    )
-
-
-def _split_disturbed_interval(trend, start, end, scale):
-    """Split one broad settled interval only around an exceptional recovered excursion."""
-    if scale <= 0 or end - start + 1 < 6:
-        return [(start, end)]
-    values = [float(point["loss"]) for point in trend]
-    threshold = scale * 2.0
-    split = None
-    for disturbance_start in range(start + 2, end - 3 + 1):
-        for disturbance_end in range(disturbance_start + 1, end - 2 + 1):
-            left = values[start:disturbance_start]
-            disturbance = values[disturbance_start:disturbance_end + 1]
-            right = values[disturbance_end + 1:end + 1]
-            if not _is_locally_settled(left, scale) or not _is_locally_settled(right, scale):
-                continue
-            floor, ceiling = min(_median(left), _median(right)), max(_median(left), _median(right))
-            above = all(value >= ceiling + threshold for value in disturbance)
-            below = all(value <= floor - threshold for value in disturbance)
-            if above or below:
-                score = min((value - ceiling) if above else (floor - value) for value in disturbance)
-                candidate = (score, -disturbance_start, -disturbance_end, disturbance_start, disturbance_end)
-                if split is None or candidate > split:
-                    split = candidate
-    if split is None:
-        return [(start, end)]
-    disturbance_start, disturbance_end = split[-2:]
-    return [(start, disturbance_start - 1), (disturbance_end + 1, end)]
-
-
-def _split_disturbed_intervals(trend, intervals, scale):
-    """Post-process settled intervals without changing how their anchors were formed."""
-    result = []
-    for start, end in intervals:
-        splits = _split_disturbed_interval(trend, start, end, scale)
-        result.extend((split_start, split_end, len(splits) > 1 and index == 1) for index, (split_start, split_end) in enumerate(splits))
-    return result
-
-
-def _representative_index(robust_points, trend, start, end):
-    """Choose the low point from the displayed trend, with deterministic raw ties."""
-    return min(
-        range(start, end + 1),
-        key=lambda index: (float(trend[index]["loss"]), float(robust_points[index]["loss"]), int(robust_points[index]["epoch"])),
-    )
-
-
-def _region_explanation(trend, anchors, scale, start, end, representative, current, recovered):
-    """Describe detector evidence without feeding it back into candidate selection."""
-    if recovered:
-        return "post_disturbance_recovery", "Current stable region · Post-disturbance recovery" if current else "Post-disturbance recovery"
-    if current:
-        return "current_stable_region", "Current stable region"
-    values = [float(point["loss"]) for point in trend]
-    if 0 < representative < len(values) - 1 and values[representative] <= values[representative - 1] and values[representative] <= values[representative + 1] and (values[representative] < values[representative - 1] or values[representative] < values[representative + 1]):
-        return "local_minimum", "Local minimum"
-    quiet = scale * 0.75
-    flat_anchors = [
-        index for index in anchors if start <= index <= end and 0 < index < len(values) - 1
-        and abs(values[index] - values[index - 1]) <= quiet
-        and abs(values[index + 1] - values[index]) <= quiet
-    ]
-    if len(flat_anchors) >= 2:
-        return "settled_plateau", "Settled plateau"
-    return "stable_region", "Stable region"
-
-
-def detect_settled_regions(robust_points):
-    """Group locally low or flat robust epochs into candidate-worthy regions."""
-    trend = _centered_median(robust_points)
-    if len(trend) < 3:
-        return trend, []
-    scale = _movement_scale(trend)
-    anchors = _settled_anchor_indexes(trend, scale)
-    intervals = _split_disturbed_intervals(trend, _region_intervals(trend, anchors, scale), scale)
-    regions = []
-    for start, end, recovered in intervals:
-        representative = _representative_index(robust_points, trend, start, end)
-        current = end == len(robust_points) - 1
-        kind, label = _region_explanation(trend, anchors, scale, start, end, representative, current, recovered)
-        regions.append({
-            "startEpoch": int(robust_points[start]["epoch"]),
-            "endEpoch": int(robust_points[end]["epoch"]),
-            "startStep": int(robust_points[start]["startStep"]),
-            "endStep": int(robust_points[end]["endStep"]),
-            "representativeEpoch": int(robust_points[representative]["epoch"]),
-            "current": current,
-            "kind": kind,
-            "label": label,
-        })
-    return trend, regions
+ALGORITHMS = {
+    "v1": _detect_v1,
+    "v2": training_candidate_v2_step_ranges.detect,
+}
 
 
 def artifact_for_epoch(run_dir, epoch):
@@ -331,8 +169,10 @@ def saved_artifacts_for_run(run_dir):
     return sorted(artifacts, key=lambda item: item["epoch"])
 
 
-def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
-    """Analyze robust detailed loss by completed epoch; never modify the run."""
+def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="v1"):
+    """Analyze completed loss points with one explicit candidate algorithm."""
+    if algorithm not in ALGORITHMS:
+        raise ValueError("Unknown candidate analysis algorithm: " + str(algorithm))
     mapped = map_detailed_loss_to_epochs(detailed_events, epoch_events)
     robust_points = aggregate_detailed_loss_by_epoch(mapped, epoch_events)
     robust_by_epoch = {point["epoch"]: point for point in robust_points}
@@ -352,14 +192,19 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
         if point["epoch"] in completed_epochs
     ], key=lambda point: point["step"])
     smoothed_step_loss_points = smooth_step_loss_ema(step_loss_points)
-    display_trend = _centered_median(robust_points)
     eligible_points = [point for point in robust_points if point["endStep"] >= MIN_CANDIDATE_STEP]
-    eligible_trend, regions = detect_settled_regions(eligible_points)
-    eligible_trend_by_epoch = {point["epoch"]: point for point in eligible_trend}
-    analysis_points = [
-        dict(point, loss=eligible_trend_by_epoch.get(point["epoch"], point)["loss"])
-        for point in display_trend
-    ]
+    eligible_step_points = [point for point in step_loss_points if point["step"] >= MIN_CANDIDATE_STEP]
+    detector_result = ALGORITHMS[algorithm](eligible_step_points, eligible_points)
+    regions = detector_result["regions"]
+    if algorithm == "v1":
+        display_trend = _centered_median(robust_points)
+        eligible_trend_by_epoch = {point["epoch"]: point for point in detector_result["analysisPoints"]}
+        analysis_points = [
+            dict(point, loss=eligible_trend_by_epoch.get(point["epoch"], point)["loss"])
+            for point in display_trend
+        ]
+    else:
+        analysis_points = detector_result["analysisPoints"]
     saved_artifacts = saved_artifacts_for_run(run_dir) if run_dir is not None else []
     for region in regions:
         region["savedEpochs"] = [
@@ -379,6 +224,8 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
     } for region in regions]
     return {
         "analysisVersion": ANALYSIS_VERSION,
+        "algorithm": algorithm,
+        "algorithmLabel": ALGORITHM_LABELS[algorithm],
         "stepLossPoints": step_loss_points,
         "smoothedStepLossPoints": smoothed_step_loss_points,
         "epochLossPoints": epoch_loss_points,
@@ -389,6 +236,6 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None):
     }
 
 
-def analyze_run_directory(run_dir):
+def analyze_run_directory(run_dir, algorithm="v1"):
     detailed_events, epoch_events = read_loss_events(run_dir)
-    return analyze_loss_points(detailed_events, epoch_events, run_dir=run_dir)
+    return analyze_loss_points(detailed_events, epoch_events, run_dir=run_dir, algorithm=algorithm)

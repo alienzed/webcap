@@ -51,7 +51,7 @@ from .training_runtime import (
     uses_native_wsl_shell as _uses_native_wsl_shell,
     wsl_executable as _wsl_executable,
 )
-from .training_candidates import analyze_run_directory as _analyze_run_directory
+from .training_candidates import ALGORITHMS as _candidate_algorithms, analyze_run_directory as _analyze_run_directory
 
 
 RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
@@ -436,8 +436,10 @@ def candidate_epoch_folder_path(folder, job_id, epoch):
     return directory
 
 
-def candidate_analysis_response(folder, job_id):
+def candidate_analysis_response(folder, job_id, algorithm="v1"):
     """Analyze one recorded run without accepting a client filesystem path."""
+    if algorithm not in _candidate_algorithms:
+        return {"ok": False, "error": "Unknown candidate analysis algorithm: " + str(algorithm)}, 422
     try:
         raw_run_path, run = _candidate_run_snapshot(folder, job_id)
     except ValueError as exc:
@@ -450,7 +452,7 @@ def candidate_analysis_response(folder, job_id):
         run_dir = host_path_for_training_path(raw_run_path)
         if not run_dir.is_dir():
             raise FileNotFoundError("Recorded training run directory is unavailable.")
-        analysis = _analyze_run_directory(run_dir)
+        analysis = _analyze_run_directory(run_dir, algorithm=algorithm)
     except (OSError, RuntimeError, ValueError) as exc:
         return {"ok": False, "error": str(exc)}, 422
     return {"ok": True, "run": run, "analysis": analysis}, 200

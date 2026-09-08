@@ -832,6 +832,11 @@
                                 <p id="training-candidates-modal-summary">Read-only loss-curve analysis.</p>
                             </div>
                             <div class="training-candidates-modal-actions">
+                                <label for="training-candidates-algorithm">Algorithm:</label>
+                                <select id="training-candidates-algorithm">
+                                    <option value="v1">v1 · Epoch Regions</option>
+                                    <option value="v2">v2 · Step Stable Ranges (experimental)</option>
+                                </select>
                                 <button id="training-candidates-open-run" type="button" class="review-captions-btn">Open Run Folder</button>
                                 <button id="training-candidates-refresh" type="button" class="review-captions-btn">Refresh</button>
                                 <button id="training-candidates-modal-close" type="button" class="training-review-modal-close" aria-label="Close candidate analysis">&times;</button>

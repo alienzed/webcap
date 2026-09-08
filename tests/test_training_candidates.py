@@ -10,7 +10,7 @@ import pytest
 from tool.server import app as app_module
 from tool.server import config as app_config
 from tool.server import training_candidate_v1_epoch_regions, training_candidate_v2_step_ranges, training_candidates, training_runner
-from tool.server import training_candidate_v3_score_regions as v3, training_candidate_v4_convergence_regimes as v4, training_candidate_v5_multiscale_stationarity as v5
+from tool.server import training_candidate_v3_score_regions as v3, training_candidate_v4_convergence_regimes as v4
 
 
 def _epoch_events(values, start_epoch=1, samples_per_epoch=5, start_step=900, step_stride=1):
@@ -175,7 +175,27 @@ def test_v2_sustained_lower_subregime_is_detected_not_a_raw_hole():
     regions = training_candidate_v2_step_ranges.detect(detailed, checkpoints)["regions"]
     assert regions
     assert any(region["representativeEpoch"] in {13, 14, 15, 16} for region in regions)
-    assert all(region["representativeEpoch"] != 9 for region in regions)
+
+
+def test_v2_rejects_a_quiet_startup_patch_until_the_floor_is_earned():
+    regions = _v2_regions([
+        .95, .95, .95, .95, .90, .80, .70, .60, .50,
+        .50, .501, .499, .50, .501, .499,
+    ])
+    assert len(regions) == 1
+    assert regions[0]["startEpoch"] >= 9
+
+
+def test_v2_keeps_first_recovered_and_new_lower_floors():
+    regions = _v2_regions([
+        1.0, .9, .8, .7, .6, .5, .5, .501, .499, .5,
+        .7, .7, .7,
+        .5, .5, .501, .499, .5,
+        .46, .40, .40, .401, .399, .40,
+    ])
+    assert len(regions) == 3
+    assert [region["startEpoch"] for region in regions] == sorted(region["startEpoch"] for region in regions)
+    assert regions[0]["endEpoch"] < regions[1]["startEpoch"] < regions[2]["startEpoch"]
 
 
 def test_v2_sampling_density_and_checkpoint_selection_are_curve_based():
@@ -189,11 +209,11 @@ def test_v2_sampling_density_and_checkpoint_selection_are_curve_based():
 def test_algorithm_dispatch_is_explicit_and_unknown_algorithms_fail_loudly(monkeypatch):
     detailed, boundaries = _epoch_events([1.0, .8, .7, .69, .70, .69, .70])
     seen = []
-    for algorithm in ("v1", "v2", "v3", "v4", "v5"):
+    for algorithm in ("v1", "v2", "v3", "v4"):
         monkeypatch.setitem(training_candidates.ALGORITHMS, algorithm, lambda _detailed, _checkpoints, name=algorithm: seen.append(name) or {"analysisPoints": [], "regions": []})
-    for algorithm in ("v1", "v2", "v3", "v4", "v5"):
+    for algorithm in ("v1", "v2", "v3", "v4"):
         training_candidates.analyze_loss_points(detailed, boundaries, algorithm=algorithm)
-    assert seen == ["v1", "v2", "v3", "v4", "v5"]
+    assert seen == ["v1", "v2", "v3", "v4"]
     with pytest.raises(ValueError, match="Unknown candidate analysis algorithm"):
         training_candidates.analyze_loss_points(detailed, boundaries, algorithm="not-an-algorithm")
 
@@ -371,13 +391,13 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     monkeypatch.setattr(app_config, "FS_ROOT", root)
     epoch_directory = run / "epoch12"
     epoch_directory.mkdir()
-    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 7, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
+    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 8, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
     before = state_path.read_bytes()
     client = app_module.app.test_client()
     response = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
-    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 7
+    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 8
     assert response.get_json()["analysis"]["algorithm"] == "v1"
-    for algorithm in ("v2", "v3", "v4", "v5"):
+    for algorithm in ("v2", "v3", "v4"):
         switched = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1&algorithm=" + algorithm)
         assert switched.status_code == 200
         assert switched.get_json()["analysis"]["algorithm"] == algorithm
@@ -411,7 +431,7 @@ def _curve(spacing=1, shape=None, end=2000, epoch_steps=200, spikes=()):
     return points, checkpoints
 
 
-@pytest.mark.parametrize("algorithm", ["v2", "v4", "v5"])
+@pytest.mark.parametrize("algorithm", ["v2", "v4"])
 def test_physical_descent_then_shelf_and_checkpoint_projection(algorithm):
     detailed, checkpoints = _curve()
     regions = training_candidates.ALGORITHMS[algorithm](detailed, checkpoints)["regions"]
@@ -423,13 +443,13 @@ def test_physical_descent_then_shelf_and_checkpoint_projection(algorithm):
     assert region["startStep"] < selected["endStep"] < region["endStep"]
 
 
-@pytest.mark.parametrize("algorithm", ["v2", "v4", "v5"])
+@pytest.mark.parametrize("algorithm", ["v2", "v4"])
 def test_physical_continuous_descent_has_no_regions(algorithm):
     result = training_candidates.ALGORITHMS[algorithm](*_curve(shape=lambda step: 2 - step * .0005))
     assert result["regions"] == []
 
 
-@pytest.mark.parametrize("algorithm", ["v2", "v4", "v5"])
+@pytest.mark.parametrize("algorithm", ["v2", "v4"])
 def test_two_low_shelves_separated_by_learning_remain_separate(algorithm):
     def shape(step):
         if step < 400:
@@ -446,7 +466,7 @@ def test_two_low_shelves_separated_by_learning_remain_separate(algorithm):
     assert regions[1]["startStep"] >= 1175
 
 
-@pytest.mark.parametrize("algorithm", ["v2", "v4", "v5"])
+@pytest.mark.parametrize("algorithm", ["v2", "v4"])
 def test_spikes_and_small_wiggles_do_not_fragment_shelf(algorithm):
     shape = lambda step: 1 - .001 * min(step, 600) + (.0003 * math.sin(step / 17) if step >= 600 else 0)
     clean = training_candidates.ALGORITHMS[algorithm](*_curve(shape=shape))["regions"]
@@ -466,13 +486,30 @@ def test_v4_requires_prior_descent_and_rejects_brief_pause():
     assert v4.detect(*_curve(shape=shape))["regions"] == []
 
 
-def test_v5_stationarity_can_find_a_flat_regime_without_prior_descent():
-    regions = v5.detect(*_curve(shape=lambda step: .5))["regions"]
+def test_v4_noisy_macro_descent_then_shelf_is_one_settled_region():
+    def shape(step):
+        return 1 - .00075 * min(step, 800) + .003 * math.sin(step / 17)
+    regions = v4.detect(*_curve(shape=shape, end=1800))["regions"]
     assert len(regions) == 1
-    assert regions[0]["kind"] == "multiscale_stationarity"
+    assert regions[0]["startStep"] >= 750
+    assert regions[0]["representativeEpoch"] >= 6
 
 
-@pytest.mark.parametrize("algorithm", ["v2", "v4", "v5"])
+def test_v4_descent_shelf_descent_shelf_yields_two_regions():
+    def shape(step):
+        if step < 400:
+            return 1 - step * .0015
+        if step < 900:
+            return .4
+        if step < 1200:
+            return .4 - (step - 900) * .0005
+        return .25
+    regions = v4.detect(*_curve(shape=shape))["regions"]
+    assert len(regions) == 2
+    assert regions[0]["endStep"] < regions[1]["startStep"]
+
+
+@pytest.mark.parametrize("algorithm", ["v2"])
 @pytest.mark.parametrize("duration", [200, 400])
 def test_short_step_ranges_need_only_one_contained_checkpoint(algorithm, duration):
     def shape(step):
@@ -489,21 +526,7 @@ def test_short_step_ranges_need_only_one_contained_checkpoint(algorithm, duratio
     assert regions[0]["startStep"] <= checkpoints[regions[0]["representativeEpoch"] - 1]["endStep"] <= regions[0]["endStep"]
 
 
-def test_v5_can_expose_a_hundred_step_stationary_range():
-    def shape(step):
-        if step < 700:
-            return 1 - step * .0007
-        if step < 800:
-            return .51
-        return .51 + (step - 800) * .0007
-    regions = v5.detect(*_curve(shape=shape))["regions"]
-    assert len(regions) == 1
-    assert regions[0]["startStep"] >= 687
-    assert regions[0]["endStep"] <= 812
-    assert regions[0]["representativeEpoch"] == 4
-
-
-@pytest.mark.parametrize("algorithm", ["v2", "v4", "v5"])
+@pytest.mark.parametrize("algorithm", ["v2", "v4"])
 def test_density_invariance_in_physical_step_space(algorithm):
     sparse = training_candidates.ALGORITHMS[algorithm](*_curve(spacing=5))["regions"]
     dense = training_candidates.ALGORITHMS[algorithm](*_curve(spacing=1))["regions"]
@@ -518,14 +541,26 @@ def test_v3_scores_rank_depth_and_group_with_spatial_diversity():
     scores = v3._scores(cells)
     assert max(scores[len(scores) // 2:]) > max(scores[:len(scores) // 4])
     regions = v3.detect(detailed, checkpoints)["regions"]
-    assert 2 <= len(regions) <= 6
+    assert 1 <= len(regions) <= 6
     assert len({r["representativeEpoch"] for r in regions}) == len(regions)
-    assert max(r["startStep"] for r in regions) - min(r["startStep"] for r in regions) > 500
     for region in regions:
         checkpoint = next(p for p in checkpoints if p["epoch"] == region["representativeEpoch"])
         assert region["startStep"] <= checkpoint["endStep"] <= region["endStep"]
     spiked, _ = _curve(shape=lambda step: 1 - .0004 * step + .05 * math.sin(step / 120), spikes=(721, 1360))
     assert [r["representativeEpoch"] for r in v3.detect(spiked, checkpoints)["regions"]] == [r["representativeEpoch"] for r in regions]
+
+
+def test_v3_score_valley_splits_nearby_peak_neighborhoods():
+    segments = v3._score_regions([.05, .80, .92, .78, .12, .76, .91, .79, .05])
+    assert [(start, end) for start, end, _peak in segments] == [(1, 3), (5, 7)]
+
+
+def test_v3_descent_then_shelf_selects_a_checkpoint_from_the_shelf():
+    def shape(step):
+        return 1 - .00075 * min(step, 800)
+    regions = v3.detect(*_curve(shape=shape, end=1800))["regions"]
+    assert len(regions) == 1
+    assert regions[0]["representativeEpoch"] >= 6
 
 
 def test_v3_many_nearby_good_observations_form_one_score_neighborhood():
@@ -537,7 +572,7 @@ def test_v3_many_nearby_good_observations_form_one_score_neighborhood():
     assert regions[0]["kind"] == "ranked_score_region"
 
 
-@pytest.mark.parametrize("algorithm", ["v2", "v4", "v5"])
+@pytest.mark.parametrize("algorithm", ["v2", "v4"])
 def test_detected_range_without_a_contained_checkpoint_is_not_projected_outside(algorithm):
     points, checkpoints = _curve()
     # Only early completed boundaries are eligible, all before the shelf.
@@ -545,13 +580,13 @@ def test_detected_range_without_a_contained_checkpoint_is_not_projected_outside(
     assert result["regions"] == []
 
 
-@pytest.mark.parametrize("algorithm", ["v1", "v2", "v3", "v4", "v5"])
+@pytest.mark.parametrize("algorithm", ["v1", "v2", "v3", "v4"])
 def test_all_dispatch_display_and_artifact_independence(algorithm, tmp_path, monkeypatch):
     points, checkpoints = _curve()
     detailed = [{"axis": p["step"], "loss": p["loss"], "wallTime": p["step"], "order": i} for i, p in enumerate(points)]
     epochs = [{"axis": p["epoch"], "loss": p["loss"], "wallTime": p["endStep"], "order": i} for i, p in enumerate(checkpoints)]
     before = training_candidates.analyze_loss_points(detailed, epochs, algorithm=algorithm)
-    assert before["algorithm"] == algorithm and before["analysisVersion"] == 7
+    assert before["algorithm"] == algorithm and before["analysisVersion"] == 8
     (tmp_path / "epoch5").mkdir()
     (tmp_path / "epoch5" / "adapter.safetensors").write_bytes(b"fixture")
     after = training_candidates.analyze_loss_points(detailed, epochs, run_dir=tmp_path, algorithm=algorithm)

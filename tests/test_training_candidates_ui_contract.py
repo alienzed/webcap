@@ -15,7 +15,7 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
     assert 'id="training-candidates-open-run"' in html
     assert 'id="training-candidates-algorithm"' in html
     assert 'v2 · Step Stable Ranges (experimental)' in html
-    for algorithm in ("v1", "v2", "v3", "v4", "v5"):
+    for algorithm in ("v1", "v2", "v3", "v4"):
         assert 'value="' + algorithm + '"' in html
     assert '/static/js/training_candidates.js' in html
     assert 'data-training-candidates=' in runner
@@ -108,7 +108,7 @@ const tooltipData = {points:data.epochLossPoints,analysis:data.analysisPoints,sm
 assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipData).includes('Robust loss: 0.2000'));
 assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));
 (async () => {
-  for (const algorithm of ['v1','v2','v3','v4','v5']) {
+  for (const algorithm of ['v1','v2','v3','v4']) {
     elements['training-candidates-algorithm'].value=algorithm;
     elements['training-candidates-algorithm'].onchange();
     await new Promise(setImmediate);

@@ -601,11 +601,15 @@ def test_v5_keeps_disturbed_stable_zones_separate_and_step_density_invariant():
             return .6 - (step - 800) * .002
         return .2
     dense = v5.detect(*_curve(shape=shape, end=1800))["regions"]
-    sparse = v5.detect(*_curve(spacing=5, shape=shape, end=1800))["regions"]
-    assert len(dense) == len(sparse) == 2
+    spacing_three = v5.detect(*_curve(spacing=3, shape=shape, end=1800))["regions"]
+    spacing_seven = v5.detect(*_curve(spacing=7, shape=shape, end=1800))["regions"]
+    assert len(dense) == len(spacing_three) == len(spacing_seven) == 2
     assert dense[0]["endStep"] < dense[1]["startStep"]
-    assert abs(dense[0]["startStep"] - sparse[0]["startStep"]) <= 10
-    assert abs(dense[1]["startStep"] - sparse[1]["startStep"]) <= 10
+    for sampled in (spacing_three, spacing_seven):
+        assert abs(dense[0]["startStep"] - sampled[0]["startStep"]) <= 14
+        assert abs(dense[0]["endStep"] - sampled[0]["endStep"]) <= 14
+        assert abs(dense[1]["startStep"] - sampled[1]["startStep"]) <= 14
+        assert abs(dense[1]["endStep"] - sampled[1]["endStep"]) <= 14
 
 
 @pytest.mark.parametrize("algorithm", ["v2", "v4"])

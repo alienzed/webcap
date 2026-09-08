@@ -14,7 +14,7 @@ def _median(values):
 def _fit(points):
     xs = [point["step"] for point in points]
     ys = [point["loss"] for point in points]
-    mean_x, mean_y = _median(xs), _median(ys)
+    mean_x, mean_y = sum(xs) / len(xs), sum(ys) / len(ys)
     variance = sum((value - mean_x) ** 2 for value in xs)
     slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / variance if variance else 0.0
     intercept = mean_y - slope * mean_x
@@ -26,10 +26,10 @@ def _fit(points):
 def _seed_windows(points):
     seeds = []
     for start, point in enumerate(points):
-        end = start
-        while end + 1 < len(points) and points[end + 1]["step"] - point["step"] <= SEED_STEPS:
+        end = start + 1
+        while end < len(points) and points[end]["step"] - point["step"] < SEED_STEPS:
             end += 1
-        if end > start and points[end]["step"] - point["step"] >= SEED_STEPS:
+        if end < len(points):
             window = points[start:end + 1]
             if len(window) >= 3:
                 slope, intercept, spread = _fit(window)

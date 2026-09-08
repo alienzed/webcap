@@ -115,7 +115,9 @@ def detect(detailed_points, checkpoint_points):
     if not scores:
         return {"analysisPoints": _public(cells), "regions": []}
     noise = _noise(cells)
-    promising = [i for i in range(1, len(cells) - 1) if scores[i] > 0
+    # Avoid filling spare neighborhood slots with numerically nonzero noise.
+    score_floor = max(scores) * .1
+    promising = [i for i in range(1, len(cells) - 1) if scores[i] >= score_floor and scores[i] > 0
                  and cells[i]["loss"] <= cells[i - 1]["loss"] + noise
                  and cells[i]["loss"] <= cells[i + 1]["loss"] + noise]
     separation = max(width * 2, (cells[-1]["step"] - cells[0]["step"]) * .15)

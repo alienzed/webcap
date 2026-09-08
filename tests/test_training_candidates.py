@@ -528,6 +528,23 @@ def test_v3_scores_rank_depth_and_group_with_spatial_diversity():
     assert [r["representativeEpoch"] for r in v3.detect(spiked, checkpoints)["regions"]] == [r["representativeEpoch"] for r in regions]
 
 
+def test_v3_many_nearby_good_observations_form_one_score_neighborhood():
+    def shape(step):
+        return .4 + .0001 * math.sin(step) if 700 <= step < 825 else 1.0
+    regions = v3.detect(*_curve(shape=shape))["regions"]
+    assert len(regions) == 1
+    assert regions[0]["representativeEpoch"] == 4
+    assert regions[0]["kind"] == "ranked_score_region"
+
+
+@pytest.mark.parametrize("algorithm", ["v2", "v4", "v5"])
+def test_detected_range_without_a_contained_checkpoint_is_not_projected_outside(algorithm):
+    points, checkpoints = _curve()
+    # Only early completed boundaries are eligible, all before the shelf.
+    result = training_candidates.ALGORITHMS[algorithm](points, checkpoints[:2])
+    assert result["regions"] == []
+
+
 @pytest.mark.parametrize("algorithm", ["v1", "v2", "v3", "v4", "v5"])
 def test_all_dispatch_display_and_artifact_independence(algorithm, tmp_path, monkeypatch):
     points, checkpoints = _curve()

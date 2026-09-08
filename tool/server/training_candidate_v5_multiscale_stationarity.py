@@ -1,6 +1,5 @@
 """V5: nested-window stationarity agreement, without a low-loss/prior-descent gate."""
 
-import math
 import statistics
 
 
@@ -103,7 +102,7 @@ def _stationary(section, noise):
 
 
 def detect(detailed_points, checkpoint_points):
-    cells, width = _prepare(detailed_points, checkpoint_points)
+    cells, _ = _prepare(detailed_points, checkpoint_points)
     if len(cells) < 8:
         return {"analysisPoints": _public(cells), "regions": []}
     noise = _noise(cells)

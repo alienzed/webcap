@@ -1,6 +1,5 @@
 """V2: locally low/quiet step ranges with anchored regime segmentation."""
 
-import math
 import statistics
 
 

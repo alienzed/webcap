@@ -1,6 +1,5 @@
 """V4: sustained descent followed by a sustained flatter regime."""
 
-import math
 import statistics
 
 
@@ -50,18 +49,6 @@ def _noise(cells):
                max((abs(v) for v in levels), default=1) * 1e-10, 1e-12)
 
 
-def _runs(flags, cells):
-    runs, start = [], None
-    for i in range(len(flags) + 1):
-        separated = i > 0 and i < len(cells) and cells[i]["bucket"] != cells[i - 1]["bucket"] + 1
-        if start is not None and (i == len(flags) or not flags[i] or separated):
-            runs.append((start, i - 1))
-            start = None
-        if i < len(flags) and flags[i] and start is None:
-            start = i
-    return runs
-
-
 def _region(cells, start, end, checkpoints, kind, label, weights=(.55, .35, .10)):
     """Project only after range formation; even one contained checkpoint is valid."""
     section = cells[start:end + 1]
@@ -90,7 +77,7 @@ def _region(cells, start, end, checkpoints, kind, label, weights=(.55, .35, .10)
 
 
 def detect(detailed_points, checkpoint_points):
-    cells, width = _prepare(detailed_points, checkpoint_points)
+    cells, _ = _prepare(detailed_points, checkpoint_points)
     if len(cells) < 8:
         return {"analysisPoints": _public(cells), "regions": []}
     noise = _noise(cells)

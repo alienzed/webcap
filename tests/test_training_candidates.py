@@ -189,11 +189,11 @@ def test_v2_sampling_density_and_checkpoint_selection_are_curve_based():
 def test_algorithm_dispatch_is_explicit_and_unknown_algorithms_fail_loudly(monkeypatch):
     detailed, boundaries = _epoch_events([1.0, .8, .7, .69, .70, .69, .70])
     seen = []
-    monkeypatch.setitem(training_candidates.ALGORITHMS, "v1", lambda _detailed, _checkpoints: seen.append("v1") or {"analysisPoints": [], "regions": []})
-    monkeypatch.setitem(training_candidates.ALGORITHMS, "v2", lambda _detailed, _checkpoints: seen.append("v2") or {"analysisPoints": [], "regions": []})
-    training_candidates.analyze_loss_points(detailed, boundaries, algorithm="v1")
-    training_candidates.analyze_loss_points(detailed, boundaries, algorithm="v2")
-    assert seen == ["v1", "v2"]
+    for algorithm in ("v1", "v2", "v3", "v4", "v5"):
+        monkeypatch.setitem(training_candidates.ALGORITHMS, algorithm, lambda _detailed, _checkpoints, name=algorithm: seen.append(name) or {"analysisPoints": [], "regions": []})
+    for algorithm in ("v1", "v2", "v3", "v4", "v5"):
+        training_candidates.analyze_loss_points(detailed, boundaries, algorithm=algorithm)
+    assert seen == ["v1", "v2", "v3", "v4", "v5"]
     with pytest.raises(ValueError, match="Unknown candidate analysis algorithm"):
         training_candidates.analyze_loss_points(detailed, boundaries, algorithm="not-an-algorithm")
 
@@ -377,6 +377,10 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     response = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
     assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 7
     assert response.get_json()["analysis"]["algorithm"] == "v1"
+    for algorithm in ("v2", "v3", "v4", "v5"):
+        switched = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1&algorithm=" + algorithm)
+        assert switched.status_code == 200
+        assert switched.get_json()["analysis"]["algorithm"] == algorithm
     assert client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1&algorithm=nope").status_code == 422
     assert state_path.read_bytes() == before
     opened = []

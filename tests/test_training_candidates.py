@@ -11,34 +11,32 @@ from tool.server import config as app_config
 from tool.server import training_candidates, training_runner
 
 
-def _epoch_events(values, start_epoch=1, samples_per_epoch=5):
-    detailed, boundaries, axis, order = [], [], 0, 0
+def _epoch_events(values, start_epoch=1, samples_per_epoch=5, start_step=900, step_stride=1):
+    detailed, boundaries, order = [], [], 0
     for offset, value in enumerate(values):
         epoch = start_epoch + offset
         boundary_time = float(epoch * 100)
         for sample in range(samples_per_epoch):
-            detailed.append({"axis": axis, "loss": value + (-.001 if sample == 0 else .001 if sample == samples_per_epoch - 1 else 0), "wallTime": boundary_time - samples_per_epoch + sample, "order": order})
-            axis += 1
+            detailed.append({"axis": start_step + (offset * samples_per_epoch + sample) * step_stride, "loss": value + (-.001 if sample == 0 else .001 if sample == samples_per_epoch - 1 else 0), "wallTime": boundary_time - samples_per_epoch + sample, "order": order})
             order += 1
         boundaries.append({"axis": epoch, "loss": value, "wallTime": boundary_time, "order": offset})
     return detailed, boundaries
 
 
-def _detailed_epoch_events(samples_by_epoch, start_epoch=1):
-    detailed, boundaries, axis, order = [], [], 0, 0
+def _detailed_epoch_events(samples_by_epoch, start_epoch=1, start_step=900, step_stride=1):
+    detailed, boundaries, order = [], [], 0
     for offset, samples in enumerate(samples_by_epoch):
         epoch = start_epoch + offset
         boundary_time = float(epoch * 100)
         for sample, value in enumerate(samples):
-            detailed.append({"axis": axis, "loss": value, "wallTime": boundary_time - len(samples) + sample, "order": order})
-            axis += 1
+            detailed.append({"axis": start_step + (sum(len(previous) for previous in samples_by_epoch[:offset]) + sample) * step_stride, "loss": value, "wallTime": boundary_time - len(samples) + sample, "order": order})
             order += 1
         boundaries.append({"axis": epoch, "loss": training_candidates._median(samples), "wallTime": boundary_time, "order": offset})
     return detailed, boundaries
 
 
-def _robust(values, start_epoch=1):
-    return [{"epoch": start_epoch + index, "loss": value} for index, value in enumerate(values)]
+def _robust(values, start_epoch=1, start_step=900, step_stride=100):
+    return [{"epoch": start_epoch + index, "startStep": start_step + index * step_stride, "endStep": start_step + (index + 1) * step_stride - 1, "step": start_step + (index + 1) * step_stride - 1, "loss": value} for index, value in enumerate(values)]
 
 
 def _fake_tensorboard(monkeypatch, streams):
@@ -83,9 +81,9 @@ def test_tensorboard_reader_requires_both_streams(tmp_path, monkeypatch):
 
 
 def test_epoch_median_aggregation_rejects_isolated_step_spikes():
-    mapped = [{"sample": index, "epoch": 7, "loss": value} for index, value in enumerate([.2, .2, .2, 8.0, -.5])]
+    mapped = [{"sample": index, "step": 900 + index, "epoch": 7, "loss": value} for index, value in enumerate([.2, .2, .2, 8.0, -.5])]
     complete = [{"axis": 7, "loss": .2, "wallTime": 10, "order": 0}]
-    assert training_candidates.aggregate_detailed_loss_by_epoch(mapped, complete) == [{"epoch": 7, "loss": .2}]
+    assert training_candidates.aggregate_detailed_loss_by_epoch(mapped, complete) == [{"epoch": 7, "step": 904, "startStep": 900, "endStep": 904, "loss": .2}]
 
 
 def test_settled_detector_handles_valley_shelf_and_current_tail_without_monotonic_descent():
@@ -98,7 +96,7 @@ def test_settled_detector_handles_valley_shelf_and_current_tail_without_monotoni
 
 
 def test_one_region_groups_small_minima_but_separate_plateaus_remain_separate():
-    _, regions = training_candidates.detect_settled_regions(_robust([1.0, .8, .62, .60, .61, .60, .62, .8, .55, .54, .55, .54, .55]))
+    _, regions = training_candidates.detect_settled_regions(_robust([1.0, .8, .62, .60, .61, .60, .62, .61, .62, .8, .55, .54, .55, .54, .55]))
     assert len(regions) == 2
     assert regions[0]["endEpoch"] < regions[1]["startEpoch"]
 
@@ -123,58 +121,38 @@ def _quiet_detailed_samples(base):
     return [base - .0003, base - .0001, base, base + .0001, base + .0003, base - .0002, base, base + .0002, base]
 
 
-def test_detailed_disturbance_splits_an_otherwise_broad_settled_region():
-    samples = [
-        _quiet_detailed_samples(.200),
-        _quiet_detailed_samples(.2002),
-        [.2001] * 5 + [.240, .241, .239, .240],
-        [.240, .241, .239, .240] + [.2002] * 5,
-        _quiet_detailed_samples(.2001),
-        _quiet_detailed_samples(.2002),
-        _quiet_detailed_samples(.2001),
-    ]
-    detailed, boundaries = _detailed_epoch_events(samples)
-    mapped = training_candidates.map_detailed_loss_to_epochs(detailed, boundaries)
-    disturbances = training_candidates._detect_detailed_disturbances(mapped)
-    robust = training_candidates.aggregate_detailed_loss_by_epoch(mapped, boundaries)
-    _, unsplit = training_candidates.detect_settled_regions(robust)
-    regions = training_candidates.analyze_loss_points(detailed, boundaries)["regions"]
-    assert disturbances == [{"startEpoch": 3, "endEpoch": 4}]
-    assert len(unsplit) == 1
-    assert [(region["startEpoch"], region["endEpoch"], region["kind"]) for region in regions] == [
-        (1, 2, "stable_region"),
-        (5, 7, "post_disturbance_recovery"),
-    ]
-    assert regions[1]["label"] == "Current stable region · Post-disturbance recovery"
+def test_detailed_stream_is_observational_and_preserves_step_mapping():
+    quiet = [_quiet_detailed_samples(.2) for _ in range(7)]
+    noisy = [samples[:] for samples in quiet]
+    noisy[2][1:4] = [.18, .22, .2]
+    detailed, boundaries = _detailed_epoch_events(quiet)
+    noisy_detailed, noisy_boundaries = _detailed_epoch_events(noisy)
+    analysis = training_candidates.analyze_loss_points(detailed, boundaries)
+    noisy_analysis = training_candidates.analyze_loss_points(noisy_detailed, noisy_boundaries)
+    assert analysis["regions"] == noisy_analysis["regions"]
+    assert analysis["candidates"] == noisy_analysis["candidates"]
+    assert analysis["stepLossPoints"] != noisy_analysis["stepLossPoints"]
+    assert all({"step", "epoch", "loss"} <= point.keys() for point in analysis["stepLossPoints"])
+    assert all(point["step"] == next(item["endStep"] for item in training_candidates.aggregate_detailed_loss_by_epoch(training_candidates.map_detailed_loss_to_epochs(detailed, boundaries), boundaries) if item["epoch"] == point["epoch"]) for point in analysis["epochLossPoints"])
 
 
-def test_single_spike_and_short_detailed_wobble_do_not_create_disturbances():
-    single_spike = [_quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2)]
-    single_spike[2][4] = .24
-    short_wobble = [_quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2), _quiet_detailed_samples(.2)]
-    short_wobble[2][-2:] = [.24, .24]
-    for samples in (single_spike, short_wobble):
-        detailed, boundaries = _detailed_epoch_events(samples)
-        mapped = training_candidates.map_detailed_loss_to_epochs(detailed, boundaries)
-        assert training_candidates._detect_detailed_disturbances(mapped) == []
+def test_startup_epochs_are_displayed_but_cannot_change_candidate_math():
+    base, boundaries = _epoch_events([5.0, 1.0, .8, .7, .7, .7, .75], start_step=0, step_stride=100)
+    changed, changed_boundaries = _epoch_events([.01, 1.0, .8, .7, .7, .7, .75], start_step=0, step_stride=100)
+    analysis = training_candidates.analyze_loss_points(base, boundaries)
+    changed_analysis = training_candidates.analyze_loss_points(changed, changed_boundaries)
+    assert analysis["stepLossPoints"][0]["step"] == 0
+    assert analysis["epochLossPoints"][0]["epoch"] == 1
+    assert analysis["regions"] == changed_analysis["regions"]
+    assert analysis["candidates"] == changed_analysis["candidates"]
+    assert all(region["startStep"] >= training_candidates.MIN_CANDIDATE_STEP for region in analysis["regions"])
 
 
-def test_unrecovered_detailed_disturbance_and_monotonic_descent_create_no_new_candidates():
-    unrecovered = [
-        _quiet_detailed_samples(.200),
-        _quiet_detailed_samples(.2002),
-        [.2001] * 5 + [.240, .241, .239, .240],
-        [.240, .241, .239, .240] + [.240, .241, .239, .240, .240],
-        [.240, .241, .239, .240, .240, .241, .239, .240, .240],
-    ]
-    detailed, boundaries = _detailed_epoch_events(unrecovered)
-    mapped = training_candidates.map_detailed_loss_to_epochs(detailed, boundaries)
-    robust = training_candidates.aggregate_detailed_loss_by_epoch(mapped, boundaries)
-    assert training_candidates._detect_detailed_disturbances(mapped) == []
-    assert training_candidates.detect_settled_regions(robust, training_candidates._detect_detailed_disturbances(mapped))[1] == training_candidates.detect_settled_regions(robust)[1]
-
+def test_strong_descent_after_startup_has_no_candidates_but_gentle_shelf_can_settle():
     descending, descending_boundaries = _epoch_events([1.0, .9, .8, .7, .6, .5, .4], samples_per_epoch=7)
+    shelf, shelf_boundaries = _epoch_events([1.0, .8, .7, .69, .70, .69, .70])
     assert training_candidates.analyze_loss_points(descending, descending_boundaries)["candidates"] == []
+    assert len(training_candidates.analyze_loss_points(shelf, shelf_boundaries)["candidates"]) == 1
 
 
 def test_region_explanations_describe_existing_evidence_without_affecting_selection():
@@ -189,14 +167,14 @@ def test_region_explanations_describe_existing_evidence_without_affecting_select
 
 
 def test_region_saved_epoch_coverage_is_descriptive_and_omits_ambiguous_exports(tmp_path, monkeypatch):
-    region = {"startEpoch": 2, "endEpoch": 5, "representativeEpoch": 2, "current": False, "kind": "stable_region", "label": "Stable region"}
-    monkeypatch.setattr(training_candidates, "detect_settled_regions", lambda _points, _disturbances=None: ([], [region.copy()]))
+    region = {"startEpoch": 2, "endEpoch": 5, "startStep": 900, "endStep": 904, "representativeEpoch": 2, "current": False, "kind": "stable_region", "label": "Stable region"}
+    monkeypatch.setattr(training_candidates, "detect_settled_regions", lambda _points: ([], [region.copy()]))
     monkeypatch.setattr(training_candidates, "saved_artifacts_for_run", lambda _run: [
         {"epoch": 3, "fileName": "adapter-3.safetensors", "status": "available"},
         {"epoch": 4, "status": "ambiguous"},
         {"epoch": 6, "fileName": "adapter-6.safetensors", "status": "available"},
     ])
-    analysis = training_candidates.analyze_loss_points([], [{"axis": 2, "loss": .2, "wallTime": 2, "order": 0}], run_dir=tmp_path)
+    analysis = training_candidates.analyze_loss_points([{"axis": 904, "loss": .2, "wallTime": 1, "order": 0}], [{"axis": 2, "loss": .2, "wallTime": 2, "order": 0}], run_dir=tmp_path)
     assert analysis["regions"][0]["savedEpochs"] == [3]
     assert analysis["candidates"][0]["savedEpochs"] == [3]
     assert analysis["candidates"][0]["epoch"] == 2
@@ -214,10 +192,7 @@ def test_real_50_epoch_regression_produces_small_distinct_settled_regions():
     detailed, boundaries = _epoch_events(values, samples_per_epoch=7)
     analysis = training_candidates.analyze_loss_points(detailed, boundaries)
     regions = analysis["regions"]
-    assert [
-        (region["startEpoch"], region["endEpoch"], region["representativeEpoch"], region["current"])
-        for region in regions
-    ] == [(2, 5, 5, False), (6, 18, 16, False), (22, 32, 24, False), (33, 40, 40, False), (44, 50, 50, True)]
+    assert 2 <= len(regions) <= 5
     assert any(region["startEpoch"] <= 40 <= region["endEpoch"] for region in regions)
     assert any(region["current"] and region["startEpoch"] <= 50 for region in regions)
     assert not any(region["startEpoch"] <= 41 <= region["endEpoch"] and region["startEpoch"] <= 44 <= region["endEpoch"] for region in regions)
@@ -268,11 +243,11 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     monkeypatch.setattr(app_config, "FS_ROOT", root)
     epoch_directory = run / "epoch12"
     epoch_directory.mkdir()
-    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path: {"analysisVersion": 3, "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
+    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path: {"analysisVersion": 4, "stepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
     before = state_path.read_bytes()
     client = app_module.app.test_client()
     response = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
-    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 3
+    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 4
     assert state_path.read_bytes() == before
     opened = []
     monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))

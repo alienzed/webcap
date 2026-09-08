@@ -25,14 +25,17 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "function refreshTrainingCandidates()" in script
     assert "/fs/training_candidates?folder=" in script
     assert "training-candidates-raw" in script
+    assert "training-candidates-step-loss" in script
     assert "training-candidates-analysis" in script
     assert "training-candidates-basin" in script
     assert "analysisPoints" in script
     assert "savedArtifacts" in script
     assert "regions" in script
     assert "epochLossPoints" in script
+    assert "stepLossPoints" in script
     assert "detailedSmoothedPoints" not in script
     assert "training-candidates-hover-layer" in script
+    assert "Step loss:" in script
     assert "training-candidates-tooltip" in script
     assert "training-candidates-open-epoch" in script
     assert "training-candidates-region-summary" in script

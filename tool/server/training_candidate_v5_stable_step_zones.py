@@ -4,9 +4,6 @@ from bisect import bisect_left, bisect_right
 from collections import deque
 from statistics import median
 
-from matplotlib.pylab import normal
-
-
 EMA_RETENTION = .98
 TREND_WIDTHS = (100, 250, 500, 1000)
 SUPPORT_RADIUS = 500

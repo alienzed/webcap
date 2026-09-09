@@ -6,54 +6,20 @@ It is intentionally file-based and direct: the media grid is the training select
 
 WebCap is built with Flask plus plain browser JavaScript. There is no database or hosted service.
 
-## What WebCap does
+## Major features
 
-### Curate and annotate media
-
-- Browse local working sets and filter the visible media by caption text, requirements, review state, ratings, flags, tags, and aspect ratio.
-- Edit caption sidecars directly beside the media.
-- Use structured requirement groups, tags, caption templates/mappings, set notes, and review state to keep a set consistent.
-- Build focus sets from reports and filters, run recursive SuperSet searches, and materialize matching items into new sets.
-- Review caption coverage, required phrases, balance, validation rules, duplicates/similar captions, and caption-length outliers.
-- Optionally generate Face Focus, scene-complexity, and MediaPipe selection-pose metadata.
-
-### Make reversible media edits
-
-WebCap supports crop, clip, rotate, flip, background blur/removal, deface, duplicate, prune, reset, and restore workflows.
-
-Operations that are expected to be reversible preserve source material under `originals/`. Destructive actions require explicit user intent.
-
-### Build and run Diffusion Pipe training
-
-The visible media grid is the dataset source of truth.
-
-For a selected training profile WebCap can:
-
-- create the profile's missing persistent config/dataset TOMLs;
-- let you inspect/edit those TOMLs directly;
-- recalculate a dataset TOML from the current visible media when explicitly Reset;
-- capture the visible media, latest captions, exact saved TOMLs, and launch plan into a run-owned bundle;
-- run the captured job through the managed queue or generate a manual WSL command;
-- show progress, checkpoint ETA, logs, GPU state, history, diagnostics, and TensorBoard controls;
-- resume from discovered compatible checkpoints;
-- initialize a new run from a saved LoRA or explicit initializer path.
-
-Captured runs are independent of later edits to the source set.
-
-### Calibrate MiniMax H3 video buckets
-
-Training Settings includes explicit H3 video-bucket calibration.
-
-The probe runs fixed single-shape training tests on the configured training hardware, persists conclusive per-shape results, and reuses them on later launches when total RAM, GPU model, and total VRAM still match.
-
-Calibrated ceilings affect newly generated/reset H3 video datasets only:
-
-- the highest tested-safe ceiling remains selectable;
-- the automatic generated default keeps a two-rung safety margin below it where possible;
-- existing dataset TOMLs and captured runs are never rewritten;
-- calibration artifacts are retained for manual cleanup rather than deleted automatically.
-
-See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md) for the calibration contract.
+| Feature | What it does | Where to start |
+| --- | --- | --- |
+| **Browse and curate media** | Open local set folders; filter the visible scope; switch between a selected-item workflow and **Media Grid**; keep ratings, flags, tags, and review state with each item. | Choose a folder in the sidebar, use the filter bar or **Advanced filters**, then select an item or open **Media Grid**. |
+| **Captions and annotation** | Edit `<media>.txt` sidecars with requirement/vocabulary groups, tags, caption templates, mappings, and set notes. The annotation helpers include tag copy/paste. | Select an item in Annotation and use the caption editor plus the **Groups** and **Tags** panels. Use **Focus Annotate** on the selected item, or press `F`, for repeated group-first annotation across the current scope. |
+| **Review Set and dataset QA** | Inspect the current visible scope with a caption sheet, coverage, required-phrase, balance, and rule checks, metadata, and **Prune Candidates**. Review findings can narrow the working scope. | Open **Review** from the sidebar. Use **Caption Report**, **Prune Candidates**, and the **Focus set** control to investigate a finding. |
+| **Focus Sets and cross-folder sets** | A Focus Set temporarily narrows the visible media for curation, review, or training. **SuperSet Search** searches a folder and its subfolders, then materializes matches into a new set. | Choose a **Focus set** from the sidebar or grid. For a cross-folder result set, open **Advanced filters**, enable **SuperSet Search**, click **Search**, then choose **Create Set**. |
+| **Media editing** | Crop images; clip videos, inspect decoded frames, and export a selected frame; rotate, flip, blur/remove backgrounds, deface, duplicate, prune, reset, and restore. **Convert FPS** is explicit and overwrites the selected video after confirmation. | Select a media item and use its preview/context actions; use **Clip** for the video clip and frame workflow. Expected reversible operations preserve source material under `originals/`. |
+| **Training setup and capture** | Configure Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, or MiniMax H3 using persistent config/dataset TOMLs. **Training Review** summarizes the bucket plan and **Adjust buckets** edits supported targets. Train captures the current visible media, latest captions, saved TOMLs, and plan into a run-owned bundle. | Open **Train** from the sidebar or utility bar, choose a model and run setup, inspect the TOMLs under **Advanced configuration**, then use **Adjust buckets** or **Train**. |
+| **Training runs and checkpoints** | Use the managed queue or generate a manual WSL command; inspect progress, checkpoint ETA, GPU status, logs, history, and TensorBoard. Resume compatible checkpoints or start a fresh run from a saved LoRA/initializer. | In Training, use the run setup and queue controls; select **Resume checkpoint** or **Fine-tune from saved LoRA** under **Starting point** when applicable. |
+| **LoRA candidate analysis** | Review a recorded run's TensorBoard loss curves and suggested completed checkpoint epochs without changing run files. **Multiscale Loss Basins** is the primary detector; **Score Scalars · legacy baseline** is available for comparison. | In a run row with recorded output, choose the chart action labeled **Analyze LoRA candidates** to open **LoRA Candidates**. |
+| **H3 calibration** | Test MiniMax H3 video bucket shapes on the configured training hardware and retain conclusive results. Verified safe ceilings affect only newly generated or reset H3 datasets; existing TOMLs and captured runs are left unchanged. | Open **App Settings** → **Training** → **H3 calibration**, choose an eligible source from the current folder, and select **Run calibration**. See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md). |
+| **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, TensorBoard behavior, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the utility bar. Use the **General**, **Training**, and **Advanced** tabs. |
 
 ## Supported training profiles
 

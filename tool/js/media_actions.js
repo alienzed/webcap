@@ -232,30 +232,11 @@ function promptRenameMedia(mediaItem) {
     return;
   }
   renameMedia(mediaItem, oldFile, newFile).then(function () {
-    if (typeof captionItemTagsByMedia === 'object' && captionItemTagsByMedia) {
-      if (Array.isArray(captionItemTagsByMedia[oldFile])) {
-        captionItemTagsByMedia[newFile] = captionItemTagsByMedia[oldFile].slice();
-        delete captionItemTagsByMedia[oldFile];
-        saveItemTagsToFolderState();
-      }
-    }
-    if (state.ratings && Object.prototype.hasOwnProperty.call(state.ratings, oldFile)) {
-      state.ratings[newFile] = state.ratings[oldFile];
-      delete state.ratings[oldFile];
-      saveFolderStateForCurrentRoot();
-    }
-    if (moveMediaMutationState(oldFile, newFile)) {
-      saveFolderStateForCurrentRoot();
-    }
     setStatus('Renamed: ' + oldFile + ' -> ' + newFile);
-    // Update the current item's fileName and reload preview
-    if (state.currentItem && state.currentItem.fileName === oldFile) {
-      state.currentItem.fileName = newFile;
-      selectPathMedia(state.currentItem).catch(function () {});
-    } else {
-      // If item not currently selected, just refresh list to show new name
-      renderFileList();
-    }
+    // The server has already moved every persisted per-media key. Reload the
+    // current directory instead of duplicating that reconciliation in the UI.
+    state.pendingSelectFileName = newFile;
+    refreshCurrentDirectory();
   }).catch(function (err) {
     setStatus((err && err.message) ? err.message : ('Rename failed: ' + err));
   });

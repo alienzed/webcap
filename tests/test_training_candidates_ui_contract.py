@@ -14,10 +14,9 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
     assert 'id="training-candidates-modal"' in html
     assert 'id="training-candidates-open-run"' in html
     assert 'id="training-candidates-algorithm"' in html
-    assert 'v2 · Step Stable Ranges (experimental)' in html
-    assert 'v3 · Score Scalars' in html
-    assert 'v5 · Multiscale Loss Basins (experimental)' in html
-    for algorithm in ("v1", "v2", "v3", "v4", "v5"):
+    assert 'Multiscale Loss Basins' in html
+    assert 'Score Scalars · legacy baseline' in html
+    for algorithm in ("v5", "v3"):
         assert 'value="' + algorithm + '"' in html
     assert '/static/js/training_candidates.js' in html
     assert 'data-training-candidates=' in runner
@@ -74,7 +73,7 @@ const elements = {};
 for (const name of ['modal', 'modal-summary', 'modal-content', 'algorithm', 'smoothing', 'smoothing-number', 'y-min', 'y-max', 'y-auto', 'refresh', 'open-run', 'modal-close']) {
   elements['training-candidates-' + name] = {
     classList: { add() {}, remove() {} }, setAttribute() {},
-    querySelectorAll() { return []; }, blur() {}, value: 'v1'
+    querySelectorAll() { return []; }, blur() {}, value: 'v5'
   };
 }
 const requests = [];
@@ -89,7 +88,7 @@ const data = {
 const context = {
   document: {getElementById(id) {return elements[id];}, querySelector() {return null;}},
   escapeHtml(s) { return String(s).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;'); },
-  trainingWorkspaceState: {candidateFolder:'set',candidateJobId:'job',candidateAlgorithm:'v1',candidateRequestVersion:0},
+  trainingWorkspaceState: {candidateFolder:'set',candidateJobId:'job',candidateAlgorithm:'v5',candidateRequestVersion:0},
   trainingRunnerStatusLabel(s) { return s; }, setStatus() {},
   trainingRunnerRequest(url) { requests.push(url); return Promise.resolve({ok:true,analysis:data,run:{status:'done'}}); }
 };
@@ -137,7 +136,7 @@ const tooltipData = {points:data.epochLossPoints,analysis:data.analysisPoints,sm
 assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipData).includes('Robust loss: 0.2000'));
 assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));
 (async () => {
-  for (const algorithm of ['v1','v2','v3','v4','v5']) {
+  for (const algorithm of ['v5','v3']) {
     elements['training-candidates-algorithm'].value=algorithm;
     elements['training-candidates-algorithm'].onchange();
     await new Promise(setImmediate);

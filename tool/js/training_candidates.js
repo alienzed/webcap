@@ -259,7 +259,7 @@ function refreshTrainingCandidates() {
   var jobId = String(trainingWorkspaceState.candidateJobId || '');
   if (!folder || !jobId) throw new Error('Candidate analysis has no selected training run.');
   var requestVersion = ++trainingWorkspaceState.candidateRequestVersion;
-  var algorithm = String(trainingWorkspaceState.candidateAlgorithm || 'v1');
+  var algorithm = String(trainingWorkspaceState.candidateAlgorithm || 'v5');
   trainingWorkspaceState.candidatePending = true;
   trainingWorkspaceState.candidatePayload = null;
   renderTrainingCandidates();
@@ -299,7 +299,7 @@ function openTrainingCandidates(job) {
   var els = trainingCandidatesElements();
   trainingWorkspaceState.candidateJobId = String(job.id);
   trainingWorkspaceState.candidateFolder = String(job.folder);
-  trainingWorkspaceState.candidateAlgorithm = 'v1';
+  trainingWorkspaceState.candidateAlgorithm = 'v5';
   trainingWorkspaceState.candidatePayload = null;
   trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30 };
   trainingWorkspaceState.candidateModalOpen = true;

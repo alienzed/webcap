@@ -6,23 +6,17 @@ import statistics
 from pathlib import Path
 
 from . import (
-    training_candidate_v1_epoch_regions, training_candidate_v2_step_ranges,
-    training_candidate_v3_score_regions, training_candidate_v4_convergence_regimes,
-    training_candidate_v5_stable_step_zones,
+    training_candidate_v3_score_regions, training_candidate_v5_stable_step_zones,
 )
 
 
 ANALYSIS_VERSION = 13
 DETAILED_LOSS_TAG = "train/loss"
 EPOCH_LOSS_TAG = "train/epoch_loss"
-MIN_CANDIDATE_STEP = 800
 _EPOCH_DIRECTORY_PATTERN = re.compile(r"^epoch(\d+)$")
 ALGORITHM_LABELS = {
-    "v1": "v1 · Epoch Regions",
-    "v2": "v2 · Step Stable Ranges (experimental)",
-    "v3": "v3 · Score Scalars",
-    "v4": "v4 · Convergence Regimes (experimental)",
-    "v5": "v5 · Multiscale Loss Basins (experimental)",
+    "v5": "Multiscale Loss Basins",
+    "v3": "Score Scalars · legacy baseline",
 }
 
 
@@ -148,11 +142,8 @@ def smooth_step_loss(points):
 
 
 ALGORITHMS = {
-    "v1": training_candidate_v1_epoch_regions.detect,
-    "v2": training_candidate_v2_step_ranges.detect,
-    "v3": training_candidate_v3_score_regions.detect,
-    "v4": training_candidate_v4_convergence_regimes.detect,
     "v5": training_candidate_v5_stable_step_zones.detect,
+    "v3": training_candidate_v3_score_regions.detect,
 }
 
 
@@ -183,7 +174,7 @@ def saved_artifacts_for_run(run_dir):
     return sorted(artifacts, key=lambda item: item["epoch"])
 
 
-def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="v1"):
+def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="v5"):
     """Analyze completed loss points with one explicit candidate algorithm."""
     if algorithm not in ALGORITHMS:
         raise ValueError("Unknown candidate analysis algorithm: " + str(algorithm))
@@ -206,12 +197,9 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
         if point["epoch"] in completed_epochs
     ], key=lambda point: point["step"])
     smoothed_step_loss_points = smooth_step_loss(step_loss_points)
-    # The legacy startup cutoff belongs only to v1's preserved behavior.
-    eligible_points = [point for point in robust_points if point["endStep"] >= MIN_CANDIDATE_STEP] if algorithm == "v1" else robust_points
-    eligible_step_points = step_loss_points
     # Score Scalars was originally written for train/epoch_loss: its x-axis is
     # the epoch number, while the optimizer end step remains display metadata.
-    detector_points = eligible_step_points
+    detector_points = step_loss_points
     if algorithm == "v3":
         detector_points = [
             {
@@ -222,17 +210,9 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
             }
             for point in epoch_loss_points
         ]
-    detector_result = ALGORITHMS[algorithm](detector_points, eligible_points)
+    detector_result = ALGORITHMS[algorithm](detector_points, robust_points)
     regions = detector_result["regions"]
-    if algorithm == "v1":
-        display_trend = training_candidate_v1_epoch_regions.centered_median(robust_points)
-        eligible_trend_by_epoch = {point["epoch"]: point for point in detector_result["analysisPoints"]}
-        analysis_points = [
-            dict(point, loss=eligible_trend_by_epoch.get(point["epoch"], point)["loss"])
-            for point in display_trend
-        ]
-    else:
-        analysis_points = detector_result["analysisPoints"]
+    analysis_points = detector_result["analysisPoints"]
     saved_artifacts = saved_artifacts_for_run(run_dir) if run_dir is not None else []
     for region in regions:
         region["savedEpochs"] = [
@@ -247,7 +227,7 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
         "kind": region["kind"],
         "label": region["label"],
         "savedEpochs": region["savedEpochs"],
-        "reason": ("Current stable region." if region["current"] else "Stable region.") if algorithm == "v1" else region["label"] + ".",
+        "reason": region["label"] + ".",
         "artifact": artifact_for_epoch(run_dir, region["representativeEpoch"]) if run_dir is not None else {"available": False, "status": "not_checked"},
     } for region in regions]
     return {
@@ -264,7 +244,7 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
     }
 
 
-def analyze_run_directory(run_dir, algorithm="v1"):
+def analyze_run_directory(run_dir, algorithm="v5"):
     if algorithm not in ALGORITHMS:
         raise ValueError("Unknown candidate analysis algorithm: " + str(algorithm))
     detailed_events, epoch_events = read_loss_events(run_dir)

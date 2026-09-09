@@ -436,7 +436,7 @@ def candidate_epoch_folder_path(folder, job_id, epoch):
     return directory
 
 
-def candidate_analysis_response(folder, job_id, algorithm="v1"):
+def candidate_analysis_response(folder, job_id, algorithm="v5"):
     """Analyze one recorded run without accepting a client filesystem path."""
     if algorithm not in _candidate_algorithms:
         return {"ok": False, "error": "Unknown candidate analysis algorithm: " + str(algorithm)}, 422

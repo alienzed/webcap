@@ -12,7 +12,7 @@ from . import (
 )
 
 
-ANALYSIS_VERSION = 12
+ANALYSIS_VERSION = 13
 DETAILED_LOSS_TAG = "train/loss"
 EPOCH_LOSS_TAG = "train/epoch_loss"
 MIN_CANDIDATE_STEP = 800

@@ -697,6 +697,17 @@ def test_v5_historical_floor_rejects_a_materially_inferior_later_shelf():
     assert hypotheses[1]["floorCompatible"] is False
 
 
+def test_v5_strong_recovered_floor_can_use_its_anchor_prominence_but_weak_shelf_cannot():
+    hypotheses = [
+        {"anchor": {"step": 1_000, "loss": .2, "prominence": .02}},
+        {"anchor": {"step": 3_000, "loss": .3, "prominence": .15}},
+        {"anchor": {"step": 5_000, "loss": .3, "prominence": .01}},
+    ]
+    assert v5._apply_floor_compatibility(hypotheses) == pytest.approx(.04)
+    assert hypotheses[1]["floorCompatible"] is True
+    assert hypotheses[2]["floorCompatible"] is False
+
+
 def test_v5_nms_drops_a_weak_neighboring_dip_and_rep_projects_after_the_smoothed_floor():
     points, checkpoints = _v5_curve(7_000, [(3_000, .4, 900), (3_550, .08, 200)])
     checkpoints.extend([
@@ -840,7 +851,7 @@ def test_all_dispatch_display_and_artifact_independence(algorithm, tmp_path, mon
     detailed = [{"axis": p["step"], "loss": p["loss"], "wallTime": p["step"], "order": i} for i, p in enumerate(points)]
     epochs = [{"axis": p["epoch"], "loss": p["loss"], "wallTime": p["endStep"], "order": i} for i, p in enumerate(checkpoints)]
     before = training_candidates.analyze_loss_points(detailed, epochs, algorithm=algorithm)
-    assert before["algorithm"] == algorithm and before["analysisVersion"] == 12
+    assert before["algorithm"] == algorithm and before["analysisVersion"] == 13
     (tmp_path / "epoch5").mkdir()
     (tmp_path / "epoch5" / "adapter.safetensors").write_bytes(b"fixture")
     after = training_candidates.analyze_loss_points(detailed, epochs, run_dir=tmp_path, algorithm=algorithm)

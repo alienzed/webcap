@@ -172,7 +172,8 @@ def _apply_floor_compatibility(hypotheses):
     best_floor = None
     for item in sorted(hypotheses, key=lambda candidate: candidate["anchor"]["step"]):
         loss = item["anchor"]["loss"]
-        item["floorCompatible"] = best_floor is None or loss <= best_floor + tolerance
+        candidate_tolerance = max(tolerance, item["anchor"]["prominence"])
+        item["floorCompatible"] = best_floor is None or loss <= best_floor + candidate_tolerance
         best_floor = loss if best_floor is None else min(best_floor, loss)
     return tolerance
 

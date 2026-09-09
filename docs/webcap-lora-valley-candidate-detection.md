@@ -1,6 +1,6 @@
 # WebCap: LoRA Candidate Analysis
 
-Candidates is a manual, read-only inspection of one recorded run. V1 remains the default whenever the modal opens, and selection is not saved to application settings. Analysis version 10 identifies the selected algorithm explicitly.
+Candidates is a manual, read-only inspection of one recorded run. V1 remains the default whenever the modal opens, and selection is not saved to application settings. Analysis version 11 identifies the selected algorithm explicitly.
 
 ## Five hypotheses
 

@@ -502,12 +502,18 @@ def history_payload(folder_path):
 def _history_job_view(job):
     item = dict(job)
     raw_output = str(item.get("outputRunPath") or item.get("effectiveOutputDir") or item.get("outputRoot") or "").strip()
+    raw_candidate = str(item.get("outputRunPath") or item.get("resumeFromCheckpoint") or "").strip()
     try:
         output_path = host_path_for_training_path(raw_output) if raw_output else None
         item["outputAvailable"] = bool(output_path) and output_path.is_dir()
     except (OSError, ValueError):
         output_path = None
         item["outputAvailable"] = False
+    try:
+        candidate_path = host_path_for_training_path(raw_candidate) if raw_candidate else None
+        item["candidateRunAvailable"] = bool(candidate_path) and candidate_path.is_dir()
+    except (OSError, ValueError):
+        item["candidateRunAvailable"] = False
     summary = item.get("artifactSummary") if isinstance(item.get("artifactSummary"), dict) else {}
     if output_path and not str(summary.get("checkpointTag") or "").strip():
         try:

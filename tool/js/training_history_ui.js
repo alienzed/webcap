@@ -178,13 +178,13 @@ function renderTrainingHistory() {
       '</div>' +
       '<div class="training-history-actions">' +
        (job.logAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show run log" aria-label="Show run log">&#128196;</button>' : '') +
-       (job.outputRunPath && job.outputAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-candidates="' + escapeHtml(job.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
+       (job.candidateRunAvailable ? '<button type="button" class="training-history-action" data-training-history-candidates="' + escapeHtml(job.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
        (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Resume this run" aria-label="Resume this run">&#8635;</button>' : '') +
        '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
          (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
          (job.actionAvailable !== false && job.actionPath ? '<button type="button" data-training-history-action="' + escapeHtml(job.id || '') + '">&#128451; Open action folder</button>' : '') +
+         '<button type="button" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove from Recent Runs — keeps files and output">Remove from Recent Runs</button>' +
        '</div></details>' +
-       '<button type="button" class="training-history-action training-history-action--clear" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove from Recent Runs — keeps files and output" aria-label="Remove from Recent Runs — keeps files and output">&#215;</button>' +
        '</div></div>';
   }).join('');
   if (els.historyShowAllBtn) {

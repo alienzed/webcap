@@ -400,16 +400,21 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     run.mkdir(parents=True)
     state_path = root / ".webcap_training" / "queue.json"
     state_path.parent.mkdir()
-    state_path.write_text(json.dumps({"version": 3, "activeJobId": "job-1", "jobs": [{"id": "job-1", "folder": "sets/subject", "outputRunPath": str(run), "status": "running", "progress": {"epoch": 12, "epochs": 70}}]}), encoding="utf-8")
+    state_path.write_text(json.dumps({"version": 3, "activeJobId": "job-1", "jobs": [
+        {"id": "job-1", "folder": "sets/subject", "outputRunPath": str(run), "status": "running", "progress": {"epoch": 12, "epochs": 70}},
+        {"id": "job-2", "folder": "sets/subject", "resumeFromCheckpoint": str(run), "outputRunPath": "", "status": "queued"},
+    ]}), encoding="utf-8")
     monkeypatch.setattr(app_config, "FS_ROOT", root)
     epoch_directory = run / "epoch12"
     epoch_directory.mkdir()
-    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 10, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
+    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 11, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
     before = state_path.read_bytes()
     client = app_module.app.test_client()
     response = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
-    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 10
+    assert response.status_code == 200 and response.get_json()["analysis"]["analysisVersion"] == 11
     assert response.get_json()["analysis"]["algorithm"] == "v1"
+    resumed = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-2")
+    assert resumed.status_code == 200 and resumed.get_json()["analysis"]["algorithm"] == "v1"
     for algorithm in ("v2", "v3", "v4", "v5"):
         switched = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1&algorithm=" + algorithm)
         assert switched.status_code == 200
@@ -705,16 +710,90 @@ def test_v5_nms_drops_a_weak_neighboring_dip_and_rep_uses_the_smoothed_floor():
     assert nearby[0]["representativeEpoch"] == 99
 
 
-def test_v5_reserves_the_first_credible_basin_before_global_ranking():
-    def hypothesis(step, basin_score, loss, prominent):
-        return {"anchor": {"step": step, "loss": loss}, "basinScore": basin_score,
-                "prominenceScore": .8 if prominent else .2, "persistenceScore": .75 if prominent else .5}
+def test_v5_startup_descent_ends_only_after_sustained_flattening():
+    trend = {"steps": list(range(0, 4_501, 500)),
+             "values": [10, 9.5, 9, 8.5, 8.5, 8.5, 8.5, 8.5, 8.5, 8.5]}
+    assert v5._startup_end_step(trend) == 2_000
 
-    early = hypothesis(1_000, .1, .6, True)
-    normal = [early] + [hypothesis(3_000 + index * 800, .9, .5 - index * .01, False) for index in range(10)]
-    selected = [early]
-    v5._accept(selected, [item for item in v5._ranked(normal) if item is not early], v5.MAX_REGIONS)
-    assert early in selected and len(selected) == v5.MAX_REGIONS
+
+def test_v5_later_descent_is_not_reclassified_as_startup():
+    trend = {"steps": list(range(0, 4_501, 500)),
+             "values": [10, 10, 10, 10, 9.5, 9, 8.5, 8, 7.5, 7]}
+    assert v5._startup_end_step(trend) is None
+
+
+def test_v5_brief_flattening_does_not_confirm_startup_end():
+    trend = {"steps": list(range(0, 5_501, 500)),
+             "values": [10, 9.5, 9, 8.5, 8.5, 8.5, 8, 7.5, 7, 6.5, 6, 5.5]}
+    assert v5._startup_end_step(trend) is None
+
+
+def test_v5_ambiguous_startup_without_flattening_fails_open():
+    trend = {"steps": list(range(0, 5_501, 500)),
+             "values": [10 - .5 * index for index in range(12)]}
+    assert v5._startup_end_step(trend) is None
+
+
+def test_v5_startup_quota_leaves_slots_for_later_hypotheses():
+    def hypothesis(step, score):
+        return {"anchor": {"step": step, "loss": 1.0}, "basinScore": score,
+                "prominenceScore": score, "persistenceScore": 1.0}
+
+    hypotheses = [hypothesis(step, 10 - index) for index, step in enumerate((500, 1_300, 2_100, 3_000, 3_800, 4_600))]
+    selected = []
+    v5._accept(selected, v5._ranked(hypotheses), 5, startup_end_step=2_100)
+    assert len(selected) == 5
+    assert sum(item["anchor"]["step"] <= 2_100 for item in selected) == v5.MAX_STARTUP_REGIONS
+    assert any(item["anchor"]["step"] > 2_100 for item in selected)
+
+
+def test_v5_startup_candidates_are_not_reserved():
+    def hypothesis(step, score):
+        return {"anchor": {"step": step, "loss": 1.0}, "basinScore": score,
+                "prominenceScore": score, "persistenceScore": 1.0}
+
+    startup = [hypothesis(500, .2), hypothesis(1_300, .1)]
+    later = [hypothesis(3_000 + index * 800, 10 - index) for index in range(v5.MAX_REGIONS)]
+    selected = []
+    v5._accept(selected, v5._ranked(startup + later), v5.MAX_REGIONS, startup_end_step=1_500)
+    assert len(selected) == v5.MAX_REGIONS
+    assert all(item["anchor"]["step"] > 1_500 for item in selected)
+
+
+def test_v5_natural_basin_boundary_keeps_an_inside_representative():
+    hypothesis = {"anchor": {"step": 1_000}}
+    floor_center = {"step": 1_000}
+    basin_minimum = {"step": 1_000, "index": 2, "loss": 0.0, "prominence": 2.0}
+    trends = {500: {"steps": [0, 500, 1_000, 1_500, 2_000, 2_500], "values": [2.0, .5, 0.0, .5, 2.0, 2.0]}}
+    trend_250 = {"steps": [0, 500, 1_000, 1_500, 2_000, 2_100, 2_500], "values": [2.0, 2.0, 2.0, 10.0, 2.0, 0.0, 0.0]}
+    start, end = v5._basin_boundaries(hypothesis, floor_center, trends, {500: [basin_minimum]}, 0, 2_500)
+    representative = v5._representative(floor_center, [
+        {"epoch": 1, "endStep": 1_500}, {"epoch": 2, "endStep": 2_100},
+    ], trend_250, start, end)
+    assert (start, end) == (0, 2_000)
+    assert representative["endStep"] == 1_500
+
+
+def test_v5_strict_interior_representative_beats_exact_boundary():
+    floor_center = {"step": 1_500}
+    trend_250 = {"steps": [1_000, 1_500, 2_000], "values": [0.0, 10.0, 2.0]}
+    representative = v5._representative(floor_center, [
+        {"epoch": 1, "endStep": 1_000}, {"epoch": 2, "endStep": 1_500},
+    ], trend_250, 1_000, 2_000)
+    assert representative["endStep"] == 1_500
+
+
+def test_v5_no_inside_checkpoint_uses_nearest_floor_and_minimal_expansion():
+    floor_center = {"step": 1_500}
+    trend_250 = {"steps": [800, 1_500, 2_200], "values": [0.0, 0.0, 0.0]}
+    start, end = 1_000, 2_000
+    representative = v5._representative(floor_center, [
+        {"epoch": 1, "endStep": 800}, {"epoch": 2, "endStep": 2_200},
+    ], trend_250, start, end)
+    start = min(start, representative["endStep"])
+    end = max(end, representative["endStep"])
+    assert representative["endStep"] == 2_200
+    assert (start, end) == (1_000, 2_200)
 
 
 def test_v5_fallback_is_nonempty_and_result_count_is_bounded():
@@ -746,7 +825,7 @@ def test_all_dispatch_display_and_artifact_independence(algorithm, tmp_path, mon
     detailed = [{"axis": p["step"], "loss": p["loss"], "wallTime": p["step"], "order": i} for i, p in enumerate(points)]
     epochs = [{"axis": p["epoch"], "loss": p["loss"], "wallTime": p["endStep"], "order": i} for i, p in enumerate(checkpoints)]
     before = training_candidates.analyze_loss_points(detailed, epochs, algorithm=algorithm)
-    assert before["algorithm"] == algorithm and before["analysisVersion"] == 10
+    assert before["algorithm"] == algorithm and before["analysisVersion"] == 11
     (tmp_path / "epoch5").mkdir()
     (tmp_path / "epoch5" / "adapter.safetensors").write_bytes(b"fixture")
     after = training_candidates.analyze_loss_points(detailed, epochs, run_dir=tmp_path, algorithm=algorithm)

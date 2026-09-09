@@ -401,9 +401,9 @@ def _candidate_run_snapshot(folder, job_id):
             job = _find_history_job(folder_text, wanted)
         if not job:
             raise LookupError("Training job not found.")
-        raw_run_path = str(job.get("outputRunPath") or "").strip()
+        raw_run_path = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "").strip()
         if not raw_run_path:
-            raise RuntimeError("This training job has no recorded run directory yet.")
+            raise RuntimeError("This training job has no recorded or resume run directory yet.")
         progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
         return raw_run_path, {
             "id": str(job.get("id") or ""),

@@ -10,6 +10,9 @@ SUPPORT_RADIUS = 500
 FINAL_NMS_STEPS = 700
 MAX_REGIONS = 8
 MIN_FALLBACK_REGIONS = 3
+STARTUP_NEGATIVE_FRACTION = .75
+STARTUP_FLATTEN_RATIO = .35
+MAX_STARTUP_REGIONS = 2
 
 
 def _ema_points(points):
@@ -180,12 +183,61 @@ def _ranked(hypotheses):
     ))
 
 
-def _accept(selected, candidates, limit):
+def _startup_end_step(trend):
+    valid = [(step, value) for step, value in zip(trend["steps"], trend["values"]) if value is not None]
+    if not valid:
+        return None
+    valid_steps = [step for step, _value in valid]
+    rates = []
+    for step, value in valid:
+        previous_index = bisect_right(valid_steps, step - SUPPORT_RADIUS) - 1
+        if previous_index < 0:
+            continue
+        previous_step, previous_value = valid[previous_index]
+        separation = step - previous_step
+        if separation >= SUPPORT_RADIUS:
+            rates.append({"step": step, "rate": (value - previous_value) * 1000 / separation})
+    if not rates:
+        return None
+    rate_steps = [sample["step"] for sample in rates]
+
+    def full_window(start_index):
+        end_index = bisect_right(rate_steps, rates[start_index]["step"] + TREND_WIDTHS[-1]) - 1
+        if end_index <= start_index or rates[end_index]["step"] - rates[start_index]["step"] < TREND_WIDTHS[-1]:
+            return None
+        return rates[start_index:end_index + 1], end_index
+
+    baseline_result = full_window(0)
+    if baseline_result is None:
+        return None
+    baseline, baseline_end_index = baseline_result
+    negative = [sample["rate"] for sample in baseline if sample["rate"] < 0]
+    if len(negative) / len(baseline) < STARTUP_NEGATIVE_FRACTION or median(sample["rate"] for sample in baseline) >= 0:
+        return None
+    flatten_threshold = -(median(abs(rate) for rate in negative) * STARTUP_FLATTEN_RATIO)
+    for start_index in range(baseline_end_index + 1, len(rates)):
+        window_result = full_window(start_index)
+        if window_result is None:
+            continue
+        window, _window_end_index = window_result
+        flattened = [sample["rate"] for sample in window if sample["rate"] >= flatten_threshold]
+        if (len(flattened) / len(window) >= STARTUP_NEGATIVE_FRACTION
+                and median(sample["rate"] for sample in window) >= flatten_threshold):
+            return window[0]["step"]
+    return None
+
+
+def _accept(selected, candidates, limit, startup_end_step=None):
+    startup_count = sum(item["anchor"]["step"] <= startup_end_step for item in selected) if startup_end_step is not None else 0
     for item in candidates:
         if len(selected) >= limit:
             break
+        is_startup = startup_end_step is not None and item["anchor"]["step"] <= startup_end_step
+        if is_startup and startup_count >= MAX_STARTUP_REGIONS:
+            continue
         if all(abs(item["anchor"]["step"] - accepted["anchor"]["step"]) >= FINAL_NMS_STEPS for accepted in selected):
             selected.append(item)
+            startup_count += is_startup
 
 
 def _fallback_anchor(trend):
@@ -228,24 +280,22 @@ def _floor_center(hypothesis, minima_by_width):
     return anchor
 
 
-def _representative(floor_center, checkpoints, trend_250):
-    nearby = [checkpoint for checkpoint in checkpoints
-          if abs(checkpoint["endStep"] - floor_center["step"]) <= SUPPORT_RADIUS]
-
-    if not nearby:
+def _representative(floor_center, checkpoints, trend_250, start, end):
+    inside = [checkpoint for checkpoint in checkpoints if start <= checkpoint["endStep"] <= end]
+    strict_inside = [checkpoint for checkpoint in inside if start < checkpoint["endStep"] < end]
+    if not inside:
         return min(checkpoints, key=lambda checkpoint: (
             abs(checkpoint["endStep"] - floor_center["step"]),
             -checkpoint["epoch"],
         ))
-
-    return min(nearby, key=lambda checkpoint: (
+    return min(strict_inside or inside, key=lambda checkpoint: (
         _nearest_trend_loss(trend_250, checkpoint["endStep"]),
         abs(checkpoint["endStep"] - floor_center["step"]),
         -checkpoint["epoch"],
     ))
 
 
-def _basin_boundaries(hypothesis, floor_center, representative, trends, minima_by_width, run_start, run_end):
+def _basin_boundaries(hypothesis, floor_center, trends, minima_by_width, run_start, run_end):
     anchor = hypothesis["anchor"]
     support = _within(minima_by_width[500], anchor["step"], SUPPORT_RADIUS)
     basin_minimum = min(support, key=lambda item: (abs(item["step"] - floor_center["step"]), item["step"])) if support else anchor
@@ -260,10 +310,8 @@ def _basin_boundaries(hypothesis, floor_center, representative, trends, minima_b
         right += 1
     start = max(trend["steps"][left], anchor["step"] - 1000)
     end = min(trend["steps"][right], anchor["step"] + 1000)
-    start = min(start, representative["endStep"])
-    end = max(end, representative["endStep"])
     if end - start < 100:
-        start = max(run_start, representative["endStep"] - 50)
+        start = max(run_start, basin_minimum["step"] - 50)
         end = min(run_end, start + 100)
         start = max(run_start, end - 100)
     return start, end
@@ -300,11 +348,12 @@ def detect(detailed_points, checkpoint_points):
     hypotheses = _anchor_hypotheses(minima_by_width)
     _apply_floor_compatibility(hypotheses)
     normal = [item for item in hypotheses if item["supportedScaleCount"] >= 3 and item["floorCompatible"]]
+    startup_end_step = _startup_end_step(trends[1000])
     selected = []
-    _accept(selected, _ranked(normal), MAX_REGIONS)
+    _accept(selected, _ranked(normal), MAX_REGIONS, startup_end_step)
     if len(selected) < MIN_FALLBACK_REGIONS:
         fallback = [item for item in hypotheses if item["supportedScaleCount"] >= 2 and item not in selected]
-        _accept(selected, _ranked(fallback), MIN_FALLBACK_REGIONS)
+        _accept(selected, _ranked(fallback), MIN_FALLBACK_REGIONS, startup_end_step)
     if not selected:
         anchor = _fallback_anchor(trends[1000])
         if anchor is not None:
@@ -315,8 +364,11 @@ def detect(detailed_points, checkpoint_points):
     for hypothesis in sorted(selected, key=lambda item: item["anchor"]["step"]):
         floor_center = _floor_center(hypothesis, minima_by_width)
         hypothesis["floorCenter"] = floor_center
-        representative = _representative(floor_center, checkpoint_points, trends[250])
-        start, end = _basin_boundaries(hypothesis, floor_center, representative, trends, minima_by_width,
+        start, end = _basin_boundaries(hypothesis, floor_center, trends, minima_by_width,
                                        points[0]["step"], points[-1]["step"])
+        representative = _representative(floor_center, checkpoint_points, trends[250], start, end)
+        if not start <= representative["endStep"] <= end:
+            start = min(start, representative["endStep"])
+            end = max(end, representative["endStep"])
         regions.append(_region(hypothesis, representative, start, end, checkpoint_points, end == points[-1]["step"]))
     return {"analysisPoints": points, "regions": regions}

@@ -151,7 +151,7 @@ python -m tool.server.app
 Then open:
 
 ```text
-http://127.0.0.1:5000/
+http://127.0.0.1:4200/
 ```
 
 ## Core workflow

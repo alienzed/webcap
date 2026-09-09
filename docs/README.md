@@ -66,7 +66,6 @@ These are useful product notes, not authoritative implementation references:
 These are intentionally retained for context:
 
 - `docs/archive/ui-revamp-2026-07/` - completed workspace-consolidation planning; use `README.md` and `docs/spec.md` for current behavior
-- `docs/h3_calibration_resume_settings_plan.md` - superseded by `vram_bucket_calibration.md`
 - `docs/archive/`
 - `docs/feature_spec.md`
 - `docs/caption-review.md`

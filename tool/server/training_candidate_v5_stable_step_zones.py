@@ -282,15 +282,21 @@ def _floor_center(hypothesis, minima_by_width):
 
 def _representative(floor_center, checkpoints, trend_250, start, end):
     inside = [checkpoint for checkpoint in checkpoints if start <= checkpoint["endStep"] <= end]
-    strict_inside = [checkpoint for checkpoint in inside if start < checkpoint["endStep"] < end]
     if not inside:
         return min(checkpoints, key=lambda checkpoint: (
             abs(checkpoint["endStep"] - floor_center["step"]),
             -checkpoint["epoch"],
         ))
-    return min(strict_inside or inside, key=lambda checkpoint: (
+    at_or_after_floor = [checkpoint for checkpoint in inside if checkpoint["endStep"] >= floor_center["step"]]
+    if at_or_after_floor:
+        return min(at_or_after_floor, key=lambda checkpoint: (
+            checkpoint["endStep"] - floor_center["step"],
+            _nearest_trend_loss(trend_250, checkpoint["endStep"]),
+            -checkpoint["epoch"],
+        ))
+    return min(inside, key=lambda checkpoint: (
+        floor_center["step"] - checkpoint["endStep"],
         _nearest_trend_loss(trend_250, checkpoint["endStep"]),
-        abs(checkpoint["endStep"] - floor_center["step"]),
         -checkpoint["epoch"],
     ))
 

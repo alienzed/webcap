@@ -697,7 +697,7 @@ def test_v5_historical_floor_rejects_a_materially_inferior_later_shelf():
     assert hypotheses[1]["floorCompatible"] is False
 
 
-def test_v5_nms_drops_a_weak_neighboring_dip_and_rep_uses_the_smoothed_floor():
+def test_v5_nms_drops_a_weak_neighboring_dip_and_rep_projects_after_the_smoothed_floor():
     points, checkpoints = _v5_curve(7_000, [(3_000, .4, 900), (3_550, .08, 200)])
     checkpoints.extend([
         {"epoch": 99, "startStep": 2_900, "endStep": 3_000, "step": 3_000, "loss": .6},
@@ -707,7 +707,7 @@ def test_v5_nms_drops_a_weak_neighboring_dip_and_rep_uses_the_smoothed_floor():
     regions = v5.detect(points, checkpoints)["regions"]
     nearby = [region for region in regions if 2_000 < region["anchorStep"] < 4_000]
     assert len(nearby) == 1
-    assert nearby[0]["representativeEpoch"] == 99
+    assert nearby[0]["representativeEpoch"] == 16
 
 
 def test_v5_startup_descent_ends_only_after_sustained_flattening():
@@ -760,35 +760,50 @@ def test_v5_startup_candidates_are_not_reserved():
     assert all(item["anchor"]["step"] > 1_500 for item in selected)
 
 
-def test_v5_natural_basin_boundary_keeps_an_inside_representative():
-    hypothesis = {"anchor": {"step": 1_000}}
-    floor_center = {"step": 1_000}
-    basin_minimum = {"step": 1_000, "index": 2, "loss": 0.0, "prominence": 2.0}
-    trends = {500: {"steps": [0, 500, 1_000, 1_500, 2_000, 2_500], "values": [2.0, .5, 0.0, .5, 2.0, 2.0]}}
-    trend_250 = {"steps": [0, 500, 1_000, 1_500, 2_000, 2_100, 2_500], "values": [2.0, 2.0, 2.0, 10.0, 2.0, 0.0, 0.0]}
-    start, end = v5._basin_boundaries(hypothesis, floor_center, trends, {500: [basin_minimum]}, 0, 2_500)
+def test_v5_representative_prefers_nearest_checkpoint_after_floor_over_trend_loss():
+    floor_center = {"step": 1_550}
+    trend_250 = {"steps": [1_500, 1_600, 1_800], "values": [0.0, 10.0, -10.0]}
     representative = v5._representative(floor_center, [
-        {"epoch": 1, "endStep": 1_500}, {"epoch": 2, "endStep": 2_100},
-    ], trend_250, start, end)
-    assert (start, end) == (0, 2_000)
-    assert representative["endStep"] == 1_500
-
-
-def test_v5_strict_interior_representative_beats_exact_boundary():
-    floor_center = {"step": 1_500}
-    trend_250 = {"steps": [1_000, 1_500, 2_000], "values": [0.0, 10.0, 2.0]}
-    representative = v5._representative(floor_center, [
-        {"epoch": 1, "endStep": 1_000}, {"epoch": 2, "endStep": 1_500},
+        {"epoch": 1, "endStep": 1_500}, {"epoch": 2, "endStep": 1_600},
+        {"epoch": 3, "endStep": 1_800},
     ], trend_250, 1_000, 2_000)
-    assert representative["endStep"] == 1_500
+    assert representative["endStep"] == 1_600
+
+
+def test_v5_representative_allows_exact_natural_basin_boundary():
+    floor_center = {"step": 1_950}
+    trend_250 = {"steps": [1_900, 2_000], "values": [0.0, 10.0]}
+    representative = v5._representative(floor_center, [
+        {"epoch": 1, "endStep": 1_900}, {"epoch": 2, "endStep": 2_000},
+    ], trend_250, 1_000, 2_000)
+    assert representative["endStep"] == 2_000
+
+
+def test_v5_representative_uses_nearest_prefloor_checkpoint_when_needed():
+    floor_center = {"step": 1_950}
+    trend_250 = {"steps": [1_500, 1_800], "values": [0.0, 10.0]}
+    representative = v5._representative(floor_center, [
+        {"epoch": 1, "endStep": 1_500}, {"epoch": 2, "endStep": 1_800},
+    ], trend_250, 1_000, 2_000)
+    assert representative["endStep"] == 1_800
+
+
+def test_v5_representative_stays_inside_natural_basin():
+    floor_center = {"step": 1_950}
+    trend_250 = {"steps": [1_800, 2_050], "values": [10.0, 0.0]}
+    representative = v5._representative(floor_center, [
+        {"epoch": 1, "endStep": 1_800}, {"epoch": 2, "endStep": 2_050},
+    ], trend_250, 1_000, 2_000)
+    assert representative["endStep"] == 1_800
 
 
 def test_v5_no_inside_checkpoint_uses_nearest_floor_and_minimal_expansion():
     floor_center = {"step": 1_500}
-    trend_250 = {"steps": [800, 1_500, 2_200], "values": [0.0, 0.0, 0.0]}
+    trend_250 = {"steps": [800, 1_500, 2_200, 3_000], "values": [0.0, 0.0, 0.0, -10.0]}
     start, end = 1_000, 2_000
     representative = v5._representative(floor_center, [
         {"epoch": 1, "endStep": 800}, {"epoch": 2, "endStep": 2_200},
+        {"epoch": 3, "endStep": 3_000},
     ], trend_250, start, end)
     start = min(start, representative["endStep"])
     end = max(end, representative["endStep"])
@@ -825,7 +840,7 @@ def test_all_dispatch_display_and_artifact_independence(algorithm, tmp_path, mon
     detailed = [{"axis": p["step"], "loss": p["loss"], "wallTime": p["step"], "order": i} for i, p in enumerate(points)]
     epochs = [{"axis": p["epoch"], "loss": p["loss"], "wallTime": p["endStep"], "order": i} for i, p in enumerate(checkpoints)]
     before = training_candidates.analyze_loss_points(detailed, epochs, algorithm=algorithm)
-    assert before["algorithm"] == algorithm and before["analysisVersion"] == 11
+    assert before["algorithm"] == algorithm and before["analysisVersion"] == 12
     (tmp_path / "epoch5").mkdir()
     (tmp_path / "epoch5" / "adapter.safetensors").write_bytes(b"fixture")
     after = training_candidates.analyze_loss_points(detailed, epochs, run_dir=tmp_path, algorithm=algorithm)

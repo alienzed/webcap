@@ -2676,16 +2676,13 @@ iframe {
 .training-candidates-legend i.analysis { background: #62bc8c; }
 .training-candidates-legend i.saved { width: 6px; height: 6px; margin: 0 5px; background: #b3c5d4; border-radius: 50%; }
 .training-candidates-legend i.basin { height: 10px; background: rgba(94, 177, 137, .3); }
-.training-candidates-list { display: grid; gap: 4px; }
-.training-candidates-list h3 { margin: 0; font-size: 13px; }
-.training-candidates-card { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; padding: 5px 8px; border: 1px solid var(--border-color, #3d4452); border-radius: 6px; background: color-mix(in srgb, var(--panel-bg, #20242c) 92%, #253144); font-size: 12px; }
-.training-candidates-card strong { min-width: 72px; }
-.training-candidates-region-summary, .training-candidates-region-type, .training-candidates-region-coverage { white-space: nowrap; }
-.training-candidates-region-type { color: var(--text, #e5e7eb); }
-.training-candidates-region-coverage { font-size: 11px; }
+.training-candidates-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 6px; }
+.training-candidates-list h3 { grid-column: 1 / -1; margin: 0; font-size: 13px; }
+.training-candidates-card { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 7px; min-width: 0; padding: 5px 8px; border: 1px solid var(--border-color, #3d4452); border-radius: 6px; background: color-mix(in srgb, var(--panel-bg, #20242c) 92%, #253144); font-size: 12px; }
+.training-candidates-card strong, .training-candidates-region-summary, .training-candidates-card em, .training-candidates-open-epoch { white-space: nowrap; }
+.training-candidates-region-summary { color: var(--muted-text, #a3adba); }
 .training-candidates-open-epoch { padding: 4px 7px; font-size: 11px; white-space: nowrap; }
-.training-candidates-card span { color: var(--muted-text, #a3adba); }
-.training-candidates-card em { font-style: normal; font-size: 11px; white-space: nowrap; }
+.training-candidates-card em { min-width: 0; overflow: hidden; color: var(--muted-text, #a3adba); font-size: 11px; font-style: normal; text-overflow: ellipsis; }
 .training-candidates-card em.available { color: #62bc8c; }
 .training-candidates-card em.missing { color: #d9a441; }
 .training-candidates-empty { padding: 26px 16px; color: var(--muted-text, #a3adba); text-align: center; }
@@ -2695,7 +2692,7 @@ iframe {
   .training-candidates-modal { padding: 10px; }
   .training-candidates-modal-header { align-items: flex-start; }
   .training-candidates-modal-actions { flex-wrap: wrap; justify-content: flex-end; }
-  .training-candidates-card { align-items: flex-start; }
+  .training-candidates-list { grid-template-columns: minmax(0, 1fr); }
 }
 .training-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); align-items: start; gap: 14px; }
 .training-review-workbench { display: grid; gap: 14px; min-width: 0; }

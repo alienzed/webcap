@@ -10,7 +10,9 @@ def test_recent_runs_promotes_recorded_epoch_and_step_progress():
 
     assert "details.push('Epoch '" in script
     assert "details.push('Step '" in script
+    assert "details.push('LR '" in script
     assert 'progress["plannedSteps"] = planned_steps' in progress
+    assert 'progress["lr"] = learning_rate_matches[-1].strip()' in progress
 
 
 def test_recent_runs_puts_record_removal_in_the_more_menu():

@@ -8,6 +8,7 @@ _SAVE_EPOCH_CONFIG_PATTERN = re.compile(r"^\s*save_every_n_epochs\s*=\s*(\d+)\s*
 _CHECKPOINT_EPOCH_CONFIG_PATTERN = re.compile(r"^\s*checkpoint_every_n_epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _LOG_EPOCH_PATTERN = re.compile(r"Started new epoch:\s*(\d+)", re.IGNORECASE)
 _LOG_STEP_PATTERN = re.compile(r"\bstep=(\d+)", re.IGNORECASE)
+_LOG_LR_PATTERN = re.compile(r"\blr=\[([^\]]+)\]", re.IGNORECASE)
 _LOG_ITER_TIME_PATTERN = re.compile(r"\biter time \(s\):\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
 ETA_MIN_SAMPLES = 3
 ETA_SAMPLE_WINDOW = 8
@@ -93,6 +94,7 @@ def sync_job_progress(job, log_text):
     previous_epoch = previous.get("epoch") if previous.get("stage") == stage else None
     epoch_matches = _LOG_EPOCH_PATTERN.findall(log_text or "")
     step_matches = _LOG_STEP_PATTERN.findall(log_text or "")
+    learning_rate_matches = _LOG_LR_PATTERN.findall(log_text or "")
     epoch = int(epoch_matches[-1]) if epoch_matches else previous_epoch
     step = int(step_matches[-1]) if step_matches else previous.get("step")
     plan = job.get("progressPlan") if isinstance(job.get("progressPlan"), dict) else {}
@@ -117,6 +119,10 @@ def sync_job_progress(job, log_text):
     }
     if planned_steps > 0:
         progress["plannedSteps"] = planned_steps
+    if learning_rate_matches:
+        progress["lr"] = learning_rate_matches[-1].strip()
+    elif previous.get("lr"):
+        progress["lr"] = previous["lr"]
     if use_steps:
         progress["source"] = "steps"
     else:

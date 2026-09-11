@@ -31,6 +31,21 @@ def test_runner_progress_reports_single_stage_epoch_progress(tmp_path):
     assert job["progress"]["epoch"] == 38
     assert job["progress"]["step"] == 4170
 
+
+def test_runner_progress_keeps_the_last_learning_rate_reported_by_the_log(tmp_path):
+    hi_path = tmp_path / "config.hi.toml"
+    hi_path.write_text("epochs = 50\n", encoding="utf-8")
+    job = {"stage": "hi", "stages": "hi", "snapshot": {"hi": str(hi_path)}}
+
+    training_progress.sync_job_progress(job, "\n".join([
+        "Started new epoch: 38",
+        "[INFO] [Rank 0] step=4159, skipped=0, lr=[9e-05]",
+        "[INFO] [Rank 0] step=4160, skipped=0, lr=[8e-05]",
+    ]))
+
+    assert job["progress"]["lr"] == "8e-05"
+
+
 def test_runner_progress_uses_generated_step_plan_without_an_epoch_marker(tmp_path):
     lo_path = tmp_path / "config.lo.toml"
     lo_path.write_text("epochs = 90\n", encoding="utf-8")

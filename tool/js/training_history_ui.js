@@ -99,6 +99,7 @@ function renderTrainingHistory() {
     var epochs = Number(progress.epochs);
     var finalStep = Number(progress.step);
     var plannedSteps = Number(progress.plannedSteps);
+    var learningRate = String(progress.lr || '').trim();
     var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
     var hasStarted = Number(job.startedAt || 0) > 0;
     var hasFinished = Number(job.finishedAt || 0) > 0;
@@ -109,6 +110,7 @@ function renderTrainingHistory() {
     var timestampKind = trainingHistoryTimestampKind(job);
     if (isFinite(epoch) && epoch >= 0) details.push('Epoch ' + Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : ''));
     if (isFinite(finalStep) && finalStep >= 0) details.push('Step ' + Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : ''));
+    if (learningRate) details.push('LR ' + learningRate);
     if (activeTime) details.push('Active ' + activeTime);
     var resumePath = String(job.outputRunPath || job.resumeCheckpoint || '');
     var resumeStage = String(job.resumeStage || job.stages || '');
@@ -150,6 +152,7 @@ function renderTrainingHistory() {
         trainingHistoryFact('Profile', profileLabel) +
         trainingHistoryFact('Epoch', isFinite(epoch) && epoch >= 0 ? Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : '') : '') +
         trainingHistoryFact('Step', isFinite(finalStep) && finalStep >= 0 ? Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : '') : '') +
+        trainingHistoryFact('Last LR', learningRate) +
         trainingHistoryFact('Base model', modelSource, modelSourcePath) +
       '</div>' +
       '<div class="training-history-fact-group"><div class="training-history-fact-heading">Dataset and output</div>' +

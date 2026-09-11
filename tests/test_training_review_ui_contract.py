@@ -223,6 +223,7 @@ assert(notices.filter((notice) => notice.type === 'lightly-used-target').length 
 assert(notices.some((notice) => notice.type === 'unused-target'), 'zero assignments must be unused');
 const rail = context.reviewRailHtml(payload);
 assert(rail.includes('Large upscale · 1') && rail.includes('At tested limit · 1') && rail.includes('Lightly used targets · 2') && rail.includes('Unused targets · 1'), 'repeated actionable notices must render in compact groups');
+assert(rail.includes('1024 × 576 · 1 item') && rail.includes('896 × 504 · 2 items') && rail.includes('768 × 432 · 0 items'), 'the selected plan must show each bucket\'s included item count');
 assert(!rail.includes('Near tested limit') && !rail.includes('Detail sources excluded') && !rail.includes('Very low Detail target'), 'normal behavior must not appear in Worth noticing');
 let targetHtml = context.reviewTargetsHtml(payload, 'detail', '169');
 assert(targetHtml.includes('control-pressure-high') && targetHtml.includes('control-pressure-medium'), 'selected controls must expose pressure semantics');

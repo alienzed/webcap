@@ -766,8 +766,15 @@ function reviewRailHtml(payload) {
     var view = item.id;
     var groups = reviewViewGroups(payload, view);
     var rows = TRAINING_REVIEW_ASPECT_ORDER.filter(function (aspect) { return !!groups[aspect]; }).map(function (aspect) {
+      var group = groups[aspect] || {};
       var selected = reviewSelectedBuckets(payload.plan || {}, view, aspect);
-      return '<button type="button" class="training-review-rail-plan-row" data-review-rail-view="' + escapeHtml(view) + '" data-review-rail-aspect="' + escapeHtml(aspect) + '"><span>' + escapeHtml(formatReviewAspect(aspect)) + '</span><strong>' + escapeHtml(selected.length ? selected.map(function (target) { return target[0] + ' × ' + target[1]; }).join(' · ') : 'No target') + '</strong></button>';
+      var targets = group.targets || [];
+      var summary = selected.length ? selected.map(function (target) {
+        var assigned = targets.filter(function (item) { return sameReviewBucket(item.shape || [], target); })[0];
+        var count = Number((assigned || {}).assignedCount || 0);
+        return target[0] + ' × ' + target[1] + ' · ' + count + ' item' + (count === 1 ? '' : 's');
+      }).join(' · ') : 'No target';
+      return '<button type="button" class="training-review-rail-plan-row" data-review-rail-view="' + escapeHtml(view) + '" data-review-rail-aspect="' + escapeHtml(aspect) + '"><span>' + escapeHtml(formatReviewAspect(aspect)) + '</span><strong>' + escapeHtml(summary) + '</strong></button>';
     }).join('');
     return rows ? '<section class="training-review-rail-plan-group"><strong>' + escapeHtml(reviewRailLabel(view)) + '</strong>' + rows + '</section>' : '';
   }).join('');

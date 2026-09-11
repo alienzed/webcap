@@ -64,6 +64,8 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "width: min(95vw, 1800px)" in css
     assert '.training-candidates-chart text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }' in css
     assert ".training-candidates-step-loss-smoothed" in css
+    assert ".training-candidates-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 6px; }" in css
+    assert ".training-candidates-card { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto;" in css
 
 
 def test_chart_geometry_step_lookup_and_algorithm_switching():

@@ -3,6 +3,7 @@ import math
 import sys
 import time
 import types
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -258,6 +259,112 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     assert client.post("/fs/training_candidates/open_epoch", json={"folder": "sets/subject", "jobId": "job-1", "epoch": "0"}).status_code == 400
     assert client.post("/fs/training_candidates/open_epoch", json={"folder": "sets/subject", "jobId": "job-1", "epoch": "99"}).status_code == 422
     assert state_path.read_bytes() == before
+
+
+def _copy_to_test_fixture(tmp_path, monkeypatch, stage="h3", subfolder="az"):
+    root = tmp_path / "root"
+    folder = root / "sets" / "subject"
+    run = root / "runs" / "one"
+    epoch = run / "epoch12"
+    destination_root = tmp_path / "test-root"
+    folder.mkdir(parents=True)
+    epoch.mkdir(parents=True)
+    destination_root.mkdir()
+    source = epoch / "adapter_model_epoch12.safetensors"
+    source.write_bytes(b"test weights")
+    state_path = root / ".webcap_training" / "queue.json"
+    state_path.parent.mkdir()
+    state_path.write_text(json.dumps({"version": 3, "jobs": [{
+        "id": "job-1", "folder": "sets/subject", "outputRunPath": str(run),
+        "stages": stage, "stage": "caching", "status": "running",
+    }]}), encoding="utf-8")
+    monkeypatch.setattr(app_config, "FS_ROOT", root)
+    roots = {key: "" for key in ("h3", "krea2", "wan21", "hi", "lo")}
+    roots[stage] = str(destination_root)
+    monkeypatch.setattr(training_runner.app_config, "load_config_from_disk", lambda: {
+        "training": {"test_copy_roots": roots, "test_copy_subfolder": subfolder}
+    })
+    return source, destination_root
+
+
+@pytest.mark.parametrize("stage", ["h3", "krea2", "wan21", "hi", "lo"])
+def test_copy_candidate_to_configured_stage_root_uses_recorded_stages(tmp_path, monkeypatch, stage):
+    source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, stage=stage)
+    result = training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
+    destination = destination_root / "az" / "subject" / source.name
+    assert Path(result["destination"]) == destination
+    assert destination.read_bytes() == b"test weights"
+    assert source.read_bytes() == b"test weights"
+
+
+def test_copy_candidate_reuses_set_directory_and_refuses_filename_collision(tmp_path, monkeypatch):
+    source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
+    destination = destination_root / "az" / "subject" / source.name
+    destination.parent.mkdir(parents=True)
+    second_epoch = source.parent.parent / "epoch13"
+    second_epoch.mkdir()
+    second_source = second_epoch / "adapter_model_epoch13.safetensors"
+    second_source.write_bytes(b"second weights")
+    training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 13)
+    assert (destination.parent / second_source.name).read_bytes() == b"second weights"
+    destination.write_bytes(b"existing destination")
+    response = app_module.app.test_client().post(
+        "/fs/training_candidates/copy_to_test",
+        json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12},
+    )
+    assert response.status_code == 409
+    assert destination.read_bytes() == b"existing destination"
+
+
+def test_copy_candidate_concurrent_requests_create_one_file(tmp_path, monkeypatch):
+    source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, subfolder="")
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(training_runner.copy_candidate_epoch_to_test, "sets/subject", "job-1", 12) for _ in range(2)]
+    outcomes = []
+    for future in futures:
+        try:
+            outcomes.append(future.result())
+        except FileExistsError:
+            outcomes.append("conflict")
+    assert outcomes.count("conflict") == 1
+    assert len([item for item in outcomes if item != "conflict"]) == 1
+    assert (destination_root / "subject" / source.name).read_bytes() == b"test weights"
+
+
+def test_copy_candidate_revalidates_source_and_removes_only_its_partial_destination(tmp_path, monkeypatch):
+    source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
+    (source.parent / "second.safetensors").write_bytes(b"second")
+    with pytest.raises(ValueError, match="exactly one"):
+        training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
+    (source.parent / "second.safetensors").unlink()
+
+    def interrupted_copy(source_file, destination_file):
+        destination_file.write(b"partial")
+        raise OSError("interrupted")
+
+    monkeypatch.setattr(training_runner.shutil, "copyfileobj", interrupted_copy)
+    with pytest.raises(OSError, match="interrupted"):
+        training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
+    assert not (destination_root / "az" / "subject" / source.name).exists()
+
+
+def test_copy_candidate_requires_saved_root_and_rejects_extra_request_fields(tmp_path, monkeypatch):
+    _source, _destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
+    unavailable_root = tmp_path / "unavailable-root"
+    monkeypatch.setattr(training_runner.app_config, "load_config_from_disk", lambda: {
+        "training": {"test_copy_roots": {"h3": str(unavailable_root)}, "test_copy_subfolder": ""}
+    })
+    client = app_module.app.test_client()
+    unavailable = client.post("/fs/training_candidates/copy_to_test", json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12})
+    assert unavailable.status_code == 422
+    monkeypatch.setattr(training_runner.app_config, "load_config_from_disk", lambda: {
+        "training": {"test_copy_roots": {}, "test_copy_subfolder": ""}
+    })
+    missing = client.post("/fs/training_candidates/copy_to_test", json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12})
+    assert missing.status_code == 400
+    assert "H3 root" in missing.get_json()["error"]
+    invalid = client.post("/fs/training_candidates/copy_to_test", json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12, "path": "no"})
+    assert invalid.status_code == 400
 
 # Physical step-space fixtures: the same curve is sampled at different densities.
 def _curve(spacing=1, shape=None, end=2000, epoch_steps=200, spikes=()):

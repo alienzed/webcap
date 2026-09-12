@@ -4,7 +4,7 @@ config.py
 Centralized config and root path logic for the backend.
 """
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import json
 import copy
 import os
@@ -226,6 +226,30 @@ def validate_config_payload(payload):
     if not isinstance(h3_split_cache_phase, bool):
         raise ValueError("Config.training.h3_split_cache_phase must be true or false.")
     normalized_training["h3_split_cache_phase"] = h3_split_cache_phase
+    test_copy_roots = training.get("test_copy_roots", {})
+    if not isinstance(test_copy_roots, dict):
+        raise ValueError("Config.training.test_copy_roots must be an object.")
+    supported_test_copy_roots = ("h3", "krea2", "wan21", "hi", "lo")
+    unknown_test_copy_roots = set(test_copy_roots) - set(supported_test_copy_roots)
+    if unknown_test_copy_roots:
+        raise ValueError("Config.training.test_copy_roots has an unknown stage: " + str(sorted(unknown_test_copy_roots)[0]))
+    normalized_training["test_copy_roots"] = {
+        stage: str(test_copy_roots.get(stage) or "").strip()
+        for stage in supported_test_copy_roots
+    }
+    raw_test_copy_subfolder = training.get("test_copy_subfolder", "")
+    if not isinstance(raw_test_copy_subfolder, str):
+        raise ValueError("Config.training.test_copy_subfolder must be a string.")
+    test_copy_subfolder = raw_test_copy_subfolder.strip()
+    if test_copy_subfolder and (
+        test_copy_subfolder in (".", "..")
+        or "/" in test_copy_subfolder
+        or "\\" in test_copy_subfolder
+        or PureWindowsPath(test_copy_subfolder).is_absolute()
+        or PureWindowsPath(test_copy_subfolder).drive
+    ):
+        raise ValueError("Config.training.test_copy_subfolder must be one directory name.")
+    normalized_training["test_copy_subfolder"] = test_copy_subfolder
     enabled_profiles = training.get("enabled_profiles", list(PROFILE_IDS))
     if not isinstance(enabled_profiles, list):
         raise ValueError("Config.training.enabled_profiles must be an array.")

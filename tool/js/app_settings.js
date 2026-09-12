@@ -6,6 +6,13 @@ var appSettingsTrainingProfiles = [
   { id: 'wan21_t2v_14b', uiKey: 'appSettingsTrainingProfileWan21El' },
   { id: 'minimax_h3', uiKey: 'appSettingsTrainingProfileH3El' }
 ];
+var appSettingsTestCopyRoots = [
+  { stage: 'h3', uiKey: 'appSettingsTrainingTestCopyH3RootEl' },
+  { stage: 'krea2', uiKey: 'appSettingsTrainingTestCopyKrea2RootEl' },
+  { stage: 'wan21', uiKey: 'appSettingsTrainingTestCopyWan21RootEl' },
+  { stage: 'hi', uiKey: 'appSettingsTrainingTestCopyHiRootEl' },
+  { stage: 'lo', uiKey: 'appSettingsTrainingTestCopyLoRootEl' }
+];
 
 function setAppSettingsTab(tabName, focusTab) {
   var next = ['general', 'training', 'advanced'].indexOf(tabName) !== -1 ? tabName : 'general';
@@ -51,6 +58,11 @@ function normalizeAppConfigShape(cfg) {
   }
   if (typeof out.training.tensorboard_bruteforce_control !== 'boolean') out.training.tensorboard_bruteforce_control = false;
   if (typeof out.training.h3_split_cache_phase !== 'boolean') out.training.h3_split_cache_phase = false;
+  if (!out.training.test_copy_roots || typeof out.training.test_copy_roots !== 'object') out.training.test_copy_roots = {};
+  appSettingsTestCopyRoots.forEach(function (root) {
+    out.training.test_copy_roots[root.stage] = String(out.training.test_copy_roots[root.stage] || '');
+  });
+  if (typeof out.training.test_copy_subfolder !== 'string') out.training.test_copy_subfolder = '';
   delete out.training.mode;
   delete out.training.write_selection_snapshot_comments;
   if (!Array.isArray(out.training.enabled_profiles)) {
@@ -98,6 +110,11 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingTensorboardPortEl) ui.appSettingsTrainingTensorboardPortEl.value = c.training.tensorboard_port;
   if (ui.appSettingsTrainingTensorboardBruteforceControlEl) ui.appSettingsTrainingTensorboardBruteforceControlEl.checked = !!c.training.tensorboard_bruteforce_control;
   if (ui.appSettingsTrainingH3SplitCachePhaseEl) ui.appSettingsTrainingH3SplitCachePhaseEl.checked = !!c.training.h3_split_cache_phase;
+  appSettingsTestCopyRoots.forEach(function (root) {
+    var el = ui[root.uiKey];
+    if (el) el.value = c.training.test_copy_roots[root.stage] || '';
+  });
+  if (ui.appSettingsTrainingTestCopySubfolderEl) ui.appSettingsTrainingTestCopySubfolderEl.value = c.training.test_copy_subfolder || '';
   appSettingsTrainingProfiles.forEach(function (profile) {
     var el = ui[profile.uiKey];
     if (el) el.checked = c.training.enabled_profiles.indexOf(profile.id) !== -1;
@@ -122,6 +139,12 @@ function collectAppSettingsFormConfig() {
   base.training.tensorboard_port = ui.appSettingsTrainingTensorboardPortEl ? Number(ui.appSettingsTrainingTensorboardPortEl.value) : 6006;
   base.training.tensorboard_bruteforce_control = !!(ui.appSettingsTrainingTensorboardBruteforceControlEl && ui.appSettingsTrainingTensorboardBruteforceControlEl.checked);
   base.training.h3_split_cache_phase = !!(ui.appSettingsTrainingH3SplitCachePhaseEl && ui.appSettingsTrainingH3SplitCachePhaseEl.checked);
+  base.training.test_copy_roots = {};
+  appSettingsTestCopyRoots.forEach(function (root) {
+    var el = ui[root.uiKey];
+    base.training.test_copy_roots[root.stage] = el ? el.value : '';
+  });
+  base.training.test_copy_subfolder = ui.appSettingsTrainingTestCopySubfolderEl ? ui.appSettingsTrainingTestCopySubfolderEl.value : '';
   base.training.enabled_profiles = appSettingsTrainingProfiles.filter(function (profile) {
     var el = ui[profile.uiKey];
     return !!(el && el.checked);
@@ -475,6 +498,12 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingTensorboardPortEl,
     ui.appSettingsTrainingTensorboardBruteforceControlEl,
     ui.appSettingsTrainingH3SplitCachePhaseEl,
+    ui.appSettingsTrainingTestCopyH3RootEl,
+    ui.appSettingsTrainingTestCopyKrea2RootEl,
+    ui.appSettingsTrainingTestCopyWan21RootEl,
+    ui.appSettingsTrainingTestCopyHiRootEl,
+    ui.appSettingsTrainingTestCopyLoRootEl,
+    ui.appSettingsTrainingTestCopySubfolderEl,
     ui.appSettingsTrainingProfileWan22El,
     ui.appSettingsTrainingProfileKrea2El,
     ui.appSettingsTrainingProfileWan21El,

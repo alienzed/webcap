@@ -58,6 +58,9 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "toggleTrainingCandidatesFullscreen" in script
     assert "Saved in region:" in script
     assert "Open Folder" in script
+    assert "Copy to Test" in script
+    assert "/fs/training_candidates/copy_to_test" in script
+    assert "artifact.status === 'available'" in script
     assert "No confirmed valleys" not in script
     assert "confidence" not in script.lower()
     assert "detector controls" not in script.lower()
@@ -145,7 +148,10 @@ assert.equal(context.trainingCandidatesStepPointForEpoch(1,{stepPoints:data.step
 assert.deepEqual(context.trainingCandidatesYAxisTicks(.16,.30),[.16,.18,.2,.22,.24,.26,.28,.3]);
 const tooltipData = {points:data.epochLossPoints,analysis:data.analysisPoints,smoothedStepPoints:[],savedArtifacts:[],regions:data.regions,candidates:data.candidates};
 assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipData).includes('Robust loss: 0.2000'));
-assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));
+  assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));
+  const savedData = Object.assign({}, tooltipData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors'}]});
+  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Copy to Test'));
+  assert(context.trainingCandidatesPinnedActionsHtml(2,savedData)==='');
 (async () => {
   for (const algorithm of ['v5','v3']) {
     elements['training-candidates-algorithm'].value=algorithm;

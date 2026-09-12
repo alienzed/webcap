@@ -190,6 +190,21 @@ function trainingCandidatesTooltipHtml(stepPoint, data) {
   return lines.map(function (line) { return '<div>' + line + '</div>'; }).join('');
 }
 
+function trainingCandidatesAvailableArtifact(epoch, data) {
+  return (data.savedArtifacts || []).filter(function (artifact) {
+    return Number(artifact.epoch) === Number(epoch) && artifact.status === 'available';
+  })[0] || null;
+}
+
+function trainingCandidatesPinnedActionsHtml(epoch, data) {
+  if (!trainingCandidatesAvailableArtifact(epoch, data)) return '';
+  var escapedEpoch = escapeHtml(String(epoch));
+  return '<div class="training-candidates-pinned-actions">' +
+    '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapedEpoch + '">Open Folder</button>' +
+    '<button type="button" class="review-captions-btn training-candidates-copy-test" data-training-candidate-copy-test="' + escapedEpoch + '">Copy to Test</button>' +
+    '</div><div class="training-candidates-copy-status" data-training-candidate-copy-status aria-live="polite"></div>';
+}
+
 function wireTrainingCandidatesChart() {
   var wrap = document.querySelector('.training-candidates-chart-wrap');
   if (!wrap || wrap.__trainingCandidatesChartWired) return;
@@ -213,18 +228,21 @@ function wireTrainingCandidatesChart() {
     trainingCandidatesClearPinnedDetails();
     popover.classList.add('hidden');
   }
-  function showPinned(epoch) {
-    var point = trainingCandidatesStepPointForEpoch(epoch, data);
-    if (!point) return;
-    trainingWorkspaceState.candidatePinnedEpoch = Number(epoch);
-    hide();
-    popover.innerHTML = trainingCandidatesTooltipHtml(point, data) + ((data.savedArtifacts || []).some(function (artifact) { return Number(artifact.epoch) === Number(epoch) && artifact.available; }) ? '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapeHtml(String(epoch)) + '">Open Folder</button>' : '');
-    popover.classList.remove('hidden');
+  function positionPinned(point) {
     var position = chartPoint(point);
     var left = position.x / data.viewWidth * chart.clientWidth + 12;
     var top = position.y / data.viewHeight * chart.clientHeight + 10;
     popover.style.left = Math.max(6, Math.min(chart.clientWidth - popover.offsetWidth - 6, left)) + 'px';
     popover.style.top = Math.max(6, Math.min(chart.clientHeight - popover.offsetHeight - 6, top)) + 'px';
+  }
+  function showPinned(epoch) {
+    var point = trainingCandidatesStepPointForEpoch(epoch, data);
+    if (!point) return;
+    trainingWorkspaceState.candidatePinnedEpoch = Number(epoch);
+    hide();
+    popover.innerHTML = trainingCandidatesTooltipHtml(point, data) + trainingCandidatesPinnedActionsHtml(epoch, data);
+    popover.classList.remove('hidden');
+    positionPinned(point);
   }
   chart.addEventListener('mouseleave', function () { if (trainingWorkspaceState.candidatePinnedEpoch === null) hide(); });
   chart.addEventListener('mousemove', function (event) {
@@ -247,6 +265,35 @@ function wireTrainingCandidatesChart() {
     tooltip.style.top = Math.max(4, Math.min(chart.clientHeight - tooltip.offsetHeight - 4, event.clientY - rect.top + 10)) + 'px';
   });
   wrap.addEventListener('click', function (event) {
+    var copyButton = event.target.closest ? event.target.closest('.training-candidates-copy-test') : null;
+    if (copyButton) {
+      event.stopPropagation();
+      if (copyButton.disabled) return;
+      var copyEpoch = copyButton.getAttribute('data-training-candidate-copy-test');
+      var copyFolder = String(trainingWorkspaceState.candidateFolder || '');
+      var copyJobId = String(trainingWorkspaceState.candidateJobId || '');
+      if (!copyFolder || !copyJobId) throw new Error('Candidate analysis has no selected training run.');
+      copyButton.disabled = true;
+      copyButton.textContent = 'Copying…';
+      trainingRunnerRequest('/fs/training_candidates/copy_to_test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: copyFolder, jobId: copyJobId, epoch: copyEpoch })
+      }).then(function (result) {
+        if (!wrap.contains(popover) || Number(trainingWorkspaceState.candidatePinnedEpoch) !== Number(copyEpoch)) return;
+        copyButton.textContent = 'Copied';
+        var status = popover.querySelector('[data-training-candidate-copy-status]');
+        if (status) status.textContent = 'Copied to ' + String(result.destination || 'configured test folder') + '.';
+        positionPinned(trainingCandidatesStepPointForEpoch(copyEpoch, data));
+      }).catch(function (err) {
+        if (!wrap.contains(popover) || Number(trainingWorkspaceState.candidatePinnedEpoch) !== Number(copyEpoch)) return;
+        copyButton.disabled = false;
+        copyButton.textContent = 'Copy to Test';
+        var status = popover.querySelector('[data-training-candidate-copy-status]');
+        if (status) status.textContent = String(err.message || err);
+        positionPinned(trainingCandidatesStepPointForEpoch(copyEpoch, data));
+      });
+      return;
+    }
     var openButton = event.target.closest ? event.target.closest('.training-candidates-open-epoch') : null;
     if (openButton) {
       event.stopPropagation();
@@ -298,7 +345,7 @@ function wireTrainingCandidatesChart() {
 }
 
 function trainingCandidatesArtifactLabel(artifact) {
-  if (artifact && artifact.available) return 'Saved · ' + String(artifact.fileName || '.safetensors');
+  if (artifact && artifact.status === 'available') return 'Saved · ' + String(artifact.fileName || '.safetensors');
   if (artifact && artifact.status === 'ambiguous') return 'Multiple exports found';
   return 'No matching saved LoRA';
 }

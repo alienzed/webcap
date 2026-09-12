@@ -6,6 +6,7 @@ import re
 import hashlib
 import shlex
 import socket
+import shutil
 import threading
 import time
 import urllib.error
@@ -410,6 +411,7 @@ def _candidate_run_snapshot(folder, job_id):
             "folder": folder_text,
             "runName": str(job.get("runName") or ""),
             "stage": str(job.get("stage") or job.get("stages") or ""),
+            "stages": str(job.get("stages") or "").strip().lower(),
             "status": str(job.get("status") or "unknown"),
             "currentEpoch": progress.get("epoch"),
             "plannedEpochs": progress.get("epochs"),
@@ -434,6 +436,97 @@ def candidate_epoch_folder_path(folder, job_id, epoch):
     if not directory.is_dir() or directory.is_symlink():
         raise FileNotFoundError("Saved epoch directory is unavailable.")
     return directory
+
+
+_TEST_COPY_STAGE_LABELS = {
+    "h3": "H3",
+    "krea2": "Krea 2",
+    "wan21": "Wan 2.1",
+    "hi": "Wan 2.2 High",
+    "lo": "Wan 2.2 Low",
+}
+
+
+def _candidate_safetensors_path(folder, job_id, epoch):
+    directory = candidate_epoch_folder_path(folder, job_id, epoch)
+    artifacts = [
+        path for path in directory.iterdir()
+        if path.suffix == ".safetensors" and path.is_file() and not path.is_symlink()
+    ]
+    if len(artifacts) != 1:
+        raise ValueError("Saved epoch must contain exactly one .safetensors artifact.")
+    return artifacts[0]
+
+
+def _copy_to_test_directory(root, parts):
+    if not root.is_dir():
+        raise FileNotFoundError("Configured Copy to Test root is unavailable: " + str(root))
+    resolved_root = root.resolve(strict=True)
+    destination = resolved_root
+    for part in parts:
+        candidate = destination / part
+        if candidate.exists():
+            if not candidate.is_dir() or candidate.is_symlink():
+                raise RuntimeError("Copy to Test destination directory is unavailable: " + str(candidate))
+        else:
+            try:
+                candidate.mkdir()
+            except FileExistsError:
+                if not candidate.is_dir() or candidate.is_symlink():
+                    raise RuntimeError("Copy to Test destination directory is unavailable: " + str(candidate))
+        resolved_candidate = candidate.resolve(strict=True)
+        if resolved_candidate != resolved_root and resolved_root not in resolved_candidate.parents:
+            raise RuntimeError("Copy to Test destination escaped its configured root.")
+        destination = resolved_candidate
+    return destination
+
+
+def copy_candidate_epoch_to_test(folder, job_id, epoch):
+    """Copy one recorded saved LoRA using the persisted Copy to Test settings."""
+    _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    stage = str(run.get("stages") or "").strip().lower()
+    if stage not in _TEST_COPY_STAGE_LABELS:
+        raise ValueError("Recorded training job has no supported Copy to Test model stage.")
+    source = _candidate_safetensors_path(folder, job_id, epoch)
+    saved_config = app_config.load_config_from_disk()
+    training = saved_config.get("training") if isinstance(saved_config.get("training"), dict) else {}
+    roots = training.get("test_copy_roots") if isinstance(training.get("test_copy_roots"), dict) else {}
+    root_text = str(roots.get(stage) or "").strip()
+    if not root_text:
+        raise ValueError("Configure the Copy to Test " + _TEST_COPY_STAGE_LABELS[stage] + " root in Training Settings.")
+    root = host_path_for_training_path(root_text)
+    subfolder = str(training.get("test_copy_subfolder") or "").strip()
+    set_name = PurePosixPath(str(run.get("folder") or "")).name
+    if not set_name or set_name in (".", ".."):
+        raise RuntimeError("Recorded training folder has no usable set name.")
+    destination_directory = _copy_to_test_directory(root, ([subfolder] if subfolder else []) + [set_name])
+    destination = destination_directory / source.name
+    created_destination = False
+    try:
+        with source.open("rb") as source_file, destination.open("xb") as destination_file:
+            created_destination = True
+            shutil.copyfileobj(source_file, destination_file)
+    except Exception:
+        if created_destination:
+            try:
+                destination.unlink()
+            except OSError:
+                pass
+        raise
+    return {"destination": str(destination), "fileName": source.name, "stage": stage}
+
+
+def copy_candidate_epoch_to_test_response(folder, job_id, epoch):
+    try:
+        return {"ok": True, **copy_candidate_epoch_to_test(folder, job_id, epoch)}, 200
+    except FileExistsError as exc:
+        return {"ok": False, "error": "Copy to Test refused: destination file already exists: " + str(exc.filename or exc)}, 409
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
 
 
 def candidate_analysis_response(folder, job_id, algorithm="v5"):

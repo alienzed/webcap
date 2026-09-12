@@ -2682,7 +2682,8 @@ iframe {
 .training-candidates-tooltip { position: absolute; z-index: 2; width: max-content; max-width: 205px; padding: 7px 9px; border: 1px solid var(--border-color, #3d4452); border-radius: 6px; background: rgba(18, 24, 34, .96); color: var(--text, #e5e7eb); box-shadow: 0 6px 18px rgba(0,0,0,.32); font-size: 11px; line-height: 1.4; pointer-events: none; }
 .training-candidates-pinned-popover { position: absolute; z-index: 3; width: max-content; max-width: min(280px, calc(100% - 12px)); padding: 8px 9px; border: 1px solid #62bc8c; border-radius: 6px; background: rgba(18, 24, 34, .98); color: var(--text, #e5e7eb); box-shadow: 0 7px 20px rgba(0,0,0,.42); font-size: 11px; line-height: 1.4; }
 .training-candidates-pinned-popover div { overflow-wrap: anywhere; }
-.training-candidates-pinned-popover .training-candidates-open-epoch { margin-top: 7px; }
+.training-candidates-pinned-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.training-candidates-copy-status { margin-top: 6px; color: var(--muted-text, #a3adba); overflow-wrap: anywhere; }
 .training-candidates-tooltip.hidden, .training-candidates-pinned-popover.hidden, .training-candidates-hover-guide.hidden, .training-candidates-hover-point.hidden { display: none; }
 .training-candidates-legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted-text, #a3adba); font-size: 11px; }
 .training-candidates-legend span { display: inline-flex; align-items: center; gap: 4px; }
@@ -2693,7 +2694,7 @@ iframe {
 .training-candidates-legend i.saved { width: 6px; height: 6px; margin: 0 5px; background: #b3c5d4; border-radius: 50%; }
 .training-candidates-legend i.basin { height: 10px; background: rgba(94, 177, 137, .3); }
 .training-candidates-no-candidates { color: var(--muted-text, #a3adba); font-size: 12px; }
-.training-candidates-open-epoch { padding: 4px 7px; font-size: 11px; white-space: nowrap; }
+.training-candidates-open-epoch, .training-candidates-copy-test { padding: 4px 7px; font-size: 11px; white-space: nowrap; }
 .training-candidates-empty { padding: 26px 16px; color: var(--muted-text, #a3adba); text-align: center; }
 .training-candidates-empty.is-error { color: #c75a5a; }
 @container (max-width: 720px) {

@@ -1004,6 +1004,21 @@
                         </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Copy to Test</div>
+                                <div class="app-settings-section-copy">Destination roots used when copying a saved candidate LoRA for testing.</div>
+                            </div>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field"><span class="app-settings-field-label">H3 Root</span><input id="app-settings-training-test-copy-h3-root" type="text" placeholder="/mnt/w/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Krea 2 Root</span><input id="app-settings-training-test-copy-krea2-root" type="text" placeholder="/mnt/w/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.1 Root</span><input id="app-settings-training-test-copy-wan21-root" type="text" placeholder="/mnt/w/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 High Root</span><input id="app-settings-training-test-copy-hi-root" type="text" placeholder="/mnt/w/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 Low Root</span><input id="app-settings-training-test-copy-lo-root" type="text" placeholder="/mnt/w/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Optional Subfolder</span><input id="app-settings-training-test-copy-subfolder" type="text" placeholder="az"></label>
+                                <p class="app-settings-help app-settings-field-wide">Example: <code>/mnt/w/models/Lora/az/my-set/adapter_model_epoch12.safetensors</code>. The optional subfolder is one folder name only.</p>
+                            </div>
+                        </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Training Models</div>
                                 <div class="app-settings-section-copy">Choose which models appear when creating new training runs. Existing files and runs are unaffected.</div>
                             </div>

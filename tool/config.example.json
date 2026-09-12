@@ -12,6 +12,14 @@
     "tensorboard_port": 6006,
     "tensorboard_bruteforce_control": false,
     "h3_split_cache_phase": false,
+    "test_copy_roots": {
+      "h3": "",
+      "krea2": "",
+      "wan21": "",
+      "hi": "",
+      "lo": ""
+    },
+    "test_copy_subfolder": "",
     "enabled_profiles": [
       "wan22_t2v",
       "krea2_raw",

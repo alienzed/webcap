@@ -24,8 +24,8 @@ function trainingCandidatesNumber(value, fallback) {
 }
 
 function trainingCandidatesDisplayState() {
-  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30, showRawStep: true, showSmoothedStep: true, showEpochLoss: true };
-  if (typeof trainingWorkspaceState.candidateDisplay.showRawStep !== 'boolean') trainingWorkspaceState.candidateDisplay.showRawStep = true;
+  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
+  if (typeof trainingWorkspaceState.candidateDisplay.showRawStep !== 'boolean') trainingWorkspaceState.candidateDisplay.showRawStep = false;
   if (typeof trainingWorkspaceState.candidateDisplay.showSmoothedStep !== 'boolean') trainingWorkspaceState.candidateDisplay.showSmoothedStep = true;
   if (typeof trainingWorkspaceState.candidateDisplay.showEpochLoss !== 'boolean') trainingWorkspaceState.candidateDisplay.showEpochLoss = true;
   return trainingWorkspaceState.candidateDisplay;
@@ -135,6 +135,9 @@ function trainingCandidatesSvg(data) {
   var candidateEpochs = {};
   candidates.forEach(function (candidate) { candidateEpochs[Number(candidate.epoch)] = true; });
   function markerData(epoch) { return 'data-training-candidate-epoch="' + escapeHtml(String(epoch)) + '"'; }
+  function artifactForEpoch(epoch) { return savedArtifacts.filter(function (artifact) { return Number(artifact.epoch) === Number(epoch) && artifact.status === 'available'; })[0] || null; }
+  function inTestFolderClass(epoch) { var artifact = artifactForEpoch(epoch); return artifact && artifact.inTestFolder ? ' in-test-folder' : ''; }
+  function markerLabel(kind, epoch) { return kind + ' at epoch ' + escapeHtml(String(epoch)) + (inTestFolderClass(epoch) ? ' · In Test Folder' : ''); }
   var regionRects = regions.map(function (region) {
     var left = x(region.startStep);
     var right = x(region.endStep);
@@ -144,14 +147,14 @@ function trainingCandidatesSvg(data) {
     var point = trainingCandidatesPointForEpoch(artifact.epoch, analysis, points);
     if (!point) return '';
     var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
-    return '<g class="training-candidates-epoch-marker training-candidates-saved-marker ' + escapeHtml(String(artifact.status || '')) + '" ' + markerData(artifact.epoch) + ' role="button" tabindex="0" aria-label="Saved LoRA at epoch ' + escapeHtml(String(artifact.epoch)) + '"><circle cx="' + pointX + '" cy="' + pointY + '" r="5"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="12"></circle></g>';
+    return '<g class="training-candidates-epoch-marker training-candidates-saved-marker ' + escapeHtml(String(artifact.status || '')) + inTestFolderClass(artifact.epoch) + '" ' + markerData(artifact.epoch) + ' role="button" tabindex="0" aria-label="' + markerLabel('Saved LoRA', artifact.epoch) + '"><circle cx="' + pointX + '" cy="' + pointY + '" r="5"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="12"></circle></g>';
   }).join('');
   var candidateMarkers = candidates.map(function (candidate) {
     var analytical = trainingCandidatesPointForStep(candidate.step, analysis);
     var checkpoint = trainingCandidatesPointForEpoch(candidate.epoch, [], points);
     var point = { step: candidate.step, loss: analytical ? analytical.loss : checkpoint.loss };
     var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
-    return '<g class="training-candidates-marker training-candidates-epoch-marker" ' + markerData(candidate.epoch) + ' role="button" tabindex="0" aria-label="Suggested epoch ' + escapeHtml(String(candidate.epoch)) + '"><line x1="' + pointX + '" y1="' + plotTop + '" x2="' + pointX + '" y2="' + plotBottom + '"></line><circle cx="' + pointX + '" cy="' + pointY + '" r="7"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="14"></circle></g>';
+    return '<g class="training-candidates-marker training-candidates-epoch-marker' + inTestFolderClass(candidate.epoch) + '" ' + markerData(candidate.epoch) + ' role="button" tabindex="0" aria-label="' + markerLabel('Suggested epoch', candidate.epoch) + '"><line x1="' + pointX + '" y1="' + plotTop + '" x2="' + pointX + '" y2="' + plotBottom + '"></line><circle cx="' + pointX + '" cy="' + pointY + '" r="7"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="14"></circle></g>';
   }).join('');
   var candidateLabels = candidates.map(function (candidate) {
     var point = trainingCandidatesPointForStep(candidate.step, analysis) || trainingCandidatesPointForEpoch(candidate.epoch, [], points);
@@ -162,7 +165,7 @@ function trainingCandidatesSvg(data) {
     var tickY = y(value);
     return '<line class="training-candidates-gridline" x1="' + plotLeft + '" y1="' + tickY.toFixed(2) + '" x2="' + plotRight + '" y2="' + tickY.toFixed(2) + '"></line><text class="training-candidates-axis-label" x="' + (plotLeft - 8) + '" y="' + (tickY + 4).toFixed(2) + '" text-anchor="end">' + escapeHtml(value.toFixed(4)) + '</text>';
   }).join('');
-  var chartData = escapeHtml(JSON.stringify({ points: points, stepPoints: stepPoints, smoothedStepPoints: smoothedStepPoints, analysis: analysis, regions: regions, candidates: candidates, savedArtifacts: savedArtifacts, minStep: minStep, maxStep: maxStep, minLoss: minLoss, maxLoss: maxLoss, plotLeft: plotLeft, plotRight: plotRight, plotTop: plotTop, plotBottom: plotBottom, plotHeight: plotHeight, viewWidth: viewWidth, viewHeight: viewHeight }));
+  var chartData = escapeHtml(JSON.stringify({ points: points, stepPoints: stepPoints, smoothedStepPoints: smoothedStepPoints, analysis: analysis, regions: regions, candidates: candidates, savedArtifacts: savedArtifacts, testFolderStatus: data.testFolderStatus || {}, minStep: minStep, maxStep: maxStep, minLoss: minLoss, maxLoss: maxLoss, plotLeft: plotLeft, plotRight: plotRight, plotTop: plotTop, plotBottom: plotBottom, plotHeight: plotHeight, viewWidth: viewWidth, viewHeight: viewHeight }));
   return '<div class="training-candidates-chart-wrap">' +
     '<svg class="training-candidates-chart" viewBox="0 0 ' + viewWidth + ' ' + viewHeight + '" role="img" aria-label="TensorBoard step loss and epoch loss curve" data-training-candidates-chart="' + chartData + '">' +
       '<defs><clipPath id="training-candidates-plot-clip"><rect x="' + plotLeft + '" y="' + plotTop + '" width="' + (plotRight - plotLeft) + '" height="' + plotHeight + '"></rect></clipPath></defs>' +
@@ -178,7 +181,7 @@ function trainingCandidatesSvg(data) {
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showRawStep"' + (display.showRawStep ? ' checked' : '') + '><i class="step"></i>Raw step loss</label>' +
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showSmoothedStep"' + (display.showSmoothedStep ? ' checked' : '') + '><i class="step-smoothed"></i>Smoothed step loss</label>' +
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showEpochLoss"' + (display.showEpochLoss ? ' checked' : '') + '><i class="raw"></i>Epoch loss</label>' +
-      '<span><i class="suggested"></i>Suggested epoch</span><span><i class="saved"></i>Saved LoRA</span><span><i class="basin"></i>Candidate region</span></div>' + (candidates.length ? '' : '<div class="training-candidates-no-candidates">No candidate regions identified by this algorithm.</div>') + '</div>';
+      '<span><i class="suggested"></i>Suggested epoch</span><span><i class="saved"></i>Saved LoRA</span><span><i class="in-test-folder"></i>In Test Folder</span><span><i class="basin"></i>Candidate region</span></div>' + (candidates.length ? '' : '<div class="training-candidates-no-candidates">No candidate regions identified by this algorithm.</div>') + '</div>';
 }
 
 function trainingCandidatesTooltipHtml(stepPoint, data) {
@@ -195,6 +198,9 @@ function trainingCandidatesTooltipHtml(stepPoint, data) {
   if (raw) lines.push('Epoch loss: ' + escapeHtml(Number(raw.loss).toFixed(4)));
   if (robust) lines.push('Robust loss: ' + escapeHtml(Number(robust.loss).toFixed(4)));
   lines.push('Saved: ' + escapeHtml(saved ? (saved.status === 'available' ? saved.fileName : 'ambiguous exports') : 'no'));
+  if (saved && saved.inTestFolder) lines.push('In Test Folder');
+  var testFolderStatus = data.testFolderStatus || {};
+  if (testFolderStatus.state === 'unknown') lines.push('Test folder unavailable: ' + escapeHtml(String(testFolderStatus.error || 'Unknown error')));
   if (region) {
     lines.push('Candidate region: ' + escapeHtml(String(region.startEpoch) + '–' + String(region.endEpoch)) + (representative ? ' · representative' : ''));
     lines.push(escapeHtml(String(region.label || 'Stable region')));
@@ -210,13 +216,17 @@ function trainingCandidatesAvailableArtifact(epoch, data) {
 }
 
 function trainingCandidatesPinnedActionsHtml(epoch, data) {
-  if (!trainingCandidatesAvailableArtifact(epoch, data)) return '';
+  var artifact = trainingCandidatesAvailableArtifact(epoch, data);
+  if (!artifact) return '';
   var escapedEpoch = escapeHtml(String(epoch));
+  var inTestFolder = artifact.inTestFolder === true;
+  var testFolderStatus = data.testFolderStatus || {};
+  var unavailable = testFolderStatus.state === 'unknown' ? '<div class="training-candidates-copy-status">Test folder unavailable: ' + escapeHtml(String(testFolderStatus.error || 'Unknown error')) + '</div>' : '';
   return '<div class="training-candidates-pinned-actions">' +
     '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapedEpoch + '">Open Epoch Folder</button>' +
-    '<button type="button" class="review-captions-btn training-candidates-copy-test" data-training-candidate-copy-test="' + escapedEpoch + '">Copy to Test</button>' +
+    '<button type="button" class="review-captions-btn training-candidates-copy-test" data-training-candidate-copy-test="' + escapedEpoch + '"' + (inTestFolder ? ' disabled aria-disabled="true"' : '') + '>' + (inTestFolder ? 'In Test Folder' : 'Copy to Test') + '</button>' +
     '<button type="button" class="review-captions-btn training-candidates-open-test" data-training-candidate-open-test>Open Test Folder</button>' +
-    '</div><div class="training-candidates-copy-status" data-training-candidate-copy-status aria-live="polite"></div>';
+    '</div><div class="training-candidates-copy-status" data-training-candidate-copy-status aria-live="polite"></div>' + unavailable;
 }
 
 function wireTrainingCandidatesChart() {
@@ -312,12 +322,13 @@ function wireTrainingCandidatesChart() {
       trainingRunnerRequest('/fs/training_candidates/copy_to_test', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder: copyFolder, jobId: copyJobId, epoch: copyEpoch })
-      }).then(function (result) {
-        if (!wrap.contains(popover) || Number(trainingWorkspaceState.candidatePinnedEpoch) !== Number(copyEpoch)) return;
-        copyButton.textContent = 'Copied';
-        var status = popover.querySelector('[data-training-candidate-copy-status]');
-        if (status) status.textContent = 'Copied to ' + String(result.destination || 'configured test folder') + '.';
-        positionPinned(trainingCandidatesStepPointForEpoch(copyEpoch, data));
+      }).then(function () {
+        if (String(trainingWorkspaceState.candidateFolder || '') !== copyFolder || String(trainingWorkspaceState.candidateJobId || '') !== copyJobId) return;
+        var artifacts = (((trainingWorkspaceState.candidatePayload || {}).analysis || {}).savedArtifacts || []);
+        artifacts.forEach(function (artifact) {
+          if (Number(artifact.epoch) === Number(copyEpoch) && artifact.status === 'available') artifact.inTestFolder = true;
+        });
+        renderTrainingCandidates();
       }).catch(function (err) {
         if (!wrap.contains(popover) || Number(trainingWorkspaceState.candidatePinnedEpoch) !== Number(copyEpoch)) return;
         copyButton.disabled = false;
@@ -522,7 +533,7 @@ function openTrainingCandidates(job) {
   trainingWorkspaceState.candidatePayload = null;
   trainingWorkspaceState.candidateChartGeometry = null;
   trainingCandidatesClearPinnedDetails();
-  trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30, showRawStep: true, showSmoothedStep: true, showEpochLoss: true };
+  trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
   trainingWorkspaceState.candidateModalOpen = true;
   els.algorithm.value = trainingWorkspaceState.candidateAlgorithm;
   syncTrainingCandidatesDisplayControls();

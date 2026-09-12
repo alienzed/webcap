@@ -2673,6 +2673,7 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-bt
 .training-candidates-saved-marker.ambiguous { fill: #d9a441; }
 .training-candidates-marker line { stroke: #62bc8c; stroke-width: 1.5; stroke-dasharray: 4 3; }
 .training-candidates-marker circle { fill: #62bc8c; stroke: var(--panel-bg, #20242c); stroke-width: 2; }
+.training-candidates-epoch-marker.in-test-folder circle:not(.training-candidates-epoch-hit) { fill: var(--accent); }
 .training-candidates-marker-label { fill: #9ee0b8; font-size: 13px; font-weight: 600; text-anchor: middle; }
 .training-candidates-epoch-marker { cursor: pointer; }
 .training-candidates-epoch-marker:focus { outline: none; }
@@ -2698,6 +2699,7 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
 .training-candidates-legend i.step-smoothed { height: 2px; background: rgba(152, 178, 198, .7); }
 .training-candidates-legend i.suggested { width: 9px; height: 9px; margin: 0 3px; background: #62bc8c; border-radius: 50%; }
 .training-candidates-legend i.saved { width: 6px; height: 6px; margin: 0 5px; background: #b3c5d4; border-radius: 50%; }
+.training-candidates-legend i.in-test-folder { width: 9px; height: 9px; margin: 0 3px; background: var(--accent); border-radius: 50%; }
 .training-candidates-legend i.basin { height: 10px; background: rgba(94, 177, 137, .3); }
 .training-candidates-no-candidates { color: var(--muted-text, #a3adba); font-size: 12px; }
 .training-candidates-open-epoch, .training-candidates-copy-test, .training-candidates-open-test { width: auto; min-height: 30px; padding: 5px 8px; font-size: 13px; white-space: nowrap; }

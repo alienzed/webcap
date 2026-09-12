@@ -61,6 +61,8 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "Open Test Folder" in script
     assert "/fs/training_candidates/open_test" in script
     assert "Copy to Test" in script
+    assert "In Test Folder" in script
+    assert "inTestFolder" in script
     assert "/fs/training_candidates/copy_to_test" in script
     assert "artifact.status === 'available'" in script
     assert "No confirmed valleys" not in script
@@ -97,7 +99,7 @@ const data = {
   smoothedStepLossPoints: [{step:10,epoch:1,loss:.8},{step:190,epoch:1,loss:.2},{step:399,epoch:2,loss:.3}],
   analysisPoints: [{step:10,epoch:1,loss:.8},{step:190,epoch:1,loss:.2},{step:390,epoch:2,loss:.3}],
   regions: [{startStep:180,endStep:199,startEpoch:1,endEpoch:1,representativeEpoch:1,label:'Test region',savedEpochs:[]}],
-  candidates: [{step:199,epoch:1}], savedArtifacts: []
+  candidates: [{step:199,epoch:1}], savedArtifacts: [{epoch:1,status:'available',fileName:'adapter.safetensors',inTestFolder:true}], testFolderStatus: {state:'available'}
 };
 const context = {
   document: {getElementById(id) {return elements[id];}, querySelector() {return null;}, addEventListener() {}, removeEventListener() {}},
@@ -108,7 +110,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
-assert.deepEqual(context.trainingCandidatesDisplayState(),{smoothing:.99,yMin:.10,yMax:.30,showRawStep:true,showSmoothedStep:true,showEpochLoss:true});
+assert.deepEqual(context.trainingCandidatesDisplayState(),{smoothing:.99,yMin:.10,yMax:.30,showRawStep:false,showSmoothedStep:true,showEpochLoss:true});
 elements['training-candidates-smoothing'].value='.95';
 elements['training-candidates-smoothing'].oninput();
 assert.equal(context.trainingCandidatesDisplayState().smoothing,.95);
@@ -136,6 +138,7 @@ const svg = context.trainingCandidatesSvg(data);
 assert(svg.includes('viewBox="0 0 1000 560"'));
 const chart = JSON.parse(svg.match(/data-training-candidates-chart="([^"]+)"/)[1].replaceAll('&quot;','"').replaceAll('&amp;','&'));
 assert.equal(chart.plotHeight,490);
+assert.equal(chart.testFolderStatus.state,'available');
 assert.equal(chart.plotBottom-chart.plotTop,490);
 for (const tag of svg.matchAll(/<rect[^>]+>/g)) {
   if (tag[0].includes('height="490"')) assert(tag[0].includes('y="28"'));
@@ -143,19 +146,22 @@ for (const tag of svg.matchAll(/<rect[^>]+>/g)) {
 assert(svg.includes('class="training-candidates-gridline"'));
 assert(svg.includes('class="training-candidates-plot-content" clip-path="url(#training-candidates-plot-clip)"'));
 assert(svg.includes('class="training-candidates-hover-guide hidden" x1="0" y1="28" x2="0" y2="518"'));
-const marker = svg.match(/class="training-candidates-marker training-candidates-epoch-marker"[^>]*><line x1="([^"]+)"/);
+const marker = svg.match(/class="training-candidates-marker training-candidates-epoch-marker(?: in-test-folder)?"[^>]*><line x1="([^"]+)"/);
 assert(Math.abs(Number(marker[1]) - (52 + (199-10)/(399-10)*926)) < .01);
 assert(svg.includes('data-training-candidate-epoch="1"'));
 assert(svg.includes('r="7"'));
 assert(svg.includes('r="14"'));
-assert(svg.includes('data-training-candidate-line="showRawStep" checked'));
+assert(svg.includes('data-training-candidate-line="showRawStep"'));
+assert(!svg.includes('data-training-candidate-line="showRawStep" checked'));
+assert(svg.includes('training-candidates-marker training-candidates-epoch-marker in-test-folder'));
+assert(svg.includes('In Test Folder'));
 context.trainingCandidatesDisplayState().showRawStep=false;
 context.trainingCandidatesDisplayState().showEpochLoss=false;
 const filteredSvg=context.trainingCandidatesSvg(data);
 assert(!filteredSvg.includes('<polyline class="training-candidates-step-loss"'));
 assert(!filteredSvg.includes('<polyline class="training-candidates-raw"'));
 assert(filteredSvg.includes('<polyline class="training-candidates-step-loss-smoothed"'));
-assert(filteredSvg.includes('class="training-candidates-marker training-candidates-epoch-marker"'));
+assert(filteredSvg.includes('class="training-candidates-marker training-candidates-epoch-marker in-test-folder"'));
 const mapped = context.trainingCandidatesPointForEpoch(1,data.analysisPoints,data.epochLossPoints);
 assert.equal(mapped.step,199);
 assert.equal(mapped.loss,.2);
@@ -164,8 +170,13 @@ assert.deepEqual(context.trainingCandidatesYAxisTicks(.16,.30),[.16,.18,.2,.22,.
 const tooltipData = {points:data.epochLossPoints,analysis:data.analysisPoints,smoothedStepPoints:[],savedArtifacts:[],regions:data.regions,candidates:data.candidates};
 assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipData).includes('Robust loss: 0.2000'));
   assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));
-  const savedData = Object.assign({}, tooltipData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors'}]});
-  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Copy to Test'));
+  const savedData = Object.assign({}, tooltipData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors',inTestFolder:true}], testFolderStatus:{state:'available'}});
+  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('In Test Folder'));
+  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('disabled'));
+  const uncopiedData = Object.assign({}, savedData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors',inTestFolder:false}]});
+  assert(context.trainingCandidatesPinnedActionsHtml(1,uncopiedData).includes('Copy to Test'));
+  const unavailableData = Object.assign({}, savedData, {testFolderStatus:{state:'unknown',error:'Test root is unavailable'}});
+  assert(context.trainingCandidatesPinnedActionsHtml(1,unavailableData).includes('Test folder unavailable: Test root is unavailable'));
   assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Open Epoch Folder'));
   assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Open Test Folder'));
   assert(context.trainingCandidatesPinnedActionsHtml(2,savedData)==='');

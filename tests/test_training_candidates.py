@@ -288,6 +288,43 @@ def _copy_to_test_fixture(tmp_path, monkeypatch, stage="h3", subfolder="az"):
 
 
 @pytest.mark.parametrize("stage", ["h3", "krea2", "wan21", "hi", "lo"])
+def test_candidate_analysis_marks_artifacts_already_in_the_configured_test_folder(tmp_path, monkeypatch, stage):
+    source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, stage=stage)
+    run = {"folder": "sets/subject", "stages": stage}
+    analysis = {"savedArtifacts": [{"epoch": 12, "fileName": source.name, "status": "available"}]}
+    expected_folder = destination_root / "az" / "subject"
+
+    training_runner._annotate_candidate_test_folder_status(run, analysis)
+    assert analysis["testFolderStatus"] == {"state": "absent"}
+    assert analysis["savedArtifacts"][0]["inTestFolder"] is False
+    assert not expected_folder.exists()
+
+    expected_folder.mkdir(parents=True)
+    (expected_folder / source.name).write_bytes(b"test weights")
+    training_runner._annotate_candidate_test_folder_status(run, analysis)
+    assert analysis["testFolderStatus"] == {"state": "available"}
+    assert analysis["savedArtifacts"][0]["inTestFolder"] is True
+
+    (expected_folder / source.name).unlink()
+    training_runner._annotate_candidate_test_folder_status(run, analysis)
+    assert analysis["savedArtifacts"][0]["inTestFolder"] is False
+
+
+def test_candidate_analysis_reports_unavailable_test_folder_without_blocking_analysis(tmp_path, monkeypatch):
+    source, _destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
+    run = {"folder": "sets/subject", "stages": "h3"}
+    analysis = {"savedArtifacts": [{"epoch": 12, "fileName": source.name, "status": "available"}]}
+    monkeypatch.setattr(training_runner.app_config, "load_config_from_disk", lambda: {
+        "training": {"test_copy_roots": {}, "test_copy_subfolder": ""}
+    })
+
+    training_runner._annotate_candidate_test_folder_status(run, analysis)
+    assert analysis["testFolderStatus"]["state"] == "unknown"
+    assert "H3 root" in analysis["testFolderStatus"]["error"]
+    assert analysis["savedArtifacts"][0]["inTestFolder"] is False
+
+
+@pytest.mark.parametrize("stage", ["h3", "krea2", "wan21", "hi", "lo"])
 def test_copy_candidate_to_configured_stage_root_uses_recorded_stages(tmp_path, monkeypatch, stage):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, stage=stage)
     result = training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)

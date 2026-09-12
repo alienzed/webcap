@@ -507,6 +507,33 @@ def candidate_test_folder_path(folder, job_id):
     return _candidate_test_directory_for_run(run, create_missing=False)
 
 
+def _annotate_candidate_test_folder_status(run, analysis):
+    """Add non-mutating Copy to Test availability to saved candidate artifacts."""
+    artifacts = analysis.get("savedArtifacts") if isinstance(analysis, dict) else None
+    artifacts = artifacts if isinstance(artifacts, list) else []
+    for artifact in artifacts:
+        if isinstance(artifact, dict) and artifact.get("status") == "available":
+            artifact["inTestFolder"] = False
+    try:
+        destination_directory = _candidate_test_directory_for_run(run, create_missing=False)
+    except FileNotFoundError as exc:
+        message = str(exc)
+        if message.startswith("Configured test folder is unavailable:"):
+            analysis["testFolderStatus"] = {"state": "absent"}
+        else:
+            analysis["testFolderStatus"] = {"state": "unknown", "error": message}
+        return
+    except (OSError, RuntimeError, ValueError) as exc:
+        analysis["testFolderStatus"] = {"state": "unknown", "error": str(exc)}
+        return
+    for artifact in artifacts:
+        if not isinstance(artifact, dict) or artifact.get("status") != "available":
+            continue
+        destination = destination_directory / str(artifact.get("fileName") or "")
+        artifact["inTestFolder"] = destination.is_file() and not destination.is_symlink()
+    analysis["testFolderStatus"] = {"state": "available"}
+
+
 def copy_candidate_epoch_to_test(folder, job_id, epoch):
     """Copy one recorded saved LoRA using the persisted Copy to Test settings."""
     _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
@@ -558,6 +585,7 @@ def candidate_analysis_response(folder, job_id, algorithm="v5"):
         if not run_dir.is_dir():
             raise FileNotFoundError("Recorded training run directory is unavailable.")
         analysis = _analyze_run_directory(run_dir, algorithm=algorithm)
+        _annotate_candidate_test_folder_status(run, analysis)
     except (OSError, RuntimeError, ValueError) as exc:
         return {"ok": False, "error": str(exc)}, 422
     return {"ok": True, "run": run, "analysis": analysis}, 200

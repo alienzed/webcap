@@ -2666,7 +2666,7 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-bt
 .training-candidates-axis-label { fill: var(--muted-text, #a3adba); font-size: 13px; }
 .training-candidates-step-loss { fill: none; stroke: rgba(152, 178, 198, .24); stroke-width: 1; stroke-linejoin: round; stroke-linecap: round; }
 .training-candidates-step-loss-smoothed { fill: none; stroke: rgba(152, 178, 198, .7); stroke-width: 1; stroke-linejoin: round; stroke-linecap: round; }
-.training-candidates-raw { fill: none; stroke: rgba(152, 178, 198, .5); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.training-candidates-raw { fill: none; stroke: rgba(76, 181, 196, .70); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
 .training-candidates-analysis { fill: none; }
 .training-candidates-basin { fill: rgba(94, 177, 137, .11); }
 .training-candidates-saved-marker { fill: #b3c5d4; stroke: var(--panel-bg, #20242c); stroke-width: 1.5; }

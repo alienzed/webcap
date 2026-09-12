@@ -2,6 +2,7 @@
 function trainingCandidatesElements() {
   return {
     modal: document.getElementById('training-candidates-modal'),
+    dialog: document.querySelector('#training-candidates-modal .training-candidates-dialog'),
     summary: document.getElementById('training-candidates-modal-summary'),
     content: document.getElementById('training-candidates-modal-content'),
     algorithm: document.getElementById('training-candidates-algorithm'),
@@ -11,6 +12,7 @@ function trainingCandidatesElements() {
     yMax: document.getElementById('training-candidates-y-max'),
     yAuto: document.getElementById('training-candidates-y-auto'),
     refresh: document.getElementById('training-candidates-refresh'),
+    fullscreen: document.getElementById('training-candidates-fullscreen'),
     openRun: document.getElementById('training-candidates-open-run'),
     close: document.getElementById('training-candidates-modal-close')
   };
@@ -27,7 +29,7 @@ function trainingCandidatesDisplayState() {
 }
 
 function trainingCandidatesEma(points, smoothing) {
-  var retained = Math.max(0, Math.min(.99, trainingCandidatesNumber(smoothing, .99)));
+  var retained = Math.max(0, Math.min(.999, trainingCandidatesNumber(smoothing, .99)));
   var previous = null;
   return points.map(function (point) {
     var loss = trainingCandidatesNumber(point.loss, 0);
@@ -53,9 +55,43 @@ function trainingCandidatesPointForStep(step, points) {
   }, null);
 }
 
+function trainingCandidatesStepPointForEpoch(epoch, data) {
+  var points = (data.stepPoints || []).filter(function (point) { return Number(point.epoch) === Number(epoch); });
+  if (points.length) return points.reduce(function (latest, point) { return Number(point.step) > Number(latest.step) ? point : latest; });
+  return (data.points || []).filter(function (point) { return Number(point.epoch) === Number(epoch); })[0] || null;
+}
+
+function trainingCandidatesChartGeometry() {
+  var geometry = trainingWorkspaceState.candidateChartGeometry;
+  return geometry && geometry.width >= 480 && geometry.height >= 320 ? geometry : { width: 1000, height: 560 };
+}
+
+function trainingCandidatesYAxisTicks(minLoss, maxLoss) {
+  var rough = (maxLoss - minLoss) / 6;
+  var scale = Math.pow(10, Math.floor(Math.log(rough) / Math.LN10));
+  var step = [1, 2, 5, 10].map(function (value) { return value * scale; }).reduce(function (best, value) {
+    return Math.abs((maxLoss - minLoss) / value - 6) < Math.abs((maxLoss - minLoss) / best - 6) ? value : best;
+  });
+  var first = Math.ceil((minLoss - step * 1e-8) / step) * step;
+  var ticks = [];
+  for (var value = first; value < maxLoss + step * 1e-8 && ticks.length < 10; value += step) ticks.push(Number(value.toFixed(12)));
+  return ticks.length > 1 ? ticks : [minLoss, maxLoss];
+}
+
+function trainingCandidatesClearPinnedDetails() {
+  trainingWorkspaceState.candidatePinnedEpoch = null;
+}
+
+function trainingCandidatesClearChartWiring() {
+  if (typeof trainingWorkspaceState.candidateChartCleanup === 'function') trainingWorkspaceState.candidateChartCleanup();
+  trainingWorkspaceState.candidateChartCleanup = null;
+}
+
 function trainingCandidatesSvg(data) {
-  var plotTop = 20, plotHeight = 350, viewHeight = 400;
-  var plotBottom = plotTop + plotHeight;
+  var geometry = trainingCandidatesChartGeometry();
+  var viewWidth = geometry.width, viewHeight = geometry.height;
+  var plotLeft = Math.max(50, Math.round(viewWidth * .052)), plotRight = viewWidth - 22;
+  var plotTop = 28, plotBottom = viewHeight - 42, plotHeight = plotBottom - plotTop;
   var points = data && Array.isArray(data.epochLossPoints) ? data.epochLossPoints : [];
   var stepPoints = data && Array.isArray(data.stepLossPoints) ? data.stepLossPoints : [];
   var display = trainingCandidatesDisplayState();
@@ -87,7 +123,7 @@ function trainingCandidatesSvg(data) {
   } else if (requestedMax !== null && requestedMax > minLoss) {
     maxLoss = requestedMax;
   }
-  function x(step) { return 46 + (trainingCandidatesNumber(step, minStep) - minStep) / (maxStep - minStep) * 914; }
+  function x(step) { return plotLeft + (trainingCandidatesNumber(step, minStep) - minStep) / (maxStep - minStep) * (plotRight - plotLeft); }
   function y(loss) { return plotTop + (maxLoss - trainingCandidatesNumber(loss, minLoss)) / (maxLoss - minLoss) * plotHeight; }
   function polyline(series) { return series.map(function (point) { return x(point.step).toFixed(2) + ',' + y(point.loss).toFixed(2); }).join(' '); }
   var regions = Array.isArray(data.regions) ? data.regions : [];
@@ -95,6 +131,7 @@ function trainingCandidatesSvg(data) {
   var savedArtifacts = Array.isArray(data.savedArtifacts) ? data.savedArtifacts : [];
   var candidateEpochs = {};
   candidates.forEach(function (candidate) { candidateEpochs[Number(candidate.epoch)] = true; });
+  function markerData(epoch) { return 'data-training-candidate-epoch="' + escapeHtml(String(epoch)) + '"'; }
   var regionRects = regions.map(function (region) {
     var left = x(region.startStep);
     var right = x(region.endStep);
@@ -102,27 +139,33 @@ function trainingCandidatesSvg(data) {
   }).join('');
   var savedMarkers = savedArtifacts.filter(function (artifact) { return !candidateEpochs[Number(artifact.epoch)]; }).map(function (artifact) {
     var point = trainingCandidatesPointForEpoch(artifact.epoch, analysis, points);
-    return point ? '<circle class="training-candidates-saved-marker ' + escapeHtml(String(artifact.status || '')) + '" cx="' + x(point.step).toFixed(2) + '" cy="' + y(point.loss).toFixed(2) + '" r="3"></circle>' : '';
+    if (!point) return '';
+    var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
+    return '<g class="training-candidates-epoch-marker training-candidates-saved-marker ' + escapeHtml(String(artifact.status || '')) + '" ' + markerData(artifact.epoch) + ' role="button" tabindex="0" aria-label="Saved LoRA at epoch ' + escapeHtml(String(artifact.epoch)) + '"><circle cx="' + pointX + '" cy="' + pointY + '" r="3"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="10"></circle></g>';
   }).join('');
   var candidateMarkers = candidates.map(function (candidate) {
     var analytical = trainingCandidatesPointForStep(candidate.step, analysis);
     var checkpoint = trainingCandidatesPointForEpoch(candidate.epoch, [], points);
     var point = { step: candidate.step, loss: analytical ? analytical.loss : checkpoint.loss };
-    return '<g class="training-candidates-marker"><line x1="' + x(point.step).toFixed(2) + '" y1="' + plotTop + '" x2="' + x(point.step).toFixed(2) + '" y2="' + plotBottom + '"></line><circle cx="' + x(point.step).toFixed(2) + '" cy="' + y(point.loss).toFixed(2) + '" r="5"></circle><text x="' + x(point.step).toFixed(2) + '" y="14">' + escapeHtml(String(candidate.epoch)) + '</text></g>';
+    var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
+    return '<g class="training-candidates-marker training-candidates-epoch-marker" ' + markerData(candidate.epoch) + ' role="button" tabindex="0" aria-label="Suggested epoch ' + escapeHtml(String(candidate.epoch)) + '"><line x1="' + pointX + '" y1="' + plotTop + '" x2="' + pointX + '" y2="' + plotBottom + '"></line><circle cx="' + pointX + '" cy="' + pointY + '" r="5"></circle><text x="' + pointX + '" y="' + (plotTop - 8) + '">' + escapeHtml(String(candidate.epoch)) + '</text><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="12"></circle></g>';
   }).join('');
-  var chartData = escapeHtml(JSON.stringify({ points: points, stepPoints: stepPoints, smoothedStepPoints: smoothedStepPoints, analysis: analysis, regions: regions, candidates: candidates, savedArtifacts: savedArtifacts, minStep: minStep, maxStep: maxStep, minLoss: minLoss, maxLoss: maxLoss, plotTop: plotTop, plotBottom: plotBottom, plotHeight: plotHeight }));
+  var yTicks = trainingCandidatesYAxisTicks(minLoss, maxLoss).map(function (value) {
+    var tickY = y(value);
+    return '<line class="training-candidates-gridline" x1="' + plotLeft + '" y1="' + tickY.toFixed(2) + '" x2="' + plotRight + '" y2="' + tickY.toFixed(2) + '"></line><text class="training-candidates-axis-label" x="' + (plotLeft - 8) + '" y="' + (tickY + 4).toFixed(2) + '" text-anchor="end">' + escapeHtml(value.toFixed(4)) + '</text>';
+  }).join('');
+  var chartData = escapeHtml(JSON.stringify({ points: points, stepPoints: stepPoints, smoothedStepPoints: smoothedStepPoints, analysis: analysis, regions: regions, candidates: candidates, savedArtifacts: savedArtifacts, minStep: minStep, maxStep: maxStep, minLoss: minLoss, maxLoss: maxLoss, plotLeft: plotLeft, plotRight: plotRight, plotTop: plotTop, plotBottom: plotBottom, plotHeight: plotHeight, viewWidth: viewWidth, viewHeight: viewHeight }));
   return '<div class="training-candidates-chart-wrap">' +
-    '<svg class="training-candidates-chart" viewBox="0 0 1000 ' + viewHeight + '" role="img" aria-label="TensorBoard step loss and epoch loss curve" data-training-candidates-chart="' + chartData + '">' +
-      '<defs><clipPath id="training-candidates-plot-clip"><rect x="46" y="' + plotTop + '" width="914" height="' + plotHeight + '"></rect></clipPath></defs>' +
-      '<line class="training-candidates-axis" x1="46" y1="' + plotBottom + '" x2="960" y2="' + plotBottom + '"></line><line class="training-candidates-axis" x1="46" y1="' + plotTop + '" x2="46" y2="' + plotBottom + '"></line>' +
+    '<svg class="training-candidates-chart" viewBox="0 0 ' + viewWidth + ' ' + viewHeight + '" role="img" aria-label="TensorBoard step loss and epoch loss curve" data-training-candidates-chart="' + chartData + '">' +
+      '<defs><clipPath id="training-candidates-plot-clip"><rect x="' + plotLeft + '" y="' + plotTop + '" width="' + (plotRight - plotLeft) + '" height="' + plotHeight + '"></rect></clipPath></defs>' +
+      yTicks + '<line class="training-candidates-axis" x1="' + plotLeft + '" y1="' + plotBottom + '" x2="' + plotRight + '" y2="' + plotBottom + '"></line><line class="training-candidates-axis" x1="' + plotLeft + '" y1="' + plotTop + '" x2="' + plotLeft + '" y2="' + plotBottom + '"></line>' +
       '<polyline class="training-candidates-step-loss" clip-path="url(#training-candidates-plot-clip)" points="' + polyline(stepPoints) + '"></polyline>' +
       (smoothedStepPoints.length ? '<polyline class="training-candidates-step-loss-smoothed" clip-path="url(#training-candidates-plot-clip)" points="' + polyline(smoothedStepPoints) + '"></polyline>' : '') +
       regionRects + '<polyline class="training-candidates-raw" points="' + polyline(points) + '"></polyline>' +
-      (analysis.length ? '<polyline class="training-candidates-analysis" points="' + polyline(analysis) + '"></polyline>' : '') + savedMarkers + candidateMarkers +
-      '<line class="training-candidates-hover-guide hidden" x1="0" y1="' + plotTop + '" x2="0" y2="' + plotBottom + '"></line><circle class="training-candidates-hover-point hidden" cx="0" cy="0" r="4"></circle><rect class="training-candidates-hover-layer" x="46" y="' + plotTop + '" width="914" height="' + plotHeight + '"></rect>' +
-      '<text class="training-candidates-axis-label" x="46" y="' + (plotBottom + 19) + '">step ' + escapeHtml(String(minStep)) + ' · epoch ' + escapeHtml(String(minStepPoint.epoch)) + '</text><text class="training-candidates-axis-label" x="960" y="' + (plotBottom + 19) + '" text-anchor="end">step ' + escapeHtml(String(maxStep)) + ' · epoch ' + escapeHtml(String(maxStepPoint.epoch)) + '</text>' +
-      '<text class="training-candidates-axis-label" x="40" y="' + (plotTop + 5) + '" text-anchor="end">' + escapeHtml(maxLoss.toFixed(4)) + '</text><text class="training-candidates-axis-label" x="40" y="' + plotBottom + '" text-anchor="end">' + escapeHtml(minLoss.toFixed(4)) + '</text>' +
-    '</svg><div class="training-candidates-tooltip hidden"></div><div class="training-candidates-legend"><span><i class="step"></i>Raw step loss</span><span><i class="step-smoothed"></i>Smoothed step loss</span><span><i class="raw"></i>Epoch loss</span><span><i class="analysis"></i>Robust trend</span><span><i class="saved"></i>Saved LoRA</span><span><i class="basin"></i>Candidate region</span></div></div>';
+      (analysis.length ? '<polyline class="training-candidates-analysis" points="' + polyline(analysis) + '"></polyline>' : '') +
+      '<rect class="training-candidates-hover-layer" x="' + plotLeft + '" y="' + plotTop + '" width="' + (plotRight - plotLeft) + '" height="' + plotHeight + '"></rect><line class="training-candidates-hover-guide hidden" x1="0" y1="' + plotTop + '" x2="0" y2="' + plotBottom + '"></line><circle class="training-candidates-hover-point hidden" cx="0" cy="0" r="4"></circle>' + savedMarkers + candidateMarkers +
+      '<text class="training-candidates-axis-label" x="' + plotLeft + '" y="' + (plotBottom + 24) + '">step ' + escapeHtml(String(minStep)) + ' · epoch ' + escapeHtml(String(minStepPoint.epoch)) + '</text><text class="training-candidates-axis-label" x="' + plotRight + '" y="' + (plotBottom + 24) + '" text-anchor="end">step ' + escapeHtml(String(maxStep)) + ' · epoch ' + escapeHtml(String(maxStepPoint.epoch)) + '</text>' +
+    '</svg><div class="training-candidates-tooltip hidden"></div><div class="training-candidates-pinned-popover hidden"></div><div class="training-candidates-legend"><span><i class="step"></i>Raw step loss</span><span><i class="step-smoothed"></i>Smoothed step loss</span><span><i class="raw"></i>Epoch loss</span><span><i class="analysis"></i>Robust trend</span><span><i class="saved"></i>Saved LoRA</span><span><i class="basin"></i>Candidate region</span></div>' + (candidates.length ? '' : '<div class="training-candidates-no-candidates">No candidate regions identified by this algorithm.</div>') + '</div>';
 }
 
 function trainingCandidatesTooltipHtml(stepPoint, data) {
@@ -132,7 +175,7 @@ function trainingCandidatesTooltipHtml(stepPoint, data) {
   var robust = trainingCandidatesPointForStep(stepPoint.step, data.analysis);
   var saved = data.savedArtifacts.filter(function (artifact) { return Number(artifact.epoch) === epoch; })[0];
   var region = data.regions.filter(function (item) { return Number(stepPoint.step) >= Number(item.startStep) && Number(stepPoint.step) <= Number(item.endStep); })[0];
-  var representative = data.candidates.some(function (candidate) { return Number(candidate.step) === Number(stepPoint.step); });
+  var representative = data.candidates.some(function (candidate) { return Number(candidate.epoch) === epoch; });
   var lines = ['<strong>Step ' + escapeHtml(String(stepPoint.step)) + ' · Epoch ' + escapeHtml(String(epoch)) + '</strong>'];
   lines.push('Step loss: ' + escapeHtml(Number(stepPoint.loss).toFixed(4)));
   if (smoothed) lines.push('Smoothed step loss: ' + escapeHtml(Number(smoothed.loss).toFixed(4)));
@@ -152,33 +195,106 @@ function wireTrainingCandidatesChart() {
   if (!wrap || wrap.__trainingCandidatesChartWired) return;
   var chart = wrap.querySelector('.training-candidates-chart');
   var tooltip = wrap.querySelector('.training-candidates-tooltip');
+  var popover = wrap.querySelector('.training-candidates-pinned-popover');
   var guide = wrap.querySelector('.training-candidates-hover-guide');
   var pointMarker = wrap.querySelector('.training-candidates-hover-point');
-  if (!chart || !tooltip || !guide || !pointMarker) return;
+  if (!chart || !tooltip || !popover || !guide || !pointMarker) return;
   wrap.__trainingCandidatesChartWired = true;
   var data = JSON.parse(chart.getAttribute('data-training-candidates-chart') || '{}');
   data.smoothedStepPoints = data.smoothedStepPoints || [];
   function hide() { tooltip.classList.add('hidden'); guide.classList.add('hidden'); pointMarker.classList.add('hidden'); }
-  chart.addEventListener('mouseleave', hide);
+  function chartPoint(point) {
+    return {
+      x: data.plotLeft + (Number(point.step) - data.minStep) / (data.maxStep - data.minStep) * (data.plotRight - data.plotLeft),
+      y: Math.max(data.plotTop, Math.min(data.plotBottom, data.plotTop + (data.maxLoss - Number(point.loss)) / (data.maxLoss - data.minLoss) * data.plotHeight))
+    };
+  }
+  function clearPinned() {
+    trainingCandidatesClearPinnedDetails();
+    popover.classList.add('hidden');
+  }
+  function showPinned(epoch) {
+    var point = trainingCandidatesStepPointForEpoch(epoch, data);
+    if (!point) return;
+    trainingWorkspaceState.candidatePinnedEpoch = Number(epoch);
+    hide();
+    popover.innerHTML = trainingCandidatesTooltipHtml(point, data) + ((data.savedArtifacts || []).some(function (artifact) { return Number(artifact.epoch) === Number(epoch) && artifact.available; }) ? '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapeHtml(String(epoch)) + '">Open Folder</button>' : '');
+    popover.classList.remove('hidden');
+    var position = chartPoint(point);
+    var left = position.x / data.viewWidth * chart.clientWidth + 12;
+    var top = position.y / data.viewHeight * chart.clientHeight + 10;
+    popover.style.left = Math.max(6, Math.min(chart.clientWidth - popover.offsetWidth - 6, left)) + 'px';
+    popover.style.top = Math.max(6, Math.min(chart.clientHeight - popover.offsetHeight - 6, top)) + 'px';
+  }
+  chart.addEventListener('mouseleave', function () { if (trainingWorkspaceState.candidatePinnedEpoch === null) hide(); });
   chart.addEventListener('mousemove', function (event) {
+    if (trainingWorkspaceState.candidatePinnedEpoch !== null) return;
     var rect = chart.getBoundingClientRect();
     var cursor = chart.createSVGPoint();
     cursor.x = event.clientX; cursor.y = event.clientY;
     var position = cursor.matrixTransform(chart.getScreenCTM().inverse());
     var chartX = position.x;
-    if (chartX < 46 || chartX > 960 || position.y < data.plotTop || position.y > data.plotBottom) return hide();
-    var wanted = data.minStep + (chartX - 46) / 914 * (data.maxStep - data.minStep);
+    if (chartX < data.plotLeft || chartX > data.plotRight || position.y < data.plotTop || position.y > data.plotBottom) return hide();
+    var wanted = data.minStep + (chartX - data.plotLeft) / (data.plotRight - data.plotLeft) * (data.maxStep - data.minStep);
     var raw = (data.stepPoints || []).reduce(function (nearest, item) { return !nearest || Math.abs(Number(item.step) - wanted) < Math.abs(Number(nearest.step) - wanted) ? item : nearest; }, null);
     if (!raw) return hide();
-    var x = 46 + (Number(raw.step) - data.minStep) / (data.maxStep - data.minStep) * 914;
-    var y = Math.max(data.plotTop, Math.min(data.plotBottom, data.plotTop + (data.maxLoss - Number(raw.loss)) / (data.maxLoss - data.minLoss) * data.plotHeight));
+    var point = chartPoint(raw), x = point.x, y = point.y;
     guide.setAttribute('x1', x.toFixed(2)); guide.setAttribute('x2', x.toFixed(2)); guide.classList.remove('hidden');
     pointMarker.setAttribute('cx', x.toFixed(2)); pointMarker.setAttribute('cy', y.toFixed(2)); pointMarker.classList.remove('hidden');
     tooltip.innerHTML = trainingCandidatesTooltipHtml(raw, data);
     tooltip.classList.remove('hidden');
     tooltip.style.left = Math.max(4, Math.min(wrap.clientWidth - tooltip.offsetWidth - 4, event.clientX - rect.left + 12)) + 'px';
-    tooltip.style.top = Math.max(4, Math.min(rect.height - tooltip.offsetHeight - 4, event.clientY - rect.top + 10)) + 'px';
+    tooltip.style.top = Math.max(4, Math.min(chart.clientHeight - tooltip.offsetHeight - 4, event.clientY - rect.top + 10)) + 'px';
   });
+  wrap.addEventListener('click', function (event) {
+    var openButton = event.target.closest ? event.target.closest('.training-candidates-open-epoch') : null;
+    if (openButton) {
+      event.stopPropagation();
+      openTrainingCandidatesFolder(openButton.getAttribute('data-training-candidate-epoch')).catch(function (err) { setStatus('Could not open saved LoRA folder: ' + String(err.message || err)); });
+      return;
+    }
+    var marker = event.target.closest ? event.target.closest('[data-training-candidate-epoch]') : null;
+    if (marker) {
+      event.stopPropagation();
+      showPinned(marker.getAttribute('data-training-candidate-epoch'));
+    } else if (!popover.contains(event.target)) {
+      clearPinned();
+    }
+  });
+  wrap.addEventListener('keydown', function (event) {
+    var marker = event.target.closest ? event.target.closest('[data-training-candidate-epoch]') : null;
+    if (marker && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      showPinned(marker.getAttribute('data-training-candidate-epoch'));
+    }
+  });
+  var onDocumentClick = function (event) { if (!wrap.contains(event.target)) clearPinned(); };
+  var onDocumentKeydown = function (event) {
+    if (event.key === 'Escape' && trainingWorkspaceState.candidatePinnedEpoch !== null) {
+      event.preventDefault();
+      clearPinned();
+    }
+  };
+  document.addEventListener('click', onDocumentClick);
+  document.addEventListener('keydown', onDocumentKeydown);
+  var observer = null;
+  if (typeof ResizeObserver !== 'undefined') {
+    observer = new ResizeObserver(function () {
+      var width = Math.round(chart.clientWidth), height = Math.round(chart.clientHeight);
+      var geometry = trainingCandidatesChartGeometry();
+      if (width >= 480 && height >= 320 && (Math.abs(width - geometry.width) > 1 || Math.abs(height - geometry.height) > 1)) {
+        trainingWorkspaceState.candidateChartGeometry = { width: width, height: height };
+        renderTrainingCandidates();
+      }
+    });
+    observer.observe(chart);
+  }
+  trainingWorkspaceState.candidateChartCleanup = function () {
+    document.removeEventListener('click', onDocumentClick);
+    document.removeEventListener('keydown', onDocumentKeydown);
+    if (observer) observer.disconnect();
+  };
+  if (trainingWorkspaceState.candidatePinnedEpoch !== null && trainingWorkspaceState.candidatePinnedEpoch !== undefined) showPinned(trainingWorkspaceState.candidatePinnedEpoch);
 }
 
 function trainingCandidatesArtifactLabel(artifact) {
@@ -212,13 +328,7 @@ function trainingCandidatesRegionSummary(region) {
 function trainingCandidatesContentHtml(payload) {
   var analysis = payload && payload.analysis ? payload.analysis : null;
   if (!analysis) return '<div class="training-candidates-empty">Loading loss curve…</div>';
-  var candidates = Array.isArray(analysis.candidates) ? analysis.candidates : [];
-  var list = candidates.length ? candidates.map(function (candidate) {
-    var openAction = candidate.artifact && candidate.artifact.available ? '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapeHtml(String(candidate.epoch)) + '">Open Folder</button>' : '';
-    var detail = String(candidate.label || 'Stable region') + ' · ' + trainingCandidatesRegionCoverage(candidate, analysis.savedArtifacts);
-    return '<article class="training-candidates-card" title="' + escapeHtml(detail) + '"><strong>Epoch ' + escapeHtml(String(candidate.epoch)) + '</strong><span class="training-candidates-region-summary">' + escapeHtml(trainingCandidatesRegionSummary(candidate)) + '</span><em class="' + (candidate.artifact && candidate.artifact.available ? 'available' : 'missing') + '" title="' + escapeHtml(trainingCandidatesArtifactLabel(candidate.artifact)) + '">' + escapeHtml(trainingCandidatesArtifactLabel(candidate.artifact)) + '</em>' + openAction + '</article>';
-  }).join('') : '<div class="training-candidates-empty">No candidate regions with a completed checkpoint identified by this algorithm.</div>';
-  return '<section class="training-candidates-analysis">' + trainingCandidatesSvg(analysis) + '<section class="training-candidates-list"><h3>Suggested epochs</h3>' + list + '</section></section>';
+  return '<section class="training-candidates-analysis">' + trainingCandidatesSvg(analysis) + '</section>';
 }
 
 function openTrainingCandidatesFolder(epoch) {
@@ -235,22 +345,20 @@ function openTrainingCandidatesFolder(epoch) {
 function renderTrainingCandidates() {
   var els = trainingCandidatesElements();
   if (!els.content) return;
+  trainingCandidatesClearChartWiring();
   if (trainingWorkspaceState.candidatePending) {
     els.content.innerHTML = '<div class="training-candidates-empty">Loading loss curve…</div>';
     return;
   }
   els.content.innerHTML = trainingCandidatesContentHtml(trainingWorkspaceState.candidatePayload);
   wireTrainingCandidatesChart();
-  Array.prototype.forEach.call(els.content.querySelectorAll('[data-training-candidate-epoch]'), function (button) {
-    button.onclick = function () { openTrainingCandidatesFolder(button.getAttribute('data-training-candidate-epoch')).catch(function (err) { setStatus('Could not open saved LoRA folder: ' + String(err.message || err)); }); };
-  });
 }
 
 function syncTrainingCandidatesDisplayControls() {
   var els = trainingCandidatesElements();
   var display = trainingCandidatesDisplayState();
   if (els.smoothing) els.smoothing.value = String(display.smoothing);
-  if (els.smoothingNumber) els.smoothingNumber.value = Number(display.smoothing).toFixed(2);
+  if (els.smoothingNumber) els.smoothingNumber.value = Number(display.smoothing).toFixed(3);
   if (els.yMin) els.yMin.value = display.yMin === null ? '' : String(display.yMin);
   if (els.yMax) els.yMax.value = display.yMax === null ? '' : String(display.yMax);
 }
@@ -261,6 +369,7 @@ function refreshTrainingCandidates() {
   if (!folder || !jobId) throw new Error('Candidate analysis has no selected training run.');
   var requestVersion = ++trainingWorkspaceState.candidateRequestVersion;
   var algorithm = String(trainingWorkspaceState.candidateAlgorithm || 'v5');
+  trainingCandidatesClearPinnedDetails();
   trainingWorkspaceState.candidatePending = true;
   trainingWorkspaceState.candidatePayload = null;
   renderTrainingCandidates();
@@ -286,12 +395,34 @@ function refreshTrainingCandidates() {
     });
 }
 
+function syncTrainingCandidatesFullscreenButton() {
+  var els = trainingCandidatesElements();
+  if (!els.fullscreen || !els.dialog) return;
+  var fullscreen = document.fullscreenElement === els.dialog;
+  els.fullscreen.innerHTML = fullscreen ? '&#10530;' : '&#9974;';
+  els.fullscreen.setAttribute('title', fullscreen ? 'Exit fullscreen' : 'Enter fullscreen');
+  els.fullscreen.setAttribute('aria-label', fullscreen ? 'Exit fullscreen' : 'Enter fullscreen');
+}
+
+function toggleTrainingCandidatesFullscreen() {
+  var els = trainingCandidatesElements();
+  if (!els.dialog) { setStatus('Fullscreen is unavailable because the candidate dialog is missing.'); return; }
+  var action = document.fullscreenElement === els.dialog
+    ? (document.exitFullscreen ? document.exitFullscreen() : Promise.reject(new Error('Fullscreen exit is not supported.')))
+    : (els.dialog.requestFullscreen ? els.dialog.requestFullscreen() : Promise.reject(new Error('Fullscreen is not supported by this browser.')));
+  Promise.resolve(action).catch(function (err) { setStatus('Could not change fullscreen mode: ' + String(err.message || err)); });
+}
+
 function closeTrainingCandidates() {
   var els = trainingCandidatesElements();
   trainingWorkspaceState.candidateRequestVersion++;
   trainingWorkspaceState.candidateModalOpen = false;
   trainingWorkspaceState.candidatePending = false;
   trainingWorkspaceState.candidatePayload = null;
+  trainingWorkspaceState.candidateChartGeometry = null;
+  trainingCandidatesClearPinnedDetails();
+  trainingCandidatesClearChartWiring();
+  if (document.fullscreenElement === els.dialog && document.exitFullscreen) document.exitFullscreen().catch(function (err) { setStatus('Could not exit fullscreen: ' + String(err.message || err)); });
   if (els.modal) { els.modal.classList.add('hidden'); els.modal.setAttribute('aria-hidden', 'true'); }
 }
 
@@ -302,10 +433,13 @@ function openTrainingCandidates(job) {
   trainingWorkspaceState.candidateFolder = String(job.folder);
   trainingWorkspaceState.candidateAlgorithm = 'v5';
   trainingWorkspaceState.candidatePayload = null;
+  trainingWorkspaceState.candidateChartGeometry = null;
+  trainingCandidatesClearPinnedDetails();
   trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30 };
   trainingWorkspaceState.candidateModalOpen = true;
   els.algorithm.value = trainingWorkspaceState.candidateAlgorithm;
   syncTrainingCandidatesDisplayControls();
+  syncTrainingCandidatesFullscreenButton();
   if (els.modal) { els.modal.classList.remove('hidden'); els.modal.setAttribute('aria-hidden', 'false'); }
   refreshTrainingCandidates().catch(function (err) {
     if (!trainingWorkspaceState.candidateModalOpen) return;
@@ -321,19 +455,24 @@ function wireTrainingCandidatesModal() {
   els.modal.__trainingCandidatesWired = true;
   els.close.onclick = closeTrainingCandidates;
   els.refresh.onclick = function () { refreshTrainingCandidates().catch(function (err) { setStatus('Could not refresh LoRA candidates: ' + String(err.message || err)); }); };
+  els.fullscreen.onclick = toggleTrainingCandidatesFullscreen;
+  document.addEventListener('fullscreenchange', syncTrainingCandidatesFullscreenButton);
   els.algorithm.onchange = function () {
     trainingWorkspaceState.candidateAlgorithm = els.algorithm.value;
+    trainingCandidatesClearPinnedDetails();
     refreshTrainingCandidates().catch(function (err) { setStatus('Could not refresh LoRA candidates: ' + String(err.message || err)); });
   };
   els.smoothing.oninput = function () {
     trainingCandidatesDisplayState().smoothing = trainingCandidatesNumber(els.smoothing.value, .99);
+    trainingCandidatesClearPinnedDetails();
     syncTrainingCandidatesDisplayControls();
     renderTrainingCandidates();
   };
   function commitSmoothingNumber() {
     var value = trainingCandidatesNumber(els.smoothingNumber.value, NaN);
-    if (value >= .90 && value <= .99) {
+    if (value >= .900 && value <= .999) {
       trainingCandidatesDisplayState().smoothing = value;
+      trainingCandidatesClearPinnedDetails();
       syncTrainingCandidatesDisplayControls();
       renderTrainingCandidates();
     } else {
@@ -352,6 +491,7 @@ function wireTrainingCandidatesModal() {
     }
     display.yMin = min;
     display.yMax = max;
+    trainingCandidatesClearPinnedDetails();
     syncTrainingCandidatesDisplayControls();
     renderTrainingCandidates();
   }
@@ -362,6 +502,7 @@ function wireTrainingCandidatesModal() {
   els.yAuto.onclick = function () {
     trainingCandidatesDisplayState().yMin = null;
     trainingCandidatesDisplayState().yMax = null;
+    trainingCandidatesClearPinnedDetails();
     syncTrainingCandidatesDisplayControls();
     renderTrainingCandidates();
   };

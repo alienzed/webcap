@@ -110,7 +110,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
-assert.deepEqual(context.trainingCandidatesDisplayState(),{smoothing:.99,yMin:.10,yMax:.30,showRawStep:false,showSmoothedStep:true,showEpochLoss:true});
+assert.deepEqual(context.trainingCandidatesDisplayState(),{smoothing:.99,yMin:null,yMax:null,showRawStep:false,showSmoothedStep:true,showEpochLoss:true});
 elements['training-candidates-smoothing'].value='.95';
 elements['training-candidates-smoothing'].oninput();
 assert.equal(context.trainingCandidatesDisplayState().smoothing,.95);

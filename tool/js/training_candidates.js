@@ -24,7 +24,7 @@ function trainingCandidatesNumber(value, fallback) {
 }
 
 function trainingCandidatesDisplayState() {
-  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
+  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
   if (typeof trainingWorkspaceState.candidateDisplay.showRawStep !== 'boolean') trainingWorkspaceState.candidateDisplay.showRawStep = false;
   if (typeof trainingWorkspaceState.candidateDisplay.showSmoothedStep !== 'boolean') trainingWorkspaceState.candidateDisplay.showSmoothedStep = true;
   if (typeof trainingWorkspaceState.candidateDisplay.showEpochLoss !== 'boolean') trainingWorkspaceState.candidateDisplay.showEpochLoss = true;
@@ -533,7 +533,7 @@ function openTrainingCandidates(job) {
   trainingWorkspaceState.candidatePayload = null;
   trainingWorkspaceState.candidateChartGeometry = null;
   trainingCandidatesClearPinnedDetails();
-  trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
+  trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
   trainingWorkspaceState.candidateModalOpen = true;
   els.algorithm.value = trainingWorkspaceState.candidateAlgorithm;
   syncTrainingCandidatesDisplayControls();

@@ -16,7 +16,7 @@ from .video_clip_ops import clip_video_response, get_clip_job_status
 from .video_frame_ops import extract_video_frame_response, inspect_video_frame_response
 from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, tensorboard_status_response as training_runner_tensorboard_status_response, tensorboard_control_response as training_runner_tensorboard_control_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, clear_history_response as training_runner_clear_history_response, history_metrics_response as training_runner_history_metrics_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses, start_observer as start_training_runner_observer
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, tensorboard_status_response as training_runner_tensorboard_status_response, tensorboard_control_response as training_runner_tensorboard_control_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, clear_history_response as training_runner_clear_history_response, history_metrics_response as training_runner_history_metrics_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses, start_observer as start_training_runner_observer
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .prune_candidates import prune_candidates_response
@@ -736,6 +736,23 @@ def training_candidates_copy_to_test_route():
         data.get("folder", ""), data.get("jobId", ""), data.get("epoch", "")
     )
     return jsonify(payload), status
+
+
+@app.route("/fs/training_candidates/open_test", methods=["POST"])
+def training_candidates_open_test_route():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or set(data) - {"folder", "jobId"}:
+        return jsonify({"ok": False, "error": "Open Test Folder accepts only folder and jobId."}), 400
+    try:
+        return open_path_in_explorer_response(
+            training_runner_candidate_test_folder_path(data.get("folder", ""), data.get("jobId", ""))
+        )
+    except LookupError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 422
+    except (TrainingStateError, ValueError, RuntimeError, OSError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.route("/fs/training_history/open_output", methods=["POST"])

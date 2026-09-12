@@ -458,7 +458,7 @@ def _candidate_safetensors_path(folder, job_id, epoch):
     return artifacts[0]
 
 
-def _copy_to_test_directory(root, parts):
+def _copy_to_test_directory(root, parts, create_missing=True):
     if not root.is_dir():
         raise FileNotFoundError("Configured Copy to Test root is unavailable: " + str(root))
     resolved_root = root.resolve(strict=True)
@@ -469,6 +469,8 @@ def _copy_to_test_directory(root, parts):
             if not candidate.is_dir() or candidate.is_symlink():
                 raise RuntimeError("Copy to Test destination directory is unavailable: " + str(candidate))
         else:
+            if not create_missing:
+                raise FileNotFoundError("Configured test folder is unavailable: " + str(candidate))
             try:
                 candidate.mkdir()
             except FileExistsError:
@@ -481,13 +483,10 @@ def _copy_to_test_directory(root, parts):
     return destination
 
 
-def copy_candidate_epoch_to_test(folder, job_id, epoch):
-    """Copy one recorded saved LoRA using the persisted Copy to Test settings."""
-    _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+def _candidate_test_directory_for_run(run, create_missing):
     stage = str(run.get("stages") or "").strip().lower()
     if stage not in _TEST_COPY_STAGE_LABELS:
         raise ValueError("Recorded training job has no supported Copy to Test model stage.")
-    source = _candidate_safetensors_path(folder, job_id, epoch)
     saved_config = app_config.load_config_from_disk()
     training = saved_config.get("training") if isinstance(saved_config.get("training"), dict) else {}
     roots = training.get("test_copy_roots") if isinstance(training.get("test_copy_roots"), dict) else {}
@@ -499,7 +498,20 @@ def copy_candidate_epoch_to_test(folder, job_id, epoch):
     set_name = PurePosixPath(str(run.get("folder") or "")).name
     if not set_name or set_name in (".", ".."):
         raise RuntimeError("Recorded training folder has no usable set name.")
-    destination_directory = _copy_to_test_directory(root, ([subfolder] if subfolder else []) + [set_name])
+    return _copy_to_test_directory(root, ([subfolder] if subfolder else []) + [set_name], create_missing=create_missing)
+
+
+def candidate_test_folder_path(folder, job_id):
+    """Resolve the existing configured test folder without creating it."""
+    _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    return _candidate_test_directory_for_run(run, create_missing=False)
+
+
+def copy_candidate_epoch_to_test(folder, job_id, epoch):
+    """Copy one recorded saved LoRA using the persisted Copy to Test settings."""
+    _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    source = _candidate_safetensors_path(folder, job_id, epoch)
+    destination_directory = _candidate_test_directory_for_run(run, create_missing=True)
     destination = destination_directory / source.name
     created_destination = False
     try:
@@ -513,7 +525,7 @@ def copy_candidate_epoch_to_test(folder, job_id, epoch):
             except OSError:
                 pass
         raise
-    return {"destination": str(destination), "fileName": source.name, "stage": stage}
+    return {"destination": str(destination), "fileName": source.name, "stage": str(run.get("stages") or "").strip().lower()}
 
 
 def copy_candidate_epoch_to_test_response(folder, job_id, epoch):

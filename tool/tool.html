@@ -827,30 +827,34 @@
                 <div id="training-candidates-modal" class="training-candidates-modal hidden" aria-hidden="true">
                     <section class="training-candidates-dialog" role="dialog" aria-modal="true" aria-labelledby="training-candidates-modal-title">
                         <header class="training-candidates-modal-header">
-                            <div>
+                            <div class="training-candidates-modal-identity">
                                 <h2 id="training-candidates-modal-title">LoRA Candidates</h2>
                                 <p id="training-candidates-modal-summary">Read-only loss-curve analysis.</p>
                             </div>
+                            <div class="training-candidates-toolbar" aria-label="Candidate chart controls">
+                                <div class="training-candidates-control-group training-candidates-analysis-controls">
+                                    <label for="training-candidates-algorithm">Algorithm</label>
+                                    <select id="training-candidates-algorithm">
+                                        <option value="v5">Multiscale Loss Basins</option>
+                                        <option value="v3">Score Scalars · legacy baseline</option>
+                                    </select>
+                                    <button id="training-candidates-refresh" type="button" class="review-captions-btn training-candidates-text-btn">Refresh</button>
+                                </div>
+                                <div class="training-candidates-control-group training-candidates-smoothing-controls">
+                                    <label>Smoothing <input id="training-candidates-smoothing" type="range" min="0.900" max="0.999" step="0.001" value="0.990"><input id="training-candidates-smoothing-number" type="number" min="0.900" max="0.999" step="0.001" value="0.990"></label>
+                                </div>
+                                <div class="training-candidates-control-group training-candidates-range-controls">
+                                    <label>Y min <input id="training-candidates-y-min" type="number" step="0.01" value="0.10" placeholder="Auto"></label>
+                                    <label>Y max <input id="training-candidates-y-max" type="number" step="0.01" value="0.30" placeholder="Auto"></label>
+                                    <button id="training-candidates-y-auto" type="button" class="review-captions-btn training-candidates-text-btn">Auto Y</button>
+                                </div>
+                            </div>
                             <div class="training-candidates-modal-actions">
-                                <button id="training-candidates-open-run" type="button" class="review-captions-btn">Open Folder</button>
-                                <button id="training-candidates-refresh" type="button" class="training-candidates-icon-btn" title="Refresh candidate analysis" aria-label="Refresh candidate analysis">&#10227;</button>
+                                <button id="training-candidates-open-run" type="button" class="review-captions-btn training-candidates-text-btn">Open Folder</button>
                                 <button id="training-candidates-fullscreen" type="button" class="training-candidates-icon-btn" title="Enter fullscreen" aria-label="Enter fullscreen">&#9974;</button>
                                 <button id="training-candidates-modal-close" type="button" class="training-review-modal-close" aria-label="Close candidate analysis">&times;</button>
                             </div>
                         </header>
-                        <div class="training-candidates-toolbar" aria-label="Candidate chart controls">
-                            <label for="training-candidates-algorithm">Algorithm:</label>
-                            <select id="training-candidates-algorithm">
-                                <option value="v5">Multiscale Loss Basins</option>
-                                <option value="v3">Score Scalars · legacy baseline</option>
-                            </select>
-                            <div class="training-candidates-display-controls" aria-label="Chart display controls">
-                                <label>Smoothing <input id="training-candidates-smoothing" type="range" min="0.900" max="0.999" step="0.001" value="0.990"><input id="training-candidates-smoothing-number" type="number" min="0.900" max="0.999" step="0.001" value="0.990"></label>
-                                <label>Y min <input id="training-candidates-y-min" type="number" step="0.01" value="0.10" placeholder="Auto"></label>
-                                <label>Y max <input id="training-candidates-y-max" type="number" step="0.01" value="0.30" placeholder="Auto"></label>
-                                <button id="training-candidates-y-auto" type="button" class="training-candidates-icon-btn" title="Auto-scale Y axis" aria-label="Auto-scale Y axis">&#10227;</button>
-                            </div>
-                        </div>
                         <div id="training-candidates-modal-content" class="training-candidates-modal-content"></div>
                     </section>
                 </div>

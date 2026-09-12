@@ -24,7 +24,10 @@ function trainingCandidatesNumber(value, fallback) {
 }
 
 function trainingCandidatesDisplayState() {
-  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30 };
+  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30, showRawStep: true, showSmoothedStep: true, showEpochLoss: true };
+  if (typeof trainingWorkspaceState.candidateDisplay.showRawStep !== 'boolean') trainingWorkspaceState.candidateDisplay.showRawStep = true;
+  if (typeof trainingWorkspaceState.candidateDisplay.showSmoothedStep !== 'boolean') trainingWorkspaceState.candidateDisplay.showSmoothedStep = true;
+  if (typeof trainingWorkspaceState.candidateDisplay.showEpochLoss !== 'boolean') trainingWorkspaceState.candidateDisplay.showEpochLoss = true;
   return trainingWorkspaceState.candidateDisplay;
 }
 
@@ -141,14 +144,19 @@ function trainingCandidatesSvg(data) {
     var point = trainingCandidatesPointForEpoch(artifact.epoch, analysis, points);
     if (!point) return '';
     var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
-    return '<g class="training-candidates-epoch-marker training-candidates-saved-marker ' + escapeHtml(String(artifact.status || '')) + '" ' + markerData(artifact.epoch) + ' role="button" tabindex="0" aria-label="Saved LoRA at epoch ' + escapeHtml(String(artifact.epoch)) + '"><circle cx="' + pointX + '" cy="' + pointY + '" r="3"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="10"></circle></g>';
+    return '<g class="training-candidates-epoch-marker training-candidates-saved-marker ' + escapeHtml(String(artifact.status || '')) + '" ' + markerData(artifact.epoch) + ' role="button" tabindex="0" aria-label="Saved LoRA at epoch ' + escapeHtml(String(artifact.epoch)) + '"><circle cx="' + pointX + '" cy="' + pointY + '" r="5"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="12"></circle></g>';
   }).join('');
   var candidateMarkers = candidates.map(function (candidate) {
     var analytical = trainingCandidatesPointForStep(candidate.step, analysis);
     var checkpoint = trainingCandidatesPointForEpoch(candidate.epoch, [], points);
     var point = { step: candidate.step, loss: analytical ? analytical.loss : checkpoint.loss };
     var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
-    return '<g class="training-candidates-marker training-candidates-epoch-marker" ' + markerData(candidate.epoch) + ' role="button" tabindex="0" aria-label="Suggested epoch ' + escapeHtml(String(candidate.epoch)) + '"><line x1="' + pointX + '" y1="' + plotTop + '" x2="' + pointX + '" y2="' + plotBottom + '"></line><circle cx="' + pointX + '" cy="' + pointY + '" r="5"></circle><text x="' + pointX + '" y="' + (plotTop - 8) + '">' + escapeHtml(String(candidate.epoch)) + '</text><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="12"></circle></g>';
+    return '<g class="training-candidates-marker training-candidates-epoch-marker" ' + markerData(candidate.epoch) + ' role="button" tabindex="0" aria-label="Suggested epoch ' + escapeHtml(String(candidate.epoch)) + '"><line x1="' + pointX + '" y1="' + plotTop + '" x2="' + pointX + '" y2="' + plotBottom + '"></line><circle cx="' + pointX + '" cy="' + pointY + '" r="7"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="14"></circle></g>';
+  }).join('');
+  var candidateLabels = candidates.map(function (candidate) {
+    var point = trainingCandidatesPointForStep(candidate.step, analysis) || trainingCandidatesPointForEpoch(candidate.epoch, [], points);
+    if (!point) return '';
+    return '<text class="training-candidates-marker-label" x="' + x(point.step).toFixed(2) + '" y="' + (plotTop - 8) + '">' + escapeHtml(String(candidate.epoch)) + '</text>';
   }).join('');
   var yTicks = trainingCandidatesYAxisTicks(minLoss, maxLoss).map(function (value) {
     var tickY = y(value);
@@ -159,13 +167,18 @@ function trainingCandidatesSvg(data) {
     '<svg class="training-candidates-chart" viewBox="0 0 ' + viewWidth + ' ' + viewHeight + '" role="img" aria-label="TensorBoard step loss and epoch loss curve" data-training-candidates-chart="' + chartData + '">' +
       '<defs><clipPath id="training-candidates-plot-clip"><rect x="' + plotLeft + '" y="' + plotTop + '" width="' + (plotRight - plotLeft) + '" height="' + plotHeight + '"></rect></clipPath></defs>' +
       yTicks + '<line class="training-candidates-axis" x1="' + plotLeft + '" y1="' + plotBottom + '" x2="' + plotRight + '" y2="' + plotBottom + '"></line><line class="training-candidates-axis" x1="' + plotLeft + '" y1="' + plotTop + '" x2="' + plotLeft + '" y2="' + plotBottom + '"></line>' +
-      '<polyline class="training-candidates-step-loss" clip-path="url(#training-candidates-plot-clip)" points="' + polyline(stepPoints) + '"></polyline>' +
-      (smoothedStepPoints.length ? '<polyline class="training-candidates-step-loss-smoothed" clip-path="url(#training-candidates-plot-clip)" points="' + polyline(smoothedStepPoints) + '"></polyline>' : '') +
-      regionRects + '<polyline class="training-candidates-raw" points="' + polyline(points) + '"></polyline>' +
+      '<g class="training-candidates-plot-content" clip-path="url(#training-candidates-plot-clip)">' + regionRects +
+      (display.showRawStep ? '<polyline class="training-candidates-step-loss" points="' + polyline(stepPoints) + '"></polyline>' : '') +
+      (display.showSmoothedStep && smoothedStepPoints.length ? '<polyline class="training-candidates-step-loss-smoothed" points="' + polyline(smoothedStepPoints) + '"></polyline>' : '') +
+      (display.showEpochLoss ? '<polyline class="training-candidates-raw" points="' + polyline(points) + '"></polyline>' : '') +
       (analysis.length ? '<polyline class="training-candidates-analysis" points="' + polyline(analysis) + '"></polyline>' : '') +
-      '<rect class="training-candidates-hover-layer" x="' + plotLeft + '" y="' + plotTop + '" width="' + (plotRight - plotLeft) + '" height="' + plotHeight + '"></rect><line class="training-candidates-hover-guide hidden" x1="0" y1="' + plotTop + '" x2="0" y2="' + plotBottom + '"></line><circle class="training-candidates-hover-point hidden" cx="0" cy="0" r="4"></circle>' + savedMarkers + candidateMarkers +
+      '<rect class="training-candidates-hover-layer" x="' + plotLeft + '" y="' + plotTop + '" width="' + (plotRight - plotLeft) + '" height="' + plotHeight + '"></rect><line class="training-candidates-hover-guide hidden" x1="0" y1="' + plotTop + '" x2="0" y2="' + plotBottom + '"></line><circle class="training-candidates-hover-point hidden" cx="0" cy="0" r="4"></circle>' + savedMarkers + candidateMarkers + '</g>' + candidateLabels +
       '<text class="training-candidates-axis-label" x="' + plotLeft + '" y="' + (plotBottom + 24) + '">step ' + escapeHtml(String(minStep)) + ' · epoch ' + escapeHtml(String(minStepPoint.epoch)) + '</text><text class="training-candidates-axis-label" x="' + plotRight + '" y="' + (plotBottom + 24) + '" text-anchor="end">step ' + escapeHtml(String(maxStep)) + ' · epoch ' + escapeHtml(String(maxStepPoint.epoch)) + '</text>' +
-    '</svg><div class="training-candidates-tooltip hidden"></div><div class="training-candidates-pinned-popover hidden"></div><div class="training-candidates-legend"><span><i class="step"></i>Raw step loss</span><span><i class="step-smoothed"></i>Smoothed step loss</span><span><i class="raw"></i>Epoch loss</span><span><i class="analysis"></i>Robust trend</span><span><i class="saved"></i>Saved LoRA</span><span><i class="basin"></i>Candidate region</span></div>' + (candidates.length ? '' : '<div class="training-candidates-no-candidates">No candidate regions identified by this algorithm.</div>') + '</div>';
+    '</svg><div class="training-candidates-tooltip hidden"></div><div class="training-candidates-pinned-popover hidden"></div><div class="training-candidates-legend">' +
+      '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showRawStep"' + (display.showRawStep ? ' checked' : '') + '><i class="step"></i>Raw step loss</label>' +
+      '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showSmoothedStep"' + (display.showSmoothedStep ? ' checked' : '') + '><i class="step-smoothed"></i>Smoothed step loss</label>' +
+      '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showEpochLoss"' + (display.showEpochLoss ? ' checked' : '') + '><i class="raw"></i>Epoch loss</label>' +
+      '<span><i class="suggested"></i>Suggested epoch</span><span><i class="saved"></i>Saved LoRA</span><span><i class="basin"></i>Candidate region</span></div>' + (candidates.length ? '' : '<div class="training-candidates-no-candidates">No candidate regions identified by this algorithm.</div>') + '</div>';
 }
 
 function trainingCandidatesTooltipHtml(stepPoint, data) {
@@ -200,8 +213,9 @@ function trainingCandidatesPinnedActionsHtml(epoch, data) {
   if (!trainingCandidatesAvailableArtifact(epoch, data)) return '';
   var escapedEpoch = escapeHtml(String(epoch));
   return '<div class="training-candidates-pinned-actions">' +
-    '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapedEpoch + '">Open Folder</button>' +
+    '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapedEpoch + '">Open Epoch Folder</button>' +
     '<button type="button" class="review-captions-btn training-candidates-copy-test" data-training-candidate-copy-test="' + escapedEpoch + '">Copy to Test</button>' +
+    '<button type="button" class="review-captions-btn training-candidates-open-test" data-training-candidate-open-test>Open Test Folder</button>' +
     '</div><div class="training-candidates-copy-status" data-training-candidate-copy-status aria-live="polite"></div>';
 }
 
@@ -265,6 +279,26 @@ function wireTrainingCandidatesChart() {
     tooltip.style.top = Math.max(4, Math.min(chart.clientHeight - tooltip.offsetHeight - 4, event.clientY - rect.top + 10)) + 'px';
   });
   wrap.addEventListener('click', function (event) {
+    var openTestButton = event.target.closest ? event.target.closest('.training-candidates-open-test') : null;
+    if (openTestButton) {
+      event.stopPropagation();
+      var testFolder = String(trainingWorkspaceState.candidateFolder || '');
+      var testJobId = String(trainingWorkspaceState.candidateJobId || '');
+      if (!testFolder || !testJobId) throw new Error('Candidate analysis has no selected training run.');
+      trainingRunnerRequest('/fs/training_candidates/open_test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: testFolder, jobId: testJobId })
+      }).then(function () {
+        var status = popover.querySelector('[data-training-candidate-copy-status]');
+        if (status) status.textContent = 'Opened configured test folder.';
+        positionPinned(trainingCandidatesStepPointForEpoch(trainingWorkspaceState.candidatePinnedEpoch, data));
+      }).catch(function (err) {
+        var status = popover.querySelector('[data-training-candidate-copy-status]');
+        if (status) status.textContent = String(err.message || err);
+        positionPinned(trainingCandidatesStepPointForEpoch(trainingWorkspaceState.candidatePinnedEpoch, data));
+      });
+      return;
+    }
     var copyButton = event.target.closest ? event.target.closest('.training-candidates-copy-test') : null;
     if (copyButton) {
       event.stopPropagation();
@@ -307,6 +341,12 @@ function wireTrainingCandidatesChart() {
     } else if (!popover.contains(event.target)) {
       clearPinned();
     }
+  });
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-training-candidate-line]'), function (input) {
+    input.onchange = function () {
+      trainingCandidatesDisplayState()[input.getAttribute('data-training-candidate-line')] = input.checked;
+      renderTrainingCandidates();
+    };
   });
   wrap.addEventListener('keydown', function (event) {
     var marker = event.target.closest ? event.target.closest('[data-training-candidate-epoch]') : null;
@@ -482,7 +522,7 @@ function openTrainingCandidates(job) {
   trainingWorkspaceState.candidatePayload = null;
   trainingWorkspaceState.candidateChartGeometry = null;
   trainingCandidatesClearPinnedDetails();
-  trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30 };
+  trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: .10, yMax: .30, showRawStep: true, showSmoothedStep: true, showEpochLoss: true };
   trainingWorkspaceState.candidateModalOpen = true;
   els.algorithm.value = trainingWorkspaceState.candidateAlgorithm;
   syncTrainingCandidatesDisplayControls();

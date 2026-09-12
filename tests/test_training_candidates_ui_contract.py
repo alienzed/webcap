@@ -57,7 +57,9 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "trainingCandidatesYAxisTicks" in script
     assert "toggleTrainingCandidatesFullscreen" in script
     assert "Saved in region:" in script
-    assert "Open Folder" in script
+    assert "Open Epoch Folder" in script
+    assert "Open Test Folder" in script
+    assert "/fs/training_candidates/open_test" in script
     assert "Copy to Test" in script
     assert "/fs/training_candidates/copy_to_test" in script
     assert "artifact.status === 'available'" in script
@@ -73,6 +75,8 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert ".training-candidates-step-loss-smoothed" in css
     assert ".training-candidates-gridline" in css
     assert ".training-candidates-pinned-popover" in css
+    assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-btn' in css
+    assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-toggle input' in css
     assert ".training-candidates-list" not in css
 
 
@@ -104,7 +108,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
-assert.deepEqual(context.trainingCandidatesDisplayState(),{smoothing:.99,yMin:.10,yMax:.30});
+assert.deepEqual(context.trainingCandidatesDisplayState(),{smoothing:.99,yMin:.10,yMax:.30,showRawStep:true,showSmoothedStep:true,showEpochLoss:true});
 elements['training-candidates-smoothing'].value='.95';
 elements['training-candidates-smoothing'].oninput();
 assert.equal(context.trainingCandidatesDisplayState().smoothing,.95);
@@ -137,10 +141,21 @@ for (const tag of svg.matchAll(/<rect[^>]+>/g)) {
   if (tag[0].includes('height="490"')) assert(tag[0].includes('y="28"'));
 }
 assert(svg.includes('class="training-candidates-gridline"'));
+assert(svg.includes('class="training-candidates-plot-content" clip-path="url(#training-candidates-plot-clip)"'));
 assert(svg.includes('class="training-candidates-hover-guide hidden" x1="0" y1="28" x2="0" y2="518"'));
 const marker = svg.match(/class="training-candidates-marker training-candidates-epoch-marker"[^>]*><line x1="([^"]+)"/);
 assert(Math.abs(Number(marker[1]) - (52 + (199-10)/(399-10)*926)) < .01);
 assert(svg.includes('data-training-candidate-epoch="1"'));
+assert(svg.includes('r="7"'));
+assert(svg.includes('r="14"'));
+assert(svg.includes('data-training-candidate-line="showRawStep" checked'));
+context.trainingCandidatesDisplayState().showRawStep=false;
+context.trainingCandidatesDisplayState().showEpochLoss=false;
+const filteredSvg=context.trainingCandidatesSvg(data);
+assert(!filteredSvg.includes('<polyline class="training-candidates-step-loss"'));
+assert(!filteredSvg.includes('<polyline class="training-candidates-raw"'));
+assert(filteredSvg.includes('<polyline class="training-candidates-step-loss-smoothed"'));
+assert(filteredSvg.includes('class="training-candidates-marker training-candidates-epoch-marker"'));
 const mapped = context.trainingCandidatesPointForEpoch(1,data.analysisPoints,data.epochLossPoints);
 assert.equal(mapped.step,199);
 assert.equal(mapped.loss,.2);
@@ -151,15 +166,20 @@ assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipD
   assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));
   const savedData = Object.assign({}, tooltipData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors'}]});
   assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Copy to Test'));
+  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Open Epoch Folder'));
+  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Open Test Folder'));
   assert(context.trainingCandidatesPinnedActionsHtml(2,savedData)==='');
 (async () => {
-  for (const algorithm of ['v5','v3']) {
+    for (const algorithm of ['v5','v3']) {
     elements['training-candidates-algorithm'].value=algorithm;
     elements['training-candidates-algorithm'].onchange();
     await new Promise(setImmediate);
     assert(requests[requests.length-1].endsWith('&algorithm='+algorithm));
-    assert(requests[requests.length-1].includes('folder=set&jobId=job'));
-  }
+      assert(requests[requests.length-1].includes('folder=set&jobId=job'));
+    }
+    assert.equal(context.trainingCandidatesDisplayState().showRawStep,false);
+    assert.equal(context.trainingCandidatesDisplayState().showEpochLoss,false);
+    assert.equal(context.trainingCandidatesDisplayState().showSmoothedStep,true);
   context.trainingRunnerRequest=() => Promise.reject(new Error('visible failure'));
   await assert.rejects(context.refreshTrainingCandidates(),/visible failure/);
   assert.equal(context.trainingWorkspaceState.candidatePayload,null);

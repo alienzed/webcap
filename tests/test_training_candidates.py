@@ -316,6 +316,30 @@ def test_copy_candidate_reuses_set_directory_and_refuses_filename_collision(tmp_
     assert destination.read_bytes() == b"existing destination"
 
 
+def test_open_test_folder_requires_existing_destination_and_never_creates_it(tmp_path, monkeypatch):
+    source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
+    expected = destination_root / "az" / "subject"
+    client = app_module.app.test_client()
+    opened = []
+    monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))
+
+    missing = client.post("/fs/training_candidates/open_test", json={"folder": "sets/subject", "jobId": "job-1"})
+    assert missing.status_code == 422
+    assert not expected.exists()
+    assert opened == []
+
+    training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
+    opened_response = client.post("/fs/training_candidates/open_test", json={"folder": "sets/subject", "jobId": "job-1"})
+    assert opened_response.status_code == 200
+    assert opened == [expected.resolve()]
+    assert (expected / source.name).read_bytes() == b"test weights"
+    assert client.post("/fs/training_candidates/open_test", json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12}).status_code == 400
+    monkeypatch.setattr(app_module, "training_runner_candidate_test_folder_path", lambda folder, job_id: (_ for _ in ()).throw(OSError("test folder permission denied")))
+    failed = client.post("/fs/training_candidates/open_test", json={"folder": "sets/subject", "jobId": "job-1"})
+    assert failed.status_code == 400
+    assert failed.get_json()["error"] == "test folder permission denied"
+
+
 def test_copy_candidate_concurrent_requests_create_one_file(tmp_path, monkeypatch):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, subfolder="")
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -363,6 +387,9 @@ def test_copy_candidate_requires_saved_root_and_rejects_extra_request_fields(tmp
     missing = client.post("/fs/training_candidates/copy_to_test", json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12})
     assert missing.status_code == 400
     assert "H3 root" in missing.get_json()["error"]
+    open_missing = client.post("/fs/training_candidates/open_test", json={"folder": "sets/subject", "jobId": "job-1"})
+    assert open_missing.status_code == 400
+    assert "H3 root" in open_missing.get_json()["error"]
     invalid = client.post("/fs/training_candidates/copy_to_test", json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12, "path": "no"})
     assert invalid.status_code == 400
 

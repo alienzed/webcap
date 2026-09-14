@@ -427,10 +427,15 @@ function updateSidebarCollapseUi(collapsed) {
     return;
   }
   toggles.forEach(function (toggle) {
-    toggle.textContent = collapsed ? '>' : '<';
-    toggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-    toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
-    toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    var sidebarHidden = toggle.id === 'training-sidebar-collapse-toggle-btn'
+      && typeof workspaceState !== 'undefined'
+      && workspaceState.surface === 'training'
+      && workspaceState.sidebarHidden;
+    var isHidden = collapsed || sidebarHidden;
+    toggle.textContent = isHidden ? '>' : '<';
+    toggle.title = isHidden ? 'Expand sidebar' : 'Collapse sidebar';
+    toggle.setAttribute('aria-label', isHidden ? 'Expand sidebar' : 'Collapse sidebar');
+    toggle.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
   });
 }
 

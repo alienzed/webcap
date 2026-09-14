@@ -593,7 +593,16 @@ function wireTrainingWorkspace() {
   var historySearch = document.getElementById('training-history-search');
   var historyClearBtn = document.getElementById('training-history-clear-btn');
   backBtn.onclick = function () { exitWorkspaceSurface(); };
-  sidebarCollapseBtn.onclick = function () { toggleSidebarCollapsed(); };
+  sidebarCollapseBtn.onclick = function () {
+    if (trainingWorkspaceState.entryMode === 'global') {
+      workspaceState.sidebarHidden = !workspaceState.sidebarHidden;
+      syncWorkspaceSurfaceUi();
+      return;
+    }
+    toggleSidebarCollapsed();
+  };
+  var launchStatusGlobalBtn = document.getElementById('training-launch-status-global-btn');
+  launchStatusGlobalBtn.onclick = function () { openTrainingSurface('global'); };
   itemOverviewToggleBtn.onclick = function () {
     trainingWorkspaceState.itemOverviewHidden = !trainingWorkspaceState.itemOverviewHidden;
     renderTrainingItemOverview(null);

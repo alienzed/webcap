@@ -13,6 +13,8 @@ const root = process.argv[1];
 const shell = fs.readFileSync(root + '/tool/js/workspace_shell.js', 'utf8');
 const workspace = fs.readFileSync(root + '/tool/js/training_workspace.js', 'utf8');
 const runner = fs.readFileSync(root + '/tool/js/training_runner_ui.js', 'utf8');
+const html = fs.readFileSync(root + '/tool/tool.html', 'utf8');
+if (!html.includes('training-launch-status') || !html.includes('training-launch-status-global-btn')) throw new Error('missing set launch status');
 function section(source, start, end) {
   return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 }
@@ -39,7 +41,7 @@ const context = {
 vm.createContext(context);
 vm.runInContext(section(shell, 'function getTrainingWorkspaceEntryKind()', 'function syncWorkspaceConfigEditorUi()'), context);
 context.syncTrainingEntryChrome();
-if (runLogTab.classList.contains('hidden') || !itemTab.classList.contains('hidden') || !context.ui.appEl.classList.contains('sidebar-hidden')) throw new Error('global chrome');
+if (runLogTab.classList.contains('hidden') || !itemTab.classList.contains('hidden') || !context.ui.appEl.classList.contains('sidebar-hidden') || nodes['training-sidebar-collapse-toggle-btn'].classList.contains('hidden')) throw new Error('global chrome');
 context.trainingWorkspaceState.entryMode = 'set';
 context.workspaceState.sidebarHidden = false;
 context.syncTrainingEntryChrome();
@@ -121,6 +123,10 @@ def test_training_scope_source_contracts_remain_explicit():
     assert "isTrainingSetRefreshCurrent" in workspace
     assert "training-global-context--after-set" not in workspace
     assert "trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : ''" in history
+    assert "entryKind === 'unavailable'" in shell
+    assert "workspaceState.sidebarHidden = !workspaceState.sidebarHidden;" in workspace
+    assert "trainingWorkspaceState.launchedJobId = payload.job.id;" in runner
+    assert "function renderTrainingLaunchStatus()" in runner
     source_navigation = workspace[workspace.index('function openTrainingWorkspaceFolder('):workspace.index('function switchTrainingSetup(')]
     assert "workspaceState.sidebarHidden = false;" in source_navigation
     assert source_navigation.index("renderTrainingItemOverview(null, 'Loading training set...')") < source_navigation.index('refreshCurrentDirectory();')

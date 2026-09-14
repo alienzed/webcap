@@ -170,7 +170,7 @@ function syncTrainingEntryChrome() {
   if (itemTab) itemTab.classList.toggle('hidden', !isSetEntry);
   if (configTab) configTab.classList.toggle('hidden', !isSetEntry);
   if (runLogTab) runLogTab.classList.toggle('hidden', !isGlobalEntry);
-  if (collapseBtn) collapseBtn.classList.toggle('hidden', !isSetEntry);
+  if (collapseBtn) collapseBtn.classList.toggle('hidden', !isTraining || entryKind === 'unavailable');
   if (tensorboardLink) tensorboardLink.classList.toggle('hidden', !isGlobalEntry);
 }
 

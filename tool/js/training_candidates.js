@@ -259,6 +259,13 @@ function wireTrainingCandidatesChart() {
       y: Math.max(data.plotTop, Math.min(data.plotBottom, data.plotTop + (data.maxLoss - Number(point.loss)) / (data.maxLoss - data.minLoss) * data.plotHeight))
     };
   }
+  function chartBoundsInWrap() {
+    var chartRect = chart.getBoundingClientRect();
+    var wrapRect = wrap.getBoundingClientRect();
+    var left = chartRect.left - wrapRect.left;
+    var top = chartRect.top - wrapRect.top;
+    return { left: left, top: top, right: left + chartRect.width, bottom: top + chartRect.height, width: chartRect.width, height: chartRect.height };
+  }
   function clearPinned() {
     trainingCandidatesClearPinnedDetails();
     popover.classList.add('hidden');
@@ -266,14 +273,15 @@ function wireTrainingCandidatesChart() {
   function positionPinned(point) {
     var position = chartPoint(point);
     var gap = 12, edge = 6;
-    var anchorLeft = chart.offsetLeft + position.x / data.viewWidth * chart.clientWidth;
-    var anchorTop = chart.offsetTop + position.y / data.viewHeight * chart.clientHeight;
+    var bounds = chartBoundsInWrap();
+    var anchorLeft = bounds.left + position.x / data.viewWidth * bounds.width;
+    var anchorTop = bounds.top + position.y / data.viewHeight * bounds.height;
     var right = anchorLeft + gap;
     var below = anchorTop + gap;
-    var left = right + popover.offsetWidth <= wrap.clientWidth - edge ? right : anchorLeft - popover.offsetWidth - gap;
-    var top = below + popover.offsetHeight <= wrap.clientHeight - edge ? below : anchorTop - popover.offsetHeight - gap;
-    popover.style.left = Math.max(edge, Math.min(wrap.clientWidth - popover.offsetWidth - edge, left)) + 'px';
-    popover.style.top = Math.max(edge, Math.min(wrap.clientHeight - popover.offsetHeight - edge, top)) + 'px';
+    var left = right + popover.offsetWidth <= bounds.right - edge ? right : anchorLeft - popover.offsetWidth - gap;
+    var top = below + popover.offsetHeight <= bounds.bottom - edge ? below : anchorTop - popover.offsetHeight - gap;
+    popover.style.left = Math.max(bounds.left + edge, Math.min(bounds.right - popover.offsetWidth - edge, left)) + 'px';
+    popover.style.top = Math.max(bounds.top + edge, Math.min(bounds.bottom - popover.offsetHeight - edge, top)) + 'px';
   }
   function showPinned(epoch) {
     var point = trainingCandidatesStepPointForEpoch(epoch, data);
@@ -301,14 +309,15 @@ function wireTrainingCandidatesChart() {
     pointMarker.setAttribute('cx', x.toFixed(2)); pointMarker.setAttribute('cy', y.toFixed(2)); pointMarker.classList.remove('hidden');
     tooltip.innerHTML = trainingCandidatesTooltipHtml(raw, data);
     tooltip.classList.remove('hidden');
-    var anchorLeft = chart.offsetLeft + event.clientX - rect.left;
-    var anchorTop = chart.offsetTop + event.clientY - rect.top;
+    var bounds = chartBoundsInWrap();
+    var anchorLeft = bounds.left + event.clientX - rect.left;
+    var anchorTop = bounds.top + event.clientY - rect.top;
     var tooltipLeft = anchorLeft + 12;
     var tooltipTop = anchorTop + 10;
-    if (tooltipLeft + tooltip.offsetWidth > chart.offsetLeft + chart.clientWidth - 4) tooltipLeft = anchorLeft - tooltip.offsetWidth - 12;
-    if (tooltipTop + tooltip.offsetHeight > chart.offsetTop + chart.clientHeight - 4) tooltipTop = anchorTop - tooltip.offsetHeight - 10;
-    tooltip.style.left = Math.max(chart.offsetLeft + 4, tooltipLeft) + 'px';
-    tooltip.style.top = Math.max(chart.offsetTop + 4, tooltipTop) + 'px';
+    if (tooltipLeft + tooltip.offsetWidth > bounds.right - 4) tooltipLeft = anchorLeft - tooltip.offsetWidth - 12;
+    if (tooltipTop + tooltip.offsetHeight > bounds.bottom - 4) tooltipTop = anchorTop - tooltip.offsetHeight - 10;
+    tooltip.style.left = Math.max(bounds.left + 4, Math.min(bounds.right - tooltip.offsetWidth - 4, tooltipLeft)) + 'px';
+    tooltip.style.top = Math.max(bounds.top + 4, Math.min(bounds.bottom - tooltip.offsetHeight - 4, tooltipTop)) + 'px';
   });
   wrap.addEventListener('click', function (event) {
     var openTestButton = event.target.closest ? event.target.closest('.training-candidates-open-test') : null;

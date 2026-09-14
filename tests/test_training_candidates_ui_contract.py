@@ -50,6 +50,10 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "Step loss:" in script
     assert "Smoothed step loss:" in script
     assert "training-candidates-tooltip" in script
+    assert "function chartBoundsInWrap()" in script
+    assert "wrap.getBoundingClientRect()" in script
+    assert "chart.offsetLeft" not in script
+    assert "chart.offsetTop" not in script
     assert "training-candidates-open-epoch" in script
     assert "training-candidates-pinned-popover" in script
     assert "training-candidates-epoch-marker" in script

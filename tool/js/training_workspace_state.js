@@ -23,6 +23,7 @@ var trainingWorkspaceState = {
   runnerQueuePauseReason: '',
   runnerNotice: '',
   entryMode: 'global',
+  workspaceRequestVersion: 0,
   gpu: null,
   gpuStatusPending: false,
   tensorboard: null,

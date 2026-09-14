@@ -132,6 +132,48 @@ function normalizeWorkspaceSurface(surface) {
   return 'default';
 }
 
+function getTrainingWorkspaceEntryKind() {
+  var mode = trainingWorkspaceState.entryMode === 'set' ? 'set' : 'global';
+  if (mode === 'global') return 'global';
+  return isSetFolderPath(state.folder) ? 'set' : 'unavailable';
+}
+
+function syncTrainingEntryChrome() {
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  var isTraining = surface === 'training';
+  var entryKind = getTrainingWorkspaceEntryKind();
+  var isSetMode = isTraining && trainingWorkspaceState.entryMode === 'set';
+  var isSetEntry = isTraining && entryKind === 'set';
+  var isGlobalEntry = isTraining && trainingWorkspaceState.entryMode === 'global';
+  var trainingBtn = document.getElementById('sidebar-open-training-btn');
+  var utilityTrainingBtn = document.getElementById('utility-training-btn');
+  var detailTabs = document.getElementById('training-detail-tabs');
+  var collapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
+  var tensorboardLink = document.getElementById('training-tensorboard-link');
+  var itemTab = document.querySelector('[data-training-detail-tab="items"]');
+  var configTab = document.querySelector('[data-training-detail-tab="config"]');
+  var runLogTab = document.querySelector('[data-training-detail-tab="run-log"]');
+
+  if (isTraining && ui && ui.appEl) {
+    ui.appEl.classList.toggle('sidebar-hidden', !!workspaceState.sidebarHidden);
+  }
+  if (trainingBtn) {
+    trainingBtn.classList.toggle('active', isSetMode);
+    trainingBtn.setAttribute('aria-pressed', isSetMode ? 'true' : 'false');
+    trainingBtn.classList.toggle('hidden', !isSetFolderPath(state.folder));
+  }
+  if (utilityTrainingBtn) {
+    utilityTrainingBtn.classList.toggle('active', isGlobalEntry);
+    utilityTrainingBtn.setAttribute('aria-pressed', isGlobalEntry ? 'true' : 'false');
+  }
+  if (detailTabs) detailTabs.classList.toggle('hidden', !isTraining || entryKind === 'unavailable');
+  if (itemTab) itemTab.classList.toggle('hidden', !isSetEntry);
+  if (configTab) configTab.classList.toggle('hidden', !isSetEntry);
+  if (runLogTab) runLogTab.classList.toggle('hidden', !isGlobalEntry);
+  if (collapseBtn) collapseBtn.classList.toggle('hidden', !isSetEntry);
+  if (tensorboardLink) tensorboardLink.classList.toggle('hidden', !isGlobalEntry);
+}
+
 function syncWorkspaceConfigEditorUi() {
   var toolbar = document.getElementById('config-editor-toolbar');
   var backBtn = document.getElementById('config-editor-back-btn');
@@ -140,9 +182,13 @@ function syncWorkspaceConfigEditorUi() {
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var isConfigEditor = surface === 'configEditor';
   var isTraining = surface === 'training';
+  var trainingEntryKind = isTraining ? getTrainingWorkspaceEntryKind() : '';
+  var isSetTraining = trainingEntryKind === 'set';
+  var isGlobalTraining = trainingEntryKind === 'global';
+  var isUnavailableSetTraining = trainingEntryKind === 'unavailable';
   var isConfigWorkspace = isConfigEditor || isTraining;
   var hasConfigFile = !!(state && state.currentConfigFile && state.currentConfigFile.file);
-  var hasTrainingConfigFile = hasConfigFile && state.currentConfigFile.folder === state.folder;
+  var hasTrainingConfigFile = isSetTraining && hasConfigFile && state.currentConfigFile.folder === state.folder;
   var hasConfigForSurface = isTraining ? hasTrainingConfigFile : hasConfigFile;
   var trainingOverview = document.getElementById('training-editor-empty');
   var trainingConfigEmpty = document.getElementById('training-config-empty');
@@ -152,7 +198,9 @@ function syncWorkspaceConfigEditorUi() {
   var trainingRunnerEmpty = document.getElementById('training-runner-empty');
   var editorWrapper = ui.appEl.querySelector('.editor-wrapper');
   var trainingDetailTab = isTraining && typeof getTrainingDetailTab === 'function' ? getTrainingDetailTab() : 'items';
-  var trainingOutputVisible = isTraining && trainingDetailTab === 'run-log';
+  if (isGlobalTraining) trainingDetailTab = 'run-log';
+  if (isUnavailableSetTraining) trainingDetailTab = 'items';
+  var trainingOutputVisible = isTraining && !isUnavailableSetTraining && trainingDetailTab === 'run-log';
   if (toolbar) {
     toolbar.classList.toggle('hidden', !isConfigWorkspace || (isTraining && (trainingDetailTab !== 'config' || !hasConfigForSurface)) || (!isTraining && !hasConfigForSurface));
   }
@@ -162,16 +210,16 @@ function syncWorkspaceConfigEditorUi() {
       ? 'Save this config and return to Training Items.'
       : 'Return to the previous workspace.';
   }
-  ui.appEl.classList.toggle('training-config-selected', isTraining && trainingDetailTab === 'config' && hasConfigForSurface);
-  if (trainingDetailTabs) trainingDetailTabs.classList.toggle('hidden', !isTraining);
+  ui.appEl.classList.toggle('training-config-selected', isSetTraining && trainingDetailTab === 'config' && hasConfigForSurface);
+  if (trainingDetailTabs) trainingDetailTabs.classList.toggle('hidden', !isTraining || isUnavailableSetTraining);
   if (configFileTabs) {
-    configFileTabs.classList.toggle('hidden', !isTraining || trainingDetailTab !== 'config' || !hasConfigForSurface);
+    configFileTabs.classList.toggle('hidden', !isSetTraining || trainingDetailTab !== 'config' || !hasConfigForSurface);
   }
   if (trainingOverview) {
-    trainingOverview.classList.toggle('hidden', !isTraining || trainingDetailTab !== 'items');
+    trainingOverview.classList.toggle('hidden', !(isSetTraining || isUnavailableSetTraining) || trainingDetailTab !== 'items');
   }
   if (trainingConfigEmpty) {
-    trainingConfigEmpty.classList.toggle('hidden', !isTraining || trainingDetailTab !== 'config' || hasConfigForSurface);
+    trainingConfigEmpty.classList.toggle('hidden', !isSetTraining || trainingDetailTab !== 'config' || hasConfigForSurface);
   }
   if (trainingOutputView) {
     trainingOutputView.classList.toggle('hidden', !trainingOutputVisible);
@@ -180,7 +228,7 @@ function syncWorkspaceConfigEditorUi() {
     trainingRunnerEmpty.classList.toggle('hidden', !trainingOutputVisible || isTrainingRunnerConsoleVisible());
   }
   if (editorWrapper) {
-    editorWrapper.classList.toggle('hidden', isTraining && (trainingDetailTab !== 'config' || !hasConfigForSurface));
+    editorWrapper.classList.toggle('hidden', isTraining && (!isSetTraining || trainingDetailTab !== 'config' || !hasConfigForSurface));
   }
   if (fileLabel) {
     fileLabel.textContent = hasConfigFile
@@ -209,8 +257,6 @@ function syncWorkspaceSurfaceUi() {
   var reviewOutputSurface = document.getElementById('review-output-surface');
   var reviewDetailSurface = document.getElementById('review-detail-surface');
   var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
-  var trainingBtn = document.getElementById('sidebar-open-training-btn');
-  var utilityTrainingBtn = document.getElementById('utility-training-btn');
   var trainingNavigator = document.getElementById('training-navigator');
   var reviewOutputBackBtn = document.getElementById('review-output-back-btn');
   var workbenchTop = ui.appEl.querySelector('.workbench-top');
@@ -247,20 +293,9 @@ function syncWorkspaceSurfaceUi() {
     reviewOutputBtn.classList.toggle('active', reviewOutputActive);
     reviewOutputBtn.setAttribute('aria-pressed', reviewOutputActive ? 'true' : 'false');
   }
-  var hasSetPath = isSetFolderPath(state.folder);
   var hasReviewContext = isSetFolderContext(state.folder, state.items);
   if (reviewOutputBtn) reviewOutputBtn.classList.toggle('hidden', !hasReviewContext);
-  if (trainingBtn) {
-    var trainingActive = surface === 'training';
-    trainingBtn.classList.toggle('active', trainingActive);
-    trainingBtn.setAttribute('aria-pressed', trainingActive ? 'true' : 'false');
-    trainingBtn.classList.toggle('hidden', !hasSetPath);
-  }
-  if (utilityTrainingBtn) {
-    var utilityTrainingActive = surface === 'training' && trainingWorkspaceState.entryMode === 'global';
-    utilityTrainingBtn.classList.toggle('active', utilityTrainingActive);
-    utilityTrainingBtn.setAttribute('aria-pressed', utilityTrainingActive ? 'true' : 'false');
-  }
+  syncTrainingEntryChrome();
   if (reviewOutputBackBtn) {
     reviewOutputBackBtn.classList.toggle('hidden', surface !== 'reviewOutput');
   }
@@ -305,7 +340,7 @@ function setWorkspaceSurface(surface, options) {
     setReviewDetailTab('metadata');
   }
   if (nextSurface === 'training' && currentSurface !== 'training' && typeof setTrainingDetailTab === 'function') {
-    setTrainingDetailTab('items');
+    setTrainingDetailTab(trainingWorkspaceState.entryMode === 'global' ? 'run-log' : 'items');
   }
   if (nextSurface === 'grid') {
     setWorkspaceViewMode('grid');
@@ -324,6 +359,38 @@ function exitWorkspaceSurface(surfaceOverride) {
     targetSurface = 'default';
   }
   setWorkspaceSurface(targetSurface || 'default', { skipRemember: true });
+}
+
+function openTrainingSurface(mode) {
+  var entryMode = mode === 'set' ? 'set' : 'global';
+  var configFile = state.currentConfigFile;
+  var shouldSaveConfig = isTrainingWorkspaceActive()
+    && trainingWorkspaceState.entryMode === 'set'
+    && getTrainingDetailTab() === 'config'
+    && configFile
+    && configFile.folder === state.folder
+    && configFile.file;
+
+  function enterTrainingSurface() {
+    setTrainingWorkspaceEntryMode(entryMode);
+    setWorkspaceSurface('training', { sidebarHidden: entryMode === 'global' });
+    setTrainingDetailTab(entryMode === 'global' ? 'run-log' : 'items');
+    syncTrainingEntryChrome();
+  }
+
+  if (!shouldSaveConfig) {
+    enterTrainingSurface();
+    return;
+  }
+
+  cancelEditorAutosaveForConfig(configFile.folder, configFile.file);
+  Promise.resolve(saveCurrentEditorContent())
+    .then(function () {
+      enterTrainingSurface();
+    })
+    .catch(function (err) {
+      setStatus('Could not save config: ' + String(err && err.message ? err.message : err));
+    });
 }
 
 function closeTrainingWorkspaceConfigEditor() {
@@ -419,16 +486,14 @@ function wireWorkspaceHeaderUi() {
   if (trainingBtn && !trainingBtn.__workspaceWired) {
     trainingBtn.__workspaceWired = true;
     trainingBtn.onclick = function () {
-      setTrainingWorkspaceEntryMode('set');
-      setWorkspaceSurface('training');
+      openTrainingSurface('set');
     };
   }
   var utilityTrainingBtn = document.getElementById('utility-training-btn');
   if (utilityTrainingBtn && !utilityTrainingBtn.__workspaceWired) {
     utilityTrainingBtn.__workspaceWired = true;
     utilityTrainingBtn.onclick = function () {
-      setTrainingWorkspaceEntryMode('global');
-      setWorkspaceSurface('training');
+      openTrainingSurface('global');
     };
   }
   var configEditorBackBtn = document.getElementById('config-editor-back-btn');

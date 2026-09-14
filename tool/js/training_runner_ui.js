@@ -74,7 +74,9 @@ function hideTrainingRunnerConsole() {
   var els = getTrainingWorkspaceEls();
   trainingWorkspaceState.runnerConsoleRequestVersion++;
   if (els.runnerConsole) els.runnerConsole.classList.add('hidden');
-  if (isTrainingWorkspaceActive()) setTrainingDetailTab('items', { keepLogVisible: true });
+  if (isTrainingWorkspaceActive()) {
+    setTrainingDetailTab(trainingWorkspaceState.entryMode === 'global' ? 'run-log' : 'items', { keepLogVisible: true });
+  }
   syncTrainingConsoleUi();
 }
 

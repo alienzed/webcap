@@ -430,43 +430,65 @@ function resetTrainingRunSetupForFolder(folder) {
   }
 }
 
+function isTrainingSetRefreshCurrent(folder, requestVersion) {
+  return isTrainingWorkspaceActive()
+    && trainingWorkspaceState.entryMode === 'set'
+    && isSetFolderPath(state.folder)
+    && state.folder === folder
+    && trainingWorkspaceState.workspaceRequestVersion === requestVersion;
+}
+
 function refreshTrainingWorkspace() {
   if (!isTrainingWorkspaceActive()) return;
   var els = getTrainingWorkspaceEls();
   var folder = String(state.folder || '').trim();
-  var isSetEntry = !!folder;
-  if (els.navigatorTitle) els.navigatorTitle.textContent = isSetEntry ? 'Train' : 'Training';
-  if (els.folder) els.folder.textContent = isSetEntry ? folder : 'Global training status';
-  if (els.globalContext) els.globalContext.classList.toggle('training-global-context--after-set', isSetEntry);
-  if (els.globalContext) els.globalContext.classList.toggle('training-global-context--global', !isSetEntry);
+  var requestVersion = ++trainingWorkspaceState.workspaceRequestVersion;
+  var isGlobalEntry = trainingWorkspaceState.entryMode !== 'set';
+  var isSetEntry = !isGlobalEntry && isSetFolderPath(folder);
+  var isUnavailableSetEntry = !isGlobalEntry && !isSetEntry;
+
+  if (els.globalContext) {
+    els.globalContext.classList.toggle('hidden', !isGlobalEntry);
+    els.globalContext.classList.toggle('training-global-context--global', isGlobalEntry);
+  }
   if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);
   if (els.runSetup) els.runSetup.classList.toggle('hidden', !isSetEntry);
-  if (!isSetEntry) {
-    trainingWorkspaceState.runSetupFolder = '';
-    trainingWorkspaceState.configFiles = [];
-    if (els.readiness) els.readiness.textContent = 'Select a set folder to configure training.';
-    renderTrainingItemOverview(null);
-    renderTrainingWorkspaceConfigList([]);
+
+  if (isGlobalEntry) {
+    if (els.navigatorTitle) els.navigatorTitle.textContent = 'Training';
+    if (els.folder) els.folder.textContent = 'Global training status';
     refreshTrainingHistory();
-    renderTrainingCommandHandoff();
     return;
   }
+
+  if (isUnavailableSetEntry) {
+    if (els.navigatorTitle) els.navigatorTitle.textContent = 'Train';
+    if (els.folder) els.folder.textContent = 'Select a set folder to configure training.';
+    if (els.readiness) els.readiness.textContent = 'Select a set folder to configure training.';
+    renderTrainingItemOverview(null, 'Select a set folder to configure training.');
+    syncWorkspaceConfigEditorUi();
+    return;
+  }
+
+  if (els.navigatorTitle) els.navigatorTitle.textContent = 'Train';
+  if (els.folder) els.folder.textContent = folder;
   resetTrainingRunSetupForFolder(folder);
   if (els.readiness) els.readiness.textContent = 'Loading training setup...';
   fetchTrainingProfiles()
     .then(function () {
-      if (state.folder !== folder || !isTrainingWorkspaceActive()) return null;
+      if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
       syncTrainingModelProfileSelect(folder);
       trainingWorkspaceState.selectedMode = 'normal';
       syncTrainingWorkspaceProfile();
+      if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
       return getVisibleMediaSelectionForTraining().length ? ensureSelectedTrainingSetup() : Promise.resolve(null);
     })
     .then(function () {
-      if (state.folder !== folder || !isTrainingWorkspaceActive()) return [];
+      if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return [];
       return Promise.all([fetchTrainingWorkspaceConfigFiles(folder), refreshTrainingHistory(), refreshTrainingReview()]);
     })
     .then(function (results) {
-      if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
+      if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return;
       trainingWorkspaceState.configFiles = results[0];
       syncTrainingWorkflowReadiness(null, results[0]);
       if (els.readiness) els.readiness.innerHTML = buildTrainingReadinessHtml();
@@ -476,7 +498,7 @@ function refreshTrainingWorkspace() {
       syncWorkspaceConfigEditorUi();
     })
     .catch(function (err) {
-      if (state.folder !== folder || !isTrainingWorkspaceActive()) return;
+      if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return;
       if (els.readiness) els.readiness.textContent = String(err && err.message ? err.message : err);
       renderTrainingItemOverview(null, 'Could not load the visible training items.');
     });
@@ -513,6 +535,10 @@ function openTrainingWorkspaceFolder(folder) {
   state.currentItem = null;
   clearEditorAndPreview();
   clearCaptionFilterInputs();
+  workspaceState.sidebarHidden = false;
+  setTrainingDetailTab('items');
+  renderTrainingItemOverview(null, 'Loading training set...');
+  syncTrainingEntryChrome();
   refreshCurrentDirectory();
 }
 
@@ -791,7 +817,9 @@ function wireTrainingWorkspace() {
 
 function syncTrainingConsoleUi() {
   var runnerConsoleBtn = document.getElementById('training-runner-console-btn');
+  var runnerConsoleCloseBtn = document.getElementById('training-runner-console-close-btn');
   var visible = isTrainingRunnerConsoleVisible();
+  var isGlobalEntry = trainingWorkspaceState.entryMode === 'global';
   [runnerConsoleBtn].forEach(function (button) {
     if (!button) return;
     button.classList.toggle('active', visible);
@@ -799,6 +827,11 @@ function syncTrainingConsoleUi() {
     button.textContent = visible ? 'Hide Run Log' : 'Show Run Log';
     button.title = visible ? 'Hide the active training run log.' : 'Show the active training run log.';
   });
+  if (runnerConsoleCloseBtn) {
+    runnerConsoleCloseBtn.textContent = isGlobalEntry ? 'Close' : 'Items';
+    runnerConsoleCloseBtn.title = isGlobalEntry ? 'Close the run log.' : 'Return to Training Items.';
+    runnerConsoleCloseBtn.setAttribute('aria-label', runnerConsoleCloseBtn.title);
+  }
   syncWorkspaceConfigEditorUi();
 }
 

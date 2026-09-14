@@ -81,6 +81,16 @@ function trainingCandidatesYAxisTicks(minLoss, maxLoss) {
   return ticks.length > 1 ? ticks : [minLoss, maxLoss];
 }
 
+function trainingCandidatesRobustLossRange(losses) {
+  var values = losses.filter(isFinite).sort(function (a, b) { return a - b; });
+  if (!values.length) return { min: 0, max: 0 };
+  var trim = values.length >= 20 ? .01 : 0;
+  return {
+    min: values[Math.ceil((values.length - 1) * trim)],
+    max: values[Math.floor((values.length - 1) * (1 - trim))]
+  };
+}
+
 function trainingCandidatesClearPinnedDetails() {
   trainingWorkspaceState.candidatePinnedEpoch = null;
 }
@@ -106,8 +116,9 @@ function trainingCandidatesSvg(data) {
   var maxStep = Math.max.apply(Math, stepPoints.map(function (point) { return trainingCandidatesNumber(point.step, 0); }));
   var minStepPoint = stepPoints.reduce(function (earlier, point) { return Number(point.step) < Number(earlier.step) ? point : earlier; });
   var maxStepPoint = stepPoints.reduce(function (later, point) { return Number(point.step) > Number(later.step) ? point : later; });
-  var minLoss = Math.min.apply(Math, allLosses);
-  var maxLoss = Math.max.apply(Math, allLosses);
+  var lossRange = trainingCandidatesRobustLossRange(allLosses);
+  var minLoss = lossRange.min;
+  var maxLoss = lossRange.max;
   if (minStep === maxStep) maxStep = minStep + 1;
   if (minLoss === maxLoss) {
     minLoss -= Math.max(0.01, Math.abs(minLoss) * 0.02);
@@ -254,10 +265,15 @@ function wireTrainingCandidatesChart() {
   }
   function positionPinned(point) {
     var position = chartPoint(point);
-    var left = position.x / data.viewWidth * chart.clientWidth + 12;
-    var top = position.y / data.viewHeight * chart.clientHeight + 10;
-    popover.style.left = Math.max(6, Math.min(chart.clientWidth - popover.offsetWidth - 6, left)) + 'px';
-    popover.style.top = Math.max(6, Math.min(chart.clientHeight - popover.offsetHeight - 6, top)) + 'px';
+    var gap = 12, edge = 6;
+    var anchorLeft = chart.offsetLeft + position.x / data.viewWidth * chart.clientWidth;
+    var anchorTop = chart.offsetTop + position.y / data.viewHeight * chart.clientHeight;
+    var right = anchorLeft + gap;
+    var below = anchorTop + gap;
+    var left = right + popover.offsetWidth <= wrap.clientWidth - edge ? right : anchorLeft - popover.offsetWidth - gap;
+    var top = below + popover.offsetHeight <= wrap.clientHeight - edge ? below : anchorTop - popover.offsetHeight - gap;
+    popover.style.left = Math.max(edge, Math.min(wrap.clientWidth - popover.offsetWidth - edge, left)) + 'px';
+    popover.style.top = Math.max(edge, Math.min(wrap.clientHeight - popover.offsetHeight - edge, top)) + 'px';
   }
   function showPinned(epoch) {
     var point = trainingCandidatesStepPointForEpoch(epoch, data);

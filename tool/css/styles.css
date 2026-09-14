@@ -1277,6 +1277,14 @@ iframe {
   padding: 0;
 }
 
+.utility-training-btn {
+  width: auto;
+  min-width: 0;
+  gap: 6px;
+  padding: 0 9px;
+  font-weight: 700;
+}
+
 .utility-icon-btn {
   min-width: 30px;
   padding: 0 9px;

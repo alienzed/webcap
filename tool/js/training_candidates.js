@@ -301,8 +301,14 @@ function wireTrainingCandidatesChart() {
     pointMarker.setAttribute('cx', x.toFixed(2)); pointMarker.setAttribute('cy', y.toFixed(2)); pointMarker.classList.remove('hidden');
     tooltip.innerHTML = trainingCandidatesTooltipHtml(raw, data);
     tooltip.classList.remove('hidden');
-    tooltip.style.left = Math.max(4, Math.min(wrap.clientWidth - tooltip.offsetWidth - 4, event.clientX - rect.left + 12)) + 'px';
-    tooltip.style.top = Math.max(4, Math.min(chart.clientHeight - tooltip.offsetHeight - 4, event.clientY - rect.top + 10)) + 'px';
+    var anchorLeft = chart.offsetLeft + event.clientX - rect.left;
+    var anchorTop = chart.offsetTop + event.clientY - rect.top;
+    var tooltipLeft = anchorLeft + 12;
+    var tooltipTop = anchorTop + 10;
+    if (tooltipLeft + tooltip.offsetWidth > chart.offsetLeft + chart.clientWidth - 4) tooltipLeft = anchorLeft - tooltip.offsetWidth - 12;
+    if (tooltipTop + tooltip.offsetHeight > chart.offsetTop + chart.clientHeight - 4) tooltipTop = anchorTop - tooltip.offsetHeight - 10;
+    tooltip.style.left = Math.max(chart.offsetLeft + 4, tooltipLeft) + 'px';
+    tooltip.style.top = Math.max(chart.offsetTop + 4, tooltipTop) + 'px';
   });
   wrap.addEventListener('click', function (event) {
     var openTestButton = event.target.closest ? event.target.closest('.training-candidates-open-test') : null;

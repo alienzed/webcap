@@ -62,7 +62,7 @@
   position: static;
   z-index: 2;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   max-width: none;
@@ -93,6 +93,41 @@
 
 .app.shell-revamp .preview-header-position {
   justify-self: start;
+}
+
+.app.shell-revamp.workspace-surface-focus .preview-header-position {
+  display: none;
+}
+
+.app.shell-revamp #focused-annotation-item-nav {
+  min-width: 0;
+}
+
+.app.shell-revamp #focused-annotation-item-nav.hidden {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-focus .groups-card {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-focus.workflow-annotate .workbench-top {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app.shell-revamp.workspace-surface-focus .workbench-side-stack,
+.app.shell-revamp.workspace-surface-focus .workbench-rail-toggle-btn {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-focus #focused-annotation-workbench {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app.shell-revamp.workspace-surface-focus #focused-annotation-workbench.hidden {
+  display: none;
 }
 
 .app.shell-revamp .preview-header-meta {

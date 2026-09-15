@@ -446,7 +446,6 @@ function rebuildUnifiedWorkspaceShell() {
   appEl.classList.add('shell-revamp');
 
   ensureWorkspaceOverlayChildren([
-    'focused-annotation-modal',
     'media-grid-viewer-modal',
     'advanced-modal-overlay',
     'review-rules-modal',

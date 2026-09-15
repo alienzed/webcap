@@ -506,9 +506,7 @@ body.media-grid-viewer-open {
   padding-top: 0;
 }
 
-.app.shell-revamp.workspace-view-grid .preview-shell > :not(#media-grid-surface),
-.app.shell-revamp.workspace-view-focus .preview-panel > *,
-.app.shell-revamp.workspace-view-focus .workbench-panel > * {
+.app.shell-revamp.workspace-view-grid .preview-shell > :not(#media-grid-surface) {
   opacity: 0;
   pointer-events: none;
 }

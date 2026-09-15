@@ -114,9 +114,7 @@ function saveChecklistTermAffixesModal() {
         renderChecklistPanel();
         renderItemMetadataPanel();
         renderItemTagsPanel();
-        if (typeof renderFocusedAnnotationModal === 'function') {
-          renderFocusedAnnotationModal();
-        }
+        renderFocusedAnnotationSurface();
       }
     }
     closeChecklistTermAffixesModal();

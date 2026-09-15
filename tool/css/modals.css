@@ -497,36 +497,6 @@ html[data-theme="dark"] .app-settings-radio-label {
   background: rgba(0, 0, 0, 0.58);
 }
 
-.focused-annotation-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 3100;
-  display: flex;
-  align-items: stretch;
-  justify-content: stretch;
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.84)),
-    radial-gradient(circle at top left, rgba(251, 191, 36, 0.12), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.1), transparent 26%);
-  backdrop-filter: blur(6px);
-}
-
-.focused-annotation-modal.hidden {
-  display: none;
-}
-
-.focused-annotation-dialog {
-  position: relative;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
-  width: 100%;
-  height: 100%;
-  color: #e2e8f0;
-  padding: 14px;
-  box-sizing: border-box;
-}
-
 .focused-annotation-header-actions {
   display: flex;
   align-items: center;
@@ -534,7 +504,7 @@ html[data-theme="dark"] .app-settings-radio-label {
   flex-wrap: wrap;
 }
 
-.focused-annotation-dialog .btn {
+.focused-annotation-group-pane .btn {
   appearance: none;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(15, 23, 42, 0.76);
@@ -547,31 +517,21 @@ html[data-theme="dark"] .app-settings-radio-label {
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
-.focused-annotation-dialog .btn:hover {
+.focused-annotation-group-pane .btn:hover {
   background: rgba(30, 41, 59, 0.92);
   border-color: rgba(148, 163, 184, 0.34);
 }
 
-.focused-annotation-dialog .btn:disabled {
+.focused-annotation-group-pane .btn:disabled {
   opacity: 0.42;
   cursor: default;
 }
 
-.focused-annotation-dialog .btn:disabled:hover {
+.focused-annotation-group-pane .btn:disabled:hover {
   background: rgba(15, 23, 42, 0.72);
   border-color: rgba(148, 163, 184, 0.35);
 }
 
-.focused-annotation-body {
-  display: grid;
-  grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.1fr);
-  gap: 14px;
-  height: auto;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.focused-annotation-preview-pane,
 .focused-annotation-group-pane {
   min-height: 0;
   border: 1px solid rgba(148, 163, 184, 0.16);
@@ -580,113 +540,12 @@ html[data-theme="dark"] .app-settings-radio-label {
   box-shadow: 0 10px 28px rgba(2, 6, 23, 0.22);
 }
 
-.focused-annotation-preview-pane {
-  display: flex;
-  flex-direction: column;
-  padding: 14px;
-  min-height: 0;
-  height: 100%;
-  gap: 10px;
-}
-
-.focused-annotation-preview-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
 .focused-annotation-axis-nav {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   flex-wrap: nowrap;
   justify-self: start;
-}
-
-.focused-annotation-preview-media {
-  flex: 1 1 auto;
-  width: 100%;
-  min-height: 0;
-  height: 100%;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: 12px;
-  background: rgba(2, 6, 23, 0.9);
-}
-
-.focused-annotation-preview-image,
-.focused-annotation-preview-video {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: 12px;
-}
-
-.focused-annotation-rating {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-  grid-column: 2;
-  justify-self: center;
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: rgba(2, 6, 23, 0.68);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-}
-
-.focused-annotation-preview-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  grid-column: 3;
-  justify-self: end;
-  min-width: 0;
-}
-
-.focused-annotation-preview-action-btn {
-  padding: 7px 12px !important;
-  font-size: 12px !important;
-  border-color: rgba(148, 163, 184, 0.22) !important;
-  background: rgba(30, 41, 59, 0.72) !important;
-}
-
-.focused-annotation-preview-action-btn:hover {
-  border-color: rgba(203, 213, 225, 0.34) !important;
-  background: rgba(51, 65, 85, 0.9) !important;
-}
-
-.focused-annotation-preview-action-btn.focused-annotation-preview-reset-btn {
-  background: rgba(245, 158, 11, 0.22) !important;
-  border-color: rgba(251, 191, 36, 0.34) !important;
-  color: #fde68a !important;
-}
-
-.focused-annotation-preview-action-btn.focused-annotation-preview-reset-btn:hover {
-  background: rgba(245, 158, 11, 0.3) !important;
-  border-color: rgba(251, 191, 36, 0.48) !important;
-}
-
-.focused-annotation-rating-star {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: rgba(226, 232, 240, 0.78);
-  cursor: pointer;
-  font-size: 20px;
-  line-height: 1;
-  padding: 2px 3px;
-}
-
-.focused-annotation-rating-star:hover,
-.focused-annotation-rating-star.active {
-  color: #fbbf24;
 }
 
 .focused-annotation-group-pane {
@@ -1014,6 +873,25 @@ html[data-theme="dark"] .app-settings-radio-label {
   font-size: 20px !important;
 }
 
+.focused-annotation-axis-nav .focused-annotation-nav-btn {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.76);
+  color: #e2e8f0;
+  box-shadow: none;
+}
+
+.focused-annotation-axis-nav .focused-annotation-nav-btn:hover {
+  border-color: rgba(148, 163, 184, 0.34);
+  background: rgba(30, 41, 59, 0.92);
+  color: #f8fafc;
+}
+
+.focused-annotation-axis-nav .focused-annotation-nav-btn:active {
+  background: rgba(51, 65, 85, 0.92);
+}
+
 .focused-annotation-btn-flash {
   animation: focused-annotation-btn-flash 180ms ease-out;
 }
@@ -1087,22 +965,6 @@ html[data-theme="dark"] .app-settings-radio-label {
   color: #cbd5e1;
 }
 
-body.focused-annotation-open {
-  overflow: hidden;
-}
-
-body.focused-annotation-open .caption-context-menu {
-  z-index: 3160;
-}
-
-.app.shell-revamp .focused-annotation-modal {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  border-radius: 14px;
-  overflow: hidden;
-}
-
 .app.shell-revamp .workspace-overlays > .modal-overlay {
   z-index: 7;
 }
@@ -1111,33 +973,13 @@ body.focused-annotation-open .caption-context-menu {
   z-index: 8;
 }
 
-.app.shell-revamp .focused-annotation-dialog {
-  padding: 12px;
-}
-
 @media (max-width: 1080px) {
-  .focused-annotation-body {
-    grid-template-columns: 1fr;
-    height: auto;
-    min-height: 0;
-    overflow: auto;
-  }
-
-  .focused-annotation-preview-media {
-    min-height: 320px;
-    height: auto;
-  }
-
   .focused-annotation-content {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 720px) {
-  .focused-annotation-dialog {
-    padding: 12px;
-  }
-
   .focused-annotation-toolbar,
   .focused-annotation-group-header {
     flex-direction: column;
@@ -1150,21 +992,6 @@ body.focused-annotation-open .caption-context-menu {
   }
 
   .focused-annotation-axis-nav {
-    flex-wrap: wrap;
-  }
-
-  .focused-annotation-preview-toolbar {
-    grid-template-columns: 1fr;
-    justify-items: stretch;
-  }
-
-  .focused-annotation-rating {
-    grid-column: 1;
-  }
-
-  .focused-annotation-preview-actions {
-    grid-column: 1;
-    justify-self: start;
     flex-wrap: wrap;
   }
 

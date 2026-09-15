@@ -46,6 +46,9 @@ function getPreviewContextActionsForCurrentItem() {
   var item = state.currentItem;
   var key = item.key || item.fileName;
   var actions = buildMediaContextMenuActions(item, key);
+  if (isFocusedAnnotationOpen()) {
+    actions = decorateFocusedAnnotationPreviewActions(actions, item);
+  }
   return Array.isArray(actions) ? actions : [];
 }
 
@@ -728,6 +731,7 @@ function renderPreviewHtml(isImage, src, titleText) {
   // clicks/wheel gestures use a single navigation path.
   try {
     doc.addEventListener('click', function () {
+      if (isFocusedAnnotationOpen()) return;
       if (typeof reselectCurrentMediaFromPreview === 'function') {
         reselectCurrentMediaFromPreview();
       }
@@ -735,6 +739,7 @@ function renderPreviewHtml(isImage, src, titleText) {
   } catch (_bindErr) {}
   try {
     doc.addEventListener('dblclick', function () {
+      if (isFocusedAnnotationOpen()) return;
       if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen()) {
         return;
       }
@@ -745,6 +750,7 @@ function renderPreviewHtml(isImage, src, titleText) {
   } catch (_dblClickBindErr) {}
   try {
     doc.addEventListener('wheel', function (e) {
+      if (isFocusedAnnotationOpen()) return;
       if (!e) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       var deltaY = (typeof e.deltaY === 'number') ? e.deltaY : 0;
@@ -757,6 +763,12 @@ function renderPreviewHtml(isImage, src, titleText) {
       }
     }, { passive: false, capture: true });
   } catch (_wheelBindErr) {}
+  try {
+    doc.addEventListener('keydown', function (e) {
+      if (!isFocusedAnnotationOpen()) return;
+      handleFocusedAnnotationKeydown(e);
+    }, true);
+  } catch (_keyBindErr) {}
 }
 
 async function renderFileList() {

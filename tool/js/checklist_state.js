@@ -777,9 +777,7 @@ function applyChecklistKeywordTermsForRequirement(requirementLabel, terms) {
   if (typeof renderFileList === 'function') {
     renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
   }
-  if (typeof renderFocusedAnnotationModal === 'function') {
-    renderFocusedAnnotationModal();
-  }
+  renderFocusedAnnotationSurface();
   return true;
 }
 
@@ -931,9 +929,7 @@ function refreshChecklistConfigDrivenUi() {
   renderChecklistPanel();
   renderItemMetadataPanel();
   renderItemTagsPanel();
-  if (typeof renderFocusedAnnotationModal === 'function') {
-    renderFocusedAnnotationModal();
-  }
+  renderFocusedAnnotationSurface();
 }
 
 function saveChecklistGlobalTermPin(requirementLabel, termText, shouldPin) {

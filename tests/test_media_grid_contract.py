@@ -72,6 +72,6 @@ def test_single_item_preview_header_renders_existing_media_metadata():
     assert "duration.toFixed(2) + 's'" in script
     assert "Math.round(frames) + 'f'" in script
     assert "' MP'" in script
-    assert "grid-template-columns: auto minmax(0, 1fr) auto;" in css
+    assert "grid-template-columns: auto auto minmax(0, 1fr) auto;" in css
     assert ".preview-header-meta-resolution" in css
     assert "overflow: hidden;" in css

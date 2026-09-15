@@ -368,6 +368,10 @@ function wireAllUi() {
     var inOriginals = state.folder && state.folder.split(/[\/]/).pop() === 'originals';
     if (inOriginals) return;
     e.preventDefault();
+    if (isFocusedAnnotationOpen()) {
+      runPreviewActionByLabel('Prune');
+      return;
+    }
     pruneMedia(state.currentItem).catch(function (err) {
       setStatus(String(err && err.message ? err.message : err));
     });
@@ -379,11 +383,11 @@ function wireAllUi() {
     var shortcutSurface = normalizeWorkspaceSurface(workspaceState.surface);
     if (shortcutSurface !== 'default' && shortcutSurface !== 'focus') return;
     if (normalizeWorkspaceViewMode(workspaceUiState.viewMode) !== 'single') return;
-    if (document.querySelector('.modal:not(.hidden), .modal-overlay:not(.hidden), .crop-modal:not(.hidden), .focused-annotation-modal:not(.hidden), .media-grid-viewer-modal:not(.hidden), .app-settings-modal:not(.hidden), .training-candidates-modal:not(.hidden)')) return;
+    if (document.querySelector('.modal:not(.hidden), .modal-overlay:not(.hidden), .crop-modal:not(.hidden), .media-grid-viewer-modal:not(.hidden), .app-settings-modal:not(.hidden), .training-candidates-modal:not(.hidden)')) return;
     var actionKey = String(e.key || '').toLowerCase();
     if (actionKey === 'f') {
       e.preventDefault();
-      openFocusedAnnotationModal();
+      startFocusedAnnotation((state.currentItem && state.currentItem.key) || '');
       return;
     }
     if (actionKey === 'c' && isCroppableImageFile(state.currentItem.fileName)) {

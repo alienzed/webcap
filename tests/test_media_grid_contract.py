@@ -77,6 +77,34 @@ def test_grid_delete_exclusively_uses_the_batch_prune_snapshot():
     assert "if (mediaGridState.open) return;" in main
 
 
+def test_grid_deface_shortcut_uses_serial_batch_mutation_bookkeeping():
+    actions = _read("tool/js/media_grid_actions.js")
+    state = _read("tool/js/media_grid_state.js")
+
+    assert "function mediaGridDefaceSelected()" in actions
+    assert "var items = mediaGridGetSelectedItems();" in actions
+    assert "var eligibleItems = items.filter(mediaGridCanDefaceItem);" in actions
+    assert "return !!MEDIA_EXTENSIONS[ext];" in actions
+    assert "if (!items.length)" in actions
+    assert "if (!eligibleItems.length)" in actions
+    assert "'Deface ' + eligibleItems.length + ' selected image'" in actions
+    assert "for (var i = 0; i < eligibleItems.length; i += 1)" in actions
+    assert "var response = await fetch('/fs/deface'" in actions
+    assert "var output = await response.text();" in actions
+    assert "succeeded.push(item);" in actions
+    assert "failed.push(item);" in actions
+    assert "markMediaMutated(item.key, 'best_effort');" in actions
+    assert "bumpMediaCacheBustToken(item.key);" in actions
+    assert "refreshMediaResolutionCache();" in actions
+    assert "mediaGridRefreshAfterMutation();" in actions
+    assert "mediaGridState.defacing" in actions
+    assert "defacing: false," in state
+
+    assert "if (isEditableElement(document.activeElement)) return;" in actions
+    assert "(e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey" in actions
+    assert "if (!e.repeat) mediaGridDefaceSelected();" in actions
+
+
 def test_single_item_preview_header_renders_existing_media_metadata():
     html = _read("tool/tool.html")
     script = _read("tool/js/item_details.js")

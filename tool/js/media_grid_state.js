@@ -3,6 +3,7 @@ var mediaGridState = {
   items: [],
   baseItems: [],
   pruning: false,
+  defacing: false,
   selectedKeys: new Set(),
   lastSelectedKey: '',
   status: '',

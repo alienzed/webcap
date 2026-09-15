@@ -26,6 +26,8 @@ def test_image_fingerprint_is_deterministic_and_keeps_sha(tmp_path):
     assert len(first["sha256"]) == 64
     assert len(first["dhash"]) == 16
     assert first["bits"] == 64
+    assert first["source_size"] == source.stat().st_size
+    assert first["source_mtime_ns"] == source.stat().st_mtime_ns
 
 
 def test_video_fingerprint_uses_one_first_frame(tmp_path, monkeypatch):

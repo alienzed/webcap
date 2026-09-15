@@ -218,6 +218,81 @@ async function mediaGridPruneSelected() {
   mediaGridRefreshAfterMutation();
 }
 
+function mediaGridCanDefaceItem(item) {
+  var fileName = String(item && item.fileName || '');
+  var dot = fileName.lastIndexOf('.');
+  var ext = dot >= 0 ? fileName.slice(dot).toLowerCase() : '';
+  return !!MEDIA_EXTENSIONS[ext];
+}
+
+async function mediaGridDefaceSelected() {
+  var items = mediaGridGetSelectedItems();
+  if (mediaGridState.defacing) {
+    mediaGridSetStatus('Grid Deface is already in progress.');
+    return;
+  }
+  if (!items.length) {
+    mediaGridSetStatus('Select images before defacing.');
+    return;
+  }
+
+  var eligibleItems = items.filter(mediaGridCanDefaceItem);
+  var skippedCount = items.length - eligibleItems.length;
+  if (!eligibleItems.length) {
+    mediaGridSetStatus('No selected media support Deface.');
+    return;
+  }
+  if (!confirm('Deface ' + eligibleItems.length + ' selected image' + (eligibleItems.length === 1 ? '' : 's') + '?')) {
+    mediaGridSetStatus('Batch Deface cancelled.');
+    return;
+  }
+
+  mediaGridState.defacing = true;
+  mediaGridRenderSelectionState();
+  var succeeded = [];
+  var failed = [];
+  for (var i = 0; i < eligibleItems.length; i += 1) {
+    var item = eligibleItems[i];
+    mediaGridSetStatus('Defacing ' + (i + 1) + ' / ' + eligibleItems.length + '...');
+    try {
+      var response = await fetch('/fs/deface', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: buildRowRelativePath(item.fileName), thresh: '0.4' })
+      });
+      var output = await response.text();
+      if (!response.ok || output.indexOf('[SUCCESS]') === -1 || output.indexOf('[FAIL]') !== -1) {
+        throw new Error(output || response.statusText || 'Deface failed');
+      }
+      succeeded.push(item);
+    } catch (err) {
+      failed.push(item);
+      console.error('[webcap] Grid Deface failed for ' + item.fileName + ':', err);
+    }
+  }
+
+  mediaGridState.defacing = false;
+  succeeded.forEach(function (item) {
+    markMediaMutated(item.key, 'best_effort');
+    bumpMediaCacheBustToken(item.key);
+  });
+  if (succeeded.length) {
+    saveFolderStateForCurrentRoot();
+    refreshMediaResolutionCache();
+  }
+
+  var summary = 'Defaced ' + succeeded.length + ' of ' + items.length + ' selected item' + (items.length === 1 ? '' : 's') + '.';
+  if (skippedCount) {
+    summary += ' ' + skippedCount + ' unsupported item' + (skippedCount === 1 ? '' : 's') + ' skipped.';
+  }
+  if (failed.length) {
+    summary += ' ' + failed.length + ' failed.';
+  }
+  mediaGridSetStatus(summary);
+  setStatus(summary);
+  mediaGridRefreshAfterMutation();
+}
+
 function mediaGridApplyRating(rating) {
   var items = mediaGridGetSelectedItems();
   if (!items.length) {
@@ -266,6 +341,11 @@ function mediaGridHandleKeydown(e) {
   if (e.key === 'Delete') {
     e.preventDefault();
     mediaGridPruneSelected();
+    return;
+  }
+  if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    e.preventDefault();
+    if (!e.repeat) mediaGridDefaceSelected();
     return;
   }
   if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {

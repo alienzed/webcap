@@ -156,27 +156,86 @@ def test_route_rejects_missing_folder_and_bad_scope():
     assert client.post("/fs/duplicate_candidates", json={"folder": "set", "selected_media": "bad"}).status_code == 400
 
 
-def test_visual_hash_cache_reuses_unchanged_media_and_recomputes_changed_media(tmp_path, monkeypatch):
+def _fake_visual_hash(calls):
+    def fake_fingerprint(path, kind):
+        calls.append((path.name, kind))
+        source_stat = path.stat()
+        return {
+            "version": 1,
+            "sha256": "hash-" + str(len(calls)),
+            "dhash": "0000000000000000",
+            "bits": 64,
+            "source_size": source_stat.st_size,
+            "source_mtime_ns": source_stat.st_mtime_ns,
+        }
+
+    return fake_fingerprint
+
+
+def test_visual_hash_cache_reuses_matching_source_evidence(tmp_path, monkeypatch):
     folder = tmp_path / "set"
     folder.mkdir()
     source = folder / "photo.png"
     Image.new("RGB", (20, 20), "red").save(source)
     calls = []
 
-    def fake_fingerprint(path, kind):
-        calls.append((path.name, kind))
-        return {"version": 1, "sha256": "hash-" + str(len(calls)), "dhash": "0000000000000000", "bits": 64}
-
-    monkeypatch.setattr(duplicate_module, "fingerprint_media", fake_fingerprint)
+    monkeypatch.setattr(duplicate_module, "fingerprint_media", _fake_visual_hash(calls))
     metadata = media_module.update_media_metadata(folder, scoped_filenames=["photo.png"])
     duplicate_module._ensure_visual_hashes(folder, metadata, ["photo.png"])
     unchanged = media_module.update_media_metadata(folder, scoped_filenames=["photo.png"])
     duplicate_module._ensure_visual_hashes(folder, unchanged, ["photo.png"])
 
-    Image.new("RGB", (21, 20), "blue").save(source)
+    assert calls == [("photo.png", "image")]
+
+
+def test_visual_hash_cache_recomputes_when_source_mtime_changes_at_same_size(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    source = _touch(folder, "photo.png", b"same-size")
+    calls = []
+    monkeypatch.setattr(duplicate_module, "fingerprint_media", _fake_visual_hash(calls))
+    metadata = {"photo.png": {}}
+    duplicate_module._ensure_visual_hashes(folder, metadata, ["photo.png"])
+
     stat = source.stat()
-    os.utime(source, (stat.st_atime, stat.st_mtime + 2))
-    changed = media_module.update_media_metadata(folder, scoped_filenames=["photo.png"])
-    duplicate_module._ensure_visual_hashes(folder, changed, ["photo.png"])
+    os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+    duplicate_module._ensure_visual_hashes(folder, metadata, ["photo.png"])
 
     assert calls == [("photo.png", "image"), ("photo.png", "image")]
+
+
+def test_visual_hash_cache_recomputes_when_source_size_changes(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    source = _touch(folder, "photo.png", b"first")
+    calls = []
+    monkeypatch.setattr(duplicate_module, "fingerprint_media", _fake_visual_hash(calls))
+    metadata = {"photo.png": {}}
+    duplicate_module._ensure_visual_hashes(folder, metadata, ["photo.png"])
+
+    source.write_bytes(b"second-size")
+    duplicate_module._ensure_visual_hashes(folder, metadata, ["photo.png"])
+
+    assert calls == [("photo.png", "image"), ("photo.png", "image")]
+
+
+def test_visual_hash_cache_recomputes_legacy_entry_without_source_mtime(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    _touch(folder, "photo.png", b"media")
+    calls = []
+    monkeypatch.setattr(duplicate_module, "fingerprint_media", _fake_visual_hash(calls))
+    metadata = {
+        "photo.png": {
+            "visual_hash": {
+                "version": 1,
+                "sha256": "legacy-hash",
+                "dhash": "0000000000000000",
+                "bits": 64,
+                "source_size": 5,
+            },
+        },
+    }
+    duplicate_module._ensure_visual_hashes(folder, metadata, ["photo.png"])
+
+    assert calls == [("photo.png", "image")]

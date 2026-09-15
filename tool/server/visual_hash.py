@@ -52,11 +52,14 @@ def video_dhash(source):
 
 def fingerprint_media(path, kind):
     source = Path(path)
+    source_stat = source.stat()
     result = {
         "version": VISUAL_HASH_VERSION,
         "sha256": file_hash(source),
         "dhash": None,
         "bits": DHASH_BITS,
+        "source_size": source_stat.st_size,
+        "source_mtime_ns": source_stat.st_mtime_ns,
     }
     try:
         result["dhash"] = video_dhash(source) if kind == "video" else image_dhash(source)

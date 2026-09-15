@@ -162,7 +162,14 @@ def _ensure_visual_hashes(folder_path, metadata, selected_media):
         if not isinstance(info, dict):
             continue
         cached = info.get("visual_hash")
-        if isinstance(cached, dict) and cached.get("version") == VISUAL_HASH_VERSION and cached.get("sha256"):
+        source_stat = path.stat()
+        if (
+            isinstance(cached, dict)
+            and cached.get("version") == VISUAL_HASH_VERSION
+            and cached.get("sha256")
+            and cached.get("source_size") == source_stat.st_size
+            and cached.get("source_mtime_ns") == source_stat.st_mtime_ns
+        ):
             continue
         visual_hash = fingerprint_media(path, _kind_for(path))
         if visual_hash.get("dhash_error"):

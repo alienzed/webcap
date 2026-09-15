@@ -255,6 +255,16 @@ function renderDuplicateCandidatesReport() {
       meta.className = 'duplicate-candidate-meta';
       meta.textContent = details.filter(Boolean).join(' · ');
       media.appendChild(meta);
+      var prune = document.createElement('button');
+      prune.type = 'button';
+      prune.className = 'review-captions-btn duplicate-candidate-prune';
+      prune.textContent = 'Prune';
+      prune.onclick = function () {
+        pruneMedia({ key: item.file, fileName: item.file }, { selectReplacement: false }).catch(function (err) {
+          setStatus(String(err && err.message ? err.message : err));
+        });
+      };
+      media.appendChild(prune);
       items.appendChild(media);
     });
     card.appendChild(items);

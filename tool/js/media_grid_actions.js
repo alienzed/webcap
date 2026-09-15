@@ -242,7 +242,7 @@ async function mediaGridDefaceSelected() {
     mediaGridSetStatus('No selected media support Deface.');
     return;
   }
-  if (!confirm('Deface ' + eligibleItems.length + ' selected image' + (eligibleItems.length === 1 ? '' : 's') + '?')) {
+  if (!confirm('Deface ' + eligibleItems.length + ' selected media item' + (eligibleItems.length === 1 ? '' : 's') + '?')) {
     mediaGridSetStatus('Batch Deface cancelled.');
     return;
   }

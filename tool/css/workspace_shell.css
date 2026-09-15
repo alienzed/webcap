@@ -59,7 +59,7 @@
 }
 
 .app.shell-revamp .preview-header {
-  position: static;
+  position: relative;
   z-index: 2;
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
@@ -67,7 +67,7 @@
   gap: 6px;
   max-width: none;
   min-height: 36px;
-  padding: 3px 6px;
+  padding: 3px 6px 3px 44px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -200,11 +200,15 @@
   top: 10px;
 }
 
-.app.shell-revamp .preview-header-actions .utility-collapse-btn {
+.app.shell-revamp #sidebar-collapse-toggle-btn {
+  position: absolute;
+  left: 6px;
+  top: 50%;
   width: 32px;
   min-width: 32px;
   padding-left: 0;
   padding-right: 0;
+  transform: translateY(-50%);
 }
 
 .app.shell-revamp .preview-workflow-actions {

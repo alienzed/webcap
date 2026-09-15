@@ -58,6 +58,25 @@ def test_only_the_surface_grid_and_viewer_remain():
     assert "media-grid-modal" not in css
 
 
+def test_grid_initializes_after_all_classic_scripts_are_loaded():
+    actions = _read("tool/js/media_grid_actions.js")
+
+    assert "addEventListener('DOMContentLoaded', initMediaGrid);" in actions
+    assert "\ninitMediaGrid();" not in actions
+
+
+def test_grid_delete_exclusively_uses_the_batch_prune_snapshot():
+    actions = _read("tool/js/media_grid_actions.js")
+    main = _read("tool/js/main.js")
+
+    assert "function mediaGridHandleKeydown(e) {\n  if (e.defaultPrevented) return;" in actions
+    assert "var items = mediaGridGetSelectedItems();" in actions
+    assert "var count = items.length;" in actions
+    assert "for (var i = 0; i < items.length; i += 1)" in actions
+    assert "mediaGridState.selectedKeys.delete(key);" in actions
+    assert "if (mediaGridState.open) return;" in main
+
+
 def test_single_item_preview_header_renders_existing_media_metadata():
     html = _read("tool/tool.html")
     script = _read("tool/js/item_details.js")

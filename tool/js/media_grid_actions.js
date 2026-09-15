@@ -236,6 +236,7 @@ function mediaGridRefreshFromCurrentFilters() {
 }
 
 function mediaGridHandleKeydown(e) {
+  if (e.defaultPrevented) return;
   if (!mediaGridState.open) return;
   if (mediaGridState.viewerKey) {
     if (e.key === 'Escape') {
@@ -291,4 +292,4 @@ function initMediaGrid() {
   });
 }
 
-initMediaGrid();
+addEventListener('DOMContentLoaded', initMediaGrid);

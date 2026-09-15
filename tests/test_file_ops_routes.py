@@ -158,6 +158,26 @@ def test_validate_config_payload_strips_legacy_chmod_training_root_on_load():
     assert "chmod_training_root_on_load" not in disabled["training"]
 
 
+def test_validate_config_payload_ignores_retired_tensorboard_service_settings():
+    normalized = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/sets", "models": ""},
+        "training": {
+            "tensorboard_port": "retired-value",
+            "tensorboard_bruteforce_control": "retired-value",
+        },
+    })
+
+    assert "tensorboard_port" not in normalized["training"]
+    assert "tensorboard_bruteforce_control" not in normalized["training"]
+
+
+def test_retired_tensorboard_service_routes_are_absent():
+    client = app_module.app.test_client()
+
+    assert client.get("/fs/training_runner/tensorboard").status_code == 404
+    assert client.post("/fs/training_runner/tensorboard/control", json={"action": "start"}).status_code == 404
+
+
 def test_validate_config_payload_defaults_all_training_profiles_and_rejects_none():
     normalized = config_module.validate_config_payload({
         "filesystem": {"root": "C:/sets", "models": ""},

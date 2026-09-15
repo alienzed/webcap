@@ -25,7 +25,7 @@ Each Train action captures visible media, latest captions, exact saved TOMLs, an
 - Persistent model/mode setup TOMLs.
 - Visible-media run capture.
 - Concrete Diffusion Pipe command construction.
-- A disposable managed queue, logs, history, progress, Resume, diagnostics, GPU status, and optional TensorBoard controls.
+- A disposable managed queue, logs, history, progress, Resume, diagnostics, GPU status, and candidate loss analysis.
 
 ## What WebCap does not own
 

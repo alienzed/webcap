@@ -849,7 +849,6 @@ function syncTrainingWorkspaceUi() {
   syncTrainingConsoleUi();
   refreshTrainingWorkspace();
   refreshTrainingRunnerStatus();
-  refreshTrainingTensorboardStatus();
 }
 
 wireTrainingWorkspace();

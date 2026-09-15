@@ -74,6 +74,6 @@ Passing development tests means the implementation is internally coherent. Live 
 - Richer hover or per-file analysis.
 - Cluster-threshold and supported-shape calibration from real training.
 - Focused NTFS/WSL permission diagnosis from a reproduced failure.
-- Background capture progress and TensorBoard refinements.
+- Background capture progress.
 
 Automatic filesystem discovery, recovery graphs, destructive cleanup, and robust reconstruction are explicitly out of scope until a demonstrated workflow requires them.

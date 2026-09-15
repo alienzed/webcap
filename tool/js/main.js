@@ -363,6 +363,7 @@ function wireAllUi() {
   document.addEventListener('keydown', function (e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.key !== 'Delete') return;
+    if (mediaGridState.open) return;
     if (!state.currentItem || !state.currentItem.fileName) return;
     if (isEditableElement(document.activeElement)) return;
     var inOriginals = state.folder && state.folder.split(/[\/]/).pop() === 'originals';

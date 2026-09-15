@@ -189,7 +189,7 @@ output/runs/
     001-minimax-h3/
 ```
 
-The set root exists to make the filesystem and TensorBoard tree predictable. The logical-run root remains the ownership boundary for WebCap's action, captures, jobs, and new trainer output.
+The set root exists to make the filesystem and analysis-event tree predictable. The logical-run root remains the ownership boundary for WebCap's action, captures, jobs, and new trainer output.
 
 No existing action or trainer output is moved into this structure.
 
@@ -874,8 +874,6 @@ Existing flat action/output directories may remain physically beneath `FS_ROOT/o
 
 New managed discovery ignores them because it derives only the deterministic current-set root and reads only version-2 actions there.
 
-They may still appear in the global TensorBoard tree because TensorBoard observes the whole runs root. That is acceptable.
-
 If an old run matters:
 
 - select Starting Point = Resume checkpoint;
@@ -1150,7 +1148,7 @@ After deployment:
 7. take one old/external known-good H3 trainer run and Resume it through Custom checkpoint directory;
 8. confirm the external run is unchanged;
 9. confirm the new capture/job/output all appear beneath a new current-set logical run;
-10. confirm TensorBoard still sees the global `output/runs` tree and the new set roots group predictably.
+10. confirm candidate analysis discovers event data beneath the new set roots.
 
 Any trainer-level failure should be diagnosed from that run's log. Do not add environment guards or recovery machinery in response to the layout change.
 
@@ -1180,7 +1178,6 @@ Do not add any of the following as part of this work:
 - arbitrary DeepSpeed-state compatibility prediction;
 - new training models;
 - generic training-layout framework;
-- TensorBoard per-action routing;
 - queue redesign;
 - Recent Runs redesign beyond what nested action IDs directly require;
 - initializer redesign beyond inheriting the faster current-set discovery;

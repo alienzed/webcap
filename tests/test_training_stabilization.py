@@ -1,6 +1,7 @@
 import json
 import tomllib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -764,6 +765,216 @@ def test_invalid_queue_state_is_loud_and_not_offered_recovery(tmp_path, monkeypa
     assert payload["stateError"] is True
     assert "recoveryAvailable" not in payload
     assert path.read_bytes() == before
+
+
+def test_disk_space_helper_uses_the_nearest_existing_parent_and_fails_open(tmp_path, monkeypatch):
+    missing_output = tmp_path / "missing" / "output"
+    checked = []
+
+    def disk_usage(path):
+        checked.append(Path(path))
+        if Path(path) != tmp_path:
+            raise FileNotFoundError("not created yet")
+        return SimpleNamespace(free=training_runner._LOW_DISK_THRESHOLD_BYTES)
+
+    monkeypatch.setattr(training_runner.shutil, "disk_usage", disk_usage)
+
+    disk = training_runner._training_disk_space(missing_output)
+
+    assert disk == {"state": "safe", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES}
+    assert checked[-1] == tmp_path
+
+    monkeypatch.setattr(
+        training_runner.shutil,
+        "disk_usage",
+        lambda _path: (_ for _ in ()).throw(OSError("I/O error")),
+    )
+    unavailable = training_runner._training_disk_space(missing_output)
+    assert unavailable["state"] == "unavailable"
+    assert "I/O error" in unavailable["notice"]
+
+
+def test_low_disk_start_is_rejected_before_review_or_capture(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    monkeypatch.setattr(
+        training_runner,
+        "_training_disk_space",
+        lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1},
+    )
+    monkeypatch.setattr(training_runner, "prepare_training_review", lambda *_args, **_kwargs: pytest.fail("review must not run"))
+
+    payload, status = training_runner.start_response(
+        "sets/subject", queue=True, stages="h3", profile_id=MINIMAX_H3_PROFILE_ID, run_id="train",
+        selected_media=["one.png"],
+    )
+
+    assert status == 409
+    assert payload["ok"] is False
+    assert "free disk space" in payload["error"]
+    assert not (tmp_path / "output" / "runs").exists()
+
+
+@pytest.mark.parametrize("free_bytes", [
+    training_runner._LOW_DISK_THRESHOLD_BYTES,
+    training_runner._LOW_DISK_THRESHOLD_BYTES + 1,
+])
+def test_start_allows_disk_space_at_or_above_threshold(tmp_path, monkeypatch, free_bytes):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    folder = _set(tmp_path)
+    training_runner._write_state({"version": 3, "activeJobId": "", "jobs": [], "queuePaused": True, "queuePauseReason": "test"})
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "safe", "freeBytes": free_bytes})
+
+    payload, status = training_runner.start_response(
+        "sets/subject", queue=True, stages="h3", profile_id=MINIMAX_H3_PROFILE_ID, run_id="train",
+        selected_media=["one.png"],
+    )
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert len(training_runner._read_state()["jobs"]) == 1
+
+
+def test_disk_drop_during_capture_queues_the_completed_capture_without_launching(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    _set(tmp_path)
+    readings = iter([
+        {"state": "safe", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES},
+        {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1},
+    ])
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: next(readings))
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("low disk must prevent launch"))
+
+    payload, status = training_runner.start_response(
+        "sets/subject", queue=True, stages="h3", profile_id=MINIMAX_H3_PROFILE_ID, run_id="train",
+        selected_media=["one.png"],
+    )
+
+    state = training_runner._read_state()
+    assert status == 200 and payload["queued"] is True
+    assert Path(state["jobs"][0]["inputPath"]).is_dir()
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"].startswith(training_runner._LOW_DISK_REASON_PREFIX)
+
+
+def test_low_disk_holds_queued_work_before_launch(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    training_runner._startup_reconciled = True
+    state = {
+        "version": 3, "activeJobId": "", "queuePaused": False, "queuePauseReason": "",
+        "jobs": [{"id": "queued", "status": "queued", "stages": "h3", "outputRoot": str(tmp_path / "output")}],
+    }
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1})
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("low disk must prevent launch"))
+
+    training_runner._refresh_state(state)
+
+    assert state["queuePaused"] is True
+    assert state["queuePauseReason"].startswith(training_runner._LOW_DISK_REASON_PREFIX)
+
+
+def test_low_disk_requests_checkpoint_pause_once_when_stage_is_eligible(tmp_path, monkeypatch):
+    state = {"queuePaused": False, "queuePauseReason": "", "jobs": []}
+    job = {"id": "active", "status": "running", "stage": "h3"}
+    calls = []
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1})
+
+    def request_pause(item, action):
+        calls.append((item["id"], action))
+        item["actionRequested"] = action
+        return ""
+
+    monkeypatch.setattr(training_runner, "_request_checkpointed_stop", request_pause)
+
+    training_runner._apply_training_disk_protection(state, [job], [])
+    training_runner._apply_training_disk_protection(state, [job], [])
+
+    assert calls == [("active", "pause")]
+    assert state["queuePaused"] is True
+
+
+def test_low_disk_waits_for_an_eligible_stage_and_preserves_existing_actions(tmp_path, monkeypatch):
+    state = {"queuePaused": False, "queuePauseReason": "", "jobs": []}
+    job = {"id": "active", "status": "running", "stage": "caching"}
+    calls = []
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1})
+    monkeypatch.setattr(training_runner, "_request_checkpointed_stop", lambda item, action: calls.append((item["id"], action)) or "")
+
+    training_runner._apply_training_disk_protection(state, [job], [])
+    job["stage"] = "h3"
+    training_runner._apply_training_disk_protection(state, [job], [])
+    job["actionRequested"] = "finish"
+    training_runner._apply_training_disk_protection(state, [job], [])
+
+    assert calls == [("active", "pause")]
+    assert state["queuePaused"] is True
+
+
+def test_low_disk_pause_failure_holds_queue_without_changing_the_active_job(tmp_path, monkeypatch):
+    state = {"queuePaused": False, "queuePauseReason": "", "jobs": []}
+    job = {"id": "active", "status": "running", "stage": "h3"}
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1})
+    monkeypatch.setattr(training_runner, "_request_checkpointed_stop", lambda *_args: "runner is not ready")
+
+    training_runner._apply_training_disk_protection(state, [job], [])
+
+    assert job["status"] == "running"
+    assert state["queuePaused"] is True
+    assert "runner is not ready" in state["queuePauseReason"]
+
+
+def test_low_disk_reason_precedence_and_no_auto_resume(tmp_path, monkeypatch):
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1})
+    queued = [{"id": "queued", "status": "queued", "outputRoot": str(tmp_path / "output")}]
+    for prior_reason in ("Queue paused by the user.", "Queue waiting for manual start after WebCap restarted."):
+        state = {"queuePaused": True, "queuePauseReason": prior_reason}
+        training_runner._apply_training_disk_protection(state, [], queued)
+        assert state["queuePauseReason"].startswith(training_runner._LOW_DISK_REASON_PREFIX)
+
+    strong_hold = "Checkpoint-safe Pause could not verify a new checkpoint. Queue held for manual recovery."
+    state = {"queuePaused": True, "queuePauseReason": strong_hold}
+    training_runner._apply_training_disk_protection(state, [], queued)
+    assert state["queuePauseReason"] == strong_hold
+
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "safe", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES})
+    paused = {"queuePaused": True, "queuePauseReason": training_runner._LOW_DISK_REASON_PREFIX + " (9 GiB free; 10 GiB required)."}
+    training_runner._apply_training_disk_protection(paused, [], queued)
+    assert paused["queuePaused"] is True
+
+
+def test_resume_stays_blocked_when_disk_is_low_but_proceeds_when_unknown(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    training_runner._startup_reconciled = True
+    state = {
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": training_runner._LOW_DISK_REASON_PREFIX + " (9 GiB free; 10 GiB required).",
+        "jobs": [{"id": "queued", "status": "queued", "stages": "h3", "folder": "sets/subject", "outputRoot": str(tmp_path / "output")}],
+    }
+    training_runner._write_state(state)
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1})
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("low disk must prevent launch"))
+
+    payload, status = training_runner.resume_queue_response()
+
+    assert status == 409 and payload["ok"] is False
+    assert training_runner._read_state()["queuePaused"] is True
+
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "unavailable", "notice": "disk check unavailable"})
+
+    def launch(job, _folder):
+        job["status"] = "starting"
+
+    monkeypatch.setattr(training_runner, "_launch_job", launch)
+    payload, status = training_runner.resume_queue_response()
+
+    assert status == 200 and payload["ok"] is True
+    restored = training_runner._read_state()
+    assert restored["queuePaused"] is False
+    assert restored["runnerNotice"] == "disk check unavailable"
 
 
 def test_finish_after_epoch_does_not_require_a_configured_savepoint(tmp_path, monkeypatch):

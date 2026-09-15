@@ -34,7 +34,6 @@ Wan2.2 `HI -> LO` creates two jobs sharing one captured bundle. Every separate T
 - Canceling a queued item removes that item only; it does not delete its captured bundle.
 - Jobs expose captured files, output folders, logs, history, GPU status, diagnostics, and checkpoint resume. Recent Runs keeps compact rows and offers an expandable facts view for timing, progress, dataset, and output details.
 - Managed Resume discovers only version-2 logical runs beneath the current set root and captures the current set again. Custom Resume is an explicit checkpoint directory; it creates a new logical run and never writes beside that source. H3 Resume includes the current capture's cache phase.
-- The Training Queue header checks the configured local TensorBoard port and opens the existing TensorBoard UI in a new tab. It never starts TensorBoard automatically.
 
 ## Manual command handoff
 
@@ -50,8 +49,6 @@ Relevant `tool/config.json` fields include:
 - `training.wsl_distribution`: optional explicit WSL distribution.
 - `training.conda_executable` and `training.conda_environment`: optional managed Conda runtime pair.
 - `training.activate_script`: optional activation script when Conda is not configured.
-- `training.tensorboard_port`: local TensorBoard port (default `6006`). TensorBoard always reads the overall `FS_ROOT/output/runs` tree.
-- `training.tensorboard_bruteforce_control`: defaults to `false`. When explicitly enabled in Training Settings, the header offers Start and Restart controls using the configured WSL and Conda/activation runtime. Restart only targets TensorBoard processes with the exact global runs logdir, but may replace a matching manually started instance. WebCap does not retain a PID or manage TensorBoard automatically; launch output goes to `.webcap_training/tensorboard.log`.
 - `training.enabled_profiles`: models shown when creating new training runs. At least one profile must remain enabled.
 
 Disabling a profile only hides it from new-run setup. Existing TOMLs, captured bundles, history, and Resume behavior remain untouched.

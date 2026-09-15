@@ -17,7 +17,6 @@ Last reviewed: 2026-09-06.
 ## Completed (2026-08-29)
 
 - Bucketing uses one explicit bucket per generated stanza; only the marked video-detail cohort uses a subset.
-- TensorBoard now has a global Training Queue status/open link, with optional explicit Start/Restart controls guarded by the `training.tensorboard_bruteforce_control` setting. It remains externally usable and is never started automatically; per-action TensorBoard filtering is deferred until TensorBoard has a stable, verified URL contract.
 
 ## Completed (2026-09-03)
 
@@ -60,5 +59,4 @@ No further persistence implementation is planned unless verification exposes a r
 - Add an assisted dataset-config editor for changing directories, frames, and compatible higher/lower resolutions, informed by model profiles and calibrated VRAM shapes, while retaining the raw text editor as a fallback.
 - Consider run-owned overrides for queued settings such as learning rate, epochs, dropout, checkpoint frequency, and state-save frequency. Define how changing them interacts with the queued job’s immutable captured bundle before implementation.
 - Expose the last saved checkpoint on a running job if real usage demonstrates enough value; checkpoint discovery already exists.
-- Add indirect TensorBoard integration for individual jobs once a stable, verified TensorBoard URL contract can scope the view to a selected action or curves. Keep the current global TensorBoard ownership behavior unchanged.
 - Add future compatible models through the app-owned training-profile registry, with one reviewed TOML template and explicit media/run requirements. Do not add arbitrary user-supplied commands.

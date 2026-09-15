@@ -214,15 +214,6 @@ function scheduleTrainingRunnerPoll() {
   }, delay);
 }
 
-function scheduleTrainingTensorboardPoll() {
-  if (trainingWorkspaceState.tensorboardPollTimer) clearTimeout(trainingWorkspaceState.tensorboardPollTimer);
-  if (!isTrainingWorkspaceActive()) return;
-  trainingWorkspaceState.tensorboardPollTimer = setTimeout(function () {
-    trainingWorkspaceState.tensorboardPollTimer = 0;
-    refreshTrainingTensorboardStatus();
-  }, 20000);
-}
-
 function refreshTrainingRunnerStatus() {
   if (!isTrainingWorkspaceActive() || trainingWorkspaceState.runnerStatusPending) return;
   trainingWorkspaceState.runnerStatusPending = true;
@@ -272,9 +263,6 @@ function refreshTrainingRunnerStatus() {
       trainingWorkspaceState.gpuForActiveJob = hasActiveJob;
       if (activeStateChanged || !trainingWorkspaceState.gpuLastFetchedAt || now - trainingWorkspaceState.gpuLastFetchedAt >= 20000) {
         refreshTrainingGpuStatus();
-      }
-      if (!trainingWorkspaceState.tensorboardLastFetchedAt || now - trainingWorkspaceState.tensorboardLastFetchedAt >= 20000) {
-        refreshTrainingTensorboardStatus();
       }
       if (isTrainingRunnerConsoleVisible()) {
         var activeJob = getTrainingRunnerActiveJob();
@@ -339,50 +327,6 @@ function refreshTrainingGpuStatus() {
       trainingWorkspaceState.gpuStatusPending = false;
       renderTrainingRunner();
     });
-}
-
-function refreshTrainingTensorboardStatus() {
-  if (!isTrainingWorkspaceActive() || trainingWorkspaceState.tensorboardStatusPending) return;
-  trainingWorkspaceState.tensorboardStatusPending = true;
-  renderTrainingRunner();
-  trainingRunnerRequest('/fs/training_runner/tensorboard')
-    .then(function (payload) {
-      trainingWorkspaceState.tensorboard = payload.tensorboard || null;
-    })
-    .catch(function (err) {
-      trainingWorkspaceState.tensorboard = {
-        running: false,
-        controlEnabled: false,
-        diagnostic: String(err && err.message ? err.message : err)
-      };
-    })
-    .then(function () {
-      trainingWorkspaceState.tensorboardLastFetchedAt = Date.now();
-      trainingWorkspaceState.tensorboardStatusPending = false;
-      renderTrainingRunner();
-      scheduleTrainingTensorboardPoll();
-    });
-}
-
-function controlTrainingTensorboard(action) {
-  if (trainingWorkspaceState.tensorboardStatusPending) return;
-  trainingWorkspaceState.tensorboardStatusPending = true;
-  renderTrainingRunner();
-  trainingRunnerRequest('/fs/training_runner/tensorboard/control', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: action })
-  }).then(function (payload) {
-    trainingWorkspaceState.tensorboard = payload.tensorboard || trainingWorkspaceState.tensorboard;
-    setStatus(action === 'restart' ? 'TensorBoard restarted.' : 'TensorBoard started.');
-  }).catch(function (err) {
-    setStatus('Could not ' + action + ' TensorBoard: ' + String(err && err.message ? err.message : err));
-  }).then(function () {
-    trainingWorkspaceState.tensorboardStatusPending = false;
-    trainingWorkspaceState.tensorboardLastFetchedAt = 0;
-    renderTrainingRunner();
-    refreshTrainingTensorboardStatus();
-  });
 }
 
 function validateTrainingRunner(options) {
@@ -893,24 +837,6 @@ function buildTrainingGpuStatusHtml() {
   return '<strong title="Live GPU utilization, VRAM use, temperature, and power draw.">' + escapeHtml(primarySummary) + '</strong>';
 }
 
-function renderTrainingTensorboardLink() {
-  var link = getTrainingWorkspaceEls().tensorboardLink;
-  if (!link) return;
-  var tensorboard = trainingWorkspaceState.tensorboard;
-  var isRunning = !!(tensorboard && tensorboard.running);
-  var diagnostic = String((tensorboard && tensorboard.diagnostic) || 'Checking whether TensorBoard is available.');
-  var url = String((tensorboard && tensorboard.url) || '');
-  link.textContent = 'TensorBoard ↗';
-  link.title = isRunning ? 'Open TensorBoard in a new tab.' : ('TensorBoard is not running. ' + diagnostic);
-  link.setAttribute('aria-label', isRunning ? 'Open TensorBoard in a new tab' : 'TensorBoard is not running');
-  link.classList.toggle('is-unavailable', !!tensorboard && !isRunning);
-  if (url) {
-    link.href = url;
-  } else {
-    link.removeAttribute('href');
-  }
-}
-
 function trainingQueueHoldLabel() {
   return trainingWorkspaceState.runnerQueuePauseReason === 'Queue waiting for manual start after WebCap restarted.'
     ? 'Queue waiting for manual start'
@@ -994,7 +920,6 @@ function renderTrainingRunner() {
     els.runnerActions.classList.add('hidden');
     if (els.runnerQueue) els.runnerQueue.classList.add('hidden');
     if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
-    renderTrainingTensorboardLink();
     return;
   }
   var jobs = trainingWorkspaceState.runnerJobs || [];
@@ -1004,7 +929,6 @@ function renderTrainingRunner() {
   var job = getTrainingRunnerActiveJob();
   var followingQueuedJobs = queuedJobs;
   if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
-  renderTrainingTensorboardLink();
   syncTrainingQueueResumeButton(els, queuedJobs);
   if (els.runnerQueue) {
     if (!followingQueuedJobs.length) {

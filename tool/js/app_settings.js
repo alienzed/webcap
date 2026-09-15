@@ -53,10 +53,6 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.conda_executable) out.training.conda_executable = '';
   if (!out.training.conda_environment) out.training.conda_environment = '';
   if (!out.training.activate_script) out.training.activate_script = '';
-  if (out.training.tensorboard_port === undefined || out.training.tensorboard_port === null || out.training.tensorboard_port === '') {
-    out.training.tensorboard_port = 6006;
-  }
-  if (typeof out.training.tensorboard_bruteforce_control !== 'boolean') out.training.tensorboard_bruteforce_control = false;
   if (typeof out.training.h3_split_cache_phase !== 'boolean') out.training.h3_split_cache_phase = false;
   if (!out.training.test_copy_roots || typeof out.training.test_copy_roots !== 'object') out.training.test_copy_roots = {};
   appSettingsTestCopyRoots.forEach(function (root) {
@@ -107,8 +103,6 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingCondaExecutableEl) ui.appSettingsTrainingCondaExecutableEl.value = c.training.conda_executable || '';
   if (ui.appSettingsTrainingCondaEnvironmentEl) ui.appSettingsTrainingCondaEnvironmentEl.value = c.training.conda_environment || '';
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
-  if (ui.appSettingsTrainingTensorboardPortEl) ui.appSettingsTrainingTensorboardPortEl.value = c.training.tensorboard_port;
-  if (ui.appSettingsTrainingTensorboardBruteforceControlEl) ui.appSettingsTrainingTensorboardBruteforceControlEl.checked = !!c.training.tensorboard_bruteforce_control;
   if (ui.appSettingsTrainingH3SplitCachePhaseEl) ui.appSettingsTrainingH3SplitCachePhaseEl.checked = !!c.training.h3_split_cache_phase;
   appSettingsTestCopyRoots.forEach(function (root) {
     var el = ui[root.uiKey];
@@ -136,8 +130,6 @@ function collectAppSettingsFormConfig() {
   base.training.conda_executable = ui.appSettingsTrainingCondaExecutableEl ? ui.appSettingsTrainingCondaExecutableEl.value : '';
   base.training.conda_environment = ui.appSettingsTrainingCondaEnvironmentEl ? ui.appSettingsTrainingCondaEnvironmentEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
-  base.training.tensorboard_port = ui.appSettingsTrainingTensorboardPortEl ? Number(ui.appSettingsTrainingTensorboardPortEl.value) : 6006;
-  base.training.tensorboard_bruteforce_control = !!(ui.appSettingsTrainingTensorboardBruteforceControlEl && ui.appSettingsTrainingTensorboardBruteforceControlEl.checked);
   base.training.h3_split_cache_phase = !!(ui.appSettingsTrainingH3SplitCachePhaseEl && ui.appSettingsTrainingH3SplitCachePhaseEl.checked);
   base.training.test_copy_roots = {};
   appSettingsTestCopyRoots.forEach(function (root) {
@@ -495,8 +487,6 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingWslDistributionEl,
     ui.appSettingsTrainingCondaExecutableEl,
     ui.appSettingsTrainingCondaEnvironmentEl,
-    ui.appSettingsTrainingTensorboardPortEl,
-    ui.appSettingsTrainingTensorboardBruteforceControlEl,
     ui.appSettingsTrainingH3SplitCachePhaseEl,
     ui.appSettingsTrainingTestCopyH3RootEl,
     ui.appSettingsTrainingTestCopyKrea2RootEl,

@@ -5,12 +5,9 @@ import os
 import re
 import hashlib
 import shlex
-import socket
 import shutil
 import threading
 import time
-import urllib.error
-import urllib.request
 import uuid
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -22,7 +19,7 @@ from .training_bundle import materialize_training_bundle
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets
 from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume
-from .training_action import allocate_action, action_id_for_root, action_paths, fingerprint_files, read_action, update_action
+from .training_action import actions_root, allocate_action, action_id_for_root, action_paths, fingerprint_files, read_action, update_action
 from .training_preflight import (
     build_launch_preflight as _build_launch_preflight,
     gpu_snapshot as _gpu_snapshot,
@@ -42,8 +39,6 @@ from .training_progress import (
 )
 from .training_runtime import (
     TRAINING_RUNTIME_DIR_NAME,
-    activation_prefix as _activation_prefix,
-    build_runtime_command as _build_runtime_command,
     build_training_launcher,
     configured_training_settings as _training_settings,
     has_conda_runtime,
@@ -77,8 +72,9 @@ _DISTRIBUTED_SOCKET_HOLD_REASON = (
 )
 _legacy_active_time_cache = {}
 _SAVE_PAUSE_TRAINING_STAGES = {"hi", "lo", "krea2", "wan21", "h3"}
-_TENSORBOARD_PROBE_TIMEOUT_SECONDS = 0.75
-_TENSORBOARD_PROBE_BYTES = 8192
+_LOW_DISK_THRESHOLD_BYTES = 10 * 1024 ** 3
+_LOW_DISK_REASON_PREFIX = "Queue auto-paused: low disk space"
+_DISK_INSPECTION_NOTICE_PREFIX = "Training disk-space protection could not inspect the output volume"
 
 
 def _runtime_root():
@@ -105,6 +101,84 @@ def _default_state():
 
 class TrainingStateError(RuntimeError):
     pass
+
+
+def _format_gib(value):
+    return ("{:.1f}".format(float(value) / (1024 ** 3))).rstrip("0").rstrip(".") + " GiB"
+
+
+def _training_disk_space(target):
+    """Return the disk state for a possibly not-yet-created training output path."""
+    path = Path(target)
+    while True:
+        try:
+            free_bytes = shutil.disk_usage(path).free
+            return {"state": "low" if free_bytes < _LOW_DISK_THRESHOLD_BYTES else "safe", "freeBytes": free_bytes}
+        except FileNotFoundError:
+            parent = path.parent
+            if parent == path:
+                return {
+                    "state": "unavailable",
+                    "notice": _DISK_INSPECTION_NOTICE_PREFIX + ": no existing parent was found for " + str(target) + ".",
+                }
+            path = parent
+        except OSError as exc:
+            return {
+                "state": "unavailable",
+                "notice": _DISK_INSPECTION_NOTICE_PREFIX + " for " + str(target) + ": " + str(exc),
+            }
+
+
+def _training_disk_target(active_jobs, queued_jobs):
+    for job in list(active_jobs) + list(queued_jobs):
+        output_root = str(job.get("outputRoot") or "").strip()
+        if output_root:
+            return Path(output_root)
+    return actions_root()
+
+
+def _append_runner_notice(state, notice):
+    existing = str(state.get("runnerNotice") or "").strip()
+    if not existing:
+        state["runnerNotice"] = notice
+    elif notice not in existing:
+        state["runnerNotice"] = existing + " " + notice
+
+
+def _low_disk_reason(free_bytes):
+    return _LOW_DISK_REASON_PREFIX + " (" + _format_gib(free_bytes) + " free; " + _format_gib(_LOW_DISK_THRESHOLD_BYTES) + " required)."
+
+
+def _low_disk_may_replace_pause_reason(reason):
+    return not reason or reason in {
+        "Queue paused by the user.",
+        "Queue waiting for manual start after WebCap restarted.",
+    } or reason.startswith(_LOW_DISK_REASON_PREFIX)
+
+
+def _apply_training_disk_protection(state, active_jobs, queued_jobs):
+    """Best-effort disk protection; unavailable measurements intentionally fail open."""
+    if not active_jobs and not queued_jobs:
+        return "safe"
+    disk = _training_disk_space(_training_disk_target(active_jobs, queued_jobs))
+    if disk["state"] == "unavailable":
+        _append_runner_notice(state, disk["notice"])
+        return "unavailable"
+    if disk["state"] == "safe":
+        return "safe"
+
+    reason = _low_disk_reason(disk["freeBytes"])
+    may_replace_reason = _low_disk_may_replace_pause_reason(str(state.get("queuePauseReason") or ""))
+    state["queuePaused"] = True
+    if may_replace_reason:
+        state["queuePauseReason"] = reason
+    for job in active_jobs:
+        if job.get("actionRequested") or str(job.get("stage") or "") not in _SAVE_PAUSE_TRAINING_STAGES:
+            continue
+        pause_error = _request_checkpointed_stop(job, "pause")
+        if pause_error and may_replace_reason:
+            state["queuePauseReason"] = reason + " Checkpoint-safe Pause could not be requested yet: " + pause_error
+    return "low"
 
 
 def _state_job_ids(state, path):
@@ -1459,13 +1533,14 @@ def _refresh_state(state):
         )
     else:
         state.pop("runnerNotice", None)
+    queued_jobs = [job for job in state.get("jobs", []) if job.get("status") in QUEUE_STATUSES]
+    _apply_training_disk_protection(state, active_jobs, queued_jobs)
     if pause_requested:
         state["queuePaused"] = True
         state["queuePauseReason"] = state.get("queuePauseReason") or "Queue paused by the user."
     if hold_reason:
         state["queuePaused"] = True
         state["queuePauseReason"] = hold_reason
-    queued_jobs = [job for job in state.get("jobs", []) if job.get("status") in QUEUE_STATUSES]
     if not _startup_reconciled and queued_jobs and not active_jobs:
         state["queuePaused"] = True
         state["queuePauseReason"] = state.get("queuePauseReason") or "Queue waiting for manual start after WebCap restarted."
@@ -1770,6 +1845,13 @@ def start_response(
         stages = _normalize_training_stages(selected_run["stages"][0])
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint or resume_output_id, resume_stage)
         _, folder_path = _resolve_folder(folder)
+        initial_disk = _training_disk_space(actions_root())
+        if initial_disk["state"] == "low":
+            return {
+                "ok": False,
+                "error": "Not enough free disk space to start training: " + _format_gib(initial_disk["freeBytes"]) +
+                    " free; at least " + _format_gib(_LOW_DISK_THRESHOLD_BYTES) + " required.",
+            }, 409
         reuse_capture = bool(str(reuse_capture_action_id or "").strip() or str(reuse_capture_path or "").strip())
         if reuse_capture and (not str(reuse_capture_action_id or "").strip() or not str(reuse_capture_path or "").strip()):
             raise ValueError("Recent Run resume requires its recorded action and capture path.")
@@ -1857,6 +1939,11 @@ def start_response(
             })
         update_action(action_id_for_root(action_root), record_capture)
         state["jobs"].append(job)
+        _apply_training_disk_protection(
+            state,
+            [item for item in state["jobs"] if item.get("status") in ACTIVE_STATUSES],
+            [item for item in state["jobs"] if item.get("status") in QUEUE_STATUSES],
+        )
         if not active and not state.get("queuePaused"):
             _launch_next_queued_job(state)
         _write_state(state)
@@ -1966,183 +2053,6 @@ def clear_history_response(folder, job_id):
 
 def gpu_status_response():
     return {"ok": True, "gpu": _gpu_snapshot()}, 200
-
-
-def _tensorboard_settings():
-    training = app_config.config.get("training") if isinstance(app_config.config, dict) else {}
-    training = training if isinstance(training, dict) else {}
-    port = training.get("tensorboard_port", 6006)
-    if isinstance(port, bool):
-        port = 6006
-    try:
-        port = int(port)
-    except (TypeError, ValueError):
-        port = 6006
-    if port < 1 or port > 65535:
-        port = 6006
-    return {
-        "port": port,
-        "controlEnabled": training.get("tensorboard_bruteforce_control") is True,
-    }
-
-
-def _tensorboard_url(port):
-    return "http://localhost:" + str(port)
-
-
-def _probe_tensorboard(port):
-    url = "http://127.0.0.1:" + str(port) + "/"
-    try:
-        request = urllib.request.Request(url, headers={"User-Agent": "WebCap TensorBoard status probe"})
-        with urllib.request.urlopen(request, timeout=_TENSORBOARD_PROBE_TIMEOUT_SECONDS) as response:
-            html = response.read(_TENSORBOARD_PROBE_BYTES).decode("utf-8", errors="replace").lower()
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, socket.error) as exc:
-        detail = str(getattr(exc, "reason", "") or exc).strip()
-        return False, detail or "No service responded on the configured local port."
-    if "tensorboard" not in html:
-        return False, "A service responded on the configured port, but it did not identify itself as TensorBoard."
-    return True, ""
-
-
-def _localhost_port_occupied(port):
-    try:
-        connection = socket.create_connection(("127.0.0.1", int(port)), timeout=_TENSORBOARD_PROBE_TIMEOUT_SECONDS)
-    except (OSError, ValueError):
-        return False
-    connection.close()
-    return True
-
-
-def _tensorboard_status_payload():
-    settings = _tensorboard_settings()
-    running, diagnostic = _probe_tensorboard(settings["port"])
-    return {
-        "running": running,
-        "port": settings["port"],
-        "url": _tensorboard_url(settings["port"]),
-        "controlEnabled": settings["controlEnabled"],
-        "diagnostic": diagnostic,
-    }
-
-
-def tensorboard_status_response():
-    return {"ok": True, "tensorboard": _tensorboard_status_payload()}, 200
-
-
-def _tensorboard_runs_root():
-    return Path(app_config.FS_ROOT) / "output" / "runs"
-
-
-def _tensorboard_log_path():
-    return _runtime_root() / "tensorboard.log"
-
-
-def _tensorboard_runtime_command(settings, wsl_logdir, port):
-    command = "tensorboard --logdir " + shlex.quote(wsl_logdir) + " --port " + str(port)
-    return _activation_prefix(settings) + _build_runtime_command(settings, command)
-
-
-def _tensorboard_matching_pids(settings, wsl_logdir):
-    # Read argv entries, rather than process text, so the logdir comparison remains exact.
-    command = """target_logdir=%s
-for proc in /proc/[0-9]*; do
-  [ -r \"$proc/cmdline\" ] || continue
-  pid=${proc##*/}
-  mapfile -d '' -t args < \"$proc/cmdline\" || continue
-  has_tensorboard=0
-  has_logdir=0
-  for i in \"${!args[@]}\"; do
-    arg=${args[$i]}
-    base=${arg##*/}
-    case \"$base\" in
-      tensorboard|tensorboard.exe|tensorboard.main|tensorboard.main.*) has_tensorboard=1 ;;
-    esac
-    if [ \"$arg\" = \"--logdir=$target_logdir\" ]; then has_logdir=1; fi
-    if [ \"$arg\" = \"--logdir\" ] && [ \"${args[$((i + 1))]:-}\" = \"$target_logdir\" ]; then has_logdir=1; fi
-  done
-  if [ \"$has_tensorboard\" = 1 ] && [ \"$has_logdir\" = 1 ]; then printf '%%s\\n' \"$pid\"; fi
-done""" % shlex.quote(wsl_logdir)
-    code, stdout, stderr = _run_wsl(command, timeout=10, distribution=settings["wslDistribution"])
-    if code != 0:
-        detail = (stderr or stdout or "WSL process inspection failed.").strip()
-        raise RuntimeError(detail)
-    return sorted({line.strip() for line in stdout.splitlines() if line.strip().isdigit()}, key=int)
-
-
-def _terminate_tensorboard_pids(settings, pids):
-    safe_pids = [pid for pid in pids if str(pid).isdigit()]
-    if not safe_pids:
-        return
-    joined = " ".join(shlex.quote(str(pid)) for pid in safe_pids)
-    command = (
-        "pids=(" + joined + "); "
-        "kill -TERM -- \"${pids[@]}\" 2>/dev/null || true; "
-        "sleep 1; "
-        "for pid in \"${pids[@]}\"; do kill -0 \"$pid\" 2>/dev/null && kill -KILL -- \"$pid\" 2>/dev/null || true; done"
-    )
-    code, stdout, stderr = _run_wsl(command, timeout=8, distribution=settings["wslDistribution"])
-    if code != 0:
-        detail = (stderr or stdout or "WSL TensorBoard termination failed.").strip()
-        raise RuntimeError(detail)
-
-
-def _wait_for_tensorboard(port, timeout_seconds):
-    deadline = time.monotonic() + timeout_seconds
-    diagnostic = ""
-    while time.monotonic() < deadline:
-        running, diagnostic = _probe_tensorboard(port)
-        if running:
-            return True, diagnostic
-        time.sleep(0.25)
-    return False, diagnostic
-
-
-def tensorboard_control_response(action):
-    action = str(action or "").strip().lower()
-    if action not in {"start", "restart"}:
-        return {"ok": False, "error": "TensorBoard action must be start or restart."}, 400
-    settings = _tensorboard_settings()
-    if not settings["controlEnabled"]:
-        return {"ok": False, "error": "TensorBoard brute-force control is disabled in Training Settings."}, 403
-
-    port = settings["port"]
-    runtime_settings = _training_settings()
-    log_path = _tensorboard_log_path()
-    try:
-        if action == "start":
-            if _localhost_port_occupied(port):
-                return {"ok": False, "error": "The configured TensorBoard port is already in use. Use Restart only for the matching global TensorBoard.", "logPath": str(log_path)}, 409
-        else:
-            runs_wsl_path = _to_wsl_path(_tensorboard_runs_root(), runtime_settings["wslDistribution"])
-            pids = _tensorboard_matching_pids(runtime_settings, runs_wsl_path)
-            if pids:
-                _terminate_tensorboard_pids(runtime_settings, pids)
-                if _localhost_port_occupied(port):
-                    time.sleep(1)
-                if _localhost_port_occupied(port):
-                    return {"ok": False, "error": "The TensorBoard port is still in use after terminating the matching process.", "logPath": str(log_path)}, 409
-            elif _localhost_port_occupied(port):
-                return {"ok": False, "error": "The configured port is in use by a service WebCap could not verify as this global TensorBoard.", "logPath": str(log_path)}, 409
-
-        runs_root = _tensorboard_runs_root()
-        runs_root.mkdir(parents=True, exist_ok=True)
-        _ensure_runtime_dirs()
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_wsl_path = _to_wsl_path(log_path, runtime_settings["wslDistribution"])
-        if action == "start":
-            runs_wsl_path = _to_wsl_path(runs_root, runtime_settings["wslDistribution"])
-        launch = "nohup " + _tensorboard_runtime_command(runtime_settings, runs_wsl_path, port) + " >> " + shlex.quote(log_wsl_path) + " 2>&1 < /dev/null &"
-        code, stdout, stderr = _run_wsl(launch, timeout=10, distribution=runtime_settings["wslDistribution"])
-        if code != 0:
-            detail = (stderr or stdout or "WSL TensorBoard launch failed.").strip()
-            return {"ok": False, "error": detail, "logPath": str(log_path)}, 502
-        running, diagnostic = _wait_for_tensorboard(port, 10)
-        if not running:
-            detail = diagnostic or "TensorBoard did not become available within 10 seconds."
-            return {"ok": False, "error": detail, "logPath": str(log_path)}, 502
-    except Exception as exc:
-        return {"ok": False, "error": str(exc), "logPath": str(log_path)}, 502
-    return {"ok": True, "tensorboard": _tensorboard_status_payload(), "logPath": str(log_path)}, 200
 
 
 def log_response(job_id, offset=0, tail=False, folder=""):

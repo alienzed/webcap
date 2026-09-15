@@ -149,7 +149,6 @@ function syncTrainingEntryChrome() {
   var utilityTrainingBtn = document.getElementById('utility-training-btn');
   var detailTabs = document.getElementById('training-detail-tabs');
   var collapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
-  var tensorboardLink = document.getElementById('training-tensorboard-link');
   var itemTab = document.querySelector('[data-training-detail-tab="items"]');
   var configTab = document.querySelector('[data-training-detail-tab="config"]');
   var runLogTab = document.querySelector('[data-training-detail-tab="run-log"]');
@@ -171,7 +170,6 @@ function syncTrainingEntryChrome() {
   if (configTab) configTab.classList.toggle('hidden', !isSetEntry);
   if (runLogTab) runLogTab.classList.toggle('hidden', !isGlobalEntry);
   if (collapseBtn) collapseBtn.classList.toggle('hidden', !isTraining || entryKind === 'unavailable');
-  if (tensorboardLink) tensorboardLink.classList.toggle('hidden', !isGlobalEntry);
 }
 
 function syncWorkspaceConfigEditorUi() {

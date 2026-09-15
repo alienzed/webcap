@@ -25,7 +25,7 @@ function element() {
 }
 const nodes = {};
 ['sidebar-open-training-btn', 'utility-training-btn', 'training-detail-tabs',
- 'training-sidebar-collapse-toggle-btn', 'training-tensorboard-link'].forEach(id => nodes[id] = element());
+ 'training-sidebar-collapse-toggle-btn'].forEach(id => nodes[id] = element());
 const itemTab = element(), configTab = element(), runLogTab = element();
 const context = {
   workspaceState: { surface: 'training', sidebarHidden: true },
@@ -115,6 +115,7 @@ def test_training_scope_source_contracts_remain_explicit():
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
     history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
 
     assert 'sidebar-open-training-btn' in shell
     assert 'utility-training-btn' in shell

@@ -130,8 +130,6 @@ ui = {
   appSettingsTrainingCondaExecutableEl: document.getElementById('app-settings-training-conda-executable'),
   appSettingsTrainingCondaEnvironmentEl: document.getElementById('app-settings-training-conda-environment'),
   appSettingsTrainingActivateScriptEl: document.getElementById('app-settings-training-activate-script'),
-  appSettingsTrainingTensorboardPortEl: document.getElementById('app-settings-training-tensorboard-port'),
-  appSettingsTrainingTensorboardBruteforceControlEl: document.getElementById('app-settings-training-tensorboard-bruteforce-control'),
   appSettingsTrainingH3SplitCachePhaseEl: document.getElementById('app-settings-training-h3-split-cache-phase'),
   appSettingsTrainingTestCopyH3RootEl: document.getElementById('app-settings-training-test-copy-h3-root'),
   appSettingsTrainingTestCopyKrea2RootEl: document.getElementById('app-settings-training-test-copy-krea2-root'),

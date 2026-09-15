@@ -75,6 +75,7 @@ def test_focus_reuses_shared_actions_and_disables_single_item_iframe_gestures():
 
     assert "function decorateFocusedAnnotationPreviewActions(actions, mediaItem)" in focus
     assert "String(action.label || '') !== 'Focused Annotate...'" in focus
+    assert "mappedRender = function flagRowRenderer(value)" in focus
     assert "action.run({ selectReplacement: false })" in focus
     assert "action.label === 'Paste Tags' && operation" in focus
     assert "actions = decorateFocusedAnnotationPreviewActions(actions, item);" in media
@@ -100,3 +101,29 @@ def test_focus_header_hides_entry_and_sidebar_controls_while_active():
     assert focus.count("renderPreviewHeaderMeta();") >= 2
     assert "'Item ' + (focusedAnnotationState.itemIndex + 1) + ' / ' + itemKeys.length" in focus
     assert "'Group ' + (groupIndex + 1) + ' / ' + requirements.length" in focus
+
+
+def test_focus_has_no_duplicate_surface_remnants_and_restores_group_keys_on_undo():
+    tool_sources = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "tool").rglob("*")
+        if path.suffix in {".html", ".js", ".css"}
+    )
+    obsolete_tokens = (
+        "focused-annotation-modal",
+        "focused-annotation-preview-media",
+        "focused-annotation-rating",
+        "focused-annotation-preview-actions",
+        "openFocusedAnnotationModal",
+        "renderFocusedAnnotationModal",
+        "closeFocusedAnnotationModal",
+        "sidebarFocusBtnEl",
+        "sidebar-open-focused-btn",
+        "focused-annotation-secondary-action-btn",
+    )
+    for token in obsolete_tokens:
+        assert token not in tool_sources
+
+    common = _read("tool/js/common.js")
+    assert "focusedAnnotationState.groupKey = String(op.requirementLabel || '').trim();" in common
+    assert "if (undone && isFocusedAnnotationOpen())" in _read("tool/js/main.js")

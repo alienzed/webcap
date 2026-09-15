@@ -232,16 +232,8 @@ function stopFocusedAnnotation() {
   focusedAnnotationState.groupIndex = 0;
   focusedAnnotationState.itemKey = '';
   focusedAnnotationState.groupKey = '';
-  if (typeof setWorkspaceViewMode === 'function') {
-    setWorkspaceViewMode('single');
-  }
-  if (typeof exitWorkspaceSurface === 'function') {
-    exitWorkspaceSurface();
-  }
+  exitWorkspaceSurface();
   renderPreviewHeaderMeta();
-  if (typeof renderFileList === 'function') {
-    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
-  }
 }
 
 function showFocusedAnnotationSurface() {
@@ -250,15 +242,8 @@ function showFocusedAnnotationSurface() {
   if (els.workbench) els.workbench.classList.remove('hidden');
   if (els.itemNav) els.itemNav.classList.remove('hidden');
   focusedAnnotationState.open = true;
-  if (typeof setWorkspaceViewMode === 'function') {
-    setWorkspaceViewMode('focus');
-  }
-  if (typeof setWorkspaceSurface === 'function') {
-    setWorkspaceSurface('focus', { sidebarHidden: true });
-  }
-  if (typeof setWorkspaceWorkflowMode === 'function') {
-    setWorkspaceWorkflowMode('annotate');
-  }
+  setWorkspaceSurface('focus', { sidebarHidden: true });
+  setWorkspaceWorkflowMode('annotate');
   renderPreviewHeaderMeta();
 }
 
@@ -337,12 +322,16 @@ function decorateFocusedAnnotationPreviewActions(actions, mediaItem) {
     return !action || action.separator || String(action.label || '') !== 'Focused Annotate...';
   }).map(function (action) {
     if (!action || action.separator) return action;
-    return {
-      label: action.label,
-      render: typeof action.render === 'function' ? function (value) {
+    var mappedRender;
+    if (typeof action.render === 'function') {
+      mappedRender = function flagRowRenderer(value) {
         action.render(value);
         syncFocusedAnnotationQueue({ anchorMediaKey: mediaItem.key });
-      } : undefined,
+      };
+    }
+    return {
+      label: action.label,
+      render: mappedRender,
       run: function () {
         var operation = action.label === 'Prune'
           ? action.run({ selectReplacement: false })

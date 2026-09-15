@@ -182,7 +182,7 @@ function undoLastOperation() {
           checklistItems.length - 1,
           Number(op.index) || 0
         ));
-        renderFocusedAnnotationSurface();
+        focusedAnnotationState.groupKey = String(op.requirementLabel || '').trim();
       }
       return restoredGroup;
     }

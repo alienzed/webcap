@@ -194,7 +194,14 @@ async function mediaGridPruneSelected() {
     });
     Object.keys(prunedKeys).forEach(function (key) {
       mediaGridState.selectedKeys.delete(key);
+      removePruneCandidateFile(key);
+      removeDuplicateCandidateFile(key);
     });
+    if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+      state.focusSet.keys = state.focusSet.keys.filter(function (key) { return !prunedKeys[key]; });
+      if (!state.focusSet.keys.length) state.focusSet = null;
+      updateFocusSetUi();
+    }
     if (currentWasPruned) {
       clearEditorAndPreview();
       renderChecklistPanel();

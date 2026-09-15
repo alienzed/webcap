@@ -365,6 +365,7 @@ function refreshCurrentDirectory() {
   var loadSequence = ++folderLoadSequence;
   state.folderStateWritable = false;
   invalidatePruneCandidates();
+  invalidateDuplicateCandidates();
   if (state && state.supersetActive) {
     state.supersetActive = false;
     state.supersetResults = [];
@@ -522,6 +523,7 @@ function handleMediaFilterChanged() {
   markSuperSetSearchDirty();
   renderFileList();
   pruneCandidatesScopeChanged();
+  duplicateCandidatesScopeChanged();
   if (isTrainingWorkspaceActive()) {
     var reviewFolder = String(state.folder || '');
     debouncedRefreshTrainingReviewForFilter(function () {

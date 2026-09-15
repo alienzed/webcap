@@ -20,6 +20,7 @@ from .training_runner import TrainingStateError, log_response as training_runner
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .prune_candidates import prune_candidates_response
+from .duplicate_candidates import duplicate_candidates_response
 from .training_setup import ensure_training_setup
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
@@ -1012,6 +1013,15 @@ def fs_prune_candidates():
         include_face_focus=bool(analysis.get("enableFaceAnalysis", False)),
         include_selection_pose=bool(analysis.get("enableMediaPipeAnalysis", False)),
         selected_media=data.get("selected_media") if request.method == "POST" else None,
+    )
+
+
+@app.route("/fs/duplicate_candidates", methods=["POST"])
+def fs_duplicate_candidates():
+    data = request.get_json(silent=True) or {}
+    return duplicate_candidates_response(
+        data.get("folder", ""),
+        selected_media=data.get("selected_media"),
     )
 
 

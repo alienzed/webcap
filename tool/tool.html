@@ -589,6 +589,7 @@
                         <button type="button" class="workspace-artifact-tab active" data-review-detail-tab="metadata" role="tab" aria-selected="true">Media Metadata</button>
                         <button type="button" class="workspace-artifact-tab" data-review-detail-tab="report" role="tab" aria-selected="false">Caption Report</button>
                         <button type="button" class="workspace-artifact-tab" data-review-detail-tab="prune" role="tab" aria-selected="false">Prune Candidates</button>
+                        <button type="button" class="workspace-artifact-tab" data-review-detail-tab="duplicates" role="tab" aria-selected="false">Duplicates</button>
                     </div>
                     <section id="review-metadata-pane" class="review-detail-pane">
                         <div class="review-output-column-header">
@@ -618,6 +619,14 @@
                             <button id="prune-candidates-inspect-btn" type="button" class="review-captions-btn" disabled>Inspect Candidates</button>
                         </div>
                         <div id="prune-candidates-list" class="prune-candidates-list"></div>
+                    </section>
+                    <section id="duplicate-candidates-pane" class="review-detail-pane duplicate-candidates-pane hidden">
+                        <div class="review-output-column-header">
+                            <div class="review-output-column-title">Duplicates</div>
+                            <div class="review-output-column-subtitle">Possible exact or visually similar media in the current visible scope. Nothing is pruned automatically.</div>
+                        </div>
+                        <div id="duplicate-candidates-summary" class="small">Analysis has not run.</div>
+                        <div id="duplicate-candidates-list" class="duplicate-candidates-list"></div>
                     </section>
                 </section>
             </div>
@@ -1299,6 +1308,7 @@
         <script src="/static/js/media_grid_tiles.js"></script>
         <script src="/static/js/media_grid_viewer.js"></script>
         <script src="/static/js/media_grid_actions.js"></script>
+        <script src="/static/js/duplicate_candidates.js"></script>
         <script src="/static/js/focused_annotation_navigation.js"></script>
         <script src="/static/js/focused_annotation.js"></script>
         <script src="/static/js/balance_distribution_wheel.js"></script>

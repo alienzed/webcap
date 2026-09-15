@@ -29,11 +29,13 @@ function activateFocusSet(fileNames, source, reportType) {
   updateFocusSetUi();
   renderFileList(ui.filterEl.value);
   pruneCandidatesScopeChanged();
+  duplicateCandidatesScopeChanged();
 }
 
 function getFocusSetReportLabel(reportType) {
   if (reportType === 'review') return 'Review Set';
   if (reportType === 'pruneCandidates') return 'Prune Candidates';
+  if (reportType === 'duplicateCandidates') return 'Duplicates';
   return '';
 }
 
@@ -70,14 +72,14 @@ var reviewWorkspaceState = { detailTab: 'metadata', metadataScopeKey: '', report
 
 function setReviewDetailTab(tab, options) {
   var opts = options || {};
-  var value = ['metadata', 'report', 'prune'].indexOf(tab) !== -1 ? tab : 'metadata';
+  var value = ['metadata', 'report', 'prune', 'duplicates'].indexOf(tab) !== -1 ? tab : 'metadata';
   reviewWorkspaceState.detailTab = value;
   Array.prototype.forEach.call(document.querySelectorAll('[data-review-detail-tab]'), function (button) {
     var active = button.getAttribute('data-review-detail-tab') === value;
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', active ? 'true' : 'false');
   });
-  [['metadata', 'review-metadata-pane'], ['report', 'review-report-pane'], ['prune', 'prune-candidates-pane']].forEach(function (entry) {
+  [['metadata', 'review-metadata-pane'], ['report', 'review-report-pane'], ['prune', 'prune-candidates-pane'], ['duplicates', 'duplicate-candidates-pane']].forEach(function (entry) {
     var pane = document.getElementById(entry[1]);
     if (pane) pane.classList.toggle('hidden', entry[0] !== value);
   });
@@ -86,6 +88,10 @@ function setReviewDetailTab(tab, options) {
   if (value === 'prune') {
     renderPruneCandidatesReport();
     ensurePruneCandidatesForCurrentFolder(false).then(renderPruneCandidatesReport).catch(renderPruneCandidatesReport);
+  }
+  if (value === 'duplicates') {
+    renderDuplicateCandidatesReport();
+    ensureDuplicateCandidatesForCurrentFolder(false).catch(function () {});
   }
 }
 
@@ -151,15 +157,21 @@ function updateFocusSetUi() {
 
 function clearFocusSet() {
   state.focusSet = null;
+  state.duplicateCandidatesParentFocusSet = undefined;
   updateFocusSetUi();
   renderFileList(ui.filterEl.value);
   pruneCandidatesScopeChanged();
+  duplicateCandidatesScopeChanged();
 }
 
 function rerunFocusSetReport() {
   var focusSet = state && state.focusSet;
   var reportType = String(focusSet && focusSet.reportType || '');
   if (!reportType) return;
+  if (reportType === 'duplicateCandidates') {
+    returnToDuplicateCandidatesReport();
+    return;
+  }
   clearFocusSet();
   setTimeout(function () {
     if (reportType === 'review') {
@@ -172,8 +184,10 @@ function rerunFocusSetReport() {
 
 function exitFocusSetToBrowsing() {
   state.focusSet = null;
+  state.duplicateCandidatesParentFocusSet = undefined;
   updateFocusSetUi();
   pruneCandidatesScopeChanged();
+  duplicateCandidatesScopeChanged();
   if (ui.editorEl) ui.editorEl.removeAttribute('readonly');
   clearEditorAndPreview();
   refreshCurrentDirectory();

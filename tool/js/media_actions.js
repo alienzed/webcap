@@ -27,22 +27,24 @@ pruneMedia = async function (mediaItem, options) {
     }
     setStatus('Media pruned: ' + mediaItem.key);
     removePruneCandidateFile(mediaItem.key);
+    removeDuplicateCandidateFile(mediaItem.key);
     if (state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
       state.focusSet.keys = state.focusSet.keys.filter(function (key) { return key !== mediaItem.key; });
       if (!state.focusSet.keys.length) state.focusSet = null;
       updateFocusSetUi();
     }
     var prunedWasCurrent = !!(state.currentItem && (state.currentItem.key === mediaItem.key || state.currentItem.fileName === mediaItem.key));
-    var nextItemToSelect = null;
+    var nextItemToSelect = prunedWasCurrent
+      ? pickReplacementVisibleMediaItem(mediaItem.key, getFilteredMediaItems(false).filter(function (item) {
+        return item && item.key !== mediaItem.key;
+      }))
+      : null;
     // Remove pruned item from state.items instead of refreshing the directory.
     if (window.state && Array.isArray(state.items)) {
       var idx = state.items.findIndex(function(item) {
         return item && (item.key === mediaItem.key || item.fileName === mediaItem.key);
       });
       if (idx !== -1) {
-        if (prunedWasCurrent && (idx + 1) < state.items.length) {
-          nextItemToSelect = state.items[idx + 1];
-        }
         state.items.splice(idx, 1);
       }
     }

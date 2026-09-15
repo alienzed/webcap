@@ -82,3 +82,21 @@ def test_focus_reuses_shared_actions_and_disables_single_item_iframe_gestures():
     assert "handleFocusedAnnotationKeydown(e);" in media
     assert "syncFocusedAnnotationQueue({ anchorMediaKey: mediaKey });" in details
     assert "runPreviewActionByLabel('Prune');" in main
+
+
+def test_focus_header_hides_entry_and_sidebar_controls_while_active():
+    html = _read("tool/tool.html")
+    details = _read("tool/js/item_details.js")
+    ui = _read("tool/js/ui.js")
+    shell = _read("tool/js/workspace_shell.js")
+    focus = _read("tool/js/focused_annotation.js")
+
+    assert 'id="preview-open-focused-btn"' in html
+    assert "sidebar-open-focused-btn" not in html + details + ui + shell
+    assert "sidebarFocusBtnEl" not in details + ui
+    assert "ui.sidebarCollapseToggleBtn.classList.toggle('hidden', focusOpen ||" in details
+    assert "ui.previewFocusBtnEl.classList.toggle('hidden', !hasItem || focusOpen);" in details
+    assert "ui.previewFocusBtnEl.classList.toggle('hidden', !hasCurrentItem || focusOpen);" in ui
+    assert focus.count("renderPreviewHeaderMeta();") >= 2
+    assert "'Item ' + (focusedAnnotationState.itemIndex + 1) + ' / ' + itemKeys.length" in focus
+    assert "'Group ' + (groupIndex + 1) + ' / ' + requirements.length" in focus

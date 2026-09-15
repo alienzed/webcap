@@ -181,10 +181,11 @@ function showContextMenu(clientX, clientY, actions) {
 
 function updateSidebarSurfaceTools() {
   var hasCurrentItem = !!(state && state.currentItem && state.currentItem.fileName);
-  if (ui.sidebarFocusBtnEl) {
-    ui.sidebarFocusBtnEl.disabled = false;
-    ui.sidebarFocusBtnEl.classList.toggle('hidden', !hasCurrentItem);
-    ui.sidebarFocusBtnEl.title = hasCurrentItem
+  var focusOpen = isFocusedAnnotationOpen();
+  if (ui.previewFocusBtnEl) {
+    ui.previewFocusBtnEl.disabled = false;
+    ui.previewFocusBtnEl.classList.toggle('hidden', !hasCurrentItem || focusOpen);
+    ui.previewFocusBtnEl.title = hasCurrentItem
       ? 'Open Focused Annotation for the selected item'
       : 'Select a media item to open Focused Annotation';
   }

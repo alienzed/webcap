@@ -238,6 +238,7 @@ function stopFocusedAnnotation() {
   if (typeof exitWorkspaceSurface === 'function') {
     exitWorkspaceSurface();
   }
+  renderPreviewHeaderMeta();
   if (typeof renderFileList === 'function') {
     renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
   }
@@ -258,6 +259,7 @@ function showFocusedAnnotationSurface() {
   if (typeof setWorkspaceWorkflowMode === 'function') {
     setWorkspaceWorkflowMode('annotate');
   }
+  renderPreviewHeaderMeta();
 }
 
 function syncFocusedAnnotationQueue(options) {
@@ -830,11 +832,11 @@ function renderFocusedAnnotationSurface() {
   var requirementLabel = requirements.length ? String(requirements[groupIndex] || '') : '';
   focusedAnnotationState.groupKey = requirementLabel;
   if (els.itemProgress) {
-    els.itemProgress.textContent = 'Item ' + (focusedAnnotationState.itemIndex + 1) + '/' + itemKeys.length;
+    els.itemProgress.textContent = 'Item ' + (focusedAnnotationState.itemIndex + 1) + ' / ' + itemKeys.length;
   }
   if (els.groupProgress) {
     els.groupProgress.textContent = requirements.length
-      ? ('Group ' + (groupIndex + 1) + '/' + requirements.length)
+      ? ('Group ' + (groupIndex + 1) + ' / ' + requirements.length)
       : 'No Groups';
   }
   if (els.groupName) {

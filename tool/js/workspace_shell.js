@@ -86,7 +86,7 @@ function syncWorkspaceHeaderUi() {
   ui.appEl.classList.add('workflow-' + workflowMode);
 
   var viewButtons = {
-    focus: document.getElementById('sidebar-open-focused-btn')
+    focus: document.getElementById('preview-open-focused-btn')
   };
   Object.keys(viewButtons).forEach(function (key) {
     var btn = viewButtons[key];

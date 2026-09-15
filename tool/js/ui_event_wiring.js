@@ -146,8 +146,8 @@ function wireMiscActionButtons() {
   }
 
 
-  if (ui.sidebarFocusBtnEl) {
-    ui.sidebarFocusBtnEl.onclick = function () {
+  if (ui.previewFocusBtnEl) {
+    ui.previewFocusBtnEl.onclick = function () {
       startFocusedAnnotation((state.currentItem && state.currentItem.key) || '');
     };
   }

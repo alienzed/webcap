@@ -70,7 +70,7 @@ ui = {
   focusSetReturnBtn: document.getElementById('focus-set-return-btn'),
   sidebarCollapseToggleBtn: document.getElementById('sidebar-collapse-toggle-btn'),
   sidebarContentEl: document.getElementById('sidebar-content'),
-  sidebarFocusBtnEl: document.getElementById('sidebar-open-focused-btn'),
+  previewFocusBtnEl: document.getElementById('preview-open-focused-btn'),
   mediaListEl: document.getElementById('media-list'),
   filterEl: document.getElementById('media-filter'),
   captionFilterClearAllBtn: document.getElementById('caption-filter-clear-all-btn'),

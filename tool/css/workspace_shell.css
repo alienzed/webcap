@@ -60,6 +60,10 @@
 
 .app.shell-revamp .preview-header {
   position: relative;
+  top: auto;
+  left: auto;
+  width: 100%;
+  box-sizing: border-box;
   z-index: 2;
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;

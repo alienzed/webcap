@@ -171,6 +171,10 @@ def restore_original_media(folder_path, file_name):
         return "not_found"
     if dest_media_path.exists():
         return "exists"
+    if not orig_media_path.is_file():
+        raise ValueError('Original media is not a regular file; working file was left unchanged.')
+    if orig_media_path.stat().st_size <= 0:
+        raise ValueError('Original media is empty; working file was left unchanged.')
     if is_pruned:
         shutil.move(str(orig_media_path), str(dest_media_path))
     else:

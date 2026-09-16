@@ -323,10 +323,14 @@ function completeFolderLoadPipeline(path, loadSequence, metadataResult) {
     applyFocusSetMetadataRows(path, metadataResult.rows);
     ensurePruneCandidatesForCurrentFolder(true).catch(function (err) {
       console.error('[webcap] Prune candidate analysis failed after metadata load:', err);
+    }).then(function () {
+      if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
+      refreshDeterministicMutationStatus();
     });
     return;
   }
   failFocusSetMetadataForCurrentFolder(path);
+  refreshDeterministicMutationStatus();
 }
 
 // Directory listing now uses backend /fs/describe.

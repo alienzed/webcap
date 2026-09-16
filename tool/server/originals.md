@@ -2,12 +2,14 @@
 
 ## Requirement
 - The `originals` folder stores immutable baseline originals for media files in a set folder.
-- No file in `originals` is ever overwritten or deleted by the app.
+- No valid existing canonical in `originals` is ever overwritten or deleted by the app.
 - When a file is backed up from the set folder:
-  - If the canonical name does not exist in `originals`, copy as-is.
-  - If the canonical name already exists in `originals`, do nothing.
+  - Establishing a required canonical original is mandatory.
+  - If the canonical name does not exist in `originals`, copy as-is; a failed copy propagates and prevents a successful folder load.
+  - A newly-created partial or zero-byte destination is removed after a failed copy or size validation.
+  - If the canonical name already exists, a valid non-empty regular file remains immutable; zero-byte or non-file canonicals are invalid and are not automatically repaired.
 - Automatic backup of edited/modified versions is intentionally out of scope.
-- Reset/Restore always brings back the canonical original by name.
+- Reset/Restore brings back the canonical original by name only when it is a valid non-empty regular file.
 - Deterministic mutation verification for images compares working file hash vs `originals/<fileName>` hash.
 
 ## Files/Functions/Variables
@@ -20,13 +22,13 @@
 
 ## Algorithm (baseline-only backup)
 1. For each media file in the set folder:
-    - If the canonical name does not exist in `originals`, copy as-is.
-    - If the canonical name exists in `originals`, do nothing.
-2. Never delete or overwrite any file in `originals`.
+    - If the canonical name does not exist in `originals`, copy as-is and require a non-empty, equal-size result.
+    - If the canonical name exists, preserve it only when it is a valid non-empty regular file; otherwise fail without repairing it.
+2. Never overwrite a valid existing canonical in `originals`; remove only a newly-created partial or zero-byte copy.
 3. Keep originals immutable and deterministic for reset.
 
 ## Reset/Restore Semantics
-- **Reset/Restore** always restores the file in `originals` with the canonical name (e.g., `dp5.mp4`).
+- **Reset/Restore** always restores the file in `originals` with the canonical name (e.g., `dp5.mp4`) only when it is a non-empty regular file.
 - The canonical original is never moved out of place by backup checks.
 
 ## Deterministic Image Mutation Verification
@@ -40,8 +42,9 @@
 - Video files are intentionally excluded from deterministic hash verification and use best-effort UI state.
 
 ## Exceptions/Edge Cases
-- If a file cannot be read or written, log and skip (never abort the whole operation).
-  - If a file with the same name exists in `originals`, do nothing.
+- A required canonical original that cannot be copied aborts folder load rather than being logged and skipped.
+- Reset and Restore refuse zero-byte or non-file original media without changing the working media.
+- If a file with the same name exists in `originals`, preserve it only when it is a valid non-empty regular file.
 - If the originals folder does not exist, create it.
 - Never process blacklisted folders (`originals`, `auto_dataset`).
 

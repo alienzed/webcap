@@ -137,6 +137,36 @@ def test_reset_rejects_empty_original_without_overwriting_working_media(client, 
     assert (set_folder / "photo.jpg").read_bytes() == b"working-image-bytes"
 
 
+def test_restore_rejects_empty_original_without_creating_working_media(client, isolated_fs_root):
+    set_folder_rel = "set_empty_restore_original"
+    set_folder = isolated_fs_root / set_folder_rel
+    originals = set_folder / "originals"
+    originals.mkdir(parents=True)
+    write_bytes(originals / "photo.jpg", b"")
+
+    r = client.post("/media/restore", json={"folder": set_folder_rel, "fileName": "photo.jpg"})
+
+    assert r.status_code == 400
+    assert "Original media is empty" in r.get_json()["error"]
+    assert not (set_folder / "photo.jpg").exists()
+    assert (originals / "photo.jpg").exists()
+
+
+def test_restore_rejects_empty_pruned_original_without_creating_working_media(client, isolated_fs_root):
+    set_folder_rel = "set_empty_pruned_restore_original"
+    set_folder = isolated_fs_root / set_folder_rel
+    originals = set_folder / "originals"
+    originals.mkdir(parents=True)
+    write_bytes(originals / "pruned_photo.jpg", b"")
+
+    r = client.post("/media/restore", json={"folder": set_folder_rel, "fileName": "pruned_photo.jpg"})
+
+    assert r.status_code == 400
+    assert "Original media is empty" in r.get_json()["error"]
+    assert not (set_folder / "photo.jpg").exists()
+    assert (originals / "pruned_photo.jpg").exists()
+
+
 def test_rename_file_renames_sidecar_and_updates_reviewed_keys(client, isolated_fs_root):
     set_folder_rel = "set_c"
     set_folder = isolated_fs_root / set_folder_rel

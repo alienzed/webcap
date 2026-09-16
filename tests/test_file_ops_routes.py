@@ -701,7 +701,7 @@ def test_fs_describe_distinguishes_missing_and_empty_captions(tmp_path, monkeypa
     assert payload["captions"]["empty.png"] == {"exists": True, "text": ""}
 
 
-def test_originals_sync_creates_baseline_after_describe(tmp_path, monkeypatch):
+def test_fs_describe_creates_baseline_before_returning_success(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_originals"
     set_dir.mkdir(parents=True)
@@ -711,10 +711,31 @@ def test_originals_sync_creates_baseline_after_describe(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
     client = app_module.app.test_client()
 
-    assert client.get("/fs/describe?path=set_originals").status_code == 200
-    assert not (set_dir / "originals").exists()
-    assert client.post("/fs/originals/sync", json={"folder": "set_originals"}).get_json() == {"ok": True}
-    assert (set_dir / "originals" / "clip.png").exists()
+    response = client.get("/fs/describe?path=set_originals")
+
+    assert response.status_code == 200
+    assert (set_dir / "originals" / "clip.png").read_bytes() == (set_dir / "clip.png").read_bytes()
+
+
+def test_fs_describe_fails_loudly_when_originals_backup_fails(tmp_path, monkeypatch, caplog):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_originals_error"
+    set_dir.mkdir(parents=True)
+    write_image(set_dir / "clip.png")
+
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel_path: (fs_root / str(rel_path or "")).resolve())
+    monkeypatch.setattr(app_module, "copy_media_to_originals", lambda _folder: (_ for _ in ()).throw(OSError("No space left on device")))
+
+    with caplog.at_level("ERROR"):
+        response = app_module.app.test_client().get("/fs/describe?path=set_originals_error")
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == (
+        "Could not back up media to originals. WebCap refused to load this folder because working in it would be unsafe. "
+        "No space left on device"
+    )
+    assert "ORIGINALS BACKUP FAILED while loading folder" in caplog.text
+    assert "Traceback" in caplog.text
 
 
 def test_originals_sync_failure_is_server_error_and_logs_traceback(tmp_path, monkeypatch, caplog):

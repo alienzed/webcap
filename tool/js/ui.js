@@ -317,46 +317,16 @@ function navigateIntoFolder(name) {
 
 var folderLoadSequence = 0;
 
-function syncOriginalsForFolderLoad(path, loadSequence, priorFailure) {
-  if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return Promise.resolve();
-  return fetch('/fs/originals/sync', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folder: path })
-  }).then(function (response) {
-    return response.json().catch(function () { return {}; }).then(function (payload) {
-      if (!response.ok) throw new Error((payload && payload.error) || ('Originals sync failed (' + response.status + ')'));
-      return payload;
-    });
-  }).then(function () {
-    if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
-    refreshDeterministicMutationStatus();
-  }).catch(function (err) {
-    if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
-    var message = 'Originals sync failed: ' + String(err && err.message ? err.message : err);
-    console.error('[webcap] ' + message, err);
-    setStatus(priorFailure ? (String(priorFailure) + ' ' + message) : message);
-  });
-}
-
-function completeFolderLoadPipeline(path, loadSequence, metadataResult, captionErrors) {
+function completeFolderLoadPipeline(path, loadSequence, metadataResult) {
   if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
-  var priorFailure = captionErrors.length
-    ? ('Loaded folder with ' + captionErrors.length + ' unreadable caption' + (captionErrors.length === 1 ? '' : 's') + '.')
-    : '';
   if (metadataResult.ok) {
     applyFocusSetMetadataRows(path, metadataResult.rows);
     ensurePruneCandidatesForCurrentFolder(true).catch(function (err) {
       console.error('[webcap] Prune candidate analysis failed after metadata load:', err);
-    }).then(function () {
-      syncOriginalsForFolderLoad(path, loadSequence, priorFailure);
     });
     return;
   }
   failFocusSetMetadataForCurrentFolder(path);
-  var pipelineFailure = metadataResult.error || '';
-  if (priorFailure) pipelineFailure += (pipelineFailure ? ' ' : '') + priorFailure;
-  syncOriginalsForFolderLoad(path, loadSequence, pipelineFailure);
 }
 
 // Directory listing now uses backend /fs/describe.
@@ -474,7 +444,7 @@ function refreshCurrentDirectory() {
             setStatus(folderStatus);
             refreshTrainingWorkspace();
             refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {
-              completeFolderLoadPipeline(path, loadSequence, metadataResult, captionErrors);
+              completeFolderLoadPipeline(path, loadSequence, metadataResult);
             });
           // If a file was just renamed, reselect it
           if (window.state && state.pendingSelectFileName) {

@@ -146,15 +146,7 @@ def ensure_original_by_hash(src_path, originals_dir):
     Ensure src_path is backed up in originals_dir as baseline-only (single-file entry point).
     If canonical name does not exist in originals, copy once. Otherwise do nothing.
     """
-    src_path = Path(src_path)
-    originals_dir = Path(originals_dir)
-    canonical = originals_dir / src_path.name
-    if not canonical.exists():
-        shutil.copy2(src_path, canonical)
-        safe_chmod(canonical, 0o644)
-        return canonical
-    # Canonical already exists; do nothing (baseline stays immutable)
-    return canonical
+    return ensure_canonical_exists(src_path, originals_dir)
 
 def restore_original_media(folder_path, file_name):
     """
@@ -208,6 +200,10 @@ def restore_original_media_video_only(folder_path, file_name):
     dest_media_path = folder_path / file_name
     if not orig_media_path.exists():
         return False
+    if not orig_media_path.is_file():
+        raise ValueError('Original media is not a regular file; working file was left unchanged.')
+    if orig_media_path.stat().st_size <= 0:
+        raise ValueError('Original media is empty; working file was left unchanged.')
     shutil.copy2(orig_media_path, dest_media_path)
     safe_chmod(dest_media_path, 0o644)
     # Do NOT overwrite caption file if it exists
@@ -222,19 +218,49 @@ def restore_original_media_video_only(folder_path, file_name):
 def ensure_canonical_exists(src_path, originals_dir):
     """
     Ensure canonical name exists in originals_dir as immutable baseline.
-    - If canonical name does not exist, copy once.
-    - If canonical name exists, do nothing.
-    Returns path to canonical file, or None if copy failed.
+    - If canonical name does not exist, copy once and verify its size.
+    - If canonical name exists, preserve it only when it is a non-empty regular file.
+    Returns path to canonical file.
     """
     src_path = Path(src_path)
     originals_dir = Path(originals_dir)
     canonical = originals_dir / src_path.name
-    if not canonical.exists():
+    if canonical.exists() or canonical.is_symlink():
+        if canonical.is_symlink() or not canonical.is_file():
+            raise ValueError(f'Original backup is not a regular file: {canonical}')
+        if canonical.stat().st_size <= 0:
+            raise ValueError(f'Original backup is empty: {canonical}')
+        return canonical
+
+    try:
+        shutil.copy2(src_path, canonical)
+    except Exception:
         try:
-            shutil.copy2(src_path, canonical)
-            safe_chmod(canonical, 0o644)
+            canonical.unlink()
+        except FileNotFoundError:
+            pass
         except Exception:
-            return None
+            pass
+        raise
+
+    try:
+        source_size = src_path.stat().st_size
+        canonical_size = canonical.stat().st_size
+        if source_size <= 0 or canonical_size <= 0 or canonical_size != source_size:
+            raise IOError(
+                f'Original backup size verification failed for {src_path}: '
+                f'source={source_size}, canonical={canonical_size}'
+            )
+    except Exception:
+        try:
+            canonical.unlink()
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+        raise
+
+    safe_chmod(canonical, 0o644)
     return canonical
 
 

@@ -121,6 +121,22 @@ def test_reset_overwrites_media_and_preserves_existing_caption(client, isolated_
     assert r.status_code == 404
 
 
+def test_reset_rejects_empty_original_without_overwriting_working_media(client, isolated_fs_root):
+    set_folder_rel = "set_empty_original"
+    set_folder = isolated_fs_root / set_folder_rel
+    originals = set_folder / "originals"
+    originals.mkdir(parents=True)
+
+    write_bytes(originals / "photo.jpg", b"")
+    write_bytes(set_folder / "photo.jpg", b"working-image-bytes")
+
+    r = client.post("/media/reset", json={"folder": set_folder_rel, "fileName": "photo.jpg"})
+
+    assert r.status_code == 400
+    assert "Original media is empty" in r.get_json()["error"]
+    assert (set_folder / "photo.jpg").read_bytes() == b"working-image-bytes"
+
+
 def test_rename_file_renames_sidecar_and_updates_reviewed_keys(client, isolated_fs_root):
     set_folder_rel = "set_c"
     set_folder = isolated_fs_root / set_folder_rel

@@ -29,6 +29,10 @@ from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteErro
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
+
+class OriginalsBackupError(RuntimeError):
+    pass
+
 ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = ROOT / "tool"
 JS_DIR = TOOL_DIR / "js"
@@ -889,6 +893,8 @@ def fs_describe():
     except FolderStateReadError as e:
         app.logger.exception("FOLDER STATE LOAD FAILED for %r: %s", rel_path, e)
         return jsonify({"error": str(e), "folderStateReadFailed": True}), 500
+    except OriginalsBackupError as e:
+        return jsonify({"error": str(e)}), 500
     except Exception as e:
         if app_config.FS_DEBUG:
             app_config.debug_print("[fs_describe] ERROR:", e)
@@ -916,6 +922,14 @@ def _build_fs_describe_payload(dir_path):
     # side effects so a failed read cannot be bypassed or normalized away.
     state_path = dir_path / ".webcap_state.json"
     folder_state = read_folder_state(state_path)
+    try:
+        copy_media_to_originals(dir_path)
+    except Exception as exc:
+        app.logger.exception("ORIGINALS BACKUP FAILED while loading folder %s", dir_path)
+        raise OriginalsBackupError(
+            "Could not back up media to originals. WebCap refused to load this folder because working in it would be unsafe. "
+            f"{exc}"
+        ) from exc
 
     entries = []
     for entry in sorted(dir_path.iterdir(), key=lambda e: e.name.lower()):

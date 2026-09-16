@@ -107,6 +107,22 @@ def test_failed_atomic_config_replace_keeps_existing_set_toml(tmp_path, monkeypa
     assert not list(folder.glob(".config.krea2.toml.*.tmp"))
 
 
+def test_failed_raw_toml_save_keeps_existing_file_and_cleans_temp(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    toml_path = folder / "dataset.train.toml"
+    original = b"existing = true\n# preserve these bytes\n"
+    toml_path.write_bytes(original)
+    monkeypatch.setattr(config_module, "safe_join_fs_root", lambda _folder: folder)
+    monkeypatch.setattr(config_module.os, "replace", lambda _temporary, _target: (_ for _ in ()).throw(OSError("replace failed")))
+
+    with pytest.raises(OSError, match="replace failed"):
+        config_module.save_toml_file("set", "dataset.train.toml", "replacement = true\n")
+
+    assert toml_path.read_bytes() == original
+    assert not list(folder.glob(".dataset.train.toml.*.tmp"))
+
+
 def test_wan21_config_shares_the_set_output_root(tmp_path, monkeypatch):
     root = tmp_path / "training"
     folder = root / "lilly"

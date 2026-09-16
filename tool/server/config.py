@@ -9,6 +9,7 @@ import json
 import copy
 import os
 import re
+import tempfile
 import traceback
 
 from .permissions import normalize_path_permissions
@@ -382,9 +383,24 @@ def save_toml_file(folder_path, filename, text):
         raise ValueError('Invalid config filename')
     folder = safe_join_fs_root(folder_path)
     file_path = folder / filename
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(text)
-    normalize_path_permissions(file_path)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode='w', encoding='utf-8', dir=file_path.parent,
+            prefix=f'.{file_path.name}.', suffix='.tmp', delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, file_path)
+        normalize_path_permissions(file_path)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
     return True
 
 def fill_template_placeholders(toml_text, dataset_name):

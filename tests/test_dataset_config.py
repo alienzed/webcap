@@ -133,11 +133,14 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert training_plan["stages"]["hi"]["estimatedSteps"] > 0
     assert training_plan["stages"]["lo"]["estimatedSteps"] > 0
 
+    shared_dataset = set_folder / "dataset.train.toml"
+    shared_dataset.write_text("h3 dataset\n", encoding="utf-8")
     krea_report = generate_dataset_configs(set_folder, profile_id=KREA2_PROFILE_ID)
-    krea_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    krea_text = (set_folder / "dataset.krea2.toml").read_text(encoding="utf-8")
     assert 'group = "videos"' not in krea_text
     assert 'group = "images"' in krea_text
     assert "Krea2 Raw: excluded 1 prepared video(s)." in krea_report
+    assert shared_dataset.read_text(encoding="utf-8") == "h3 dataset\n"
     krea_plan = json.loads((auto_dataset / "training_plan.json").read_text(encoding="utf-8"))
     assert krea_plan["stages"]["krea2"]["estimatedSteps"] > 0
 

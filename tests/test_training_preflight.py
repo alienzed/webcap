@@ -63,7 +63,7 @@ def test_krea_preflight_accepts_mixed_manifest_when_generated_dataset_is_image_o
     auto_dataset = folder / "auto_dataset"
     auto_dataset.mkdir(parents=True)
     (folder / "config.krea2.toml").write_text("[model]\ntype = 'krea2'\n", encoding="utf-8")
-    (folder / "dataset.train.toml").write_text(
+    (folder / "dataset.krea2.toml").write_text(
         "[[directory]]\npath = '/images'\ngroup = 'images'\n",
         encoding="utf-8",
     )

@@ -47,9 +47,9 @@ _PROFILES = {
         "command": {"launcher": "standard_deepspeed"},
         "mediaKinds": ("image",),
         "videoFps": None,
-        "datasetFiles": ("dataset.train.toml",),
+        "datasetFiles": ("dataset.krea2.toml",),
         "configs": (
-            {"id": "krea2", "file": "config.krea2.toml", "dataset": "dataset.train.toml", "label": "Krea2 Raw", "outputSlug": "krea2-raw", "modelIdentityKeys": ("type", "diffusion_model")},
+            {"id": "krea2", "file": "config.krea2.toml", "dataset": "dataset.krea2.toml", "label": "Krea2 Raw", "outputSlug": "krea2-raw", "modelIdentityKeys": ("type", "diffusion_model")},
         ),
         "runs": (
             {"id": "train", "label": "Train", "stages": ("krea2",)},

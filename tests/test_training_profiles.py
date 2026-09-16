@@ -25,7 +25,7 @@ def test_training_profiles_expose_only_their_valid_runs_and_artifacts():
     assert tuple(krea["mediaKinds"]) == ("image",)
     assert krea["videoFps"] is None
     assert krea["configs"][0]["file"] == "config.krea2.toml"
-    assert tuple(krea["datasetFiles"]) == ("dataset.train.toml",)
+    assert tuple(krea["datasetFiles"]) == ("dataset.krea2.toml",)
     assert tuple(krea["configs"][0]["modelIdentityKeys"]) == ("type", "diffusion_model")
 
     wan21 = profile(WAN21_PROFILE_ID)

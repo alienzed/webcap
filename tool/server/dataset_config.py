@@ -353,7 +353,7 @@ def generate_dataset_configs(folder_path: Path, write_selection_snapshot_comment
     lines.append(f"[INFO] Wrote training plan: {training_plan_path}")
     single_stage = str(profile_id or "") in {KREA2_PROFILE_ID, WAN21_PROFILE_ID, MINIMAX_H3_PROFILE_ID}
     if single_stage:
-        train_path = folder / "dataset.train.toml"
+        train_path = folder / training_profile(profile_id)["configs"][0]["dataset"]
         _write_set_toml_atomic(train_path, artifacts["loText"])
         lines.append(f"[INFO] Wrote {train_path}")
     else:

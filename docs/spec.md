@@ -29,7 +29,7 @@ Queued and running jobs use their captured bundle and are independent of later c
 Supported profiles are Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, and MiniMax H3. The app-owned profile registry defines media support, persistent filenames, run options, and standard DeepSpeed launch behavior.
 
 - Wan2.2 accepts images and videos and owns separate HI and LO setup files. High and Low are independent runs with separate captures.
-- Krea2 Raw is image-only and owns `config.krea2.toml` and `dataset.train.toml`.
+- Krea2 Raw is image-only and owns `config.krea2.toml` and `dataset.krea2.toml`.
 - Wan2.1 accepts images and videos and owns `config.wan21.toml` and `dataset.train.toml`.
 - MiniMax H3 accepts images and videos and owns `config.h3.toml` and `dataset.train.toml`.
 - App Settings can hide profiles from new-run selection. All are enabled by default; disabling one never deletes files or run data.

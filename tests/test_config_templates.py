@@ -68,7 +68,7 @@ def test_krea2_config_is_rendered_with_the_existing_shared_output_dir(tmp_path, 
     assert krea2_path.is_file()
     krea2_text = krea2_path.read_text(encoding="utf-8")
     assert 'dataset    = "' in krea2_text
-    assert "dataset.train.toml" in krea2_text
+    assert "dataset.krea2.toml" in krea2_text
     assert "{TRAINING_ROOT}" not in krea2_text
     assert "{DATASET}" not in krea2_text
     assert training_config_files_module.output_dir_from_config(folder, "krea2") == training_config_files_module.output_dir_from_config(folder, "hi")

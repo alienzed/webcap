@@ -10,6 +10,7 @@ import tool.server.app as app_module
 import tool.server.dataset_config as dataset_config_module
 import tool.server.h3_probe as h3_probe_module
 import tool.server.run_ops as run_ops_module
+import tool.server.training_config_files as training_config_files_module
 from tool.server.dataset_config import (
     H3_VIDEO_BASELINE_CEILINGS,
     H3_VIDEO_MFP_LIMIT,
@@ -151,6 +152,20 @@ def test_generate_dataset_configs_fails_without_prep_manifest(tmp_path):
         assert "prep_manifest.json" in str(exc)
     else:
         raise AssertionError("generate_dataset_configs should fail without prep_manifest.json")
+
+
+def test_failed_atomic_dataset_replace_keeps_existing_set_toml(tmp_path, monkeypatch):
+    set_folder = tmp_path / "set"
+    _write_h3_video_manifest(set_folder, 136)
+    dataset_path = set_folder / "dataset.train.toml"
+    dataset_path.write_text("existing = true\n", encoding="utf-8")
+    monkeypatch.setattr(training_config_files_module.os, "replace", lambda _temporary, _target: (_ for _ in ()).throw(OSError("replace failed")))
+
+    with pytest.raises(OSError, match="replace failed"):
+        generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
+
+    assert dataset_path.read_text(encoding="utf-8") == "existing = true\n"
+    assert not list(set_folder.glob(".dataset.train.toml.*.tmp"))
 
 
 def _write_h3_video_manifest(set_folder, frames, include_image=False, fps=24, duration=None, ar="square", size=(768, 768)):

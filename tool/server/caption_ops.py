@@ -1,5 +1,7 @@
 
 from pathlib import Path
+import os
+import tempfile
 from flask import send_from_directory
 
 from . import config as app_config
@@ -68,7 +70,23 @@ def save_caption_text(folder: str, media_name: str, text: str):
     caption_path.parent.mkdir(parents=True, exist_ok=True)
     normalize_path_permissions(caption_path.parent)
     if clean_text.strip():
-        caption_path.write_text(clean_text, encoding='utf-8')
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode='w', encoding='utf-8', dir=caption_path.parent,
+                prefix=f'.{caption_path.name}.', suffix='.tmp', delete=False,
+            ) as handle:
+                temporary_path = Path(handle.name)
+                handle.write(clean_text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_path, caption_path)
+        finally:
+            if temporary_path is not None and temporary_path.exists():
+                try:
+                    temporary_path.unlink()
+                except OSError:
+                    pass
         app_config.debug_print('[BACKEND][WRITE] Caption written.')
         normalize_path_permissions(caption_path)
     elif caption_path.exists():

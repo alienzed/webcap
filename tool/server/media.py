@@ -197,6 +197,10 @@ def media_flip_horizontal_response(data):
         ext = src_media.suffix.lower()
         if ext not in {".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v", ".ogg", ".wmv", ".mpg", ".mpeg"}:
             return jsonify({"error": "Flip is only available for video files"}), 400
+        originals_dir = ensure_originals_folder(folder_path)
+        if originals_dir is None:
+            raise RuntimeError("Cannot overwrite source in this folder")
+        ensure_original_by_hash(src_media, originals_dir)
         # Write to temp file, then replace original
         tmp_path = src_media.with_suffix(src_media.suffix + ".tmp")
         cmd = [
@@ -269,7 +273,7 @@ def probe_media_metadata(file_path, face_detector=None, selection_pose_analyzers
             height = stream["height"]
             result["resolution"] = f"{width}x{height}"
             result["aspect_ratio"] = get_aspect_ratio(width, height)
-            result["fps"] = eval(stream["avg_frame_rate"]) if stream["avg_frame_rate"] != "0/0" else None
+            result["fps"] = _parse_fps_value(stream.get("avg_frame_rate"))
             result["codec"] = stream.get("codec_name", "")
             result["color_space"] = stream.get("pix_fmt", "")
             result["bitrate"] = int(stream.get("bit_rate", 0)) // 1000 if stream.get("bit_rate") else None

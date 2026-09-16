@@ -1,5 +1,6 @@
 import tool.server.config as config_module
 import tool.server.training_config_files as training_config_files_module
+import pytest
 
 
 def test_fill_template_placeholders_normalizes_paths(monkeypatch):
@@ -90,6 +91,20 @@ def test_profile_generation_only_creates_missing_selected_configs_and_reset_is_e
     assert krea.read_text(encoding="utf-8") == "edited = true\n"
     training_config_files_module.reset_training_config_file(folder, "config.krea2.toml")
     assert "type = \"krea2\"" in krea.read_text(encoding="utf-8")
+
+
+def test_failed_atomic_config_replace_keeps_existing_set_toml(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    config_path = folder / "config.krea2.toml"
+    config_path.write_text("existing = true\n", encoding="utf-8")
+    monkeypatch.setattr(training_config_files_module.os, "replace", lambda _temporary, _target: (_ for _ in ()).throw(OSError("replace failed")))
+
+    with pytest.raises(OSError, match="replace failed"):
+        training_config_files_module.reset_training_config_file(folder, "config.krea2.toml")
+
+    assert config_path.read_text(encoding="utf-8") == "existing = true\n"
+    assert not list(folder.glob(".config.krea2.toml.*.tmp"))
 
 
 def test_wan21_config_shares_the_set_output_root(tmp_path, monkeypatch):

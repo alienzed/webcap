@@ -50,6 +50,29 @@ def test_convert_fps_rejects_missing_source_and_non_video_file(fps_set):
     assert "only available for video files" in non_video.get_json()["error"]
 
 
+def test_flip_horizontal_establishes_original_before_overwriting_source(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    source = folder / "video.mp4"
+    source.write_bytes(b"original-video")
+    monkeypatch.setattr(media_module, "safe_join_fs_root", lambda _folder: folder)
+    monkeypatch.setattr(media_module, "update_media_metadata", lambda _folder: None)
+    monkeypatch.setattr(media_module, "normalize_path_permissions", lambda _path: None)
+
+    def fake_run(command, capture_output, text):
+        assert (folder / "originals" / "video.mp4").read_bytes() == b"original-video"
+        Path(command[-1]).write_bytes(b"flipped-video")
+        return _response()
+
+    monkeypatch.setattr(media_module.subprocess, "run", fake_run)
+
+    response = app_module.app.test_client().post("/media/flip_horizontal", json={"folder": "set", "fileName": "video.mp4"})
+
+    assert response.status_code == 200
+    assert source.read_bytes() == b"flipped-video"
+    assert (folder / "originals" / "video.mp4").read_bytes() == b"original-video"
+
+
 def test_fps_ffmpeg_command_uses_conservative_video_and_audio_policy(tmp_path, monkeypatch):
     source = tmp_path / "source.mp4"
     output = tmp_path / "converted.mp4"

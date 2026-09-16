@@ -34,6 +34,7 @@ from .training_profiles import (
 )
 from .training_setup import DATASET_ROOT_PLACEHOLDER, ensure_training_setup
 from .training_history import discover_runs
+from .training_config_files import _write_set_toml_atomic
 
 
 TRAINING_PLAN_VERSION = 1
@@ -519,7 +520,7 @@ def _write_structured_datasets(folder, setup, review_plan, profile_plan, profile
             continue
         text = _render_stage_dataset((review_plan.get("stages") or {}).get(stage, {}), profile_plan, profile_id)
         destination = Path(folder) / filename
-        destination.write_text(text, encoding="utf-8")
+        _write_set_toml_atomic(destination, text)
 
 
 def _bucket_aspect(bucket):

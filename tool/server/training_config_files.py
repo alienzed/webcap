@@ -1,11 +1,14 @@
 import json
 import math
+import os
 import re
+import tempfile
 import tomllib
 from pathlib import Path
 
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
+from .permissions import normalize_path_permissions
 from .training_profiles import (
     KREA2_PROFILE_ID,
     MINIMAX_H3_PROFILE_ID,
@@ -52,6 +55,28 @@ _OUTPUT_DIR_LINE_PATTERN = re.compile(r'^(\s*output_dir\s*=\s*)["\'][^"\']+["\']
 _DATASET_LINE_PATTERN = re.compile(r'^(\s*dataset\s*=\s*)["\'][^"\']+["\'](\s*(?:#.*)?)$', re.MULTILINE)
 _OUTPUT_PREFIX_PATTERN = re.compile(r"^(\d{3})-")
 _TABLE_PATTERN = re.compile(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$", re.MULTILINE)
+
+
+def _write_set_toml_atomic(destination, text):
+    path = Path(destination)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+        normalize_path_permissions(path)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
 
 # Last-resort values only if a canonical template is missing or malformed.
 _FALLBACK_HI_EPOCHS = 50
@@ -341,7 +366,7 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, 
                     # makes corruption visible instead of silently replacing it.
                     tomllib.loads(destination.read_text(encoding="utf-8"))
                     continue
-                destination.write_text(render_training_config_template(base["file"], folder), encoding="utf-8")
+                _write_set_toml_atomic(destination, render_training_config_template(base["file"], folder))
                 written.append(destination)
         return written
 
@@ -354,7 +379,7 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, 
             tomllib.loads(dest.read_text(encoding="utf-8"))
             continue
         rendered = _render_mode_config(folder, selected_profile["id"], base["id"], mode, reset=reset)
-        dest.write_text(rendered, encoding="utf-8")
+        _write_set_toml_atomic(dest, rendered)
         written.append(dest)
     return written
 
@@ -367,7 +392,7 @@ def reset_training_config_file(folder_path: Path, filename: str, profile_id=None
         if name not in TRAINING_CONFIG_TEMPLATE_NAMES:
             raise ValueError("Unknown training config: " + name)
         destination = folder / name
-        destination.write_text(render_training_config_template(name, folder), encoding="utf-8")
+        _write_set_toml_atomic(destination, render_training_config_template(name, folder))
         return destination
     selected = profile(profile_id or WAN22_PROFILE_ID)
     matches = [config_for_stage(selected["id"], item["id"], mode) for item in selected["configs"]]
@@ -376,5 +401,5 @@ def reset_training_config_file(folder_path: Path, filename: str, profile_id=None
         raise ValueError("Unknown training config: " + name)
     destination = folder / name
     rendered = _render_mode_config(folder, selected["id"], resolved["id"], mode, reset=True)
-    destination.write_text(rendered, encoding="utf-8")
+    _write_set_toml_atomic(destination, rendered)
     return destination

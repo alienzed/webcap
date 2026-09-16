@@ -137,6 +137,26 @@ def test_reset_rejects_empty_original_without_overwriting_working_media(client, 
     assert (set_folder / "photo.jpg").read_bytes() == b"working-image-bytes"
 
 
+def test_reset_replace_failure_keeps_working_media_and_original(client, isolated_fs_root, monkeypatch):
+    import tool.server.originals as originals_module
+
+    set_folder_rel = "set_reset_replace_failure"
+    set_folder = isolated_fs_root / set_folder_rel
+    originals = set_folder / "originals"
+    originals.mkdir(parents=True)
+    write_bytes(originals / "photo.jpg", b"canonical-bytes")
+    write_bytes(set_folder / "photo.jpg", b"working-bytes")
+    monkeypatch.setattr(originals_module.os, "replace", lambda _temporary, _target: (_ for _ in ()).throw(OSError("replace failed")))
+
+    r = client.post("/media/reset", json={"folder": set_folder_rel, "fileName": "photo.jpg"})
+
+    assert r.status_code == 400
+    assert "replace failed" in r.get_json()["error"]
+    assert (set_folder / "photo.jpg").read_bytes() == b"working-bytes"
+    assert (originals / "photo.jpg").read_bytes() == b"canonical-bytes"
+    assert not list(set_folder.glob(".webcap-reset-*"))
+
+
 def test_restore_rejects_empty_original_without_creating_working_media(client, isolated_fs_root):
     set_folder_rel = "set_empty_restore_original"
     set_folder = isolated_fs_root / set_folder_rel

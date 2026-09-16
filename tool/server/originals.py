@@ -3,7 +3,9 @@ originals.py
 Utility for managing the 'originals' folder for media safety.
 """
 from pathlib import Path
+import os
 import shutil
+import tempfile
 import hashlib
 import json
 
@@ -206,9 +208,26 @@ def restore_original_media_video_only(folder_path, file_name):
         return False
     if not orig_media_path.is_file():
         raise ValueError('Original media is not a regular file; working file was left unchanged.')
-    if orig_media_path.stat().st_size <= 0:
+    source_size = orig_media_path.stat().st_size
+    if source_size <= 0:
         raise ValueError('Original media is empty; working file was left unchanged.')
-    shutil.copy2(orig_media_path, dest_media_path)
+    temp_fd, temp_name = tempfile.mkstemp(
+        prefix='.webcap-reset-', suffix=orig_media_path.suffix, dir=str(folder_path),
+    )
+    os.close(temp_fd)
+    temp_media_path = Path(temp_name)
+    try:
+        shutil.copy2(orig_media_path, temp_media_path)
+        temp_size = temp_media_path.stat().st_size
+        if temp_size <= 0 or temp_size != source_size:
+            raise IOError('Original media copy was incomplete; working file was left unchanged.')
+        os.replace(temp_media_path, dest_media_path)
+    finally:
+        if temp_media_path.exists():
+            try:
+                temp_media_path.unlink()
+            except OSError:
+                pass
     safe_chmod(dest_media_path, 0o644)
     # Do NOT overwrite caption file if it exists
     caption_name = Path(file_name).stem + '.txt'

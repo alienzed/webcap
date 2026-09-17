@@ -3,12 +3,13 @@
   var H3_PROFILE_ID = 'minimax_h3';
   var pollTimer = null;
   var prepared = null;
+  var modalFolder = '';
 
   function el(id) { return document.getElementById(id); }
 
   function request(mode, extra) {
     var body = {
-      folder: String(state && state.folder || ''),
+      folder: String(modalFolder || (state && state.folder) || ''),
       profileId: PROFILE_ID,
       mode: mode
     };
@@ -113,6 +114,7 @@
     if (!modal) return;
     modal.classList.add('hidden');
     modal.setAttribute('aria-hidden', 'true');
+    modalFolder = '';
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
@@ -126,6 +128,7 @@
     var prompt = el('test-generations-prompt');
     var errorEl = el('test-generations-error');
     if (!modal) return;
+    modalFolder = String(state && state.folder || '');
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
     if (summary) summary.textContent = 'Loading H3 Test folder...';
@@ -142,7 +145,11 @@
         summary.textContent = payload.count + ' LoRA' + (payload.count === 1 ? '' : 's') + ' queued from the H3 Test folder, in filename order.';
       }
       if (list) list.textContent = (payload.files || []).join('\n');
-      if (prompt && !prompt.value.trim()) prompt.value = String(payload.defaultPrompt || '');
+      if (prompt) {
+        prompt.value = payload.latest && payload.latest.status === 'running'
+          ? String(payload.latest.prompt || payload.defaultPrompt || '')
+          : String(payload.defaultPrompt || '');
+      }
       renderStatus(payload.latest || { status: 'idle' });
       if (payload.latest && payload.latest.status === 'running') pollStatus();
     }).catch(function (err) {

@@ -18,7 +18,7 @@ from .training_profiles import config_for_stage, normalize_mode, profile, profil
 from .training_bundle import materialize_training_bundle
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets
-from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume
+from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume, run_summary_from_capture
 from .training_action import actions_root, allocate_action, action_id_for_root, action_paths, fingerprint_files, read_action, update_action
 from .training_preflight import (
     build_launch_preflight as _build_launch_preflight,
@@ -480,15 +480,25 @@ def _candidate_run_snapshot(folder, job_id):
         if not raw_run_path:
             raise RuntimeError("This training job has no recorded or resume run directory yet.")
         progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+        run_summary = job.get("runSummary") if isinstance(job.get("runSummary"), dict) else {}
+        if not run_summary:
+            run_summary = run_summary_from_capture(
+                job.get("recordPath") or job.get("inputPath"),
+                job.get("stages"),
+                job.get("capturedItemCount"),
+            )
         return raw_run_path, {
             "id": str(job.get("id") or ""),
             "folder": folder_text,
             "runName": str(job.get("runName") or ""),
+            "sequence": str(job.get("sequence") or ""),
+            "actionId": str(job.get("actionId") or ""),
             "stage": str(job.get("stage") or job.get("stages") or ""),
             "stages": str(job.get("stages") or "").strip().lower(),
             "status": str(job.get("status") or "unknown"),
             "currentEpoch": progress.get("epoch"),
             "plannedEpochs": progress.get("epochs"),
+            "runSummary": run_summary,
         }
 
 
@@ -581,6 +591,36 @@ def candidate_test_folder_path(folder, job_id):
     return _candidate_test_directory_for_run(run, create_missing=False)
 
 
+def _candidate_short_run_id(run):
+    sequence = str(run.get("sequence") or "").strip()
+    if sequence.isdigit() and 0 < int(sequence) <= 99:
+        return str(int(sequence)).zfill(2)
+    action_name = PurePosixPath(str(run.get("actionId") or "")).name
+    match = re.match(r"^(\d+)-", action_name)
+    if match and 0 < int(match.group(1)) <= 99:
+        return str(int(match.group(1))).zfill(2)
+    job_id = re.sub(r"[^A-Za-z0-9]+", "", str(run.get("id") or ""))
+    return (job_id[:2].lower() or "00").ljust(2, "0")
+
+
+def _candidate_test_prefix(run):
+    short_id = _candidate_short_run_id(run)
+    run_name = re.sub(r"[^A-Za-z0-9]+", "-", str(run.get("runName") or "").strip()).strip("-").lower()
+    if not run_name:
+        return "run-" + short_id
+    max_name_length = 29
+    run_name = run_name[:max_name_length].rstrip("-")
+    return run_name + "-" + short_id
+
+
+def _candidate_test_file_name(run, epoch):
+    return _candidate_test_prefix(run) + "__epoch" + str(int(epoch)) + ".safetensors"
+
+
+def _candidate_test_sidecar_path(destination):
+    return Path(destination).with_suffix(".webcap.json")
+
+
 def _annotate_candidate_test_folder_status(run, analysis):
     """Add non-mutating Copy to Test availability to saved candidate artifacts."""
     artifacts = analysis.get("savedArtifacts") if isinstance(analysis, dict) else None
@@ -603,7 +643,13 @@ def _annotate_candidate_test_folder_status(run, analysis):
     for artifact in artifacts:
         if not isinstance(artifact, dict) or artifact.get("status") != "available":
             continue
-        destination = destination_directory / str(artifact.get("fileName") or "")
+        epoch = artifact.get("epoch")
+        try:
+            test_file_name = _candidate_test_file_name(run, epoch)
+        except (TypeError, ValueError):
+            continue
+        artifact["testFileName"] = test_file_name
+        destination = destination_directory / test_file_name
         artifact["inTestFolder"] = destination.is_file() and not destination.is_symlink()
     analysis["testFolderStatus"] = {"state": "available"}
 
@@ -613,20 +659,47 @@ def copy_candidate_epoch_to_test(folder, job_id, epoch):
     _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
     source = _candidate_safetensors_path(folder, job_id, epoch)
     destination_directory = _candidate_test_directory_for_run(run, create_missing=True)
-    destination = destination_directory / source.name
+    file_name = _candidate_test_file_name(run, epoch)
+    destination = destination_directory / file_name
+    sidecar = _candidate_test_sidecar_path(destination)
     created_destination = False
+    created_sidecar = False
+    provenance = {
+        "version": 1,
+        "sourceJobId": str(run.get("id") or ""),
+        "sourceRunName": str(run.get("runName") or ""),
+        "sourceRunSequence": _candidate_short_run_id(run),
+        "sourceEpoch": int(epoch),
+        "sourceFileName": source.name,
+        "sourceFolder": str(run.get("folder") or ""),
+        "stage": str(run.get("stages") or "").strip().lower(),
+        "runSummary": run.get("runSummary") if isinstance(run.get("runSummary"), dict) else {},
+    }
     try:
         with source.open("rb") as source_file, destination.open("xb") as destination_file:
             created_destination = True
             shutil.copyfileobj(source_file, destination_file)
+        with sidecar.open("x", encoding="utf-8") as sidecar_file:
+            created_sidecar = True
+            json.dump(provenance, sidecar_file, indent=2)
     except Exception:
+        if created_sidecar:
+            try:
+                sidecar.unlink()
+            except OSError:
+                pass
         if created_destination:
             try:
                 destination.unlink()
             except OSError:
                 pass
         raise
-    return {"destination": str(destination), "fileName": source.name, "stage": str(run.get("stages") or "").strip().lower()}
+    return {
+        "destination": str(destination),
+        "fileName": file_name,
+        "sourceFileName": source.name,
+        "stage": str(run.get("stages") or "").strip().lower(),
+    }
 
 
 def copy_candidate_epoch_to_test_response(folder, job_id, epoch):
@@ -1604,7 +1677,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
+    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -1715,6 +1788,8 @@ def _new_job(
     progress_plan = _plan_run_steps(_read_training_plan(bundle.get("recordPath") or bundle["path"]) or _default_progress_plan(), snapshot)
     input_evidence = _input_evidence(bundle.get("inputPath") or bundle["path"], stages)
     model = _model_identity(artifacts, selected_profile["id"], stages)
+    captured_item_count = int(bundle.get("capturedItemCount") or 0)
+    run_summary = run_summary_from_capture(bundle.get("recordPath") or bundle["path"], stages, captured_item_count)
     sequence_match = re.match(r"^(\d+)-", action_root.name)
     action_run_id = str(run_id or "")
     return {
@@ -1746,7 +1821,8 @@ def _new_job(
         "inputPath": str(bundle.get("inputPath") or bundle["path"]),
         "bundleArtifacts": {key: str(value) for key, value in artifacts.items()},
         "bundleSummary": bundle.get("summary") or {},
-        "capturedItemCount": int(bundle.get("capturedItemCount") or 0),
+        "capturedItemCount": captured_item_count,
+        "runSummary": run_summary,
         "artifactPath": str(job_dir),
         "artifactDir": str(job_dir),
         "progressPlan": progress_plan,

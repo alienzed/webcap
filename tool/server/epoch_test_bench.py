@@ -346,9 +346,15 @@ def start(folder_path, prompt):
     resolved_loras = _resolve_comfy_loras(loras)
     folder_key = str(Path(folder_path).resolve())
     with _lock:
+        dead_keys = [key for key, thread in _active_threads.items() if not thread.is_alive()]
+        for key in dead_keys:
+            _active_threads.pop(key, None)
         active = _active_threads.get(folder_key)
         if active and active.is_alive():
             return _latest_status(folder_path)
+        if _active_threads:
+            raise RuntimeError("Another Test Generations batch is already running.")
+
         session_directory = _new_session_directory(folder_path)
         payload = {
             "status": "running",

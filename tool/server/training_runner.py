@@ -1299,6 +1299,27 @@ def _apply_terminal_job_status(job, result_status=""):
     return requested_action
 
 
+def _populate_queued_resume_point(job, folder_path=None):
+    """Attach the already-known checkpoint position to queued resume work."""
+    resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
+    if not resume_path:
+        job.pop("resumePoint", None)
+        job.pop("resumePointError", None)
+        return
+    stage = str(job.get("resumeStage") or job.get("stages") or "").strip().lower()
+    try:
+        folder_path = Path(folder_path) if folder_path is not None else app_config.safe_join_fs_root(str(job.get("folder") or ""))
+        point = resume_point_from_directory(folder_path, stage, resume_path)
+        job["resumePoint"] = {
+            key: point.get(key)
+            for key in ("checkpointAvailable", "checkpointTag", "epoch", "step", "expectedEpochs", "completed")
+        }
+        job.pop("resumePointError", None)
+    except (OSError, RuntimeError, ValueError) as exc:
+        job["resumePoint"] = {}
+        job["resumePointError"] = str(exc)
+
+
 def _queue_paused_job(job):
     """Return paused work to the front as ordinary queued resume intent."""
     resume_path = str(job.get("outputRunPath") or "").strip()
@@ -1306,6 +1327,7 @@ def _queue_paused_job(job):
         job["resumeFromCheckpoint"] = resume_path
         job["resumeStage"] = str(job.get("stages") or "")
         job["outputRunPath"] = ""
+        _populate_queued_resume_point(job)
     else:
         job.pop("resumeFromCheckpoint", None)
         job.pop("resumeStage", None)
@@ -1512,6 +1534,13 @@ def _refresh_state(state):
     for job in state.get("jobs", []):
         if job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
+        if (
+            job.get("status") == "queued"
+            and job.get("resumeFromCheckpoint")
+            and not job.get("resumePoint")
+            and not job.get("resumePointError")
+        ):
+            _populate_queued_resume_point(job)
         if job.get("status") == "completed":
             _annotate_completed_job(job)
         outcome = _refresh_job(job) if job.get("status") not in QUEUE_STATUSES | {"cancelled"} else None
@@ -1882,12 +1911,21 @@ def start_response(
         if resume_path and resume_output_id:
             raise ValueError("Choose either a managed checkpoint or a filesystem checkpoint, not both.")
         resume_action = None
+        resume_point = {}
         if resume_output_id and not resume_path:
             resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage)
             resume_path = str(resume["runPath"])
             resume_action = resume["actionRoot"]
+            resume_point = {
+                key: resume["point"].get(key)
+                for key in ("checkpointAvailable", "checkpointTag", "epoch", "step", "expectedEpochs", "completed")
+            }
         elif resume_path:
-            validate_resumable_run_for_path(folder_path, resume_stage, resume_path)
+            validated_resume = validate_resumable_run_for_path(folder_path, resume_stage, resume_path)
+            resume_point = {
+                key: validated_resume.get(key)
+                for key in ("checkpointAvailable", "checkpointTag", "epoch", "step", "expectedEpochs", "completed")
+            }
         if reuse_capture:
             action_root, action = read_action(str(reuse_capture_action_id).strip())
             bundle = _bundle_from_recorded_capture(
@@ -1924,6 +1962,7 @@ def start_response(
             resume_path, resume_stage, "", selected_profile["id"], selected_run["id"], selected_mode,
             action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
         )
+        job["resumePoint"] = resume_point
         def record_capture(data):
             if not reuse_capture:
                 try:

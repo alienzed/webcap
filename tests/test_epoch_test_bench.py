@@ -24,9 +24,9 @@ def test_workflow_substitution_changes_only_test_inputs():
         "138": {"inputs": {"lora_1": {"lora": "turbo.safetensors", "strength": 1}}},
     }
     original = copy.deepcopy(template)
-    path = Path("C:/ComfyUI/models/loras/mh3/test/set/epoch10.safetensors")
+    comfy_name = "mh3/test/set/epoch10.safetensors"
 
-    workflow = bench._workflow_for_lora(template, "the prompt", path)
+    workflow = bench._workflow_for_lora(template, "the prompt", comfy_name)
 
     assert template == original
     assert workflow["146"]["inputs"]["wildcard_text"] == "the prompt"
@@ -89,8 +89,8 @@ def test_run_batch_stops_on_first_failure(tmp_path, monkeypatch):
         },
     )
     loras = [
-        Path("C:/ComfyUI/models/loras/mh3/set/epoch01.safetensors"),
-        Path("C:/ComfyUI/models/loras/mh3/set/epoch02.safetensors"),
+        (Path("C:/ComfyUI/models/loras/mh3/set/epoch01.safetensors"), "mh3/set/epoch01.safetensors"),
+        (Path("C:/ComfyUI/models/loras/mh3/set/epoch02.safetensors"), "mh3/set/epoch02.safetensors"),
     ]
     queued = []
 
@@ -113,3 +113,22 @@ def test_run_batch_stops_on_first_failure(tmp_path, monkeypatch):
     assert status["completed"] == 0
     assert status["failed"] == 1
     assert status["error"] == "boom"
+
+
+def test_staged_lora_provenance_reads_copy_to_test_sidecar(tmp_path):
+    lora = tmp_path / "run-03__epoch24.safetensors"
+    lora.write_bytes(b"weights")
+    lora.with_suffix(".webcap.json").write_text(
+        '{"sourceJobId":"abc","sourceEpoch":24,"sourceRunSequence":"03"}',
+        encoding="utf-8",
+    )
+
+    assert bench._staged_lora_provenance(lora) == {
+        "sourceJobId": "abc",
+        "sourceEpoch": 24,
+        "sourceRunSequence": "03",
+    }
+
+
+def test_workflow_seed_uses_fixed_random_noise_seed():
+    assert bench._workflow_seed({"129": {"inputs": {"noise_seed": 12345}}}) == 12345

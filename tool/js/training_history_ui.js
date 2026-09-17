@@ -90,6 +90,9 @@ function renderTrainingHistory() {
   els.historySummary.classList.toggle('hidden', !!latest);
   els.historySummary.textContent = latest ? '' : 'No completed or actionable training outcomes yet.';
   var visibleJobs = trainingWorkspaceState.historyExpanded ? jobs : jobs.slice(0, 2);
+  visibleJobs.forEach(function (job) {
+    loadTrainingHistoryMetrics(job);
+  });
   els.historyList.innerHTML = visibleJobs.map(function (job) {
     var progress = job.progress && typeof job.progress === 'object' ? job.progress : {};
     var modelLabel = trainingModelLabel(job);
@@ -146,7 +149,7 @@ function renderTrainingHistory() {
       '<div class="training-history-fact-group"><div class="training-history-fact-heading">Timing</div>' +
         trainingHistoryFact('Active time', activeTime || (metricPending ? 'Loading…' : 'Unavailable')) +
         trainingHistoryFact('Started', formatTrainingHistoryTime(job.startedAt)) +
-        trainingHistoryFact('Completed', formatTrainingHistoryTime(job.finishedAt)) +
+        trainingHistoryFact('Finished', formatTrainingHistoryTime(job.finishedAt)) +
       '</div>' +
       '<div class="training-history-fact-group"><div class="training-history-fact-heading">Training</div>' +
         trainingHistoryFact('Profile', profileLabel) +

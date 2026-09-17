@@ -744,6 +744,7 @@ function buildTrainingQueueHtml(queuedJobs) {
           resume + buildQueuedResumePointHtml(queuedJob) + output + captured + sourceUnavailable + error +
         '</div>' +
         '<div class="training-runner-queue-controls">' +
+          (String(queuedJob.outputRunPath || '').trim() ? '<button type="button" class="training-runner-queue-control" data-training-candidates="' + escapeHtml(queuedJob.id) + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
           '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' +
           (queuedJob.actionPath ? '<button type="button" class="training-runner-queue-control" data-training-job-action="' + escapeHtml(queuedJob.id) + '" title="Open action folder" aria-label="Open action folder">&#128451;</button>' : '') +
           '<button type="button" class="training-runner-queue-control" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + '>&#8593;</button>' +

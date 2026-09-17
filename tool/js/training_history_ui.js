@@ -3,7 +3,7 @@ function formatTrainingHistoryTime(value) {
   var seconds = Number(value || 0);
   if (!seconds) return '';
   return new Date(seconds * 1000).toLocaleString([], {
-    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit'
+    year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
   });
 }
 
@@ -17,6 +17,33 @@ function trainingHistoryTimestampKind(job) {
 function trainingHistoryFact(label, value, title) {
   if (!value) return '';
   return '<div class="training-history-fact"><span>' + escapeHtml(label) + '</span><strong' + (title ? ' title="' + escapeHtml(title) + '"' : '') + '>' + escapeHtml(value) + '</strong></div>';
+}
+
+function trainingHistoryCompactNumber(value) {
+  var number = Number(value);
+  if (!isFinite(number)) return '';
+  if (number !== 0 && Math.abs(number) < .001) {
+    return number.toExponential(1).replace('.0e', 'e').replace('e+', 'e');
+  }
+  return String(number);
+}
+
+function trainingHistoryRunSummary(job) {
+  var summary = job && job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
+  var parts = [];
+  if (summary.lr !== undefined && summary.lr !== null) parts.push('LR ' + trainingHistoryCompactNumber(summary.lr));
+  if (summary.dropout !== undefined && summary.dropout !== null) parts.push('dropout ' + trainingHistoryCompactNumber(summary.dropout));
+  if (summary.shift !== undefined && summary.shift !== null) parts.push('shift ' + trainingHistoryCompactNumber(summary.shift));
+  if (Number(summary.capturedItems || 0) > 0) parts.push(Math.round(Number(summary.capturedItems)).toLocaleString() + ' items');
+  if (Number(summary.epochs || 0) > 0) parts.push(Math.round(Number(summary.epochs)).toLocaleString() + ' epochs');
+  return parts.join(' · ');
+}
+
+function trainingHistoryRunDisplayName(job, profileLabel) {
+  var name = String(job && job.runName || '').trim();
+  if (name) return name;
+  var sequence = String(job && job.sequence || '').trim();
+  return sequence ? 'Run ' + sequence.replace(/^0+(?=\d)/, '') : profileLabel;
 }
 
 function trainingHistoryCheckpointLabel(artifact) {
@@ -72,7 +99,8 @@ function renderTrainingHistory() {
     if (!searchText) return true;
     var model = job.model && typeof job.model === 'object' ? job.model : {};
     var haystack = [
-      job.folder, job.datasetTarget, job.profileId, job.mode, job.stages, job.status, job.modelLabel, model.label, model.source
+      job.folder, job.datasetTarget, job.profileId, job.mode, job.stages, job.status, job.modelLabel, model.label, model.source,
+      job.runName, trainingHistoryRunSummary(job)
     ].join(' ').toLowerCase();
     return haystack.indexOf(searchText) !== -1;
   }).sort(function (a, b) {
@@ -104,6 +132,7 @@ function renderTrainingHistory() {
     var plannedSteps = Number(progress.plannedSteps);
     var learningRate = String(progress.lr || '').trim();
     var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
+    var runSummary = trainingHistoryRunSummary(job);
     var hasStarted = Number(job.startedAt || 0) > 0;
     var hasFinished = Number(job.finishedAt || 0) > 0;
     var details = [];
@@ -129,6 +158,7 @@ function renderTrainingHistory() {
     var modelSource = modelSourcePath.split(/[\\/]/).pop();
     var stageLabel = trainingStageLabel(job.stages || '');
     var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
+    var runDisplayName = trainingHistoryRunDisplayName(job, profileLabel);
     var checkpointLabel = trainingHistoryCheckpointLabel(artifact);
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
     var canOpenCheckpointRun = !!(checkpointLabel && job.folder && job.outputRunPath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(checkpointStage) !== -1);
@@ -168,9 +198,10 @@ function renderTrainingHistory() {
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span></div>' +
         '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
-      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(job.runName || profileLabel) + '</div>' +
+      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(runDisplayName) + '</div>' +
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
+        (runSummary ? '<div>' + escapeHtml(runSummary) + '</div>' : '') +
         (details.length ? '<div>' +
           (details.length ? escapeHtml(details.join(' · ')) : '') +
           '</div>' : '') +

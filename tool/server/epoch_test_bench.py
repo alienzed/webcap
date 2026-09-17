@@ -270,6 +270,24 @@ def _latest_status(folder_path):
     return {"status": "idle"}
 
 
+def _staged_lora_provenance(lora_file):
+    sidecar = Path(lora_file).with_suffix(".webcap.json")
+    try:
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _workflow_seed(workflow):
+    inputs = ((workflow.get("129") or {}).get("inputs") or {}) if isinstance(workflow, dict) else {}
+    seed = inputs.get("noise_seed")
+    try:
+        return int(seed)
+    except (TypeError, ValueError):
+        return None
+
+
 def _result_paths(session_directory, lora_file):
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", lora_file.stem).strip("._") or "result"
     video = Path(session_directory) / (stem + ".mp4")
@@ -298,6 +316,18 @@ def _run_batch(folder_key, session_directory, loras, prompt):
             video_path.write_bytes(video_bytes)
             caption_path.write_text(prompt, encoding="utf-8")
             status = _read_status(session_directory) or {}
+            provenance = _staged_lora_provenance(lora_file)
+            results = status.get("results") if isinstance(status.get("results"), list) else []
+            result = {
+                "sourceLoRA": lora_file.name,
+                "outputVideo": video_path.name,
+                "prompt": prompt,
+                "seed": _workflow_seed(workflow),
+            }
+            if provenance:
+                result["provenance"] = provenance
+            results.append(result)
+            status["results"] = results
             status["completed"] = int(status.get("completed") or 0) + 1
             status["current"] = ""
             _atomic_write_json(status_file, status)
@@ -352,9 +382,6 @@ def start(folder_path, prompt):
         active = _active_threads.get(folder_key)
         if active and active.is_alive():
             return _latest_status(folder_path)
-        if _active_threads:
-            raise RuntimeError("Another Test Generations batch is already running.")
-
         session_directory = _new_session_directory(folder_path)
         payload = {
             "status": "running",
@@ -365,6 +392,8 @@ def start(folder_path, prompt):
             "failed": 0,
             "current": "",
             "error": "",
+            "seed": _workflow_seed(_load_template()),
+            "results": [],
             "resultFolder": _relative_to_fs_root(session_directory),
         }
         _atomic_write_json(_status_path(session_directory), payload)

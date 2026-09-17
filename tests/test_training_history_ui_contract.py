@@ -30,3 +30,12 @@ def test_recent_runs_offer_curve_analysis_for_an_available_resume_run():
 
     assert 'item["candidateRunAvailable"]' in history
     assert 'job.candidateRunAvailable' in script
+
+
+def test_recent_runs_load_timing_for_completed_and_finished_early_rows():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+
+    assert "['completed', 'finished_early']" in script
+    assert "visibleJobs.forEach(function (job)" in script
+    assert "loadTrainingHistoryMetrics(job);" in script
+    assert "trainingHistoryFact('Finished', formatTrainingHistoryTime(job.finishedAt))" in script

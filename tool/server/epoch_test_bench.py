@@ -16,6 +16,7 @@ from .training_history import host_path_for_training_path
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "comfyui" / "minimax_h3_test_api.json"
 TEST_RESULTS_DIR = "test-generations"
+GENERATION_TIMEOUT_SECONDS = 45 * 60
 _lock = threading.Lock()
 _active_threads = {}
 
@@ -96,19 +97,52 @@ def _lora_files(test_directory):
     )
 
 
-def _relative_comfy_lora_name(path):
-    segments = [segment for segment in re.split(r"[\\/]+", str(path)) if segment]
-    lower = [segment.lower() for segment in segments]
-    indices = [index for index, segment in enumerate(lower) if segment == "loras"]
-    if not indices:
-        raise ValueError("The configured H3 Test folder must be inside a ComfyUI models/loras directory.")
-    relative = segments[indices[-1] + 1 :]
-    if not relative:
-        raise ValueError("Could not derive the ComfyUI LoRA name from the configured H3 Test folder.")
-    return "/".join(relative)
+def _normalize_lora_name(value):
+    return "/".join(segment for segment in re.split(r"[\\/]+", str(value or "")) if segment).casefold()
 
 
-def _workflow_for_lora(template, prompt, lora_path):
+def _available_comfy_lora_names():
+    payload = _read_json_response(COMFY_BASE_URL + "/object_info/LoraLoader", timeout=5)
+    node = payload.get("LoraLoader") if isinstance(payload, dict) else None
+    inputs = node.get("input") if isinstance(node, dict) and isinstance(node.get("input"), dict) else {}
+    required = inputs.get("required") if isinstance(inputs.get("required"), dict) else {}
+    lora_spec = required.get("lora_name")
+    choices = lora_spec[0] if isinstance(lora_spec, (list, tuple)) and lora_spec else None
+    if not isinstance(choices, (list, tuple)):
+        raise RuntimeError("ComfyUI did not expose the available LoRA names for LoraLoader.")
+    names = [str(name) for name in choices if str(name).strip()]
+    if not names:
+        raise RuntimeError("ComfyUI reports no LoRAs available to LoraLoader.")
+    return names
+
+
+def _resolve_comfy_loras(loras):
+    available = _available_comfy_lora_names()
+    records = [(name, _normalize_lora_name(name), Path(str(name).replace("\\", "/")).name.casefold()) for name in available]
+    resolved = []
+    for path in loras:
+        local_normalized = _normalize_lora_name(path)
+        suffix_matches = [
+            name
+            for name, normalized, _ in records
+            if local_normalized == normalized or local_normalized.endswith("/" + normalized)
+        ]
+        if len(suffix_matches) == 1:
+            resolved.append((path, suffix_matches[0]))
+            continue
+
+        basename = path.name.casefold()
+        basename_matches = [name for name, _, record_basename in records if record_basename == basename]
+        if len(basename_matches) == 1:
+            resolved.append((path, basename_matches[0]))
+            continue
+        if not basename_matches:
+            raise RuntimeError("ComfyUI cannot see staged LoRA: " + path.name)
+        raise RuntimeError("ComfyUI LoRA name is ambiguous for staged file: " + path.name)
+    return resolved
+
+
+def _workflow_for_lora(template, prompt, comfy_lora_name):
     workflow = copy.deepcopy(template)
     try:
         prompt_inputs = workflow["146"]["inputs"]
@@ -116,7 +150,7 @@ def _workflow_for_lora(template, prompt, lora_path):
         prompt_inputs["populated_text"] = prompt
         prompt_inputs["mode"] = "fixed"
         lora_inputs = workflow["148"]["inputs"]
-        lora_inputs["lora_name"] = _relative_comfy_lora_name(lora_path)
+        lora_inputs["lora_name"] = comfy_lora_name
         lora_inputs["strength_model"] = 0.9
         lora_inputs["strength_clip"] = 1
     except (KeyError, TypeError) as exc:
@@ -149,9 +183,12 @@ def _queue_workflow(workflow):
     return prompt_id
 
 
-def _wait_for_video(prompt_id):
+def _wait_for_video(prompt_id, timeout=GENERATION_TIMEOUT_SECONDS):
     history_url = COMFY_BASE_URL + "/history/" + urllib.parse.quote(prompt_id, safe="")
+    deadline = time.monotonic() + timeout
     while True:
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Timed out waiting for ComfyUI to finish this generation.")
         history = _read_json_response(history_url)
         entry = history.get(prompt_id) if isinstance(history, dict) else None
         if isinstance(entry, dict):
@@ -249,11 +286,11 @@ def _run_batch(folder_key, session_directory, loras, prompt):
     status_file = _status_path(session_directory)
     template = _load_template()
     try:
-        for lora_file in loras:
+        for lora_file, comfy_lora_name in loras:
             status = _read_status(session_directory) or {}
             status["current"] = lora_file.name
             _atomic_write_json(status_file, status)
-            workflow = _workflow_for_lora(template, prompt, lora_file)
+            workflow = _workflow_for_lora(template, prompt, comfy_lora_name)
             prompt_id = _queue_workflow(workflow)
             video_ref = _wait_for_video(prompt_id)
             video_bytes = _download_video(video_ref)
@@ -306,6 +343,7 @@ def start(folder_path, prompt):
     if not loras:
         raise ValueError("The H3 Test folder contains no .safetensors files.")
     _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
+    resolved_loras = _resolve_comfy_loras(loras)
     folder_key = str(Path(folder_path).resolve())
     with _lock:
         active = _active_threads.get(folder_key)
@@ -316,7 +354,7 @@ def start(folder_path, prompt):
             "status": "running",
             "model": "h3",
             "prompt": prompt,
-            "total": len(loras),
+            "total": len(resolved_loras),
             "completed": 0,
             "failed": 0,
             "current": "",
@@ -326,7 +364,7 @@ def start(folder_path, prompt):
         _atomic_write_json(_status_path(session_directory), payload)
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, loras, prompt),
+            args=(folder_key, session_directory, resolved_loras, prompt),
             name="webcap-h3-test-generations",
             daemon=True,
         )

@@ -717,9 +717,22 @@ function buildTrainingQueueHtml(queuedJobs) {
       var stage = trainingJobLabel(queuedJob);
       var plannedSteps = trainingPlannedStepCount(queuedJob);
       var plannedEpochs = trainingPlannedEpochCount(queuedJob);
+      var resumePoint = queuedJob && queuedJob.resumePoint && typeof queuedJob.resumePoint === 'object' ? queuedJob.resumePoint : {};
+      var resumeEpoch = Number(resumePoint.epoch);
+      var resumeStep = Number(resumePoint.step);
       var workloadParts = [];
-      if (plannedEpochs) workloadParts.push(Math.round(plannedEpochs).toLocaleString() + ' epochs');
-      if (plannedSteps) workloadParts.push('~' + Math.round(plannedSteps).toLocaleString() + ' run steps');
+      if (plannedEpochs) {
+        var remainingEpochs = queuedJob.resumeFromCheckpoint && isFinite(resumeEpoch) && resumeEpoch > 0
+          ? Math.max(0, plannedEpochs - resumeEpoch)
+          : plannedEpochs;
+        workloadParts.push((queuedJob.resumeFromCheckpoint ? remainingEpochs.toLocaleString() + ' epochs remaining' : Math.round(plannedEpochs).toLocaleString() + ' epochs'));
+      }
+      if (plannedSteps) {
+        var remainingSteps = queuedJob.resumeFromCheckpoint && isFinite(resumeStep) && resumeStep > 0
+          ? Math.max(0, plannedSteps - resumeStep)
+          : plannedSteps;
+        workloadParts.push((queuedJob.resumeFromCheckpoint ? '~' + Math.round(remainingSteps).toLocaleString() + ' steps remaining' : '~' + Math.round(plannedSteps).toLocaleString() + ' run steps'));
+      }
       var workload = workloadParts.length ? '<span class="training-runner-queue-workload">' + escapeHtml(workloadParts.join(' · ')) + '</span>' : '';
       var status = String(queuedJob.status || 'queued');
       var error = queuedJob.error ? '<div class="training-runner-queue-resume">' + escapeHtml(queuedJob.error) + '</div>' : '';

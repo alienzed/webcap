@@ -51,3 +51,18 @@ def test_queued_resumes_show_checkpoint_progress_and_remaining_work():
     assert "def _populate_queued_resume_point" in backend
     assert 'job["resumePoint"] = resume_point' in backend
     assert "_populate_queued_resume_point(job)" in backend
+
+
+def test_recent_runs_show_captured_run_settings_and_short_unnamed_identity():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+
+    assert "trainingHistoryRunSummary(job)" in script
+    assert "'dropout '" in script
+    assert "'shift '" in script
+    assert "' items'" in script
+    assert "'Run ' + sequence" in script
+    assert "def run_summary_from_capture" in history
+    assert 'summary["lr"]' in history
+    assert 'summary["dropout"]' in history
+    assert 'summary["shift"]' in history

@@ -224,8 +224,10 @@
     });
 
     var select = el('training-model-profile-select');
-    if (select) select.addEventListener('change', syncLaunchVisibility);
-    document.addEventListener('click', function () { setTimeout(syncLaunchVisibility, 0); });
+    if (select) {
+      select.addEventListener('change', syncLaunchVisibility);
+      new MutationObserver(syncLaunchVisibility).observe(select, { childList: true, subtree: true });
+    }
     syncLaunchVisibility();
   }
 

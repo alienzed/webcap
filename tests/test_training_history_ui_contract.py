@@ -39,3 +39,15 @@ def test_recent_runs_load_timing_for_completed_and_finished_early_rows():
     assert "visibleJobs.forEach(function (job)" in script
     assert "loadTrainingHistoryMetrics(job);" in script
     assert "trainingHistoryFact('Finished', formatTrainingHistoryTime(job.finishedAt))" in script
+
+
+def test_queued_resumes_show_checkpoint_progress_and_remaining_work():
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
+
+    assert "buildQueuedResumePointHtml(queuedJob)" in runner
+    assert "' epochs remaining'" in runner
+    assert "' steps remaining'" in runner
+    assert "def _populate_queued_resume_point" in backend
+    assert 'job["resumePoint"] = resume_point' in backend
+    assert "_populate_queued_resume_point(job)" in backend

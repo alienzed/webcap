@@ -199,7 +199,13 @@ function trainingCandidatesSvg(data) {
   }
   function x(step) { return plotLeft + (trainingCandidatesNumber(step, minStep) - minStep) / (maxStep - minStep) * (plotRight - plotLeft); }
   function y(loss) { return plotTop + (maxLoss - trainingCandidatesNumber(loss, minLoss)) / (maxLoss - minLoss) * plotHeight; }
+  var epochPositionData = { stepPoints: stepPoints, points: points };
+  function epochX(epoch, fallbackStep) {
+    var epochPoint = trainingCandidatesStepPointForEpoch(epoch, epochPositionData);
+    return x(epochPoint ? epochPoint.step : fallbackStep);
+  }
   function polyline(series) { return series.map(function (point) { return x(point.step).toFixed(2) + ',' + y(point.loss).toFixed(2); }).join(' '); }
+  function epochPolyline(series) { return series.map(function (point) { return epochX(point.epoch, point.step).toFixed(2) + ',' + y(point.loss).toFixed(2); }).join(' '); }
   var regions = Array.isArray(data.regions) ? data.regions : [];
   var candidates = Array.isArray(data.candidates) ? data.candidates : [];
   var savedArtifacts = Array.isArray(data.savedArtifacts) ? data.savedArtifacts : [];
@@ -209,6 +215,14 @@ function trainingCandidatesSvg(data) {
   function artifactForEpoch(epoch) { return savedArtifacts.filter(function (artifact) { return Number(artifact.epoch) === Number(epoch) && artifact.status === 'available'; })[0] || null; }
   function inTestFolderClass(epoch) { var artifact = artifactForEpoch(epoch); return artifact && artifact.inTestFolder ? ' in-test-folder' : ''; }
   function markerLabel(kind, epoch) { return kind + ' at epoch ' + escapeHtml(String(epoch)) + (inTestFolderClass(epoch) ? ' · In Test Folder' : ''); }
+  var epochBands = points.map(function (point, index) {
+    var right = epochX(point.epoch, point.step);
+    var previous = index ? points[index - 1] : null;
+    var left = previous ? epochX(previous.epoch, previous.step) : plotLeft;
+    var alternate = index % 2 ? ' is-alternate' : '';
+    return '<rect class="training-candidates-epoch-band' + alternate + '" x="' + left.toFixed(2) + '" y="' + plotTop + '" width="' + Math.max(0, right - left).toFixed(2) + '" height="' + plotHeight + '"></rect>' +
+      '<line class="training-candidates-epoch-boundary" x1="' + right.toFixed(2) + '" y1="' + plotTop + '" x2="' + right.toFixed(2) + '" y2="' + plotBottom + '"></line>';
+  }).join('');
   var regionRects = regions.map(function (region) {
     var left = x(region.startStep);
     var right = x(region.endStep);
@@ -217,20 +231,20 @@ function trainingCandidatesSvg(data) {
   var savedMarkers = savedArtifacts.filter(function (artifact) { return !candidateEpochs[Number(artifact.epoch)]; }).map(function (artifact) {
     var point = trainingCandidatesPointForEpoch(artifact.epoch, analysis, points);
     if (!point) return '';
-    var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
+    var pointX = epochX(artifact.epoch, point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
     return '<g class="training-candidates-epoch-marker training-candidates-saved-marker ' + escapeHtml(String(artifact.status || '')) + inTestFolderClass(artifact.epoch) + '" ' + markerData(artifact.epoch) + ' role="button" tabindex="0" aria-label="' + markerLabel('Saved LoRA', artifact.epoch) + '"><circle cx="' + pointX + '" cy="' + pointY + '" r="5"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="12"></circle></g>';
   }).join('');
   var candidateMarkers = candidates.map(function (candidate) {
     var analytical = trainingCandidatesPointForStep(candidate.step, analysis);
     var checkpoint = trainingCandidatesPointForEpoch(candidate.epoch, [], points);
     var point = { step: candidate.step, loss: analytical ? analytical.loss : checkpoint.loss };
-    var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
+    var pointX = epochX(candidate.epoch, point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
     return '<g class="training-candidates-marker training-candidates-epoch-marker' + inTestFolderClass(candidate.epoch) + '" ' + markerData(candidate.epoch) + ' role="button" tabindex="0" aria-label="' + markerLabel('Suggested epoch', candidate.epoch) + '"><line x1="' + pointX + '" y1="' + plotTop + '" x2="' + pointX + '" y2="' + plotBottom + '"></line><circle cx="' + pointX + '" cy="' + pointY + '" r="7"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="14"></circle></g>';
   }).join('');
   var candidateLabels = candidates.map(function (candidate) {
     var point = trainingCandidatesPointForStep(candidate.step, analysis) || trainingCandidatesPointForEpoch(candidate.epoch, [], points);
     if (!point) return '';
-    return '<text class="training-candidates-marker-label" x="' + x(point.step).toFixed(2) + '" y="' + (plotTop - 8) + '">' + escapeHtml(String(candidate.epoch)) + '</text>';
+    return '<text class="training-candidates-marker-label" x="' + epochX(candidate.epoch, point.step).toFixed(2) + '" y="' + (plotTop - 8) + '">' + escapeHtml(String(candidate.epoch)) + '</text>';
   }).join('');
   var yTicks = trainingCandidatesYAxisTicks(minLoss, maxLoss).map(function (value) {
     var tickY = y(value);
@@ -241,10 +255,10 @@ function trainingCandidatesSvg(data) {
     '<svg class="training-candidates-chart" viewBox="0 0 ' + viewWidth + ' ' + viewHeight + '" role="img" aria-label="TensorBoard step loss and epoch loss curve" data-training-candidates-chart="' + chartData + '">' +
       '<defs><clipPath id="training-candidates-plot-clip"><rect x="' + plotLeft + '" y="' + plotTop + '" width="' + (plotRight - plotLeft) + '" height="' + plotHeight + '"></rect></clipPath></defs>' +
       yTicks + '<line class="training-candidates-axis" x1="' + plotLeft + '" y1="' + plotBottom + '" x2="' + plotRight + '" y2="' + plotBottom + '"></line><line class="training-candidates-axis" x1="' + plotLeft + '" y1="' + plotTop + '" x2="' + plotLeft + '" y2="' + plotBottom + '"></line>' +
-      '<g class="training-candidates-plot-content" clip-path="url(#training-candidates-plot-clip)">' + regionRects +
+      '<g class="training-candidates-plot-content" clip-path="url(#training-candidates-plot-clip)">' + epochBands + regionRects +
       (display.showRawStep ? '<polyline class="training-candidates-step-loss" points="' + polyline(stepPoints) + '"></polyline>' : '') +
       (display.showSmoothedStep && smoothedStepPoints.length ? '<polyline class="training-candidates-step-loss-smoothed" points="' + polyline(smoothedStepPoints) + '"></polyline>' : '') +
-      (display.showEpochLoss ? '<polyline class="training-candidates-raw" points="' + polyline(points) + '"></polyline>' : '') +
+      (display.showEpochLoss ? '<polyline class="training-candidates-raw" points="' + epochPolyline(points) + '"></polyline>' : '') +
       (analysis.length ? '<polyline class="training-candidates-analysis" points="' + polyline(analysis) + '"></polyline>' : '') +
       '<rect class="training-candidates-hover-layer" x="' + plotLeft + '" y="' + plotTop + '" width="' + (plotRight - plotLeft) + '" height="' + plotHeight + '"></rect><line class="training-candidates-hover-guide hidden" x1="0" y1="' + plotTop + '" x2="0" y2="' + plotBottom + '"></line><circle class="training-candidates-hover-point hidden" cx="0" cy="0" r="4"></circle>' + savedMarkers + candidateMarkers + '</g>' + candidateLabels +
       '<text class="training-candidates-axis-label" x="' + plotLeft + '" y="' + (plotBottom + 24) + '">step ' + escapeHtml(String(minStep)) + ' · epoch ' + escapeHtml(String(minStepPoint.epoch)) + '</text><text class="training-candidates-axis-label" x="' + plotRight + '" y="' + (plotBottom + 24) + '" text-anchor="end">step ' + escapeHtml(String(maxStep)) + ' · epoch ' + escapeHtml(String(maxStepPoint.epoch)) + '</text>' +

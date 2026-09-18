@@ -348,9 +348,9 @@
     if (!host) return;
     var results = status && Array.isArray(status.results) ? status.results : [];
     var resultFolder = String(status && status.resultFolder || '');
-    host.innerHTML = '';
 
     if (results.length < 2) {
+      host.dataset.compareKey = '';
       host.innerHTML = '<div class="test-generations-empty">At least two completed results are needed to compare.</div>';
       return;
     }

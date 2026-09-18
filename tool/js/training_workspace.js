@@ -448,7 +448,7 @@ function refreshTrainingWorkspace() {
   var isUnavailableSetEntry = !isGlobalEntry && !isSetEntry;
 
   if (els.globalContext) {
-    els.globalContext.classList.remove('hidden');
+    els.globalContext.classList.toggle('hidden', false);
     els.globalContext.classList.toggle('training-global-context--global', isGlobalEntry);
   }
   if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);

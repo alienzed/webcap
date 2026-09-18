@@ -248,7 +248,7 @@ def test_start_refuses_when_training_gpu_is_unavailable(tmp_path, monkeypatch):
         "133": {"inputs": {"value": 7}},
     })
     monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
-    monkeypatch.setattr(bench, "reserve_gpu_for_external_work", lambda _owner: False)
+    monkeypatch.setattr(bench, "_reserve_gpu_for_test_generations", lambda: False)
 
     with pytest.raises(RuntimeError, match="GPU is busy"):
         bench.start(tmp_path, "prompt")
@@ -265,7 +265,7 @@ def test_run_batch_releases_gpu_reservation_when_template_load_fails(tmp_path, m
     )
     released = []
     monkeypatch.setattr(bench, "_load_template", lambda: (_ for _ in ()).throw(RuntimeError("template boom")))
-    monkeypatch.setattr(bench, "release_gpu_for_external_work", released.append)
+    monkeypatch.setattr(bench, "_release_gpu_for_test_generations", lambda: released.append(bench.GPU_RESERVATION_OWNER))
 
     bench._run_batch("folder-key", session, [], "prompt")
 
@@ -344,7 +344,7 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
     monkeypatch.setattr(bench, "_queue_workflow", lambda workflow: seen.append(workflow["127"]["inputs"]["unet_name"]) or "prompt-id")
     monkeypatch.setattr(bench, "_wait_for_video", lambda _prompt_id: {"filename": "x.mp4", "subfolder": "", "type": "temp"})
     monkeypatch.setattr(bench, "_download_video", lambda _ref: b"video")
-    monkeypatch.setattr(bench, "release_gpu_for_external_work", lambda _owner: None)
+    monkeypatch.setattr(bench, "_release_gpu_for_test_generations", lambda: None)
 
     bench._run_batch(
         "folder-key",
@@ -356,3 +356,10 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
 
     assert seen == ["mh3/linux-model.safetensors"]
     assert bench._read_status(session)["status"] == "complete"
+
+
+
+def test_epoch_test_bench_does_not_import_training_runner_at_module_load():
+    source = Path(bench.__file__).read_text(encoding="utf-8")
+    top_level = source.split("def _reserve_gpu_for_test_generations", 1)[0]
+    assert "from .training_runner import" not in top_level

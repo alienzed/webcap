@@ -14,7 +14,6 @@ from pathlib import Path
 
 from . import config as app_config
 from .training_history import host_path_for_training_path
-from .training_runner import release_gpu_for_external_work, reserve_gpu_for_external_work
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "comfyui" / "minimax_h3_test_api.json"
@@ -23,6 +22,16 @@ GENERATION_TIMEOUT_SECONDS = 45 * 60
 GPU_RESERVATION_OWNER = "test-generations"
 _lock = threading.Lock()
 _active_threads = {}
+
+
+def _reserve_gpu_for_test_generations():
+    from .training_runner import reserve_gpu_for_external_work
+    return _reserve_gpu_for_test_generations()
+
+
+def _release_gpu_for_test_generations():
+    from .training_runner import release_gpu_for_external_work
+    _release_gpu_for_test_generations()
 
 
 def _windows_curl_path():

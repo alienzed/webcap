@@ -81,6 +81,10 @@
     if (countEl) countEl.textContent = String(count);
     if (!host) return;
     host.innerHTML = '';
+    if (!files.length) {
+      host.innerHTML = '<div class="test-generations-library-empty">No staged LoRAs.</div>';
+      return;
+    }
     files.forEach(function (fileName) {
       var row = document.createElement('div');
       row.className = 'test-generations-staged-row';
@@ -106,6 +110,10 @@
     if (countEl) countEl.textContent = String(items.length);
     if (!host) return;
     host.innerHTML = '';
+    if (!items.length) {
+      host.innerHTML = '<div class="test-generations-library-empty">No test sessions yet.</div>';
+      return;
+    }
     items.forEach(function (session) {
       var name = String(session.session || '');
       var row = document.createElement('div');

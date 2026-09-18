@@ -80,6 +80,8 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert '.training-candidates-chart text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }' in css
     assert ".training-candidates-step-loss-smoothed" in css
     assert ".training-candidates-gridline" in css
+    assert ".training-candidates-epoch-band.is-alternate" in css
+    assert ".training-candidates-epoch-boundary" in css
     assert ".training-candidates-pinned-popover" in css
     assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-btn' in css
     assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-toggle input' in css
@@ -148,10 +150,14 @@ for (const tag of svg.matchAll(/<rect[^>]+>/g)) {
   if (tag[0].includes('height="490"')) assert(tag[0].includes('y="28"'));
 }
 assert(svg.includes('class="training-candidates-gridline"'));
+assert(svg.includes('class="training-candidates-epoch-band is-alternate"'));
+assert(svg.includes('class="training-candidates-epoch-boundary"'));
 assert(svg.includes('class="training-candidates-plot-content" clip-path="url(#training-candidates-plot-clip)"'));
 assert(svg.includes('class="training-candidates-hover-guide hidden" x1="0" y1="28" x2="0" y2="518"'));
 const marker = svg.match(/class="training-candidates-marker training-candidates-epoch-marker(?: in-test-folder)?"[^>]*><line x1="([^"]+)"/);
+const epochBoundary = svg.match(/class="training-candidates-epoch-boundary" x1="([^"]+)"/);
 assert(Math.abs(Number(marker[1]) - (52 + (199-10)/(399-10)*926)) < .01);
+assert(Math.abs(Number(marker[1]) - Number(epochBoundary[1])) < .01);
 assert(svg.includes('data-training-candidate-epoch="1"'));
 assert(svg.includes('r="7"'));
 assert(svg.includes('r="14"'));

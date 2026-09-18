@@ -6,6 +6,7 @@
   var launchFolder = '';
   var currentSession = '';
   var currentStatus = {};
+  var activeStatus = {};
   var resultsView = 'grid';
   var compareIndex = 0;
   var debouncedPromptSave = debounceCreate(500);
@@ -453,11 +454,26 @@
     renderCompare(status || {});
   }
 
-  function setControlsDisabled(disabled) {
-    ['test-generations-prompt', 'test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-seed', 'test-generations-reset-prompt-btn'].forEach(function (id) {
+  function setRunSettingsDisabled(disabled) {
+    ['test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-seed'].forEach(function (id) {
       var node = el(id);
       if (node) node.disabled = !!disabled;
     });
+  }
+
+  function syncActiveRunControls(status) {
+    activeStatus = status || {};
+    var running = !!(status && status.status === 'running');
+    var stopping = !!(status && status.status === 'stopping');
+    var active = running || stopping;
+    var runBtn = el('test-generations-run-btn');
+    var stopBtn = el('test-generations-stop-btn');
+    if (runBtn) runBtn.disabled = active || !prepared || !prepared.count;
+    if (stopBtn) {
+      stopBtn.classList.toggle('hidden', !active);
+      stopBtn.disabled = stopping;
+    }
+    setRunSettingsDisabled(active);
   }
 
   function renderStatus(status) {
@@ -466,22 +482,11 @@
     syncSessionSelection();
     var statusEl = el('test-generations-status');
     var errorEl = el('test-generations-error');
-    var runBtn = el('test-generations-run-btn');
-    var stopBtn = el('test-generations-stop-btn');
     if (statusEl) statusEl.textContent = statusText(status);
     if (errorEl) {
       errorEl.textContent = status && status.error ? String(status.error) : '';
       errorEl.classList.toggle('hidden', !errorEl.textContent);
     }
-    var running = !!(status && status.status === 'running');
-    var stopping = !!(status && status.status === 'stopping');
-    var active = running || stopping;
-    if (runBtn) runBtn.disabled = active || !prepared || !prepared.count;
-    if (stopBtn) {
-      stopBtn.classList.toggle('hidden', !active);
-      stopBtn.disabled = stopping;
-    }
-    setControlsDisabled(active);
     renderResults(status || {});
   }
 
@@ -489,7 +494,11 @@
     if (pollTimer) clearTimeout(pollTimer);
     if (!isOpen()) return;
     request('test_status').then(function (status) {
-      renderStatus(status);
+      syncActiveRunControls(status);
+      var activeSession = String(status && status.session || '');
+      if (!currentSession || currentSession === activeSession) {
+        renderStatus(status);
+      }
       if (status && (status.status === 'running' || status.status === 'stopping')) {
         pollTimer = setTimeout(pollStatus, 2000);
       } else {
@@ -572,6 +581,7 @@
     prepared = null;
     currentSession = '';
     currentStatus = {};
+    activeStatus = {};
     compareIndex = 0;
     setResultsView('grid');
     renderStatus({ status: 'idle' });
@@ -580,8 +590,9 @@
       renderStagedFiles(payload);
       renderSessions(payload.sessions);
       populateControls(payload);
+      syncActiveRunControls(payload.latest || { status: 'idle' });
       renderStatus(payload.latest || { status: 'idle' });
-      if (payload.latest && payload.latest.status === 'running') pollStatus();
+      if (payload.latest && (payload.latest.status === 'running' || payload.latest.status === 'stopping')) pollStatus();
     }).catch(function (err) {
       if (summary) summary.textContent = 'Test Generations is unavailable.';
       showError(err);
@@ -607,11 +618,12 @@
       duration: duration,
       seed: seed
     }).then(function (status) {
+      syncActiveRunControls(status);
       renderStatus(status);
       pollStatus();
     }).catch(function (err) {
       if (runBtn) runBtn.disabled = false;
-      setControlsDisabled(false);
+      setRunSettingsDisabled(false);
       showError(err);
     });
   }
@@ -620,7 +632,8 @@
     var stopBtn = el('test-generations-stop-btn');
     if (stopBtn) stopBtn.disabled = true;
     request('test_stop').then(function (status) {
-      renderStatus(status);
+      syncActiveRunControls(status);
+      if (!currentSession || currentSession === String(status && status.session || '')) renderStatus(status);
       pollStatus();
     }).catch(function (err) {
       if (stopBtn) stopBtn.disabled = false;

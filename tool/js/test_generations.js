@@ -78,23 +78,27 @@
   function syncUtilityButton(payload) {
     utilityActivity = payload || {};
     var button = el('utility-test-bench-btn');
-    if (!button) return;
+    var activityButton = el('activity-test-btn');
+    if (!button || !activityButton) return;
     var active = Array.isArray(utilityActivity.active) && utilityActivity.active.length ? utilityActivity.active[0] : null;
     var current = utilityActivity.current || {};
     var targetFolder = active && active.folder ? String(active.folder) : (current.hasTestData ? String(current.folder || '') : '');
     var visible = !!targetFolder;
-    button.classList.toggle('hidden', !visible);
-    button.classList.toggle('test-running', !!active);
-    button.classList.toggle('active', isOpen());
-    button.setAttribute('aria-pressed', isOpen() ? 'true' : 'false');
-    button.dataset.testBenchFolder = targetFolder;
-    if (active) {
-      var completed = Number(active.completed || 0);
-      var total = Number(active.total || 0);
-      button.title = 'Test Bench · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total;
-    } else {
-      button.title = 'Open Test Bench';
-    }
+    [button, activityButton].forEach(function (target) {
+      target.classList.toggle('hidden', !visible);
+      target.classList.toggle('test-running', !!active);
+      target.classList.toggle('active', isOpen());
+      target.setAttribute('aria-pressed', isOpen() ? 'true' : 'false');
+      target.dataset.testBenchFolder = targetFolder;
+      if (active) {
+        var completed = Number(active.completed || 0);
+        var total = Number(active.total || 0);
+        target.title = 'Test Bench · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total;
+      } else {
+        target.title = 'Open Test Bench';
+      }
+    });
+    if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   }
 
   function refreshUtilityButton() {
@@ -654,6 +658,7 @@
       pollTimer = null;
     }
     refreshUtilityButton();
+    if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   }
 
   function populateControls(payload) {
@@ -698,6 +703,7 @@
     surface.classList.add('test-generations-active');
     app.classList.add('test-generations-workspace-open');
     node.classList.remove('hidden');
+    if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (summary) summary.textContent = 'Loading H3 Test folder...';
     if (list) list.textContent = '';
     if (errorEl) {

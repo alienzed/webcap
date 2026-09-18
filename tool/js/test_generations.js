@@ -4,6 +4,7 @@
   var pollTimer = null;
   var prepared = null;
   var paneFolder = '';
+  var debouncedPromptSave = debounceCreate(500);
 
   function el(id) { return document.getElementById(id); }
 
@@ -29,6 +30,22 @@
   }
 
   function pane() { return el('test-generations-pane'); }
+
+  function capturePromptSave(prompt) {
+    state.testGenerationPrompt = String(prompt || '');
+    var capturedSave = captureCurrentFolderStateSave();
+    if (!capturedSave) return null;
+    capturedSave.snapshot.test_generation_prompt = state.testGenerationPrompt;
+    return capturedSave;
+  }
+
+  function savePrompt(prompt) {
+    var capturedSave = capturePromptSave(prompt);
+    if (!capturedSave) return;
+    debouncedPromptSave(function () {
+      writeCapturedFolderState(capturedSave);
+    });
+  }
 
   function isOpen() {
     var node = pane();
@@ -136,7 +153,7 @@
   }
 
   function setControlsDisabled(disabled) {
-    ['test-generations-prompt', 'test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-seed'].forEach(function (id) {
+    ['test-generations-prompt', 'test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-seed', 'test-generations-reset-prompt-btn'].forEach(function (id) {
       var node = el(id);
       if (node) node.disabled = !!disabled;
     });
@@ -229,7 +246,12 @@
     if (megapixels) megapixels.value = String(running ? latest.megapixels : defaults.megapixels);
     if (duration) duration.value = String(running ? latest.duration : defaults.duration);
     if (seed) seed.value = String(running ? latest.seed : defaults.seed);
-    if (prompt) prompt.value = running ? String(latest.prompt || payload.defaultPrompt || '') : String(payload.defaultPrompt || '');
+    if (prompt) {
+      var savedPrompt = String(state.testGenerationPrompt || '');
+      prompt.value = running
+        ? String(latest.prompt || payload.defaultPrompt || '')
+        : (savedPrompt.trim() ? savedPrompt : String(payload.defaultPrompt || ''));
+    }
   }
 
   function openPane() {
@@ -326,7 +348,7 @@
       '<label class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="0.1" step="0.1"></label>',
       '<label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>',
       '</div>',
-      '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Results</button></div>',
+      '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset Prompt</button><button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Results</button></div>',
       '<div id="test-generations-status" class="training-command-status" aria-live="polite"></div>',
       '<div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>',
       '</div>',
@@ -339,6 +361,15 @@
     button.onclick = openPane;
     el('test-generations-close-btn').onclick = closePane;
     el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-prompt').addEventListener('input', function () {
+      savePrompt(this.value);
+    });
+    el('test-generations-reset-prompt-btn').onclick = function () {
+      if (!prepared) throw new Error('Test Generations prompt defaults are not loaded.');
+      var prompt = String(prepared.defaultPrompt || '');
+      el('test-generations-prompt').value = prompt;
+      savePrompt(prompt);
+    };
     el('test-generations-open-results-btn').onclick = function () { openResults(this.dataset.resultFolder || ''); };
 
     var select = el('training-model-profile-select');

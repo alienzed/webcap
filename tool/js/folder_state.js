@@ -106,6 +106,7 @@ function sanitizeFolderState(data) {
     caption_term_descriptor_defaults: captionTermDescriptorDefaults,
     caption_term_descriptors_by_media: captionTermDescriptorsByMedia,
     caption_set_notes: String(src.caption_set_notes || ''),
+    test_generation_prompt: String(src.test_generation_prompt || ''),
     annotate_strip_visible: !!src.annotate_strip_visible,
     caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,
     media_filters: {
@@ -274,6 +275,7 @@ function snapshotFolderStateFromDom() {
     caption_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorDefaultsByKey)) : undefined,
     caption_term_descriptors_by_media: (typeof window.checklistTermDescriptorsByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorsByMedia)) : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),
+    test_generation_prompt: String(state.testGenerationPrompt || ''),
     annotate_strip_visible: !!window.annotateStripVisible,
     caption_helper_panel_collapsed: !!window.captionHelperPanelCollapsed,
     media_filters: mediaFilters,
@@ -311,6 +313,7 @@ function applyFolderStateToDom(folderState) {
   state.ratings = (clean && clean.ratings_by_media && typeof clean.ratings_by_media === 'object')
     ? clean.ratings_by_media
     : {};
+  state.testGenerationPrompt = String(clean.test_generation_prompt || '');
   state.mutatedSet = new Set(Array.isArray(clean.mutated_media_keys) ? clean.mutated_media_keys : []);
   state.mutatedByMediaSource = {};
   state.mutatedSet.forEach(function (key) {

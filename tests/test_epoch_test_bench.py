@@ -842,3 +842,43 @@ def test_open_session_keeps_live_running_session_running(tmp_path, monkeypatch):
 
     assert payload["status"] == "running"
     assert payload["current"] == "Base"
+
+
+
+def test_move_saved_video_failure_keeps_source(tmp_path):
+    source_dir = tmp_path / "output" / "webcap-tests" / "2026-09-18_1700-h3" / "001-base"
+    source_dir.mkdir(parents=True)
+    source = source_dir / "render_00001.mp4"
+    source.write_bytes(b"video")
+    destination = tmp_path / "session" / "base.mp4"
+    destination.parent.mkdir()
+    destination.write_bytes(b"existing")
+
+    with pytest.raises(FileExistsError):
+        bench._move_saved_video(
+            {"filename": source.name, "type": "output", "fullpath": str(source)},
+            destination,
+            filename_prefix="webcap-tests/2026-09-18_1700-h3/001-base/render",
+        )
+
+    assert source.read_bytes() == b"video"
+    assert source_dir.exists()
+
+
+def test_remove_candidate_refuses_active_batch(tmp_path, monkeypatch):
+    candidate = tmp_path / "epoch10.safetensors"
+    candidate.write_bytes(b"weights")
+
+    class ActiveThread:
+        def is_alive(self):
+            return True
+
+    folder_key = str(tmp_path.resolve())
+    monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
+    monkeypatch.setattr(bench, "_active_sessions", {})
+    monkeypatch.setattr(bench, "_stop_requests", set())
+
+    with pytest.raises(RuntimeError, match="active Test Generations batch"):
+        bench.remove_candidate(tmp_path, candidate.name)
+
+    assert candidate.exists()

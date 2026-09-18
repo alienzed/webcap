@@ -447,6 +447,7 @@ function refreshCurrentDirectory() {
               : ('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
             setStatus(folderStatus);
             refreshTrainingWorkspace();
+            if (typeof window.testGenerationsFolderLoaded === 'function') window.testGenerationsFolderLoaded();
             refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {
               completeFolderLoadPipeline(path, loadSequence, metadataResult);
             });

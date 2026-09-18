@@ -241,14 +241,14 @@
     "inputs": {
       "frame_rate": 24,
       "loop_count": 0,
-      "filename_prefix": "mh3/HH4013_vid",
+      "filename_prefix": "webcap-tests/h3-test",
       "format": "video/h264-mp4",
       "pix_fmt": "yuv420p",
       "crf": 19,
       "save_metadata": true,
       "trim_to_audio": false,
       "pingpong": false,
-      "save_output": false,
+      "save_output": true,
       "images": [
         "122",
         0
@@ -261,6 +261,19 @@
     "class_type": "VHS_VideoCombine",
     "_meta": {
       "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "162": {
+    "inputs": {
+      "filenames": [
+        "141",
+        0
+      ],
+      "options": "Intermediate and Utility"
+    },
+    "class_type": "VHS_PruneOutputs",
+    "_meta": {
+      "title": "Prune Outputs"
     }
   },
   "146": {

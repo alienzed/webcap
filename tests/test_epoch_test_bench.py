@@ -40,17 +40,6 @@ def test_windows_curl_transport_posts_json_via_stdin(monkeypatch):
     assert json.loads(calls["input"].decode("utf-8")) == payload
 
 
-def test_windows_curl_transport_reads_binary(monkeypatch):
-    class Result:
-        returncode = 0
-        stdout = b"video-bytes"
-        stderr = b""
-
-    monkeypatch.setattr(bench, "_windows_curl_path", lambda: "/mnt/c/Windows/System32/curl.exe")
-    monkeypatch.setattr(bench.subprocess, "run", lambda *args, **kwargs: Result())
-
-    assert bench._read_bytes("http://127.0.0.1:8188/view?filename=test.mp4") == b"video-bytes"
-
 def test_lora_files_are_filtered_and_sorted(tmp_path):
     (tmp_path / "epoch10.safetensors").write_bytes(b"")
     (tmp_path / "Epoch02.safetensors").write_bytes(b"")
@@ -133,24 +122,53 @@ def test_workflow_substitution_changes_only_test_inputs():
     assert workflow["138"] == original["138"]
 
 
-def test_find_video_ref_preserves_temp_type():
+def test_find_video_ref_preserves_saved_output_path():
     outputs = {
         "141": {
             "gifs": [
                 {
-                    "filename": "mh3/test_00001.mp4",
-                    "subfolder": "",
-                    "type": "temp",
+                    "filename": "h3-test_00001.mp4",
+                    "subfolder": "webcap-tests",
+                    "type": "output",
+                    "fullpath": "C:/ComfyUI/output/webcap-tests/h3-test_00001.mp4",
                 }
             ]
         }
     }
 
     assert bench._find_video_ref(outputs) == {
-        "filename": "mh3/test_00001.mp4",
-        "subfolder": "",
-        "type": "temp",
+        "filename": "h3-test_00001.mp4",
+        "subfolder": "webcap-tests",
+        "type": "output",
+        "fullpath": "C:/ComfyUI/output/webcap-tests/h3-test_00001.mp4",
     }
+
+
+def test_move_saved_video_moves_exact_comfy_output(tmp_path):
+    source = tmp_path / "comfy-output.mp4"
+    destination = tmp_path / "session" / "epoch10.mp4"
+    destination.parent.mkdir()
+    source.write_bytes(b"workflow-bearing-video")
+
+    moved = bench._move_saved_video(
+        {"filename": source.name, "type": "output", "fullpath": str(source)},
+        destination,
+    )
+
+    assert moved == destination
+    assert destination.read_bytes() == b"workflow-bearing-video"
+    assert not source.exists()
+
+
+def test_move_saved_video_rejects_temp_output(tmp_path):
+    source = tmp_path / "temp.mp4"
+    source.write_bytes(b"video")
+
+    with pytest.raises(RuntimeError, match="not saved to the output directory"):
+        bench._move_saved_video(
+            {"filename": source.name, "type": "temp", "fullpath": str(source)},
+            tmp_path / "result.mp4",
+        )
 
 
 def test_default_template_has_required_test_nodes():
@@ -162,7 +180,12 @@ def test_default_template_has_required_test_nodes():
     assert workflow["146"]["class_type"] == "ImpactWildcardProcessor"
     assert workflow["148"]["class_type"] == "LoraLoader"
     assert workflow["148"]["inputs"]["strength_model"] == 0.9
-    assert workflow["141"]["inputs"]["save_output"] is False
+    assert workflow["141"]["inputs"]["save_metadata"] is True
+    assert workflow["141"]["inputs"]["save_output"] is True
+    assert workflow["141"]["inputs"]["filename_prefix"] == "webcap-tests/h3-test"
+    assert workflow["162"]["class_type"] == "VHS_PruneOutputs"
+    assert workflow["162"]["inputs"]["options"] == "Intermediate and Utility"
+    assert workflow["162"]["inputs"]["filenames"] == ["141", 0]
     assert bench._default_prompt(workflow)
 
 
@@ -210,8 +233,16 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
         return "prompt-ok"
 
     monkeypatch.setattr(bench, "_queue_workflow", queue)
-    monkeypatch.setattr(bench, "_wait_for_video", lambda _prompt_id: {"filename": "ok.mp4"})
-    monkeypatch.setattr(bench, "_download_video", lambda _video_ref: b"video")
+    monkeypatch.setattr(
+        bench,
+        "_wait_for_video",
+        lambda _prompt_id: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
+    )
+    monkeypatch.setattr(
+        bench,
+        "_move_saved_video",
+        lambda _video_ref, destination: Path(destination).write_bytes(b"video"),
+    )
 
     bench._run_batch("folder-key", session, loras, "prompt")
 
@@ -406,8 +437,16 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
     seen = []
     monkeypatch.setattr(bench, "_load_template", lambda: pytest.fail("worker must use the resolved template from start"))
     monkeypatch.setattr(bench, "_queue_workflow", lambda workflow: seen.append(workflow["127"]["inputs"]["unet_name"]) or "prompt-id")
-    monkeypatch.setattr(bench, "_wait_for_video", lambda _prompt_id: {"filename": "x.mp4", "subfolder": "", "type": "temp"})
-    monkeypatch.setattr(bench, "_download_video", lambda _ref: b"video")
+    monkeypatch.setattr(
+        bench,
+        "_wait_for_video",
+        lambda _prompt_id: {"filename": "x.mp4", "subfolder": "webcap-tests", "type": "output", "fullpath": "C:/ComfyUI/output/webcap-tests/x.mp4"},
+    )
+    monkeypatch.setattr(
+        bench,
+        "_move_saved_video",
+        lambda _ref, destination: Path(destination).write_bytes(b"video"),
+    )
     monkeypatch.setattr(bench, "_release_gpu_for_test_generations", lambda: None)
 
     bench._run_batch(

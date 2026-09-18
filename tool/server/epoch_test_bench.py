@@ -126,21 +126,6 @@ def _read_json_response(url, method="GET", payload=None, timeout=10):
         raise RuntimeError("ComfyUI returned invalid JSON.") from exc
 
 
-def _read_bytes(url, timeout=30):
-    curl_path = _windows_curl_path()
-    if curl_path:
-        try:
-            return _windows_curl_request(curl_path, url, timeout=timeout)
-        except (ConnectionError, RuntimeError) as exc:
-            raise RuntimeError("Could not retrieve the ComfyUI output.") from exc
-    req = urllib.request.Request(url, method="GET")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            return response.read()
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
-        raise RuntimeError("Could not retrieve the ComfyUI output.") from exc
-
-
 def _interrupt_comfy():
     url = COMFY_BASE_URL + "/interrupt"
     curl_path = _windows_curl_path()
@@ -405,7 +390,12 @@ def _find_video_ref(value):
     if isinstance(value, dict):
         filename = str(value.get("filename") or "")
         if filename.lower().endswith(".mp4"):
-            return {"filename": filename, "subfolder": str(value.get("subfolder") or ""), "type": str(value.get("type") or "output")}
+            return {
+                "filename": filename,
+                "subfolder": str(value.get("subfolder") or ""),
+                "type": str(value.get("type") or "output"),
+                "fullpath": str(value.get("fullpath") or ""),
+            }
         for child in value.values():
             found = _find_video_ref(child)
             if found:
@@ -447,13 +437,43 @@ def _wait_for_video(prompt_id, timeout=GENERATION_TIMEOUT_SECONDS):
         time.sleep(2)
 
 
-def _download_video(video_ref):
-    query = urllib.parse.urlencode({
-        "filename": video_ref["filename"],
-        "subfolder": video_ref.get("subfolder") or "",
-        "type": video_ref.get("type") or "output",
-    })
-    return _read_bytes(COMFY_BASE_URL + "/view?" + query)
+def _comfy_saved_output_path(video_ref):
+    if str(video_ref.get("type") or "") != "output":
+        raise RuntimeError("ComfyUI Test output was not saved to the output directory.")
+    raw_path = str(video_ref.get("fullpath") or "").strip()
+    if not raw_path:
+        raise RuntimeError("ComfyUI did not expose the saved Test video path.")
+    path = Path(raw_path)
+    if path.is_file():
+        return path
+    if _windows_curl_path() and re.match(r"^[A-Za-z]:[\\/]", raw_path):
+        try:
+            converted = subprocess.run(
+                ["wslpath", "-u", raw_path],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError("Could not resolve the saved ComfyUI video path.") from exc
+        converted_path = (converted.stdout or "").strip()
+        if converted.returncode == 0 and converted_path:
+            path = Path(converted_path)
+    if not path.is_file():
+        raise FileNotFoundError("Saved ComfyUI Test video does not exist: " + raw_path)
+    return path
+
+
+def _move_saved_video(video_ref, destination):
+    source = _comfy_saved_output_path(video_ref)
+    target = Path(destination)
+    if target.exists():
+        raise FileExistsError("Test result already exists: " + str(target))
+    shutil.move(str(source), str(target))
+    if not target.is_file():
+        raise RuntimeError("Saved ComfyUI Test video was not moved into the Test session.")
+    return target
 
 
 def _atomic_write_json(path, payload):
@@ -749,19 +769,12 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 )
                 prompt_id = _queue_workflow(workflow)
                 video_ref = _wait_for_video(prompt_id)
-                if _stop_requested(folder_key):
-                    _mark_stopped(session_directory)
-                    return
-                video_bytes = _download_video(video_ref)
-                if _stop_requested(folder_key):
-                    _mark_stopped(session_directory)
-                    return
                 video_path, caption_path = _result_paths(
                     session_directory,
                     lora_file,
                     stem_override="base" if candidate["kind"] == "base" else None,
                 )
-                video_path.write_bytes(video_bytes)
+                _move_saved_video(video_ref, video_path)
                 caption_path.write_text(prompt, encoding="utf-8")
                 status = _read_status(session_directory) or {}
                 results = status.get("results") if isinstance(status.get("results"), list) else []

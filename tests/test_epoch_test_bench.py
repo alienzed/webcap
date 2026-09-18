@@ -619,3 +619,72 @@ def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path):
 
     with pytest.raises(ValueError):
         bench.open_session(tmp_path, "../outside")
+
+
+
+def test_test_bench_resolves_session_folder_back_to_owning_set(tmp_path, monkeypatch):
+    set_folder = tmp_path / "sets" / "HH4013"
+    session_folder = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1037-h3"
+    session_folder.mkdir(parents=True)
+    test_root = tmp_path / "test-root"
+
+    monkeypatch.setattr(bench.app_config, "load_config_from_disk", lambda: {
+        "training": {
+            "test_copy_roots": {"h3": str(test_root)},
+            "test_copy_subfolder": "WebCap",
+        }
+    })
+    monkeypatch.setattr(bench, "host_path_for_training_path", lambda value: Path(value))
+
+    assert bench._owning_set_directory(session_folder) == set_folder.resolve()
+    assert bench._folder_key(session_folder) == str(set_folder.resolve())
+    assert bench._h3_test_directory(session_folder) == test_root / "WebCap" / "HH4013"
+    assert bench._session_root(session_folder) == set_folder.resolve() / bench.TEST_RESULTS_DIR
+
+
+def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_path, monkeypatch):
+    set_folder = tmp_path / "sets" / "HH4013"
+    session_folder = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1037-h3"
+    staged = tmp_path / "test-root" / "WebCap" / "HH4013"
+    session_folder.mkdir(parents=True)
+    staged.mkdir(parents=True)
+    candidate = staged / "baseline-01__epoch10.safetensors"
+    candidate.write_bytes(b"weights")
+
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench.app_config, "load_config_from_disk", lambda: {
+        "training": {
+            "test_copy_roots": {"h3": str(tmp_path / "test-root")},
+            "test_copy_subfolder": "WebCap",
+        }
+    })
+    monkeypatch.setattr(bench, "host_path_for_training_path", lambda value: Path(value))
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder: {"status": "idle"})
+    monkeypatch.setattr(bench, "_read_json_response", lambda *args, **kwargs: {})
+    monkeypatch.setattr(bench, "_resolve_comfy_loras", lambda loras: [(loras[0], "HH4013/" + loras[0].name)])
+    monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
+    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
+    monkeypatch.setattr(bench, "_reserve_gpu_for_test_generations", lambda: True)
+    monkeypatch.setattr(bench, "_active_threads", {})
+    monkeypatch.setattr(bench, "_active_sessions", {})
+    monkeypatch.setattr(bench, "_stop_requests", set())
+
+    class FakeThread:
+        def __init__(self, *args, **kwargs):
+            self.started = False
+
+        def is_alive(self):
+            return self.started
+
+        def start(self):
+            self.started = True
+
+    monkeypatch.setattr(bench.threading, "Thread", FakeThread)
+
+    prepared = bench.prepare(session_folder)
+    assert prepared["files"] == [candidate.name]
+
+    started = bench.start(session_folder, "test prompt")
+    assert started["status"] == "running"
+    assert started["total"] == 2
+    assert (set_folder / bench.TEST_RESULTS_DIR / started["session"] / "test.json").is_file()

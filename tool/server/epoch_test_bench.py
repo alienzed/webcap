@@ -683,6 +683,12 @@ def open_session(folder_path, session_name):
 
 def delete_session(folder_path, session_name):
     session = _session_directory(folder_path, session_name)
+    folder_key = _folder_key(folder_path)
+    with _lock:
+        thread = _active_threads.get(folder_key)
+        active_session = _active_sessions.get(folder_key)
+        if thread and thread.is_alive() and active_session and Path(active_session).resolve() == session.resolve():
+            raise RuntimeError("Cannot delete the active Test Generations session. Stop it first.")
     shutil.rmtree(session)
     return {
         "operation": "test_delete_session",

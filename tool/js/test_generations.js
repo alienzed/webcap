@@ -555,6 +555,7 @@
     if (!isOpen()) return;
     request('test_status').then(function (status) {
       syncActiveRunControls(status);
+      refreshUtilityButton();
       var activeSession = String(status && status.session || '');
       if (!currentSession || currentSession === activeSession) {
         renderStatus(status);
@@ -681,6 +682,7 @@
       seed: seed
     }).then(function (status) {
       syncActiveRunControls(status);
+      refreshUtilityButton();
       renderStatus(status);
       pollStatus();
     }).catch(function (err) {
@@ -695,6 +697,7 @@
     if (stopBtn) stopBtn.disabled = true;
     request('test_stop').then(function (status) {
       syncActiveRunControls(status);
+      refreshUtilityButton();
       if (!currentSession || currentSession === String(status && status.session || '')) renderStatus(status);
       pollStatus();
     }).catch(function (err) {

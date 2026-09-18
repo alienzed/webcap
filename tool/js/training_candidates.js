@@ -33,11 +33,14 @@ function trainingCandidatesDisplayState() {
 
 function trainingCandidatesEma(points, smoothing) {
   var retained = Math.max(0, Math.min(.999, trainingCandidatesNumber(smoothing, .99)));
-  var previous = null;
+  var accumulator = 0;
+  var count = 0;
   return points.map(function (point) {
     var loss = trainingCandidatesNumber(point.loss, 0);
-    previous = previous === null ? loss : retained * previous + (1 - retained) * loss;
-    return { step: point.step, epoch: point.epoch, loss: previous };
+    accumulator = retained * accumulator + (1 - retained) * loss;
+    count++;
+    var debias = 1 - Math.pow(retained, count);
+    return { step: point.step, epoch: point.epoch, loss: debias ? accumulator / debias : loss };
   });
 }
 
@@ -98,6 +101,30 @@ function trainingCandidatesClearPinnedDetails() {
 function trainingCandidatesClearChartWiring() {
   if (typeof trainingWorkspaceState.candidateChartCleanup === 'function') trainingWorkspaceState.candidateChartCleanup();
   trainingWorkspaceState.candidateChartCleanup = null;
+}
+
+var trainingCandidatesAutoRefreshTimer = 0;
+
+function clearTrainingCandidatesAutoRefresh() {
+  if (trainingCandidatesAutoRefreshTimer) {
+    clearTimeout(trainingCandidatesAutoRefreshTimer);
+    trainingCandidatesAutoRefreshTimer = 0;
+  }
+}
+
+function scheduleTrainingCandidatesAutoRefresh() {
+  clearTrainingCandidatesAutoRefresh();
+  if (!trainingWorkspaceState.candidateModalOpen || trainingWorkspaceState.candidatePending) return;
+  var run = trainingWorkspaceState.candidatePayload && trainingWorkspaceState.candidatePayload.run;
+  var status = String(run && run.status || '');
+  if (status !== 'starting' && status !== 'running' && status !== 'stopping') return;
+  trainingCandidatesAutoRefreshTimer = setTimeout(function () {
+    trainingCandidatesAutoRefreshTimer = 0;
+    if (!trainingWorkspaceState.candidateModalOpen) return;
+    refreshTrainingCandidates().catch(function (err) {
+      if (window.console && console.error) console.error('[Training candidates] Auto-refresh failed:', err);
+    });
+  }, 60000);
 }
 
 function trainingCandidatesSvg(data) {
@@ -521,6 +548,7 @@ function refreshTrainingCandidates() {
       if (requestVersion !== trainingWorkspaceState.candidateRequestVersion) return;
       trainingWorkspaceState.candidatePending = false;
       if (trainingWorkspaceState.candidatePayload) renderTrainingCandidates();
+      scheduleTrainingCandidatesAutoRefresh();
     });
 }
 
@@ -544,6 +572,7 @@ function toggleTrainingCandidatesFullscreen() {
 
 function closeTrainingCandidates() {
   var els = trainingCandidatesElements();
+  clearTrainingCandidatesAutoRefresh();
   trainingWorkspaceState.candidateRequestVersion++;
   trainingWorkspaceState.candidateModalOpen = false;
   trainingWorkspaceState.candidatePending = false;

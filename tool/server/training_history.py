@@ -28,6 +28,42 @@ _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MUL
 _DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(?:#.*)?$", re.MULTILINE)
 
 
+def run_summary_from_capture(record_path, stage, captured_items=0):
+    """Return a compact summary of the captured config actually used by a run."""
+    root = Path(str(record_path or "").strip())
+    selected_stage = str(stage or "").strip().lower()
+    if not str(root) or not selected_stage:
+        return {}
+    try:
+        config_name = config_for_id(selected_stage)["file"]
+        parsed = tomllib.loads((root / config_name).read_text(encoding="utf-8"))
+    except (KeyError, OSError, ValueError, tomllib.TOMLDecodeError):
+        return {}
+    summary = {}
+    epochs = parsed.get("epochs")
+    if isinstance(epochs, int) and epochs > 0:
+        summary["epochs"] = epochs
+    model = parsed.get("model") if isinstance(parsed.get("model"), dict) else {}
+    shift = model.get("shift")
+    if isinstance(shift, (int, float)):
+        summary["shift"] = shift
+    adapter = parsed.get("adapter") if isinstance(parsed.get("adapter"), dict) else {}
+    dropout = adapter.get("dropout")
+    if isinstance(dropout, (int, float)):
+        summary["dropout"] = dropout
+    optimizer = parsed.get("optimizer") if isinstance(parsed.get("optimizer"), dict) else {}
+    learning_rate = optimizer.get("lr")
+    if isinstance(learning_rate, (int, float)):
+        summary["lr"] = learning_rate
+    try:
+        item_count = int(captured_items or 0)
+    except (TypeError, ValueError):
+        item_count = 0
+    if item_count > 0:
+        summary["capturedItems"] = item_count
+    return summary
+
+
 def output_root_for_folder(folder_path, stage=""):
     return host_path_for_training_path(output_root_path_for_folder(folder_path, stage))
 
@@ -453,7 +489,7 @@ def record_job(folder_path, job):
     folder = Path(folder_path)
     folder_key = _folder_key(folder)
     record_fields = (
-        "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage",
+        "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId", "activeTrainingSeconds", "activeTrainingTimingComplete",
         "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "progress", "model", "input", "artifactDir", "artifactSummary",
     )
@@ -469,6 +505,12 @@ def record_job(folder_path, job):
             "label": str(record["model"].get("label") or "")[:160],
             "source": str(record["model"].get("source") or "")[:512],
         }
+    if not isinstance(record.get("runSummary"), dict) or not record.get("runSummary"):
+        record["runSummary"] = run_summary_from_capture(
+            record.get("recordPath") or record.get("inputPath"),
+            record.get("stages"),
+            record.get("capturedItemCount"),
+        )
     record["artifactSummary"] = dict(record.get("artifactSummary") or {})
     with _history_lock:
         recent = _read_recent_runs()
@@ -501,6 +543,12 @@ def history_payload(folder_path):
 
 def _history_job_view(job):
     item = dict(job)
+    if not isinstance(item.get("runSummary"), dict) or not item.get("runSummary"):
+        item["runSummary"] = run_summary_from_capture(
+            item.get("recordPath") or item.get("inputPath"),
+            item.get("stages"),
+            item.get("capturedItemCount"),
+        )
     raw_output = str(item.get("outputRunPath") or item.get("effectiveOutputDir") or item.get("outputRoot") or "").strip()
     raw_candidate = str(item.get("outputRunPath") or item.get("resumeFromCheckpoint") or "").strip()
     try:

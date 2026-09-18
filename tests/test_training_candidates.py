@@ -277,6 +277,7 @@ def _copy_to_test_fixture(tmp_path, monkeypatch, stage="h3", subfolder="az"):
     state_path.write_text(json.dumps({"version": 3, "jobs": [{
         "id": "job-1", "folder": "sets/subject", "outputRunPath": str(run),
         "stages": stage, "stage": "caching", "status": "running",
+        "runName": "baseline", "sequence": "3", "actionId": "003-h3",
     }]}), encoding="utf-8")
     monkeypatch.setattr(app_config, "FS_ROOT", root)
     roots = {key: "" for key in ("h3", "krea2", "wan21", "hi", "lo")}
@@ -290,7 +291,7 @@ def _copy_to_test_fixture(tmp_path, monkeypatch, stage="h3", subfolder="az"):
 @pytest.mark.parametrize("stage", ["h3", "krea2", "wan21", "hi", "lo"])
 def test_candidate_analysis_marks_artifacts_already_in_the_configured_test_folder(tmp_path, monkeypatch, stage):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, stage=stage)
-    run = {"folder": "sets/subject", "stages": stage}
+    run = {"folder": "sets/subject", "stages": stage, "runName": "baseline", "sequence": "3", "id": "job-1"}
     analysis = {"savedArtifacts": [{"epoch": 12, "fileName": source.name, "status": "available"}]}
     expected_folder = destination_root / "az" / "subject"
 
@@ -300,19 +301,32 @@ def test_candidate_analysis_marks_artifacts_already_in_the_configured_test_folde
     assert not expected_folder.exists()
 
     expected_folder.mkdir(parents=True)
-    (expected_folder / source.name).write_bytes(b"test weights")
+    staged_name = "baseline-03__epoch12.safetensors"
+    (expected_folder / staged_name).write_bytes(b"test weights")
     training_runner._annotate_candidate_test_folder_status(run, analysis)
     assert analysis["testFolderStatus"] == {"state": "available"}
     assert analysis["savedArtifacts"][0]["inTestFolder"] is True
 
-    (expected_folder / source.name).unlink()
+    (expected_folder / staged_name).unlink()
     training_runner._annotate_candidate_test_folder_status(run, analysis)
     assert analysis["savedArtifacts"][0]["inTestFolder"] is False
 
 
+def test_copy_to_test_prefix_is_short_and_uses_two_character_run_id():
+    run = {
+        "id": "abcdef123456",
+        "runName": "This is an extremely long descriptive run name that should not leak into filenames",
+        "sequence": "7",
+    }
+    prefix = training_runner._candidate_test_prefix(run)
+    assert prefix.endswith("-07")
+    assert len(prefix) <= 32
+    assert training_runner._candidate_test_file_name(run, 24).endswith("__epoch24.safetensors")
+
+
 def test_candidate_analysis_reports_unavailable_test_folder_without_blocking_analysis(tmp_path, monkeypatch):
     source, _destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
-    run = {"folder": "sets/subject", "stages": "h3"}
+    run = {"folder": "sets/subject", "stages": "h3", "runName": "baseline", "sequence": "3", "id": "job-1"}
     analysis = {"savedArtifacts": [{"epoch": 12, "fileName": source.name, "status": "available"}]}
     monkeypatch.setattr(training_runner.app_config, "load_config_from_disk", lambda: {
         "training": {"test_copy_roots": {}, "test_copy_subfolder": ""}
@@ -328,7 +342,7 @@ def test_candidate_analysis_reports_unavailable_test_folder_without_blocking_ana
 def test_copy_candidate_to_configured_stage_root_uses_recorded_stages(tmp_path, monkeypatch, stage):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, stage=stage)
     result = training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
-    destination = destination_root / "az" / "subject" / source.name
+    destination = destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors"
     assert Path(result["destination"]) == destination
     assert destination.read_bytes() == b"test weights"
     assert source.read_bytes() == b"test weights"
@@ -336,14 +350,14 @@ def test_copy_candidate_to_configured_stage_root_uses_recorded_stages(tmp_path, 
 
 def test_copy_candidate_reuses_set_directory_and_refuses_filename_collision(tmp_path, monkeypatch):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
-    destination = destination_root / "az" / "subject" / source.name
+    destination = destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors"
     destination.parent.mkdir(parents=True)
     second_epoch = source.parent.parent / "epoch13"
     second_epoch.mkdir()
     second_source = second_epoch / "adapter_model_epoch13.safetensors"
     second_source.write_bytes(b"second weights")
     training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 13)
-    assert (destination.parent / second_source.name).read_bytes() == b"second weights"
+    assert (destination.parent / "baseline-03__epoch13.safetensors").read_bytes() == b"second weights"
     destination.write_bytes(b"existing destination")
     response = app_module.app.test_client().post(
         "/fs/training_candidates/copy_to_test",
@@ -369,7 +383,7 @@ def test_open_test_folder_requires_existing_destination_and_never_creates_it(tmp
     opened_response = client.post("/fs/training_candidates/open_test", json={"folder": "sets/subject", "jobId": "job-1"})
     assert opened_response.status_code == 200
     assert opened == [expected.resolve()]
-    assert (expected / source.name).read_bytes() == b"test weights"
+    assert (expected / "baseline-03__epoch12.safetensors").read_bytes() == b"test weights"
     assert client.post("/fs/training_candidates/open_test", json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12}).status_code == 400
     monkeypatch.setattr(app_module, "training_runner_candidate_test_folder_path", lambda folder, job_id: (_ for _ in ()).throw(OSError("test folder permission denied")))
     failed = client.post("/fs/training_candidates/open_test", json={"folder": "sets/subject", "jobId": "job-1"})
@@ -389,7 +403,7 @@ def test_copy_candidate_concurrent_requests_create_one_file(tmp_path, monkeypatc
             outcomes.append("conflict")
     assert outcomes.count("conflict") == 1
     assert len([item for item in outcomes if item != "conflict"]) == 1
-    assert (destination_root / "subject" / source.name).read_bytes() == b"test weights"
+    assert (destination_root / "subject" / "baseline-03__epoch12.safetensors").read_bytes() == b"test weights"
 
 
 def test_copy_candidate_revalidates_source_and_removes_only_its_partial_destination(tmp_path, monkeypatch):
@@ -406,7 +420,7 @@ def test_copy_candidate_revalidates_source_and_removes_only_its_partial_destinat
     monkeypatch.setattr(training_runner.shutil, "copyfileobj", interrupted_copy)
     with pytest.raises(OSError, match="interrupted"):
         training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
-    assert not (destination_root / "az" / "subject" / source.name).exists()
+    assert not (destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors").exists()
 
 
 def test_copy_candidate_requires_saved_root_and_rejects_extra_request_fields(tmp_path, monkeypatch):

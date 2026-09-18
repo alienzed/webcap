@@ -3,7 +3,7 @@ function formatTrainingHistoryTime(value) {
   var seconds = Number(value || 0);
   if (!seconds) return '';
   return new Date(seconds * 1000).toLocaleString([], {
-    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit'
+    year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
   });
 }
 
@@ -17,6 +17,33 @@ function trainingHistoryTimestampKind(job) {
 function trainingHistoryFact(label, value, title) {
   if (!value) return '';
   return '<div class="training-history-fact"><span>' + escapeHtml(label) + '</span><strong' + (title ? ' title="' + escapeHtml(title) + '"' : '') + '>' + escapeHtml(value) + '</strong></div>';
+}
+
+function trainingHistoryCompactNumber(value) {
+  var number = Number(value);
+  if (!isFinite(number)) return '';
+  if (number !== 0 && Math.abs(number) < .001) {
+    return number.toExponential(1).replace('.0e', 'e').replace('e+', 'e');
+  }
+  return String(number);
+}
+
+function trainingHistoryRunSummary(job) {
+  var summary = job && job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
+  var parts = [];
+  if (summary.lr !== undefined && summary.lr !== null) parts.push('LR ' + trainingHistoryCompactNumber(summary.lr));
+  if (summary.dropout !== undefined && summary.dropout !== null) parts.push('dropout ' + trainingHistoryCompactNumber(summary.dropout));
+  if (summary.shift !== undefined && summary.shift !== null) parts.push('shift ' + trainingHistoryCompactNumber(summary.shift));
+  if (Number(summary.capturedItems || 0) > 0) parts.push(Math.round(Number(summary.capturedItems)).toLocaleString() + ' items');
+  if (Number(summary.epochs || 0) > 0) parts.push(Math.round(Number(summary.epochs)).toLocaleString() + ' epochs');
+  return parts.join(' · ');
+}
+
+function trainingHistoryRunDisplayName(job, profileLabel) {
+  var name = String(job && job.runName || '').trim();
+  if (name) return name;
+  var sequence = String(job && job.sequence || '').trim();
+  return sequence ? 'Run ' + sequence.replace(/^0+(?=\d)/, '') : profileLabel;
 }
 
 function trainingHistoryCheckpointLabel(artifact) {
@@ -68,11 +95,24 @@ function renderTrainingHistory() {
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
   var history = trainingWorkspaceState.history || {};
   var searchText = String((els.historySearch && els.historySearch.value) || '').trim().toLowerCase();
+  var scope = trainingWorkspaceState.historyViewScope === 'set' ? 'set' : 'all';
+  var currentFolder = trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : '';
+  if (!currentFolder) scope = 'all';
+  if (els.historyScope) {
+    els.historyScope.classList.toggle('hidden', !currentFolder);
+    Array.prototype.forEach.call(els.historyScope.querySelectorAll('[data-training-history-scope]'), function (button) {
+      var active = button.getAttribute('data-training-history-scope') === scope;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
   var jobs = (history.jobs || []).filter(function (job) {
+    if (scope === 'set' && String(job.folder || '') !== currentFolder) return false;
     if (!searchText) return true;
     var model = job.model && typeof job.model === 'object' ? job.model : {};
     var haystack = [
-      job.folder, job.datasetTarget, job.profileId, job.mode, job.stages, job.status, job.modelLabel, model.label, model.source
+      job.folder, job.datasetTarget, job.profileId, job.mode, job.stages, job.status, job.modelLabel, model.label, model.source,
+      job.runName, trainingHistoryRunSummary(job)
     ].join(' ').toLowerCase();
     return haystack.indexOf(searchText) !== -1;
   }).sort(function (a, b) {
@@ -86,10 +126,15 @@ function renderTrainingHistory() {
     els.historyCollapseBtn.textContent = 'Recent Runs' + (jobs.length ? ' · ' + jobs.length : '');
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');
   }
-  if (els.historyClearBtn) els.historyClearBtn.textContent = 'Clear history';
+  if (els.historyClearBtn) els.historyClearBtn.textContent = 'Clear all history';
   els.historySummary.classList.toggle('hidden', !!latest);
-  els.historySummary.textContent = latest ? '' : 'No completed or actionable training outcomes yet.';
+  els.historySummary.textContent = latest ? '' : (scope === 'set'
+    ? 'No completed or actionable training outcomes for this set yet.'
+    : 'No completed or actionable training outcomes yet.');
   var visibleJobs = trainingWorkspaceState.historyExpanded ? jobs : jobs.slice(0, 2);
+  visibleJobs.forEach(function (job) {
+    loadTrainingHistoryMetrics(job);
+  });
   els.historyList.innerHTML = visibleJobs.map(function (job) {
     var progress = job.progress && typeof job.progress === 'object' ? job.progress : {};
     var modelLabel = trainingModelLabel(job);
@@ -101,6 +146,7 @@ function renderTrainingHistory() {
     var plannedSteps = Number(progress.plannedSteps);
     var learningRate = String(progress.lr || '').trim();
     var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
+    var runSummary = trainingHistoryRunSummary(job);
     var hasStarted = Number(job.startedAt || 0) > 0;
     var hasFinished = Number(job.finishedAt || 0) > 0;
     var details = [];
@@ -126,6 +172,7 @@ function renderTrainingHistory() {
     var modelSource = modelSourcePath.split(/[\\/]/).pop();
     var stageLabel = trainingStageLabel(job.stages || '');
     var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
+    var runDisplayName = trainingHistoryRunDisplayName(job, profileLabel);
     var checkpointLabel = trainingHistoryCheckpointLabel(artifact);
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
     var canOpenCheckpointRun = !!(checkpointLabel && job.folder && job.outputRunPath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(checkpointStage) !== -1);
@@ -146,7 +193,7 @@ function renderTrainingHistory() {
       '<div class="training-history-fact-group"><div class="training-history-fact-heading">Timing</div>' +
         trainingHistoryFact('Active time', activeTime || (metricPending ? 'Loading…' : 'Unavailable')) +
         trainingHistoryFact('Started', formatTrainingHistoryTime(job.startedAt)) +
-        trainingHistoryFact('Completed', formatTrainingHistoryTime(job.finishedAt)) +
+        trainingHistoryFact('Finished', formatTrainingHistoryTime(job.finishedAt)) +
       '</div>' +
       '<div class="training-history-fact-group"><div class="training-history-fact-heading">Training</div>' +
         trainingHistoryFact('Profile', profileLabel) +
@@ -165,9 +212,10 @@ function renderTrainingHistory() {
     return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span></div>' +
         '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
-      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(job.runName || profileLabel) + '</div>' +
+      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(runDisplayName) + '</div>' +
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
+        (runSummary ? '<div>' + escapeHtml(runSummary) + '</div>' : '') +
         (details.length ? '<div>' +
           (details.length ? escapeHtml(details.join(' · ')) : '') +
           '</div>' : '') +
@@ -364,17 +412,8 @@ function trainingHistoryScopeFolder() {
 }
 
 function syncTrainingHistorySearchScope() {
-  var searchEl = document.getElementById('training-history-search');
   var folder = trainingHistoryScopeFolder();
   var priorFolder = trainingWorkspaceState.historySearchScopeFolder;
-  if (folder !== priorFolder && trainingWorkspaceState.history) {
-    trainingWorkspaceState.history.runs = [];
-    trainingWorkspaceState.history.resumeDefaults = {};
-  }
-  if (searchEl && folder !== priorFolder) {
-    if (folder) searchEl.value = folder;
-    else if (searchEl.value === priorFolder) searchEl.value = '';
-  }
   trainingWorkspaceState.historySearchScopeFolder = folder;
   if (folder !== priorFolder) {
     trainingWorkspaceState.resumeSelectionTouched = false;

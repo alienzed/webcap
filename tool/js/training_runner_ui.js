@@ -717,9 +717,22 @@ function buildTrainingQueueHtml(queuedJobs) {
       var stage = trainingJobLabel(queuedJob);
       var plannedSteps = trainingPlannedStepCount(queuedJob);
       var plannedEpochs = trainingPlannedEpochCount(queuedJob);
+      var resumePoint = queuedJob && queuedJob.resumePoint && typeof queuedJob.resumePoint === 'object' ? queuedJob.resumePoint : {};
+      var resumeEpoch = Number(resumePoint.epoch);
+      var resumeStep = Number(resumePoint.step);
       var workloadParts = [];
-      if (plannedEpochs) workloadParts.push(Math.round(plannedEpochs).toLocaleString() + ' epochs');
-      if (plannedSteps) workloadParts.push('~' + Math.round(plannedSteps).toLocaleString() + ' run steps');
+      if (plannedEpochs) {
+        var remainingEpochs = queuedJob.resumeFromCheckpoint && isFinite(resumeEpoch) && resumeEpoch > 0
+          ? Math.max(0, plannedEpochs - resumeEpoch)
+          : plannedEpochs;
+        workloadParts.push((queuedJob.resumeFromCheckpoint ? remainingEpochs.toLocaleString() + ' epochs remaining' : Math.round(plannedEpochs).toLocaleString() + ' epochs'));
+      }
+      if (plannedSteps) {
+        var remainingSteps = queuedJob.resumeFromCheckpoint && isFinite(resumeStep) && resumeStep > 0
+          ? Math.max(0, plannedSteps - resumeStep)
+          : plannedSteps;
+        workloadParts.push((queuedJob.resumeFromCheckpoint ? '~' + Math.round(remainingSteps).toLocaleString() + ' steps remaining' : '~' + Math.round(plannedSteps).toLocaleString() + ' run steps'));
+      }
       var workload = workloadParts.length ? '<span class="training-runner-queue-workload">' + escapeHtml(workloadParts.join(' · ')) + '</span>' : '';
       var status = String(queuedJob.status || 'queued');
       var error = queuedJob.error ? '<div class="training-runner-queue-resume">' + escapeHtml(queuedJob.error) + '</div>' : '';
@@ -744,6 +757,7 @@ function buildTrainingQueueHtml(queuedJobs) {
           resume + buildQueuedResumePointHtml(queuedJob) + output + captured + sourceUnavailable + error +
         '</div>' +
         '<div class="training-runner-queue-controls">' +
+          (String(queuedJob.outputRunPath || '').trim() ? '<button type="button" class="training-runner-queue-control" data-training-candidates="' + escapeHtml(queuedJob.id) + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
           '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' +
           (queuedJob.actionPath ? '<button type="button" class="training-runner-queue-control" data-training-job-action="' + escapeHtml(queuedJob.id) + '" title="Open action folder" aria-label="Open action folder">&#128451;</button>' : '') +
           '<button type="button" class="training-runner-queue-control" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + '>&#8593;</button>' +

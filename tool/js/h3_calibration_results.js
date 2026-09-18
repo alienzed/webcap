@@ -38,3 +38,11 @@ function renderH3CalibrationResults(calibration) {
   }
   container.innerHTML = html;
 }
+
+// Test Generations is self-contained and injects its Training UI at runtime.
+(function loadTestGenerationsUi() {
+  var script = document.createElement('script');
+  script.src = '/static/js/test_generations.js';
+  script.async = false;
+  document.head.appendChild(script);
+})();

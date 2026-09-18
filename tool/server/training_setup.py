@@ -3,11 +3,13 @@ import tomllib
 
 from .dataset_config import build_dataset_config_artifacts
 from .dataset_prep import build_dataset_manifest
+from .epoch_test_bench import handle_request as handle_epoch_test_bench_request
 from .training_config_files import _write_set_toml_atomic, ensure_training_config_files, reset_training_config_file
 from .training_profiles import WAN22_PROFILE_ID, config_for_stage, normalize_mode, profile_for_mode
 
 
 DATASET_ROOT_PLACEHOLDER = Path("__WEBCAP_DATASET_ROOT__")
+TEST_GENERATIONS_PROFILE_ID = "__test_generations__"
 
 
 def resolved_setup(profile_id, mode):
@@ -32,6 +34,9 @@ def ensure_training_setup(
     reset_file="",
 ):
     folder = Path(folder_path)
+    if str(profile_id or "").strip() == TEST_GENERATIONS_PROFILE_ID:
+        return handle_epoch_test_bench_request(folder, mode, selection_criteria=selection_criteria)
+
     selected = resolved_setup(profile_id, mode)
     selected_mode = selected["mode"]
     reset_name = str(reset_file or "").strip()

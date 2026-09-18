@@ -37,11 +37,26 @@ Important examples:
 - `<media>.txt`: caption storage
 - `originals/`: reversible mutation backing store
 
+## Feature Ownership and Boundaries
+
+Keep ownership obvious as the app grows. These are practical defaults, not purity rules.
+
+- A feature should own its own feature-specific state and DOM.
+- The shell owns application navigation, shared working context, global status, and global chrome.
+- A feature should not reach into another feature's DOM to reuse a control just because it already exists.
+- When features need to interact, prefer a small explicit function or shared state contract over DOM coupling.
+- Shared state should have one clear owner. Other features may consume it without maintaining competing copies.
+- Reuse behavior and concepts when useful; do not reuse UI ownership merely to avoid adding a small amount of code.
+- A little duplication is preferable to a premature abstraction with unclear ownership.
+- Do not introduce event buses, dependency injection, registries, service layers, framework-like infrastructure, or other indirection unless a concrete workflow actually needs it.
+- Do not reorganize working code merely to make it conform to an architectural ideal. Improve boundaries as related code is touched.
+- If the straightforward solution is obvious and local, use it.
+
 ## How To Make Changes
 
 Prefer the smallest change that cleanly solves the real problem.
 
-- Wire existing UI, state, and routes before inventing new infrastructure.
+- Reuse existing behavior, state, and routes when ownership still makes sense; do not couple one feature to another feature's DOM merely because a usable control already exists.
 - Prefer localized edits over refactors.
 - Prefer one-file or one-function changes when they are enough.
 - Resist new abstraction, indirection, or configuration unless the workflow value clearly justifies it.

@@ -631,31 +631,6 @@ function closeTrainingCandidates() {
   if (els.modal) { els.modal.classList.add('hidden'); els.modal.setAttribute('aria-hidden', 'true'); }
 }
 
-function latestTrainingCandidateStageJob() {
-  var folder = String(state && state.folder || '');
-  var historyJobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
-    ? trainingWorkspaceState.history.jobs : [];
-  var runnerJobs = Array.isArray(trainingWorkspaceState.runnerJobs) ? trainingWorkspaceState.runnerJobs : [];
-  var byId = {};
-  historyJobs.concat(runnerJobs).forEach(function (job) {
-    if (job && job.id) byId[String(job.id)] = job;
-  });
-  return Object.keys(byId).map(function (id) { return byId[id]; }).filter(function (job) {
-    return String(job.folder || '') === folder && !!String(job.outputRunPath || job.resumeFromCheckpoint || '').trim();
-  }).sort(function (a, b) {
-    return Number(b.finishedAt || b.startedAt || b.createdAt || 0) - Number(a.finishedAt || a.startedAt || a.createdAt || 0);
-  })[0] || null;
-}
-
-function openLatestTrainingCandidatesForSet() {
-  var job = latestTrainingCandidateStageJob();
-  if (!job) {
-    setStatus('No recorded training run is available for Candidates in this set.');
-    return;
-  }
-  openTrainingCandidates(job);
-}
-
 function openTrainingCandidates(job) {
   if (!job || !job.id || !job.folder || !String(job.outputRunPath || job.resumeFromCheckpoint || '').trim()) { setStatus('Candidate analysis is available once this job has a recorded run directory.'); return; }
   var els = trainingCandidatesElements();
@@ -683,7 +658,6 @@ function wireTrainingCandidatesModal() {
   var els = trainingCandidatesElements();
   if (!els.modal || els.modal.__trainingCandidatesWired) return;
   els.modal.__trainingCandidatesWired = true;
-  document.getElementById('training-candidates-stage-btn').onclick = openLatestTrainingCandidatesForSet;
   els.close.onclick = closeTrainingCandidates;
   els.refresh.onclick = function () { refreshTrainingCandidates().catch(function (err) { setStatus('Could not refresh LoRA candidates: ' + String(err.message || err)); }); };
   els.fullscreen.onclick = toggleTrainingCandidatesFullscreen;

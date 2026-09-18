@@ -655,27 +655,21 @@
                                 <button id="training-workspace-back-btn" type="button" class="review-captions-btn training-back-btn">Back</button>
                             </div>
                         </div>
-                        <section id="training-set-workflow" class="training-set-workflow training-set-only" aria-label="Configure this training set">
-                            <div class="training-workflow-step">
-                                <div class="training-workflow-step-number">1</div>
-                                <div class="training-workflow-step-copy">
-                                    <div class="training-workspace-section-title">Model</div>
-                                    <label class="training-profile-control">Model
-                                        <select id="training-model-profile-select"></select>
-                                    </label>
-                                    <div id="training-model-trained-status" class="training-model-trained-status hidden" aria-live="polite"></div>
-                                </div>
-                            </div>
-                        </section>
                         <section id="training-run-setup" class="training-run-setup training-set-only" aria-label="Training run setup">
                             <div class="training-run-layout">
                                 <div class="training-run-setup-header">
                                     <div class="training-run-setup-heading">
-                                        <div id="training-run-step-number" class="training-workflow-step-number">2</div>
+                                        <div id="training-run-step-number" class="training-workflow-step-number">1</div>
                                         <div class="training-workspace-section-title">Run setup</div>
                                     </div>
                                 </div>
                                 <div class="training-run-setup-fields">
+                                    <div class="training-run-model-block">
+                                        <label class="training-profile-control">Model
+                                            <select id="training-model-profile-select"></select>
+                                        </label>
+                                        <div id="training-model-trained-status" class="training-model-trained-status hidden" aria-live="polite"></div>
+                                    </div>
                                     <label class="training-run-option training-run-name-option">
                                         <span>Run name <em>(optional)</em></span>
                                         <input id="training-run-name-input" type="text" maxlength="80" placeholder="e.g. clothing baseline">
@@ -747,7 +741,7 @@
                             </details>
                         </section>
                         <section id="training-global-context" class="training-global-context" aria-label="Training activity">
-                            <div class="training-global-label"><span class="training-workflow-step-number">3</span><span>Training</span></div>
+                            <div class="training-global-label"><span class="training-workflow-step-number">2</span><span>Training</span></div>
                             <section class="training-runner-card" aria-label="Training queue">
                                 <div class="training-runner-card-header">
                                     <div class="training-workspace-section-title">Training Queue</div>
@@ -784,19 +778,11 @@
                             </section>
                             </div>
                         </section>
-                        <section id="training-candidates-stage" class="training-workflow-step training-lifecycle-stage training-set-only" aria-label="Training candidates">
-                            <div class="training-workflow-step-number">4</div>
-                            <div class="training-workflow-step-copy">
-                                <div class="training-workspace-section-title">Candidates</div>
-                                <div class="training-workflow-stage-note">Analyze the latest recorded run and stage promising epochs for testing.</div>
-                            </div>
-                            <button id="training-candidates-stage-btn" type="button" class="review-captions-btn training-workflow-action">Open Candidates</button>
-                        </section>
                         <section id="training-tests-stage" class="training-workflow-step training-lifecycle-stage training-set-only" aria-label="Test generations">
-                            <div class="training-workflow-step-number">5</div>
+                            <div class="training-workflow-step-number">3</div>
                             <div class="training-workflow-step-copy">
                                 <div class="training-workspace-section-title">Tests</div>
-                                <div id="training-tests-summary" class="training-workflow-stage-note">Stage LoRAs from Candidates, then compare them with one frozen generation setup.</div>
+                                <div id="training-tests-summary" class="training-workflow-stage-note">Stage LoRAs from run analysis, then compare them with one frozen generation setup.</div>
                             </div>
                             <div id="training-tests-actions" class="training-workflow-stage-actions"></div>
                         </section>

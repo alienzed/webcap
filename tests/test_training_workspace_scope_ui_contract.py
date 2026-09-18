@@ -49,7 +49,7 @@ if (itemTab.classList.contains('hidden') || configTab.classList.contains('hidden
 
 let globalHistory = 0, profileCalls = 0, modelSync = 0, pendingProfileResolve;
 const refreshContext = Object.assign({}, context, {
-  getTrainingWorkspaceEls: () => ({ navigatorTitle: element(), folder: element(), globalContext: element(), setWorkflow: element(), runSetup: element(), readiness: element() }),
+  getTrainingWorkspaceEls: () => ({ navigatorTitle: element(), folder: element(), globalContext: element(), runSetup: element(), testsStage: element(), readiness: element() }),
   isTrainingWorkspaceActive: () => true,
   refreshTrainingHistory: () => { globalHistory++; return Promise.resolve(); },
   fetchTrainingProfiles: () => { profileCalls++; return new Promise(resolve => { pendingProfileResolve = resolve; }); },
@@ -164,13 +164,23 @@ def test_training_entry_defaults_collapse_by_context_without_refresh_reset():
 
 
 
-def test_training_lifecycle_visual_grouping_is_phase_based():
+def test_training_lifecycle_is_run_setup_training_tests():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+
+    assert 'id="training-set-workflow"' not in html
+    assert 'id="training-model-profile-select"' in html
+    assert 'id="training-run-setup"' in html
+    assert 'id="training-candidates-stage"' not in html
+    assert '<span class="training-workflow-step-number">2</span><span>Training</span>' in html
+    assert 'id="training-tests-stage"' in html
+    assert '<div class="training-workflow-step-number">3</div>' in html
+    assert 'Stage LoRAs from run analysis' in html
 
     navigator_rule = css.split(".app.shell-revamp .training-navigator {", 1)[1].split("}", 1)[0]
     assert "gap: 12px;" in navigator_rule
-    assert ".app.shell-revamp #training-candidates-stage::before" in css
-    assert "margin-top: 12px;" in css.split(".app.shell-revamp #training-candidates-stage {", 1)[1].split("}", 1)[0]
-    assert "margin-top: -4px;" in css.split(".app.shell-revamp #training-tests-stage {", 1)[1].split("}", 1)[0]
+    assert ".app.shell-revamp #training-candidates-stage" not in css
+    assert ".app.shell-revamp #training-tests-stage::before" in css
+    assert "margin-top: 12px;" in css.split(".app.shell-revamp #training-tests-stage {", 1)[1].split("}", 1)[0]
     training_rule = css.split(".app.shell-revamp .training-global-context {", 1)[1].split("}", 1)[0]
     assert "margin-top: 6px;" in training_rule

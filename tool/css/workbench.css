@@ -1100,11 +1100,6 @@
   display: none !important;
 }
 
-.app.shell-revamp .training-set-workflow {
-  display: grid;
-  gap: 8px;
-}
-
 .app.shell-revamp .training-workflow-step {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1146,29 +1141,25 @@
   gap: 4px;
 }
 
-.app.shell-revamp .training-workflow-step:first-child .training-workflow-step-copy {
-  grid-template-columns: auto auto minmax(0, 1fr);
-  align-items: center;
-  column-gap: 12px;
+.app.shell-revamp .training-run-model-block {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(0, 1fr);
+  align-items: end;
+  gap: 8px 12px;
 }
 
-.app.shell-revamp .training-workflow-step:first-child .training-workspace-section-title {
-  grid-row: 1 / span 2;
-}
-
-.app.shell-revamp .training-workflow-step:first-child .training-profile-control {
+.app.shell-revamp .training-run-model-block .training-profile-control {
   margin-top: 0;
 }
 
-.app.shell-revamp .training-workflow-step:first-child .training-model-trained-status {
-  grid-column: 2 / -1;
-  margin-top: 2px;
+.app.shell-revamp .training-run-model-block .training-model-trained-status {
+  min-width: 0;
+  margin: 0;
 }
 
-.app.shell-revamp .training-workflow-step:first-child .training-model-trained-row {
+.app.shell-revamp .training-run-model-block .training-model-trained-row {
   width: 100%;
 }
-
 .app.shell-revamp .training-workflow-step .training-readiness {
   display: block;
   padding: 0;
@@ -1202,22 +1193,18 @@
   margin-top: 0;
 }
 
-.app.shell-revamp #training-candidates-stage {
+.app.shell-revamp #training-tests-stage {
   position: relative;
   margin-top: 12px;
 }
 
-.app.shell-revamp #training-candidates-stage::before {
+.app.shell-revamp #training-tests-stage::before {
   content: "";
   position: absolute;
   top: -13px;
   right: 0;
   left: 0;
   border-top: 1px solid color-mix(in srgb, var(--accent-dark) 55%, var(--border));
-}
-
-.app.shell-revamp #training-tests-stage {
-  margin-top: -4px;
 }
 
 .app.shell-revamp .training-workflow-stage-note {

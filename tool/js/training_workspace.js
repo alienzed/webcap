@@ -451,9 +451,7 @@ function refreshTrainingWorkspace() {
     els.globalContext.classList.toggle('hidden', false);
     els.globalContext.classList.toggle('training-global-context--global', isGlobalEntry);
   }
-  if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);
   if (els.runSetup) els.runSetup.classList.toggle('hidden', !isSetEntry);
-  if (els.candidatesStage) els.candidatesStage.classList.toggle('hidden', !isSetEntry);
   if (els.testsStage) els.testsStage.classList.toggle('hidden', !isSetEntry);
 
   if (isGlobalEntry) {

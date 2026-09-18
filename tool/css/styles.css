@@ -2737,13 +2737,22 @@ iframe {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-size: 12px;
 }
-.test-generations-staged-row > span {
+.test-generations-staged-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.test-generations-staged-copy strong,
+.test-generations-staged-copy span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.test-generations-staged-copy strong { font-size: 12px; }
+.test-generations-staged-copy span { color: var(--muted); font-size: 10px; }
 .test-generations-sessions-list {
   display: grid;
   gap: 5px;
@@ -2757,6 +2766,13 @@ iframe {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+.test-generations-session-row.is-active {
+  border-color: var(--accent);
+  background: var(--panel);
 }
 .test-generations-session-copy {
   display: grid;

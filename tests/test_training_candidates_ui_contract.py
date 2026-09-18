@@ -160,8 +160,11 @@ assert(svg.includes('class="training-candidates-plot-content" clip-path="url(#tr
 assert(svg.includes('class="training-candidates-hover-guide hidden" x1="0" y1="28" x2="0" y2="518"'));
 const marker = svg.match(/class="training-candidates-marker training-candidates-epoch-marker(?: in-test-folder)?"[^>]*><line x1="([^"]+)"/);
 const epochBoundary = svg.match(/class="training-candidates-epoch-boundary" x1="([^"]+)"/);
-assert(Math.abs(Number(marker[1]) - (52 + (199-10)/(399-10)*926)) < .01);
+assert(Math.abs(Number(marker[1]) - (52 + (190-10)/(399-10)*926)) < .01);
 assert(Math.abs(Number(marker[1]) - Number(epochBoundary[1])) < .01);
+const epochLossLine = svg.match(/class="training-candidates-raw" points="([^"]+)"/);
+const firstEpochLossX = Number(epochLossLine[1].split(' ')[0].split(',')[0]);
+assert(Math.abs(firstEpochLossX - Number(epochBoundary[1])) < .01);
 assert(svg.includes('data-training-candidate-epoch="1"'));
 assert(svg.includes('r="7"'));
 assert(svg.includes('r="14"'));

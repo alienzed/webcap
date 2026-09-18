@@ -199,8 +199,9 @@ function trainingCandidatesSvg(data) {
   }
   function x(step) { return plotLeft + (trainingCandidatesNumber(step, minStep) - minStep) / (maxStep - minStep) * (plotRight - plotLeft); }
   function y(loss) { return plotTop + (maxLoss - trainingCandidatesNumber(loss, minLoss)) / (maxLoss - minLoss) * plotHeight; }
+  var epochPositionData = { stepPoints: stepPoints, points: points };
   function epochX(epoch, fallbackStep) {
-    var epochPoint = trainingCandidatesPointForEpoch(epoch, [], points);
+    var epochPoint = trainingCandidatesStepPointForEpoch(epoch, epochPositionData);
     return x(epochPoint ? epochPoint.step : fallbackStep);
   }
   function polyline(series) { return series.map(function (point) { return x(point.step).toFixed(2) + ',' + y(point.loss).toFixed(2); }).join(' '); }

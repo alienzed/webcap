@@ -448,7 +448,7 @@ function refreshTrainingWorkspace() {
   var isUnavailableSetEntry = !isGlobalEntry && !isSetEntry;
 
   if (els.globalContext) {
-    els.globalContext.classList.toggle('hidden', !isGlobalEntry);
+    els.globalContext.classList.remove('hidden');
     els.globalContext.classList.toggle('training-global-context--global', isGlobalEntry);
   }
   if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);
@@ -462,7 +462,7 @@ function refreshTrainingWorkspace() {
   }
 
   if (isUnavailableSetEntry) {
-    if (els.navigatorTitle) els.navigatorTitle.textContent = 'Train';
+    if (els.navigatorTitle) els.navigatorTitle.textContent = 'Training';
     if (els.folder) els.folder.textContent = 'Select a set folder to configure training.';
     if (els.readiness) els.readiness.textContent = 'Select a set folder to configure training.';
     renderTrainingItemOverview(null, 'Select a set folder to configure training.');
@@ -470,7 +470,7 @@ function refreshTrainingWorkspace() {
     return;
   }
 
-  if (els.navigatorTitle) els.navigatorTitle.textContent = 'Train';
+  if (els.navigatorTitle) els.navigatorTitle.textContent = 'Training';
   if (els.folder) els.folder.textContent = folder;
   resetTrainingRunSetupForFolder(folder);
   if (els.readiness) els.readiness.textContent = 'Loading training setup...';
@@ -591,6 +591,7 @@ function wireTrainingWorkspace() {
   var historyCollapseBtn = document.getElementById('training-history-collapse-btn');
   var historyShowAllBtn = document.getElementById('training-history-show-all-btn');
   var historySearch = document.getElementById('training-history-search');
+  var historyScope = document.getElementById('training-history-scope');
   var historyClearBtn = document.getElementById('training-history-clear-btn');
   backBtn.onclick = function () { exitWorkspaceSurface(); };
   sidebarCollapseBtn.onclick = function () {
@@ -818,6 +819,14 @@ function wireTrainingWorkspace() {
   };
   historyShowAllBtn.onclick = function () {
     trainingWorkspaceState.historyExpanded = !trainingWorkspaceState.historyExpanded;
+    renderTrainingHistory();
+  };
+  if (historyScope) historyScope.onclick = function (event) {
+    var button = event.target.closest('[data-training-history-scope]');
+    if (!button) return;
+    var scope = button.getAttribute('data-training-history-scope');
+    trainingWorkspaceState.historyViewScope = scope === 'set' ? 'set' : 'all';
+    trainingWorkspaceState.historyExpanded = false;
     renderTrainingHistory();
   };
   if (historySearch) historySearch.oninput = renderTrainingHistory;

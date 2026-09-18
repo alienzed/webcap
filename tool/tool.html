@@ -30,11 +30,38 @@
         <div id="app-frame" class="app-frame">
             <header id="app-header" class="app-header" aria-label="Application header">
                 <div class="app-header-brand">WebCap</div>
-                <div id="app-header-context" class="app-header-context" aria-live="polite"></div>
+                <div id="app-header-context" class="app-header-context" aria-live="polite">
+                    <span class="app-header-context-label">Folder</span>
+                    <span id="app-header-folder" class="app-header-folder"></span>
+                </div>
                 <div id="app-header-workspace-controls" class="app-header-workspace-controls"></div>
                 <div id="app-header-global" class="app-header-global"></div>
             </header>
-            <nav id="activity-rail" class="activity-rail" aria-label="Activities"></nav>
+            <nav id="activity-rail" class="activity-rail" aria-label="Activities">
+                <button id="activity-prep-btn" type="button" class="activity-rail-btn active" title="Prep" aria-label="Prep" aria-pressed="true">
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 10.5L12 3l9 7.5"></path>
+                        <path d="M6.5 9.5V20h11V9.5"></path>
+                    </svg>
+                </button>
+                <button id="activity-training-btn" type="button" class="activity-rail-btn" title="Training" aria-label="Training" aria-pressed="false">
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 19V11"></path>
+                        <path d="M10 19V7"></path>
+                        <path d="M16 19V3"></path>
+                        <path d="M3 19h18"></path>
+                        <path d="M16 3h4v4"></path>
+                        <path d="M20 3l-7 7"></path>
+                    </svg>
+                </button>
+                <button id="activity-test-btn" type="button" class="activity-rail-btn hidden" title="Test Bench" aria-label="Test Bench" aria-pressed="false">
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 3h10"></path>
+                        <path d="M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"></path>
+                        <path d="M8 14h8"></path>
+                    </svg>
+                </button>
+            </nav>
             <div class="app shell-revamp workspace-view-single workflow-annotate workspace-surface-default">
             <div id="sidebar-panel" class="panel stack sidebar-panel">
                 <div class="panel-scrollable">

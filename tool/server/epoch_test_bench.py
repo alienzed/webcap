@@ -261,7 +261,11 @@ def _resolve_comfy_loras(loras):
 
 def _workflow_for_lora(template, prompt, comfy_lora_name, settings=None):
     workflow = copy.deepcopy(template)
-    selected = settings or _normalized_test_settings(template)
+    if settings is None:
+        selected = _template_test_settings(template)
+        selected["seed"] = _workflow_seed(template)
+    else:
+        selected = settings
     try:
         prompt_inputs = workflow["146"]["inputs"]
         prompt_inputs["wildcard_text"] = prompt
@@ -426,7 +430,7 @@ def _result_paths(session_directory, lora_file):
     return video, caption
 
 
-def _run_batch(folder_key, session_directory, loras, prompt, settings):
+def _run_batch(folder_key, session_directory, loras, prompt, settings=None):
     status_file = _status_path(session_directory)
     template = _load_template()
     try:

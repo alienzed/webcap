@@ -856,12 +856,15 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 "kind": "lora",
             })
 
-        for candidate in candidates:
+        for candidate_index, candidate in enumerate(candidates, start=1):
             if _stop_requested(folder_key):
                 _mark_stopped(session_directory)
                 return
 
             lora_file = candidate["file"]
+            output_prefix = _candidate_output_prefix(session_directory, candidate_index, candidate)
+            video_path = None
+            caption_path = None
             status = _read_status(session_directory) or {}
             status["current"] = candidate["label"]
             _atomic_write_json(status_file, status)
@@ -873,6 +876,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                     settings=settings,
                     strength_model=candidate["strengthModel"],
                     strength_clip=candidate["strengthClip"],
+                    filename_prefix=output_prefix,
                 )
                 prompt_id = _queue_workflow(workflow)
                 video_ref = _wait_for_video(prompt_id)
@@ -881,7 +885,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                     lora_file,
                     stem_override="base" if candidate["kind"] == "base" else None,
                 )
-                _move_saved_video(video_ref, video_path)
+                _move_saved_video(video_ref, video_path, filename_prefix=output_prefix)
                 caption_path.write_text(prompt, encoding="utf-8")
                 status = _read_status(session_directory) or {}
                 results = status.get("results") if isinstance(status.get("results"), list) else []
@@ -903,6 +907,9 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 status["current"] = ""
                 _atomic_write_json(status_file, status)
             except Exception as exc:
+                for owned_path in (caption_path, video_path):
+                    if owned_path and Path(owned_path).is_file():
+                        Path(owned_path).unlink()
                 if _stop_requested(folder_key):
                     _mark_stopped(session_directory)
                     return

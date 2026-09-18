@@ -78,7 +78,7 @@ Promise.resolve().then(() => Promise.resolve()).then(() => {
     isTrainingWorkspaceActive: () => true, getTrainingDetailTab: () => 'config',
     cancelEditorAutosaveForConfig: () => transitions.push('cancel'),
     saveCurrentEditorContent: () => rejectSave ? Promise.reject(new Error('save failed')) : Promise.resolve(),
-    setTrainingWorkspaceEntryMode: mode => transitions.push('mode:' + mode),
+    setTrainingWorkspaceEntryMode: (mode, options) => transitions.push('mode:' + mode + ':' + !!(options && options.resetDefaults)),
     setWorkspaceSurface: (surface, opts) => transitions.push('surface:' + surface + ':' + opts.sidebarHidden),
     setTrainingDetailTab: tab => transitions.push('tab:' + tab), syncTrainingEntryChrome: () => transitions.push('chrome'),
     setStatus: text => statuses.push(text)
@@ -87,7 +87,7 @@ Promise.resolve().then(() => Promise.resolve()).then(() => {
   vm.runInContext(section(shell, 'function openTrainingSurface(', 'function ensureWorkspaceOverlayHost('), entryContext);
   entryContext.openTrainingSurface('global');
   return Promise.resolve().then(() => {
-    if (transitions.join('|') !== 'cancel|mode:global|surface:training:true|tab:run-log|chrome') throw new Error('save success transition');
+    if (transitions.join('|') !== 'cancel|mode:global:true|surface:training:true|tab:run-log|chrome') throw new Error('save success transition');
     transitions = []; rejectSave = true;
     entryContext.openTrainingSurface('global');
     return Promise.resolve().then(() => Promise.resolve()).then(() => {
@@ -151,3 +151,13 @@ def test_training_set_keeps_global_activity_and_explicit_recent_run_scope():
     assert "trainingWorkspaceState.historyViewScope = scope === 'set' ? 'set' : 'all';" in workspace
     assert "scope === 'set' && String(job.folder || '') !== currentFolder" in history
     assert "searchEl.value = folder" not in history
+
+
+def test_training_entry_defaults_collapse_by_context_without_refresh_reset():
+    state = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    assert "setTrainingWorkspaceEntryMode(entryMode, { resetDefaults: true });" in shell
+    assert "trainingWorkspaceState.historyCollapsed = nextMode === 'set';" in state
+    assert "trainingWorkspaceState.runnerQueueCollapsed = nextMode === 'set';" in state
+    assert "if (resetDefaults)" in state

@@ -370,7 +370,7 @@ function openTrainingSurface(mode) {
     && configFile.file;
 
   function enterTrainingSurface() {
-    setTrainingWorkspaceEntryMode(entryMode);
+    setTrainingWorkspaceEntryMode(entryMode, { resetDefaults: true });
     setWorkspaceSurface('training', { sidebarHidden: entryMode === 'global' });
     setTrainingDetailTab(entryMode === 'global' ? 'run-log' : 'items');
     syncTrainingEntryChrome();

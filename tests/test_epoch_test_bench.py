@@ -121,7 +121,7 @@ def test_default_template_has_required_test_nodes():
     assert bench._default_prompt(workflow)
 
 
-def test_run_batch_stops_on_first_failure(tmp_path, monkeypatch):
+def test_run_batch_continues_after_candidate_failure(tmp_path, monkeypatch):
     session = tmp_path / "session"
     session.mkdir()
     bench._atomic_write_json(
@@ -133,6 +133,7 @@ def test_run_batch_stops_on_first_failure(tmp_path, monkeypatch):
             "total": 2,
             "completed": 0,
             "failed": 0,
+            "failures": [],
             "current": "",
             "error": "",
         },
@@ -150,21 +151,29 @@ def test_run_batch_stops_on_first_failure(tmp_path, monkeypatch):
         "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
     })
+    monkeypatch.setattr(bench, "_release_gpu_for_test_generations", lambda: None)
 
-    def fail_queue(workflow):
-        queued.append(workflow["148"]["inputs"]["lora_name"])
-        raise RuntimeError("boom")
+    def queue(workflow):
+        name = workflow["148"]["inputs"]["lora_name"]
+        queued.append(name)
+        if len(queued) == 1:
+            raise RuntimeError("boom")
+        return "prompt-2"
 
-    monkeypatch.setattr(bench, "_queue_workflow", fail_queue)
+    monkeypatch.setattr(bench, "_queue_workflow", queue)
+    monkeypatch.setattr(bench, "_wait_for_video", lambda _prompt_id: {"filename": "ok.mp4"})
+    monkeypatch.setattr(bench, "_download_video", lambda _video_ref: b"video")
 
     bench._run_batch("folder-key", session, loras, "prompt")
 
     status = bench._read_status(session)
-    assert queued == ["mh3/set/epoch01.safetensors"]
-    assert status["status"] == "failed"
-    assert status["completed"] == 0
+    assert queued == ["mh3/set/epoch01.safetensors", "mh3/set/epoch02.safetensors"]
+    assert status["status"] == "complete"
+    assert status["completed"] == 1
     assert status["failed"] == 1
-    assert status["error"] == "boom"
+    assert status["failures"][0]["sourceLoRA"] == "epoch01.safetensors"
+    assert len(status["results"]) == 1
+    assert status["results"][0]["sourceLoRA"] == "epoch02.safetensors"
 
 
 def test_staged_lora_provenance_reads_copy_to_test_sidecar(tmp_path):
@@ -408,3 +417,44 @@ def test_prepare_exposes_supported_test_aspect_ratios(tmp_path, monkeypatch):
 def test_normalized_test_settings_rejects_unknown_aspect_ratio():
     with pytest.raises(ValueError, match="Unsupported Test Generations aspect ratio"):
         bench._normalized_test_settings(bench._load_template(), aspect_ratio="5:4 (Unsupported)")
+
+
+def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "run-01__epoch10.safetensors"
+    candidate.write_bytes(b"copy")
+    candidate.with_suffix(".webcap.json").write_text("{}", encoding="utf-8")
+    other = staged / "run-02__epoch20.safetensors"
+    other.write_bytes(b"keep")
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+
+    payload = bench.remove_candidate(tmp_path, candidate.name)
+
+    assert not candidate.exists()
+    assert not candidate.with_suffix(".webcap.json").exists()
+    assert other.exists()
+    assert payload["count"] == 1
+    assert payload["files"] == [other.name]
+
+
+def test_stop_marks_active_session_stopping_and_interrupts_comfy(tmp_path, monkeypatch):
+    class ActiveThread:
+        def is_alive(self):
+            return True
+
+    session = tmp_path / "session"
+    session.mkdir()
+    bench._atomic_write_json(session / "test.json", {"status": "running", "current": "epoch10.safetensors"})
+    folder_key = str(tmp_path.resolve())
+    monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
+    monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
+    monkeypatch.setattr(bench, "_stop_requests", set())
+    interrupted = []
+    monkeypatch.setattr(bench, "_interrupt_comfy", lambda: interrupted.append(True))
+
+    status = bench.stop(tmp_path)
+
+    assert status["status"] == "stopping"
+    assert folder_key in bench._stop_requests
+    assert interrupted == [True]

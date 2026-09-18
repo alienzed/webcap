@@ -2699,6 +2699,36 @@ iframe {
   background: var(--panel-soft);
 }
 .test-generations-controls .training-command-text { max-height: 120px; margin: 8px 0 0; overflow: auto; }
+.test-generations-staged-list {
+  display: grid;
+  gap: 4px;
+  max-height: 180px;
+  margin-top: 8px;
+  overflow: auto;
+}
+.test-generations-staged-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.test-generations-staged-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-remove-candidate {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--danger, #f87171);
+  cursor: pointer;
+}
 .test-generations-prompt textarea {
   box-sizing: border-box;
   width: 100%;

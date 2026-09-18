@@ -32,6 +32,8 @@ TEST_ASPECT_RATIO_OPTIONS = (
 )
 _lock = threading.Lock()
 _active_threads = {}
+_active_sessions = {}
+_stop_requests = set()
 
 
 def _reserve_gpu_for_test_generations():
@@ -138,6 +140,23 @@ def _read_bytes(url, timeout=30):
         raise RuntimeError("Could not retrieve the ComfyUI output.") from exc
 
 
+def _interrupt_comfy():
+    url = COMFY_BASE_URL + "/interrupt"
+    curl_path = _windows_curl_path()
+    if curl_path:
+        try:
+            _windows_curl_request(curl_path, url, method="POST", timeout=5)
+            return
+        except (ConnectionError, RuntimeError) as exc:
+            raise RuntimeError("Could not interrupt the current ComfyUI generation.") from exc
+    req = urllib.request.Request(url, data=b"", method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=5):
+            return
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
+        raise RuntimeError("Could not interrupt the current ComfyUI generation.") from exc
+
+
 def _load_template():
     try:
         workflow = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
@@ -218,6 +237,35 @@ def _lora_files(test_directory):
         [path for path in test_directory.iterdir() if path.is_file() and path.suffix.lower() == ".safetensors"],
         key=lambda path: path.name.lower(),
     )
+
+
+def remove_candidate(folder_path, file_name):
+    name = str(file_name or "").strip()
+    if (
+        not name
+        or name in (".", "..")
+        or "/" in name
+        or "\\" in name
+        or not name.lower().endswith(".safetensors")
+    ):
+        raise ValueError("A staged .safetensors filename is required.")
+    test_directory = _h3_test_directory(folder_path)
+    candidate = test_directory / name
+    if not candidate.is_file() or candidate.is_symlink():
+        raise FileNotFoundError("Staged Test candidate does not exist: " + name)
+    sidecar = candidate.with_suffix(".webcap.json")
+    if sidecar.exists() and (not sidecar.is_file() or sidecar.is_symlink()):
+        raise RuntimeError("Staged Test candidate sidecar is not a regular file: " + sidecar.name)
+    candidate.unlink()
+    if sidecar.exists():
+        sidecar.unlink()
+    remaining = _lora_files(test_directory)
+    return {
+        "operation": "test_remove_candidate",
+        "removed": name,
+        "count": len(remaining),
+        "files": [path.name for path in remaining],
+    }
 
 
 def _normalize_lora_name(value):
@@ -451,7 +499,7 @@ def _latest_status(folder_path):
 
 def _visible_status(folder_path):
     payload = _latest_status(folder_path)
-    if payload.get("status") != "running":
+    if payload.get("status") not in ("running", "stopping"):
         return payload
     folder_key = str(Path(folder_path).resolve())
     with _lock:
@@ -459,6 +507,8 @@ def _visible_status(folder_path):
         if thread and thread.is_alive():
             return payload
         _active_threads.pop(folder_key, None)
+        _active_sessions.pop(folder_key, None)
+        _stop_requests.discard(folder_key)
     interrupted = dict(payload)
     interrupted["status"] = "interrupted"
     interrupted["current"] = ""
@@ -500,52 +550,91 @@ def _result_paths(session_directory, lora_file):
     return video, caption
 
 
+def _stop_requested(folder_key):
+    with _lock:
+        return folder_key in _stop_requests
+
+
+def _mark_stopped(session_directory):
+    status = _read_status(session_directory) or {}
+    status["status"] = "stopped"
+    status["current"] = ""
+    status["error"] = ""
+    _atomic_write_json(_status_path(session_directory), status)
+    return status
+
+
 def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None):
     status_file = _status_path(session_directory)
     try:
         template = copy.deepcopy(template) if template is not None else _load_template()
         for lora_file, comfy_lora_name in loras:
+            if _stop_requested(folder_key):
+                _mark_stopped(session_directory)
+                return
+
             status = _read_status(session_directory) or {}
             status["current"] = lora_file.name
             _atomic_write_json(status_file, status)
-            workflow = _workflow_for_lora(template, prompt, comfy_lora_name, settings=settings)
-            prompt_id = _queue_workflow(workflow)
-            video_ref = _wait_for_video(prompt_id)
-            video_bytes = _download_video(video_ref)
-            video_path, caption_path = _result_paths(session_directory, lora_file)
-            video_path.write_bytes(video_bytes)
-            caption_path.write_text(prompt, encoding="utf-8")
-            status = _read_status(session_directory) or {}
-            provenance = _staged_lora_provenance(lora_file)
-            results = status.get("results") if isinstance(status.get("results"), list) else []
-            result = {
-                "sourceLoRA": lora_file.name,
-                "outputVideo": video_path.name,
-                "prompt": prompt,
-                "seed": _workflow_seed(workflow),
-            }
-            if provenance:
-                result["provenance"] = provenance
-            results.append(result)
-            status["results"] = results
-            status["completed"] = int(status.get("completed") or 0) + 1
-            status["current"] = ""
-            _atomic_write_json(status_file, status)
+            try:
+                workflow = _workflow_for_lora(template, prompt, comfy_lora_name, settings=settings)
+                prompt_id = _queue_workflow(workflow)
+                video_ref = _wait_for_video(prompt_id)
+                if _stop_requested(folder_key):
+                    _mark_stopped(session_directory)
+                    return
+                video_bytes = _download_video(video_ref)
+                if _stop_requested(folder_key):
+                    _mark_stopped(session_directory)
+                    return
+                video_path, caption_path = _result_paths(session_directory, lora_file)
+                video_path.write_bytes(video_bytes)
+                caption_path.write_text(prompt, encoding="utf-8")
+                status = _read_status(session_directory) or {}
+                provenance = _staged_lora_provenance(lora_file)
+                results = status.get("results") if isinstance(status.get("results"), list) else []
+                result = {
+                    "sourceLoRA": lora_file.name,
+                    "outputVideo": video_path.name,
+                    "prompt": prompt,
+                    "seed": _workflow_seed(workflow),
+                }
+                if provenance:
+                    result["provenance"] = provenance
+                results.append(result)
+                status["results"] = results
+                status["completed"] = int(status.get("completed") or 0) + 1
+                status["current"] = ""
+                _atomic_write_json(status_file, status)
+            except Exception as exc:
+                if _stop_requested(folder_key):
+                    _mark_stopped(session_directory)
+                    return
+                status = _read_status(session_directory) or {}
+                failures = status.get("failures") if isinstance(status.get("failures"), list) else []
+                failures.append({"sourceLoRA": lora_file.name, "error": str(exc)})
+                status["failures"] = failures
+                status["failed"] = int(status.get("failed") or 0) + 1
+                status["current"] = ""
+                status["error"] = ""
+                _atomic_write_json(status_file, status)
+
         status = _read_status(session_directory) or {}
-        status["status"] = "complete"
+        status["status"] = "stopped" if _stop_requested(folder_key) else "complete"
         status["current"] = ""
         _atomic_write_json(status_file, status)
     except Exception as exc:
         status = _read_status(session_directory) or {}
         status["status"] = "failed"
-        status["failed"] = 1
+        status["current"] = ""
         status["error"] = str(exc)
         _atomic_write_json(status_file, status)
     finally:
         with _lock:
             _active_threads.pop(folder_key, None)
+            _active_sessions.pop(folder_key, None)
+            _stop_requests.discard(folder_key)
         _release_gpu_for_test_generations()
-
 
 def prepare(folder_path):
     template = _load_template()
@@ -593,6 +682,8 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
         dead_keys = [key for key, thread in _active_threads.items() if not thread.is_alive()]
         for key in dead_keys:
             _active_threads.pop(key, None)
+            _active_sessions.pop(key, None)
+            _stop_requests.discard(key)
         active = _active_threads.get(folder_key)
         if active and active.is_alive():
             return _latest_status(folder_path)
@@ -608,6 +699,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
                 "total": len(resolved_loras),
                 "completed": 0,
                 "failed": 0,
+                "failures": [],
                 "current": "",
                 "error": "",
                 "seed": settings["seed"],
@@ -624,6 +716,8 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
                 name="webcap-h3-test-generations",
                 daemon=True,
             )
+            _stop_requests.discard(folder_key)
+            _active_sessions[folder_key] = session_directory
             _active_threads[folder_key] = thread
             thread.start()
     except Exception:
@@ -632,12 +726,32 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
     return payload
 
 
+def stop(folder_path):
+    folder_key = str(Path(folder_path).resolve())
+    with _lock:
+        thread = _active_threads.get(folder_key)
+        session_directory = _active_sessions.get(folder_key)
+        if not thread or not thread.is_alive() or not session_directory:
+            raise RuntimeError("No active Test Generations batch to stop.")
+        _stop_requests.add(folder_key)
+    status = _read_status(session_directory) or {}
+    status["status"] = "stopping"
+    _atomic_write_json(_status_path(session_directory), status)
+    _interrupt_comfy()
+    return status
+
+
 def handle_request(folder_path, mode, selection_criteria=None):
     operation = str(mode or "").strip().lower()
     if operation == "test_prepare":
         return prepare(folder_path)
     if operation == "test_status":
         return status(folder_path)
+    if operation == "test_stop":
+        return stop(folder_path)
+    if operation == "test_remove_candidate":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return remove_candidate(folder_path, criteria.get("fileName"))
     if operation == "test_start":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return start(

@@ -60,13 +60,44 @@
     button.classList.toggle('hidden', !available);
   }
 
+  function renderStagedFiles(payload) {
+    var count = Number(payload && payload.count || 0);
+    var files = payload && Array.isArray(payload.files) ? payload.files : [];
+    var summary = el('test-generations-summary');
+    var toggle = el('test-generations-files-toggle');
+    var host = el('test-generations-files');
+    if (summary) summary.textContent = count + ' LoRA' + (count === 1 ? '' : 's') + ' staged · one frozen setting set for the whole batch.';
+    if (toggle) toggle.textContent = 'View ' + count + ' staged LoRA' + (count === 1 ? '' : 's');
+    if (!host) return;
+    host.innerHTML = '';
+    files.forEach(function (fileName) {
+      var row = document.createElement('div');
+      row.className = 'test-generations-staged-row';
+      var name = document.createElement('span');
+      name.textContent = String(fileName || '');
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'test-generations-remove-candidate';
+      remove.dataset.fileName = String(fileName || '');
+      remove.title = 'Remove this staged Test candidate';
+      remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
+      remove.textContent = '×';
+      row.appendChild(name);
+      row.appendChild(remove);
+      host.appendChild(row);
+    });
+  }
+
   function statusText(status) {
     if (!status || status.status === 'idle') return '';
     var completed = Number(status.completed || 0);
     var total = Number(status.total || 0);
-    if (status.status === 'running') return 'Running ' + completed + ' / ' + total + (status.current ? ' · ' + status.current : '');
-    if (status.status === 'complete') return 'Complete · ' + completed + ' / ' + total;
-    if (status.status === 'failed') return 'Stopped after failure · ' + completed + ' / ' + total;
+    var failed = Number(status.failed || 0);
+    if (status.status === 'running') return 'Running ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '') + (status.current ? ' · ' + status.current : '');
+    if (status.status === 'stopping') return 'Stopping · ' + completed + ' / ' + total;
+    if (status.status === 'stopped') return 'Stopped · ' + completed + ' / ' + total;
+    if (status.status === 'complete') return 'Complete · ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '');
+    if (status.status === 'failed') return 'Batch failed · ' + completed + ' / ' + total;
     return String(status.status || '');
   }
 
@@ -163,6 +194,7 @@
     var statusEl = el('test-generations-status');
     var errorEl = el('test-generations-error');
     var runBtn = el('test-generations-run-btn');
+    var stopBtn = el('test-generations-stop-btn');
     var openBtn = el('test-generations-open-results-btn');
     if (statusEl) statusEl.textContent = statusText(status);
     if (errorEl) {
@@ -170,12 +202,18 @@
       errorEl.classList.toggle('hidden', !errorEl.textContent);
     }
     var running = !!(status && status.status === 'running');
-    if (runBtn) runBtn.disabled = running || !prepared || !prepared.count;
-    setControlsDisabled(running);
+    var stopping = !!(status && status.status === 'stopping');
+    var active = running || stopping;
+    if (runBtn) runBtn.disabled = active || !prepared || !prepared.count;
+    if (stopBtn) {
+      stopBtn.classList.toggle('hidden', !active);
+      stopBtn.disabled = stopping;
+    }
+    setControlsDisabled(active);
     if (openBtn) {
       var resultFolder = status && status.resultFolder ? String(status.resultFolder) : '';
       openBtn.dataset.resultFolder = resultFolder;
-      openBtn.classList.toggle('hidden', !resultFolder || (status.status !== 'complete' && status.status !== 'failed'));
+      openBtn.classList.toggle('hidden', !resultFolder || ['complete', 'failed', 'stopped'].indexOf(status.status) === -1);
     }
     renderResults(status || {});
   }
@@ -185,7 +223,7 @@
     if (!isOpen()) return;
     request('test_status').then(function (status) {
       renderStatus(status);
-      if (status && status.status === 'running') pollTimer = setTimeout(pollStatus, 2000);
+      if (status && (status.status === 'running' || status.status === 'stopping')) pollTimer = setTimeout(pollStatus, 2000);
     }).catch(showError);
   }
 
@@ -276,10 +314,7 @@
     renderStatus({ status: 'idle' });
     request('test_prepare').then(function (payload) {
       prepared = payload;
-      if (summary) summary.textContent = payload.count + ' LoRA' + (payload.count === 1 ? '' : 's') + ' staged · one frozen setting set for the whole batch.';
-      var filesToggle = el('test-generations-files-toggle');
-      if (filesToggle) filesToggle.textContent = 'View ' + payload.count + ' staged LoRA' + (payload.count === 1 ? '' : 's');
-      if (list) list.textContent = (payload.files || []).join('\n');
+      renderStagedFiles(payload);
       populateControls(payload);
       renderStatus(payload.latest || { status: 'idle' });
       if (payload.latest && payload.latest.status === 'running') pollStatus();
@@ -317,6 +352,29 @@
     });
   }
 
+  function stopRun() {
+    var stopBtn = el('test-generations-stop-btn');
+    if (stopBtn) stopBtn.disabled = true;
+    request('test_stop').then(function (status) {
+      renderStatus(status);
+      pollStatus();
+    }).catch(function (err) {
+      if (stopBtn) stopBtn.disabled = false;
+      showError(err);
+    });
+  }
+
+  function removeCandidate(fileName) {
+    request('test_remove_candidate', { fileName: String(fileName || '') }).then(function (payload) {
+      if (prepared) {
+        prepared.count = Number(payload.count || 0);
+        prepared.files = Array.isArray(payload.files) ? payload.files.slice() : [];
+        renderStagedFiles(prepared);
+      }
+      return request('test_status');
+    }).then(renderStatus).catch(showError);
+  }
+
   function buildUi() {
     if (el('test-generations-open-btn')) return;
     var actions = el('training-tests-actions');
@@ -339,7 +397,7 @@
       '<header class="test-generations-header"><div><h2>Test Generations</h2><p>MiniMax H3 · compare staged LoRAs with one frozen configuration per batch.</p></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
       '<div class="test-generations-body">',
       '<section class="test-generations-controls">',
-      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div><details><summary id="test-generations-files-toggle">View staged LoRAs</summary><pre id="test-generations-files" class="training-command-text"></pre></details></div>',
+      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div><details><summary id="test-generations-files-toggle">View staged LoRAs</summary><div id="test-generations-files" class="test-generations-staged-list"></div></details></div>',
       '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="5"></textarea></label>',
       '<div class="test-generations-setup-options">',
       '<div class="test-generations-settings-grid">',
@@ -348,7 +406,7 @@
       '<label class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="0.1" step="0.1"></label>',
       '<label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>',
       '</div>',
-      '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset Prompt</button><button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Results</button></div>',
+      '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-stop-btn" type="button" class="review-captions-btn hidden">Stop</button><button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset Prompt</button><button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Results</button></div>',
       '<div id="test-generations-status" class="training-command-status" aria-live="polite"></div>',
       '<div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>',
       '</div>',
@@ -361,6 +419,13 @@
     button.onclick = openPane;
     el('test-generations-close-btn').onclick = closePane;
     el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-stop-btn').onclick = stopRun;
+    el('test-generations-files').onclick = function (event) {
+      var button = event.target.closest('[data-file-name]');
+      if (!button) return;
+      button.disabled = true;
+      removeCandidate(button.dataset.fileName);
+    };
     el('test-generations-prompt').addEventListener('input', function () {
       savePrompt(this.value);
     });

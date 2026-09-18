@@ -653,6 +653,45 @@ def _session_status(session_directory):
     return visible
 
 
+def _mark_session_interrupted(session_directory, message):
+    status = _read_status(session_directory) or {}
+    if status.get("status") not in ("running", "stopping"):
+        return _session_status(session_directory)
+    status["status"] = "interrupted"
+    status["current"] = ""
+    status["error"] = str(message or "Test run was interrupted.")
+    _atomic_write_json(_status_path(session_directory), status)
+    return _session_status(session_directory)
+
+
+def _visible_session_status(folder_path, session_directory):
+    payload = _session_status(session_directory)
+    if not payload or payload.get("status") not in ("running", "stopping"):
+        return payload
+
+    folder_key = _folder_key(folder_path)
+    with _lock:
+        thread = _active_threads.get(folder_key)
+        active_session = _active_sessions.get(folder_key)
+        live = bool(
+            thread
+            and thread.is_alive()
+            and active_session
+            and Path(active_session).resolve() == Path(session_directory).resolve()
+        )
+        if live:
+            return payload
+        if not thread or not thread.is_alive():
+            _active_threads.pop(folder_key, None)
+            _active_sessions.pop(folder_key, None)
+            _stop_requests.discard(folder_key)
+
+    return _mark_session_interrupted(
+        session_directory,
+        "Test run was interrupted because its worker is no longer active.",
+    )
+
+
 def list_sessions(folder_path):
     root = _session_root(folder_path)
     if not root.is_dir():
@@ -663,7 +702,7 @@ def list_sessions(folder_path):
         key=lambda path: path.name.lower(),
         reverse=True,
     ):
-        payload = _session_status(session)
+        payload = _visible_session_status(folder_path, session)
         if not payload:
             continue
         sessions.append({
@@ -678,7 +717,8 @@ def list_sessions(folder_path):
 
 
 def open_session(folder_path, session_name):
-    return _session_status(_session_directory(folder_path, session_name))
+    session = _session_directory(folder_path, session_name)
+    return _visible_session_status(folder_path, session)
 
 
 def delete_session(folder_path, session_name):
@@ -773,19 +813,11 @@ def _visible_status(folder_path):
     payload = _latest_status(folder_path)
     if payload.get("status") not in ("running", "stopping"):
         return payload
-    folder_key = _folder_key(folder_path)
-    with _lock:
-        thread = _active_threads.get(folder_key)
-        if thread and thread.is_alive():
-            return payload
-        _active_threads.pop(folder_key, None)
-        _active_sessions.pop(folder_key, None)
-        _stop_requests.discard(folder_key)
-    interrupted = dict(payload)
-    interrupted["status"] = "interrupted"
-    interrupted["current"] = ""
-    interrupted["error"] = "Test run was interrupted because WebCap restarted."
-    return interrupted
+    session_name = str(payload.get("session") or "").strip()
+    if not session_name:
+        return payload
+    session_directory = _session_directory(folder_path, session_name)
+    return _visible_session_status(folder_path, session_directory)
 
 
 def _staged_lora_provenance(lora_file):

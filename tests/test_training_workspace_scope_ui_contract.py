@@ -147,7 +147,7 @@ def test_training_set_keeps_global_activity_and_explicit_recent_run_scope():
     assert 'data-training-history-scope="all"' in html
     assert "historyViewScope: 'all'" in state
     assert "nextMode === 'set' ? 'set' : 'all'" in state
-    assert "els.globalContext.classList.remove('hidden')" in workspace
+    assert "els.globalContext.classList.toggle('hidden', false)" in workspace
     assert "trainingWorkspaceState.historyViewScope = scope === 'set' ? 'set' : 'all';" in workspace
     assert "scope === 'set' && String(job.folder || '') !== currentFolder" in history
     assert "searchEl.value = folder" not in history

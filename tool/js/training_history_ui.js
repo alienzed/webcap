@@ -91,7 +91,6 @@ function loadTrainingHistoryMetrics(job) {
 
 function renderTrainingHistory() {
   var els = getTrainingWorkspaceEls();
-  renderTrainingModelTrainedStatus();
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
   var history = trainingWorkspaceState.history || {};
   var searchText = String((els.historySearch && els.historySearch.value) || '').trim().toLowerCase();
@@ -261,30 +260,6 @@ function renderTrainingHistory() {
     els.checkpointSelect.value = selectedCheckpoint;
   }
   syncManagedTrainingResumeUi();
-}
-
-function renderTrainingModelTrainedStatus() {
-  var els = getTrainingWorkspaceEls();
-  if (!els.modelTrainedStatus) return;
-  var profile = getSelectedTrainingModelProfile();
-  var modelIds = (profile && profile.configs || []).map(function (config) { return String(config.id || ''); });
-  var seen = {};
-  var runs = ((trainingWorkspaceState.history || {}).runs || []).filter(function (run) {
-    var modelId = String(run.candidateFor || run.stage || '');
-    if (modelIds.indexOf(modelId) === -1 || seen[modelId]) return false;
-    seen[modelId] = true;
-    return true;
-  });
-  els.modelTrainedStatus.classList.toggle('hidden', !runs.length);
-  els.modelTrainedStatus.innerHTML = runs.map(function (run) {
-    var progress = run.epoch && run.expectedEpochs ? 'epoch ' + run.epoch + ' / ' + run.expectedEpochs : '';
-    var details = [run.modelLabel || trainingStageLabel(run.stage), run.name || 'run', progress].filter(Boolean).join(' · ');
-    return '<div class="training-model-trained-row" title="' + escapeHtml(run.path || '') + '">' +
-      '<span class="training-model-trained-badge">Already trained</span>' +
-      '<span class="training-model-trained-detail">' + escapeHtml(details) + '</span>' +
-      '<button type="button" class="training-history-action" data-training-trained-output="' + escapeHtml(run.path || '') + '" data-training-trained-model="' + escapeHtml(run.candidateFor || run.stage || '') + '" title="Open run directory" aria-label="Open trained run directory">&#128193;</button>' +
-    '</div>';
-  }).join('');
 }
 
 function clearTrainingHistory() {

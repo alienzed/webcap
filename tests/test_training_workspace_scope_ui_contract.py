@@ -184,3 +184,25 @@ def test_training_lifecycle_is_run_setup_training_tests():
     assert "margin-top: 12px;" in css.split(".app.shell-revamp #training-tests-stage {", 1)[1].split("}", 1)[0]
     training_rule = css.split(".app.shell-revamp .training-global-context {", 1)[1].split("}", 1)[0]
     assert "margin-top: 6px;" in training_rule
+
+
+
+def test_run_setup_is_one_form_without_trained_badge_and_history_is_flat():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+
+    assert 'id="training-model-trained-status"' not in html
+    assert 'Already trained' not in history
+    assert 'class="training-run-option training-run-model-option"' in html
+    assert 'class="training-global-secondary"' not in html
+    assert 'Training Queue' in html
+    assert '>Recent Runs</button>' in html
+
+    fields_rule = css.split(".app.shell-revamp .training-run-layout .training-run-setup-fields {", 1)[1].split("}", 1)[0]
+    assert "grid-template-columns: 150px minmax(0, 1fr);" in fields_rule
+    actions_rule = css.split(".app.shell-revamp .training-run-setup-actions {", 1)[1].split("}", 1)[0]
+    assert "justify-content: flex-end;" in actions_rule
+    history_rule = css.split(".app.shell-revamp.workspace-surface-training .training-history-card {", 1)[1].split("}", 1)[0]
+    assert "border: 0;" in history_rule
+    assert "background: transparent;" in history_rule

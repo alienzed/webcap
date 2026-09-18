@@ -1141,25 +1141,6 @@
   gap: 4px;
 }
 
-.app.shell-revamp .training-run-model-block {
-  display: grid;
-  grid-template-columns: minmax(180px, auto) minmax(0, 1fr);
-  align-items: end;
-  gap: 8px 12px;
-}
-
-.app.shell-revamp .training-run-model-block .training-profile-control {
-  margin-top: 0;
-}
-
-.app.shell-revamp .training-run-model-block .training-model-trained-status {
-  min-width: 0;
-  margin: 0;
-}
-
-.app.shell-revamp .training-run-model-block .training-model-trained-row {
-  width: 100%;
-}
 .app.shell-revamp .training-workflow-step .training-readiness {
   display: block;
   padding: 0;
@@ -1254,24 +1235,44 @@
 
 .app.shell-revamp .training-run-layout {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(150px, auto);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "heading options launch"
-    ". checkpoint checkpoint";
-  align-items: stretch;
-  gap: 8px 14px;
+    "heading"
+    "options"
+    "launch";
+  gap: 12px;
 }
 
 .app.shell-revamp .training-run-layout .training-run-setup-header {
   grid-area: heading;
-  align-self: start;
-  padding-top: 3px;
 }
 
 .app.shell-revamp .training-run-layout .training-run-setup-fields {
   grid-area: options;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 7px;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option {
+  grid-column: 1 / -1;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > span {
+  grid-column: 1;
+}
+
+.app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > input,
+.app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > select,
+.app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > .training-run-stage-buttons {
+  grid-column: 2;
+}
+
+.app.shell-revamp .training-run-layout .training-review {
+  grid-column: 2;
 }
 
 .app.shell-revamp .training-run-layout #training-run-resume-fields {
@@ -1280,16 +1281,18 @@
 
 .app.shell-revamp .training-run-setup-actions {
   grid-area: launch;
-  align-self: stretch;
-  flex-direction: column;
-  align-items: stretch;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   padding-top: 0;
 }
 
 .app.shell-revamp .training-run-setup-actions .training-launch-btn {
-  width: 100%;
-  min-height: 64px;
+  width: auto;
+  min-width: 150px;
+  min-height: 38px;
 }
 
 .app.shell-revamp .training-launch-status {
@@ -1385,14 +1388,13 @@
   border-top: 0;
 }
 
-.app.shell-revamp .training-global-secondary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-}
-
-.app.shell-revamp .training-global-secondary .training-history-card {
-  margin-top: 0;
+.app.shell-revamp.workspace-surface-training .training-history-card {
+  gap: 8px;
+  margin-top: 2px;
+  padding: 4px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .app.shell-revamp .training-runner-folder,
@@ -1432,15 +1434,23 @@
 
   .app.shell-revamp .training-run-layout {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "heading"
-      "options"
-      "launch"
-      "checkpoint";
   }
 
-  .app.shell-revamp .training-run-layout .training-run-setup-header {
-    padding-top: 0;
+  .app.shell-revamp .training-run-layout .training-run-setup-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > span,
+  .app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > input,
+  .app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > select,
+  .app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > .training-run-stage-buttons,
+  .app.shell-revamp .training-run-layout .training-review {
+    grid-column: 1;
   }
 
   .app.shell-revamp .training-run-layout #training-run-resume-fields {
@@ -1449,10 +1459,6 @@
 
   .app.shell-revamp .training-run-setup-actions .training-launch-btn {
     min-height: 38px;
-  }
-
-  .app.shell-revamp .training-global-secondary {
-    grid-template-columns: 1fr;
   }
 
   .app.shell-revamp .training-set-context .training-readiness {

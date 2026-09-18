@@ -664,12 +664,10 @@
                                     </div>
                                 </div>
                                 <div class="training-run-setup-fields">
-                                    <div class="training-run-model-block">
-                                        <label class="training-profile-control">Model
-                                            <select id="training-model-profile-select"></select>
-                                        </label>
-                                        <div id="training-model-trained-status" class="training-model-trained-status hidden" aria-live="polite"></div>
-                                    </div>
+                                    <label class="training-run-option training-run-model-option">
+                                        <span>Model</span>
+                                        <select id="training-model-profile-select"></select>
+                                    </label>
                                     <label class="training-run-option training-run-name-option">
                                         <span>Run name <em>(optional)</em></span>
                                         <input id="training-run-name-input" type="text" maxlength="80" placeholder="e.g. clothing baseline">
@@ -757,7 +755,6 @@
                                 </div>
                                 <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued training jobs"></div>
                             </section>
-                            <div class="training-global-secondary">
                             <section class="training-history-card" aria-label="Recent training runs">
                                 <div class="training-history-heading">
                                     <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Recent Runs</button>
@@ -776,7 +773,6 @@
                                     <div id="training-history-list" class="training-history-list"></div>
                                 </div>
                             </section>
-                            </div>
                         </section>
                         <section id="training-tests-stage" class="training-workflow-step training-lifecycle-stage training-set-only" aria-label="Test generations">
                             <div class="training-workflow-step-number">3</div>

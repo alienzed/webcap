@@ -564,7 +564,6 @@ function wireTrainingWorkspace() {
   var sidebarCollapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
   var modelProfileSelect = document.getElementById('training-model-profile-select');
   var modeSelect = document.getElementById('training-workspace-profile-select');
-  var modelTrainedStatus = document.getElementById('training-model-trained-status');
   var stageButtons = document.querySelectorAll('[data-training-stage]');
   var resumeInput = document.getElementById('training-run-resume-input');
   var checkpointSelect = document.getElementById('training-run-checkpoint-select');
@@ -610,11 +609,6 @@ function wireTrainingWorkspace() {
   };
   if (modelProfileSelect) modelProfileSelect.onchange = function () { switchTrainingSetup(modelProfileSelect.value, ''); };
   if (modeSelect) modeSelect.onchange = function () { switchTrainingSetup('', modeSelect.value); };
-  if (modelTrainedStatus) modelTrainedStatus.onclick = function (event) {
-    var button = event.target.closest('[data-training-trained-output]');
-    if (!button) return;
-    openDiscoveredTrainingRun(button.getAttribute('data-training-trained-model'), button.getAttribute('data-training-trained-output'));
-  };
   stageButtons.forEach(function (button) {
     button.onclick = function () {
       setManagedTrainingStages(button.getAttribute('data-training-stage'));

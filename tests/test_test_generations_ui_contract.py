@@ -171,10 +171,12 @@ def test_test_bench_utility_and_live_session_contract():
 
 def test_compare_polling_preserves_video_elements():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
 
-    assert "var compareKey = resultFolder + '|'" in script
-    assert "host.dataset.compareKey = compareKey" in script
-    assert "host.querySelector('.test-generations-compare-stage')" in script
+    assert "var compareKey = resultFolder + '|'" in compare_block
+    assert "host.dataset.compareKey = compareKey" in compare_block
+    assert "host.querySelector('.test-generations-compare-stage')" in compare_block
+    assert compare_block.index("host.querySelector('.test-generations-compare-stage')") < compare_block.index("host.innerHTML = '';")
     assert "if (resultsView === 'compare') renderCompare(status || {});" in script
 
 

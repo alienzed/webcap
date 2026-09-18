@@ -511,7 +511,8 @@ function startManagedTraining() {
     .catch(function (err) {
       setStatus('Managed training did not start: ' + String(err && err.message ? err.message : err));
     }).finally(function () {
-      if (trainButton) trainButton.disabled = false;
+      if (trainButton) reviewTrainButtonState(trainingWorkspaceState.review);
+      renderTrainingLaunchStatus();
     });
 }
 
@@ -901,24 +902,23 @@ function renderTrainingRunnerPreflight(payload) {
 
 function renderTrainingLaunchStatus() {
   var els = getTrainingWorkspaceEls();
+  var button = els.queueJobBtn;
+  if (!button) return;
   var isCurrentSet = trainingWorkspaceState.entryMode === 'set'
     && trainingWorkspaceState.launchedJobId
     && trainingWorkspaceState.launchedJobFolder === state.folder;
-  els.launchStatus.classList.toggle('hidden', !isCurrentSet);
-  if (!isCurrentSet) return;
+  var job = isCurrentSet
+    ? (getTrainingRunnerJobById(trainingWorkspaceState.launchedJobId) || trainingWorkspaceState.launchedJob)
+    : null;
+  var status = String(job && job.status || '');
+  var active = ['queued', 'starting', 'running', 'stopping'].indexOf(status) !== -1;
 
-  var job = getTrainingRunnerJobById(trainingWorkspaceState.launchedJobId) || trainingWorkspaceState.launchedJob;
-  if (!job) return;
-  var status = String(job.status || 'queued');
-  var jobs = trainingWorkspaceState.runnerJobs || [];
-  var queuedJobs = jobs.filter(function (candidate) { return candidate.status === 'queued'; });
-  var queuePosition = status === 'queued' ? queuedJobs.map(function (candidate) { return candidate.id; }).indexOf(job.id) + 1 : 0;
-  var detail = status === 'queued'
-    ? (queuePosition ? 'Position ' + queuePosition + ' of ' + queuedJobs.length + '.' : 'Checking queue position…')
-    : status === 'starting' ? 'Starting now.'
-    : status === 'running' ? 'Training is running.'
-    : trainingRunnerStatusLabel(status) + '.';
-  els.launchStatusCopy.innerHTML = '<strong>' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span>' + escapeHtml(detail) + '</span>';
+  button.textContent = active ? trainingRunnerStatusLabel(status) : 'Train';
+  if (active) {
+    button.disabled = true;
+  } else {
+    reviewTrainButtonState(trainingWorkspaceState.review);
+  }
 }
 
 function renderTrainingRunner() {

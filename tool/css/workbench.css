@@ -1291,36 +1291,9 @@
 
 .app.shell-revamp .training-run-setup-actions .training-launch-btn {
   width: auto;
-  min-width: 150px;
-  min-height: 38px;
-}
-
-.app.shell-revamp .training-launch-status {
-  display: grid;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel-soft);
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.app.shell-revamp .training-launch-status.hidden {
-  display: none;
-}
-
-.app.shell-revamp .training-launch-status-copy {
-  display: grid;
-  gap: 2px;
-}
-
-.app.shell-revamp .training-launch-status-copy strong {
-  color: var(--text);
-}
-
-.app.shell-revamp .training-launch-status .review-captions-btn {
-  justify-self: start;
+  min-width: 110px;
+  min-height: 34px;
+  padding-inline: 18px;
 }
 
 .app.shell-revamp .training-run-layout .training-run-custom-checkpoint {

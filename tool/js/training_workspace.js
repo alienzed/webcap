@@ -601,8 +601,6 @@ function wireTrainingWorkspace() {
     }
     toggleSidebarCollapsed();
   };
-  var launchStatusGlobalBtn = document.getElementById('training-launch-status-global-btn');
-  launchStatusGlobalBtn.onclick = function () { openTrainingSurface('global'); };
   itemOverviewToggleBtn.onclick = function () {
     trainingWorkspaceState.itemOverviewHidden = !trainingWorkspaceState.itemOverviewHidden;
     renderTrainingItemOverview(null);

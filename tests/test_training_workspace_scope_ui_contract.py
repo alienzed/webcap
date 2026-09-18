@@ -14,7 +14,8 @@ const shell = fs.readFileSync(root + '/tool/js/workspace_shell.js', 'utf8');
 const workspace = fs.readFileSync(root + '/tool/js/training_workspace.js', 'utf8');
 const runner = fs.readFileSync(root + '/tool/js/training_runner_ui.js', 'utf8');
 const html = fs.readFileSync(root + '/tool/tool.html', 'utf8');
-if (!html.includes('training-launch-status') || !html.includes('training-launch-status-global-btn')) throw new Error('missing set launch status');
+if (html.includes('training-launch-status') || html.includes('training-launch-status-global-btn')) throw new Error('legacy run setup launch status remains');
+if (!html.includes('training-queue-job-btn')) throw new Error('missing Train action');
 function section(source, start, end) {
   return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 }
@@ -131,6 +132,8 @@ def test_training_scope_source_contracts_remain_explicit():
     assert "workspaceState.sidebarHidden = !workspaceState.sidebarHidden;" in workspace
     assert "trainingWorkspaceState.launchedJobId = payload.job.id;" in runner
     assert "function renderTrainingLaunchStatus()" in runner
+    assert "button.textContent = active ? trainingRunnerStatusLabel(status) : 'Train';" in runner
+    assert "['queued', 'starting', 'running', 'stopping']" in runner
     source_navigation = workspace[workspace.index('function openTrainingWorkspaceFolder('):workspace.index('function switchTrainingSetup(')]
     assert "workspaceState.sidebarHidden = false;" in source_navigation
     assert source_navigation.index("renderTrainingItemOverview(null, 'Loading training set...')") < source_navigation.index('refreshCurrentDirectory();')
@@ -206,3 +209,21 @@ def test_run_setup_is_one_form_without_trained_badge_and_history_is_flat():
     history_rule = css.split(".app.shell-revamp.workspace-surface-training .training-history-card {", 1)[1].split("}", 1)[0]
     assert "border: 0;" in history_rule
     assert "background: transparent;" in history_rule
+
+
+
+def test_run_setup_train_action_is_compact_and_queue_status_lives_in_training():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+
+    assert 'id="training-launch-status"' not in html
+    assert 'id="training-launch-status-global-btn"' not in html
+    assert 'id="training-runner-summary"' in html
+    assert 'id="training-runner-queue"' in html
+
+    button_rule = css.split(".app.shell-revamp .training-run-setup-actions .training-launch-btn {", 1)[1].split("}", 1)[0]
+    assert "min-width: 110px;" in button_rule
+    assert "min-height: 34px;" in button_rule
+    assert "button.textContent = active ? trainingRunnerStatusLabel(status) : 'Train';" in runner
+    assert "Position " not in runner[runner.index("function renderTrainingLaunchStatus()"):runner.index("function renderTrainingRunner()")]

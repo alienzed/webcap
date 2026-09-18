@@ -185,7 +185,6 @@ function syncTrainingEntryChrome() {
   var isSetEntry = isTraining && entryKind === 'set';
   var isGlobalEntry = isTraining && trainingWorkspaceState.entryMode === 'global';
   var trainingBtn = document.getElementById('sidebar-open-training-btn');
-  var utilityTrainingBtn = document.getElementById('utility-training-btn');
   var detailTabs = document.getElementById('training-detail-tabs');
   var collapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
   var itemTab = document.querySelector('[data-training-detail-tab="items"]');
@@ -199,10 +198,6 @@ function syncTrainingEntryChrome() {
     trainingBtn.classList.toggle('active', isSetMode);
     trainingBtn.setAttribute('aria-pressed', isSetMode ? 'true' : 'false');
     trainingBtn.classList.toggle('hidden', !isSetFolderPath(state.folder));
-  }
-  if (utilityTrainingBtn) {
-    utilityTrainingBtn.classList.toggle('active', isGlobalEntry);
-    utilityTrainingBtn.setAttribute('aria-pressed', isGlobalEntry ? 'true' : 'false');
   }
   if (detailTabs) detailTabs.classList.toggle('hidden', !isTraining || entryKind === 'unavailable');
   if (itemTab) itemTab.classList.toggle('hidden', !isSetEntry);
@@ -514,13 +509,6 @@ function wireWorkspaceHeaderUi() {
       openTrainingSurface('set');
     };
   }
-  var utilityTrainingBtn = document.getElementById('utility-training-btn');
-  if (utilityTrainingBtn && !utilityTrainingBtn.__workspaceWired) {
-    utilityTrainingBtn.__workspaceWired = true;
-    utilityTrainingBtn.onclick = function () {
-      openTrainingSurface('global');
-    };
-  }
   var prepActivityBtn = document.getElementById('activity-prep-btn');
   if (prepActivityBtn && !prepActivityBtn.__workspaceWired) {
     prepActivityBtn.__workspaceWired = true;
@@ -537,8 +525,8 @@ function wireWorkspaceHeaderUi() {
   if (testActivityBtn && !testActivityBtn.__workspaceWired) {
     testActivityBtn.__workspaceWired = true;
     testActivityBtn.onclick = function () {
-      var legacyTestBtn = document.getElementById('utility-test-bench-btn');
-      if (legacyTestBtn) legacyTestBtn.click();
+      if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test Bench activity is not available.');
+      window.openTestBenchActivity();
     };
   }
   var configEditorBackBtn = document.getElementById('config-editor-back-btn');

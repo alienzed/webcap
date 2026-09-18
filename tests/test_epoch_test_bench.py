@@ -789,3 +789,56 @@ def test_delete_session_refuses_active_worker(tmp_path, monkeypatch):
         bench.delete_session(tmp_path, session.name)
 
     assert session.exists()
+
+
+
+def test_open_session_marks_dead_running_session_interrupted(tmp_path, monkeypatch):
+    session = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-18_1600-h3"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "running",
+        "session": session.name,
+        "completed": 0,
+        "total": 14,
+        "current": "Base",
+        "error": "",
+    })
+
+    monkeypatch.setattr(bench, "_active_threads", {})
+    monkeypatch.setattr(bench, "_active_sessions", {})
+    monkeypatch.setattr(bench, "_stop_requests", set())
+
+    payload = bench.open_session(tmp_path, session.name)
+
+    assert payload["status"] == "interrupted"
+    assert payload["current"] == ""
+    assert "worker is no longer active" in payload["error"]
+    persisted = bench._read_status(session)
+    assert persisted["status"] == "interrupted"
+
+
+def test_open_session_keeps_live_running_session_running(tmp_path, monkeypatch):
+    session = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-18_1601-h3"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "running",
+        "session": session.name,
+        "completed": 0,
+        "total": 14,
+        "current": "Base",
+        "error": "",
+    })
+
+    class ActiveThread:
+        def is_alive(self):
+            return True
+
+    folder_key = str(tmp_path.resolve())
+    monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
+    monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
+    monkeypatch.setattr(bench, "_stop_requests", set())
+
+    payload = bench.open_session(tmp_path, session.name)
+
+    assert payload["status"] == "running"
+    assert payload["current"] == "Base"

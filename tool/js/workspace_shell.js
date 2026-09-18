@@ -277,17 +277,6 @@ function syncWorkspaceConfigEditorUi() {
   }
 }
 
-function syncConsolePanelHost() {
-  if (!ui || !ui.consolePanelEl) return;
-  var surface = normalizeWorkspaceSurface(workspaceState.surface);
-  var host = surface === 'configEditor'
-    ? document.querySelector('.editor-surface')
-    : document.querySelector('.preview-panel');
-  if (host && ui.consolePanelEl.parentNode !== host) {
-    host.appendChild(ui.consolePanelEl);
-  }
-}
-
 function syncWorkspaceSurfaceUi() {
   if (!ui || !ui.appEl) return;
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
@@ -342,7 +331,6 @@ function syncWorkspaceSurfaceUi() {
   if (typeof updateSidebarCollapseUi === 'function') {
     updateSidebarCollapseUi(ui.appEl.classList.contains('left-rail-collapsed'));
   }
-  syncConsolePanelHost();
   renderFileList();
   syncWorkbenchRailUi();
   syncWorkspaceConfigEditorUi();

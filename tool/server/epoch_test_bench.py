@@ -411,7 +411,7 @@ def _workflow_seed(workflow):
 
 
 def _new_session_seed():
-    return secrets.randbelow(2 ** 63)
+    return secrets.randbelow(2 ** 53)
 
 
 def _result_paths(session_directory, lora_file):

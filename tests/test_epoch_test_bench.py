@@ -214,3 +214,42 @@ def test_workflow_applies_session_settings_without_mutating_template():
 def test_new_session_seed_is_javascript_safe():
     seed = bench._new_session_seed()
     assert 0 <= seed < 2 ** 53
+
+
+def test_visible_status_marks_persisted_running_session_interrupted_without_worker(tmp_path, monkeypatch):
+    session = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-17_2150-h3"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(
+        session / "test.json",
+        {"status": "running", "completed": 1, "total": 10, "current": "epoch02.safetensors", "error": ""},
+    )
+    monkeypatch.setattr(bench, "_active_threads", {})
+
+    status = bench._visible_status(tmp_path)
+
+    assert status["status"] == "interrupted"
+    assert status["completed"] == 1
+    assert status["total"] == 10
+    assert status["current"] == ""
+    assert "restarted" in status["error"]
+
+
+def test_start_refuses_when_training_gpu_is_unavailable(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    lora = staged / "epoch01.safetensors"
+    lora.write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_read_json_response", lambda *args, **kwargs: {})
+    monkeypatch.setattr(bench, "_resolve_comfy_loras", lambda _loras: [(lora, "mh3/set/epoch01.safetensors")])
+    monkeypatch.setattr(bench, "_load_template", lambda: {
+        "115": {"inputs": {"aspect_ratio": "2:3", "megapixels": 0.2}},
+        "129": {"inputs": {"noise_seed": 123}},
+        "133": {"inputs": {"value": 7}},
+    })
+    monkeypatch.setattr(bench, "reserve_gpu_for_external_work", lambda _owner: False)
+
+    with pytest.raises(RuntimeError, match="GPU is busy"):
+        bench.start(tmp_path, "prompt")
+
+    assert not (tmp_path / bench.TEST_RESULTS_DIR).exists()

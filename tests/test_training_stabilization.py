@@ -1015,3 +1015,43 @@ def test_training_modules_do_not_apply_permissions_repairs():
     root = Path(__file__).parents[1] / "tool" / "server"
     for name in ("training_runner.py", "training_bundle.py", "training_action.py", "run_ops.py", "dataset_config.py"):
         assert "normalize_path_permissions" not in (root / name).read_text(encoding="utf-8")
+
+
+def test_external_gpu_reservation_blocks_training_queue_launch(monkeypatch):
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued", "status": "queued", "folder": "sets/subject"}],
+    }
+    monkeypatch.setattr(training_runner, "_external_gpu_owner", "test-generations")
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("reserved GPU must not launch training"))
+
+    training_runner._launch_next_queued_job(state)
+
+    assert state["activeJobId"] == ""
+    assert state["jobs"][0]["status"] == "queued"
+
+
+def test_external_gpu_reservation_respects_training_queue_policy(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(training_runner, "_external_gpu_owner", "")
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued", "status": "queued"}],
+    })
+
+    assert training_runner.reserve_gpu_for_external_work("test-generations") is False
+
+    state = training_runner._read_state()
+    state["queuePaused"] = True
+    training_runner._write_state(state)
+    assert training_runner.reserve_gpu_for_external_work("test-generations") is True
+    assert training_runner.reserve_gpu_for_external_work("another-owner") is False
+    training_runner.release_gpu_for_external_work("test-generations")
+    assert training_runner.reserve_gpu_for_external_work("another-owner") is True
+    training_runner.release_gpu_for_external_work("another-owner")

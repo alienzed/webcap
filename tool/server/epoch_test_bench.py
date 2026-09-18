@@ -14,11 +14,13 @@ from pathlib import Path
 
 from . import config as app_config
 from .training_history import host_path_for_training_path
+from .training_runner import release_gpu_for_external_work, reserve_gpu_for_external_work
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "comfyui" / "minimax_h3_test_api.json"
 TEST_RESULTS_DIR = "test-generations"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
+GPU_RESERVATION_OWNER = "test-generations"
 _lock = threading.Lock()
 _active_threads = {}
 
@@ -491,6 +493,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None):
     finally:
         with _lock:
             _active_threads.pop(folder_key, None)
+        release_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
 def prepare(folder_path):
@@ -544,32 +547,39 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
         active = _active_threads.get(folder_key)
         if active and active.is_alive():
             return _latest_status(folder_path)
-        session_directory = _new_session_directory(folder_path)
-        payload = {
-            "status": "running",
-            "model": "h3",
-            "prompt": prompt,
-            "total": len(resolved_loras),
-            "completed": 0,
-            "failed": 0,
-            "current": "",
-            "error": "",
-            "seed": settings["seed"],
-            "aspectRatio": settings["aspectRatio"],
-            "megapixels": settings["megapixels"],
-            "duration": settings["duration"],
-            "results": [],
-            "resultFolder": _relative_to_fs_root(session_directory),
-        }
-        _atomic_write_json(_status_path(session_directory), payload)
-        thread = threading.Thread(
-            target=_run_batch,
-            args=(folder_key, session_directory, resolved_loras, prompt, settings),
-            name="webcap-h3-test-generations",
-            daemon=True,
-        )
-        _active_threads[folder_key] = thread
-        thread.start()
+    if not reserve_gpu_for_external_work(GPU_RESERVATION_OWNER):
+        raise RuntimeError("GPU is busy with managed training or another Test Generations batch.")
+    try:
+        with _lock:
+            session_directory = _new_session_directory(folder_path)
+            payload = {
+                "status": "running",
+                "model": "h3",
+                "prompt": prompt,
+                "total": len(resolved_loras),
+                "completed": 0,
+                "failed": 0,
+                "current": "",
+                "error": "",
+                "seed": settings["seed"],
+                "aspectRatio": settings["aspectRatio"],
+                "megapixels": settings["megapixels"],
+                "duration": settings["duration"],
+                "results": [],
+                "resultFolder": _relative_to_fs_root(session_directory),
+            }
+            _atomic_write_json(_status_path(session_directory), payload)
+            thread = threading.Thread(
+                target=_run_batch,
+                args=(folder_key, session_directory, resolved_loras, prompt, settings),
+                name="webcap-h3-test-generations",
+                daemon=True,
+            )
+            _active_threads[folder_key] = thread
+            thread.start()
+    except Exception:
+        release_gpu_for_external_work(GPU_RESERVATION_OWNER)
+        raise
     return payload
 
 

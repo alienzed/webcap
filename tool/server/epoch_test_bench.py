@@ -198,6 +198,18 @@ def _normalized_test_settings(template, aspect_ratio=None, megapixels=None, dura
     }
 
 
+def _owning_set_directory(folder_path):
+    path = Path(folder_path).resolve()
+    for candidate in (path, *path.parents):
+        if candidate.name == TEST_RESULTS_DIR:
+            return candidate.parent
+    return path
+
+
+def _folder_key(folder_path):
+    return str(_owning_set_directory(folder_path))
+
+
 def _h3_test_directory(folder_path):
     saved_config = app_config.load_config_from_disk()
     training = saved_config.get("training") if isinstance(saved_config.get("training"), dict) else {}
@@ -207,7 +219,7 @@ def _h3_test_directory(folder_path):
         raise ValueError("Configure the Copy to Test H3 root in Training Settings.")
     root = Path(host_path_for_training_path(root_text))
     subfolder = str(training.get("test_copy_subfolder") or "").strip()
-    set_name = Path(folder_path).name
+    set_name = _owning_set_directory(folder_path).name
     if not set_name or set_name in (".", ".."):
         raise ValueError("The current set has no usable folder name.")
     destination = root
@@ -493,7 +505,7 @@ def _relative_to_fs_root(path):
 
 
 def _session_root(folder_path):
-    return Path(folder_path) / TEST_RESULTS_DIR
+    return _owning_set_directory(folder_path) / TEST_RESULTS_DIR
 
 
 def _session_directory(folder_path, session_name):
@@ -510,7 +522,7 @@ def _session_directory(folder_path, session_name):
 
 
 def _new_session_directory(folder_path):
-    root = Path(folder_path) / TEST_RESULTS_DIR
+    root = _session_root(folder_path)
     root.mkdir(parents=True, exist_ok=True)
     base = datetime.now().strftime("%Y-%m-%d_%H%M-h3")
     candidate = root / base
@@ -660,7 +672,7 @@ def _visible_status(folder_path):
     payload = _latest_status(folder_path)
     if payload.get("status") not in ("running", "stopping"):
         return payload
-    folder_key = str(Path(folder_path).resolve())
+    folder_key = _folder_key(folder_path)
     with _lock:
         thread = _active_threads.get(folder_key)
         if thread and thread.is_alive():
@@ -868,7 +880,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
         seed=seed,
     )
     resolved_prompt = _resolve_wildcard_prompt(prompt, settings["seed"])
-    folder_key = str(Path(folder_path).resolve())
+    folder_key = _folder_key(folder_path)
     with _lock:
         dead_keys = [key for key, thread in _active_threads.items() if not thread.is_alive()]
         for key in dead_keys:
@@ -921,7 +933,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
 
 
 def stop(folder_path):
-    folder_key = str(Path(folder_path).resolve())
+    folder_key = _folder_key(folder_path)
     with _lock:
         thread = _active_threads.get(folder_key)
         session_directory = _active_sessions.get(folder_key)

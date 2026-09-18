@@ -126,7 +126,7 @@ def test_training_scope_source_contracts_remain_explicit():
     assert "trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : ''" in history
     assert "trainingWorkspaceState.historyViewScope === 'set'" in history
     assert "data-training-history-scope" in history
-    assert "els.globalContext.classList.remove('hidden')" in workspace
+    assert "els.globalContext.classList.toggle('hidden', false)" in workspace
     assert "entryKind === 'unavailable'" in shell
     assert "workspaceState.sidebarHidden = !workspaceState.sidebarHidden;" in workspace
     assert "trainingWorkspaceState.launchedJobId = payload.job.id;" in runner

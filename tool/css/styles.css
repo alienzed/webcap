@@ -2680,8 +2680,9 @@ iframe {
   min-width: 0;
 }
 .test-generations-setup-overview details {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: min(420px, 48%);
 }
 .test-generations-setup-options {
   display: grid;
@@ -2791,7 +2792,7 @@ iframe {
   .test-generations-body { overflow: auto; }
   .test-generations-controls { grid-template-columns: 1fr; }
   .test-generations-setup-overview { align-items: stretch; flex-direction: column; }
-  .test-generations-setup-overview details { flex-basis: auto; }
+  .test-generations-setup-overview details { flex-basis: auto; max-width: none; }
   .test-generations-results-section { overflow: visible; }
 }
 .training-candidates-modal {

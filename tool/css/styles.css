@@ -1235,14 +1235,16 @@ iframe {
   color: var(--accent);
 }
 
-.utility-btn.training-running {
+.utility-btn.training-running,
+.utility-btn.test-running {
   border-color: #d28a16;
   color: #a55f00;
   background: #fff9ed;
   animation: utility-training-pulse 2.4s ease-in-out infinite;
 }
 
-.utility-btn.training-running.active {
+.utility-btn.training-running.active,
+.utility-btn.test-running.active {
   border-color: var(--accent);
   color: var(--accent);
   background: #f4f8fd;
@@ -1266,7 +1268,8 @@ iframe {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .utility-btn.training-running {
+  .utility-btn.training-running,
+  .utility-btn.test-running {
     animation: none;
   }
 }
@@ -1277,7 +1280,8 @@ iframe {
   padding: 0;
 }
 
-.utility-training-btn {
+.utility-training-btn,
+.utility-test-bench-btn {
   width: auto;
   min-width: 0;
   gap: 6px;

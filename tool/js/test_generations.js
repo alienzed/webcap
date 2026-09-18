@@ -3,7 +3,7 @@
   var H3_PROFILE_ID = 'minimax_h3';
   var pollTimer = null;
   var prepared = null;
-  var paneFolder = '';
+  var launchFolder = '';
   var currentSession = '';
   var currentStatus = {};
   var resultsView = 'grid';
@@ -12,16 +12,9 @@
 
   function el(id) { return document.getElementById(id); }
 
-  function owningSetFolder(folder) {
-    var value = String(folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-    var marker = '/test-generations/';
-    var index = value.indexOf(marker);
-    return index === -1 ? value : value.slice(0, index);
-  }
-
   function request(mode, criteria) {
     var body = {
-      folder: owningSetFolder(paneFolder || (state && state.folder) || ''),
+      folder: String(launchFolder || ''),
       profileId: PROFILE_ID,
       mode: mode
     };
@@ -43,7 +36,7 @@
   function pane() { return el('test-generations-pane'); }
 
   function capturePromptSave(prompt) {
-    if (!state || String(state.folder || '') !== String(paneFolder || '')) return null;
+    if (!state || String(state.folder || '') !== String(launchFolder || '')) return null;
     state.testGenerationPrompt = String(prompt || '');
     var capturedSave = captureCurrentFolderStateSave();
     if (!capturedSave) return null;
@@ -520,7 +513,7 @@
     if (node) node.classList.add('hidden');
     if (surface) surface.classList.remove('test-generations-active');
     if (app) app.classList.remove('test-generations-workspace-open');
-    paneFolder = '';
+    launchFolder = '';
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
@@ -549,7 +542,7 @@
     if (duration) duration.value = String(running ? latest.duration : defaults.duration);
     if (seed) seed.value = String(running ? latest.seed : defaults.seed);
     if (prompt) {
-      var savedPrompt = state && String(state.folder || '') === String(paneFolder || '')
+      var savedPrompt = state && String(state.folder || '') === String(launchFolder || '')
         ? String(state.testGenerationPrompt || '')
         : '';
       prompt.value = running
@@ -566,7 +559,7 @@
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
     if (!node || !surface || !app) throw new Error('Test Generations requires the app shell, editor surface, and test pane.');
-    paneFolder = owningSetFolder(state && state.folder || '');
+    launchFolder = String(state && state.folder || '');
     surface.classList.add('test-generations-active');
     app.classList.add('test-generations-workspace-open');
     node.classList.remove('hidden');

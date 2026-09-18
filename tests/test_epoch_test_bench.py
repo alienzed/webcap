@@ -247,6 +247,7 @@ def test_start_refuses_when_training_gpu_is_unavailable(tmp_path, monkeypatch):
         "129": {"inputs": {"noise_seed": 123}},
         "133": {"inputs": {"value": 7}},
     })
+    monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
     monkeypatch.setattr(bench, "reserve_gpu_for_external_work", lambda _owner: False)
 
     with pytest.raises(RuntimeError, match="GPU is busy"):
@@ -272,3 +273,86 @@ def test_run_batch_releases_gpu_reservation_when_template_load_fails(tmp_path, m
     assert status["status"] == "failed"
     assert status["error"] == "template boom"
     assert released == [bench.GPU_RESERVATION_OWNER]
+
+
+
+def test_template_assets_resolve_to_names_exposed_by_comfy(monkeypatch):
+    template = {
+        "119": {"inputs": {"vae_name": "minimax_h3_video_vae_fp16.safetensors"}},
+        "120": {"inputs": {"vae_name": "minimax_h3_audio_vae_fp32.safetensors"}},
+        "127": {"inputs": {"unet_name": "mh3\\minimax_h3_fl2va_pruned_int8_convrot.safetensors"}},
+        "128": {"inputs": {"clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors"}},
+        "138": {"inputs": {
+            "lora_1": {"on": True, "lora": "mh3\\minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors"},
+            "lora_2": {"on": False, "lora": "mh3\\disabled.safetensors"},
+        }},
+    }
+    original = copy.deepcopy(template)
+    available = {
+        ("UNETLoader", "unet_name"): ["mh3/minimax_h3_fl2va_pruned_int8_convrot.safetensors"],
+        ("CLIPLoader", "clip_name"): ["qwen3vl_32b_minimax_h3_int8_convrot.safetensors"],
+        ("VAELoader", "vae_name"): [
+            "minimax_h3_video_vae_fp16.safetensors",
+            "minimax_h3_audio_vae_fp32.safetensors",
+        ],
+        ("LoraLoader", "lora_name"): ["mh3/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors"],
+    }
+    monkeypatch.setattr(
+        bench,
+        "_available_comfy_names",
+        lambda node_type, input_name, _label: available[(node_type, input_name)],
+    )
+
+    resolved = bench._resolve_comfy_template_assets(template)
+
+    assert template == original
+    assert resolved["127"]["inputs"]["unet_name"] == "mh3/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+    assert resolved["128"]["inputs"]["clip_name"] == "qwen3vl_32b_minimax_h3_int8_convrot.safetensors"
+    assert resolved["119"]["inputs"]["vae_name"] == "minimax_h3_video_vae_fp16.safetensors"
+    assert resolved["120"]["inputs"]["vae_name"] == "minimax_h3_audio_vae_fp32.safetensors"
+    assert resolved["138"]["inputs"]["lora_1"]["lora"] == "mh3/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors"
+    assert resolved["138"]["inputs"]["lora_2"]["lora"] == "mh3\\disabled.safetensors"
+
+
+def test_comfy_name_resolution_fails_loudly_when_asset_is_missing():
+    with pytest.raises(RuntimeError, match="cannot see diffusion model"):
+        bench._resolve_comfy_name(
+            "mh3\\missing.safetensors",
+            ["mh3/other.safetensors"],
+            "diffusion model",
+        )
+
+
+def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch):
+    session = tmp_path / "session"
+    session.mkdir()
+    bench._atomic_write_json(
+        session / "test.json",
+        {"status": "running", "completed": 0, "total": 1, "current": "", "error": ""},
+    )
+    lora = Path("epoch01.safetensors")
+    resolved_template = {
+        "115": {"inputs": {"aspect_ratio": "2:3", "megapixels": 0.2}},
+        "127": {"inputs": {"unet_name": "mh3/linux-model.safetensors"}},
+        "129": {"inputs": {"noise_seed": 123}},
+        "133": {"inputs": {"value": 7}},
+        "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
+        "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
+    }
+    seen = []
+    monkeypatch.setattr(bench, "_load_template", lambda: pytest.fail("worker must use the resolved template from start"))
+    monkeypatch.setattr(bench, "_queue_workflow", lambda workflow: seen.append(workflow["127"]["inputs"]["unet_name"]) or "prompt-id")
+    monkeypatch.setattr(bench, "_wait_for_video", lambda _prompt_id: {"filename": "x.mp4", "subfolder": "", "type": "temp"})
+    monkeypatch.setattr(bench, "_download_video", lambda _ref: b"video")
+    monkeypatch.setattr(bench, "release_gpu_for_external_work", lambda _owner: None)
+
+    bench._run_batch(
+        "folder-key",
+        session,
+        [(lora, "mh3/epoch01.safetensors")],
+        "prompt",
+        template=resolved_template,
+    )
+
+    assert seen == ["mh3/linux-model.safetensors"]
+    assert bench._read_status(session)["status"] == "complete"

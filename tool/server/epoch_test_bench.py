@@ -220,45 +220,92 @@ def _normalize_lora_name(value):
     return "/".join(segment for segment in re.split(r"[\\/]+", str(value or "")) if segment).casefold()
 
 
-def _available_comfy_lora_names():
-    payload = _read_json_response(COMFY_BASE_URL + "/object_info/LoraLoader", timeout=5)
-    node = payload.get("LoraLoader") if isinstance(payload, dict) else None
+def _available_comfy_names(node_type, input_name, label):
+    payload = _read_json_response(
+        COMFY_BASE_URL + "/object_info/" + urllib.parse.quote(node_type, safe=""),
+        timeout=5,
+    )
+    node = payload.get(node_type) if isinstance(payload, dict) else None
     inputs = node.get("input") if isinstance(node, dict) and isinstance(node.get("input"), dict) else {}
     required = inputs.get("required") if isinstance(inputs.get("required"), dict) else {}
-    lora_spec = required.get("lora_name")
-    choices = lora_spec[0] if isinstance(lora_spec, (list, tuple)) and lora_spec else None
+    spec = required.get(input_name)
+    choices = spec[0] if isinstance(spec, (list, tuple)) and spec else None
     if not isinstance(choices, (list, tuple)):
-        raise RuntimeError("ComfyUI did not expose the available LoRA names for LoraLoader.")
+        raise RuntimeError("ComfyUI did not expose the available " + label + " names for " + node_type + ".")
     names = [str(name) for name in choices if str(name).strip()]
     if not names:
-        raise RuntimeError("ComfyUI reports no LoRAs available to LoraLoader.")
+        raise RuntimeError("ComfyUI reports no " + label + " files available to " + node_type + ".")
     return names
+
+
+def _resolve_comfy_name(configured_name, available, label):
+    configured = str(configured_name or "").strip()
+    normalized = _normalize_lora_name(configured)
+    records = [
+        (name, _normalize_lora_name(name), Path(str(name).replace("\\", "/")).name.casefold())
+        for name in available
+    ]
+    suffix_matches = [
+        name
+        for name, available_normalized, _ in records
+        if normalized == available_normalized or normalized.endswith("/" + available_normalized)
+    ]
+    if len(suffix_matches) == 1:
+        return suffix_matches[0]
+
+    basename = Path(configured.replace("\\", "/")).name.casefold()
+    basename_matches = [name for name, _, record_basename in records if record_basename == basename]
+    if len(basename_matches) == 1:
+        return basename_matches[0]
+    display_name = Path(configured.replace("\\", "/")).name or configured
+    if not basename_matches:
+        raise RuntimeError("ComfyUI cannot see " + label + ": " + display_name)
+    raise RuntimeError("ComfyUI " + label + " name is ambiguous: " + display_name)
+
+
+def _available_comfy_lora_names():
+    return _available_comfy_names("LoraLoader", "lora_name", "LoRA")
 
 
 def _resolve_comfy_loras(loras):
     available = _available_comfy_lora_names()
-    records = [(name, _normalize_lora_name(name), Path(str(name).replace("\\", "/")).name.casefold()) for name in available]
-    resolved = []
-    for path in loras:
-        local_normalized = _normalize_lora_name(path)
-        suffix_matches = [
-            name
-            for name, normalized, _ in records
-            if local_normalized == normalized or local_normalized.endswith("/" + normalized)
-        ]
-        if len(suffix_matches) == 1:
-            resolved.append((path, suffix_matches[0]))
-            continue
+    return [
+        (path, _resolve_comfy_name(path, available, "staged LoRA"))
+        for path in loras
+    ]
 
-        basename = path.name.casefold()
-        basename_matches = [name for name, _, record_basename in records if record_basename == basename]
-        if len(basename_matches) == 1:
-            resolved.append((path, basename_matches[0]))
-            continue
-        if not basename_matches:
-            raise RuntimeError("ComfyUI cannot see staged LoRA: " + path.name)
-        raise RuntimeError("ComfyUI LoRA name is ambiguous for staged file: " + path.name)
-    return resolved
+
+def _resolve_comfy_template_assets(template):
+    workflow = copy.deepcopy(template)
+    specs = (
+        ("127", "UNETLoader", "unet_name", "diffusion model"),
+        ("128", "CLIPLoader", "clip_name", "CLIP model"),
+        ("119", "VAELoader", "vae_name", "video VAE"),
+        ("120", "VAELoader", "vae_name", "audio VAE"),
+    )
+    available_cache = {}
+    try:
+        for node_id, node_type, input_name, label in specs:
+            inputs = workflow[node_id]["inputs"]
+            configured = inputs[input_name]
+            cache_key = (node_type, input_name)
+            if cache_key not in available_cache:
+                available_cache[cache_key] = _available_comfy_names(node_type, input_name, label)
+            inputs[input_name] = _resolve_comfy_name(configured, available_cache[cache_key], label)
+
+        power_inputs = workflow["138"]["inputs"]
+        enabled_power_loras = [
+            value
+            for value in power_inputs.values()
+            if isinstance(value, dict) and value.get("on") is True and str(value.get("lora") or "").strip()
+        ]
+        if enabled_power_loras:
+            available_loras = _available_comfy_lora_names()
+            for entry in enabled_power_loras:
+                entry["lora"] = _resolve_comfy_name(entry["lora"], available_loras, "LoRA")
+    except (KeyError, TypeError) as exc:
+        raise ValueError("MiniMax H3 Test Bench workflow is missing required model inputs.") from exc
+    return workflow
 
 
 def _workflow_for_lora(template, prompt, comfy_lora_name, settings=None):
@@ -449,10 +496,10 @@ def _result_paths(session_directory, lora_file):
     return video, caption
 
 
-def _run_batch(folder_key, session_directory, loras, prompt, settings=None):
+def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None):
     status_file = _status_path(session_directory)
     try:
-        template = _load_template()
+        template = copy.deepcopy(template) if template is not None else _load_template()
         for lora_file, comfy_lora_name in loras:
             status = _read_status(session_directory) or {}
             status["current"] = lora_file.name
@@ -531,7 +578,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
         raise ValueError("The H3 Test folder contains no .safetensors files.")
     _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
     resolved_loras = _resolve_comfy_loras(loras)
-    template = _load_template()
+    template = _resolve_comfy_template_assets(_load_template())
     settings = _normalized_test_settings(
         template,
         aspect_ratio=aspect_ratio,
@@ -571,7 +618,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
             _atomic_write_json(_status_path(session_directory), payload)
             thread = threading.Thread(
                 target=_run_batch,
-                args=(folder_key, session_directory, resolved_loras, prompt, settings),
+                args=(folder_key, session_directory, resolved_loras, prompt, settings, template),
                 name="webcap-h3-test-generations",
                 daemon=True,
             )

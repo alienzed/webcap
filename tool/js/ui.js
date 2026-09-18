@@ -352,6 +352,7 @@ function refreshCurrentDirectory() {
     if (typeof updateSuperSetControls === 'function') updateSuperSetControls();
   }
   updateUtilityPathLabel(path);
+  if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   updateSetFolderScopedUi();
   updateReviewButtonAvailability();
   debugLog('[webcap] refreshCurrentDirectory: called.');

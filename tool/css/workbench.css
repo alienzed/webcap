@@ -1053,7 +1053,7 @@
 
 /* Training is a workflow first, then a shared operations surface. */
 .app.shell-revamp .training-navigator {
-  gap: 18px;
+  gap: 12px;
   padding: 14px;
 }
 
@@ -1199,6 +1199,24 @@
 }
 
 .app.shell-revamp .training-lifecycle-stage {
+  margin-top: 0;
+}
+
+.app.shell-revamp #training-candidates-stage {
+  position: relative;
+  margin-top: 12px;
+}
+
+.app.shell-revamp #training-candidates-stage::before {
+  content: "";
+  position: absolute;
+  top: -13px;
+  right: 0;
+  left: 0;
+  border-top: 1px solid color-mix(in srgb, var(--accent-dark) 55%, var(--border));
+}
+
+.app.shell-revamp #training-tests-stage {
   margin-top: -4px;
 }
 
@@ -1356,6 +1374,7 @@
 
 .app.shell-revamp .training-global-context {
   gap: 12px;
+  margin-top: 6px;
   padding-top: 18px;
   border-top: 2px solid var(--accent-dark);
 }

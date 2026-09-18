@@ -161,3 +161,16 @@ def test_training_entry_defaults_collapse_by_context_without_refresh_reset():
     assert "trainingWorkspaceState.historyCollapsed = nextMode === 'set';" in state
     assert "trainingWorkspaceState.runnerQueueCollapsed = nextMode === 'set';" in state
     assert "if (resetDefaults)" in state
+
+
+
+def test_training_lifecycle_visual_grouping_is_phase_based():
+    css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+
+    navigator_rule = css.split(".app.shell-revamp .training-navigator {", 1)[1].split("}", 1)[0]
+    assert "gap: 12px;" in navigator_rule
+    assert ".app.shell-revamp #training-candidates-stage::before" in css
+    assert "margin-top: 12px;" in css.split(".app.shell-revamp #training-candidates-stage {", 1)[1].split("}", 1)[0]
+    assert "margin-top: -4px;" in css.split(".app.shell-revamp #training-tests-stage {", 1)[1].split("}", 1)[0]
+    training_rule = css.split(".app.shell-revamp .training-global-context {", 1)[1].split("}", 1)[0]
+    assert "margin-top: 6px;" in training_rule

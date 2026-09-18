@@ -3976,13 +3976,15 @@ html[data-theme="dark"] .checklist-close-btn:hover {
   color: #ffffff;
 }
 
-html[data-theme="dark"] #utility-training-btn.active {
+html[data-theme="dark"] #utility-training-btn.active,
+html[data-theme="dark"] #utility-test-bench-btn.active {
   background: #202a38;
   border-color: #8f7137;
   color: #d6a64d;
 }
 
-html[data-theme="dark"] #utility-training-btn.training-running.active {
+html[data-theme="dark"] #utility-training-btn.training-running.active,
+html[data-theme="dark"] #utility-test-bench-btn.test-running {
   background: #202a38;
   border-color: #a57a28;
   color: #d9a84e;

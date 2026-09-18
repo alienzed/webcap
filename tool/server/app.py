@@ -22,6 +22,7 @@ from .smart_set import create_set_from_results_response, smart_set_materialize_r
 from .prune_candidates import prune_candidates_response
 from .duplicate_candidates import duplicate_candidates_response
 from .training_setup import ensure_training_setup
+from .epoch_test_bench import activity_snapshot as test_generations_activity_snapshot
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
@@ -361,6 +362,16 @@ def media_video_clip_status():
 def training_profiles_route():
     enabled = set((app_config.config.get("training") or {}).get("enabled_profiles") or [])
     return jsonify({"profiles": [item for item in training_profiles() if item["id"] in enabled]})
+
+
+@app.route("/fs/test_generations/activity", methods=["GET"])
+def test_generations_activity_route():
+    rel_path = str(request.args.get("folder") or "").strip()
+    try:
+        folder_path = safe_join_fs_root(rel_path) if rel_path else None
+        return jsonify({"ok": True, **test_generations_activity_snapshot(folder_path)})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.route("/fs/training_setup", methods=["POST"])

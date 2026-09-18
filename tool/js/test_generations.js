@@ -9,6 +9,8 @@
   var activeStatus = {};
   var resultsView = 'grid';
   var compareIndex = 0;
+  var pendingUtilityFolder = '';
+  var utilityActivity = {};
   var debouncedPromptSave = debounceCreate(500);
 
   function el(id) { return document.getElementById(id); }
@@ -56,6 +58,64 @@
   function isOpen() {
     var node = pane();
     return !!(node && !node.classList.contains('hidden'));
+  }
+
+  function syncUtilityButton(payload) {
+    utilityActivity = payload || {};
+    var button = el('utility-test-bench-btn');
+    if (!button) return;
+    var active = Array.isArray(utilityActivity.active) && utilityActivity.active.length ? utilityActivity.active[0] : null;
+    var current = utilityActivity.current || {};
+    var targetFolder = active && active.folder ? String(active.folder) : (current.hasTestData ? String(current.folder || '') : '');
+    var visible = !!targetFolder;
+    button.classList.toggle('hidden', !visible);
+    button.classList.toggle('test-running', !!active);
+    button.classList.toggle('active', isOpen());
+    button.setAttribute('aria-pressed', isOpen() ? 'true' : 'false');
+    button.dataset.testBenchFolder = targetFolder;
+    if (active) {
+      var completed = Number(active.completed || 0);
+      var total = Number(active.total || 0);
+      button.title = 'Test Bench · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total;
+    } else {
+      button.title = 'Open Test Bench';
+    }
+  }
+
+  function refreshUtilityButton() {
+    var folder = String(state && state.folder || '');
+    var url = '/fs/test_generations/activity' + (folder ? ('?folder=' + encodeURIComponent(folder)) : '');
+    return fetch(url).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Could not read Test Bench activity.');
+        syncUtilityButton(payload);
+        return payload;
+      });
+    }).catch(function () {
+      var button = el('utility-test-bench-btn');
+      if (button) button.classList.add('hidden');
+      return null;
+    });
+  }
+
+  function openUtilityTestBench() {
+    var button = el('utility-test-bench-btn');
+    var folder = String(button && button.dataset.testBenchFolder || '');
+    if (!folder) return;
+    if (String(state && state.folder || '') === folder && state.folderStateWritable) {
+      openPane();
+      return;
+    }
+    pendingUtilityFolder = folder;
+    openTrainingWorkspaceFolder(folder);
+  }
+
+  function testGenerationsFolderLoaded() {
+    refreshUtilityButton();
+    if (!pendingUtilityFolder) return;
+    if (String(state && state.folder || '') !== String(pendingUtilityFolder)) return;
+    pendingUtilityFolder = '';
+    openPane();
   }
 
   function syncLaunchVisibility() {
@@ -527,6 +587,7 @@
       clearTimeout(pollTimer);
       pollTimer = null;
     }
+    refreshUtilityButton();
   }
 
   function populateControls(payload) {
@@ -554,9 +615,9 @@
       var savedPrompt = state && String(state.folder || '') === String(launchFolder || '')
         ? String(state.testGenerationPrompt || '')
         : '';
-      prompt.value = running
-        ? String(latest.prompt || payload.defaultPrompt || '')
-        : (savedPrompt.trim() ? savedPrompt : String(payload.defaultPrompt || ''));
+      prompt.value = savedPrompt.trim()
+        ? savedPrompt
+        : (running ? String(latest.prompt || payload.defaultPrompt || '') : String(payload.defaultPrompt || ''));
     }
   }
 
@@ -606,6 +667,7 @@
     var duration = String(el('test-generations-duration') && el('test-generations-duration').value || '').trim();
     var seed = String(el('test-generations-seed') && el('test-generations-seed').value || '').trim();
     if (!prompt) return showError(new Error('A test prompt is required.'));
+    savePrompt(prompt);
     if (!aspectRatio) return showError(new Error('An aspect ratio is required.'));
     var runBtn = el('test-generations-run-btn');
     var errorEl = el('test-generations-error');
@@ -732,6 +794,8 @@
       });
     });
     el('test-generations-run-btn').onclick = startRun;
+    var utilityButton = el('utility-test-bench-btn');
+    if (utilityButton) utilityButton.onclick = openUtilityTestBench;
     el('test-generations-stop-btn').onclick = stopRun;
     el('test-generations-view-grid-btn').onclick = function () {
       setResultsView('grid');
@@ -804,7 +868,10 @@
       new MutationObserver(syncLaunchVisibility).observe(select, { childList: true, subtree: true });
     }
     syncLaunchVisibility();
+    refreshUtilityButton();
   }
 
+  window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
+  window.refreshTestBenchUtility = refreshUtilityButton;
   buildUi();
 })();

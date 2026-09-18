@@ -65,7 +65,9 @@ def test_workflow_substitution_changes_only_test_inputs():
     template = {
         "146": {"inputs": {"wildcard_text": "old", "populated_text": "old", "mode": "fixed", "seed": 123}},
         "148": {"inputs": {"lora_name": "old.safetensors", "strength_model": 0.1, "strength_clip": 0.2}},
+        "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
         "129": {"inputs": {"noise_seed": 999}},
+        "133": {"inputs": {"value": 7}},
         "138": {"inputs": {"lora_1": {"lora": "turbo.safetensors", "strength": 1}}},
     }
     original = copy.deepcopy(template)
@@ -80,7 +82,9 @@ def test_workflow_substitution_changes_only_test_inputs():
     assert workflow["148"]["inputs"]["lora_name"] == "mh3/test/set/epoch10.safetensors"
     assert workflow["148"]["inputs"]["strength_model"] == 0.9
     assert workflow["148"]["inputs"]["strength_clip"] == 1
+    assert workflow["115"] == original["115"]
     assert workflow["129"] == original["129"]
+    assert workflow["133"] == original["133"]
     assert workflow["138"] == original["138"]
 
 
@@ -140,6 +144,9 @@ def test_run_batch_stops_on_first_failure(tmp_path, monkeypatch):
     queued = []
 
     monkeypatch.setattr(bench, "_load_template", lambda: {
+        "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
+        "129": {"inputs": {"noise_seed": 123}},
+        "133": {"inputs": {"value": 7}},
         "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
     })
@@ -177,3 +184,33 @@ def test_staged_lora_provenance_reads_copy_to_test_sidecar(tmp_path):
 
 def test_workflow_seed_uses_fixed_random_noise_seed():
     assert bench._workflow_seed({"129": {"inputs": {"noise_seed": 12345}}}) == 12345
+
+
+def test_workflow_applies_session_settings_without_mutating_template():
+    template = {
+        "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
+        "129": {"inputs": {"noise_seed": 111}},
+        "133": {"inputs": {"value": 7}},
+        "146": {"inputs": {"wildcard_text": "old", "populated_text": "old", "mode": "fixed"}},
+        "148": {"inputs": {"lora_name": "old.safetensors", "strength_model": 0.9, "strength_clip": 1}},
+    }
+    original = copy.deepcopy(template)
+    settings = {
+        "aspectRatio": "16:9 (Landscape)",
+        "megapixels": 0.35,
+        "duration": 10,
+        "seed": 424242,
+    }
+
+    workflow = bench._workflow_for_lora(template, "prompt", "set/epoch10.safetensors", settings=settings)
+
+    assert template == original
+    assert workflow["115"]["inputs"]["aspect_ratio"] == "16:9 (Landscape)"
+    assert workflow["115"]["inputs"]["megapixels"] == 0.35
+    assert workflow["133"]["inputs"]["value"] == 10
+    assert workflow["129"]["inputs"]["noise_seed"] == 424242
+
+
+def test_new_session_seed_is_javascript_safe():
+    seed = bench._new_session_seed()
+    assert 0 <= seed < 2 ** 53

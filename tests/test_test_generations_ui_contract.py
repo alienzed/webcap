@@ -157,16 +157,16 @@ def test_test_bench_utility_and_live_session_contract():
     assert ".utility-btn.test-running" in css
     assert "window.testGenerationsFolderLoaded()" in ui_script
 
-    settings_block = script.split("function setRunSettingsDisabled(disabled)", 1)[1].split("function syncActiveRunControls", 1)[0]
-    assert "test-generations-prompt" not in settings_block
-    assert "test-generations-reset-prompt-btn" not in settings_block
-    assert "test-generations-aspect" in settings_block
-    assert "test-generations-seed" in settings_block
+    assert "function setRunSettingsDisabled" not in script
+    controls_block = script.split("function syncActiveRunControls(status)", 1)[1].split("function renderStatus(status)", 1)[0]
+    assert "runBtn.disabled = active" in controls_block
+    assert "stopBtn.classList.toggle('hidden', !active)" in controls_block
+    assert ".disabled = !!disabled" not in controls_block
 
     assert "if (!currentSession || currentSession === activeSession)" in script
     assert "savedPrompt.trim()" in script
     assert "saveTestBenchState(prompt);" in script
-    assert "if (seed) seed.value = String(randomSeed());" in script
+    assert "if (nextSeed) nextSeed.value = String(randomSeed());" in script
 
 
 
@@ -187,3 +187,24 @@ def test_compare_videos_start_muted():
 
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
     assert "video.muted = true;" in compare_block
+
+
+
+def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "Next run" in script
+    assert "test-generations-session-meta" in script
+    assert "test-generations-session-info-btn" in script
+    assert "test-generations-session-details" in script
+    assert "function sessionMetaText(status)" in script
+    assert "function renderSessionMeta(status)" in script
+    assert "status.resolvedPrompt || status.prompt" in script
+    assert "status.sourcePrompt" in script
+    assert "status.aspectRatio" in script
+    assert "status.megapixels" in script
+    assert "status.duration" in script
+    assert "status.seed" in script
+    assert ".test-generations-session-details" in css
+    assert ".test-generations-session-prompt pre" in css

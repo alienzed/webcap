@@ -10,6 +10,11 @@ function sanitizeFolderState(data) {
   var stats = src.stats || {};
   var primer = src.primer || {};
   var mediaFilters = (src.media_filters && typeof src.media_filters === 'object') ? src.media_filters : {};
+  var testGenerationSettings = (src.test_generation_settings && typeof src.test_generation_settings === 'object')
+    ? src.test_generation_settings
+    : {};
+  var testGenerationMegapixels = Number(testGenerationSettings.megapixels);
+  var testGenerationDuration = Number(testGenerationSettings.duration);
   var reviewRulesValue = Array.isArray(stats.reviewRules)
     ? JSON.parse(JSON.stringify(stats.reviewRules))
     : (typeof stats.reviewRules === 'string' ? String(stats.reviewRules) : []);
@@ -107,6 +112,11 @@ function sanitizeFolderState(data) {
     caption_term_descriptors_by_media: captionTermDescriptorsByMedia,
     caption_set_notes: String(src.caption_set_notes || ''),
     test_generation_prompt: String(src.test_generation_prompt || ''),
+    test_generation_settings: {
+      aspectRatio: String(testGenerationSettings.aspectRatio || ''),
+      megapixels: isFinite(testGenerationMegapixels) && testGenerationMegapixels > 0 ? testGenerationMegapixels : null,
+      duration: isFinite(testGenerationDuration) && testGenerationDuration > 0 ? testGenerationDuration : null
+    },
     annotate_strip_visible: !!src.annotate_strip_visible,
     caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,
     media_filters: {
@@ -276,6 +286,9 @@ function snapshotFolderStateFromDom() {
     caption_term_descriptors_by_media: (typeof window.checklistTermDescriptorsByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorsByMedia)) : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),
     test_generation_prompt: String(state.testGenerationPrompt || ''),
+    test_generation_settings: (state.testGenerationSettings && typeof state.testGenerationSettings === 'object')
+      ? JSON.parse(JSON.stringify(state.testGenerationSettings))
+      : {},
     annotate_strip_visible: !!window.annotateStripVisible,
     caption_helper_panel_collapsed: !!window.captionHelperPanelCollapsed,
     media_filters: mediaFilters,
@@ -314,6 +327,9 @@ function applyFolderStateToDom(folderState) {
     ? clean.ratings_by_media
     : {};
   state.testGenerationPrompt = String(clean.test_generation_prompt || '');
+  state.testGenerationSettings = (clean.test_generation_settings && typeof clean.test_generation_settings === 'object')
+    ? JSON.parse(JSON.stringify(clean.test_generation_settings))
+    : {};
   state.mutatedSet = new Set(Array.isArray(clean.mutated_media_keys) ? clean.mutated_media_keys : []);
   state.mutatedByMediaSource = {};
   state.mutatedSet.forEach(function (key) {

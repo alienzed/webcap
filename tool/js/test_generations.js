@@ -275,7 +275,7 @@
   }
 
   function renderStatus(status) {
-    if (status && status.session) currentSession = String(status.session);
+    if (status) currentSession = String(status.session || '');
     var statusEl = el('test-generations-status');
     var errorEl = el('test-generations-error');
     var runBtn = el('test-generations-run-btn');
@@ -533,6 +533,11 @@
 
     button.onclick = openPane;
     el('test-generations-close-btn').onclick = closePane;
+    ['sidebar-open-training-btn', 'utility-training-btn'].forEach(function (id) {
+      el(id).addEventListener('click', function () {
+        if (isOpen()) closePane();
+      });
+    });
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-stop-btn').onclick = stopRun;
     el('test-generations-files').onclick = function (event) {

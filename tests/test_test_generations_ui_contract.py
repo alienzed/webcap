@@ -90,3 +90,11 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "session: String(currentSession || '')" in script
     assert ".test-generations-session-row" in css
     assert ".test-generations-result-footer" in css
+
+
+def test_test_generations_closes_on_training_navigation_and_clears_session_state():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "currentSession = String(status.session || '')" in script
+    assert "['sidebar-open-training-btn', 'utility-training-btn'].forEach" in script
+    assert "if (isOpen()) closePane();" in script

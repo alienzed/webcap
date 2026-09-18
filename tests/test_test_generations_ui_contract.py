@@ -166,7 +166,7 @@ def test_test_bench_utility_and_live_session_contract():
     assert "if (!currentSession || currentSession === activeSession)" in script
     assert "savedPrompt.trim()" in script
     assert "saveTestBenchState(prompt);" in script
-    assert "el('test-generations-seed').value = String(randomSeed());" in script
+    assert "if (seed) seed.value = String(randomSeed());" in script
 
 
 

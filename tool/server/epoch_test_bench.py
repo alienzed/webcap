@@ -20,6 +20,16 @@ TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "comfyui" / 
 TEST_RESULTS_DIR = "test-generations"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
 GPU_RESERVATION_OWNER = "test-generations"
+TEST_ASPECT_RATIO_OPTIONS = (
+    "1:1 (Square)",
+    "2:3 (Portrait Photo)",
+    "3:2 (Photo)",
+    "3:4 (Portrait Standard)",
+    "4:3 (Standard)",
+    "9:16 (Portrait Widescreen)",
+    "16:9 (Widescreen)",
+    "21:9 (Ultrawide)",
+)
 _lock = threading.Lock()
 _active_threads = {}
 
@@ -158,26 +168,11 @@ def _template_test_settings(workflow=None):
     }
 
 
-def _resolution_aspect_ratio_options():
-    try:
-        payload = _read_json_response(COMFY_BASE_URL + "/object_info/ResolutionSelector", timeout=3)
-        node = payload.get("ResolutionSelector") if isinstance(payload, dict) else None
-        inputs = node.get("input") if isinstance(node, dict) and isinstance(node.get("input"), dict) else {}
-        required = inputs.get("required") if isinstance(inputs.get("required"), dict) else {}
-        spec = required.get("aspect_ratio")
-        choices = spec[0] if isinstance(spec, (list, tuple)) and spec else None
-        if isinstance(choices, (list, tuple)):
-            return [str(value) for value in choices if str(value).strip()]
-    except RuntimeError:
-        pass
-    return []
-
-
 def _normalized_test_settings(template, aspect_ratio=None, megapixels=None, duration=None, seed=None):
     defaults = _template_test_settings(template)
     selected_aspect = str(aspect_ratio or defaults["aspectRatio"]).strip()
-    if not selected_aspect:
-        raise ValueError("A test aspect ratio is required.")
+    if selected_aspect not in TEST_ASPECT_RATIO_OPTIONS:
+        raise ValueError("Unsupported Test Generations aspect ratio: " + selected_aspect)
     try:
         selected_megapixels = float(defaults["megapixels"] if megapixels is None else megapixels)
         selected_duration = float(defaults["duration"] if duration is None else duration)
@@ -558,9 +553,7 @@ def prepare(folder_path):
     loras = _lora_files(test_directory)
     defaults = _template_test_settings(template)
     defaults["seed"] = _new_session_seed()
-    aspect_options = _resolution_aspect_ratio_options()
-    if defaults["aspectRatio"] and defaults["aspectRatio"] not in aspect_options:
-        aspect_options.insert(0, defaults["aspectRatio"])
+    aspect_options = list(TEST_ASPECT_RATIO_OPTIONS)
     return {
         "operation": "test_prepare",
         "model": "h3",

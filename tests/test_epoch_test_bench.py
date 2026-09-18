@@ -196,7 +196,7 @@ def test_workflow_applies_session_settings_without_mutating_template():
     }
     original = copy.deepcopy(template)
     settings = {
-        "aspectRatio": "16:9 (Landscape)",
+        "aspectRatio": "16:9 (Widescreen)",
         "megapixels": 0.35,
         "duration": 10,
         "seed": 424242,
@@ -205,7 +205,7 @@ def test_workflow_applies_session_settings_without_mutating_template():
     workflow = bench._workflow_for_lora(template, "prompt", "set/epoch10.safetensors", settings=settings)
 
     assert template == original
-    assert workflow["115"]["inputs"]["aspect_ratio"] == "16:9 (Landscape)"
+    assert workflow["115"]["inputs"]["aspect_ratio"] == "16:9 (Widescreen)"
     assert workflow["115"]["inputs"]["megapixels"] == 0.35
     assert workflow["133"]["inputs"]["value"] == 10
     assert workflow["129"]["inputs"]["noise_seed"] == 424242
@@ -389,3 +389,22 @@ def test_test_generation_gpu_calls_go_through_lazy_wrappers():
     assert source.count("release_gpu_for_external_work(GPU_RESERVATION_OWNER)") == 1
     assert source.count("_reserve_gpu_for_test_generations()") >= 2
     assert source.count("_release_gpu_for_test_generations()") >= 3
+
+
+
+def test_prepare_exposes_supported_test_aspect_ratios(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    (staged / "epoch01.safetensors").write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder: {"status": "idle"})
+
+    payload = bench.prepare(tmp_path)
+
+    assert payload["aspectRatioOptions"] == list(bench.TEST_ASPECT_RATIO_OPTIONS)
+    assert payload["defaults"]["aspectRatio"] == "4:3 (Standard)"
+
+
+def test_normalized_test_settings_rejects_unknown_aspect_ratio():
+    with pytest.raises(ValueError, match="Unsupported Test Generations aspect ratio"):
+        bench._normalized_test_settings(bench._load_template(), aspect_ratio="5:4 (Unsupported)")

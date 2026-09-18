@@ -34,11 +34,19 @@ def test_test_generations_uses_training_pane_and_core_controls():
 
 
 
-def test_test_generation_previews_keep_stable_width_and_native_video_aspect():
+def test_test_generation_previews_keep_native_aspect_without_fixed_width_box():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
-    assert "grid-template-columns: repeat(auto-fill, 280px);" in css
-    assert "justify-content: start;" in css
+    results_rule = css.split(".test-generations-results {", 1)[1].split("}", 1)[0]
+    assert "display: flex;" in results_rule
+    assert "flex-wrap: wrap;" in results_rule
+    assert "grid-template-columns:" not in results_rule
+
+    card_rule = css.split(".test-generations-result-card {", 1)[1].split("}", 1)[0]
+    assert "width: max-content;" in card_rule
+    assert "flex: 0 0 auto;" in card_rule
+
     video_rule = css.split(".test-generations-result-card video {", 1)[1].split("}", 1)[0]
-    assert "height: auto;" in video_rule
+    assert "width: auto;" in video_rule
+    assert "height: 320px;" in video_rule
     assert "aspect-ratio:" not in video_rule

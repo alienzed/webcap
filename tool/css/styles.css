@@ -2716,16 +2716,18 @@ iframe {
 }
 .test-generations-results-heading span { color: var(--muted); font-size: 12px; }
 .test-generations-results {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, 280px);
-  align-content: start;
-  justify-content: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: flex-start;
   gap: 12px;
   min-height: 0;
   overflow: auto;
 }
 .test-generations-result-card {
-  min-width: 0;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -2733,8 +2735,10 @@ iframe {
 }
 .test-generations-result-card video {
   display: block;
-  width: 100%;
-  height: auto;
+  width: auto;
+  height: 320px;
+  max-width: 100%;
+  object-fit: contain;
   background: #090d12;
 }
 .test-generations-preview-placeholder {

@@ -289,6 +289,12 @@ def activity_snapshot(folder_path=None):
 
 
 def remove_candidate(folder_path, file_name, session_name=None):
+    folder_key = _folder_key(folder_path)
+    with _lock:
+        thread = _active_threads.get(folder_key)
+        if thread and thread.is_alive():
+            raise RuntimeError("Cannot remove Test candidates while this set has an active Test Generations batch. Stop it first.")
+
     name = str(file_name or "").strip()
     if (
         not name
@@ -557,9 +563,11 @@ def _cleanup_owned_comfy_directory(directory, filename_prefix):
         raise ValueError("Refusing to clean an unscoped ComfyUI output directory.")
     expected_parent = parts[-2]
     expected_session = parts[-3]
+    if directory.is_symlink():
+        raise ValueError("Refusing to clean a symlinked ComfyUI output directory.")
     if directory.name != expected_parent or directory.parent.name != expected_session or directory.parent.parent.name != "webcap-tests":
         raise ValueError("ComfyUI output directory does not match the Test Bench prefix.")
-    shutil.rmtree(directory, ignore_errors=True)
+    shutil.rmtree(directory)
     for parent in (directory.parent, directory.parent.parent):
         try:
             parent.rmdir()
@@ -571,16 +579,17 @@ def _move_saved_video(video_ref, destination, filename_prefix=None):
     source = _comfy_saved_output_path(video_ref)
     source_directory = source.parent
     target = Path(destination)
-    try:
-        if target.exists():
-            raise FileExistsError("Test result already exists: " + str(target))
-        shutil.move(str(source), str(target))
-        if not target.is_file():
-            raise RuntimeError("Saved ComfyUI Test video was not moved into the Test session.")
-        return target
-    finally:
-        if filename_prefix:
+    if target.exists():
+        raise FileExistsError("Test result already exists: " + str(target))
+    shutil.move(str(source), str(target))
+    if not target.is_file():
+        raise RuntimeError("Saved ComfyUI Test video was not moved into the Test session.")
+    if filename_prefix:
+        try:
             _cleanup_owned_comfy_directory(source_directory, filename_prefix)
+        except (OSError, ValueError) as exc:
+            app_config.debug_print("[test-generations] Could not clean owned ComfyUI output directory:", exc)
+    return target
 
 
 def _atomic_write_json(path, payload):

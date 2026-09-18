@@ -38,21 +38,37 @@
 
   function pane() { return el('test-generations-pane'); }
 
-  function capturePromptSave(prompt) {
+  function currentPersistedSettings() {
+    return {
+      aspectRatio: String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim(),
+      megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
+      duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0)
+    };
+  }
+
+  function captureTestBenchSave(prompt) {
     if (!state || String(state.folder || '') !== String(launchFolder || '')) return null;
     state.testGenerationPrompt = String(prompt || '');
+    state.testGenerationSettings = currentPersistedSettings();
     var capturedSave = captureCurrentFolderStateSave();
     if (!capturedSave) return null;
     capturedSave.snapshot.test_generation_prompt = state.testGenerationPrompt;
+    capturedSave.snapshot.test_generation_settings = JSON.parse(JSON.stringify(state.testGenerationSettings));
     return capturedSave;
   }
 
-  function savePrompt(prompt) {
-    var capturedSave = capturePromptSave(prompt);
+  function saveTestBenchState(prompt) {
+    var capturedSave = captureTestBenchSave(prompt);
     if (!capturedSave) return;
     debouncedPromptSave(function () {
       writeCapturedFolderState(capturedSave);
     });
+  }
+
+  function randomSeed() {
+    var values = new Uint32Array(2);
+    window.crypto.getRandomValues(values);
+    return ((values[0] & 0x1fffff) * 4294967296) + values[1];
   }
 
   function isOpen() {
@@ -154,7 +170,7 @@
     var summary = el('test-generations-summary');
     var countEl = el('test-generations-files-count');
     var host = el('test-generations-files');
-    if (summary) summary.textContent = count + ' LoRA' + (count === 1 ? '' : 's') + ' staged · one frozen setting set for the whole batch.';
+    if (summary) summary.textContent = count + ' LoRA' + (count === 1 ? '' : 's') + ' staged';
     if (countEl) countEl.textContent = String(count);
     if (!host) return;
     host.innerHTML = '';
@@ -617,7 +633,10 @@
     var duration = el('test-generations-duration');
     var seed = el('test-generations-seed');
     var prompt = el('test-generations-prompt');
-    var selectedAspect = running ? String(latest.aspectRatio || defaults.aspectRatio || '') : String(defaults.aspectRatio || '');
+    var savedSettings = state && String(state.folder || '') === String(launchFolder || '') && state.testGenerationSettings
+      ? state.testGenerationSettings
+      : {};
+    var selectedAspect = String(savedSettings.aspectRatio || (running ? latest.aspectRatio : '') || defaults.aspectRatio || '');
     var options = Array.isArray(payload.aspectRatioOptions) ? payload.aspectRatioOptions.slice() : [];
     if (selectedAspect && options.indexOf(selectedAspect) < 0) options.unshift(selectedAspect);
     if (aspect) {
@@ -626,8 +645,8 @@
       }).join('');
       aspect.value = selectedAspect;
     }
-    if (megapixels) megapixels.value = String(running ? latest.megapixels : defaults.megapixels);
-    if (duration) duration.value = String(running ? latest.duration : defaults.duration);
+    if (megapixels) megapixels.value = String(savedSettings.megapixels || (running ? latest.megapixels : '') || defaults.megapixels);
+    if (duration) duration.value = String(savedSettings.duration || (running ? latest.duration : '') || defaults.duration);
     if (seed) seed.value = String(running ? latest.seed : defaults.seed);
     if (prompt) {
       var savedPrompt = state && String(state.folder || '') === String(launchFolder || '')
@@ -685,7 +704,7 @@
     var duration = String(el('test-generations-duration') && el('test-generations-duration').value || '').trim();
     var seed = String(el('test-generations-seed') && el('test-generations-seed').value || '').trim();
     if (!prompt) return showError(new Error('A test prompt is required.'));
-    savePrompt(prompt);
+    saveTestBenchState(prompt);
     if (!aspectRatio) return showError(new Error('An aspect ratio is required.'));
     var runBtn = el('test-generations-run-btn');
     var errorEl = el('test-generations-error');
@@ -780,7 +799,8 @@
     node.innerHTML = [
       '<div class="test-generations-body">',
       '<aside class="test-generations-rail">',
-      '<header class="test-generations-header"><div><h2>Test Generations</h2><p>MiniMax H3 · one frozen configuration per batch.</p></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
+      '<header class="test-generations-header"><div class="test-generations-title-row"><h2>Test Generations</h2><button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
+      '<div id="test-generations-help" class="test-generations-help hidden"><strong>How Test Generations works</strong><p>Each run uses one frozen prompt, aspect ratio, resolution, duration, and seed across the Base render and every staged LoRA so the results are directly comparable.</p><p>Prompt, aspect ratio, resolution, and duration are remembered for this set. The seed is shared within a batch, then randomized for the next batch.</p><p>Completed videos are stored in this set\'s Test Generations sessions. ComfyUI output is treated as temporary staging and cleaned after WebCap moves each finished render into the session.</p></div>',
       '<section class="test-generations-controls">',
       '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div></div>',
       '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="5"></textarea></label>',
@@ -791,7 +811,7 @@
       '<label class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="0.1" step="0.1"></label>',
       '<label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>',
       '</div>',
-      '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-stop-btn" type="button" class="review-captions-btn hidden">Stop</button><button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset Prompt</button></div>',
+      '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-stop-btn" type="button" class="review-captions-btn hidden">Stop</button><button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset</button></div>',
       '<div id="test-generations-status" class="training-command-status" aria-live="polite"></div>',
       '<div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>',
       '<section class="test-generations-library">',
@@ -873,13 +893,26 @@
       }
     };
     el('test-generations-prompt').addEventListener('input', function () {
-      savePrompt(this.value);
+      saveTestBenchState(this.value);
     });
+    ['test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration'].forEach(function (id) {
+      el(id).addEventListener('change', function () {
+        saveTestBenchState(String(el('test-generations-prompt').value || ''));
+      });
+    });
+    el('test-generations-info-btn').onclick = function () {
+      el('test-generations-help').classList.toggle('hidden');
+    };
     el('test-generations-reset-prompt-btn').onclick = function () {
-      if (!prepared) throw new Error('Test Generations prompt defaults are not loaded.');
+      if (!prepared) throw new Error('Test Generations defaults are not loaded.');
+      var defaults = prepared.defaults || {};
       var prompt = String(prepared.defaultPrompt || '');
       el('test-generations-prompt').value = prompt;
-      savePrompt(prompt);
+      el('test-generations-aspect').value = String(defaults.aspectRatio || '');
+      el('test-generations-megapixels').value = String(defaults.megapixels || '');
+      el('test-generations-duration').value = String(defaults.duration || '');
+      el('test-generations-seed').value = String(randomSeed());
+      saveTestBenchState(prompt);
     };
 
     var select = el('training-model-profile-select');

@@ -27,7 +27,15 @@
         <link rel="stylesheet" href="/static/vendor/cropperjs/dist/cropper.min.css">
     </head>
     <body>
-        <div class="app shell-revamp workspace-view-single workflow-annotate workspace-surface-default">
+        <div id="app-frame" class="app-frame">
+            <header id="app-header" class="app-header" aria-label="Application header">
+                <div class="app-header-brand">WebCap</div>
+                <div id="app-header-context" class="app-header-context" aria-live="polite"></div>
+                <div id="app-header-workspace-controls" class="app-header-workspace-controls"></div>
+                <div id="app-header-global" class="app-header-global"></div>
+            </header>
+            <nav id="activity-rail" class="activity-rail" aria-label="Activities"></nav>
+            <div class="app shell-revamp workspace-view-single workflow-annotate workspace-surface-default">
             <div id="sidebar-panel" class="panel stack sidebar-panel">
                 <div class="panel-scrollable">
                     <div id="utility-bar" class="utility-bar">
@@ -919,6 +927,7 @@
                     </section>
                 </div>
             </div>
+        </div>
         </div>
         <div id="media-grid-viewer-modal" class="media-grid-viewer-modal hidden" aria-hidden="true">
             <div class="media-grid-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-viewer-title">

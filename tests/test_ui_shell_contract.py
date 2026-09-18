@@ -22,17 +22,22 @@ def test_outer_shell_wraps_existing_workspace_without_replacing_it():
     assert 'id="workspace-overlays"' in html
 
 
-def test_legacy_global_controls_remain_present_during_shell_bootstrap():
+def test_global_shell_controls_have_permanent_nodes_during_migration():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    # These remain where they are until their dedicated migration phases.
+    # Legacy activity entry points remain while permanent shell controls take ownership.
     assert 'id="utility-bar"' in html
     assert 'id="utility-current-path-btn"' in html
     assert 'id="utility-training-btn"' in html
     assert 'id="utility-test-bench-btn"' in html
+
+    # Settings, Help, status, and console keep their established IDs after moving.
+    assert 'id="activity-rail-spacer"' not in html
+    assert 'class="activity-rail-spacer"' in html
     assert 'id="utility-settings-btn"' in html
     assert 'id="utility-help-btn"' in html
-    assert 'id="status"' in html
+    assert 'class="status status-bar app-header-status"' in html
+    assert 'id="status-text"' in html
     assert 'id="console-panel"' in html
 
 
@@ -100,3 +105,24 @@ def test_test_activity_visibility_and_active_state_are_mirrored_to_new_rail():
     assert "[button, activityButton].forEach" in script
     assert "target.classList.toggle('hidden', !visible)" in script
     assert "target.classList.toggle('active', isOpen())" in script
+
+
+def test_console_has_one_stable_shell_host():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert html.count('id="console-panel"') == 1
+    assert ".app-frame > #console-panel {" in css
+    assert "syncConsolePanelHost" not in shell
+    assert "host.appendChild(ui.consolePanelEl)" not in shell
+
+
+def test_training_background_activity_is_mirrored_to_permanent_rail():
+    script = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert "document.getElementById('activity-training-btn')" in script
+    assert "[utilityTrainingBtn, activityTrainingBtn].forEach" in script
+    assert "button.classList.toggle('training-running', running)" in script
+    assert ".activity-rail-btn.training-running::after" in css

@@ -35,7 +35,19 @@
                     <span id="app-header-folder" class="app-header-folder"></span>
                 </div>
                 <div id="app-header-workspace-controls" class="app-header-workspace-controls"></div>
-                <div id="app-header-global" class="app-header-global"></div>
+                <div id="app-header-global" class="app-header-global">
+                    <div id="status" class="status status-bar app-header-status">
+                        <span id="status-text" class="flex1"></span>
+                        <button
+                            id="console-toggle-btn"
+                            type="button"
+                            title="Show/hide console"
+                            aria-label="Show console"
+                            aria-expanded="false"
+                            class="console-toggle-btn"
+                        >&#x25B2;</button>
+                    </div>
+                </div>
             </header>
             <nav id="activity-rail" class="activity-rail" aria-label="Activities">
                 <button id="activity-prep-btn" type="button" class="activity-rail-btn active" title="Prep" aria-label="Prep" aria-pressed="true">
@@ -59,6 +71,32 @@
                         <path d="M7 3h10"></path>
                         <path d="M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"></path>
                         <path d="M8 14h8"></path>
+                    </svg>
+                </button>
+                <div class="activity-rail-spacer"></div>
+                <button
+                    id="utility-settings-btn"
+                    type="button"
+                    class="activity-rail-btn"
+                    title="App settings"
+                    aria-label="App settings"
+                >
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5z"></path>
+                        <path d="M19.02 10.94l1.23-.95-1.5-2.6-1.52.54a6.98 6.98 0 0 0-1.47-.86l-.25-1.6h-3l-.25 1.6c-.52.18-1.02.47-1.47.86l-1.52-.54-1.5 2.6 1.23.95a6.9 6.9 0 0 0 0 1.72l-1.23.95 1.5 2.6 1.52-.54c.45.39.95.68 1.47.86l.25 1.6h3l.25-1.6c.52-.18 1.02-.47 1.47-.86l1.52.54 1.5-2.6-1.23-.95a6.9 6.9 0 0 0 0-1.72z"></path>
+                    </svg>
+                </button>
+                <button
+                    id="utility-help-btn"
+                    type="button"
+                    class="activity-rail-btn"
+                    title="Open help"
+                    aria-label="Open help"
+                >
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9"></circle>
+                        <path d="M9.75 9.75a2.25 2.25 0 0 1 4.02 1.37c0 1.5-1.77 1.88-1.77 3.13"></path>
+                        <path d="M12 16.75h.01"></path>
                     </svg>
                 </button>
             </nav>
@@ -110,31 +148,7 @@
                                 <path d="M8 14h8"></path>
                             </svg>
                         </button>
-                        <div class="utility-spacer"></div>
-                        <button
-                            id="utility-settings-btn"
-                            type="button"
-                            class="utility-btn utility-settings-btn"
-                            title="App settings"
-                            aria-label="App settings"
-                        >
-                            <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5z"></path>
-                                <path d="M19.02 10.94l1.23-.95-1.5-2.6-1.52.54a6.98 6.98 0 0 0-1.47-.86l-.25-1.6h-3l-.25 1.6c-.52.18-1.02.47-1.47.86l-1.52-.54-1.5 2.6 1.23.95a6.9 6.9 0 0 0 0 1.72l-1.23.95 1.5 2.6 1.52-.54c.45.39.95.68 1.47.86l.25 1.6h3l.25-1.6c.52-.18 1.02-.47 1.47-.86l1.52.54 1.5-2.6-1.23-.95a6.9 6.9 0 0 0 0-1.72z"></path>
-                            </svg>
-                        </button>
-                        <button
-                            id="utility-help-btn"
-                            type="button"
-                            class="utility-btn utility-icon-btn"
-                            title="Open help"
-                        >
-                            <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
-                                <circle cx="12" cy="12" r="9"></circle>
-                                <path d="M9.75 9.75a2.25 2.25 0 0 1 4.02 1.37c0 1.5-1.77 1.88-1.77 3.13"></path>
-                                <path d="M12 16.75h.01"></path>
-                            </svg>
-                        </button>
+
                     </div>
                     <div id="sidebar-content" class="sidebar-content">
                     <div id="caption-filter-row" class="filter-row">
@@ -369,17 +383,6 @@
                         </details>
                     </div>
                     </div>
-                </div>
-                <div id="status" class="status status-bar">
-                    <span id="status-text" class="flex1"></span>
-                    <button
-                        id="console-toggle-btn"
-                        type="button"
-                        title="Show/hide console"
-                        aria-label="Show console"
-                        aria-expanded="false"
-                        class="console-toggle-btn"
-                    >&#x25B2;</button>
                 </div>
             </div>
             <div class="panel editor-panel workbench-panel">
@@ -894,13 +897,6 @@
                         <div id="balance-distribution-wheel" class="balance-distribution-wheel hidden" tabindex="0" aria-label="Balance distribution"></div>
                     </div>
                     </div>
-                    <div id="console-panel" aria-hidden="true">
-                        <div class="console-panel-header">
-                            <strong class="console-panel-title">Console</strong>
-                            <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
-                        </div>
-                        <div id="console-panel-log" class="console-panel-log" aria-live="polite"></div>
-                    </div>
                 </div>
             </div>
             <div id="workspace-overlays" class="workspace-overlays">
@@ -955,6 +951,13 @@
                 </div>
             </div>
         </div>
+            <div id="console-panel" aria-hidden="true">
+                <div class="console-panel-header">
+                    <strong class="console-panel-title">Console</strong>
+                    <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
+                </div>
+                <div id="console-panel-log" class="console-panel-log" aria-live="polite"></div>
+            </div>
         </div>
         <div id="media-grid-viewer-modal" class="media-grid-viewer-modal hidden" aria-hidden="true">
             <div class="media-grid-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-viewer-title">

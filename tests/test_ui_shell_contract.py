@@ -1,0 +1,64 @@
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_outer_shell_wraps_existing_workspace_without_replacing_it():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+
+    assert 'id="app-frame"' in html
+    assert 'id="app-header"' in html
+    assert 'id="activity-rail"' in html
+    assert 'id="app-header-context"' in html
+    assert 'id="app-header-workspace-controls"' in html
+    assert 'id="app-header-global"' in html
+
+    # The existing inner workspace remains intact during the first migration slice.
+    assert 'class="app shell-revamp workspace-view-single workflow-annotate workspace-surface-default"' in html
+    assert 'id="sidebar-panel"' in html
+    assert 'class="panel preview-panel"' in html
+    assert 'class="panel workbench-panel"' in html
+    assert 'id="workspace-overlays"' in html
+
+
+def test_legacy_global_controls_remain_present_during_shell_bootstrap():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+
+    # These remain where they are until their dedicated migration phases.
+    assert 'id="utility-bar"' in html
+    assert 'id="utility-current-path-btn"' in html
+    assert 'id="utility-training-btn"' in html
+    assert 'id="utility-test-bench-btn"' in html
+    assert 'id="utility-settings-btn"' in html
+    assert 'id="utility-help-btn"' in html
+    assert 'id="status"' in html
+    assert 'id="console-panel"' in html
+
+
+def test_shell_geometry_is_outside_the_existing_workspace_grid():
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert ".app-frame {" in css
+    assert 'grid-template-columns: 42px minmax(0, 1fr);' in css
+    assert 'grid-template-rows: 34px minmax(0, 1fr);' in css
+    assert '"header header"' in css
+    assert '"rail workspace"' in css
+    assert ".app-frame > .app {" in css
+
+    # Existing workspace layout still owns its internal three-column structure.
+    assert 'grid-template-areas: "sidebar preview workbench";' in css
+
+
+def test_shell_exists_outside_test_generations_takeover():
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    # Test Generations still owns the old inner workspace for now.
+    assert ".app.shell-revamp.test-generations-workspace-open" in css
+    assert ".test-generations-workspace-open .sidebar-panel" in css
+
+    # The permanent frame is not selected by those takeover rules.
+    takeover = css.split("/* Test Generations temporarily owns the full workspace. */", 1)[1]
+    assert ".app-frame" not in takeover
+    assert ".app-header" not in takeover
+    assert ".activity-rail" not in takeover

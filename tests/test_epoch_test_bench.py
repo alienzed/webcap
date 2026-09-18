@@ -61,6 +61,51 @@ def test_lora_files_are_filtered_and_sorted(tmp_path):
     assert [path.name for path in files] == ["Epoch02.safetensors", "epoch10.safetensors"]
 
 
+def test_resolve_wildcard_prompt_uses_impact_endpoint_once(monkeypatch):
+    calls = []
+
+    def fake_request(url, method="GET", payload=None, timeout=10):
+        calls.append((url, method, payload, timeout))
+        return {"text": "a blue garment"}
+
+    monkeypatch.setattr(bench, "_read_json_response", fake_request)
+
+    resolved = bench._resolve_wildcard_prompt("a {red|blue} garment", 4242)
+
+    assert resolved == "a blue garment"
+    assert calls == [
+        (
+            bench.COMFY_BASE_URL + "/impact/wildcards",
+            "POST",
+            {"text": "a {red|blue} garment", "seed": 4242},
+            10,
+        )
+    ]
+
+
+def test_workflow_can_disable_test_lora_for_base():
+    template = {
+        "146": {"inputs": {"wildcard_text": "old", "populated_text": "old", "mode": "populate", "seed": 123}},
+        "148": {"inputs": {"lora_name": "old.safetensors", "strength_model": 0.9, "strength_clip": 1}},
+        "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
+        "129": {"inputs": {"noise_seed": 999}},
+        "133": {"inputs": {"value": 7}},
+    }
+
+    workflow = bench._workflow_for_lora(
+        template,
+        "resolved prompt",
+        "mh3/test/set/epoch10.safetensors",
+        strength_model=0,
+        strength_clip=0,
+    )
+
+    assert workflow["146"]["inputs"]["mode"] == "fixed"
+    assert workflow["146"]["inputs"]["populated_text"] == "resolved prompt"
+    assert workflow["148"]["inputs"]["strength_model"] == 0
+    assert workflow["148"]["inputs"]["strength_clip"] == 0
+
+
 def test_workflow_substitution_changes_only_test_inputs():
     template = {
         "146": {"inputs": {"wildcard_text": "old", "populated_text": "old", "mode": "fixed", "seed": 123}},
@@ -121,7 +166,7 @@ def test_default_template_has_required_test_nodes():
     assert bench._default_prompt(workflow)
 
 
-def test_run_batch_continues_after_candidate_failure(tmp_path, monkeypatch):
+def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, monkeypatch):
     session = tmp_path / "session"
     session.mkdir()
     bench._atomic_write_json(
@@ -130,7 +175,7 @@ def test_run_batch_continues_after_candidate_failure(tmp_path, monkeypatch):
             "status": "running",
             "model": "h3",
             "prompt": "prompt",
-            "total": 2,
+            "total": 3,
             "completed": 0,
             "failed": 0,
             "failures": [],
@@ -154,11 +199,15 @@ def test_run_batch_continues_after_candidate_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(bench, "_release_gpu_for_test_generations", lambda: None)
 
     def queue(workflow):
-        name = workflow["148"]["inputs"]["lora_name"]
-        queued.append(name)
-        if len(queued) == 1:
+        item = (
+            workflow["148"]["inputs"]["lora_name"],
+            workflow["148"]["inputs"]["strength_model"],
+            workflow["148"]["inputs"]["strength_clip"],
+        )
+        queued.append(item)
+        if item[0].endswith("epoch01.safetensors") and item[1] == 0.9:
             raise RuntimeError("boom")
-        return "prompt-2"
+        return "prompt-ok"
 
     monkeypatch.setattr(bench, "_queue_workflow", queue)
     monkeypatch.setattr(bench, "_wait_for_video", lambda _prompt_id: {"filename": "ok.mp4"})
@@ -167,13 +216,18 @@ def test_run_batch_continues_after_candidate_failure(tmp_path, monkeypatch):
     bench._run_batch("folder-key", session, loras, "prompt")
 
     status = bench._read_status(session)
-    assert queued == ["mh3/set/epoch01.safetensors", "mh3/set/epoch02.safetensors"]
+    assert queued == [
+        ("mh3/set/epoch01.safetensors", 0, 0),
+        ("mh3/set/epoch01.safetensors", 0.9, 1),
+        ("mh3/set/epoch02.safetensors", 0.9, 1),
+    ]
     assert status["status"] == "complete"
-    assert status["completed"] == 1
+    assert status["completed"] == 2
     assert status["failed"] == 1
     assert status["failures"][0]["sourceLoRA"] == "epoch01.safetensors"
-    assert len(status["results"]) == 1
-    assert status["results"][0]["sourceLoRA"] == "epoch02.safetensors"
+    assert [result["sourceLoRA"] for result in status["results"]] == ["Base", "epoch02.safetensors"]
+    assert status["results"][0]["kind"] == "base"
+    assert status["results"][0]["outputVideo"] == "base.mp4"
 
 
 def test_staged_lora_provenance_reads_copy_to_test_sidecar(tmp_path):
@@ -257,6 +311,7 @@ def test_start_refuses_when_training_gpu_is_unavailable(tmp_path, monkeypatch):
         "133": {"inputs": {"value": 7}},
     })
     monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
+    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_reserve_gpu_for_test_generations", lambda: False)
 
     with pytest.raises(RuntimeError, match="GPU is busy"):

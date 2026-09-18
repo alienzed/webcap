@@ -170,7 +170,7 @@ def _load_template():
 def _default_prompt(workflow=None):
     selected = workflow or _load_template()
     inputs = ((selected.get("146") or {}).get("inputs") or {})
-    prompt = str(inputs.get("populated_text") or inputs.get("wildcard_text") or "").strip()
+    prompt = str(inputs.get("wildcard_text") or inputs.get("populated_text") or "").strip()
     if not prompt:
         raise ValueError("MiniMax H3 Test Bench workflow has no default prompt in node 146.")
     return prompt
@@ -360,7 +360,20 @@ def _resolve_comfy_template_assets(template):
     return workflow
 
 
-def _workflow_for_lora(template, prompt, comfy_lora_name, settings=None):
+def _resolve_wildcard_prompt(prompt, seed):
+    response = _read_json_response(
+        COMFY_BASE_URL + "/impact/wildcards",
+        method="POST",
+        payload={"text": str(prompt or ""), "seed": int(seed)},
+        timeout=10,
+    )
+    resolved = str(response.get("text") or "").strip() if isinstance(response, dict) else ""
+    if not resolved:
+        raise RuntimeError("Impact Pack did not return a resolved Test prompt.")
+    return resolved
+
+
+def _workflow_for_lora(template, prompt, comfy_lora_name, settings=None, strength_model=0.9, strength_clip=1):
     workflow = copy.deepcopy(template)
     if settings is None:
         selected = _template_test_settings(template)
@@ -374,8 +387,8 @@ def _workflow_for_lora(template, prompt, comfy_lora_name, settings=None):
         prompt_inputs["mode"] = "fixed"
         lora_inputs = workflow["148"]["inputs"]
         lora_inputs["lora_name"] = comfy_lora_name
-        lora_inputs["strength_model"] = 0.9
-        lora_inputs["strength_clip"] = 1
+        lora_inputs["strength_model"] = strength_model
+        lora_inputs["strength_clip"] = strength_clip
         workflow["115"]["inputs"]["aspect_ratio"] = selected["aspectRatio"]
         workflow["115"]["inputs"]["megapixels"] = selected["megapixels"]
         workflow["133"]["inputs"]["value"] = selected["duration"]
@@ -538,8 +551,9 @@ def _new_session_seed():
     return secrets.randbelow(2 ** 53)
 
 
-def _result_paths(session_directory, lora_file):
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", lora_file.stem).strip("._") or "result"
+def _result_paths(session_directory, lora_file, stem_override=None):
+    raw_stem = str(stem_override or lora_file.stem)
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", raw_stem).strip("._") or "result"
     video = Path(session_directory) / (stem + ".mp4")
     caption = Path(session_directory) / (stem + ".txt")
     suffix = 2
@@ -568,16 +582,45 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
     status_file = _status_path(session_directory)
     try:
         template = copy.deepcopy(template) if template is not None else _load_template()
+        candidates = []
+        if loras:
+            base_file, base_comfy_name = loras[0]
+            candidates.append({
+                "label": "Base",
+                "file": base_file,
+                "comfyName": base_comfy_name,
+                "strengthModel": 0,
+                "strengthClip": 0,
+                "kind": "base",
+            })
         for lora_file, comfy_lora_name in loras:
+            candidates.append({
+                "label": lora_file.name,
+                "file": lora_file,
+                "comfyName": comfy_lora_name,
+                "strengthModel": 0.9,
+                "strengthClip": 1,
+                "kind": "lora",
+            })
+
+        for candidate in candidates:
             if _stop_requested(folder_key):
                 _mark_stopped(session_directory)
                 return
 
+            lora_file = candidate["file"]
             status = _read_status(session_directory) or {}
-            status["current"] = lora_file.name
+            status["current"] = candidate["label"]
             _atomic_write_json(status_file, status)
             try:
-                workflow = _workflow_for_lora(template, prompt, comfy_lora_name, settings=settings)
+                workflow = _workflow_for_lora(
+                    template,
+                    prompt,
+                    candidate["comfyName"],
+                    settings=settings,
+                    strength_model=candidate["strengthModel"],
+                    strength_clip=candidate["strengthClip"],
+                )
                 prompt_id = _queue_workflow(workflow)
                 video_ref = _wait_for_video(prompt_id)
                 if _stop_requested(folder_key):
@@ -587,20 +630,27 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 if _stop_requested(folder_key):
                     _mark_stopped(session_directory)
                     return
-                video_path, caption_path = _result_paths(session_directory, lora_file)
+                video_path, caption_path = _result_paths(
+                    session_directory,
+                    lora_file,
+                    stem_override="base" if candidate["kind"] == "base" else None,
+                )
                 video_path.write_bytes(video_bytes)
                 caption_path.write_text(prompt, encoding="utf-8")
                 status = _read_status(session_directory) or {}
-                provenance = _staged_lora_provenance(lora_file)
                 results = status.get("results") if isinstance(status.get("results"), list) else []
                 result = {
-                    "sourceLoRA": lora_file.name,
+                    "kind": candidate["kind"],
+                    "sourceLoRA": candidate["label"],
                     "outputVideo": video_path.name,
                     "prompt": prompt,
                     "seed": _workflow_seed(workflow),
                 }
-                if provenance:
-                    result["provenance"] = provenance
+                if candidate["kind"] == "lora":
+                    result["candidateFile"] = lora_file.name
+                    provenance = _staged_lora_provenance(lora_file)
+                    if provenance:
+                        result["provenance"] = provenance
                 results.append(result)
                 status["results"] = results
                 status["completed"] = int(status.get("completed") or 0) + 1
@@ -612,7 +662,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                     return
                 status = _read_status(session_directory) or {}
                 failures = status.get("failures") if isinstance(status.get("failures"), list) else []
-                failures.append({"sourceLoRA": lora_file.name, "error": str(exc)})
+                failures.append({"sourceLoRA": candidate["label"], "error": str(exc)})
                 status["failures"] = failures
                 status["failed"] = int(status.get("failed") or 0) + 1
                 status["current"] = ""
@@ -677,6 +727,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
         duration=duration,
         seed=seed,
     )
+    resolved_prompt = _resolve_wildcard_prompt(prompt, settings["seed"])
     folder_key = str(Path(folder_path).resolve())
     with _lock:
         dead_keys = [key for key, thread in _active_threads.items() if not thread.is_alive()]
@@ -695,8 +746,10 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
             payload = {
                 "status": "running",
                 "model": "h3",
-                "prompt": prompt,
-                "total": len(resolved_loras),
+                "sourcePrompt": prompt,
+                "resolvedPrompt": resolved_prompt,
+                "prompt": resolved_prompt,
+                "total": len(resolved_loras) + 1,
                 "completed": 0,
                 "failed": 0,
                 "failures": [],
@@ -712,7 +765,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
             _atomic_write_json(_status_path(session_directory), payload)
             thread = threading.Thread(
                 target=_run_batch,
-                args=(folder_key, session_directory, resolved_loras, prompt, settings, template),
+                args=(folder_key, session_directory, resolved_loras, resolved_prompt, settings, template),
                 name="webcap-h3-test-generations",
                 daemon=True,
             )

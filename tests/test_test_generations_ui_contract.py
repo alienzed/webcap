@@ -166,3 +166,13 @@ def test_test_bench_utility_and_live_session_contract():
     assert "if (!currentSession || currentSession === activeSession)" in script
     assert "savedPrompt.trim()" in script
     assert "savePrompt(prompt);" in script
+
+
+
+def test_compare_polling_preserves_video_elements():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "var compareKey = resultFolder + '|'" in script
+    assert "host.dataset.compareKey = compareKey" in script
+    assert "host.querySelector('.test-generations-compare-stage')" in script
+    assert "if (resultsView === 'compare') renderCompare(status || {});" in script

@@ -3,6 +3,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import threading
 import time
@@ -239,7 +240,7 @@ def _lora_files(test_directory):
     )
 
 
-def remove_candidate(folder_path, file_name):
+def remove_candidate(folder_path, file_name, session_name=None):
     name = str(file_name or "").strip()
     if (
         not name
@@ -256,6 +257,7 @@ def remove_candidate(folder_path, file_name):
     sidecar = candidate.with_suffix(".webcap.json")
     if sidecar.exists() and (not sidecar.is_file() or sidecar.is_symlink()):
         raise RuntimeError("Staged Test candidate sidecar is not a regular file: " + sidecar.name)
+    session_status = _remove_candidate_from_session(folder_path, session_name, name) if session_name else None
     candidate.unlink()
     if sidecar.exists():
         sidecar.unlink()
@@ -265,6 +267,7 @@ def remove_candidate(folder_path, file_name):
         "removed": name,
         "count": len(remaining),
         "files": [path.name for path in remaining],
+        "sessionStatus": session_status,
     }
 
 
@@ -469,6 +472,23 @@ def _relative_to_fs_root(path):
     return Path(path).resolve().relative_to(Path(app_config.FS_ROOT).resolve()).as_posix()
 
 
+def _session_root(folder_path):
+    return Path(folder_path) / TEST_RESULTS_DIR
+
+
+def _session_directory(folder_path, session_name):
+    name = str(session_name or "").strip()
+    if not name or name in (".", "..") or "/" in name or "\\" in name:
+        raise ValueError("A valid Test session name is required.")
+    root = _session_root(folder_path).resolve()
+    session = (root / name).resolve()
+    if session.parent != root:
+        raise ValueError("Test session path escaped the current set.")
+    if not session.is_dir() or not (session / "test.json").is_file():
+        raise FileNotFoundError("Test session does not exist: " + name)
+    return session
+
+
 def _new_session_directory(folder_path):
     root = Path(folder_path) / TEST_RESULTS_DIR
     root.mkdir(parents=True, exist_ok=True)
@@ -495,16 +515,122 @@ def _read_status(session_directory):
     return payload if isinstance(payload, dict) else None
 
 
+def _session_status(session_directory):
+    payload = _read_status(session_directory)
+    if not payload:
+        return None
+    visible = dict(payload)
+    visible["session"] = Path(session_directory).name
+    if not visible.get("resultFolder"):
+        visible["resultFolder"] = _relative_to_fs_root(session_directory)
+    return visible
+
+
+def list_sessions(folder_path):
+    root = _session_root(folder_path)
+    if not root.is_dir():
+        return []
+    sessions = []
+    for session in sorted(
+        [path for path in root.iterdir() if path.is_dir() and (path / "test.json").is_file()],
+        key=lambda path: path.name.lower(),
+        reverse=True,
+    ):
+        payload = _session_status(session)
+        if not payload:
+            continue
+        sessions.append({
+            "session": session.name,
+            "status": str(payload.get("status") or ""),
+            "completed": int(payload.get("completed") or 0),
+            "failed": int(payload.get("failed") or 0),
+            "total": int(payload.get("total") or 0),
+            "resultFolder": str(payload.get("resultFolder") or ""),
+        })
+    return sessions
+
+
+def open_session(folder_path, session_name):
+    return _session_status(_session_directory(folder_path, session_name))
+
+
+def delete_session(folder_path, session_name):
+    session = _session_directory(folder_path, session_name)
+    shutil.rmtree(session)
+    return {
+        "operation": "test_delete_session",
+        "deleted": session.name,
+        "sessions": list_sessions(folder_path),
+        "latest": _latest_status(folder_path),
+    }
+
+
+def _session_result_path(session_directory, file_name):
+    name = str(file_name or "").strip()
+    if not name or name in (".", "..") or "/" in name or "\\" in name:
+        raise ValueError("Test result filename is invalid.")
+    path = Path(session_directory) / name
+    if path.exists() and (not path.is_file() or path.is_symlink()):
+        raise RuntimeError("Test result is not a regular file: " + name)
+    return path
+
+
+def _remove_candidate_from_session(folder_path, session_name, candidate_name):
+    session = _session_directory(folder_path, session_name)
+    status = _read_status(session) or {}
+    results = status.get("results") if isinstance(status.get("results"), list) else []
+    failures = status.get("failures") if isinstance(status.get("failures"), list) else []
+
+    removed_results = [
+        result for result in results
+        if isinstance(result, dict)
+        and str(result.get("candidateFile") or result.get("sourceLoRA") or "") == candidate_name
+    ]
+    removed_failures = [
+        failure for failure in failures
+        if isinstance(failure, dict) and str(failure.get("sourceLoRA") or "") == candidate_name
+    ]
+
+    paths = []
+    for result in removed_results:
+        output_name = str(result.get("outputVideo") or "").strip()
+        if output_name:
+            video_path = _session_result_path(session, output_name)
+            caption_path = _session_result_path(session, Path(output_name).with_suffix(".txt").name)
+            if not video_path.is_file():
+                raise FileNotFoundError("Test result video does not exist: " + output_name)
+            if not caption_path.is_file():
+                raise FileNotFoundError("Test result caption does not exist: " + caption_path.name)
+            paths.extend([video_path, caption_path])
+
+    for path in paths:
+        path.unlink()
+
+    if removed_results or removed_failures:
+        status["results"] = [result for result in results if result not in removed_results]
+        status["failures"] = [failure for failure in failures if failure not in removed_failures]
+        status["completed"] = max(0, int(status.get("completed") or 0) - len(removed_results))
+        status["failed"] = max(0, int(status.get("failed") or 0) - len(removed_failures))
+        status["total"] = max(
+            0,
+            int(status.get("total") or 0) - len(removed_results) - len(removed_failures),
+        )
+        _atomic_write_json(_status_path(session), status)
+
+    return _session_status(session)
+
+
 def _latest_status(folder_path):
-    root = Path(folder_path) / TEST_RESULTS_DIR
+    root = _session_root(folder_path)
     if not root.is_dir():
         return {"status": "idle"}
     sessions = sorted(
         [path for path in root.iterdir() if path.is_dir() and (path / "test.json").is_file()],
-        key=lambda path: path.name.lower(), reverse=True,
+        key=lambda path: path.name.lower(),
+        reverse=True,
     )
     for session in sessions:
-        payload = _read_status(session)
+        payload = _session_status(session)
         if payload:
             return payload
     return {"status": "idle"}
@@ -701,6 +827,7 @@ def prepare(folder_path):
         "aspectRatioOptions": aspect_options,
         "count": len(loras),
         "files": [path.name for path in loras],
+        "sessions": list_sessions(folder_path),
         "latest": _visible_status(folder_path),
     }
 
@@ -746,6 +873,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
             payload = {
                 "status": "running",
                 "model": "h3",
+                "session": session_directory.name,
                 "sourcePrompt": prompt,
                 "resolvedPrompt": resolved_prompt,
                 "prompt": resolved_prompt,
@@ -800,11 +928,23 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return prepare(folder_path)
     if operation == "test_status":
         return status(folder_path)
+    if operation == "test_sessions":
+        return {"operation": "test_sessions", "sessions": list_sessions(folder_path)}
+    if operation == "test_open_session":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return open_session(folder_path, criteria.get("session"))
+    if operation == "test_delete_session":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return delete_session(folder_path, criteria.get("session"))
     if operation == "test_stop":
         return stop(folder_path)
     if operation == "test_remove_candidate":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return remove_candidate(folder_path, criteria.get("fileName"))
+        return remove_candidate(
+            folder_path,
+            criteria.get("fileName"),
+            session_name=criteria.get("session"),
+        )
     if operation == "test_start":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return start(

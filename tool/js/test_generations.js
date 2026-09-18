@@ -4,6 +4,7 @@
   var pollTimer = null;
   var prepared = null;
   var paneFolder = '';
+  var currentSession = '';
   var debouncedPromptSave = debounceCreate(500);
 
   function el(id) { return document.getElementById(id); }
@@ -88,6 +89,60 @@
     });
   }
 
+  function renderSessions(sessions) {
+    var items = Array.isArray(sessions) ? sessions : [];
+    var toggle = el('test-generations-sessions-toggle');
+    var host = el('test-generations-sessions-list');
+    if (toggle) toggle.textContent = 'Sessions (' + items.length + ')';
+    if (!host) return;
+    host.innerHTML = '';
+    items.forEach(function (session) {
+      var name = String(session.session || '');
+      var row = document.createElement('div');
+      row.className = 'test-generations-session-row';
+
+      var copy = document.createElement('div');
+      copy.className = 'test-generations-session-copy';
+      var title = document.createElement('strong');
+      title.textContent = name;
+      var meta = document.createElement('span');
+      var completed = Number(session.completed || 0);
+      var total = Number(session.total || 0);
+      var failed = Number(session.failed || 0);
+      meta.textContent = String(session.status || '') + ' · ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '');
+      copy.appendChild(title);
+      copy.appendChild(meta);
+
+      var actions = document.createElement('div');
+      actions.className = 'test-generations-session-actions';
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'review-captions-btn';
+      open.dataset.sessionOpen = name;
+      open.textContent = 'Open';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'test-generations-remove-candidate';
+      remove.dataset.sessionDelete = name;
+      remove.title = 'Delete this Test session';
+      remove.setAttribute('aria-label', 'Delete Test session ' + name);
+      remove.textContent = '×';
+      actions.appendChild(open);
+      actions.appendChild(remove);
+
+      row.appendChild(copy);
+      row.appendChild(actions);
+      host.appendChild(row);
+    });
+  }
+
+  function refreshSessions() {
+    return request('test_sessions').then(function (payload) {
+      renderSessions(payload && payload.sessions);
+      return payload;
+    });
+  }
+
   function statusText(status) {
     if (!status || status.status === 'idle') return '';
     var completed = Number(status.completed || 0);
@@ -118,6 +173,17 @@
       host.dataset.resultFolder = resultFolder;
     }
 
+    var validKeys = results.map(function (result, index) {
+      var outputVideo = String(result.outputVideo || '');
+      return outputVideo || (String(result.sourceLoRA || 'result') + ':' + index);
+    });
+    Array.prototype.forEach.call(
+      host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
+      function (card) {
+        if (validKeys.indexOf(String(card.dataset.resultKey || '')) === -1) card.remove();
+      }
+    );
+
     var empty = host.querySelector('.test-generations-empty');
     if ((results.length || (status && status.status === 'running')) && empty) empty.remove();
 
@@ -147,10 +213,28 @@
         card.appendChild(placeholder);
       }
 
+      var footer = document.createElement('div');
+      footer.className = 'test-generations-result-footer';
       var label = document.createElement('div');
       label.className = 'test-generations-result-name';
       label.textContent = String(result.sourceLoRA || outputVideo || 'Result');
-      card.appendChild(label);
+      footer.appendChild(label);
+
+      var candidateFile = String(result.candidateFile || '');
+      if (!candidateFile && String(result.kind || '') !== 'base' && /\.safetensors$/i.test(String(result.sourceLoRA || ''))) {
+        candidateFile = String(result.sourceLoRA || '');
+      }
+      if (candidateFile) {
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'test-generations-remove-candidate';
+        remove.dataset.removeCandidate = candidateFile;
+        remove.title = 'Remove this candidate and its current Test render';
+        remove.setAttribute('aria-label', 'Remove candidate ' + candidateFile);
+        remove.textContent = '×';
+        footer.appendChild(remove);
+      }
+      card.appendChild(footer);
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);
@@ -191,6 +275,7 @@
   }
 
   function renderStatus(status) {
+    if (status && status.session) currentSession = String(status.session);
     var statusEl = el('test-generations-status');
     var errorEl = el('test-generations-error');
     var runBtn = el('test-generations-run-btn');
@@ -223,7 +308,11 @@
     if (!isOpen()) return;
     request('test_status').then(function (status) {
       renderStatus(status);
-      if (status && (status.status === 'running' || status.status === 'stopping')) pollTimer = setTimeout(pollStatus, 2000);
+      if (status && (status.status === 'running' || status.status === 'stopping')) {
+        pollTimer = setTimeout(pollStatus, 2000);
+      } else {
+        refreshSessions().catch(showError);
+      }
     }).catch(showError);
   }
 
@@ -315,6 +404,7 @@
     request('test_prepare').then(function (payload) {
       prepared = payload;
       renderStagedFiles(payload);
+      renderSessions(payload.sessions);
       populateControls(payload);
       renderStatus(payload.latest || { status: 'idle' });
       if (payload.latest && payload.latest.status === 'running') pollStatus();
@@ -364,15 +454,40 @@
     });
   }
 
+  function openSession(sessionName) {
+    request('test_open_session', { session: String(sessionName || '') }).then(function (status) {
+      renderStatus(status);
+    }).catch(showError);
+  }
+
+  function deleteSession(sessionName) {
+    request('test_delete_session', { session: String(sessionName || '') }).then(function (payload) {
+      renderSessions(payload && payload.sessions);
+      if (currentSession === String(payload.deleted || '')) {
+        currentSession = '';
+        renderStatus(payload.latest || { status: 'idle' });
+      }
+    }).catch(showError);
+  }
+
   function removeCandidate(fileName) {
-    request('test_remove_candidate', { fileName: String(fileName || '') }).then(function (payload) {
+    request('test_remove_candidate', {
+      fileName: String(fileName || ''),
+      session: String(currentSession || '')
+    }).then(function (payload) {
       if (prepared) {
         prepared.count = Number(payload.count || 0);
         prepared.files = Array.isArray(payload.files) ? payload.files.slice() : [];
         renderStagedFiles(prepared);
       }
-      return request('test_status');
-    }).then(renderStatus).catch(showError);
+      if (payload.sessionStatus) {
+        renderStatus(payload.sessionStatus);
+        return null;
+      }
+      return request('test_status').then(renderStatus);
+    }).then(function () {
+      return refreshSessions();
+    }).catch(showError);
   }
 
   function buildUi() {
@@ -397,7 +512,7 @@
       '<header class="test-generations-header"><div><h2>Test Generations</h2><p>MiniMax H3 · compare staged LoRAs with one frozen configuration per batch.</p></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
       '<div class="test-generations-body">',
       '<section class="test-generations-controls">',
-      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div><details><summary id="test-generations-files-toggle">View staged LoRAs</summary><div id="test-generations-files" class="test-generations-staged-list"></div></details></div>',
+      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div><div class="test-generations-setup-tools"><details><summary id="test-generations-files-toggle">View staged LoRAs</summary><div id="test-generations-files" class="test-generations-staged-list"></div></details><details class="test-generations-sessions"><summary id="test-generations-sessions-toggle">Sessions (0)</summary><div id="test-generations-sessions-list" class="test-generations-sessions-list"></div></details></div></div>',
       '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="5"></textarea></label>',
       '<div class="test-generations-setup-options">',
       '<div class="test-generations-settings-grid">',
@@ -425,6 +540,24 @@
       if (!button) return;
       button.disabled = true;
       removeCandidate(button.dataset.fileName);
+    };
+    el('test-generations-sessions-list').onclick = function (event) {
+      var open = event.target.closest('[data-session-open]');
+      if (open) {
+        openSession(open.dataset.sessionOpen);
+        return;
+      }
+      var remove = event.target.closest('[data-session-delete]');
+      if (remove) {
+        remove.disabled = true;
+        deleteSession(remove.dataset.sessionDelete);
+      }
+    };
+    el('test-generations-results').onclick = function (event) {
+      var remove = event.target.closest('[data-remove-candidate]');
+      if (!remove) return;
+      remove.disabled = true;
+      removeCandidate(remove.dataset.removeCandidate);
     };
     el('test-generations-prompt').addEventListener('input', function () {
       savePrompt(this.value);

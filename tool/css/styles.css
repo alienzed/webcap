@@ -2679,10 +2679,17 @@ iframe {
   gap: 16px;
   min-width: 0;
 }
+.test-generations-setup-tools {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
 .test-generations-setup-overview details {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(420px, 48%);
+  max-width: 420px;
 }
 .test-generations-setup-options {
   display: grid;
@@ -2717,6 +2724,43 @@ iframe {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.test-generations-sessions-list {
+  display: grid;
+  gap: 5px;
+  max-height: 220px;
+  min-width: 320px;
+  margin-top: 8px;
+  overflow: auto;
+}
+.test-generations-session-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.test-generations-session-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.test-generations-session-copy strong,
+.test-generations-session-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-session-copy strong { font-size: 12px; }
+.test-generations-session-copy span { color: var(--muted); font-size: 11px; }
+.test-generations-session-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.test-generations-session-actions .review-captions-btn {
+  width: auto;
+  min-height: 24px;
+  padding: 3px 7px;
 }
 .test-generations-remove-candidate {
   width: 24px;
@@ -2772,7 +2816,9 @@ iframe {
 .test-generations-results-heading span { color: var(--muted); font-size: 12px; }
 .test-generations-results {
   display: grid;
+  flex: 1 1 0;
   grid-template-columns: repeat(auto-fill, 280px);
+  grid-auto-rows: max-content;
   align-content: start;
   justify-content: start;
   gap: 12px;
@@ -2780,6 +2826,7 @@ iframe {
   overflow: auto;
 }
 .test-generations-result-card {
+  align-self: start;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -2802,9 +2849,15 @@ iframe {
   font-size: 12px;
 }
 .test-generations-result-card.is-pending { opacity: .72; }
+.test-generations-result-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 7px 6px 9px;
+}
 .test-generations-result-name {
   overflow: hidden;
-  padding: 8px 9px;
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
@@ -2822,7 +2875,9 @@ iframe {
   .test-generations-body { overflow: auto; }
   .test-generations-controls { grid-template-columns: 1fr; }
   .test-generations-setup-overview { align-items: stretch; flex-direction: column; }
+  .test-generations-setup-tools { flex-direction: column; }
   .test-generations-setup-overview details { flex-basis: auto; max-width: none; }
+  .test-generations-sessions-list { min-width: 0; }
   .test-generations-results-section { overflow: visible; }
 }
 .training-candidates-modal {

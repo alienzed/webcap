@@ -513,3 +513,70 @@ def test_stop_marks_active_session_stopping_and_interrupts_comfy(tmp_path, monke
     assert status["status"] == "stopping"
     assert folder_key in bench._stop_requests
     assert interrupted == [True]
+
+
+def test_remove_candidate_deletes_only_current_session_result(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "run-01__epoch10.safetensors"
+    candidate.write_bytes(b"copy")
+    candidate.with_suffix(".webcap.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+
+    current = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
+    older = tmp_path / bench.TEST_RESULTS_DIR / "session-b"
+    current.mkdir(parents=True)
+    older.mkdir(parents=True)
+    for session in (current, older):
+        (session / "epoch10.mp4").write_bytes(b"video")
+        (session / "epoch10.txt").write_text("prompt", encoding="utf-8")
+        bench._atomic_write_json(
+            session / "test.json",
+            {
+                "status": "complete",
+                "total": 1,
+                "completed": 1,
+                "failed": 0,
+                "failures": [],
+                "results": [{
+                    "kind": "lora",
+                    "sourceLoRA": candidate.name,
+                    "candidateFile": candidate.name,
+                    "outputVideo": "epoch10.mp4",
+                }],
+            },
+        )
+
+    payload = bench.remove_candidate(tmp_path, candidate.name, session_name="session-a")
+
+    assert not candidate.exists()
+    assert not candidate.with_suffix(".webcap.json").exists()
+    assert not (current / "epoch10.mp4").exists()
+    assert not (current / "epoch10.txt").exists()
+    assert (older / "epoch10.mp4").is_file()
+    assert (older / "epoch10.txt").is_file()
+    assert payload["sessionStatus"]["session"] == "session-a"
+    assert payload["sessionStatus"]["results"] == []
+    assert payload["sessionStatus"]["completed"] == 0
+    assert payload["sessionStatus"]["total"] == 0
+
+
+def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path):
+    first = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-18_0900-h3"
+    second = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-18_1000-h3"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    bench._atomic_write_json(first / "test.json", {"status": "complete", "completed": 2, "total": 2})
+    bench._atomic_write_json(second / "test.json", {"status": "stopped", "completed": 1, "total": 3})
+
+    sessions = bench.list_sessions(tmp_path)
+    assert [item["session"] for item in sessions] == [second.name, first.name]
+    assert bench.open_session(tmp_path, first.name)["session"] == first.name
+
+    payload = bench.delete_session(tmp_path, first.name)
+    assert not first.exists()
+    assert second.exists()
+    assert [item["session"] for item in payload["sessions"]] == [second.name]
+
+    with pytest.raises(ValueError):
+        bench.open_session(tmp_path, "../outside")

@@ -42,7 +42,7 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert "grid-template-columns: repeat(2, minmax(360px, 1fr));" in controls_rule
     details_rule = css.split(".test-generations-setup-overview details {", 1)[1].split("}", 1)[0]
     assert "flex: 0 1 auto;" in details_rule
-    assert "max-width: min(420px, 48%);" in details_rule
+    assert "max-width: 420px;" in details_rule
     assert ".test-generations-setup-overview details { flex-basis: auto; max-width: none; }" in css
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -58,6 +58,8 @@ def test_test_generation_previews_keep_stable_width_and_natural_height():
     assert "display: grid;" in results_rule
     assert "grid-template-columns: repeat(auto-fill, 280px);" in results_rule
     assert "justify-content: start;" in results_rule
+    assert "flex: 1 1 0;" in results_rule
+    assert "grid-auto-rows: max-content;" in results_rule
 
     video_rule = css.split(".test-generations-result-card video {", 1)[1].split("}", 1)[0]
     assert "width: 100%;" in video_rule
@@ -73,3 +75,18 @@ def test_test_generations_owns_full_workbench_when_open():
     assert ".test-generations-workspace-open .workbench-side-stack" in shell_css
     assert "grid-template-columns: minmax(0, 1fr) !important;" in shell_css
     assert "flex: 1 1 auto !important;" in shell_css
+
+
+def test_test_generation_sessions_and_candidate_removal_contract():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "test-generations-sessions-toggle" in script
+    assert "test-generations-sessions-list" in script
+    assert "test_open_session" in script
+    assert "test_delete_session" in script
+    assert "dataRemoveCandidate" not in script
+    assert "dataset.removeCandidate" in script
+    assert "session: String(currentSession || '')" in script
+    assert ".test-generations-session-row" in css
+    assert ".test-generations-result-footer" in css

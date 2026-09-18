@@ -81,11 +81,15 @@ function trainingCandidatesRangeValue(value) {
   return value === '' || value === null || value === undefined || !isFinite(Number(value)) ? null : Number(value);
 }
 
-function trainingCandidatesPointForEpoch(epoch, analysis, points) {
-  var checkpoint = points.filter(function (item) { return Number(item.epoch) === Number(epoch); })[0];
+function trainingCandidatesEpochPlotPoint(epoch, data) {
+  var checkpoint = (data.points || []).filter(function (item) { return Number(item.epoch) === Number(epoch); })[0];
   if (!checkpoint) return null;
-  var analytical = trainingCandidatesPointForStep(checkpoint.step, analysis);
-  return { step: checkpoint.step, epoch: epoch, loss: analytical ? analytical.loss : checkpoint.loss };
+  var position = trainingCandidatesStepPointForEpoch(epoch, data);
+  return {
+    step: position ? position.step : checkpoint.step,
+    epoch: Number(epoch),
+    loss: checkpoint.loss
+  };
 }
 
 function trainingCandidatesPointForStep(step, points) {
@@ -229,22 +233,21 @@ function trainingCandidatesSvg(data) {
     return '<rect class="training-candidates-basin" x="' + left.toFixed(2) + '" y="' + plotTop + '" width="' + Math.max(4, right - left).toFixed(2) + '" height="' + plotHeight + '"></rect>';
   }).join('');
   var savedMarkers = savedArtifacts.filter(function (artifact) { return !candidateEpochs[Number(artifact.epoch)]; }).map(function (artifact) {
-    var point = trainingCandidatesPointForEpoch(artifact.epoch, analysis, points);
+    var point = trainingCandidatesEpochPlotPoint(artifact.epoch, epochPositionData);
     if (!point) return '';
-    var pointX = epochX(artifact.epoch, point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
+    var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
     return '<g class="training-candidates-epoch-marker training-candidates-saved-marker ' + escapeHtml(String(artifact.status || '')) + inTestFolderClass(artifact.epoch) + '" ' + markerData(artifact.epoch) + ' role="button" tabindex="0" aria-label="' + markerLabel('Saved LoRA', artifact.epoch) + '"><circle cx="' + pointX + '" cy="' + pointY + '" r="5"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="12"></circle></g>';
   }).join('');
   var candidateMarkers = candidates.map(function (candidate) {
-    var analytical = trainingCandidatesPointForStep(candidate.step, analysis);
-    var checkpoint = trainingCandidatesPointForEpoch(candidate.epoch, [], points);
-    var point = { step: candidate.step, loss: analytical ? analytical.loss : checkpoint.loss };
-    var pointX = epochX(candidate.epoch, point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
+    var point = trainingCandidatesEpochPlotPoint(candidate.epoch, epochPositionData);
+    if (!point) return '';
+    var pointX = x(point.step).toFixed(2), pointY = y(point.loss).toFixed(2);
     return '<g class="training-candidates-marker training-candidates-epoch-marker' + inTestFolderClass(candidate.epoch) + '" ' + markerData(candidate.epoch) + ' role="button" tabindex="0" aria-label="' + markerLabel('Suggested epoch', candidate.epoch) + '"><line x1="' + pointX + '" y1="' + plotTop + '" x2="' + pointX + '" y2="' + plotBottom + '"></line><circle cx="' + pointX + '" cy="' + pointY + '" r="7"></circle><circle class="training-candidates-epoch-hit" cx="' + pointX + '" cy="' + pointY + '" r="14"></circle></g>';
   }).join('');
   var candidateLabels = candidates.map(function (candidate) {
-    var point = trainingCandidatesPointForStep(candidate.step, analysis) || trainingCandidatesPointForEpoch(candidate.epoch, [], points);
+    var point = trainingCandidatesEpochPlotPoint(candidate.epoch, epochPositionData);
     if (!point) return '';
-    return '<text class="training-candidates-marker-label" x="' + epochX(candidate.epoch, point.step).toFixed(2) + '" y="' + (plotTop - 8) + '">' + escapeHtml(String(candidate.epoch)) + '</text>';
+    return '<text class="training-candidates-marker-label" x="' + x(point.step).toFixed(2) + '" y="' + (plotTop - 8) + '">' + escapeHtml(String(candidate.epoch)) + '</text>';
   }).join('');
   var yTicks = trainingCandidatesYAxisTicks(minLoss, maxLoss).map(function (value) {
     var tickY = y(value);
@@ -358,13 +361,14 @@ function wireTrainingCandidatesChart() {
     popover.style.top = Math.max(bounds.top + edge, Math.min(bounds.bottom - popover.offsetHeight - edge, top)) + 'px';
   }
   function showPinned(epoch) {
-    var point = trainingCandidatesStepPointForEpoch(epoch, data);
-    if (!point) return;
+    var positionPoint = trainingCandidatesEpochPlotPoint(epoch, data);
+    var stepPoint = trainingCandidatesStepPointForEpoch(epoch, data);
+    if (!positionPoint) return;
     trainingWorkspaceState.candidatePinnedEpoch = Number(epoch);
     hide();
-    popover.innerHTML = trainingCandidatesTooltipHtml(point, data) + trainingCandidatesPinnedActionsHtml(epoch, data);
+    popover.innerHTML = trainingCandidatesTooltipHtml(stepPoint || positionPoint, data) + trainingCandidatesPinnedActionsHtml(epoch, data);
     popover.classList.remove('hidden');
-    positionPinned(point);
+    positionPinned(positionPoint);
   }
   chart.addEventListener('mouseleave', function () { if (trainingWorkspaceState.candidatePinnedEpoch === null) hide(); });
   chart.addEventListener('mousemove', function (event) {
@@ -406,11 +410,11 @@ function wireTrainingCandidatesChart() {
       }).then(function () {
         var status = popover.querySelector('[data-training-candidate-copy-status]');
         if (status) status.textContent = 'Opened configured test folder.';
-        positionPinned(trainingCandidatesStepPointForEpoch(trainingWorkspaceState.candidatePinnedEpoch, data));
+        positionPinned(trainingCandidatesEpochPlotPoint(trainingWorkspaceState.candidatePinnedEpoch, data));
       }).catch(function (err) {
         var status = popover.querySelector('[data-training-candidate-copy-status]');
         if (status) status.textContent = String(err.message || err);
-        positionPinned(trainingCandidatesStepPointForEpoch(trainingWorkspaceState.candidatePinnedEpoch, data));
+        positionPinned(trainingCandidatesEpochPlotPoint(trainingWorkspaceState.candidatePinnedEpoch, data));
       });
       return;
     }
@@ -440,7 +444,7 @@ function wireTrainingCandidatesChart() {
         copyButton.textContent = 'Copy to Test';
         var status = popover.querySelector('[data-training-candidate-copy-status]');
         if (status) status.textContent = String(err.message || err);
-        positionPinned(trainingCandidatesStepPointForEpoch(copyEpoch, data));
+        positionPinned(trainingCandidatesEpochPlotPoint(copyEpoch, data));
       });
       return;
     }

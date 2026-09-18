@@ -1,10 +1,55 @@
 import copy
+import json
 from pathlib import Path
 
 import pytest
 
 from tool.server import epoch_test_bench as bench
 
+
+
+def test_windows_curl_transport_posts_json_via_stdin(monkeypatch):
+    calls = {}
+
+    class Result:
+        returncode = 0
+        stdout = b'{"prompt_id":"abc"}'
+        stderr = b""
+
+    def fake_run(command, **kwargs):
+        calls["command"] = command
+        calls["input"] = kwargs.get("input")
+        return Result()
+
+    monkeypatch.setattr(bench, "_windows_curl_path", lambda: "/mnt/c/Windows/System32/curl.exe")
+    monkeypatch.setattr(bench.subprocess, "run", fake_run)
+    payload = {"prompt": {"1": {"inputs": {}}}}
+
+    response = bench._read_json_response(
+        "http://127.0.0.1:8188/prompt",
+        method="POST",
+        payload=payload,
+        timeout=3,
+    )
+
+    assert response == {"prompt_id": "abc"}
+    assert calls["command"][0] == "/mnt/c/Windows/System32/curl.exe"
+    assert calls["command"][-1] == "http://127.0.0.1:8188/prompt"
+    assert "--data-binary" in calls["command"]
+    assert calls["command"][calls["command"].index("--data-binary") + 1] == "@-"
+    assert json.loads(calls["input"].decode("utf-8")) == payload
+
+
+def test_windows_curl_transport_reads_binary(monkeypatch):
+    class Result:
+        returncode = 0
+        stdout = b"video-bytes"
+        stderr = b""
+
+    monkeypatch.setattr(bench, "_windows_curl_path", lambda: "/mnt/c/Windows/System32/curl.exe")
+    monkeypatch.setattr(bench.subprocess, "run", lambda *args, **kwargs: Result())
+
+    assert bench._read_bytes("http://127.0.0.1:8188/view?filename=test.mp4") == b"video-bytes"
 
 def test_lora_files_are_filtered_and_sorted(tmp_path):
     (tmp_path / "epoch10.safetensors").write_bytes(b"")

@@ -36,16 +36,20 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert ".test-generations-result-card video" in css
     assert ".test-generations-setup-overview" in css
     assert ".test-generations-setup-options" in css
-    assert 'id="test-generations-files-toggle"' in script
-    assert "filesToggle.textContent = 'View ' + payload.count + ' staged LoRA'" in script
+    assert 'id="test-generations-files-count"' in script
+    assert 'id="test-generations-sessions-count"' in script
+    assert "countEl.textContent = String(count)" in script
+    assert "countEl.textContent = String(items.length)" in script
+    assert 'class="test-generations-library"' in script
+    assert "<details>" not in script
     body_rule = css.split(".test-generations-body {", 1)[1].split("}", 1)[0]
     assert "grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);" in body_rule
     assert 'class="test-generations-rail"' in script
     controls_rule = css.split(".test-generations-controls {", 1)[1].split("}", 1)[0]
     assert "display: flex;" in controls_rule
     assert "flex-direction: column;" in controls_rule
-    details_rule = css.split(".test-generations-setup-overview details {", 1)[1].split("}", 1)[0]
-    assert "max-width: none;" in details_rule
+    assert ".test-generations-library-panel" in css
+    assert ".test-generations-library-heading" in css
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     assert ".test-generations-workspace-open .sidebar-panel" in shell_css
@@ -87,7 +91,7 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
-    assert "test-generations-sessions-toggle" in script
+    assert "test-generations-sessions-count" in script
     assert "test-generations-sessions-list" in script
     assert "test_open_session" in script
     assert "test_delete_session" in script
@@ -102,6 +106,8 @@ def test_test_generations_closes_on_training_navigation_and_clears_session_state
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert "currentSession = String(status.session || '')" in script
+    assert "function owningSetFolder(folder)" in script
+    assert "paneFolder = owningSetFolder(state && state.folder || '')" in script
     assert "['sidebar-open-training-btn', 'utility-training-btn'].forEach" in script
     assert "if (isOpen()) closePane();" in script
 

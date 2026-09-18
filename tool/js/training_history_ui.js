@@ -95,7 +95,19 @@ function renderTrainingHistory() {
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
   var history = trainingWorkspaceState.history || {};
   var searchText = String((els.historySearch && els.historySearch.value) || '').trim().toLowerCase();
+  var scope = trainingWorkspaceState.historyViewScope === 'set' ? 'set' : 'all';
+  var currentFolder = trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : '';
+  if (!currentFolder) scope = 'all';
+  if (els.historyScope) {
+    els.historyScope.classList.toggle('hidden', !currentFolder);
+    Array.prototype.forEach.call(els.historyScope.querySelectorAll('[data-training-history-scope]'), function (button) {
+      var active = button.getAttribute('data-training-history-scope') === scope;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
   var jobs = (history.jobs || []).filter(function (job) {
+    if (scope === 'set' && String(job.folder || '') !== currentFolder) return false;
     if (!searchText) return true;
     var model = job.model && typeof job.model === 'object' ? job.model : {};
     var haystack = [
@@ -114,9 +126,11 @@ function renderTrainingHistory() {
     els.historyCollapseBtn.textContent = 'Recent Runs' + (jobs.length ? ' · ' + jobs.length : '');
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');
   }
-  if (els.historyClearBtn) els.historyClearBtn.textContent = 'Clear history';
+  if (els.historyClearBtn) els.historyClearBtn.textContent = 'Clear all history';
   els.historySummary.classList.toggle('hidden', !!latest);
-  els.historySummary.textContent = latest ? '' : 'No completed or actionable training outcomes yet.';
+  els.historySummary.textContent = latest ? '' : (scope === 'set'
+    ? 'No completed or actionable training outcomes for this set yet.'
+    : 'No completed or actionable training outcomes yet.');
   var visibleJobs = trainingWorkspaceState.historyExpanded ? jobs : jobs.slice(0, 2);
   visibleJobs.forEach(function (job) {
     loadTrainingHistoryMetrics(job);

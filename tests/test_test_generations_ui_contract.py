@@ -38,14 +38,17 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert ".test-generations-setup-options" in css
     assert 'id="test-generations-files-toggle"' in script
     assert "filesToggle.textContent = 'View ' + payload.count + ' staged LoRA'" in script
+    body_rule = css.split(".test-generations-body {", 1)[1].split("}", 1)[0]
+    assert "grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);" in body_rule
+    assert 'class="test-generations-rail"' in script
     controls_rule = css.split(".test-generations-controls {", 1)[1].split("}", 1)[0]
-    assert "grid-template-columns: repeat(2, minmax(360px, 1fr));" in controls_rule
+    assert "display: flex;" in controls_rule
+    assert "flex-direction: column;" in controls_rule
     details_rule = css.split(".test-generations-setup-overview details {", 1)[1].split("}", 1)[0]
-    assert "flex: 0 1 auto;" in details_rule
-    assert "max-width: 420px;" in details_rule
-    assert ".test-generations-setup-overview details { flex-basis: auto; max-width: none; }" in css
+    assert "max-width: none;" in details_rule
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    assert ".test-generations-workspace-open .sidebar-panel" in shell_css
     assert ".test-generations-workspace-open .preview-panel" in shell_css
     assert 'src="/static/js/test_generations.js"' in html
 
@@ -71,8 +74,11 @@ def test_test_generation_previews_keep_stable_width_and_natural_height():
 def test_test_generations_owns_full_workbench_when_open():
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
+    assert ".test-generations-workspace-open .sidebar-panel" in shell_css
+    assert ".test-generations-workspace-open .preview-panel" in shell_css
     assert ".test-generations-workspace-open .workbench-main-stack > :not(.workbench-bottom)" in shell_css
     assert ".test-generations-workspace-open .workbench-side-stack" in shell_css
+    assert 'grid-template-areas: "workbench" !important;' in shell_css
     assert "grid-template-columns: minmax(0, 1fr) !important;" in shell_css
     assert "flex: 1 1 auto !important;" in shell_css
 

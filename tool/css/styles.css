@@ -2646,50 +2646,52 @@ iframe {
 .test-generations-header {
   display: flex;
   flex: 0 0 auto;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 12px;
   border-bottom: 1px solid var(--border);
 }
 .test-generations-header h2 { margin: 0; font-size: 17px; }
 .test-generations-header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
 .test-generations-header .review-captions-btn { width: auto; }
 .test-generations-body {
-  display: flex;
+  display: grid;
   flex: 1 1 auto;
+  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
   min-height: 0;
-  flex-direction: column;
   overflow: hidden;
 }
-.test-generations-controls {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(360px, 1fr));
-  align-content: start;
-  gap: 12px 16px;
+.test-generations-rail {
+  display: flex;
   min-width: 0;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+}
+.test-generations-controls {
+  display: flex;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  flex-direction: column;
+  padding: 12px;
 }
 .test-generations-setup-overview {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-width: 0;
-}
-.test-generations-setup-tools {
-  display: flex;
-  flex: 0 1 auto;
-  align-items: flex-start;
+  display: grid;
   gap: 8px;
   min-width: 0;
 }
-.test-generations-setup-overview details {
-  flex: 0 1 auto;
+.test-generations-setup-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
   min-width: 0;
-  max-width: 420px;
+}
+.test-generations-setup-overview details {
+  min-width: 0;
+  max-width: none;
 }
 .test-generations-setup-options {
   display: grid;
@@ -2729,7 +2731,7 @@ iframe {
   display: grid;
   gap: 5px;
   max-height: 220px;
-  min-width: 320px;
+  min-width: 0;
   margin-top: 8px;
   overflow: auto;
 }
@@ -2776,7 +2778,7 @@ iframe {
 .test-generations-prompt textarea {
   box-sizing: border-box;
   width: 100%;
-  min-height: 120px;
+  min-height: 220px;
   resize: vertical;
 }
 .test-generations-settings-grid {
@@ -2798,7 +2800,6 @@ iframe {
 .test-generations-actions .training-btn { width: auto; }
 .test-generations-results-section {
   display: flex;
-  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
@@ -2926,14 +2927,11 @@ iframe {
   font-size: 13px;
 }
 @container (max-width: 900px) {
-  .test-generations-body { overflow: auto; }
-  .test-generations-controls { grid-template-columns: 1fr; }
-  .test-generations-setup-overview { align-items: stretch; flex-direction: column; }
-  .test-generations-setup-tools { flex-direction: column; }
-  .test-generations-setup-overview details { flex-basis: auto; max-width: none; }
-  .test-generations-sessions-list { min-width: 0; }
+  .test-generations-body {
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  }
+  .test-generations-setup-tools { grid-template-columns: 1fr; }
   .test-generations-compare-stage { grid-template-columns: 1fr; }
-  .test-generations-results-section { overflow: visible; }
 }
 .training-candidates-modal {
   position: fixed;

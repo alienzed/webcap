@@ -550,10 +550,22 @@ html[data-theme="dark"] .app.shell-revamp .console-panel-header {
 }
 
 
-/* Test Generations temporarily owns the Training work area. */
+/* Test Generations temporarily owns the full workspace. */
+.app.shell-revamp.test-generations-workspace-open {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas: "workbench" !important;
+  gap: 0;
+}
+
+.app.shell-revamp.test-generations-workspace-open .sidebar-panel,
+.app.shell-revamp.test-generations-workspace-open .preview-panel,
 .app.shell-revamp.test-generations-workspace-open .workbench-main-stack > :not(.workbench-bottom),
 .app.shell-revamp.test-generations-workspace-open .workbench-side-stack {
   display: none !important;
+}
+
+.app.shell-revamp.test-generations-workspace-open .workbench-panel {
+  grid-area: workbench;
 }
 
 .app.shell-revamp.test-generations-workspace-open .workbench-top {
@@ -565,30 +577,7 @@ html[data-theme="dark"] .app.shell-revamp .console-panel-header {
   flex: 1 1 auto !important;
   min-height: 0;
 }
-.app.shell-revamp.workspace-surface-training.test-generations-workspace-open {
-  grid-template-columns: minmax(0, var(--sidebar-width)) minmax(0, 1fr);
-  grid-template-areas: "sidebar workbench";
-}
 
-.app.shell-revamp.workspace-surface-training.test-generations-workspace-open .preview-panel {
-  display: none;
-}
-
-.app.shell-revamp.workspace-surface-training.test-generations-workspace-open .workbench-panel {
-  grid-area: workbench;
-}
-
-.app.shell-revamp.workspace-surface-training.test-generations-workspace-open .workspace-overlays {
-  grid-column: 2;
-}
-
-.app.shell-revamp.workspace-surface-training.test-generations-workspace-open.sidebar-hidden,
-.app.shell-revamp.workspace-surface-training.test-generations-workspace-open.left-rail-collapsed {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "workbench";
-}
-
-.app.shell-revamp.workspace-surface-training.test-generations-workspace-open.sidebar-hidden .workspace-overlays,
-.app.shell-revamp.workspace-surface-training.test-generations-workspace-open.left-rail-collapsed .workspace-overlays {
+.app.shell-revamp.test-generations-workspace-open .workspace-overlays {
   grid-column: 1;
 }

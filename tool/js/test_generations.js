@@ -658,8 +658,9 @@
     node.className = 'test-generations-pane hidden';
     node.setAttribute('aria-label', 'Test Generations');
     node.innerHTML = [
-      '<header class="test-generations-header"><div><h2>Test Generations</h2><p>MiniMax H3 · compare staged LoRAs with one frozen configuration per batch.</p></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
       '<div class="test-generations-body">',
+      '<aside class="test-generations-rail">',
+      '<header class="test-generations-header"><div><h2>Test Generations</h2><p>MiniMax H3 · one frozen configuration per batch.</p></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
       '<section class="test-generations-controls">',
       '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div><div class="test-generations-setup-tools"><details><summary id="test-generations-files-toggle">View staged LoRAs</summary><div id="test-generations-files" class="test-generations-staged-list"></div></details><details class="test-generations-sessions"><summary id="test-generations-sessions-toggle">Sessions (0)</summary><div id="test-generations-sessions-list" class="test-generations-sessions-list"></div></details></div></div>',
       '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="5"></textarea></label>',
@@ -675,6 +676,7 @@
       '<div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>',
       '</div>',
       '</section>',
+      '</aside>',
       '<section class="test-generations-results-section"><div class="test-generations-results-heading"><strong>Results</strong><div class="test-generations-view-toggle"><button id="test-generations-view-grid-btn" type="button" class="review-captions-btn active">Grid</button><button id="test-generations-view-compare-btn" type="button" class="review-captions-btn">Compare</button></div><span>Previews appear as each LoRA finishes.</span></div><div id="test-generations-results" class="test-generations-results"></div><div id="test-generations-compare" class="test-generations-compare hidden"></div></section>',
       '</div>'
     ].join('');

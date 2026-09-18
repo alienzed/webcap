@@ -110,6 +110,13 @@ def test_test_generations_closes_on_training_navigation_and_clears_session_state
     assert "paneFolder = owningSetFolder(state && state.folder || '')" in script
     assert "['sidebar-open-training-btn', 'utility-training-btn'].forEach" in script
     assert "if (isOpen()) closePane();" in script
+    assert "test-generations-open-results-btn" not in script
+    assert "function openResults(" not in script
+    assert "state.folder = targetFolder" not in script
+    assert "String(state.folder || '') !== String(paneFolder || '')" in script
+    assert "function stagedFileParts(fileName)" in script
+    assert "function sessionLabel(sessionName)" in script
+    assert "function syncSessionSelection()" in script
 
 
 def test_test_generations_compare_mode_reuses_current_session_results():

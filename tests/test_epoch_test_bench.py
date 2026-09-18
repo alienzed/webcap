@@ -769,3 +769,23 @@ def test_workflow_can_override_test_output_prefix():
     )
 
     assert workflow["141"]["inputs"]["filename_prefix"] == "webcap-tests/session/001-epoch10/render"
+
+
+
+def test_delete_session_refuses_active_worker(tmp_path, monkeypatch):
+    session = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-18_1500-h3"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {"status": "running"})
+
+    class ActiveThread:
+        def is_alive(self):
+            return True
+
+    folder_key = str(tmp_path.resolve())
+    monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
+    monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
+
+    with pytest.raises(RuntimeError, match="Cannot delete the active"):
+        bench.delete_session(tmp_path, session.name)
+
+    assert session.exists()

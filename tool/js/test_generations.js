@@ -71,6 +71,28 @@
     button.classList.toggle('hidden', !available);
   }
 
+  function stagedFileParts(fileName) {
+    var name = String(fileName || '');
+    var match = name.match(/^(.*)__epoch(\d+)\.safetensors$/i);
+    return match
+      ? { label: 'Epoch ' + match[2], detail: match[1], fileName: name }
+      : { label: name, detail: '', fileName: name };
+  }
+
+  function sessionLabel(sessionName) {
+    var name = String(sessionName || '');
+    var match = name.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})-h3$/i);
+    return match ? match[1] + ' · ' + match[2] + ':' + match[3] : name;
+  }
+
+  function syncSessionSelection() {
+    var host = el('test-generations-sessions-list');
+    if (!host) return;
+    Array.prototype.forEach.call(host.querySelectorAll('[data-session-name]'), function (row) {
+      row.classList.toggle('is-active', String(row.dataset.sessionName || '') === String(currentSession || ''));
+    });
+  }
+
   function renderStagedFiles(payload) {
     var count = Number(payload && payload.count || 0);
     var files = payload && Array.isArray(payload.files) ? payload.files : [];
@@ -86,10 +108,18 @@
       return;
     }
     files.forEach(function (fileName) {
+      var parts = stagedFileParts(fileName);
       var row = document.createElement('div');
       row.className = 'test-generations-staged-row';
-      var name = document.createElement('span');
-      name.textContent = String(fileName || '');
+      row.title = parts.fileName;
+      var copy = document.createElement('div');
+      copy.className = 'test-generations-staged-copy';
+      var name = document.createElement('strong');
+      name.textContent = parts.label;
+      var detail = document.createElement('span');
+      detail.textContent = parts.detail;
+      copy.appendChild(name);
+      if (parts.detail) copy.appendChild(detail);
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'test-generations-remove-candidate';
@@ -97,7 +127,7 @@
       remove.title = 'Remove this staged Test candidate';
       remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
       remove.textContent = '×';
-      row.appendChild(name);
+      row.appendChild(copy);
       row.appendChild(remove);
       host.appendChild(row);
     });
@@ -118,11 +148,13 @@
       var name = String(session.session || '');
       var row = document.createElement('div');
       row.className = 'test-generations-session-row';
+      row.dataset.sessionName = name;
+      row.title = name;
 
       var copy = document.createElement('div');
       copy.className = 'test-generations-session-copy';
       var title = document.createElement('strong');
-      title.textContent = name;
+      title.textContent = sessionLabel(name);
       var meta = document.createElement('span');
       var completed = Number(session.completed || 0);
       var total = Number(session.total || 0);
@@ -152,6 +184,7 @@
       row.appendChild(actions);
       host.appendChild(row);
     });
+    syncSessionSelection();
   }
 
   function refreshSessions() {
@@ -436,6 +469,7 @@
   function renderStatus(status) {
     currentStatus = status || {};
     if (status) currentSession = String(status.session || '');
+    syncSessionSelection();
     var statusEl = el('test-generations-status');
     var errorEl = el('test-generations-error');
     var runBtn = el('test-generations-run-btn');

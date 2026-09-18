@@ -549,7 +549,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
     finally:
         with _lock:
             _active_threads.pop(folder_key, None)
-        release_gpu_for_external_work(GPU_RESERVATION_OWNER)
+        _release_gpu_for_test_generations()
 
 
 def prepare(folder_path):
@@ -603,7 +603,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
         active = _active_threads.get(folder_key)
         if active and active.is_alive():
             return _latest_status(folder_path)
-    if not reserve_gpu_for_external_work(GPU_RESERVATION_OWNER):
+    if not _reserve_gpu_for_test_generations():
         raise RuntimeError("GPU is busy with managed training or another Test Generations batch.")
     try:
         with _lock:
@@ -634,7 +634,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
             _active_threads[folder_key] = thread
             thread.start()
     except Exception:
-        release_gpu_for_external_work(GPU_RESERVATION_OWNER)
+        _release_gpu_for_test_generations()
         raise
     return payload
 

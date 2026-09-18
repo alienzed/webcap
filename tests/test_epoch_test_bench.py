@@ -380,3 +380,12 @@ def test_test_generation_gpu_helpers_call_training_runner(monkeypatch):
         ("reserve", bench.GPU_RESERVATION_OWNER),
         ("release", bench.GPU_RESERVATION_OWNER),
     ]
+
+
+
+def test_test_generation_gpu_calls_go_through_lazy_wrappers():
+    source = Path(bench.__file__).read_text(encoding="utf-8")
+    assert source.count("reserve_gpu_for_external_work(GPU_RESERVATION_OWNER)") == 1
+    assert source.count("release_gpu_for_external_work(GPU_RESERVATION_OWNER)") == 1
+    assert source.count("_reserve_gpu_for_test_generations()") >= 2
+    assert source.count("_release_gpu_for_test_generations()") >= 3

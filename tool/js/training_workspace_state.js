@@ -77,10 +77,15 @@ function isTrainingWorkspaceActive() {
   return normalizeWorkspaceSurface(workspaceState.surface) === 'training';
 }
 
-function setTrainingWorkspaceEntryMode(mode) {
+function setTrainingWorkspaceEntryMode(mode, options) {
   var nextMode = mode === 'set' ? 'set' : 'global';
-  if (trainingWorkspaceState.entryMode !== nextMode) {
+  var resetDefaults = !!(options && options.resetDefaults);
+  if (trainingWorkspaceState.entryMode !== nextMode || resetDefaults) {
     trainingWorkspaceState.historyViewScope = nextMode === 'set' ? 'set' : 'all';
+  }
+  if (resetDefaults) {
+    trainingWorkspaceState.historyCollapsed = nextMode === 'set';
+    trainingWorkspaceState.runnerQueueCollapsed = nextMode === 'set';
   }
   trainingWorkspaceState.entryMode = nextMode;
 }

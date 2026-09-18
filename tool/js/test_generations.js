@@ -594,6 +594,8 @@
       if (status && (status.status === 'running' || status.status === 'stopping')) {
         pollTimer = setTimeout(pollStatus, 2000);
       } else {
+        var seed = el('test-generations-seed');
+        if (seed) seed.value = String(randomSeed());
         refreshSessions().catch(showError);
       }
     }).catch(showError);
@@ -717,7 +719,6 @@
       syncActiveRunControls(status);
       refreshUtilityButton();
       renderStatus(status);
-      el('test-generations-seed').value = String(randomSeed());
       pollStatus();
     }).catch(function (err) {
       if (runBtn) runBtn.disabled = false;

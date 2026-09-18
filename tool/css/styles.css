@@ -2432,6 +2432,31 @@ iframe {
   margin-left: auto;
 }
 
+.workspace-surface-training .training-history-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.workspace-surface-training .training-history-scope.hidden {
+  display: none;
+}
+
+.workspace-surface-training .training-history-scope .review-captions-btn {
+  border-color: transparent;
+  background: transparent;
+}
+
+.workspace-surface-training .training-history-scope .review-captions-btn.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--panel) 78%, var(--accent));
+  color: var(--text);
+}
+
 .workspace-surface-training .training-history-tools input {
   width: min(30vw, 280px);
   min-width: 180px;

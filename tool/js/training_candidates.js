@@ -619,7 +619,7 @@ function closeTrainingCandidates() {
 }
 
 function openTrainingCandidates(job) {
-  if (!job || !job.id || !job.folder || !job.outputRunPath) { setStatus('Candidate analysis is available once this job has a recorded run directory.'); return; }
+  if (!job || !job.id || !job.folder || !String(job.outputRunPath || job.resumeFromCheckpoint || '').trim()) { setStatus('Candidate analysis is available once this job has a recorded run directory.'); return; }
   var els = trainingCandidatesElements();
   trainingWorkspaceState.candidateJobId = String(job.id);
   trainingWorkspaceState.candidateFolder = String(job.folder);

@@ -412,17 +412,8 @@ function trainingHistoryScopeFolder() {
 }
 
 function syncTrainingHistorySearchScope() {
-  var searchEl = document.getElementById('training-history-search');
   var folder = trainingHistoryScopeFolder();
   var priorFolder = trainingWorkspaceState.historySearchScopeFolder;
-  if (folder !== priorFolder && trainingWorkspaceState.history) {
-    trainingWorkspaceState.history.runs = [];
-    trainingWorkspaceState.history.resumeDefaults = {};
-  }
-  if (searchEl && folder !== priorFolder) {
-    if (folder) searchEl.value = folder;
-    else if (searchEl.value === priorFolder) searchEl.value = '';
-  }
   trainingWorkspaceState.historySearchScopeFolder = folder;
   if (folder !== priorFolder) {
     trainingWorkspaceState.resumeSelectionTouched = false;

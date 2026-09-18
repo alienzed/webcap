@@ -367,6 +367,7 @@
       var video = document.createElement('video');
       video.controls = true;
       video.preload = 'metadata';
+      video.muted = true;
       video.src = videoUrl(resultFolder, String(result.outputVideo || ''));
       item.appendChild(video);
       videos.push(video);

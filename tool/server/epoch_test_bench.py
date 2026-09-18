@@ -451,8 +451,8 @@ def _result_paths(session_directory, lora_file):
 
 def _run_batch(folder_key, session_directory, loras, prompt, settings=None):
     status_file = _status_path(session_directory)
-    template = _load_template()
     try:
+        template = _load_template()
         for lora_file, comfy_lora_name in loras:
             status = _read_status(session_directory) or {}
             status["current"] = lora_file.name

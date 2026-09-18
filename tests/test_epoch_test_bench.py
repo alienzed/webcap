@@ -253,3 +253,22 @@ def test_start_refuses_when_training_gpu_is_unavailable(tmp_path, monkeypatch):
         bench.start(tmp_path, "prompt")
 
     assert not (tmp_path / bench.TEST_RESULTS_DIR).exists()
+
+
+def test_run_batch_releases_gpu_reservation_when_template_load_fails(tmp_path, monkeypatch):
+    session = tmp_path / "session"
+    session.mkdir()
+    bench._atomic_write_json(
+        session / "test.json",
+        {"status": "running", "completed": 0, "total": 1, "current": "", "error": ""},
+    )
+    released = []
+    monkeypatch.setattr(bench, "_load_template", lambda: (_ for _ in ()).throw(RuntimeError("template boom")))
+    monkeypatch.setattr(bench, "release_gpu_for_external_work", released.append)
+
+    bench._run_batch("folder-key", session, [], "prompt")
+
+    status = bench._read_status(session)
+    assert status["status"] == "failed"
+    assert status["error"] == "template boom"
+    assert released == [bench.GPU_RESERVATION_OWNER]

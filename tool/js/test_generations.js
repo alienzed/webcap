@@ -720,6 +720,7 @@
       syncActiveRunControls(status);
       refreshUtilityButton();
       renderStatus(status);
+      el('test-generations-seed').value = String(randomSeed());
       pollStatus();
     }).catch(function (err) {
       if (runBtn) runBtn.disabled = false;

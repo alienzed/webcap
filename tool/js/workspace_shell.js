@@ -132,6 +132,45 @@ function normalizeWorkspaceSurface(surface) {
   return 'default';
 }
 
+function syncApplicationShellContext() {
+  var folderEl = document.getElementById('app-header-folder');
+  if (folderEl) {
+    var folder = String(state && state.folder || '');
+    var label = folder || (typeof ROOT_FOLDER_LABEL === 'string' && ROOT_FOLDER_LABEL ? ROOT_FOLDER_LABEL : 'root');
+    folderEl.textContent = label;
+    folderEl.title = label;
+  }
+
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  var prepBtn = document.getElementById('activity-prep-btn');
+  var trainingBtn = document.getElementById('activity-training-btn');
+  var testBtn = document.getElementById('activity-test-btn');
+  var testOpen = document.querySelector('.test-generations-pane:not(.hidden)');
+
+  if (prepBtn) {
+    var prepActive = !testOpen && surface !== 'training';
+    prepBtn.classList.toggle('active', prepActive);
+    prepBtn.setAttribute('aria-pressed', prepActive ? 'true' : 'false');
+  }
+  if (trainingBtn) {
+    var trainingActive = !testOpen && surface === 'training';
+    trainingBtn.classList.toggle('active', trainingActive);
+    trainingBtn.setAttribute('aria-pressed', trainingActive ? 'true' : 'false');
+  }
+  if (testBtn) {
+    var testActive = !!testOpen;
+    testBtn.classList.toggle('active', testActive);
+    testBtn.setAttribute('aria-pressed', testActive ? 'true' : 'false');
+  }
+}
+
+function openPrepActivity() {
+  var testPane = document.getElementById('test-generations-pane');
+  var testBack = document.getElementById('test-generations-close-btn');
+  if (testPane && !testPane.classList.contains('hidden') && testBack) testBack.click();
+  setWorkspaceSurface('default');
+}
+
 function getTrainingWorkspaceEntryKind() {
   var mode = trainingWorkspaceState.entryMode === 'set' ? 'set' : 'global';
   if (mode === 'global') return 'global';
@@ -308,6 +347,7 @@ function syncWorkspaceSurfaceUi() {
   syncWorkbenchRailUi();
   syncWorkspaceConfigEditorUi();
   syncTrainingWorkspaceUi();
+  syncApplicationShellContext();
 }
 
 function refreshWorkspaceWorkbenchSurface() {
@@ -493,6 +533,26 @@ function wireWorkspaceHeaderUi() {
       openTrainingSurface('global');
     };
   }
+  var prepActivityBtn = document.getElementById('activity-prep-btn');
+  if (prepActivityBtn && !prepActivityBtn.__workspaceWired) {
+    prepActivityBtn.__workspaceWired = true;
+    prepActivityBtn.onclick = openPrepActivity;
+  }
+  var trainingActivityBtn = document.getElementById('activity-training-btn');
+  if (trainingActivityBtn && !trainingActivityBtn.__workspaceWired) {
+    trainingActivityBtn.__workspaceWired = true;
+    trainingActivityBtn.onclick = function () {
+      openTrainingSurface('global');
+    };
+  }
+  var testActivityBtn = document.getElementById('activity-test-btn');
+  if (testActivityBtn && !testActivityBtn.__workspaceWired) {
+    testActivityBtn.__workspaceWired = true;
+    testActivityBtn.onclick = function () {
+      var legacyTestBtn = document.getElementById('utility-test-bench-btn');
+      if (legacyTestBtn) legacyTestBtn.click();
+    };
+  }
   var configEditorBackBtn = document.getElementById('config-editor-back-btn');
   if (configEditorBackBtn && !configEditorBackBtn.__workspaceWired) {
     configEditorBackBtn.__workspaceWired = true;
@@ -517,6 +577,7 @@ window.setWorkspaceSurface = setWorkspaceSurface;
 window.exitWorkspaceSurface = exitWorkspaceSurface;
 window.ensureWorkspaceOverlayChildren = ensureWorkspaceOverlayChildren;
 window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;
+window.syncApplicationShellContext = syncApplicationShellContext;
 
 function getThemedPreviewPlaceholderHtml(message) {
   var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';

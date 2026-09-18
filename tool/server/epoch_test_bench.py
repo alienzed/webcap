@@ -2,6 +2,7 @@ import copy
 import json
 import os
 import re
+import secrets
 import subprocess
 import threading
 import time
@@ -207,7 +208,7 @@ def _resolve_comfy_loras(loras):
     return resolved
 
 
-def _workflow_for_lora(template, prompt, comfy_lora_name):
+def _workflow_for_lora(template, prompt, comfy_lora_name, seed=None):
     workflow = copy.deepcopy(template)
     try:
         prompt_inputs = workflow["146"]["inputs"]
@@ -218,8 +219,10 @@ def _workflow_for_lora(template, prompt, comfy_lora_name):
         lora_inputs["lora_name"] = comfy_lora_name
         lora_inputs["strength_model"] = 0.9
         lora_inputs["strength_clip"] = 1
-    except (KeyError, TypeError) as exc:
-        raise ValueError("MiniMax H3 Test Bench workflow is missing node 146 or node 148 inputs.") from exc
+        if seed is not None:
+            workflow["129"]["inputs"]["noise_seed"] = int(seed)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("MiniMax H3 Test Bench workflow is missing required test inputs.") from exc
     return workflow
 
 
@@ -353,6 +356,10 @@ def _workflow_seed(workflow):
         return None
 
 
+def _new_session_seed():
+    return secrets.randbelow(2 ** 63)
+
+
 def _result_paths(session_directory, lora_file):
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", lora_file.stem).strip("._") or "result"
     video = Path(session_directory) / (stem + ".mp4")
@@ -365,7 +372,7 @@ def _result_paths(session_directory, lora_file):
     return video, caption
 
 
-def _run_batch(folder_key, session_directory, loras, prompt):
+def _run_batch(folder_key, session_directory, loras, prompt, seed):
     status_file = _status_path(session_directory)
     template = _load_template()
     try:
@@ -373,7 +380,7 @@ def _run_batch(folder_key, session_directory, loras, prompt):
             status = _read_status(session_directory) or {}
             status["current"] = lora_file.name
             _atomic_write_json(status_file, status)
-            workflow = _workflow_for_lora(template, prompt, comfy_lora_name)
+            workflow = _workflow_for_lora(template, prompt, comfy_lora_name, seed=seed)
             prompt_id = _queue_workflow(workflow)
             video_ref = _wait_for_video(prompt_id)
             video_bytes = _download_video(video_ref)
@@ -448,6 +455,7 @@ def start(folder_path, prompt):
         if active and active.is_alive():
             return _latest_status(folder_path)
         session_directory = _new_session_directory(folder_path)
+        seed = _new_session_seed()
         payload = {
             "status": "running",
             "model": "h3",
@@ -457,14 +465,14 @@ def start(folder_path, prompt):
             "failed": 0,
             "current": "",
             "error": "",
-            "seed": _workflow_seed(_load_template()),
+            "seed": seed,
             "results": [],
             "resultFolder": _relative_to_fs_root(session_directory),
         }
         _atomic_write_json(_status_path(session_directory), payload)
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, resolved_loras, prompt),
+            args=(folder_key, session_directory, resolved_loras, prompt, seed),
             name="webcap-h3-test-generations",
             daemon=True,
         )

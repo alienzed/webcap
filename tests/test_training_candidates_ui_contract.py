@@ -46,6 +46,11 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "epochLossPoints" in script
     assert "stepLossPoints" in script
     assert "function trainingCandidatesEma" in script
+    assert "TRAINING_CANDIDATES_DISPLAY_SESSION_KEY" in script
+    assert "sessionStorage.setItem(TRAINING_CANDIDATES_DISPLAY_SESSION_KEY" in script
+    assert "showRawStep" in script
+    assert "showSmoothedStep" in script
+    assert "showEpochLoss" in script
     assert "training-candidates-smoothing-number" in script
     assert "training-candidates-y-auto" in script
     assert "detailedSmoothedPoints" not in script
@@ -144,6 +149,8 @@ assert.equal(context.trainingCandidatesDisplayState().yMax,.28);
 elements['training-candidates-y-auto'].onclick();
 assert.equal(context.trainingCandidatesDisplayState().yMin,null);
 assert.equal(context.trainingCandidatesDisplayState().yMax,null);
+assert.notEqual(elements['training-candidates-y-min'].value,'');
+assert.notEqual(elements['training-candidates-y-max'].value,'');
 const svg = context.trainingCandidatesSvg(data);
 assert(svg.includes('viewBox="0 0 1000 560"'));
 const chart = JSON.parse(svg.match(/data-training-candidates-chart="([^"]+)"/)[1].replaceAll('&quot;','"').replaceAll('&amp;','&'));
@@ -196,6 +203,13 @@ assert.deepEqual(context.trainingCandidatesYAxisTicks(.16,.30),[.16,.18,.2,.22,.
 const robustRange = context.trainingCandidatesRobustLossRange(Array.from({length:100},(_,index) => index === 99 ? 1000 : index));
 assert.equal(robustRange.min,1);
 assert.equal(robustRange.max,98);
+const autoRange = context.trainingCandidatesAutoLossRange({
+  epochLossPoints:[{epoch:1,loss:.10},{epoch:2,loss:.42}],
+  stepLossPoints:Array.from({length:100},(_,index)=>({step:index,epoch:1,loss:index===99?10:.20 + index*.0001})),
+  analysisPoints:[]
+},{showRawStep:false,showSmoothedStep:true,showEpochLoss:true},Array.from({length:100},(_,index)=>({step:index,epoch:1,loss:.20 + index*.0001})));
+assert(autoRange.min <= .10);
+assert(autoRange.max >= .42);
 const tooltipData = {points:data.epochLossPoints,analysis:data.analysisPoints,smoothedStepPoints:[],savedArtifacts:[],regions:data.regions,candidates:data.candidates};
 assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipData).includes('Robust loss: 0.2000'));
   assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));

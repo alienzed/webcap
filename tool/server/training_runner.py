@@ -663,7 +663,6 @@ def copy_candidate_epoch_to_test(folder, job_id, epoch):
     destination = destination_directory / file_name
     sidecar = _candidate_test_sidecar_path(destination)
     created_destination = False
-    created_sidecar = False
     provenance = {
         "version": 1,
         "sourceJobId": str(run.get("id") or ""),
@@ -679,15 +678,8 @@ def copy_candidate_epoch_to_test(folder, job_id, epoch):
         with source.open("rb") as source_file, destination.open("xb") as destination_file:
             created_destination = True
             shutil.copyfileobj(source_file, destination_file)
-        with sidecar.open("x", encoding="utf-8") as sidecar_file:
-            created_sidecar = True
-            json.dump(provenance, sidecar_file, indent=2)
+        sidecar.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     except Exception:
-        if created_sidecar:
-            try:
-                sidecar.unlink()
-            except OSError:
-                pass
         if created_destination:
             try:
                 destination.unlink()

@@ -5,6 +5,9 @@
   var prepared = null;
   var paneFolder = '';
   var currentSession = '';
+  var currentStatus = {};
+  var resultsView = 'grid';
+  var compareIndex = 0;
   var debouncedPromptSave = debounceCreate(500);
 
   function el(id) { return document.getElementById(id); }
@@ -160,6 +163,147 @@
     return '/caption/media?folder=' + encodeURIComponent(String(folder || '')) + '&media=' + encodeURIComponent(String(fileName || ''));
   }
 
+  function candidateFileForResult(result) {
+    var candidateFile = String(result && result.candidateFile || '');
+    if (!candidateFile && String(result && result.kind || '') !== 'base' && /\.safetensors$/i.test(String(result && result.sourceLoRA || ''))) {
+      candidateFile = String(result.sourceLoRA || '');
+    }
+    return candidateFile;
+  }
+
+  function setResultsView(mode) {
+    resultsView = mode === 'compare' ? 'compare' : 'grid';
+    var gridBtn = el('test-generations-view-grid-btn');
+    var compareBtn = el('test-generations-view-compare-btn');
+    var grid = el('test-generations-results');
+    var compare = el('test-generations-compare');
+    if (gridBtn) gridBtn.classList.toggle('active', resultsView === 'grid');
+    if (compareBtn) compareBtn.classList.toggle('active', resultsView === 'compare');
+    if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
+    if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
+    renderResults(currentStatus);
+  }
+
+  function syncCompareVideos(videos) {
+    if (!videos || videos.length !== 2) return;
+    var syncing = false;
+
+    function mirror(source, target, action) {
+      if (syncing) return;
+      syncing = true;
+      try {
+        if (action === 'seek' && Math.abs(target.currentTime - source.currentTime) > 0.03) {
+          target.currentTime = source.currentTime;
+        }
+        if (action === 'rate' && target.playbackRate !== source.playbackRate) {
+          target.playbackRate = source.playbackRate;
+        }
+        if (action === 'play') {
+          if (Math.abs(target.currentTime - source.currentTime) > 0.03) target.currentTime = source.currentTime;
+          if (target.playbackRate !== source.playbackRate) target.playbackRate = source.playbackRate;
+          if (target.paused) {
+            var playPromise = target.play();
+            if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(showError);
+          }
+        }
+        if (action === 'pause') {
+          if (Math.abs(target.currentTime - source.currentTime) > 0.03) target.currentTime = source.currentTime;
+          if (!target.paused) target.pause();
+        }
+      } finally {
+        syncing = false;
+      }
+    }
+
+    videos.forEach(function (video, index) {
+      var other = videos[index ? 0 : 1];
+      video.addEventListener('play', function () { mirror(video, other, 'play'); });
+      video.addEventListener('pause', function () { mirror(video, other, 'pause'); });
+      video.addEventListener('seeked', function () { mirror(video, other, 'seek'); });
+      video.addEventListener('ratechange', function () { mirror(video, other, 'rate'); });
+    });
+  }
+
+  function renderCompare(status) {
+    var host = el('test-generations-compare');
+    if (!host) return;
+    var results = status && Array.isArray(status.results) ? status.results : [];
+    var resultFolder = String(status && status.resultFolder || '');
+    host.innerHTML = '';
+
+    if (results.length < 2) {
+      host.innerHTML = '<div class="test-generations-empty">At least two completed results are needed to compare.</div>';
+      return;
+    }
+
+    compareIndex = Math.max(0, Math.min(compareIndex, results.length - 2));
+    var pair = [results[compareIndex], results[compareIndex + 1]];
+    var stage = document.createElement('div');
+    stage.className = 'test-generations-compare-stage';
+    var videos = [];
+
+    pair.forEach(function (result) {
+      var item = document.createElement('article');
+      item.className = 'test-generations-compare-item';
+
+      var video = document.createElement('video');
+      video.controls = true;
+      video.preload = 'metadata';
+      video.src = videoUrl(resultFolder, String(result.outputVideo || ''));
+      item.appendChild(video);
+      videos.push(video);
+
+      var footer = document.createElement('div');
+      footer.className = 'test-generations-result-footer';
+      var label = document.createElement('div');
+      label.className = 'test-generations-result-name';
+      label.textContent = String(result.sourceLoRA || result.outputVideo || 'Result');
+      footer.appendChild(label);
+
+      var candidateFile = candidateFileForResult(result);
+      if (candidateFile) {
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'test-generations-remove-candidate';
+        remove.dataset.removeCandidate = candidateFile;
+        remove.title = 'Remove this candidate and its current Test render';
+        remove.setAttribute('aria-label', 'Remove candidate ' + candidateFile);
+        remove.textContent = '×';
+        footer.appendChild(remove);
+      }
+
+      item.appendChild(footer);
+      stage.appendChild(item);
+    });
+
+    var controls = document.createElement('div');
+    controls.className = 'test-generations-compare-controls';
+
+    var previous = document.createElement('button');
+    previous.type = 'button';
+    previous.className = 'review-captions-btn';
+    previous.dataset.comparePrevious = '1';
+    previous.disabled = compareIndex <= 0;
+    previous.textContent = 'Previous';
+
+    var position = document.createElement('span');
+    position.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);
+
+    var next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'review-captions-btn';
+    next.dataset.compareNext = '1';
+    next.disabled = compareIndex >= results.length - 2;
+    next.textContent = 'Next';
+
+    controls.appendChild(previous);
+    controls.appendChild(position);
+    controls.appendChild(next);
+    host.appendChild(stage);
+    host.appendChild(controls);
+    syncCompareVideos(videos);
+  }
+
   function renderResults(status) {
     var host = el('test-generations-results');
     if (!host) return;
@@ -199,6 +343,7 @@
       var card = document.createElement('article');
       card.className = 'test-generations-result-card';
       card.dataset.resultKey = resultKey;
+      card.dataset.compareIndex = String(index);
 
       if (resultFolder && outputVideo) {
         var video = document.createElement('video');
@@ -220,10 +365,7 @@
       label.textContent = String(result.sourceLoRA || outputVideo || 'Result');
       footer.appendChild(label);
 
-      var candidateFile = String(result.candidateFile || '');
-      if (!candidateFile && String(result.kind || '') !== 'base' && /\.safetensors$/i.test(String(result.sourceLoRA || ''))) {
-        candidateFile = String(result.sourceLoRA || '');
-      }
+      var candidateFile = candidateFileForResult(result);
       if (candidateFile) {
         var remove = document.createElement('button');
         remove.type = 'button';
@@ -265,6 +407,8 @@
     if (!results.length && !(status && status.status === 'running') && !host.querySelector('.test-generations-result-card')) {
       host.innerHTML = '<div class="test-generations-empty">Generated previews will appear here.</div>';
     }
+
+    renderCompare(status || {});
   }
 
   function setControlsDisabled(disabled) {
@@ -275,6 +419,7 @@
   }
 
   function renderStatus(status) {
+    currentStatus = status || {};
     if (status) currentSession = String(status.session || '');
     var statusEl = el('test-generations-status');
     var errorEl = el('test-generations-error');
@@ -400,6 +545,10 @@
       errorEl.classList.add('hidden');
     }
     prepared = null;
+    currentSession = '';
+    currentStatus = {};
+    compareIndex = 0;
+    setResultsView('grid');
     renderStatus({ status: 'idle' });
     request('test_prepare').then(function (payload) {
       prepared = payload;
@@ -526,7 +675,7 @@
       '<div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>',
       '</div>',
       '</section>',
-      '<section class="test-generations-results-section"><div class="test-generations-results-heading"><strong>Results</strong><span>Previews appear as each LoRA finishes.</span></div><div id="test-generations-results" class="test-generations-results"></div></section>',
+      '<section class="test-generations-results-section"><div class="test-generations-results-heading"><strong>Results</strong><div class="test-generations-view-toggle"><button id="test-generations-view-grid-btn" type="button" class="review-captions-btn active">Grid</button><button id="test-generations-view-compare-btn" type="button" class="review-captions-btn">Compare</button></div><span>Previews appear as each LoRA finishes.</span></div><div id="test-generations-results" class="test-generations-results"></div><div id="test-generations-compare" class="test-generations-compare hidden"></div></section>',
       '</div>'
     ].join('');
     surface.appendChild(node);
@@ -540,6 +689,12 @@
     });
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-stop-btn').onclick = stopRun;
+    el('test-generations-view-grid-btn').onclick = function () {
+      setResultsView('grid');
+    };
+    el('test-generations-view-compare-btn').onclick = function () {
+      setResultsView('compare');
+    };
     el('test-generations-files').onclick = function (event) {
       var button = event.target.closest('[data-file-name]');
       if (!button) return;
@@ -560,9 +715,34 @@
     };
     el('test-generations-results').onclick = function (event) {
       var remove = event.target.closest('[data-remove-candidate]');
-      if (!remove) return;
-      remove.disabled = true;
-      removeCandidate(remove.dataset.removeCandidate);
+      if (remove) {
+        remove.disabled = true;
+        removeCandidate(remove.dataset.removeCandidate);
+        return;
+      }
+      if (event.target.closest('video, button')) return;
+      var card = event.target.closest('[data-compare-index]');
+      if (!card) return;
+      compareIndex = Number(card.dataset.compareIndex || 0);
+      setResultsView('compare');
+    };
+    el('test-generations-compare').onclick = function (event) {
+      var remove = event.target.closest('[data-remove-candidate]');
+      if (remove) {
+        remove.disabled = true;
+        removeCandidate(remove.dataset.removeCandidate);
+        return;
+      }
+      if (event.target.closest('[data-compare-previous]')) {
+        compareIndex = Math.max(0, compareIndex - 1);
+        renderCompare(currentStatus);
+        return;
+      }
+      if (event.target.closest('[data-compare-next]')) {
+        var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
+        compareIndex = Math.min(Math.max(0, results.length - 2), compareIndex + 1);
+        renderCompare(currentStatus);
+      }
     };
     el('test-generations-prompt').addEventListener('input', function () {
       savePrompt(this.value);

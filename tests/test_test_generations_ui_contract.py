@@ -98,3 +98,24 @@ def test_test_generations_closes_on_training_navigation_and_clears_session_state
     assert "currentSession = String(status.session || '')" in script
     assert "['sidebar-open-training-btn', 'utility-training-btn'].forEach" in script
     assert "if (isOpen()) closePane();" in script
+
+
+def test_test_generations_compare_mode_reuses_current_session_results():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "test-generations-view-grid-btn" in script
+    assert "test-generations-view-compare-btn" in script
+    assert "function setResultsView(mode)" in script
+    assert "function renderCompare(status)" in script
+    assert "var pair = [results[compareIndex], results[compareIndex + 1]];" in script
+    assert "compareIndex = Math.max(0, compareIndex - 1);" in script
+    assert "compareIndex = Math.min(Math.max(0, results.length - 2), compareIndex + 1);" in script
+    assert "function syncCompareVideos(videos)" in script
+    assert "video.addEventListener('play'" in script
+    assert "video.addEventListener('pause'" in script
+    assert "video.addEventListener('seeked'" in script
+    assert "video.addEventListener('ratechange'" in script
+    assert "remove.dataset.removeCandidate = candidateFile" in script
+    assert ".test-generations-compare-stage" in css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css

@@ -62,3 +62,41 @@ def test_shell_exists_outside_test_generations_takeover():
     assert ".app-frame" not in takeover
     assert ".app-header" not in takeover
     assert ".activity-rail" not in takeover
+
+
+def test_shell_activity_controls_are_real_navigation_without_replacing_legacy_paths():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    assert 'id="activity-prep-btn"' in html
+    assert 'id="activity-training-btn"' in html
+    assert 'id="activity-test-btn"' in html
+    assert "prepActivityBtn.onclick = openPrepActivity" in script
+    assert "trainingActivityBtn.onclick" in script
+    assert "openTrainingSurface('global')" in script
+    assert "legacyTestBtn.click()" in script
+
+    # Old paths stay available during migration.
+    assert 'id="utility-training-btn"' in html
+    assert 'id="utility-test-bench-btn"' in html
+
+
+def test_shell_header_tracks_current_folder_without_owning_folder_state():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+
+    assert 'id="app-header-folder"' in html
+    assert "String(state && state.folder || '')" in shell
+    assert "folderEl.textContent = label" in shell
+    assert "window.syncApplicationShellContext = syncApplicationShellContext" in shell
+    assert "window.syncApplicationShellContext()" in ui
+
+
+def test_test_activity_visibility_and_active_state_are_mirrored_to_new_rail():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "var activityButton = el('activity-test-btn')" in script
+    assert "[button, activityButton].forEach" in script
+    assert "target.classList.toggle('hidden', !visible)" in script
+    assert "target.classList.toggle('active', isOpen())" in script

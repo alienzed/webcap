@@ -2633,6 +2633,141 @@ iframe {
 .training-review-modal-content { min-height: 0; overflow: auto; padding: 16px; }
 .training-review-modal-content .training-review { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .training-review-modal-footer { justify-content: flex-end; border-top: 1px solid var(--border-color, #3d4452); }
+
+.editor-surface.test-generations-active > *:not(#test-generations-pane) { display: none !important; }
+.test-generations-pane {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.test-generations-pane.hidden { display: none; }
+.test-generations-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.test-generations-header h2 { margin: 0; font-size: 17px; }
+.test-generations-header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+.test-generations-header .review-captions-btn { width: auto; }
+.test-generations-body {
+  display: grid;
+  grid-template-columns: minmax(340px, .9fr) minmax(0, 1.35fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.test-generations-controls {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+}
+.test-generations-summary { color: var(--muted); font-size: 13px; }
+.test-generations-controls details { min-width: 0; }
+.test-generations-controls details summary { cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 700; }
+.test-generations-controls .training-command-text { max-height: 120px; margin: 8px 0 0; overflow: auto; }
+.test-generations-prompt textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+}
+.test-generations-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.test-generations-settings-grid select,
+.test-generations-settings-grid input {
+  box-sizing: border-box;
+  width: 100%;
+}
+.test-generations-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.test-generations-actions .review-captions-btn,
+.test-generations-actions .training-btn { width: auto; }
+.test-generations-results-section {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px;
+}
+.test-generations-results-heading {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.test-generations-results-heading span { color: var(--muted); font-size: 12px; }
+.test-generations-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+.test-generations-result-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+.test-generations-result-card video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: contain;
+  background: #090d12;
+}
+.test-generations-preview-placeholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background: color-mix(in srgb, var(--panel-soft) 90%, var(--border));
+  color: var(--muted);
+  font-size: 12px;
+}
+.test-generations-result-card.is-pending { opacity: .72; }
+.test-generations-result-name {
+  overflow: hidden;
+  padding: 8px 9px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-empty {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+@container (max-width: 900px) {
+  .test-generations-body { grid-template-columns: 1fr; overflow: auto; }
+  .test-generations-controls { overflow: visible; border-right: 0; border-bottom: 1px solid var(--border); }
+  .test-generations-results-section { overflow: visible; }
+}
 .training-candidates-modal {
   position: fixed;
   inset: 0;

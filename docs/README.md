@@ -52,6 +52,7 @@ These are useful product notes, not authoritative implementation references:
 - `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
 - `docs/ui_gold_master.md`
 - `docs/workspace_shell_architecture_audit.md` - current-code DOM/workspace weakness map; planning only
+- `docs/ui_shell_refactor_plan.md` - audited phased migration plan for the permanent activity rail/header shell; preserves all features and explicitly retires legacy shell scaffolding
 - `docs/qa_panel.md`
 - `docs/generate_config_mode.md` - current model/stage dataset configuration
 - `docs/repeat_targeting.md` - dataset repeat calculation

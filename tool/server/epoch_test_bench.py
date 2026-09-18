@@ -237,6 +237,57 @@ def _lora_files(test_directory):
     )
 
 
+def _relative_set_folder(folder_path):
+    value = _relative_to_fs_root(_owning_set_directory(folder_path))
+    return "" if value == "." else value
+
+
+def test_presence(folder_path):
+    set_folder = _owning_set_directory(folder_path)
+    staged_count = 0
+    try:
+        test_directory = _h3_test_directory(set_folder)
+        if test_directory.is_dir():
+            staged_count = len([
+                path for path in test_directory.iterdir()
+                if path.is_file() and path.suffix.lower() == ".safetensors"
+            ])
+    except ValueError:
+        staged_count = 0
+    sessions = list_sessions(set_folder)
+    return {
+        "folder": _relative_set_folder(set_folder),
+        "stagedCount": staged_count,
+        "sessionCount": len(sessions),
+        "hasTestData": bool(staged_count or sessions),
+    }
+
+
+def activity_snapshot(folder_path=None):
+    active = []
+    with _lock:
+        dead_keys = []
+        for folder_key, thread in list(_active_threads.items()):
+            if not thread or not thread.is_alive():
+                dead_keys.append(folder_key)
+                continue
+            session_directory = _active_sessions.get(folder_key)
+            status = _session_status(session_directory) if session_directory else None
+            active.append({
+                "folder": _relative_set_folder(Path(folder_key)),
+                "session": str((status or {}).get("session") or (Path(session_directory).name if session_directory else "")),
+                "status": str((status or {}).get("status") or "running"),
+                "completed": int((status or {}).get("completed") or 0),
+                "total": int((status or {}).get("total") or 0),
+            })
+        for folder_key in dead_keys:
+            _active_threads.pop(folder_key, None)
+            _active_sessions.pop(folder_key, None)
+            _stop_requests.discard(folder_key)
+    current = test_presence(folder_path) if folder_path is not None else None
+    return {"active": active, "current": current}
+
+
 def remove_candidate(folder_path, file_name, session_name=None):
     name = str(file_name or "").strip()
     if (

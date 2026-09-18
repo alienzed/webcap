@@ -43,6 +43,7 @@
   function pane() { return el('test-generations-pane'); }
 
   function capturePromptSave(prompt) {
+    if (!state || String(state.folder || '') !== String(paneFolder || '')) return null;
     state.testGenerationPrompt = String(prompt || '');
     var capturedSave = captureCurrentFolderStateSave();
     if (!capturedSave) return null;
@@ -474,7 +475,6 @@
     var errorEl = el('test-generations-error');
     var runBtn = el('test-generations-run-btn');
     var stopBtn = el('test-generations-stop-btn');
-    var openBtn = el('test-generations-open-results-btn');
     if (statusEl) statusEl.textContent = statusText(status);
     if (errorEl) {
       errorEl.textContent = status && status.error ? String(status.error) : '';
@@ -489,11 +489,6 @@
       stopBtn.disabled = stopping;
     }
     setControlsDisabled(active);
-    if (openBtn) {
-      var resultFolder = status && status.resultFolder ? String(status.resultFolder) : '';
-      openBtn.dataset.resultFolder = resultFolder;
-      openBtn.classList.toggle('hidden', !resultFolder || ['complete', 'failed', 'stopped'].indexOf(status.status) === -1);
-    }
     renderResults(status || {});
   }
 
@@ -516,20 +511,6 @@
       errorEl.textContent = String(err && err.message ? err.message : err);
       errorEl.classList.remove('hidden');
     }
-  }
-
-  function openResults(folder) {
-    var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
-    if (!targetFolder || !state || !state.dirStack || !state.dirStack.length) return;
-    if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) clearFocusSet();
-    closePane();
-    setWorkspaceSurface('default');
-    state.dirStack = [state.dirStack[0]].concat(targetFolder.split('/').filter(Boolean).map(function (name) { return { name: name }; }));
-    state.folder = targetFolder;
-    state.currentItem = null;
-    clearEditorAndPreview();
-    clearCaptionFilterInputs();
-    refreshCurrentDirectory();
   }
 
   function closePane() {
@@ -568,7 +549,9 @@
     if (duration) duration.value = String(running ? latest.duration : defaults.duration);
     if (seed) seed.value = String(running ? latest.seed : defaults.seed);
     if (prompt) {
-      var savedPrompt = String(state.testGenerationPrompt || '');
+      var savedPrompt = state && String(state.folder || '') === String(paneFolder || '')
+        ? String(state.testGenerationPrompt || '')
+        : '';
       prompt.value = running
         ? String(latest.prompt || payload.defaultPrompt || '')
         : (savedPrompt.trim() ? savedPrompt : String(payload.defaultPrompt || ''));
@@ -720,7 +703,7 @@
       '<label class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="0.1" step="0.1"></label>',
       '<label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>',
       '</div>',
-      '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-stop-btn" type="button" class="review-captions-btn hidden">Stop</button><button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset Prompt</button><button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Results</button></div>',
+      '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-stop-btn" type="button" class="review-captions-btn hidden">Stop</button><button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset Prompt</button></div>',
       '<div id="test-generations-status" class="training-command-status" aria-live="polite"></div>',
       '<div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>',
       '<section class="test-generations-library">',
@@ -808,7 +791,6 @@
       el('test-generations-prompt').value = prompt;
       savePrompt(prompt);
     };
-    el('test-generations-open-results-btn').onclick = function () { openResults(this.dataset.resultFolder || ''); };
 
     var select = el('training-model-profile-select');
     if (select) {

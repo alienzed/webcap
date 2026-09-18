@@ -70,8 +70,6 @@ var trainingWorkspaceState = {
   candidateAlgorithm: 'v5',
   runSetupFolder: ''
 };
-var utilityTrainingTurtleTimer = 0;
-var utilityTrainingTurtleAtLeft = true;
 
 function isTrainingWorkspaceActive() {
   return normalizeWorkspaceSurface(workspaceState.surface) === 'training';

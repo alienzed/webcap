@@ -650,7 +650,11 @@ def _annotate_candidate_test_folder_status(run, analysis):
             continue
         artifact["testFileName"] = test_file_name
         destination = destination_directory / test_file_name
-        artifact["inTestFolder"] = destination.is_file() and not destination.is_symlink()
+        legacy_destination = destination_directory / str(artifact.get("fileName") or "")
+        artifact["inTestFolder"] = (
+            (destination.is_file() and not destination.is_symlink())
+            or (legacy_destination.is_file() and not legacy_destination.is_symlink())
+        )
     analysis["testFolderStatus"] = {"state": "available"}
 
 

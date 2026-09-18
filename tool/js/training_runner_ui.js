@@ -511,7 +511,6 @@ function startManagedTraining() {
     .catch(function (err) {
       setStatus('Managed training did not start: ' + String(err && err.message ? err.message : err));
     }).finally(function () {
-      if (trainButton) reviewTrainButtonState(trainingWorkspaceState.review);
       renderTrainingLaunchStatus();
     });
 }
@@ -916,7 +915,7 @@ function renderTrainingLaunchStatus() {
   button.textContent = active ? trainingRunnerStatusLabel(status) : 'Train';
   if (active) {
     button.disabled = true;
-  } else {
+  } else if (trainingWorkspaceState.review) {
     reviewTrainButtonState(trainingWorkspaceState.review);
   }
 }

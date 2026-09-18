@@ -396,6 +396,23 @@ def _latest_status(folder_path):
     return {"status": "idle"}
 
 
+def _visible_status(folder_path):
+    payload = _latest_status(folder_path)
+    if payload.get("status") != "running":
+        return payload
+    folder_key = str(Path(folder_path).resolve())
+    with _lock:
+        thread = _active_threads.get(folder_key)
+        if thread and thread.is_alive():
+            return payload
+        _active_threads.pop(folder_key, None)
+    interrupted = dict(payload)
+    interrupted["status"] = "interrupted"
+    interrupted["current"] = ""
+    interrupted["error"] = "Test run was interrupted because WebCap restarted."
+    return interrupted
+
+
 def _staged_lora_provenance(lora_file):
     sidecar = Path(lora_file).with_suffix(".webcap.json")
     try:
@@ -493,12 +510,12 @@ def prepare(folder_path):
         "aspectRatioOptions": aspect_options,
         "count": len(loras),
         "files": [path.name for path in loras],
-        "latest": _latest_status(folder_path),
+        "latest": _visible_status(folder_path),
     }
 
 
 def status(folder_path):
-    return _latest_status(folder_path)
+    return _visible_status(folder_path)
 
 
 def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None, seed=None):

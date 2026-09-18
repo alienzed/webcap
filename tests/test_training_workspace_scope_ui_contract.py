@@ -124,6 +124,9 @@ def test_training_scope_source_contracts_remain_explicit():
     assert "isTrainingSetRefreshCurrent" in workspace
     assert "training-global-context--after-set" not in workspace
     assert "trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : ''" in history
+    assert "trainingWorkspaceState.historyViewScope === 'set'" in history
+    assert "data-training-history-scope" in history
+    assert "els.globalContext.classList.remove('hidden')" in workspace
     assert "entryKind === 'unavailable'" in shell
     assert "workspaceState.sidebarHidden = !workspaceState.sidebarHidden;" in workspace
     assert "trainingWorkspaceState.launchedJobId = payload.job.id;" in runner
@@ -131,3 +134,20 @@ def test_training_scope_source_contracts_remain_explicit():
     source_navigation = workspace[workspace.index('function openTrainingWorkspaceFolder('):workspace.index('function switchTrainingSetup(')]
     assert "workspaceState.sidebarHidden = false;" in source_navigation
     assert source_navigation.index("renderTrainingItemOverview(null, 'Loading training set...')") < source_navigation.index('refreshCurrentDirectory();')
+
+
+def test_training_set_keeps_global_activity_and_explicit_recent_run_scope():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    state = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+    workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+
+    assert 'id="training-global-context"' in html
+    assert 'data-training-history-scope="set"' in html
+    assert 'data-training-history-scope="all"' in html
+    assert "historyViewScope: 'all'" in state
+    assert "nextMode === 'set' ? 'set' : 'all'" in state
+    assert "els.globalContext.classList.remove('hidden')" in workspace
+    assert "trainingWorkspaceState.historyViewScope = scope === 'set' ? 'set' : 'all';" in workspace
+    assert "scope === 'set' && String(job.folder || '') !== currentFolder" in history
+    assert "searchEl.value = folder" not in history

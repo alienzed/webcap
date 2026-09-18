@@ -2691,6 +2691,71 @@ iframe {
   gap: 10px;
 }
 .test-generations-summary { color: var(--muted); font-size: 13px; }
+.test-generations-form-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.test-generations-form-heading > strong { font-size: 12px; }
+.test-generations-results-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.test-generations-session-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-session-details {
+  flex: 0 0 auto;
+  max-height: 42vh;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+.test-generations-session-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.test-generations-session-detail-grid > div {
+  display: grid;
+  gap: 2px;
+}
+.test-generations-session-detail-grid span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.test-generations-session-detail-grid strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-session-prompt { margin-top: 10px; }
+.test-generations-session-prompt > strong { font-size: 11px; }
+.test-generations-session-prompt pre {
+  margin: 4px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .test-generations-library {
   display: grid;
   gap: 10px;

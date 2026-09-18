@@ -30,6 +30,7 @@ var trainingWorkspaceState = {
   historyLoaded: false,
   historyLoadPromise: null,
   historySearchScopeFolder: '',
+  historyViewScope: 'all',
   resumeSelectionTouched: false,
   historyExpanded: false,
   historyCollapsed: true,

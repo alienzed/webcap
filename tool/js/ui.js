@@ -351,7 +351,7 @@ function refreshCurrentDirectory() {
     if (ui.advancedFilterSupersetEl) ui.advancedFilterSupersetEl.checked = false;
     if (typeof updateSuperSetControls === 'function') updateSuperSetControls();
   }
-  updateUtilityPathLabel(path);
+  updateShellFolderLabel(path);
   if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   updateSetFolderScopedUi();
   updateReviewButtonAvailability();

@@ -363,3 +363,20 @@ def test_epoch_test_bench_does_not_import_training_runner_at_module_load():
     source = Path(bench.__file__).read_text(encoding="utf-8")
     top_level = source.split("def _reserve_gpu_for_test_generations", 1)[0]
     assert "from .training_runner import" not in top_level
+
+
+
+def test_test_generation_gpu_helpers_call_training_runner(monkeypatch):
+    from tool.server import training_runner
+
+    calls = []
+    monkeypatch.setattr(training_runner, "reserve_gpu_for_external_work", lambda owner: calls.append(("reserve", owner)) or True)
+    monkeypatch.setattr(training_runner, "release_gpu_for_external_work", lambda owner: calls.append(("release", owner)))
+
+    assert bench._reserve_gpu_for_test_generations() is True
+    bench._release_gpu_for_test_generations()
+
+    assert calls == [
+        ("reserve", bench.GPU_RESERVATION_OWNER),
+        ("release", bench.GPU_RESERVATION_OWNER),
+    ]

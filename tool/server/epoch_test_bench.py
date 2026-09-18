@@ -26,12 +26,12 @@ _active_threads = {}
 
 def _reserve_gpu_for_test_generations():
     from .training_runner import reserve_gpu_for_external_work
-    return _reserve_gpu_for_test_generations()
+    return reserve_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
 def _release_gpu_for_test_generations():
     from .training_runner import release_gpu_for_external_work
-    _release_gpu_for_test_generations()
+    release_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
 def _windows_curl_path():

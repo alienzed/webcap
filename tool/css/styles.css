@@ -2690,6 +2690,9 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-bt
 .training-candidates-chart text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .training-candidates-axis { stroke: rgba(174, 189, 202, .34); stroke-width: 1; }
 .training-candidates-gridline { stroke: rgba(174, 189, 202, .12); stroke-width: 1; }
+.training-candidates-epoch-band { fill: transparent; }
+.training-candidates-epoch-band.is-alternate { fill: rgba(174, 189, 202, .025); }
+.training-candidates-epoch-boundary { stroke: rgba(174, 189, 202, .09); stroke-width: 1; }
 .training-candidates-axis-label { fill: var(--muted-text, #a3adba); font-size: 13px; }
 .training-candidates-step-loss { fill: none; stroke: rgba(152, 178, 198, .24); stroke-width: 1; stroke-linejoin: round; stroke-linecap: round; }
 .training-candidates-step-loss-smoothed { fill: none; stroke: rgba(152, 178, 198, .7); stroke-width: 1; stroke-linejoin: round; stroke-linecap: round; }

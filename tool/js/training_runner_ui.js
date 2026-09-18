@@ -33,13 +33,16 @@ function getTrainingRunnerActiveJob() {
 function syncUtilityTrainingActivity() {
   var utilityTrainingBtn = document.getElementById('utility-training-btn');
   var utilityTrainingProgress = document.getElementById('utility-training-progress');
-  if (!utilityTrainingBtn) return;
+  var activityTrainingBtn = document.getElementById('activity-training-btn');
+  if (!utilityTrainingBtn || !utilityTrainingProgress || !activityTrainingBtn) return;
   var running = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
     return job.status === 'running';
   });
-  utilityTrainingBtn.classList.toggle('training-running', running);
-  utilityTrainingBtn.title = running ? 'Open Training (training in progress)' : 'Open Training';
-  utilityTrainingBtn.setAttribute('aria-label', running ? 'Open Training (training in progress)' : 'Open Training');
+  [utilityTrainingBtn, activityTrainingBtn].forEach(function (button) {
+    button.classList.toggle('training-running', running);
+    button.title = running ? 'Open Training (training in progress)' : 'Open Training';
+    button.setAttribute('aria-label', running ? 'Open Training (training in progress)' : 'Open Training');
+  });
   utilityTrainingProgress.hidden = !running;
   if (running && !utilityTrainingTurtleTimer) {
     utilityTrainingTurtleAtLeft = true;

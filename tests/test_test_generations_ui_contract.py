@@ -64,3 +64,12 @@ def test_test_generation_previews_keep_stable_width_and_natural_height():
     assert "height: auto;" in video_rule
     assert "aspect-ratio:" not in video_rule
     assert "object-fit:" not in video_rule
+
+
+def test_test_generations_owns_full_workbench_when_open():
+    shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert ".test-generations-workspace-open .workbench-main-stack > :not(.workbench-bottom)" in shell_css
+    assert ".test-generations-workspace-open .workbench-side-stack" in shell_css
+    assert "grid-template-columns: minmax(0, 1fr) !important;" in shell_css
+    assert "flex: 1 1 auto !important;" in shell_css

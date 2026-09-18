@@ -551,6 +551,20 @@ html[data-theme="dark"] .app.shell-revamp .console-panel-header {
 
 
 /* Test Generations temporarily owns the Training work area. */
+.app.shell-revamp.test-generations-workspace-open .workbench-main-stack > :not(.workbench-bottom),
+.app.shell-revamp.test-generations-workspace-open .workbench-side-stack {
+  display: none !important;
+}
+
+.app.shell-revamp.test-generations-workspace-open .workbench-top {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.app.shell-revamp.test-generations-workspace-open .workbench-main-stack,
+.app.shell-revamp.test-generations-workspace-open .workbench-main-stack > .workbench-bottom {
+  flex: 1 1 auto !important;
+  min-height: 0;
+}
 .app.shell-revamp.workspace-surface-training.test-generations-workspace-open {
   grid-template-columns: minmax(0, var(--sidebar-width)) minmax(0, 1fr);
   grid-template-areas: "sidebar workbench";

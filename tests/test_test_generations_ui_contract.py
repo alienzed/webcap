@@ -176,3 +176,11 @@ def test_compare_polling_preserves_video_elements():
     assert "host.dataset.compareKey = compareKey" in script
     assert "host.querySelector('.test-generations-compare-stage')" in script
     assert "if (resultsView === 'compare') renderCompare(status || {});" in script
+
+
+
+def test_compare_videos_start_muted():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
+    assert "video.muted = true;" in compare_block

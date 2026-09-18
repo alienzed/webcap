@@ -2,6 +2,7 @@ import copy
 import json
 import os
 import re
+import subprocess
 import threading
 import time
 import urllib.error
@@ -21,21 +22,79 @@ _lock = threading.Lock()
 _active_threads = {}
 
 
-def _read_json_response(url, method="GET", payload=None, timeout=10):
+def _windows_curl_path():
+    is_wsl = bool(os.environ.get("WSL_INTEROP") or os.environ.get("WSL_DISTRO_NAME"))
+    if not is_wsl:
+        try:
+            is_wsl = "microsoft" in Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8").lower()
+        except OSError:
+            is_wsl = False
+    if not is_wsl:
+        return None
+    candidate = Path("/mnt/c/Windows/System32/curl.exe")
+    return str(candidate) if candidate.is_file() else None
+
+
+def _windows_curl_request(curl_path, url, method="GET", payload=None, timeout=10):
+    command = [
+        curl_path,
+        "--silent",
+        "--show-error",
+        "--fail",
+        "--max-time",
+        str(timeout),
+        "--request",
+        method,
+    ]
     data = None
-    headers = {}
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        command.extend(["--header", "Content-Type: application/json", "--data-binary", "@-"])
+    command.append(url)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            body = response.read()
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace").strip()
-        raise RuntimeError("ComfyUI request failed: " + (detail or str(exc))) from exc
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise RuntimeError("Could not connect to ComfyUI at " + COMFY_BASE_URL + ".") from exc
+        result = subprocess.run(
+            command,
+            input=data,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout + 5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ConnectionError(str(exc)) from exc
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        if result.returncode in (5, 6, 7, 28):
+            raise ConnectionError(detail or "curl.exe could not reach ComfyUI.")
+        raise RuntimeError(
+            "ComfyUI request failed: "
+            + (detail or "curl.exe exited with code " + str(result.returncode) + ".")
+        )
+    return result.stdout
+
+
+def _read_json_response(url, method="GET", payload=None, timeout=10):
+    curl_path = _windows_curl_path()
+    if curl_path:
+        try:
+            body = _windows_curl_request(curl_path, url, method=method, payload=payload, timeout=timeout)
+        except ConnectionError as exc:
+            raise RuntimeError("Could not connect to ComfyUI at " + COMFY_BASE_URL + ".") from exc
+    else:
+        data = None
+        headers = {}
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                body = response.read()
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace").strip()
+            raise RuntimeError("ComfyUI request failed: " + (detail or str(exc))) from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise RuntimeError("Could not connect to ComfyUI at " + COMFY_BASE_URL + ".") from exc
     try:
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -43,6 +102,12 @@ def _read_json_response(url, method="GET", payload=None, timeout=10):
 
 
 def _read_bytes(url, timeout=30):
+    curl_path = _windows_curl_path()
+    if curl_path:
+        try:
+            return _windows_curl_request(curl_path, url, timeout=timeout)
+        except (ConnectionError, RuntimeError) as exc:
+            raise RuntimeError("Could not retrieve the ComfyUI output.") from exc
     req = urllib.request.Request(url, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:

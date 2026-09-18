@@ -136,6 +136,57 @@ def _default_prompt(workflow=None):
     return prompt
 
 
+def _template_test_settings(workflow=None):
+    selected = workflow or _load_template()
+    resolution = ((selected.get("115") or {}).get("inputs") or {})
+    duration = ((selected.get("133") or {}).get("inputs") or {})
+    return {
+        "aspectRatio": str(resolution.get("aspect_ratio") or "").strip(),
+        "megapixels": float(resolution.get("megapixels") or 0),
+        "duration": float(duration.get("value") or 0),
+    }
+
+
+def _resolution_aspect_ratio_options():
+    try:
+        payload = _read_json_response(COMFY_BASE_URL + "/object_info/ResolutionSelector", timeout=3)
+        node = payload.get("ResolutionSelector") if isinstance(payload, dict) else None
+        inputs = node.get("input") if isinstance(node, dict) and isinstance(node.get("input"), dict) else {}
+        required = inputs.get("required") if isinstance(inputs.get("required"), dict) else {}
+        spec = required.get("aspect_ratio")
+        choices = spec[0] if isinstance(spec, (list, tuple)) and spec else None
+        if isinstance(choices, (list, tuple)):
+            return [str(value) for value in choices if str(value).strip()]
+    except RuntimeError:
+        pass
+    return []
+
+
+def _normalized_test_settings(template, aspect_ratio=None, megapixels=None, duration=None, seed=None):
+    defaults = _template_test_settings(template)
+    selected_aspect = str(aspect_ratio or defaults["aspectRatio"]).strip()
+    if not selected_aspect:
+        raise ValueError("A test aspect ratio is required.")
+    try:
+        selected_megapixels = float(defaults["megapixels"] if megapixels is None else megapixels)
+        selected_duration = float(defaults["duration"] if duration is None else duration)
+        selected_seed = _new_session_seed() if seed is None or str(seed).strip() == "" else int(seed)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Test resolution, duration, and seed must be numeric.") from exc
+    if selected_megapixels <= 0:
+        raise ValueError("Test resolution must be greater than zero megapixels.")
+    if selected_duration <= 0:
+        raise ValueError("Test duration must be greater than zero seconds.")
+    if selected_seed < 0 or selected_seed >= 2 ** 63:
+        raise ValueError("Test seed must be between 0 and 9223372036854775807.")
+    return {
+        "aspectRatio": selected_aspect,
+        "megapixels": selected_megapixels,
+        "duration": selected_duration,
+        "seed": selected_seed,
+    }
+
+
 def _h3_test_directory(folder_path):
     saved_config = app_config.load_config_from_disk()
     training = saved_config.get("training") if isinstance(saved_config.get("training"), dict) else {}
@@ -208,8 +259,9 @@ def _resolve_comfy_loras(loras):
     return resolved
 
 
-def _workflow_for_lora(template, prompt, comfy_lora_name, seed=None):
+def _workflow_for_lora(template, prompt, comfy_lora_name, settings=None):
     workflow = copy.deepcopy(template)
+    selected = settings or _normalized_test_settings(template)
     try:
         prompt_inputs = workflow["146"]["inputs"]
         prompt_inputs["wildcard_text"] = prompt
@@ -219,8 +271,10 @@ def _workflow_for_lora(template, prompt, comfy_lora_name, seed=None):
         lora_inputs["lora_name"] = comfy_lora_name
         lora_inputs["strength_model"] = 0.9
         lora_inputs["strength_clip"] = 1
-        if seed is not None:
-            workflow["129"]["inputs"]["noise_seed"] = int(seed)
+        workflow["115"]["inputs"]["aspect_ratio"] = selected["aspectRatio"]
+        workflow["115"]["inputs"]["megapixels"] = selected["megapixels"]
+        workflow["133"]["inputs"]["value"] = selected["duration"]
+        workflow["129"]["inputs"]["noise_seed"] = selected["seed"]
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("MiniMax H3 Test Bench workflow is missing required test inputs.") from exc
     return workflow
@@ -372,7 +426,7 @@ def _result_paths(session_directory, lora_file):
     return video, caption
 
 
-def _run_batch(folder_key, session_directory, loras, prompt, seed):
+def _run_batch(folder_key, session_directory, loras, prompt, settings):
     status_file = _status_path(session_directory)
     template = _load_template()
     try:
@@ -380,7 +434,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, seed):
             status = _read_status(session_directory) or {}
             status["current"] = lora_file.name
             _atomic_write_json(status_file, status)
-            workflow = _workflow_for_lora(template, prompt, comfy_lora_name, seed=seed)
+            workflow = _workflow_for_lora(template, prompt, comfy_lora_name, settings=settings)
             prompt_id = _queue_workflow(workflow)
             video_ref = _wait_for_video(prompt_id)
             video_bytes = _download_video(video_ref)
@@ -422,10 +476,17 @@ def prepare(folder_path):
     template = _load_template()
     test_directory = _h3_test_directory(folder_path)
     loras = _lora_files(test_directory)
+    defaults = _template_test_settings(template)
+    defaults["seed"] = _new_session_seed()
+    aspect_options = _resolution_aspect_ratio_options()
+    if defaults["aspectRatio"] and defaults["aspectRatio"] not in aspect_options:
+        aspect_options.insert(0, defaults["aspectRatio"])
     return {
         "operation": "test_prepare",
         "model": "h3",
         "defaultPrompt": _default_prompt(template),
+        "defaults": defaults,
+        "aspectRatioOptions": aspect_options,
         "count": len(loras),
         "files": [path.name for path in loras],
         "latest": _latest_status(folder_path),
@@ -436,7 +497,7 @@ def status(folder_path):
     return _latest_status(folder_path)
 
 
-def start(folder_path, prompt):
+def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None, seed=None):
     prompt = str(prompt or "").strip()
     if not prompt:
         raise ValueError("A test prompt is required.")
@@ -446,6 +507,14 @@ def start(folder_path, prompt):
         raise ValueError("The H3 Test folder contains no .safetensors files.")
     _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
     resolved_loras = _resolve_comfy_loras(loras)
+    template = _load_template()
+    settings = _normalized_test_settings(
+        template,
+        aspect_ratio=aspect_ratio,
+        megapixels=megapixels,
+        duration=duration,
+        seed=seed,
+    )
     folder_key = str(Path(folder_path).resolve())
     with _lock:
         dead_keys = [key for key, thread in _active_threads.items() if not thread.is_alive()]
@@ -455,7 +524,6 @@ def start(folder_path, prompt):
         if active and active.is_alive():
             return _latest_status(folder_path)
         session_directory = _new_session_directory(folder_path)
-        seed = _new_session_seed()
         payload = {
             "status": "running",
             "model": "h3",
@@ -465,14 +533,17 @@ def start(folder_path, prompt):
             "failed": 0,
             "current": "",
             "error": "",
-            "seed": seed,
+            "seed": settings["seed"],
+            "aspectRatio": settings["aspectRatio"],
+            "megapixels": settings["megapixels"],
+            "duration": settings["duration"],
             "results": [],
             "resultFolder": _relative_to_fs_root(session_directory),
         }
         _atomic_write_json(_status_path(session_directory), payload)
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, resolved_loras, prompt, seed),
+            args=(folder_key, session_directory, resolved_loras, prompt, settings),
             name="webcap-h3-test-generations",
             daemon=True,
         )
@@ -489,5 +560,12 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return status(folder_path)
     if operation == "test_start":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return start(folder_path, criteria.get("prompt"))
+        return start(
+            folder_path,
+            criteria.get("prompt"),
+            aspect_ratio=criteria.get("aspectRatio"),
+            megapixels=criteria.get("megapixels"),
+            duration=criteria.get("duration"),
+            seed=criteria.get("seed"),
+        )
     raise ValueError("Unsupported Test Generations operation: " + operation)

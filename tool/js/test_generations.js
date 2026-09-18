@@ -3,19 +3,17 @@
   var H3_PROFILE_ID = 'minimax_h3';
   var pollTimer = null;
   var prepared = null;
-  var modalFolder = '';
+  var paneFolder = '';
 
   function el(id) { return document.getElementById(id); }
 
-  function request(mode, extra) {
+  function request(mode, criteria) {
     var body = {
-      folder: String(modalFolder || (state && state.folder) || ''),
+      folder: String(paneFolder || (state && state.folder) || ''),
       profileId: PROFILE_ID,
       mode: mode
     };
-    if (extra && extra.prompt != null) {
-      body.selection_criteria = { prompt: String(extra.prompt || '') };
-    }
+    if (criteria) body.selection_criteria = criteria;
     return fetch('/fs/training_setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -30,9 +28,11 @@
     });
   }
 
+  function pane() { return el('test-generations-pane'); }
+
   function isOpen() {
-    var modal = el('test-generations-modal');
-    return !!(modal && !modal.classList.contains('hidden'));
+    var node = pane();
+    return !!(node && !node.classList.contains('hidden'));
   }
 
   function syncLaunchVisibility() {
@@ -47,12 +47,46 @@
     if (!status || status.status === 'idle') return '';
     var completed = Number(status.completed || 0);
     var total = Number(status.total || 0);
-    if (status.status === 'running') {
-      return 'Running ' + completed + ' / ' + total + (status.current ? ' · ' + status.current : '');
-    }
+    if (status.status === 'running') return 'Running ' + completed + ' / ' + total + (status.current ? ' · ' + status.current : '');
     if (status.status === 'complete') return 'Complete · ' + completed + ' / ' + total;
     if (status.status === 'failed') return 'Stopped after failure · ' + completed + ' / ' + total;
     return String(status.status || '');
+  }
+
+  function videoUrl(folder, fileName) {
+    return '/caption/media?folder=' + encodeURIComponent(String(folder || '')) + '&media=' + encodeURIComponent(String(fileName || ''));
+  }
+
+  function renderResults(status) {
+    var host = el('test-generations-results');
+    if (!host) return;
+    var results = status && Array.isArray(status.results) ? status.results : [];
+    var total = Number(status && status.total || (prepared && prepared.count) || 0);
+    var resultFolder = String(status && status.resultFolder || '');
+    if (!results.length && !(status && status.status === 'running')) {
+      host.innerHTML = '<div class="test-generations-empty">Generated previews will appear here.</div>';
+      return;
+    }
+    var html = results.map(function (result) {
+      var name = String(result.sourceLoRA || result.outputVideo || 'Result');
+      var video = resultFolder && result.outputVideo
+        ? '<video controls preload="metadata" src="' + videoUrl(resultFolder, result.outputVideo) + '"></video>'
+        : '<div class="test-generations-preview-placeholder">Preview unavailable</div>';
+      return '<article class="test-generations-result-card">' + video +
+        '<div class="test-generations-result-name">' + escapeHtml(name) + '</div></article>';
+    }).join('');
+    if (status && status.status === 'running' && results.length < total) {
+      html += '<article class="test-generations-result-card is-pending"><div class="test-generations-preview-placeholder">Generating…</div><div class="test-generations-result-name">' +
+        escapeHtml(String(status.current || 'Next LoRA')) + '</div></article>';
+    }
+    host.innerHTML = html;
+  }
+
+  function setControlsDisabled(disabled) {
+    ['test-generations-prompt', 'test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-seed'].forEach(function (id) {
+      var node = el(id);
+      if (node) node.disabled = !!disabled;
+    });
   }
 
   function renderStatus(status) {
@@ -67,11 +101,13 @@
     }
     var running = !!(status && status.status === 'running');
     if (runBtn) runBtn.disabled = running || !prepared || !prepared.count;
+    setControlsDisabled(running);
     if (openBtn) {
       var resultFolder = status && status.resultFolder ? String(status.resultFolder) : '';
       openBtn.dataset.resultFolder = resultFolder;
       openBtn.classList.toggle('hidden', !resultFolder || (status.status !== 'complete' && status.status !== 'failed'));
     }
+    renderResults(status || {});
   }
 
   function pollStatus() {
@@ -79,29 +115,25 @@
     if (!isOpen()) return;
     request('test_status').then(function (status) {
       renderStatus(status);
-      if (status && status.status === 'running') {
-        pollTimer = setTimeout(pollStatus, 2000);
-      }
-    }).catch(function (err) {
-      var errorEl = el('test-generations-error');
-      if (errorEl) {
-        errorEl.textContent = String(err && err.message ? err.message : err);
-        errorEl.classList.remove('hidden');
-      }
-    });
+      if (status && status.status === 'running') pollTimer = setTimeout(pollStatus, 2000);
+    }).catch(showError);
+  }
+
+  function showError(err) {
+    var errorEl = el('test-generations-error');
+    if (errorEl) {
+      errorEl.textContent = String(err && err.message ? err.message : err);
+      errorEl.classList.remove('hidden');
+    }
   }
 
   function openResults(folder) {
     var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
     if (!targetFolder || !state || !state.dirStack || !state.dirStack.length) return;
-    if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
-      clearFocusSet();
-    }
-    closeModal();
+    if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) clearFocusSet();
+    closePane();
     setWorkspaceSurface('default');
-    state.dirStack = [state.dirStack[0]].concat(targetFolder.split('/').filter(Boolean).map(function (name) {
-      return { name: name };
-    }));
+    state.dirStack = [state.dirStack[0]].concat(targetFolder.split('/').filter(Boolean).map(function (name) { return { name: name }; }));
     state.folder = targetFolder;
     state.currentItem = null;
     clearEditorAndPreview();
@@ -109,28 +141,52 @@
     refreshCurrentDirectory();
   }
 
-  function closeModal() {
-    var modal = el('test-generations-modal');
-    if (!modal) return;
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
-    modalFolder = '';
+  function closePane() {
+    var node = pane();
+    var surface = document.querySelector('.editor-surface');
+    if (node) node.classList.add('hidden');
+    if (surface) surface.classList.remove('test-generations-active');
+    paneFolder = '';
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
     }
   }
 
-  function openModal() {
-    var modal = el('test-generations-modal');
+  function populateControls(payload) {
+    var latest = payload.latest || {};
+    var running = latest.status === 'running';
+    var defaults = payload.defaults || {};
+    var aspect = el('test-generations-aspect');
+    var megapixels = el('test-generations-megapixels');
+    var duration = el('test-generations-duration');
+    var seed = el('test-generations-seed');
+    var prompt = el('test-generations-prompt');
+    var selectedAspect = running ? String(latest.aspectRatio || defaults.aspectRatio || '') : String(defaults.aspectRatio || '');
+    var options = Array.isArray(payload.aspectRatioOptions) ? payload.aspectRatioOptions.slice() : [];
+    if (selectedAspect && options.indexOf(selectedAspect) < 0) options.unshift(selectedAspect);
+    if (aspect) {
+      aspect.innerHTML = options.map(function (value) {
+        return '<option value="' + escapeHtml(value) + '">' + escapeHtml(value) + '</option>';
+      }).join('');
+      aspect.value = selectedAspect;
+    }
+    if (megapixels) megapixels.value = String(running ? latest.megapixels : defaults.megapixels);
+    if (duration) duration.value = String(running ? latest.duration : defaults.duration);
+    if (seed) seed.value = String(running ? latest.seed : defaults.seed);
+    if (prompt) prompt.value = running ? String(latest.prompt || payload.defaultPrompt || '') : String(payload.defaultPrompt || '');
+  }
+
+  function openPane() {
+    var node = pane();
+    var surface = document.querySelector('.editor-surface');
     var summary = el('test-generations-summary');
     var list = el('test-generations-files');
-    var prompt = el('test-generations-prompt');
     var errorEl = el('test-generations-error');
-    if (!modal) return;
-    modalFolder = String(state && state.folder || '');
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
+    if (!node || !surface) return;
+    paneFolder = String(state && state.folder || '');
+    surface.classList.add('test-generations-active');
+    node.classList.remove('hidden');
     if (summary) summary.textContent = 'Loading H3 Test folder...';
     if (list) list.textContent = '';
     if (errorEl) {
@@ -141,94 +197,89 @@
     renderStatus({ status: 'idle' });
     request('test_prepare').then(function (payload) {
       prepared = payload;
-      if (summary) {
-        summary.textContent = payload.count + ' LoRA' + (payload.count === 1 ? '' : 's') + ' queued from the H3 Test folder, in filename order.';
-      }
+      if (summary) summary.textContent = payload.count + ' LoRA' + (payload.count === 1 ? '' : 's') + ' staged · one frozen setting set for the whole batch.';
       if (list) list.textContent = (payload.files || []).join('\n');
-      if (prompt) {
-        prompt.value = payload.latest && payload.latest.status === 'running'
-          ? String(payload.latest.prompt || payload.defaultPrompt || '')
-          : String(payload.defaultPrompt || '');
-      }
+      populateControls(payload);
       renderStatus(payload.latest || { status: 'idle' });
       if (payload.latest && payload.latest.status === 'running') pollStatus();
     }).catch(function (err) {
       if (summary) summary.textContent = 'Test Generations is unavailable.';
-      if (errorEl) {
-        errorEl.textContent = String(err && err.message ? err.message : err);
-        errorEl.classList.remove('hidden');
-      }
+      showError(err);
     });
   }
 
   function startRun() {
-    var prompt = el('test-generations-prompt');
+    var prompt = String(el('test-generations-prompt') && el('test-generations-prompt').value || '').trim();
+    var aspectRatio = String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim();
+    var megapixels = String(el('test-generations-megapixels') && el('test-generations-megapixels').value || '').trim();
+    var duration = String(el('test-generations-duration') && el('test-generations-duration').value || '').trim();
+    var seed = String(el('test-generations-seed') && el('test-generations-seed').value || '').trim();
+    if (!prompt) return showError(new Error('A test prompt is required.'));
+    if (!aspectRatio) return showError(new Error('An aspect ratio is required.'));
     var runBtn = el('test-generations-run-btn');
     var errorEl = el('test-generations-error');
-    var value = String(prompt && prompt.value || '').trim();
-    if (!value) {
-      if (errorEl) {
-        errorEl.textContent = 'A test prompt is required.';
-        errorEl.classList.remove('hidden');
-      }
-      return;
-    }
     if (runBtn) runBtn.disabled = true;
     if (errorEl) errorEl.classList.add('hidden');
-    request('test_start', { prompt: value }).then(function (status) {
+    request('test_start', {
+      prompt: prompt,
+      aspectRatio: aspectRatio,
+      megapixels: megapixels,
+      duration: duration,
+      seed: seed
+    }).then(function (status) {
       renderStatus(status);
       pollStatus();
     }).catch(function (err) {
       if (runBtn) runBtn.disabled = false;
-      if (errorEl) {
-        errorEl.textContent = String(err && err.message ? err.message : err);
-        errorEl.classList.remove('hidden');
-      }
+      setControlsDisabled(false);
+      showError(err);
     });
   }
 
   function buildUi() {
     if (el('test-generations-open-btn')) return;
     var actions = document.querySelector('.training-run-setup-actions');
-    var overlays = el('workspace-overlays');
-    if (!actions || !overlays) return;
+    var surface = document.querySelector('.editor-surface');
+    if (!actions || !surface) return;
 
     var button = document.createElement('button');
     button.id = 'test-generations-open-btn';
     button.type = 'button';
     button.className = 'review-captions-btn hidden';
     button.textContent = 'Test Generations';
-    button.title = 'Generate one comparable H3 test video for every LoRA in this set\'s H3 Test folder.';
+    button.title = 'Open the H3 test bench for this set.';
     actions.insertBefore(button, actions.firstChild);
 
-    var modal = document.createElement('div');
-    modal.id = 'test-generations-modal';
-    modal.className = 'training-review-modal hidden';
-    modal.setAttribute('aria-hidden', 'true');
-    modal.innerHTML = [
-      '<section class="training-review-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-title">',
-      '<header class="training-review-modal-header"><div><h2 id="test-generations-title">Test Generations</h2><p>MiniMax H3 · every .safetensors file currently staged in this set\'s H3 Test folder.</p></div><button id="test-generations-close-btn" type="button" class="training-review-modal-close" aria-label="Close Test Generations">&times;</button></header>',
-      '<div class="training-review-modal-content">',
-      '<p id="test-generations-summary">Loading H3 Test folder...</p>',
-      '<pre id="test-generations-files" class="training-command-text" style="max-height:140px;overflow:auto;"></pre>',
-      '<label class="training-run-option" style="display:block;"><span>Prompt</span><textarea id="test-generations-prompt" rows="9" style="width:100%;resize:vertical;"></textarea></label>',
+    var node = document.createElement('section');
+    node.id = 'test-generations-pane';
+    node.className = 'test-generations-pane hidden';
+    node.setAttribute('aria-label', 'Test Generations');
+    node.innerHTML = [
+      '<header class="test-generations-header"><div><h2>Test Generations</h2><p>MiniMax H3 · compare staged LoRAs with one frozen configuration per batch.</p></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
+      '<div class="test-generations-body">',
+      '<section class="test-generations-controls">',
+      '<div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div>',
+      '<details><summary>Staged LoRAs</summary><pre id="test-generations-files" class="training-command-text"></pre></details>',
+      '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="8"></textarea></label>',
+      '<div class="test-generations-settings-grid">',
+      '<label class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>',
+      '<label class="training-run-option"><span>Resolution (MP)</span><input id="test-generations-megapixels" type="number" min="0.01" step="0.01"></label>',
+      '<label class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="0.1" step="0.1"></label>',
+      '<label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>',
+      '</div>',
+      '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Results</button></div>',
       '<div id="test-generations-status" class="training-command-status" aria-live="polite"></div>',
       '<div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>',
-      '</div>',
-      '<footer class="training-review-modal-footer"><button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Results</button><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run</button></footer>',
-      '</section>'
+      '</section>',
+      '<section class="test-generations-results-section"><div class="test-generations-results-heading"><strong>Results</strong><span>Previews appear as each LoRA finishes.</span></div><div id="test-generations-results" class="test-generations-results"></div></section>',
+      '</div>'
     ].join('');
-    overlays.appendChild(modal);
+    surface.appendChild(node);
 
-    button.onclick = openModal;
-    el('test-generations-close-btn').onclick = closeModal;
+    button.onclick = openPane;
+    el('test-generations-close-btn').onclick = closePane;
     el('test-generations-run-btn').onclick = startRun;
-    el('test-generations-open-results-btn').onclick = function () {
-      openResults(this.dataset.resultFolder || '');
-    };
-    modal.addEventListener('click', function (event) {
-      if (event.target === modal) closeModal();
-    });
+    el('test-generations-open-results-btn').onclick = function () { openResults(this.dataset.resultFolder || ''); };
 
     var select = el('training-model-profile-select');
     if (select) {

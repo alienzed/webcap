@@ -341,6 +341,21 @@
 
     compareIndex = Math.max(0, Math.min(compareIndex, results.length - 2));
     var pair = [results[compareIndex], results[compareIndex + 1]];
+    var compareKey = resultFolder + '|' + pair.map(function (result, index) {
+      return String(result.outputVideo || result.sourceLoRA || ('result-' + (compareIndex + index)));
+    }).join('|');
+    if (String(host.dataset.compareKey || '') === compareKey && host.querySelector('.test-generations-compare-stage')) {
+      var existingPrevious = host.querySelector('[data-compare-previous]');
+      var existingNext = host.querySelector('[data-compare-next]');
+      var existingPosition = host.querySelector('[data-compare-position]');
+      if (existingPrevious) existingPrevious.disabled = compareIndex <= 0;
+      if (existingNext) existingNext.disabled = compareIndex >= results.length - 2;
+      if (existingPosition) existingPosition.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);
+      return;
+    }
+
+    host.innerHTML = '';
+    host.dataset.compareKey = compareKey;
     var stage = document.createElement('div');
     stage.className = 'test-generations-compare-stage';
     var videos = [];
@@ -390,6 +405,7 @@
     previous.textContent = 'Previous';
 
     var position = document.createElement('span');
+    position.dataset.comparePosition = '1';
     position.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);
 
     var next = document.createElement('button');
@@ -511,7 +527,7 @@
       host.innerHTML = '<div class="test-generations-empty">Generated previews will appear here.</div>';
     }
 
-    renderCompare(status || {});
+    if (resultsView === 'compare') renderCompare(status || {});
   }
 
   function setRunSettingsDisabled(disabled) {

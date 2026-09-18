@@ -12,9 +12,16 @@
 
   function el(id) { return document.getElementById(id); }
 
+  function owningSetFolder(folder) {
+    var value = String(folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    var marker = '/test-generations/';
+    var index = value.indexOf(marker);
+    return index === -1 ? value : value.slice(0, index);
+  }
+
   function request(mode, criteria) {
     var body = {
-      folder: String(paneFolder || (state && state.folder) || ''),
+      folder: owningSetFolder(paneFolder || (state && state.folder) || ''),
       profileId: PROFILE_ID,
       mode: mode
     };
@@ -68,10 +75,10 @@
     var count = Number(payload && payload.count || 0);
     var files = payload && Array.isArray(payload.files) ? payload.files : [];
     var summary = el('test-generations-summary');
-    var toggle = el('test-generations-files-toggle');
+    var countEl = el('test-generations-files-count');
     var host = el('test-generations-files');
     if (summary) summary.textContent = count + ' LoRA' + (count === 1 ? '' : 's') + ' staged · one frozen setting set for the whole batch.';
-    if (toggle) toggle.textContent = 'View ' + count + ' staged LoRA' + (count === 1 ? '' : 's');
+    if (countEl) countEl.textContent = String(count);
     if (!host) return;
     host.innerHTML = '';
     files.forEach(function (fileName) {
@@ -94,9 +101,9 @@
 
   function renderSessions(sessions) {
     var items = Array.isArray(sessions) ? sessions : [];
-    var toggle = el('test-generations-sessions-toggle');
+    var countEl = el('test-generations-sessions-count');
     var host = el('test-generations-sessions-list');
-    if (toggle) toggle.textContent = 'Sessions (' + items.length + ')';
+    if (countEl) countEl.textContent = String(items.length);
     if (!host) return;
     host.innerHTML = '';
     items.forEach(function (session) {
@@ -534,7 +541,7 @@
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
     if (!node || !surface || !app) throw new Error('Test Generations requires the app shell, editor surface, and test pane.');
-    paneFolder = String(state && state.folder || '');
+    paneFolder = owningSetFolder(state && state.folder || '');
     surface.classList.add('test-generations-active');
     app.classList.add('test-generations-workspace-open');
     node.classList.remove('hidden');
@@ -662,7 +669,7 @@
       '<aside class="test-generations-rail">',
       '<header class="test-generations-header"><div><h2>Test Generations</h2><p>MiniMax H3 · one frozen configuration per batch.</p></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
       '<section class="test-generations-controls">',
-      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div><div class="test-generations-setup-tools"><details><summary id="test-generations-files-toggle">View staged LoRAs</summary><div id="test-generations-files" class="test-generations-staged-list"></div></details><details class="test-generations-sessions"><summary id="test-generations-sessions-toggle">Sessions (0)</summary><div id="test-generations-sessions-list" class="test-generations-sessions-list"></div></details></div></div>',
+      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div></div>',
       '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="5"></textarea></label>',
       '<div class="test-generations-setup-options">',
       '<div class="test-generations-settings-grid">',
@@ -674,6 +681,10 @@
       '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-stop-btn" type="button" class="review-captions-btn hidden">Stop</button><button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset Prompt</button><button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Results</button></div>',
       '<div id="test-generations-status" class="training-command-status" aria-live="polite"></div>',
       '<div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>',
+      '<section class="test-generations-library">',
+      '<div class="test-generations-library-panel"><div class="test-generations-library-heading"><strong>Staged LoRAs</strong><span id="test-generations-files-count">0</span></div><div id="test-generations-files" class="test-generations-staged-list"></div></div>',
+      '<div class="test-generations-library-panel test-generations-sessions"><div class="test-generations-library-heading"><strong>Sessions</strong><span id="test-generations-sessions-count">0</span></div><div id="test-generations-sessions-list" class="test-generations-sessions-list"></div></div>',
+      '</section>',
       '</div>',
       '</section>',
       '</aside>',

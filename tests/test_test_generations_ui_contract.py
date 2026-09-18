@@ -36,6 +36,10 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert ".test-generations-result-card video" in css
     assert ".test-generations-setup-overview" in css
     assert ".test-generations-setup-options" in css
+    assert 'id="test-generations-files-toggle"' in script
+    assert "filesToggle.textContent = 'View ' + payload.count + ' staged LoRA'" in script
+    controls_rule = css.split(".test-generations-controls {", 1)[1].split("}", 1)[0]
+    assert "grid-template-columns: repeat(2, minmax(360px, 1fr));" in controls_rule
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     assert ".test-generations-workspace-open .preview-panel" in shell_css

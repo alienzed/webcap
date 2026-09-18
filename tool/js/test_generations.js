@@ -255,6 +255,8 @@
     request('test_prepare').then(function (payload) {
       prepared = payload;
       if (summary) summary.textContent = payload.count + ' LoRA' + (payload.count === 1 ? '' : 's') + ' staged · one frozen setting set for the whole batch.';
+      var filesToggle = el('test-generations-files-toggle');
+      if (filesToggle) filesToggle.textContent = 'View ' + payload.count + ' staged LoRA' + (payload.count === 1 ? '' : 's');
       if (list) list.textContent = (payload.files || []).join('\n');
       populateControls(payload);
       renderStatus(payload.latest || { status: 'idle' });
@@ -315,7 +317,7 @@
       '<header class="test-generations-header"><div><h2>Test Generations</h2><p>MiniMax H3 · compare staged LoRAs with one frozen configuration per batch.</p></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
       '<div class="test-generations-body">',
       '<section class="test-generations-controls">',
-      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div><details><summary>Staged LoRAs</summary><pre id="test-generations-files" class="training-command-text"></pre></details></div>',
+      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div><details><summary id="test-generations-files-toggle">View staged LoRAs</summary><pre id="test-generations-files" class="training-command-text"></pre></details></div>',
       '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="5"></textarea></label>',
       '<div class="test-generations-setup-options">',
       '<div class="test-generations-settings-grid">',

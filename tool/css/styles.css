@@ -2664,7 +2664,7 @@ iframe {
 }
 .test-generations-controls {
   display: grid;
-  grid-template-columns: minmax(420px, 1.5fr) minmax(320px, 1fr);
+  grid-template-columns: repeat(2, minmax(360px, 1fr));
   align-content: start;
   gap: 12px 16px;
   min-width: 0;
@@ -2680,7 +2680,7 @@ iframe {
   min-width: 0;
 }
 .test-generations-setup-overview details {
-  flex: 0 1 420px;
+  flex: 0 0 auto;
   min-width: 0;
 }
 .test-generations-setup-options {
@@ -2690,7 +2690,13 @@ iframe {
 }
 .test-generations-summary { color: var(--muted); font-size: 13px; }
 .test-generations-controls details { min-width: 0; }
-.test-generations-controls details summary { cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 700; }
+.test-generations-controls details summary { cursor: pointer; color: var(--text); font-size: 12px; font-weight: 700; }
+.test-generations-setup-overview details summary {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel-soft);
+}
 .test-generations-controls .training-command-text { max-height: 120px; margin: 8px 0 0; overflow: auto; }
 .test-generations-prompt textarea {
   box-sizing: border-box;

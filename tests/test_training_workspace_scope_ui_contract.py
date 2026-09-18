@@ -204,6 +204,9 @@ def test_run_setup_is_one_form_without_trained_badge_and_history_is_flat():
 
     fields_rule = css.split(".app.shell-revamp .training-run-layout .training-run-setup-fields {", 1)[1].split("}", 1)[0]
     assert "grid-template-columns: 150px minmax(0, 1fr);" in fields_rule
+    assert 'class="training-run-review-row"' in html
+    review_row_rule = css.split(".app.shell-revamp .training-run-review-row {", 1)[1].split("}", 1)[0]
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in review_row_rule
     actions_rule = css.split(".app.shell-revamp .training-run-setup-actions {", 1)[1].split("}", 1)[0]
     assert "justify-content: flex-end;" in actions_rule
     history_rule = css.split(".app.shell-revamp.workspace-surface-training .training-history-card {", 1)[1].split("}", 1)[0]

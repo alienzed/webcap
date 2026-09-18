@@ -546,13 +546,6 @@
     if (resultsView === 'compare') renderCompare(status || {});
   }
 
-  function setRunSettingsDisabled(disabled) {
-    ['test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-seed'].forEach(function (id) {
-      var node = el(id);
-      if (node) node.disabled = !!disabled;
-    });
-  }
-
   function syncActiveRunControls(status) {
     var running = !!(status && status.status === 'running');
     var stopping = !!(status && status.status === 'stopping');
@@ -564,7 +557,47 @@
       stopBtn.classList.toggle('hidden', !active);
       stopBtn.disabled = stopping;
     }
-    setRunSettingsDisabled(active);
+  }
+
+  function sessionMetaText(status) {
+    if (!status || !status.session) return '';
+    var parts = [sessionLabel(status.session)];
+    if (status.aspectRatio) parts.push(String(status.aspectRatio));
+    if (status.megapixels !== undefined && status.megapixels !== null && status.megapixels !== '') parts.push(String(status.megapixels) + ' MP');
+    if (status.duration !== undefined && status.duration !== null && status.duration !== '') parts.push(String(status.duration) + 's');
+    if (status.seed !== undefined && status.seed !== null && status.seed !== '') parts.push('Seed ' + String(status.seed));
+    return parts.join(' · ');
+  }
+
+  function renderSessionMeta(status) {
+    var summary = el('test-generations-session-meta');
+    var infoBtn = el('test-generations-session-info-btn');
+    var details = el('test-generations-session-details');
+    var hasSession = !!(status && status.session);
+    if (summary) {
+      summary.textContent = hasSession ? sessionMetaText(status) : '';
+      summary.classList.toggle('hidden', !hasSession);
+    }
+    if (infoBtn) infoBtn.classList.toggle('hidden', !hasSession);
+    if (!details) return;
+    if (!hasSession) {
+      details.classList.add('hidden');
+      details.innerHTML = '';
+      return;
+    }
+    var resolvedPrompt = String(status.resolvedPrompt || status.prompt || '');
+    var sourcePrompt = String(status.sourcePrompt || '');
+    details.innerHTML = [
+      '<div class="test-generations-session-detail-grid">',
+      '<div><span>Status</span><strong>' + escapeHtml(String(status.status || '')) + '</strong></div>',
+      '<div><span>Aspect ratio</span><strong>' + escapeHtml(String(status.aspectRatio || '—')) + '</strong></div>',
+      '<div><span>Resolution</span><strong>' + escapeHtml(status.megapixels !== undefined && status.megapixels !== null ? String(status.megapixels) + ' MP' : '—') + '</strong></div>',
+      '<div><span>Duration</span><strong>' + escapeHtml(status.duration !== undefined && status.duration !== null ? String(status.duration) + 's' : '—') + '</strong></div>',
+      '<div><span>Seed</span><strong>' + escapeHtml(status.seed !== undefined && status.seed !== null ? String(status.seed) : '—') + '</strong></div>',
+      '</div>',
+      '<div class="test-generations-session-prompt"><strong>Resolved prompt</strong><pre>' + escapeHtml(resolvedPrompt || '—') + '</pre></div>',
+      '<div class="test-generations-session-prompt"><strong>Source prompt</strong><pre>' + escapeHtml(sourcePrompt || '—') + '</pre></div>'
+    ].join('');
   }
 
   function renderStatus(status) {
@@ -578,6 +611,7 @@
       errorEl.textContent = status && status.error ? String(status.error) : '';
       errorEl.classList.toggle('hidden', !errorEl.textContent);
     }
+    renderSessionMeta(status || {});
     renderResults(status || {});
   }
 
@@ -594,8 +628,6 @@
       if (status && (status.status === 'running' || status.status === 'stopping')) {
         pollTimer = setTimeout(pollStatus, 2000);
       } else {
-        var seed = el('test-generations-seed');
-        if (seed) seed.value = String(randomSeed());
         refreshSessions().catch(showError);
       }
     }).catch(showError);
@@ -625,8 +657,6 @@
   }
 
   function populateControls(payload) {
-    var latest = payload.latest || {};
-    var running = latest.status === 'running';
     var defaults = payload.defaults || {};
     var aspect = el('test-generations-aspect');
     var megapixels = el('test-generations-megapixels');
@@ -636,7 +666,7 @@
     var savedSettings = state && String(state.folder || '') === String(launchFolder || '') && state.testGenerationSettings
       ? state.testGenerationSettings
       : {};
-    var selectedAspect = String(savedSettings.aspectRatio || (running ? latest.aspectRatio : '') || defaults.aspectRatio || '');
+    var selectedAspect = String(savedSettings.aspectRatio || defaults.aspectRatio || '');
     var options = Array.isArray(payload.aspectRatioOptions) ? payload.aspectRatioOptions.slice() : [];
     if (selectedAspect && options.indexOf(selectedAspect) < 0) options.unshift(selectedAspect);
     if (aspect) {
@@ -645,16 +675,14 @@
       }).join('');
       aspect.value = selectedAspect;
     }
-    if (megapixels) megapixels.value = String(savedSettings.megapixels || (running ? latest.megapixels : '') || defaults.megapixels);
-    if (duration) duration.value = String(savedSettings.duration || (running ? latest.duration : '') || defaults.duration);
-    if (seed) seed.value = String(running ? latest.seed : defaults.seed);
+    if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels);
+    if (duration) duration.value = String(savedSettings.duration || defaults.duration);
+    if (seed) seed.value = String(defaults.seed);
     if (prompt) {
       var savedPrompt = state && String(state.folder || '') === String(launchFolder || '')
         ? String(state.testGenerationPrompt || '')
         : '';
-      prompt.value = savedPrompt.trim()
-        ? savedPrompt
-        : (running ? String(latest.prompt || payload.defaultPrompt || '') : String(payload.defaultPrompt || ''));
+      prompt.value = savedPrompt.trim() ? savedPrompt : String(payload.defaultPrompt || '');
     }
   }
 
@@ -719,10 +747,11 @@
       syncActiveRunControls(status);
       refreshUtilityButton();
       renderStatus(status);
+      var nextSeed = el('test-generations-seed');
+      if (nextSeed) nextSeed.value = String(randomSeed());
       pollStatus();
     }).catch(function (err) {
       if (runBtn) runBtn.disabled = false;
-      setRunSettingsDisabled(false);
       showError(err);
     });
   }
@@ -801,7 +830,7 @@
       '<header class="test-generations-header"><div class="test-generations-title-row"><h2>Test Generations</h2><button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
       '<div id="test-generations-help" class="test-generations-help hidden"><strong>How Test Generations works</strong><p>Each run uses one frozen prompt, aspect ratio, resolution, duration, and seed across the Base render and every staged LoRA so the results are directly comparable.</p><p>Prompt, aspect ratio, resolution, and duration are remembered for this set. The seed is shared within a batch, then randomized for the next batch.</p><p>Completed videos are stored in this set\'s Test Generations sessions. ComfyUI output is treated as temporary staging and cleaned after WebCap moves each finished render into the session.</p></div>',
       '<section class="test-generations-controls">',
-      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div></div>',
+      '<div class="test-generations-form-heading"><strong>Next run</strong><span id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</span></div>',
       '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="5"></textarea></label>',
       '<div class="test-generations-setup-options">',
       '<div class="test-generations-settings-grid">',
@@ -820,7 +849,7 @@
       '</div>',
       '</section>',
       '</aside>',
-      '<section class="test-generations-results-section"><div class="test-generations-results-heading"><strong>Results</strong><div class="test-generations-view-toggle"><button id="test-generations-view-grid-btn" type="button" class="review-captions-btn active">Grid</button><button id="test-generations-view-compare-btn" type="button" class="review-captions-btn">Compare</button></div><span>Previews appear as each LoRA finishes.</span></div><div id="test-generations-results" class="test-generations-results"></div><div id="test-generations-compare" class="test-generations-compare hidden"></div></section>',
+      '<section class="test-generations-results-section"><div class="test-generations-results-heading"><div class="test-generations-results-title"><strong>Results</strong><span id="test-generations-session-meta" class="test-generations-session-meta hidden"></span><button id="test-generations-session-info-btn" type="button" class="mini-info-btn hidden" title="View frozen session settings and resolved prompt" aria-label="View frozen session settings and resolved prompt">i</button></div><div class="test-generations-view-toggle"><button id="test-generations-view-grid-btn" type="button" class="review-captions-btn active">Grid</button><button id="test-generations-view-compare-btn" type="button" class="review-captions-btn">Compare</button></div></div><div id="test-generations-session-details" class="test-generations-session-details hidden"></div><div id="test-generations-results" class="test-generations-results"></div><div id="test-generations-compare" class="test-generations-compare hidden"></div></section>',
       '</div>'
     ].join('');
     surface.appendChild(node);
@@ -901,6 +930,9 @@
     });
     el('test-generations-info-btn').onclick = function () {
       el('test-generations-help').classList.toggle('hidden');
+    };
+    el('test-generations-session-info-btn').onclick = function () {
+      el('test-generations-session-details').classList.toggle('hidden');
     };
     el('test-generations-reset-prompt-btn').onclick = function () {
       if (!prepared) throw new Error('Test Generations defaults are not loaded.');

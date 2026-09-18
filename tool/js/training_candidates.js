@@ -131,6 +131,52 @@ function trainingCandidatesRobustLossRange(losses) {
   };
 }
 
+function trainingCandidatesAutoLossRange(data, display, smoothedStepPoints) {
+  var epochPoints = data && Array.isArray(data.epochLossPoints) ? data.epochLossPoints : [];
+  var stepPoints = data && Array.isArray(data.stepLossPoints) ? data.stepLossPoints : [];
+  var analysisPoints = data && Array.isArray(data.analysisPoints) ? data.analysisPoints : [];
+  var denseLosses = [];
+  if (display.showRawStep) denseLosses = denseLosses.concat(stepPoints.map(function (point) { return trainingCandidatesNumber(point.loss, NaN); }));
+  if (display.showSmoothedStep) denseLosses = denseLosses.concat((smoothedStepPoints || []).map(function (point) { return trainingCandidatesNumber(point.loss, NaN); }));
+  denseLosses = denseLosses.concat(analysisPoints.map(function (point) { return trainingCandidatesNumber(point.loss, NaN); }));
+
+  var anchors = [];
+  if (display.showEpochLoss) {
+    anchors = epochPoints.map(function (point) { return trainingCandidatesNumber(point.loss, NaN); });
+  } else {
+    var markerEpochs = {};
+    (Array.isArray(data && data.candidates) ? data.candidates : []).forEach(function (candidate) {
+      markerEpochs[Number(candidate.epoch)] = true;
+    });
+    (Array.isArray(data && data.savedArtifacts) ? data.savedArtifacts : []).forEach(function (artifact) {
+      markerEpochs[Number(artifact.epoch)] = true;
+    });
+    anchors = epochPoints.filter(function (point) {
+      return !!markerEpochs[Number(point.epoch)];
+    }).map(function (point) {
+      return trainingCandidatesNumber(point.loss, NaN);
+    });
+  }
+
+  var values = [];
+  var dense = denseLosses.filter(isFinite);
+  if (dense.length) {
+    var robust = trainingCandidatesRobustLossRange(dense);
+    values.push(robust.min, robust.max);
+  }
+  values = values.concat(anchors.filter(isFinite));
+  if (!values.length) return { min: 0, max: 0 };
+  return {
+    min: Math.min.apply(Math, values),
+    max: Math.max.apply(Math, values)
+  };
+}
+
+function trainingCandidatesRangeInputValue(value) {
+  if (!isFinite(Number(value))) return '';
+  return Number(Number(value).toFixed(6)).toString();
+}
+
 function trainingCandidatesClearPinnedDetails() {
   trainingWorkspaceState.candidatePinnedEpoch = null;
 }
@@ -175,12 +221,11 @@ function trainingCandidatesSvg(data) {
   var smoothedStepPoints = trainingCandidatesEma(stepPoints, display.smoothing);
   var analysis = data && Array.isArray(data.analysisPoints) ? data.analysisPoints : [];
   if (!points.length || !stepPoints.length) return '<div class="training-candidates-empty">No completed TensorBoard loss points are available.</div>';
-  var allLosses = points.concat(smoothedStepPoints).map(function (point) { return trainingCandidatesNumber(point.loss, 0); });
   var minStep = Math.min.apply(Math, stepPoints.map(function (point) { return trainingCandidatesNumber(point.step, 0); }));
   var maxStep = Math.max.apply(Math, stepPoints.map(function (point) { return trainingCandidatesNumber(point.step, 0); }));
   var minStepPoint = stepPoints.reduce(function (earlier, point) { return Number(point.step) < Number(earlier.step) ? point : earlier; });
   var maxStepPoint = stepPoints.reduce(function (later, point) { return Number(point.step) > Number(later.step) ? point : later; });
-  var lossRange = trainingCandidatesRobustLossRange(allLosses);
+  var lossRange = trainingCandidatesAutoLossRange(data, display, smoothedStepPoints);
   var minLoss = lossRange.min;
   var maxLoss = lossRange.max;
   if (minStep === maxStep) maxStep = minStep + 1;
@@ -191,6 +236,7 @@ function trainingCandidatesSvg(data) {
   var lossPadding = (maxLoss - minLoss) * 0.08;
   minLoss -= lossPadding;
   maxLoss += lossPadding;
+  trainingWorkspaceState.candidateAutoYRange = { min: minLoss, max: maxLoss };
   var requestedMin = trainingCandidatesRangeValue(display.yMin);
   var requestedMax = trainingCandidatesRangeValue(display.yMax);
   if (requestedMin !== null && requestedMax !== null && requestedMin < requestedMax) {
@@ -559,16 +605,18 @@ function renderTrainingCandidates() {
     return;
   }
   els.content.innerHTML = trainingCandidatesContentHtml(trainingWorkspaceState.candidatePayload);
+  syncTrainingCandidatesDisplayControls();
   wireTrainingCandidatesChart();
 }
 
 function syncTrainingCandidatesDisplayControls() {
   var els = trainingCandidatesElements();
   var display = trainingCandidatesDisplayState();
+  var autoRange = trainingWorkspaceState.candidateAutoYRange || {};
   if (els.smoothing) els.smoothing.value = String(display.smoothing);
   if (els.smoothingNumber) els.smoothingNumber.value = Number(display.smoothing).toFixed(3);
-  if (els.yMin) els.yMin.value = display.yMin === null ? '' : String(display.yMin);
-  if (els.yMax) els.yMax.value = display.yMax === null ? '' : String(display.yMax);
+  if (els.yMin) els.yMin.value = display.yMin === null ? trainingCandidatesRangeInputValue(autoRange.min) : String(display.yMin);
+  if (els.yMax) els.yMax.value = display.yMax === null ? trainingCandidatesRangeInputValue(autoRange.max) : String(display.yMax);
 }
 
 function refreshTrainingCandidates() {
@@ -630,6 +678,7 @@ function closeTrainingCandidates() {
   trainingWorkspaceState.candidatePending = false;
   trainingWorkspaceState.candidatePayload = null;
   trainingWorkspaceState.candidateChartGeometry = null;
+  trainingWorkspaceState.candidateAutoYRange = null;
   trainingCandidatesClearPinnedDetails();
   trainingCandidatesClearChartWiring();
   if (document.fullscreenElement === els.dialog && document.exitFullscreen) document.exitFullscreen().catch(function (err) { setStatus('Could not exit fullscreen: ' + String(err.message || err)); });
@@ -644,6 +693,7 @@ function openTrainingCandidates(job) {
   trainingWorkspaceState.candidateAlgorithm = 'v5';
   trainingWorkspaceState.candidatePayload = null;
   trainingWorkspaceState.candidateChartGeometry = null;
+  trainingWorkspaceState.candidateAutoYRange = null;
   trainingCandidatesClearPinnedDetails();
   trainingWorkspaceState.candidateDisplay = trainingCandidatesLoadDisplaySession();
   trainingWorkspaceState.candidateModalOpen = true;
@@ -693,22 +743,23 @@ function wireTrainingCandidatesModal() {
   }
   els.smoothingNumber.onchange = commitSmoothingNumber;
   els.smoothingNumber.onkeydown = function (event) { if (event.key === 'Enter') els.smoothingNumber.blur(); };
-  function updateYRange() {
+  function updateYRange(key, input) {
     var display = trainingCandidatesDisplayState();
-    var min = trainingCandidatesRangeValue(els.yMin.value);
-    var max = trainingCandidatesRangeValue(els.yMax.value);
-    if (min !== null && max !== null && min >= max) {
+    var value = trainingCandidatesRangeValue(input.value);
+    var autoRange = trainingWorkspaceState.candidateAutoYRange || {};
+    var other = key === 'yMin'
+      ? (display.yMax === null ? trainingCandidatesRangeValue(autoRange.max) : display.yMax)
+      : (display.yMin === null ? trainingCandidatesRangeValue(autoRange.min) : display.yMin);
+    if (value !== null && other !== null && (key === 'yMin' ? value >= other : value <= other)) {
       syncTrainingCandidatesDisplayControls();
       return;
     }
-    display.yMin = min;
-    display.yMax = max;
+    display[key] = value;
     trainingCandidatesClearPinnedDetails();
-    syncTrainingCandidatesDisplayControls();
     renderTrainingCandidates();
   }
-  els.yMin.onchange = updateYRange;
-  els.yMax.onchange = updateYRange;
+  els.yMin.onchange = function () { updateYRange('yMin', els.yMin); };
+  els.yMax.onchange = function () { updateYRange('yMax', els.yMax); };
   els.yMin.onkeydown = function (event) { if (event.key === 'Enter') els.yMin.blur(); };
   els.yMax.onkeydown = function (event) { if (event.key === 'Enter') els.yMax.blur(); };
   els.yAuto.onclick = function () {

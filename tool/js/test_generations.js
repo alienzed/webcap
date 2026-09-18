@@ -63,23 +63,76 @@
     var results = status && Array.isArray(status.results) ? status.results : [];
     var total = Number(status && status.total || (prepared && prepared.count) || 0);
     var resultFolder = String(status && status.resultFolder || '');
-    if (!results.length && !(status && status.status === 'running')) {
-      host.innerHTML = '<div class="test-generations-empty">Generated previews will appear here.</div>';
-      return;
+    var priorFolder = String(host.dataset.resultFolder || '');
+
+    if (priorFolder !== resultFolder) {
+      host.innerHTML = '';
+      host.dataset.resultFolder = resultFolder;
     }
-    var html = results.map(function (result) {
-      var name = String(result.sourceLoRA || result.outputVideo || 'Result');
-      var video = resultFolder && result.outputVideo
-        ? '<video controls preload="metadata" src="' + videoUrl(resultFolder, result.outputVideo) + '"></video>'
-        : '<div class="test-generations-preview-placeholder">Preview unavailable</div>';
-      return '<article class="test-generations-result-card">' + video +
-        '<div class="test-generations-result-name">' + escapeHtml(name) + '</div></article>';
-    }).join('');
+
+    var empty = host.querySelector('.test-generations-empty');
+    if ((results.length || (status && status.status === 'running')) && empty) empty.remove();
+
+    results.forEach(function (result, index) {
+      var outputVideo = String(result.outputVideo || '');
+      var resultKey = outputVideo || (String(result.sourceLoRA || 'result') + ':' + index);
+      var exists = Array.prototype.some.call(
+        host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
+        function (card) { return card.dataset.resultKey === resultKey; }
+      );
+      if (exists) return;
+
+      var card = document.createElement('article');
+      card.className = 'test-generations-result-card';
+      card.dataset.resultKey = resultKey;
+
+      if (resultFolder && outputVideo) {
+        var video = document.createElement('video');
+        video.controls = true;
+        video.preload = 'metadata';
+        video.src = videoUrl(resultFolder, outputVideo);
+        card.appendChild(video);
+      } else {
+        var placeholder = document.createElement('div');
+        placeholder.className = 'test-generations-preview-placeholder';
+        placeholder.textContent = 'Preview unavailable';
+        card.appendChild(placeholder);
+      }
+
+      var label = document.createElement('div');
+      label.className = 'test-generations-result-name';
+      label.textContent = String(result.sourceLoRA || outputVideo || 'Result');
+      card.appendChild(label);
+
+      var pending = host.querySelector('.test-generations-result-card.is-pending');
+      host.insertBefore(card, pending || null);
+    });
+
+    var pending = host.querySelector('.test-generations-result-card.is-pending');
     if (status && status.status === 'running' && results.length < total) {
-      html += '<article class="test-generations-result-card is-pending"><div class="test-generations-preview-placeholder">Generating…</div><div class="test-generations-result-name">' +
-        escapeHtml(String(status.current || 'Next LoRA')) + '</div></article>';
+      if (!pending) {
+        pending = document.createElement('article');
+        pending.className = 'test-generations-result-card is-pending';
+
+        var pendingPlaceholder = document.createElement('div');
+        pendingPlaceholder.className = 'test-generations-preview-placeholder';
+        pendingPlaceholder.textContent = 'Generating…';
+        pending.appendChild(pendingPlaceholder);
+
+        var pendingLabel = document.createElement('div');
+        pendingLabel.className = 'test-generations-result-name';
+        pending.appendChild(pendingLabel);
+
+        host.appendChild(pending);
+      }
+      pending.querySelector('.test-generations-result-name').textContent = String(status.current || 'Next LoRA');
+    } else if (pending) {
+      pending.remove();
     }
-    host.innerHTML = html;
+
+    if (!results.length && !(status && status.status === 'running') && !host.querySelector('.test-generations-result-card')) {
+      host.innerHTML = '<div class="test-generations-empty">Generated previews will appear here.</div>';
+    }
   }
 
   function setControlsDisabled(disabled) {

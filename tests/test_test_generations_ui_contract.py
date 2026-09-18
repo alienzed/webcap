@@ -17,6 +17,10 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert "test-generations-duration" in script
     assert "test-generations-seed" in script
     assert "test-generations-results" in script
+    assert "card.dataset.resultKey = resultKey" in script
+    assert "host.insertBefore(card, pending || null)" in script
+    assert "pending.querySelector('.test-generations-result-name').textContent" in script
+    assert "host.innerHTML = html" not in script
     assert "Previews appear as each LoRA finishes." in script
     assert "aspectRatio: aspectRatio" in script
     assert "megapixels: megapixels" in script

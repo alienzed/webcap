@@ -768,8 +768,12 @@
                                 <div class="training-history-heading">
                                     <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Recent Runs</button>
                                     <div id="training-history-tools" class="training-history-tools hidden">
+                                        <div id="training-history-scope" class="training-history-scope hidden" role="group" aria-label="Recent runs scope">
+                                            <button type="button" class="review-captions-btn" data-training-history-scope="set" aria-pressed="false">Current Set</button>
+                                            <button type="button" class="review-captions-btn" data-training-history-scope="all" aria-pressed="true">All Sets</button>
+                                        </div>
                                         <input id="training-history-search" type="search" placeholder="Filter recent runs" aria-label="Filter recent runs">
-                                        <button id="training-history-clear-btn" type="button" class="review-captions-btn">Clear history</button>
+                                        <button id="training-history-clear-btn" type="button" class="review-captions-btn">Clear all history</button>
                                         <button id="training-history-show-all-btn" type="button" class="review-captions-btn hidden">Show all</button>
                                     </div>
                                 </div>

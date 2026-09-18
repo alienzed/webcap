@@ -2717,8 +2717,9 @@ iframe {
 .test-generations-results-heading span { color: var(--muted); font-size: 12px; }
 .test-generations-results {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, 280px);
   align-content: start;
+  justify-content: start;
   gap: 12px;
   min-height: 0;
   overflow: auto;
@@ -2733,8 +2734,7 @@ iframe {
 .test-generations-result-card video {
   display: block;
   width: 100%;
-  aspect-ratio: 2 / 3;
-  object-fit: contain;
+  height: auto;
   background: #090d12;
 }
 .test-generations-preview-placeholder {

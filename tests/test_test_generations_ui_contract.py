@@ -31,3 +31,14 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert ".editor-surface.test-generations-active" in css
     assert ".test-generations-results" in css
     assert ".test-generations-result-card video" in css
+
+
+
+def test_test_generation_previews_keep_stable_width_and_native_video_aspect():
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "grid-template-columns: repeat(auto-fill, 280px);" in css
+    assert "justify-content: start;" in css
+    video_rule = css.split(".test-generations-result-card video {", 1)[1].split("}", 1)[0]
+    assert "height: auto;" in video_rule
+    assert "aspect-ratio:" not in video_rule

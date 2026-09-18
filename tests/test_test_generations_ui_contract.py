@@ -139,3 +139,30 @@ def test_test_generations_compare_mode_reuses_current_session_results():
     assert "remove.dataset.removeCandidate = candidateFile" in script
     assert ".test-generations-compare-stage" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
+
+
+
+def test_test_bench_utility_and_live_session_contract():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    ui_script = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+
+    assert 'id="utility-test-bench-btn"' in html
+    assert "function refreshUtilityButton()" in script
+    assert "function openUtilityTestBench()" in script
+    assert "window.testGenerationsFolderLoaded = testGenerationsFolderLoaded" in script
+    assert "window.refreshTestBenchUtility = refreshUtilityButton" in script
+    assert "button.classList.toggle('test-running', !!active)" in script
+    assert ".utility-btn.test-running" in css
+    assert "window.testGenerationsFolderLoaded()" in ui_script
+
+    settings_block = script.split("function setRunSettingsDisabled(disabled)", 1)[1].split("function syncActiveRunControls", 1)[0]
+    assert "test-generations-prompt" not in settings_block
+    assert "test-generations-reset-prompt-btn" not in settings_block
+    assert "test-generations-aspect" in settings_block
+    assert "test-generations-seed" in settings_block
+
+    assert "if (!currentSession || currentSession === activeSession)" in script
+    assert "savedPrompt.trim()" in script
+    assert "savePrompt(prompt);" in script

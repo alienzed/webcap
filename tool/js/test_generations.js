@@ -6,7 +6,6 @@
   var launchFolder = '';
   var currentSession = '';
   var currentStatus = {};
-  var activeStatus = {};
   var resultsView = 'grid';
   var compareIndex = 0;
   var pendingUtilityFolder = '';
@@ -555,7 +554,6 @@
   }
 
   function syncActiveRunControls(status) {
-    activeStatus = status || {};
     var running = !!(status && status.status === 'running');
     var stopping = !!(status && status.status === 'stopping');
     var active = running || stopping;
@@ -679,7 +677,6 @@
     prepared = null;
     currentSession = '';
     currentStatus = {};
-    activeStatus = {};
     compareIndex = 0;
     setResultsView('grid');
     renderStatus({ status: 'idle' });

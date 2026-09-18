@@ -361,21 +361,18 @@ function triggerRuntimeConfigReload(quietInModal) {
   });
 }
 
-function updateUtilityPathLabel(pathText) {
-  if (!ui.utilityCurrentPathBtn) return;
+function updateShellFolderLabel(pathText) {
+  var button = ui.shellFolderBtn;
+  if (!button) return;
   var normalized = String(pathText || '').trim();
   var rootLabel = String(ROOT_FOLDER_LABEL || '').trim();
   var tooltipPath = normalized || '';
   if (rootLabel) {
     tooltipPath = tooltipPath ? (rootLabel + '/' + tooltipPath) : rootLabel;
   }
-  ui.utilityCurrentPathBtn.title = tooltipPath
+  button.title = tooltipPath
     ? ('Go to root folder. Current folder: ' + tooltipPath)
     : 'Go to root folder';
-  var labelEl = document.getElementById('utility-path-label');
-  if (labelEl) {
-    labelEl.textContent = tooltipPath || 'Workspace';
-  }
 }
 
 function openHelpReadmeInPreview() {
@@ -417,10 +414,10 @@ function openHelpReadmeInPreview() {
 }
 
 function wireAppSettingsUi() {
-  if (ui.utilitySettingsBtn) ui.utilitySettingsBtn.onclick = openAppSettingsModal;
-  if (ui.utilityHelpBtn) ui.utilityHelpBtn.onclick = openHelpReadmeInPreview;
-  if (ui.utilityCurrentPathBtn) {
-    ui.utilityCurrentPathBtn.onclick = function () {
+  if (ui.shellSettingsBtn) ui.shellSettingsBtn.onclick = openAppSettingsModal;
+  if (ui.shellHelpBtn) ui.shellHelpBtn.onclick = openHelpReadmeInPreview;
+  if (ui.shellFolderBtn) {
+    ui.shellFolderBtn.onclick = function () {
       navigateToDirStackIndex(0);
     };
   }

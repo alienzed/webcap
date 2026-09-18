@@ -241,7 +241,7 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     monkeypatch.setattr(
         bench,
         "_move_saved_video",
-        lambda _video_ref, destination: Path(destination).write_bytes(b"video"),
+        lambda _video_ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
     bench._run_batch("folder-key", session, loras, "prompt")
@@ -445,7 +445,7 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
     monkeypatch.setattr(
         bench,
         "_move_saved_video",
-        lambda _ref, destination: Path(destination).write_bytes(b"video"),
+        lambda _ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
     monkeypatch.setattr(bench, "_release_gpu_for_test_generations", lambda: None)
 
@@ -729,3 +729,43 @@ def test_activity_snapshot_exposes_current_set_and_active_run(tmp_path, monkeypa
         "completed": 3,
         "total": 8,
     }]
+
+
+
+def test_move_saved_video_cleans_only_owned_comfy_directory(tmp_path):
+    source_dir = tmp_path / "output" / "webcap-tests" / "2026-09-18_1400-h3" / "001-base"
+    source_dir.mkdir(parents=True)
+    source = source_dir / "render_00001.mp4"
+    extra = source_dir / "render_00001.png"
+    source.write_bytes(b"video")
+    extra.write_bytes(b"leftover")
+    destination = tmp_path / "session" / "base.mp4"
+    destination.parent.mkdir()
+
+    bench._move_saved_video(
+        {"filename": source.name, "type": "output", "fullpath": str(source)},
+        destination,
+        filename_prefix="webcap-tests/2026-09-18_1400-h3/001-base/render",
+    )
+
+    assert destination.read_bytes() == b"video"
+    assert not source_dir.exists()
+
+
+def test_cleanup_owned_comfy_directory_rejects_unscoped_path(tmp_path):
+    unsafe = tmp_path / "output" / "other"
+    unsafe.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="Refusing to clean"):
+        bench._cleanup_owned_comfy_directory(unsafe, "other/render")
+
+
+def test_workflow_can_override_test_output_prefix():
+    workflow = bench._workflow_for_lora(
+        bench._load_template(),
+        "prompt",
+        "mh3/example.safetensors",
+        filename_prefix="webcap-tests/session/001-epoch10/render",
+    )
+
+    assert workflow["141"]["inputs"]["filename_prefix"] == "webcap-tests/session/001-epoch10/render"

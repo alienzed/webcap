@@ -688,3 +688,44 @@ def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_pat
     assert started["status"] == "running"
     assert started["total"] == 2
     assert (set_folder / bench.TEST_RESULTS_DIR / started["session"] / "test.json").is_file()
+
+
+
+def test_activity_snapshot_exposes_current_set_and_active_run(tmp_path, monkeypatch):
+    set_folder = tmp_path / "HH4013"
+    staged = tmp_path / "staged"
+    session = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1400-h3"
+    staged.mkdir(parents=True)
+    set_folder.mkdir(parents=True, exist_ok=True)
+    session.mkdir(parents=True)
+    (staged / "run__epoch10.safetensors").write_bytes(b"weights")
+    bench._atomic_write_json(session / "test.json", {
+        "status": "running",
+        "completed": 3,
+        "total": 8,
+    })
+
+    class ActiveThread:
+        def is_alive(self):
+            return True
+
+    folder_key = str(set_folder.resolve())
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
+    monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
+    monkeypatch.setattr(bench, "_stop_requests", set())
+
+    payload = bench.activity_snapshot(set_folder)
+
+    assert payload["current"]["folder"] == "HH4013"
+    assert payload["current"]["stagedCount"] == 1
+    assert payload["current"]["sessionCount"] == 1
+    assert payload["current"]["hasTestData"] is True
+    assert payload["active"] == [{
+        "folder": "HH4013",
+        "session": session.name,
+        "status": "running",
+        "completed": 3,
+        "total": 8,
+    }]

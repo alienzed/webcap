@@ -239,7 +239,7 @@
     var summary = el('test-generations-summary');
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
-    if (!node || !surface) return;
+    if (!node || !surface || !app) throw new Error('Test Generations requires the app shell, editor surface, and test pane.');
     paneFolder = String(state && state.folder || '');
     surface.classList.add('test-generations-active');
     app.classList.add('test-generations-workspace-open');

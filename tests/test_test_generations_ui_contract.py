@@ -11,7 +11,10 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert "test-generations-pane" in script
     assert "test-generations-modal" not in script
     assert "document.querySelector('.editor-surface')" in script
+    assert "training-tests-actions" in script
+    assert ".training-run-setup-actions" not in script
     assert "test-generations-active" in script
+    assert "test-generations-workspace-open" in script
     assert "test-generations-aspect" in script
     assert "test-generations-megapixels" in script
     assert "test-generations-duration" in script
@@ -31,6 +34,12 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert ".editor-surface.test-generations-active" in css
     assert ".test-generations-results" in css
     assert ".test-generations-result-card video" in css
+    assert ".test-generations-setup-overview" in css
+    assert ".test-generations-setup-options" in css
+    shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    assert ".test-generations-workspace-open .preview-panel" in shell_css
+    assert 'src="/static/js/test_generations.js"' in html
 
 
 

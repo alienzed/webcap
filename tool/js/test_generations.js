@@ -197,8 +197,10 @@
   function closePane() {
     var node = pane();
     var surface = document.querySelector('.editor-surface');
+    var app = document.querySelector('.app');
     if (node) node.classList.add('hidden');
     if (surface) surface.classList.remove('test-generations-active');
+    if (app) app.classList.remove('test-generations-workspace-open');
     paneFolder = '';
     if (pollTimer) {
       clearTimeout(pollTimer);
@@ -233,12 +235,14 @@
   function openPane() {
     var node = pane();
     var surface = document.querySelector('.editor-surface');
+    var app = document.querySelector('.app');
     var summary = el('test-generations-summary');
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
     if (!node || !surface) return;
     paneFolder = String(state && state.folder || '');
     surface.classList.add('test-generations-active');
+    app.classList.add('test-generations-workspace-open');
     node.classList.remove('hidden');
     if (summary) summary.textContent = 'Loading H3 Test folder...';
     if (list) list.textContent = '';
@@ -291,17 +295,17 @@
 
   function buildUi() {
     if (el('test-generations-open-btn')) return;
-    var actions = document.querySelector('.training-run-setup-actions');
+    var actions = el('training-tests-actions');
     var surface = document.querySelector('.editor-surface');
-    if (!actions || !surface) return;
+    if (!actions || !surface) throw new Error('Test Generations requires the Training Tests stage and editor surface.');
 
     var button = document.createElement('button');
     button.id = 'test-generations-open-btn';
     button.type = 'button';
-    button.className = 'review-captions-btn hidden';
-    button.textContent = 'Test Generations';
-    button.title = 'Open the H3 test bench for this set.';
-    actions.insertBefore(button, actions.firstChild);
+    button.className = 'review-captions-btn training-workflow-action hidden';
+    button.textContent = 'Open Test Bench';
+    button.title = 'Compare staged H3 LoRAs with frozen generation settings.';
+    actions.appendChild(button);
 
     var node = document.createElement('section');
     node.id = 'test-generations-pane';
@@ -311,9 +315,9 @@
       '<header class="test-generations-header"><div><h2>Test Generations</h2><p>MiniMax H3 · compare staged LoRAs with one frozen configuration per batch.</p></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
       '<div class="test-generations-body">',
       '<section class="test-generations-controls">',
-      '<div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div>',
-      '<details><summary>Staged LoRAs</summary><pre id="test-generations-files" class="training-command-text"></pre></details>',
-      '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="8"></textarea></label>',
+      '<div class="test-generations-setup-overview"><div id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</div><details><summary>Staged LoRAs</summary><pre id="test-generations-files" class="training-command-text"></pre></details></div>',
+      '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="5"></textarea></label>',
+      '<div class="test-generations-setup-options">',
       '<div class="test-generations-settings-grid">',
       '<label class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>',
       '<label class="training-run-option"><span>Resolution (MP)</span><input id="test-generations-megapixels" type="number" min="0.01" step="0.01"></label>',
@@ -323,6 +327,7 @@
       '<div class="test-generations-actions"><button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button><button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Results</button></div>',
       '<div id="test-generations-status" class="training-command-status" aria-live="polite"></div>',
       '<div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>',
+      '</div>',
       '</section>',
       '<section class="test-generations-results-section"><div class="test-generations-results-heading"><strong>Results</strong><span>Previews appear as each LoRA finishes.</span></div><div id="test-generations-results" class="test-generations-results"></div></section>',
       '</div>'

@@ -424,7 +424,15 @@ def _resolve_wildcard_prompt(prompt, seed):
     return resolved
 
 
-def _workflow_for_lora(template, prompt, comfy_lora_name, settings=None, strength_model=0.9, strength_clip=1):
+def _workflow_for_lora(
+    template,
+    prompt,
+    comfy_lora_name,
+    settings=None,
+    strength_model=0.9,
+    strength_clip=1,
+    filename_prefix=None,
+):
     workflow = copy.deepcopy(template)
     if settings is None:
         selected = _template_test_settings(template)
@@ -444,6 +452,8 @@ def _workflow_for_lora(template, prompt, comfy_lora_name, settings=None, strengt
         workflow["115"]["inputs"]["megapixels"] = selected["megapixels"]
         workflow["133"]["inputs"]["value"] = selected["duration"]
         workflow["129"]["inputs"]["noise_seed"] = selected["seed"]
+        if filename_prefix:
+            workflow["141"]["inputs"]["filename_prefix"] = str(filename_prefix)
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("MiniMax H3 Test Bench workflow is missing required test inputs.") from exc
     return workflow
@@ -528,15 +538,49 @@ def _comfy_saved_output_path(video_ref):
     return path
 
 
-def _move_saved_video(video_ref, destination):
+def _safe_output_component(value):
+    text = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "")).strip("._-")
+    return (text[:80] or "candidate")
+
+
+def _candidate_output_prefix(session_directory, index, candidate):
+    session_name = _safe_output_component(Path(session_directory).name)
+    label = "base" if candidate.get("kind") == "base" else Path(str(candidate.get("label") or "candidate")).stem
+    candidate_name = f"{int(index):03d}-{_safe_output_component(label)}"
+    return f"webcap-tests/{session_name}/{candidate_name}/render"
+
+
+def _cleanup_owned_comfy_directory(directory, filename_prefix):
+    directory = Path(directory)
+    parts = [part for part in str(filename_prefix or "").replace("\\", "/").split("/") if part]
+    if len(parts) < 4 or parts[0] != "webcap-tests":
+        raise ValueError("Refusing to clean an unscoped ComfyUI output directory.")
+    expected_parent = parts[-2]
+    expected_session = parts[-3]
+    if directory.name != expected_parent or directory.parent.name != expected_session or directory.parent.parent.name != "webcap-tests":
+        raise ValueError("ComfyUI output directory does not match the Test Bench prefix.")
+    shutil.rmtree(directory, ignore_errors=True)
+    for parent in (directory.parent, directory.parent.parent):
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+
+
+def _move_saved_video(video_ref, destination, filename_prefix=None):
     source = _comfy_saved_output_path(video_ref)
+    source_directory = source.parent
     target = Path(destination)
-    if target.exists():
-        raise FileExistsError("Test result already exists: " + str(target))
-    shutil.move(str(source), str(target))
-    if not target.is_file():
-        raise RuntimeError("Saved ComfyUI Test video was not moved into the Test session.")
-    return target
+    try:
+        if target.exists():
+            raise FileExistsError("Test result already exists: " + str(target))
+        shutil.move(str(source), str(target))
+        if not target.is_file():
+            raise RuntimeError("Saved ComfyUI Test video was not moved into the Test session.")
+        return target
+    finally:
+        if filename_prefix:
+            _cleanup_owned_comfy_directory(source_directory, filename_prefix)
 
 
 def _atomic_write_json(path, payload):

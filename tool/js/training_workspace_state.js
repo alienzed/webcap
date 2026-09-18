@@ -78,7 +78,11 @@ function isTrainingWorkspaceActive() {
 }
 
 function setTrainingWorkspaceEntryMode(mode) {
-  trainingWorkspaceState.entryMode = mode === 'set' ? 'set' : 'global';
+  var nextMode = mode === 'set' ? 'set' : 'global';
+  if (trainingWorkspaceState.entryMode !== nextMode) {
+    trainingWorkspaceState.historyViewScope = nextMode === 'set' ? 'set' : 'all';
+  }
+  trainingWorkspaceState.entryMode = nextMode;
 }
 
 function getTrainingWorkspaceEls() {
@@ -131,6 +135,7 @@ function getTrainingWorkspaceEls() {
     historyContent: document.getElementById('training-history-content'),
     historyCollapseBtn: document.getElementById('training-history-collapse-btn'),
     historyTools: document.getElementById('training-history-tools'),
+    historyScope: document.getElementById('training-history-scope'),
     historyShowAllBtn: document.getElementById('training-history-show-all-btn'),
     historySearch: document.getElementById('training-history-search'),
     historyClearBtn: document.getElementById('training-history-clear-btn'),

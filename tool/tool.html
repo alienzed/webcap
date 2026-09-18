@@ -747,7 +747,7 @@
                             </details>
                         </section>
                         <section id="training-global-context" class="training-global-context" aria-label="Training activity">
-                            <div class="training-global-label">Training</div>
+                            <div class="training-global-label"><span class="training-workflow-step-number">3</span><span>Training</span></div>
                             <section class="training-runner-card" aria-label="Training queue">
                                 <div class="training-runner-card-header">
                                     <div class="training-workspace-section-title">Training Queue</div>
@@ -783,6 +783,22 @@
                                 </div>
                             </section>
                             </div>
+                        </section>
+                        <section id="training-candidates-stage" class="training-workflow-step training-lifecycle-stage training-set-only" aria-label="Training candidates">
+                            <div class="training-workflow-step-number">4</div>
+                            <div class="training-workflow-step-copy">
+                                <div class="training-workspace-section-title">Candidates</div>
+                                <div class="training-workflow-stage-note">Analyze the latest recorded run and stage promising epochs for testing.</div>
+                            </div>
+                            <button id="training-candidates-stage-btn" type="button" class="review-captions-btn training-workflow-action">Open Candidates</button>
+                        </section>
+                        <section id="training-tests-stage" class="training-workflow-step training-lifecycle-stage training-set-only" aria-label="Test generations">
+                            <div class="training-workflow-step-number">5</div>
+                            <div class="training-workflow-step-copy">
+                                <div class="training-workspace-section-title">Tests</div>
+                                <div id="training-tests-summary" class="training-workflow-stage-note">Stage LoRAs from Candidates, then compare them with one frozen generation setup.</div>
+                            </div>
+                            <div id="training-tests-actions" class="training-workflow-stage-actions"></div>
                         </section>
                     </section>
                     <div id="preview-shell" class="preview-shell">

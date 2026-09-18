@@ -12,6 +12,10 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
     workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
 
     assert 'id="training-candidates-modal"' in html
+    assert 'id="training-candidates-stage"' in html
+    assert 'id="training-candidates-stage-btn"' in html
+    assert '>4</div>' in html
+    assert '>5</div>' in html
     assert 'id="training-candidates-open-run"' in html
     assert 'id="training-candidates-algorithm"' in html
     assert 'Multiscale Loss Basins' in html
@@ -20,6 +24,7 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
         assert 'value="' + algorithm + '"' in html
     assert '/static/js/training_candidates.js' in html
     assert 'data-training-candidates=' in runner
+    assert 'latestTrainingCandidateStageJob' in (ROOT / "tool" / "js" / "training_candidates.js").read_text(encoding="utf-8")
     assert 'data-training-history-candidates=' in history
     assert workspace.count('openTrainingCandidates(') >= 3
 
@@ -92,7 +97,7 @@ def test_chart_geometry_step_lookup_and_algorithm_switching():
     harness = r"""
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 const elements = {};
-for (const name of ['modal', 'modal-summary', 'modal-content', 'algorithm', 'smoothing', 'smoothing-number', 'y-min', 'y-max', 'y-auto', 'refresh', 'fullscreen', 'open-run', 'modal-close']) {
+for (const name of ['modal', 'modal-summary', 'modal-content', 'algorithm', 'smoothing', 'smoothing-number', 'y-min', 'y-max', 'y-auto', 'refresh', 'fullscreen', 'open-run', 'modal-close', 'stage-btn']) {
   elements['training-candidates-' + name] = {
     classList: { add() {}, remove() {} }, setAttribute() {},
     querySelectorAll() { return []; }, blur() {}, value: 'v5'
@@ -110,7 +115,8 @@ const data = {
 const context = {
   document: {getElementById(id) {return elements[id];}, querySelector() {return null;}, addEventListener() {}, removeEventListener() {}},
   escapeHtml(s) { return String(s).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;'); },
-  trainingWorkspaceState: {candidateFolder:'set',candidateJobId:'job',candidateAlgorithm:'v5',candidateRequestVersion:0},
+  trainingWorkspaceState: {candidateFolder:'set',candidateJobId:'job',candidateAlgorithm:'v5',candidateRequestVersion:0,runnerJobs:[],history:{jobs:[]}},
+  state: {folder:'set'},
   trainingRunnerStatusLabel(s) { return s; }, setStatus() {},
   trainingRunnerRequest(url) { requests.push(url); return Promise.resolve({ok:true,analysis:data,run:{status:'done'}}); }
 };

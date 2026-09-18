@@ -98,6 +98,8 @@ function getTrainingWorkspaceEls() {
     globalContext: document.getElementById('training-global-context'),
     setWorkflow: document.getElementById('training-set-workflow'),
     runSetup: document.getElementById('training-run-setup'),
+    candidatesStage: document.getElementById('training-candidates-stage'),
+    testsStage: document.getElementById('training-tests-stage'),
     readiness: document.getElementById('training-readiness'),
     configList: document.getElementById('training-workspace-config-list'),
     modelProfileSelect: document.getElementById('training-model-profile-select'),

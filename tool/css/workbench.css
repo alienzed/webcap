@@ -1198,6 +1198,26 @@
   color: #1f2937;
 }
 
+.app.shell-revamp .training-lifecycle-stage {
+  margin-top: -4px;
+}
+
+.app.shell-revamp .training-workflow-stage-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.app.shell-revamp .training-workflow-stage-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app.shell-revamp .training-workflow-stage-actions .training-workflow-action {
+  width: auto;
+}
+
 .app.shell-revamp .training-workflow-action:hover,
 .app.shell-revamp .training-launch-btn:hover {
   background: var(--accent-dark);
@@ -1341,11 +1361,13 @@
 }
 
 .app.shell-revamp .training-global-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   color: var(--text);
   font-size: 18px;
   font-weight: 800;
   line-height: 1.2;
-  text-align: center;
 }
 
 .app.shell-revamp .training-global-context--global .training-global-label {

@@ -453,6 +453,8 @@ function refreshTrainingWorkspace() {
   }
   if (els.setWorkflow) els.setWorkflow.classList.toggle('hidden', !isSetEntry);
   if (els.runSetup) els.runSetup.classList.toggle('hidden', !isSetEntry);
+  if (els.candidatesStage) els.candidatesStage.classList.toggle('hidden', !isSetEntry);
+  if (els.testsStage) els.testsStage.classList.toggle('hidden', !isSetEntry);
 
   if (isGlobalEntry) {
     if (els.navigatorTitle) els.navigatorTitle.textContent = 'Training';

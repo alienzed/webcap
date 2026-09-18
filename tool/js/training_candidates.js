@@ -23,8 +23,41 @@ function trainingCandidatesNumber(value, fallback) {
   return isFinite(number) ? number : fallback;
 }
 
+var TRAINING_CANDIDATES_DISPLAY_SESSION_KEY = 'webcap.trainingCandidates.display.v1';
+
+function trainingCandidatesDefaultDisplayState() {
+  return { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
+}
+
+function trainingCandidatesLoadDisplaySession() {
+  var display = trainingCandidatesDefaultDisplayState();
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(TRAINING_CANDIDATES_DISPLAY_SESSION_KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+      var smoothing = trainingCandidatesNumber(saved.smoothing, NaN);
+      if (smoothing >= .900 && smoothing <= .999) display.smoothing = smoothing;
+      if (typeof saved.showRawStep === 'boolean') display.showRawStep = saved.showRawStep;
+      if (typeof saved.showSmoothedStep === 'boolean') display.showSmoothedStep = saved.showSmoothedStep;
+      if (typeof saved.showEpochLoss === 'boolean') display.showEpochLoss = saved.showEpochLoss;
+    }
+  } catch (err) {}
+  return display;
+}
+
+function trainingCandidatesSaveDisplaySession() {
+  var display = trainingCandidatesDisplayState();
+  try {
+    sessionStorage.setItem(TRAINING_CANDIDATES_DISPLAY_SESSION_KEY, JSON.stringify({
+      smoothing: display.smoothing,
+      showRawStep: display.showRawStep,
+      showSmoothedStep: display.showSmoothedStep,
+      showEpochLoss: display.showEpochLoss
+    }));
+  } catch (err) {}
+}
+
 function trainingCandidatesDisplayState() {
-  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
+  if (!trainingWorkspaceState.candidateDisplay) trainingWorkspaceState.candidateDisplay = trainingCandidatesLoadDisplaySession();
   if (typeof trainingWorkspaceState.candidateDisplay.showRawStep !== 'boolean') trainingWorkspaceState.candidateDisplay.showRawStep = false;
   if (typeof trainingWorkspaceState.candidateDisplay.showSmoothedStep !== 'boolean') trainingWorkspaceState.candidateDisplay.showSmoothedStep = true;
   if (typeof trainingWorkspaceState.candidateDisplay.showEpochLoss !== 'boolean') trainingWorkspaceState.candidateDisplay.showEpochLoss = true;
@@ -414,6 +447,7 @@ function wireTrainingCandidatesChart() {
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-training-candidate-line]'), function (input) {
     input.onchange = function () {
       trainingCandidatesDisplayState()[input.getAttribute('data-training-candidate-line')] = input.checked;
+      trainingCandidatesSaveDisplaySession();
       renderTrainingCandidates();
     };
   });
@@ -593,7 +627,7 @@ function openTrainingCandidates(job) {
   trainingWorkspaceState.candidatePayload = null;
   trainingWorkspaceState.candidateChartGeometry = null;
   trainingCandidatesClearPinnedDetails();
-  trainingWorkspaceState.candidateDisplay = { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
+  trainingWorkspaceState.candidateDisplay = trainingCandidatesLoadDisplaySession();
   trainingWorkspaceState.candidateModalOpen = true;
   els.algorithm.value = trainingWorkspaceState.candidateAlgorithm;
   syncTrainingCandidatesDisplayControls();
@@ -622,6 +656,7 @@ function wireTrainingCandidatesModal() {
   };
   els.smoothing.oninput = function () {
     trainingCandidatesDisplayState().smoothing = trainingCandidatesNumber(els.smoothing.value, .99);
+    trainingCandidatesSaveDisplaySession();
     trainingCandidatesClearPinnedDetails();
     syncTrainingCandidatesDisplayControls();
     renderTrainingCandidates();
@@ -630,6 +665,7 @@ function wireTrainingCandidatesModal() {
     var value = trainingCandidatesNumber(els.smoothingNumber.value, NaN);
     if (value >= .900 && value <= .999) {
       trainingCandidatesDisplayState().smoothing = value;
+      trainingCandidatesSaveDisplaySession();
       trainingCandidatesClearPinnedDetails();
       syncTrainingCandidatesDisplayControls();
       renderTrainingCandidates();

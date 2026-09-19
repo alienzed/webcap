@@ -2548,7 +2548,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 
 .app.shell-revamp #caption-checklist-panel.group-tools-card.checklist-panel {
-  display: flex !important;
+  display: flex;
   flex: 0 0 auto;
   flex-direction: column;
   min-height: 0;

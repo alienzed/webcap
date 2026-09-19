@@ -148,7 +148,9 @@ function syncApplicationShellContext() {
   if (workspaceTitle) {
     workspaceTitle.textContent = testOpen
       ? 'Test'
-      : (surface === 'training' ? 'Training' : (surface === 'reviewOutput' ? 'Review Set' : ''));
+      : (surface === 'training'
+        ? 'Training'
+        : (surface === 'reviewOutput' ? 'Review Set' : (surface === 'grid' ? 'Grid' : '')));
   }
   if (workspaceContext) {
     var workspaceContextText = '';
@@ -161,6 +163,8 @@ function syncApplicationShellContext() {
         : (entryKind === 'set' ? String(state && state.folder || '') : 'Select a set');
     } else if (surface === 'reviewOutput' && typeof getReviewWorkspaceShellContext === 'function') {
       workspaceContextText = getReviewWorkspaceShellContext();
+    } else if (surface === 'grid') {
+      workspaceContextText = mediaGridGetSourceLabel();
     }
     workspaceContext.textContent = workspaceContextText;
   }
@@ -188,6 +192,9 @@ function syncApplicationShellContext() {
 
 function openPrepActivity() {
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
+  if (normalizeWorkspaceSurface(workspaceState.surface) === 'grid') {
+    closeMediaGridSurface();
+  }
   setWorkspaceSurface('default');
 }
 

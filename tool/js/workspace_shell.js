@@ -328,9 +328,12 @@ function syncWorkspaceConfigEditorUi() {
   var backBtn = document.getElementById('config-editor-back-btn');
   var fileLabel = document.getElementById('config-editor-current-file');
   var saveBtn = document.getElementById('config-editor-save-btn');
+  var editorWrapper = ui && ui.appEl ? ui.appEl.querySelector('.editor-wrapper') : null;
   var isConfigEditor = surface === 'configEditor';
   var hasConfigFile = !!(state && state.currentConfigFile && state.currentConfigFile.file);
 
+  if (ui && ui.appEl) ui.appEl.classList.remove('training-config-selected');
+  if (editorWrapper) editorWrapper.classList.remove('hidden');
   if (toolbar) toolbar.classList.toggle('hidden', !isConfigEditor || !hasConfigFile);
   if (backBtn) {
     backBtn.textContent = 'Back';

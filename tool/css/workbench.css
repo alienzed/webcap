@@ -646,7 +646,6 @@
   overflow: auto;
 }
 
-.app.shell-revamp .training-command-status,
 .app.shell-revamp .training-command-status {
   color: var(--muted);
   font-size: 12px;
@@ -1042,15 +1041,6 @@
 .app.shell-revamp .training-navigator {
   gap: 12px;
   padding: 14px;
-}
-
-.app.shell-revamp .training-navigator-header {
-  display: flex;
-  align-items: center;
-}
-
-.app.shell-revamp .training-sidebar-collapse-btn {
-  flex: 0 0 auto;
 }
 
 .app.shell-revamp .training-set-only.hidden {

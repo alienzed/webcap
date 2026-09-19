@@ -408,7 +408,7 @@
   display: none;
 }
 
-.app.shell-revamp.workspace-surface-focus.workflow-annotate .workbench-top {
+.app.shell-revamp.workspace-surface-focus .workbench-top {
   grid-template-columns: minmax(0, 1fr);
 }
 

@@ -229,8 +229,10 @@ def _h3_test_directory(folder_path):
 
 
 def _lora_files(test_directory):
+    if not test_directory.exists():
+        return []
     if not test_directory.is_dir():
-        raise FileNotFoundError("H3 Test folder does not exist: " + str(test_directory))
+        raise NotADirectoryError("H3 Test path is not a directory: " + str(test_directory))
     return sorted(
         [path for path in test_directory.iterdir() if path.is_file() and path.suffix.lower() == ".safetensors"],
         key=lambda path: path.name.lower(),

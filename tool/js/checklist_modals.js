@@ -2,15 +2,6 @@ var checklistKeywordsModalTemp = null;
 var checklistGroupTermsModalState = null;
 var checklistTermAffixesModalState = null;
 
-function ensureChecklistWorkspaceOverlayNodes() {
-  ensureWorkspaceOverlayChildren([
-    'modal-overlay',
-    'checklist-keywords-modal',
-    'checklist-group-terms-modal',
-    'checklist-term-affixes-modal'
-  ]);
-}
-
 function closeChecklistGroupTermsModal() {
   var modal = document.getElementById('checklist-group-terms-modal');
   var overlay = document.getElementById('modal-overlay');
@@ -158,7 +149,6 @@ function clearChecklistTermAffixesModal() {
 function openChecklistTermAffixesModal(termText) {
   var term = normalizeChecklistTerm(termText);
   if (!term) return;
-  ensureChecklistWorkspaceOverlayNodes();
   var mediaKey = resolveChecklistTermMediaKey();
   var hasTag = checklistMediaHasTag(mediaKey, term);
   var isPinned = typeof isChecklistTermPinnedGloballyAnywhere === 'function'
@@ -405,7 +395,6 @@ function renderChecklistGroupTermsModal() {
 function openChecklistGroupTermsModal(requirementLabel) {
   var requirement = String(requirementLabel || '').trim();
   if (!requirement) return;
-  ensureChecklistWorkspaceOverlayNodes();
   checklistGroupTermsModalState = {
     requirement: requirement,
     terms: getChecklistKeywordTermsForRequirement(requirement)
@@ -474,7 +463,6 @@ function renderChecklistKeywordsModal() {
 }
 
 function openChecklistKeywordsModal() {
-  ensureChecklistWorkspaceOverlayNodes();
   renderChecklistKeywordsModal();
   var modal = document.getElementById('checklist-keywords-modal');
   var overlay = document.getElementById('modal-overlay');

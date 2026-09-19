@@ -51,18 +51,15 @@ def test_shell_geometry_is_outside_the_existing_workspace_grid():
     assert 'grid-template-areas: "sidebar preview workbench";' in css
 
 
-def test_shell_exists_outside_test_generations_takeover():
+def test_test_workspace_is_first_class_inside_permanent_shell():
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    # Test Generations still owns the old inner workspace for now.
-    assert ".app.shell-revamp.test-generations-workspace-open" in css
-    assert ".test-generations-workspace-open .sidebar-panel" in css
-
-    # The permanent frame is not selected by those takeover rules.
-    takeover = css.split("/* Test Generations temporarily owns the full workspace. */", 1)[1]
-    assert ".app-frame" not in takeover
-    assert ".app-header" not in takeover
-    assert ".activity-rail" not in takeover
+    assert 'id="test-generations-workspace"' in html
+    assert ".app.shell-revamp.workspace-test-open" in css
+    assert 'grid-template-areas: "test";' in css
+    assert "test-generations-workspace-open" not in css
+    assert "temporarily owns the full workspace" not in css
 
 
 def test_shell_activity_controls_are_real_navigation_without_replacing_legacy_paths():

@@ -921,7 +921,7 @@
       if (nextSeed) nextSeed.value = String(randomSeed());
       pollStatus();
     }).catch(function (err) {
-      if (runBtn) runBtn.disabled = false;
+      syncActiveRunControls(currentStatus);
       showError(err);
     });
   }

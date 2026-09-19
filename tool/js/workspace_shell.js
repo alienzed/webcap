@@ -383,6 +383,7 @@ function exitWorkspaceSurface(surfaceOverride) {
 }
 
 function openTrainingSurface(mode) {
+  if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
   var entryMode = mode === 'set' ? 'set' : 'global';
   var configFile = state.currentConfigFile;
   var shouldSaveConfig = isTrainingWorkspaceActive()

@@ -304,8 +304,6 @@ function wireAllUi() {
   function closeChecklistPanel() {
     if (typeof setChecklistPanelVisible === 'function') {
       setChecklistPanelVisible(false);
-    } else if (checklistPanelEl) {
-      checklistPanelEl.style.display = 'none';
     }
     if (typeof renderAnnotateStrip === 'function') {
       renderAnnotateStrip();

@@ -284,3 +284,18 @@ def test_true_modals_share_one_static_application_overlay_root():
     assert "ensureWorkspaceOverlayHost" not in shell
     assert "function isApplicationOverlayOpen()" in shell
     assert ".app-overlay-root {" in css
+
+
+def test_shell_navigation_state_is_derived_from_activity_root_and_context_only():
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    assert "var shellNavigationState = {" in shell
+    assert "activity: 'prep'" in shell
+    assert "workspaceRoot: 'prep'" in shell
+    assert "contextKind: 'set'" in shell
+    assert "function deriveShellNavigationState()" in shell
+    assert "navigation.activity === 'prep'" in shell
+    assert "navigation.activity === 'training'" in shell
+    assert "navigation.activity === 'test'" in shell
+    assert "Grid selection" not in shell
+    assert "Focus group" not in shell

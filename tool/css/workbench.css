@@ -2370,11 +2370,15 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
     display: none;
   }
 
-  .app.shell-revamp.workspace-surface-config-editor,
+  .app.shell-revamp.workspace-surface-config-editor {
+    grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+    grid-template-areas: "sidebar workbench";
+  }
+
   .app.shell-revamp.workspace-surface-config-editor.left-rail-collapsed,
   .app.shell-revamp.workspace-surface-config-editor.sidebar-hidden {
-    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
-    grid-template-areas: "sidebar workbench";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "workbench";
   }
 }
 
@@ -2386,13 +2390,17 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .app.shell-revamp.workspace-surface-config-editor,
-  .app.shell-revamp.workspace-surface-config-editor.left-rail-collapsed,
-  .app.shell-revamp.workspace-surface-config-editor.sidebar-hidden {
+  .app.shell-revamp.workspace-surface-config-editor {
     grid-template-columns: 1fr;
     grid-template-areas:
       "sidebar"
       "workbench";
+  }
+
+  .app.shell-revamp.workspace-surface-config-editor.left-rail-collapsed,
+  .app.shell-revamp.workspace-surface-config-editor.sidebar-hidden {
+    grid-template-columns: 1fr;
+    grid-template-areas: "workbench";
   }
 }
 /* Workbench layout reset: shared annotation groups on the left, full-height utility rail on the right. */

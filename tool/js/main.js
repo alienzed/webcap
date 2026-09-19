@@ -384,7 +384,7 @@ function wireAllUi() {
     if (isEditableElement(document.activeElement)) return;
     var shortcutSurface = normalizeWorkspaceSurface(workspaceState.surface);
     if (shortcutSurface !== 'default' && shortcutSurface !== 'focus') return;
-    if (normalizeWorkspaceViewMode(workspaceUiState.viewMode) !== 'single') return;
+    if (getWorkspaceViewMode() !== 'single') return;
     if (document.querySelector('.modal:not(.hidden), .modal-overlay:not(.hidden), .crop-modal:not(.hidden), .media-grid-viewer-modal:not(.hidden), .app-settings-modal:not(.hidden), .training-candidates-modal:not(.hidden)')) return;
     var actionKey = String(e.key || '').toLowerCase();
     if (actionKey === 'f') {

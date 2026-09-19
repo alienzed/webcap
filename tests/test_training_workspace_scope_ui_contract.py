@@ -172,7 +172,7 @@ def test_training_lifecycle_is_run_setup_training_tests():
     css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
     assert 'id="training-set-workflow"' not in html
-    assert 'id="training-model-profile-select"' in html
+    assert 'id="app-header-model-profile-select"' in html
     assert 'id="training-run-setup"' in html
     assert 'id="training-candidates-stage"' not in html
     assert '<span class="training-workflow-step-number">2</span><span>Training</span>' in html
@@ -197,7 +197,7 @@ def test_run_setup_is_one_form_without_trained_badge_and_history_is_flat():
 
     assert 'id="training-model-trained-status"' not in html
     assert 'Already trained' not in history
-    assert 'class="training-run-option training-run-model-option"' in html
+    assert 'class="training-run-option training-run-model-option"' not in html
     assert 'class="training-global-secondary"' not in html
     assert 'Training Queue' in html
     assert '>Recent Runs</button>' in html
@@ -252,3 +252,16 @@ def test_folder_metadata_finishes_before_training_workspace_refresh():
     training_index = ui.index(training_call, metadata_index)
     assert metadata_index < training_index
     assert "completeFolderLoadPipeline(path, loadSequence, metadataResult);" in ui[metadata_index:training_index]
+
+
+def test_model_switch_has_no_removed_trained_status_dependency():
+    workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+
+    assert "renderTrainingModelTrainedStatus" not in workspace
+    assert 'id="training-model-trained-status"' not in html
+    switch_start = workspace.index("function switchTrainingSetup(")
+    switch_end = workspace.index("function wireTrainingWorkspace(", switch_start)
+    switch_code = workspace[switch_start:switch_end]
+    assert "setSelectedTrainingModelProfile(profileId)" in switch_code
+    assert "refreshTrainingWorkspace();" in switch_code

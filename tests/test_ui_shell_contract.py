@@ -116,7 +116,8 @@ def test_training_identity_is_owned_by_shell_header():
 
     assert 'id="app-header-workspace-title"' in html
     assert 'id="app-header-workspace-context"' in html
-    assert 'id="training-sidebar-collapse-toggle-btn"' in html
+    assert html.count('id="sidebar-collapse-toggle-btn"') == 1
+    assert 'id="training-sidebar-collapse-toggle-btn"' not in html
     assert "surface === 'training' ? 'Training'" in shell
     assert "entryKind === 'global'" in shell
 

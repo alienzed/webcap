@@ -303,3 +303,23 @@ def test_saved_test_history_does_not_require_external_staging_folder():
     assert '"sessions": list_sessions(folder_path)' in prepare
     start_start = backend.index("def start(folder_path")
     assert "_h3_test_directory(folder_path)" in backend[start_start:]
+
+def test_test_generations_reuses_normal_folder_review_for_assessment():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-session-name"' in html
+    assert 'id="test-generations-open-results-btn"' in html
+    assert "var selectedCandidates = null;" in script
+    assert "dataset.candidateSelect" in script
+    assert "selectedFiles: selectedFiles" in script
+    assert "name: name" in script
+    assert "candidateScores" in script
+    assert "function openResultsFolder(folder)" in script
+    assert "setWorkspaceSurface('default')" in script
+    assert "refreshCurrentDirectory();" in script
+    assert "★ " in script
+
+    staged_rule = css.split(".test-generations-staged-row {", 1)[1].split("}", 1)[0]
+    assert "grid-template-columns: auto minmax(0, 1fr) auto;" in staged_rule

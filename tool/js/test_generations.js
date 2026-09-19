@@ -82,14 +82,66 @@
     return !!(node && !node.classList.contains('hidden'));
   }
 
+  function recentSetLabel(folder) {
+    var parts = String(folder || '').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : String(folder || '');
+  }
+
+  function renderRecentTestSets(items) {
+    var recent = Array.isArray(items) ? items : [];
+    var countEl = el('test-generations-recent-sets-count');
+    var host = el('test-generations-recent-sets-list');
+    if (countEl) countEl.textContent = String(recent.length);
+    if (!host) return;
+    host.innerHTML = '';
+    if (!recent.length) {
+      host.innerHTML = '<div class="test-generations-library-empty">No recent Test sets.</div>';
+      return;
+    }
+    recent.forEach(function (item) {
+      var folder = String(item.folder || '');
+      if (!folder) return;
+      var row = document.createElement('div');
+      row.className = 'test-generations-recent-set-row';
+      row.dataset.recentTestFolder = folder;
+      row.title = folder;
+
+      var copy = document.createElement('div');
+      copy.className = 'test-generations-recent-set-copy';
+      var title = document.createElement('strong');
+      title.textContent = recentSetLabel(folder);
+      var meta = document.createElement('span');
+      var completed = Number(item.completed || 0);
+      var total = Number(item.total || 0);
+      var failed = Number(item.failed || 0);
+      meta.textContent = Number(item.sessionCount || 0) + ' session' + (Number(item.sessionCount || 0) === 1 ? '' : 's') +
+        ' · ' + String(item.status || '') + ' · ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '');
+      copy.appendChild(title);
+      copy.appendChild(meta);
+
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'review-captions-btn';
+      open.dataset.recentTestOpen = folder;
+      open.textContent = 'Open';
+
+      row.appendChild(copy);
+      row.appendChild(open);
+      host.appendChild(row);
+    });
+  }
+
   function syncActivityButton(payload) {
     testActivity = payload || {};
     var activityButton = el('activity-test-btn');
     if (!activityButton) return;
     var active = Array.isArray(testActivity.active) && testActivity.active.length ? testActivity.active[0] : null;
     var current = testActivity.current || {};
-    var targetFolder = active && active.folder ? String(active.folder) : (current.hasTestData ? String(current.folder || '') : '');
+    var recent = Array.isArray(testActivity.recent) ? testActivity.recent : [];
+    var recentFolder = recent.length ? String(recent[0].folder || '') : '';
+    var targetFolder = active && active.folder ? String(active.folder) : (current.hasTestData ? String(current.folder || '') : recentFolder);
     var visible = !!targetFolder;
+    renderRecentTestSets(recent);
     activityButton.classList.toggle('hidden', !visible);
     activityButton.classList.toggle('test-running', !!active);
     activityButton.classList.toggle('active', isOpen());
@@ -103,7 +155,6 @@
       activityButton.title = 'Open Test Bench';
     }
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
-    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
   }
 
@@ -123,16 +174,20 @@
     });
   }
 
-  function openTestBenchActivity() {
-    var button = el('activity-test-btn');
-    var folder = String(button && button.dataset.testBenchFolder || '');
-    if (!folder) return;
-    if (String(state && state.folder || '') === folder && state.folderStateWritable) {
+  function openTestBenchFolder(folder) {
+    var targetFolder = String(folder || '');
+    if (!targetFolder) return;
+    if (String(state && state.folder || '') === targetFolder && state.folderStateWritable) {
       openPane();
       return;
     }
-    pendingActivityFolder = folder;
-    openTrainingWorkspaceFolder(folder);
+    pendingActivityFolder = targetFolder;
+    openTrainingWorkspaceFolder(targetFolder);
+  }
+
+  function openTestBenchActivity() {
+    var button = el('activity-test-btn');
+    openTestBenchFolder(String(button && button.dataset.testBenchFolder || ''));
   }
 
   function testGenerationsFolderLoaded() {
@@ -810,6 +865,7 @@
     compareIndex = 0;
     setResultsView('grid');
     renderStatus({ status: 'idle' });
+    refreshActivityButton();
     request('test_prepare').then(function (payload) {
       prepared = payload;
       renderStagedFiles(payload);
@@ -926,6 +982,11 @@
       if (!button) return;
       button.disabled = true;
       removeCandidate(button.dataset.fileName);
+    };
+    el('test-generations-recent-sets-list').onclick = function (event) {
+      var open = event.target.closest('[data-recent-test-open]');
+      if (!open) return;
+      openTestBenchFolder(open.dataset.recentTestOpen);
     };
     el('test-generations-sessions-list').onclick = function (event) {
       var open = event.target.closest('[data-session-open]');

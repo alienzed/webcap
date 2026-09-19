@@ -1457,29 +1457,6 @@ function refreshMediaResolutionCache(options) {
   });
 }
 
-function wireItemDetailsUi() {
-  var addInput = document.getElementById('item-tag-add-input');
-  var addBtn = document.getElementById('item-tag-add-btn');
-  if (!addInput || !addBtn || addBtn.__itemTagsBound) return;
-  addBtn.__itemTagsBound = true;
-
-  function addTag() {
-    var tag = normalizeItemTag(addInput.value);
-    if (!tag) return;
-    var added = addTagToCurrentMedia(tag);
-    addInput.value = '';
-    if (!added) return;
-  }
-
-  addBtn.onclick = addTag;
-  addInput.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addTag();
-    }
-  });
-}
-
 window.addTagToCurrentMedia = addTagToCurrentMedia;
 window.hasTagForMediaKey = hasTagForMediaKey;
 window.removeTagFromCurrentMedia = removeTagFromCurrentMedia;

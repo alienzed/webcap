@@ -178,7 +178,7 @@ def test_single_item_preview_header_keeps_item_controls_local_and_moves_shell_to
     assert 'id="preview-open-focused-btn"' in html
     assert "ui.previewHeaderEl.classList.add('hidden');" in item_details
     assert "ui.sidebarCollapseToggleBtn.classList.toggle('hidden'" not in item_details
-    assert ".app-header-workspace-controls #sidebar-collapse-toggle-btn" in css
+    assert ".app-header-sidebar-toggle-btn {" in css
     assert ".app.shell-revamp #sidebar-collapse-toggle-btn {" not in css
 
 
@@ -187,7 +187,7 @@ def test_focus_uses_shell_identity_but_keeps_local_cleanup_exit():
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
 
     assert "surface === 'focus' ? 'Focus'" in shell
-    assert "prepSidebarToggle.classList.toggle('hidden', !!testOpen || surface !== 'default');" in shell
+    assert "sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');" in shell
     assert "stopFocusedAnnotation();" in shell
     assert 'id="focused-annotation-close-btn"' in html
 

@@ -171,6 +171,20 @@ def test_move_saved_video_rejects_temp_output(tmp_path):
         )
 
 
+def test_move_saved_video_falls_back_to_comfy_view_when_fullpath_is_missing(tmp_path, monkeypatch):
+    destination = tmp_path / "session" / "epoch10.mp4"
+    destination.parent.mkdir()
+    monkeypatch.setattr(bench, "_download_video", lambda _ref: b"workflow-bearing-video")
+
+    moved = bench._move_saved_video(
+        {"filename": "render_00001.mp4", "subfolder": "webcap-tests/session/candidate", "type": "output"},
+        destination,
+    )
+
+    assert moved == destination
+    assert destination.read_bytes() == b"workflow-bearing-video"
+
+
 def test_default_template_has_required_test_nodes():
     workflow = bench._load_template()
 

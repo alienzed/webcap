@@ -145,7 +145,11 @@ function syncApplicationShellContext() {
   var workspaceTitle = document.getElementById('app-header-workspace-title');
   var workspaceContext = document.getElementById('app-header-workspace-context');
   var testOpen = document.querySelector('.test-generations-pane:not(.hidden)');
-  if (workspaceTitle) workspaceTitle.textContent = testOpen ? 'Test' : (surface === 'training' ? 'Training' : '');
+  if (workspaceTitle) {
+    workspaceTitle.textContent = testOpen
+      ? 'Test'
+      : (surface === 'training' ? 'Training' : (surface === 'reviewOutput' ? 'Review Set' : ''));
+  }
   if (workspaceContext) {
     var workspaceContextText = '';
     if (testOpen) {
@@ -155,6 +159,8 @@ function syncApplicationShellContext() {
       workspaceContextText = entryKind === 'global'
         ? 'Global'
         : (entryKind === 'set' ? String(state && state.folder || '') : 'Select a set');
+    } else if (surface === 'reviewOutput' && typeof getReviewWorkspaceShellContext === 'function') {
+      workspaceContextText = getReviewWorkspaceShellContext();
     }
     workspaceContext.textContent = workspaceContextText;
   }

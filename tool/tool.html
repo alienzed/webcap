@@ -35,6 +35,10 @@
                     <button id="app-header-folder-btn" type="button" class="app-header-folder-btn" title="Go to root folder">
                         <span id="app-header-folder" class="app-header-folder"></span>
                     </button>
+                    <label class="app-header-model-control">
+                        <span class="app-header-context-label">Model</span>
+                        <select id="app-header-model-profile-select" aria-label="Working model"></select>
+                    </label>
                 </div>
                 <div id="app-header-workspace-controls" class="app-header-workspace-controls">
                     <button
@@ -672,10 +676,6 @@
                                     </div>
                                 </div>
                                 <div class="training-run-setup-fields">
-                                    <label class="training-run-option training-run-model-option">
-                                        <span>Model</span>
-                                        <select id="training-model-profile-select"></select>
-                                    </label>
                                     <label class="training-run-option training-run-name-option">
                                         <span>Run name <em>(optional)</em></span>
                                         <input id="training-run-name-input" type="text" maxlength="80" placeholder="e.g. clothing baseline">

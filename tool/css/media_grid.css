@@ -531,7 +531,7 @@ body.media-grid-viewer-open {
 }
 
 .app.shell-revamp.workspace-surface-grid #caption-checklist-panel.checklist-panel {
-  display: flex !important;
+  display: flex;
   max-height: none;
   height: 100%;
 }
@@ -541,7 +541,7 @@ body.media-grid-viewer-open {
 }
 
 .app.shell-revamp.workspace-surface-grid #checklist-items {
-  display: none !important;
+  display: none;
 }
 
 .app.shell-revamp.workspace-surface-grid #group-workbench,
@@ -572,7 +572,7 @@ body.media-grid-viewer-open {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  padding: 0 !important;
+  padding: 0;
 }
 
 .app.shell-revamp.workspace-surface-grid .workbench-main-stack > .groups-card {

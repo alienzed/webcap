@@ -850,7 +850,74 @@
                     </div>
                 </div>
             </div>
-            <section id="test-generations-workspace" class="test-generations-workspace" aria-label="Test workspace"></section>
+            <section id="test-generations-workspace" class="test-generations-workspace" aria-label="Test workspace">
+                <section id="test-generations-pane" class="test-generations-pane hidden" aria-label="Test Generations">
+                    <div class="test-generations-body">
+                        <aside class="test-generations-rail">
+                            <div id="test-generations-help" class="test-generations-help hidden">
+                                <strong>How Test Generations works</strong>
+                                <p>Each run uses one frozen prompt, aspect ratio, resolution, duration, and seed across the Base render and every staged LoRA so the results are directly comparable.</p>
+                                <p>Prompt, aspect ratio, resolution, and duration are remembered for this set. The seed is shared within a batch, then randomized for the next batch.</p>
+                                <p>Completed videos are stored in this set's Test Generations sessions. ComfyUI output is treated as temporary staging and cleaned after WebCap moves each finished render into the session.</p>
+                            </div>
+                            <section class="test-generations-controls">
+                                <div class="test-generations-form-heading">
+                                    <div class="test-generations-form-title">
+                                        <strong>Next run</strong>
+                                        <button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button>
+                                    </div>
+                                    <span id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</span>
+                                </div>
+                                <label class="training-run-option test-generations-prompt">
+                                    <span>Prompt</span>
+                                    <textarea id="test-generations-prompt" rows="5"></textarea>
+                                </label>
+                                <div class="test-generations-setup-options">
+                                    <div class="test-generations-settings-grid">
+                                        <label class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>
+                                        <label class="training-run-option"><span>Resolution (MP)</span><input id="test-generations-megapixels" type="number" min="0.2" step="0.1"></label>
+                                        <label class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="3" step="1"></label>
+                                        <label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>
+                                    </div>
+                                    <div class="test-generations-actions">
+                                        <button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button>
+                                        <button id="test-generations-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
+                                        <button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset</button>
+                                    </div>
+                                </div>
+                                <div id="test-generations-status" class="training-command-status" aria-live="polite"></div>
+                                <div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>
+                                <section class="test-generations-library">
+                                    <div class="test-generations-library-panel">
+                                        <div class="test-generations-library-heading"><strong>Staged LoRAs</strong><span id="test-generations-files-count">0</span></div>
+                                        <div id="test-generations-files" class="test-generations-staged-list"></div>
+                                    </div>
+                                    <div class="test-generations-library-panel test-generations-sessions">
+                                        <div class="test-generations-library-heading"><strong>Sessions</strong><span id="test-generations-sessions-count">0</span></div>
+                                        <div id="test-generations-sessions-list" class="test-generations-sessions-list"></div>
+                                    </div>
+                                </section>
+                            </section>
+                        </aside>
+                        <section class="test-generations-results-section">
+                            <div class="test-generations-results-heading">
+                                <div class="test-generations-results-title">
+                                    <strong>Results</strong>
+                                    <span id="test-generations-session-meta" class="test-generations-session-meta hidden"></span>
+                                    <button id="test-generations-session-info-btn" type="button" class="mini-info-btn hidden" title="View frozen session settings and resolved prompt" aria-label="View frozen session settings and resolved prompt">i</button>
+                                </div>
+                                <div class="test-generations-view-toggle">
+                                    <button id="test-generations-view-grid-btn" type="button" class="review-captions-btn active">Grid</button>
+                                    <button id="test-generations-view-compare-btn" type="button" class="review-captions-btn">Compare</button>
+                                </div>
+                            </div>
+                            <div id="test-generations-session-details" class="test-generations-session-details hidden"></div>
+                            <div id="test-generations-results" class="test-generations-results"></div>
+                            <div id="test-generations-compare" class="test-generations-compare hidden"></div>
+                        </section>
+                    </div>
+                </section>
+            </section>
             <div id="workspace-overlays" class="workspace-overlays">
                 <div id="training-review-modal" class="training-review-modal hidden" aria-hidden="true">
                     <section class="training-review-dialog" role="dialog" aria-modal="true" aria-labelledby="training-review-modal-title">

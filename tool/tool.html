@@ -881,6 +881,10 @@
                                     </div>
                                     <span id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</span>
                                 </div>
+                                <label class="training-run-option test-generations-session-name">
+                                    <span>Session name <small>(optional)</small></span>
+                                    <input id="test-generations-session-name" type="text" maxlength="120" placeholder="e.g. Red colour test">
+                                </label>
                                 <label class="training-run-option test-generations-prompt">
                                     <span>Prompt</span>
                                     <textarea id="test-generations-prompt" rows="5"></textarea>
@@ -924,6 +928,7 @@
                                     <button id="test-generations-session-info-btn" type="button" class="mini-info-btn hidden" title="View frozen session settings and resolved prompt" aria-label="View frozen session settings and resolved prompt">i</button>
                                 </div>
                                 <div class="test-generations-view-toggle">
+                                    <button id="test-generations-open-results-btn" type="button" class="review-captions-btn hidden">Open Folder</button>
                                     <button id="test-generations-view-grid-btn" type="button" class="review-captions-btn active">Grid</button>
                                     <button id="test-generations-view-compare-btn" type="button" class="review-captions-btn">Compare</button>
                                 </div>

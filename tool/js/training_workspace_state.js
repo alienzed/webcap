@@ -95,7 +95,6 @@ function getTrainingWorkspaceEls() {
     testsStage: document.getElementById('training-tests-stage'),
     readiness: document.getElementById('training-readiness'),
     configList: document.getElementById('training-workspace-config-list'),
-    modelProfileSelect: document.getElementById('training-model-profile-select'),
     profileSelect: document.getElementById('training-workspace-profile-select'),
     configStepNumber: document.getElementById('training-workspace-config-step-number'),
     runStepNumber: document.getElementById('training-run-step-number'),

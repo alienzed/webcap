@@ -407,3 +407,26 @@ def test_activity_navigation_and_escape_precedence_are_accessible():
     assert "closeBtn.click();" in shell
     assert "isFocusedAnnotationOpen()" in shell
     assert "setShellImmersive(false);" in shell
+
+
+def test_reload_location_uses_hash_route_not_transient_ui_persistence():
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    main = (ROOT / "tool" / "js" / "main.js").read_text(encoding="utf-8")
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+    test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "function parseShellLocationRoute()" in shell
+    assert "function syncShellLocationRoute()" in shell
+    assert "function applyInitialShellLocationRoute()" in shell
+    assert "function restoreInitialShellLocationRoute()" in shell
+    assert "window.history.replaceState" in shell
+    assert "'#/' + workspace" in shell
+    assert "params.set('folder', folder)" in shell
+    assert "params.set('scope', 'global')" in shell
+    assert "applyInitialShellLocationRoute();" in main
+    assert "restoreInitialShellLocationRoute()" in ui
+    assert "openTestBenchForCurrentFolder" in test_bench
+    assert "syncShellLocationRoute()" in test_bench
+    assert "localStorage" not in shell
+    assert "shellNavigationState.immersive" in shell
+    assert "immersive" not in shell[shell.index("function syncShellLocationRoute()"):shell.index("function applyInitialShellLocationRoute()")]

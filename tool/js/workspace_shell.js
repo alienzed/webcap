@@ -73,12 +73,6 @@ function syncWorkbenchRailUi() {
   toggleBtn.title = collapsed ? 'Expand workbench rail' : 'Collapse workbench rail';
   toggleBtn.innerHTML = collapsed ? '&#9664;' : '&#9654;';
 }
-function normalizeWorkspaceViewMode(mode) {
-  var value = String(mode || '').trim().toLowerCase();
-  if (value === 'grid' || value === 'focus') return value;
-  return 'single';
-}
-
 function syncWorkspaceHeaderUi() {
   if (!ui || !ui.appEl) return;
   var viewMode = getWorkspaceViewMode();

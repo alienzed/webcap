@@ -8,8 +8,8 @@
   var currentStatus = {};
   var resultsView = 'grid';
   var compareIndex = 0;
-  var pendingUtilityFolder = '';
-  var utilityActivity = {};
+  var pendingActivityFolder = '';
+  var testActivity = {};
   var debouncedPromptSave = debounceCreate(500);
 
   function el(id) { return document.getElementById(id); }
@@ -75,65 +75,62 @@
     return !!(node && !node.classList.contains('hidden'));
   }
 
-  function syncUtilityButton(payload) {
-    utilityActivity = payload || {};
-    var button = el('utility-test-bench-btn');
+  function syncActivityButton(payload) {
+    testActivity = payload || {};
     var activityButton = el('activity-test-btn');
-    if (!button || !activityButton) return;
-    var active = Array.isArray(utilityActivity.active) && utilityActivity.active.length ? utilityActivity.active[0] : null;
-    var current = utilityActivity.current || {};
+    if (!activityButton) return;
+    var active = Array.isArray(testActivity.active) && testActivity.active.length ? testActivity.active[0] : null;
+    var current = testActivity.current || {};
     var targetFolder = active && active.folder ? String(active.folder) : (current.hasTestData ? String(current.folder || '') : '');
     var visible = !!targetFolder;
-    [button, activityButton].forEach(function (target) {
-      target.classList.toggle('hidden', !visible);
-      target.classList.toggle('test-running', !!active);
-      target.classList.toggle('active', isOpen());
-      target.setAttribute('aria-pressed', isOpen() ? 'true' : 'false');
-      target.dataset.testBenchFolder = targetFolder;
-      if (active) {
-        var completed = Number(active.completed || 0);
-        var total = Number(active.total || 0);
-        target.title = 'Test Bench · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total;
-      } else {
-        target.title = 'Open Test Bench';
-      }
-    });
+    activityButton.classList.toggle('hidden', !visible);
+    activityButton.classList.toggle('test-running', !!active);
+    activityButton.classList.toggle('active', isOpen());
+    activityButton.setAttribute('aria-pressed', isOpen() ? 'true' : 'false');
+    activityButton.dataset.testBenchFolder = targetFolder;
+    if (active) {
+      var completed = Number(active.completed || 0);
+      var total = Number(active.total || 0);
+      activityButton.title = 'Test Bench · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total;
+    } else {
+      activityButton.title = 'Open Test Bench';
+    }
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   }
 
-  function refreshUtilityButton() {
+  function refreshActivityButton() {
     var folder = String(state && state.folder || '');
     var url = '/fs/test_generations/activity' + (folder ? ('?folder=' + encodeURIComponent(folder)) : '');
     return fetch(url).then(function (response) {
       return response.json().then(function (payload) {
         if (!response.ok || !payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Could not read Test Bench activity.');
-        syncUtilityButton(payload);
+        syncActivityButton(payload);
         return payload;
       });
     }).catch(function () {
-      var button = el('utility-test-bench-btn');
-      if (button) button.classList.add('hidden');
+      var activityButton = el('activity-test-btn');
+      if (activityButton) activityButton.classList.add('hidden');
       return null;
     });
   }
 
-  function openUtilityTestBench() {
-    var button = el('utility-test-bench-btn');
+  function openTestBenchActivity() {
+    var button = el('activity-test-btn');
     var folder = String(button && button.dataset.testBenchFolder || '');
     if (!folder) return;
     if (String(state && state.folder || '') === folder && state.folderStateWritable) {
       openPane();
       return;
     }
-    pendingUtilityFolder = folder;
+    pendingActivityFolder = folder;
     openTrainingWorkspaceFolder(folder);
   }
 
   function testGenerationsFolderLoaded() {
-    refreshUtilityButton();
-    if (!pendingUtilityFolder) return;
-    if (String(state && state.folder || '') !== String(pendingUtilityFolder)) return;
-    pendingUtilityFolder = '';
+    refreshActivityButton();
+    if (!pendingActivityFolder) return;
+    if (String(state && state.folder || '') !== String(pendingActivityFolder)) return;
+    pendingActivityFolder = '';
     openPane();
   }
 
@@ -624,7 +621,7 @@
     if (!isOpen()) return;
     request('test_status').then(function (status) {
       syncActiveRunControls(status);
-      refreshUtilityButton();
+      refreshActivityButton();
       var activeSession = String(status && status.session || '');
       if (!currentSession || currentSession === activeSession) {
         renderStatus(status);
@@ -657,7 +654,7 @@
       clearTimeout(pollTimer);
       pollTimer = null;
     }
-    refreshUtilityButton();
+    refreshActivityButton();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   }
 
@@ -751,7 +748,7 @@
       seed: seed
     }).then(function (status) {
       syncActiveRunControls(status);
-      refreshUtilityButton();
+      refreshActivityButton();
       renderStatus(status);
       var nextSeed = el('test-generations-seed');
       if (nextSeed) nextSeed.value = String(randomSeed());
@@ -767,7 +764,7 @@
     if (stopBtn) stopBtn.disabled = true;
     request('test_stop').then(function (status) {
       syncActiveRunControls(status);
-      refreshUtilityButton();
+      refreshActivityButton();
       if (!currentSession || currentSession === String(status && status.session || '')) renderStatus(status);
       pollStatus();
     }).catch(function (err) {
@@ -862,14 +859,12 @@
 
     button.onclick = openPane;
     el('test-generations-close-btn').onclick = closePane;
-    ['sidebar-open-training-btn', 'utility-training-btn'].forEach(function (id) {
+    ['sidebar-open-training-btn', 'activity-training-btn'].forEach(function (id) {
       el(id).addEventListener('click', function () {
         if (isOpen()) closePane();
       });
     });
     el('test-generations-run-btn').onclick = startRun;
-    var utilityButton = el('utility-test-bench-btn');
-    if (utilityButton) utilityButton.onclick = openUtilityTestBench;
     el('test-generations-stop-btn').onclick = stopRun;
     el('test-generations-view-grid-btn').onclick = function () {
       setResultsView('grid');
@@ -958,10 +953,11 @@
       new MutationObserver(syncLaunchVisibility).observe(select, { childList: true, subtree: true });
     }
     syncLaunchVisibility();
-    refreshUtilityButton();
+    refreshActivityButton();
   }
 
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
-  window.refreshTestBenchUtility = refreshUtilityButton;
+  window.openTestBenchActivity = openTestBenchActivity;
+  window.refreshTestBenchActivity = refreshActivityButton;
   buildUi();
 })();

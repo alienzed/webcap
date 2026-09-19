@@ -567,9 +567,6 @@ function selectPathMedia(mediaItem) {
     var keepSpecialWorkspaceSurface = typeof workspaceState !== 'undefined' &&
       workspaceState &&
       (workspaceState.surface === 'focus' || workspaceState.surface === 'grid');
-    if (typeof setWorkspaceViewMode === 'function' && !keepSpecialWorkspaceSurface) {
-      setWorkspaceViewMode('single');
-    }
     if (
       typeof setWorkspaceSurface === 'function' &&
       !keepSpecialWorkspaceSurface

@@ -187,7 +187,6 @@ function revealTrainingRunnerLog() {
 
 function scheduleTrainingRunnerPoll() {
   if (trainingWorkspaceState.runnerPollTimer) clearTimeout(trainingWorkspaceState.runnerPollTimer);
-  if (!isTrainingWorkspaceActive()) return;
   var activeStatus = (trainingWorkspaceState.runnerJobs || []).map(function (job) { return job.status; });
   var hasActiveJob = activeStatus.some(function (status) {
     return status === 'starting' || status === 'running' || status === 'stopping';
@@ -201,7 +200,7 @@ function scheduleTrainingRunnerPoll() {
 }
 
 function refreshTrainingRunnerStatus() {
-  if (!isTrainingWorkspaceActive() || trainingWorkspaceState.runnerStatusPending) return;
+  if (trainingWorkspaceState.runnerStatusPending) return;
   trainingWorkspaceState.runnerStatusPending = true;
   trainingRunnerRequest('/fs/training_runner/status', { allowNotOk: true })
     .then(function (payload) {
@@ -298,7 +297,8 @@ function recoverManagedTrainingQueue() {
 }
 
 function refreshTrainingGpuStatus() {
-  if (!isTrainingWorkspaceActive() || trainingWorkspaceState.gpuStatusPending) return;
+  if (trainingWorkspaceState.gpuStatusPending) return;
+  if (!isTrainingWorkspaceActive() && !trainingWorkspaceState.gpuForActiveJob) return;
   trainingWorkspaceState.gpuStatusPending = true;
   renderTrainingRunner();
   trainingRunnerRequest('/fs/training_runner/gpu')
@@ -312,6 +312,7 @@ function refreshTrainingGpuStatus() {
       trainingWorkspaceState.gpuLastFetchedAt = Date.now();
       trainingWorkspaceState.gpuStatusPending = false;
       renderTrainingRunner();
+      syncShellTrainingGpuStatus();
     });
 }
 
@@ -811,6 +812,17 @@ function formatTrainingGpuMemory(value) {
   return gib.toFixed(1) + ' GiB';
 }
 
+function syncShellTrainingGpuStatus() {
+  var host = document.getElementById('shell-gpu-status');
+  if (!host) return;
+  var hasActiveJob = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
+    return job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
+  });
+  var html = hasActiveJob ? buildTrainingGpuStatusHtml() : '';
+  host.innerHTML = html;
+  host.classList.toggle('hidden', !html);
+}
+
 function buildTrainingGpuStatusHtml() {
   var gpu = trainingWorkspaceState.gpu;
   if (!gpu) {
@@ -909,6 +921,7 @@ function renderTrainingLaunchStatus() {
 function renderTrainingRunner() {
   var els = getTrainingWorkspaceEls();
   syncUtilityTrainingActivity();
+  syncShellTrainingGpuStatus();
   renderTrainingLaunchStatus();
   if (!els.runnerSummary || !els.runnerActions) return;
   if (trainingWorkspaceState.runnerStatusError) {

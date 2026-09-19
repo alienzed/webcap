@@ -2333,9 +2333,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   }
 
   .app.shell-revamp .workbench-top,
-  .app.shell-revamp.workflow-annotate .workbench-top,
-  .app.shell-revamp .workbench-bottom,
-  .app.shell-revamp.workflow-annotate .workbench-bottom {
+  .app.shell-revamp .workbench-bottom {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2343,12 +2341,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
     grid-template-columns: 1fr;
   }
 
-  .app.shell-revamp.workflow-annotate .workbench-top,
-  .app.shell-revamp.workflow-annotate .workbench-bottom {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .app.shell-revamp.workflow-annotate .workbench-side-stack {
+  .app.shell-revamp .workbench-side-stack {
     display: none;
   }
 
@@ -2366,9 +2359,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 
 @media (max-width: 880px) {
   .app.shell-revamp .workbench-top,
-  .app.shell-revamp.workflow-annotate .workbench-top,
-  .app.shell-revamp .workbench-bottom,
-  .app.shell-revamp.workflow-annotate .workbench-bottom {
+  .app.shell-revamp .workbench-bottom {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2404,10 +2395,6 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   align-items: stretch;
   overflow: hidden;
   position: relative;
-}
-
-.app.shell-revamp.workflow-annotate .workbench-top {
-  grid-template-columns: minmax(0, 1fr) var(--workbench-rail-width);
 }
 
 .app.shell-revamp .workbench-rail-toggle-btn {
@@ -2813,8 +2800,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 }
 
 @media (max-width: 1180px) {
-  .app.shell-revamp .workbench-top,
-  .app.shell-revamp.workflow-annotate .workbench-top {
+  .app.shell-revamp .workbench-top {
     grid-template-columns: minmax(0, 1fr);
   }
 

@@ -450,10 +450,11 @@ function refreshCurrentDirectory() {
             window.refreshWorkingModelSelector().catch(function (err) {
               console.error('[webcap] Could not refresh working model selector:', err);
             });
-            refreshTrainingWorkspace();
             if (typeof window.testGenerationsFolderLoaded === 'function') window.testGenerationsFolderLoaded();
             refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {
               completeFolderLoadPipeline(path, loadSequence, metadataResult);
+              if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
+              refreshTrainingWorkspace();
             });
           // If a file was just renamed, reselect it
           if (window.state && state.pendingSelectFileName) {

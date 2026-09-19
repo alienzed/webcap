@@ -1067,8 +1067,11 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
 
 def prepare(folder_path):
     template = _load_template()
-    test_directory = _h3_test_directory(folder_path)
-    loras = _lora_files(test_directory) if test_directory.is_dir() else []
+    try:
+        test_directory = _h3_test_directory(folder_path)
+        loras = _lora_files(test_directory) if test_directory.is_dir() else []
+    except ValueError:
+        loras = []
     defaults = _template_test_settings(template)
     defaults["seed"] = _new_session_seed()
     aspect_options = list(TEST_ASPECT_RATIO_OPTIONS)

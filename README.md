@@ -15,11 +15,12 @@ WebCap is built with Flask plus plain browser JavaScript. There is no database o
 | **Review Set and dataset QA** | Inspect the current visible scope with a caption sheet, coverage, required-phrase, balance, and rule checks, metadata, and **Prune Candidates**. Review findings can narrow the working scope. | Open **Review** from the sidebar. Use **Caption Report**, **Prune Candidates**, and the **Focus set** control to investigate a finding. |
 | **Focus Sets and cross-folder sets** | A Focus Set temporarily narrows the visible media for curation, review, or training. **SuperSet Search** searches a folder and its subfolders, then materializes matches into a new set. | Choose a **Focus set** from the sidebar or grid. For a cross-folder result set, open **Advanced filters**, enable **SuperSet Search**, click **Search**, then choose **Create Set**. |
 | **Media editing** | Crop images; clip videos, inspect decoded frames, and export a selected frame; rotate, flip, blur/remove backgrounds, deface, duplicate, prune, reset, and restore. **Convert FPS** is explicit and overwrites the selected video after confirmation. | Select a media item and use its preview/context actions; use **Clip** for the video clip and frame workflow. Expected reversible operations preserve source material under `originals/`. |
-| **Training setup and capture** | Configure Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, or MiniMax H3 using persistent config/dataset TOMLs. **Training Review** summarizes the bucket plan and **Adjust buckets** edits supported targets. Train captures the current visible media, latest captions, saved TOMLs, and plan into a run-owned bundle. | Open **Train** from the sidebar or utility bar, choose a model and run setup, inspect the TOMLs under **Advanced configuration**, then use **Adjust buckets** or **Train**. |
+| **Training setup and capture** | Configure Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, or MiniMax H3 using persistent config/dataset TOMLs. **Training Review** summarizes the bucket plan and **Adjust buckets** edits supported targets. Train captures the current visible media, latest captions, saved TOMLs, and plan into a run-owned bundle. | Use the permanent **Training** activity rail entry, choose the working model in the application header, inspect the TOMLs under **Advanced configuration**, then use **Adjust buckets** or **Train**. |
 | **Training runs and checkpoints** | Use the managed queue or generate a manual WSL command; inspect progress, checkpoint ETA, GPU status, logs, and history. Resume compatible checkpoints or start a fresh run from a saved LoRA/initializer. | In Training, use the run setup and queue controls; select **Resume checkpoint** or **Fine-tune from saved LoRA** under **Starting point** when applicable. |
 | **LoRA candidate analysis** | Review a recorded run's TensorBoard loss curves and suggested completed checkpoint epochs without changing run files. **Multiscale Loss Basins** is the primary detector; **Score Scalars · legacy baseline** is available for comparison. | In a run row with recorded output, choose the chart action labeled **Analyze LoRA candidates** to open **LoRA Candidates**. |
 | **H3 calibration** | Test MiniMax H3 video bucket shapes on the configured training hardware and retain conclusive results. Verified safe ceilings affect only newly generated or reset H3 datasets; existing TOMLs and captured runs are left unchanged. | Open **App Settings** → **Training** → **H3 calibration**, choose an eligible source from the current folder, and select **Run calibration**. See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md). |
-| **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the utility bar. Use the **General**, **Training**, and **Advanced** tabs. |
+| **Test Bench** | Compare staged MiniMax H3 LoRA checkpoints against frozen generation settings, revisit saved Test sessions, and switch between Grid and Compare views. | Choose MiniMax H3 as the working model, stage checkpoints from Training, then open **Test** from the permanent activity rail. |
+| **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the permanent activity rail. Use the **General**, **Training**, and **Advanced** tabs. |
 
 ## Supported training profiles
 
@@ -39,6 +40,17 @@ Captured videos currently remain byte-for-byte source copies. A future advanced,
 Profiles can be hidden from new-run selection in App Settings without deleting their existing TOMLs, captured runs, or history.
 
 See [`docs/training_profiles.md`](docs/training_profiles.md) and [`docs/train.md`](docs/train.md) for the operational detail.
+
+## Application shell and reload location
+
+WebCap uses a permanent application shell:
+
+- the left activity rail switches major activities such as Prep, Training, and Test and also owns Console, Settings, Help, and immersive-mode access;
+- the top header shows current folder/set context, the single editable working-model selector, workspace identity, and background GPU activity when Training is active;
+- transient application status appears as a floating bottom-left shell message;
+- the multiline application console is a separate shell surface and is not the same thing as a Training run log.
+
+Durable navigation location is reflected in the URL hash. Refreshing a route such as `#/training?folder=my/set&scope=set`, `#/test?folder=my/set`, or `#/grid?folder=my/set` restores the folder and major workspace after the folder finishes loading. Transient state such as open modals, local tabs, Focus cursor/group, console visibility, and immersive mode is intentionally not encoded in the URL.
 
 ## Requirements
 

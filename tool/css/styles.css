@@ -2950,6 +2950,46 @@ iframe {
   height: auto;
   background: #090d12;
 }
+.test-generations-video-transport {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 7px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-soft) 94%, #000 6%);
+}
+.test-generations-video-play {
+  display: grid;
+  width: 26px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.test-generations-video-play:hover,
+.test-generations-video-play:focus-visible {
+  border-color: var(--accent);
+}
+.test-generations-video-scrubber {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.test-generations-video-time {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .test-generations-preview-placeholder {
   display: grid;
   place-items: center;

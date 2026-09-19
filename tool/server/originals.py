@@ -12,7 +12,7 @@ import json
 from .permissions import normalize_path_permissions
 
 # Blacklisted folder names (never process or mutate)
-BLACKLISTED_FOLDERS = {'originals', 'auto_dataset', 'src_videos'}
+BLACKLISTED_FOLDERS = {'originals', 'auto_dataset', 'src_videos', 'test-generations'}
 
 # Supported media extensions (video + image)
 MEDIA_ALL_EXTS = {

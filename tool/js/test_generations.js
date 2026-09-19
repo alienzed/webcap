@@ -813,18 +813,10 @@
   }
 
   function buildUi() {
-    if (el('test-generations-open-btn')) return;
-    var actions = el('training-tests-actions');
+    if (el('test-generations-pane')) return;
+    var button = el('test-generations-open-btn');
     var workspace = el('test-generations-workspace');
-    if (!actions || !workspace) throw new Error('Test Generations requires the Training Tests stage and Test workspace root.');
-
-    var button = document.createElement('button');
-    button.id = 'test-generations-open-btn';
-    button.type = 'button';
-    button.className = 'review-captions-btn training-workflow-action hidden';
-    button.textContent = 'Open Test Bench';
-    button.title = 'Compare staged H3 LoRAs with frozen generation settings.';
-    actions.appendChild(button);
+    if (!button || !workspace) throw new Error('Test Generations requires its Training handoff and Test workspace root.');
 
     var node = document.createElement('section');
     node.id = 'test-generations-pane';

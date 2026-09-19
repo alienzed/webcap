@@ -147,14 +147,16 @@ function syncApplicationShellContext() {
   var testOpen = document.querySelector('.test-generations-pane:not(.hidden)');
   if (workspaceTitle) workspaceTitle.textContent = testOpen ? 'Test' : (surface === 'training' ? 'Training' : '');
   if (workspaceContext) {
-    var trainingContext = '';
-    if (!testOpen && surface === 'training') {
+    var workspaceContextText = '';
+    if (testOpen) {
+      workspaceContextText = 'Generations';
+    } else if (surface === 'training') {
       var entryKind = getTrainingWorkspaceEntryKind();
-      trainingContext = entryKind === 'global'
+      workspaceContextText = entryKind === 'global'
         ? 'Global'
         : (entryKind === 'set' ? String(state && state.folder || '') : 'Select a set');
     }
-    workspaceContext.textContent = trainingContext;
+    workspaceContext.textContent = workspaceContextText;
   }
 
   var prepBtn = document.getElementById('activity-prep-btn');
@@ -179,9 +181,7 @@ function syncApplicationShellContext() {
 }
 
 function openPrepActivity() {
-  var testPane = document.getElementById('test-generations-pane');
-  var testBack = document.getElementById('test-generations-close-btn');
-  if (testPane && !testPane.classList.contains('hidden') && testBack) testBack.click();
+  if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
   setWorkspaceSurface('default');
 }
 

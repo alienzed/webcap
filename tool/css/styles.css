@@ -1183,16 +1183,6 @@ iframe {
   min-height: 18px;
 }
 
-.stack>.status {
-  flex-shrink: 0;
-  background: #f8fafc;
-  border-top: 1px solid var(--border);
-  box-shadow: 0 -1px 8px rgba(20,28,38,0.06);
-  padding: 8px 12px 12px 12px;
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-}
 
 .stats-panel {
   display: flex;
@@ -3782,15 +3772,6 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
 
 /* Utility classes for inline style removal */
 .hidden { display: none !important; }
-.m8y { margin: 8px 0; }
-.status-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.flex1 { flex: 1 1 auto; }
-.status-bar .flex1 {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 html[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0d1117;
@@ -3830,12 +3811,6 @@ html[data-theme="dark"] .crop-modal-dialog {
   color: var(--text);
 }
 
-html[data-theme="dark"] .stack>.status {
-  background: #101620;
-  border-top-color: var(--border);
-  box-shadow: 0 -1px 8px rgba(0, 0, 0, 0.35);
-  color: var(--muted);
-}
 
 html[data-theme="dark"] .caption-filter-rated-summary,
 html[data-theme="dark"] .small,

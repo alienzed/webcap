@@ -13,7 +13,11 @@
   display: none !important;
 }
 
-.app.shell-revamp .review-output-surface-header,
+.app.shell-revamp .review-output-surface-header {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .app.shell-revamp .config-editor-toolbar {
   display: flex;
   align-items: center;
@@ -21,27 +25,6 @@
   gap: 14px;
 }
 
-.app.shell-revamp .review-output-context {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.app.shell-revamp .review-output-scope {
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--text);
-  background: var(--panel-soft);
-}
-
-.app.shell-revamp .review-output-scope.hidden {
-  display: none;
-}
-
-.app.shell-revamp .review-output-surface-copy,
 .app.shell-revamp .config-editor-title-copy {
   min-width: 0;
   display: flex;
@@ -96,13 +79,11 @@
   margin-bottom: 3px;
 }
 
-.app.shell-revamp .review-output-surface-title,
 .app.shell-revamp .config-editor-title {
   font-size: 18px;
   font-weight: 700;
 }
 
-.app.shell-revamp .review-output-surface-subtitle,
 .app.shell-revamp .config-editor-current-file {
   color: rgba(15, 23, 42, 0.64);
   font-size: 12px;

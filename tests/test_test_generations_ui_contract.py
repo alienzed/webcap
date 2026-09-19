@@ -246,3 +246,28 @@ def test_test_workspace_markup_is_static_and_behavior_only_binds_it():
     assert "workspace.appendChild(node)" not in script
     assert "function bindUi()" in script
     assert "bindUi();" in script
+
+
+def test_test_preview_controls_do_not_cover_video_frames():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "video.controls = true" not in script
+    assert "function appendTestPreviewVideo(container, video)" in script
+    assert "test-generations-video-transport" in script
+    assert "test-generations-video-scrubber" in script
+    assert ".test-generations-video-transport {" in css
+
+
+def test_recent_test_sets_reuse_existing_session_history():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-recent-sets-list"' in html
+    assert "def recent_test_sets(limit=8):" in backend
+    assert '"recent": recent_test_sets()' in backend
+    assert "function renderRecentTestSets(items)" in script
+    assert "function openTestBenchFolder(folder)" in script
+    assert "data.recentTestOpen" not in script
+    assert "dataset.recentTestOpen" in script

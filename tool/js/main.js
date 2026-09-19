@@ -441,4 +441,5 @@ addEventListener('DOMContentLoaded', function () {
   if (typeof applyInitialShellLocationRoute === 'function') applyInitialShellLocationRoute();
   refreshCurrentDirectory();
   wireAllUi();
+  if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();
 });

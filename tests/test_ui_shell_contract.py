@@ -390,3 +390,20 @@ def test_console_visibility_is_class_owned_after_shell_cleanup():
     assert "style.display" not in console
     assert ".app-frame > #console-panel {" in css
     assert "display: flex;" in css
+
+
+def test_activity_navigation_and_escape_precedence_are_accessible():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    assert 'aria-controls="prep-workspace-root"' in html
+    assert 'aria-controls="training-navigator"' in html
+    assert 'aria-controls="test-generations-workspace"' in html
+    assert 'aria-current="page"' in html
+    assert "setAttribute('aria-current', prepActive ? 'page' : 'false')" in shell
+    assert "setAttribute('aria-current', trainingActive ? 'page' : 'false')" in shell
+    assert "setAttribute('aria-current', testActive ? 'page' : 'false')" in shell
+    assert "#app-overlay-root > :not(.hidden)[data-escape-close-id]" in shell
+    assert "closeBtn.click();" in shell
+    assert "isFocusedAnnotationOpen()" in shell
+    assert "setShellImmersive(false);" in shell

@@ -19,7 +19,7 @@ def test_outer_shell_wraps_existing_workspace_without_replacing_it():
     assert 'id="sidebar-panel"' in html
     assert 'class="panel preview-panel"' in html
     assert 'class="panel workbench-panel"' in html
-    assert 'id="workspace-overlays"' in html
+    assert 'id="app-overlay-root"' in html
 
 
 def test_global_shell_controls_are_owned_by_permanent_shell():
@@ -251,6 +251,36 @@ def test_model_selector_is_single_real_control_in_permanent_header():
     assert "window.refreshWorkingModelSelector()" in ui
     assert "if (isTrainingWorkspaceActive())" in training
     assert "setWorkingModelProfileId(modelProfileSelect.value, state.folder);" in training
-    assert "app-header-model-profile-select" in test_bench
+    assert "app-header-model-profile-select" not in test_bench
     assert "training-model-profile-select" not in test_bench
+    assert "getWorkingModelProfileId()" in test_bench
+    assert "webcap:working-model-changed" in test_bench
     assert ".app-header-model-control select" in css
+
+
+def test_true_modals_share_one_static_application_overlay_root():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    root_start = html.index('id="app-overlay-root"')
+    scripts_start = html.index('<!-- JS load order:')
+    for modal_id in (
+        'training-review-modal',
+        'training-candidates-modal',
+        'media-grid-viewer-modal',
+        'crop-modal',
+        'app-settings-modal',
+        'review-rules-modal',
+        'checklist-keywords-modal',
+        'checklist-group-terms-modal',
+        'checklist-term-affixes-modal',
+    ):
+        position = html.index('id="' + modal_id + '"')
+        assert root_start < position < scripts_start
+
+    assert 'id="workspace-overlays"' not in html
+    assert "ensureWorkspaceOverlayChildren" not in shell
+    assert "ensureWorkspaceOverlayHost" not in shell
+    assert "function isApplicationOverlayOpen()" in shell
+    assert ".app-overlay-root {" in css

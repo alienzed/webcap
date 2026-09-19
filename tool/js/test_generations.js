@@ -14,9 +14,16 @@
 
   function el(id) { return document.getElementById(id); }
 
+  function owningSetFolder(folder) {
+    var value = String(folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    var marker = '/test-generations/';
+    var index = value.indexOf(marker);
+    return index === -1 ? value : value.slice(0, index);
+  }
+
   function request(mode, criteria) {
     var body = {
-      folder: String(launchFolder || ''),
+      folder: owningSetFolder(launchFolder || (state && state.folder) || ''),
       profileId: PROFILE_ID,
       mode: mode
     };
@@ -696,7 +703,7 @@
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
     if (!node || !surface || !app) throw new Error('Test Generations requires the app shell, editor surface, and test pane.');
-    launchFolder = String(state && state.folder || '');
+    launchFolder = owningSetFolder(state && state.folder || '');
     surface.classList.add('test-generations-active');
     app.classList.add('test-generations-workspace-open');
     node.classList.remove('hidden');

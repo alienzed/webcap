@@ -1,7 +1,6 @@
 var trainingWorkspaceState = {
   configFiles: [],
   profiles: [],
-  selectedProfileId: 'wan22_t2v',
   selectedMode: 'normal',
   runnerJobs: [],
   runnerActiveJobId: '',

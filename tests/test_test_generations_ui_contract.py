@@ -271,3 +271,22 @@ def test_recent_test_sets_reuse_existing_session_history():
     assert "function openTestBenchFolder(folder)" in script
     assert "data.recentTestOpen" not in script
     assert "dataset.recentTestOpen" in script
+
+
+def test_test_execution_is_h3_gated_even_when_workspace_is_opened_indirectly():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "function isTestModelSupported()" in script
+    assert "runBtn.disabled = active || !prepared || !prepared.count || !supported;" in script
+    assert "if (!isTestModelSupported())" in script
+    assert "New Test runs currently require MiniMax H3 as the working model." in script
+    assert "syncLaunchVisibility();" in script[script.index("function testGenerationsFolderLoaded()"):script.index("function stagedFileParts(", script.index("function testGenerationsFolderLoaded()"))]
+    assert "syncActiveRunControls(currentStatus);" in script
+    assert ".test-generations-video-transport, video, button" in script
+
+
+def test_recent_test_sets_are_cached_during_active_test_polling():
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+
+    assert '_recent_sets_cache = {"expires": 0.0, "items": []}' in backend
+    assert 'time.monotonic() + 10.0' in backend

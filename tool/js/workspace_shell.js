@@ -673,20 +673,3 @@ function clearEditorAndPreview() {
   updateBalanceDistributionWheel();
 }
 
-function clearSelection() {
-  if (state.objectUrl) {
-    URL.revokeObjectURL(state.objectUrl);
-    state.objectUrl = '';
-  }
-  state.currentItem = null;
-  state.currentConfigFile = null;
-  if (typeof updatePrimerCaptionResetUi === 'function') {
-    updatePrimerCaptionResetUi();
-  }
-  renderItemTagsPanel();
-  renderItemMetadataPanel();
-  renderFileList(ui.filterEl.value);
-  if (typeof updateSidebarSurfaceTools === 'function') {
-    updateSidebarSurfaceTools();
-  }
-}

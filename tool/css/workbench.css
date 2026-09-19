@@ -1534,7 +1534,6 @@
 .app.shell-revamp.workspace-surface-training .training-item-badges {
   position: absolute;
   right: 5px;
-  bottom: 5px;
   display: flex;
   gap: 4px;
 }

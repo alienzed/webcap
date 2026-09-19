@@ -341,10 +341,6 @@
   box-shadow: none;
 }
 
-.app.shell-revamp .workspace-main-resizer {
-  display: none !important;
-}
-
 .app.shell-revamp .preview-shell {
   position: relative;
   gap: 6px;
@@ -469,8 +465,7 @@
   justify-self: start;
 }
 
-.app.shell-revamp .preview-header-actions .review-captions-btn,
-.app.shell-revamp .preview-header-actions .app-header-segment-btn {
+.app.shell-revamp .preview-header-actions .review-captions-btn {
   width: auto;
   min-width: 0;
   min-height: 30px;

@@ -10,6 +10,7 @@
   var compareIndex = 0;
   var pendingActivityFolder = '';
   var testActivity = {};
+  var selectedCandidates = null;
   var debouncedPromptSave = debounceCreate(500);
 
   function el(id) { return document.getElementById(id); }
@@ -238,9 +239,21 @@
     });
   }
 
+  function selectedCandidateFiles() {
+    if (!(selectedCandidates instanceof Set)) return [];
+    return Array.from(selectedCandidates);
+  }
+
   function renderStagedFiles(payload) {
     var count = Number(payload && payload.count || 0);
     var files = payload && Array.isArray(payload.files) ? payload.files : [];
+    var scores = payload && payload.candidateScores && typeof payload.candidateScores === 'object'
+      ? payload.candidateScores
+      : {};
+    if (!(selectedCandidates instanceof Set)) selectedCandidates = new Set(files);
+    Array.from(selectedCandidates).forEach(function (fileName) {
+      if (files.indexOf(fileName) === -1) selectedCandidates.delete(fileName);
+    });
     var summary = el('test-generations-summary');
     var countEl = el('test-generations-files-count');
     var host = el('test-generations-files');
@@ -257,14 +270,26 @@
       var row = document.createElement('div');
       row.className = 'test-generations-staged-row';
       row.title = parts.fileName;
+      var include = document.createElement('input');
+      include.type = 'checkbox';
+      include.className = 'test-generations-candidate-checkbox';
+      include.dataset.candidateSelect = String(fileName || '');
+      include.checked = selectedCandidates.has(String(fileName || ''));
+      include.title = 'Include this staged LoRA in the next Test run';
+      include.setAttribute('aria-label', 'Include ' + String(fileName || 'candidate') + ' in next Test run');
+
       var copy = document.createElement('div');
       copy.className = 'test-generations-staged-copy';
       var name = document.createElement('strong');
       name.textContent = parts.label;
       var detail = document.createElement('span');
-      detail.textContent = parts.detail;
+      var score = scores[String(fileName || '')];
+      var scoreText = score && Number(score.count || 0)
+        ? ('★ ' + Number(score.average || 0).toFixed(1) + ' (' + Number(score.count || 0) + ')')
+        : '';
+      detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
-      if (parts.detail) copy.appendChild(detail);
+      if (detail.textContent) copy.appendChild(detail);
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'test-generations-remove-candidate';
@@ -272,6 +297,7 @@
       remove.title = 'Remove this staged Test candidate';
       remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
       remove.textContent = '×';
+      row.appendChild(include);
       row.appendChild(copy);
       row.appendChild(remove);
       host.appendChild(row);
@@ -299,7 +325,7 @@
       var copy = document.createElement('div');
       copy.className = 'test-generations-session-copy';
       var title = document.createElement('strong');
-      title.textContent = sessionLabel(name);
+      title.textContent = String(session.name || '').trim() || sessionLabel(name);
       var meta = document.createElement('span');
       var completed = Number(session.completed || 0);
       var total = Number(session.total || 0);
@@ -713,7 +739,7 @@
     var stopBtn = el('test-generations-stop-btn');
     if (runBtn) {
       var supported = isTestModelSupported();
-      runBtn.disabled = active || !prepared || !prepared.count || !supported;
+      runBtn.disabled = active || !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;
       runBtn.title = supported
         ? 'Run this frozen Test batch.'
         : 'New Test runs currently require MiniMax H3 as the working model.';
@@ -726,7 +752,9 @@
 
   function sessionMetaText(status) {
     if (!status || !status.session) return '';
-    var parts = [sessionLabel(status.session)];
+    var parts = [];
+    if (String(status.name || '').trim()) parts.push(String(status.name).trim());
+    parts.push(sessionLabel(status.session));
     if (status.aspectRatio) parts.push(String(status.aspectRatio));
     if (status.megapixels !== undefined && status.megapixels !== null && status.megapixels !== '') parts.push(String(status.megapixels) + ' MP');
     if (status.duration !== undefined && status.duration !== null && status.duration !== '') parts.push(String(status.duration) + 's');
@@ -754,6 +782,7 @@
     var sourcePrompt = String(status.sourcePrompt || '');
     details.innerHTML = [
       '<div class="test-generations-session-detail-grid">',
+      '<div><span>Name</span><strong>' + escapeHtml(String(status.name || '—')) + '</strong></div>',
       '<div><span>Status</span><strong>' + escapeHtml(String(status.status || '')) + '</strong></div>',
       '<div><span>Aspect ratio</span><strong>' + escapeHtml(String(status.aspectRatio || '—')) + '</strong></div>',
       '<div><span>Resolution</span><strong>' + escapeHtml(status.megapixels !== undefined && status.megapixels !== null ? String(status.megapixels) + ' MP' : '—') + '</strong></div>',
@@ -769,6 +798,12 @@
     currentStatus = status || {};
     if (status) currentSession = String(status.session || '');
     syncActiveRunControls(status || {});
+    var openFolderBtn = el('test-generations-open-results-btn');
+    if (openFolderBtn) {
+      var resultFolder = String(status && status.resultFolder || '');
+      openFolderBtn.dataset.resultFolder = resultFolder;
+      openFolderBtn.classList.toggle('hidden', !resultFolder);
+    }
     syncSessionSelection();
     var statusEl = el('test-generations-status');
     var errorEl = el('test-generations-error');
@@ -805,6 +840,24 @@
       errorEl.textContent = String(err && err.message ? err.message : err);
       errorEl.classList.remove('hidden');
     }
+  }
+
+  function openResultsFolder(folder) {
+    var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
+    if (!targetFolder || !state || !state.dirStack || !state.dirStack.length) return;
+    if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+      clearFocusSet();
+    }
+    closePane();
+    setWorkspaceSurface('default');
+    state.dirStack = [state.dirStack[0]].concat(targetFolder.split('/').filter(Boolean).map(function (name) {
+      return { name: name };
+    }));
+    state.folder = targetFolder;
+    state.currentItem = null;
+    clearEditorAndPreview();
+    clearCaptionFilterInputs();
+    refreshCurrentDirectory();
   }
 
   function closePane() {
@@ -871,6 +924,7 @@
       errorEl.classList.add('hidden');
     }
     prepared = null;
+    selectedCandidates = null;
     currentSession = '';
     currentStatus = {};
     compareIndex = 0;
@@ -895,11 +949,14 @@
     if (!isTestModelSupported()) {
       return showError(new Error('New Test runs currently require MiniMax H3 as the working model.'));
     }
+    var name = String(el('test-generations-session-name') && el('test-generations-session-name').value || '').trim();
     var prompt = String(el('test-generations-prompt') && el('test-generations-prompt').value || '').trim();
+    var selectedFiles = selectedCandidateFiles();
     var aspectRatio = String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim();
     var megapixels = String(el('test-generations-megapixels') && el('test-generations-megapixels').value || '').trim();
     var duration = String(el('test-generations-duration') && el('test-generations-duration').value || '').trim();
     var seed = String(el('test-generations-seed') && el('test-generations-seed').value || '').trim();
+    if (!selectedFiles.length) return showError(new Error('Select at least one staged LoRA to test.'));
     if (!prompt) return showError(new Error('A test prompt is required.'));
     saveTestBenchState(prompt);
     if (!aspectRatio) return showError(new Error('An aspect ratio is required.'));
@@ -908,6 +965,8 @@
     if (runBtn) runBtn.disabled = true;
     if (errorEl) errorEl.classList.add('hidden');
     request('test_start', {
+      name: name,
+      selectedFiles: selectedFiles,
       prompt: prompt,
       aspectRatio: aspectRatio,
       megapixels: megapixels,
@@ -985,16 +1044,28 @@
     button.onclick = openPane;
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-stop-btn').onclick = stopRun;
+    el('test-generations-open-results-btn').onclick = function () {
+      openResultsFolder(this.dataset.resultFolder);
+    };
     el('test-generations-view-grid-btn').onclick = function () {
       setResultsView('grid');
     };
     el('test-generations-view-compare-btn').onclick = function () {
       setResultsView('compare');
     };
+    el('test-generations-files').addEventListener('change', function (event) {
+      var checkbox = event.target.closest('[data-candidate-select]');
+      if (!checkbox) return;
+      var fileName = String(checkbox.dataset.candidateSelect || '');
+      if (checkbox.checked) selectedCandidates.add(fileName);
+      else selectedCandidates.delete(fileName);
+      syncActiveRunControls(currentStatus);
+    });
     el('test-generations-files').onclick = function (event) {
       var button = event.target.closest('[data-file-name]');
       if (!button) return;
       button.disabled = true;
+      selectedCandidates.delete(String(button.dataset.fileName || ''));
       removeCandidate(button.dataset.fileName);
     };
     el('test-generations-recent-sets-list').onclick = function (event) {

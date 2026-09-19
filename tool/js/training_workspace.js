@@ -83,7 +83,6 @@ function syncWorkingModelProfileSelect(folder) {
 function setSelectedTrainingModelProfile(profileId) {
   setWorkingModelProfileId(profileId, state.folder);
   setManagedTrainingStages(trainingWorkspaceState.runStages);
-  renderTrainingModelTrainedStatus();
 }
 
 function refreshWorkingModelSelector() {

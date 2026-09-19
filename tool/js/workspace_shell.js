@@ -213,16 +213,19 @@ function syncApplicationShellContext() {
     var prepActive = navigation.activity === 'prep';
     prepBtn.classList.toggle('active', prepActive);
     prepBtn.setAttribute('aria-pressed', prepActive ? 'true' : 'false');
+    prepBtn.setAttribute('aria-current', prepActive ? 'page' : 'false');
   }
   if (trainingBtn) {
     var trainingActive = navigation.activity === 'training';
     trainingBtn.classList.toggle('active', trainingActive);
     trainingBtn.setAttribute('aria-pressed', trainingActive ? 'true' : 'false');
+    trainingBtn.setAttribute('aria-current', trainingActive ? 'page' : 'false');
   }
   if (testBtn) {
     var testActive = navigation.activity === 'test';
     testBtn.classList.toggle('active', testActive);
     testBtn.setAttribute('aria-pressed', testActive ? 'true' : 'false');
+    testBtn.setAttribute('aria-current', testActive ? 'page' : 'false');
   }
 }
 
@@ -586,13 +589,26 @@ function wireWorkspaceHeaderUi() {
     immersiveExitBtn.__workspaceWired = true;
     immersiveExitBtn.onclick = function () { setShellImmersive(false); };
   }
-  if (!window.__webcapImmersiveEscapeBound) {
-    window.__webcapImmersiveEscapeBound = true;
+  if (!window.__webcapShellEscapeBound) {
+    window.__webcapShellEscapeBound = true;
     document.addEventListener('keydown', function (event) {
-      if (event && event.key === 'Escape' && shellNavigationState.immersive) {
+      if (!event || event.key !== 'Escape' || event.defaultPrevented) return;
+      var openOverlay = document.querySelector('#app-overlay-root > :not(.hidden)[data-escape-close-id]');
+      if (openOverlay) {
+        var closeId = openOverlay.getAttribute('data-escape-close-id');
+        var closeBtn = closeId ? document.getElementById(closeId) : null;
+        if (closeBtn) {
+          event.preventDefault();
+          closeBtn.click();
+          return;
+        }
+      }
+      if (typeof isFocusedAnnotationOpen === 'function' && isFocusedAnnotationOpen()) return;
+      if (shellNavigationState.immersive) {
+        event.preventDefault();
         setShellImmersive(false);
       }
-    }, true);
+    });
   }
 
   var configEditorSaveBtn = document.getElementById('config-editor-save-btn');

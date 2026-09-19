@@ -6,7 +6,7 @@ Keep intended training media in the set folder, caption it, and use WebCap's rev
 
 ## 2. Choose the training setup
 
-Open **Train** and select a supported model. WebCap creates any missing persistent TOMLs for that setup and shows only those files.
+Open **Training** from the permanent activity rail and select the working model from the application header. WebCap creates any missing persistent TOMLs for that setup and shows only those files.
 
 Inspect or edit every relevant config and dataset TOML. Existing files are preserved. **Reset** is the explicit replacement action for one file.
 

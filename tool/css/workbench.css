@@ -646,20 +646,7 @@
   overflow: auto;
 }
 
-.app.shell-revamp .training-navigator-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.app.shell-revamp .training-navigator-title {
-  color: var(--text);
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.app.shell-revamp .training-navigator-subtitle,
+.app.shell-revamp .training-command-status,
 .app.shell-revamp .training-command-status {
   color: var(--muted);
   font-size: 12px;
@@ -1058,42 +1045,12 @@
 }
 
 .app.shell-revamp .training-navigator-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
-}
-
-.app.shell-revamp .training-navigator-title {
-  white-space: nowrap;
-}
-
-.app.shell-revamp .training-navigator-heading {
-  min-width: 0;
-  text-align: center;
-}
-
-.app.shell-revamp .training-navigator-heading .training-navigator-subtitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .app.shell-revamp .training-sidebar-collapse-btn {
-  justify-self: start;
-}
-
-.app.shell-revamp .training-navigator-actions {
-  display: flex;
-  justify-self: end;
-  align-items: center;
-  gap: 8px;
-}
-
-.app.shell-revamp .training-back-btn {
   flex: 0 0 auto;
-  width: auto !important;
-  min-height: 28px;
-  padding: 4px 8px;
 }
 
 .app.shell-revamp .training-set-only.hidden {

@@ -19,3 +19,11 @@ def test_grouped_metadata_selection_uses_the_rendered_ratio_group_as_its_focus_s
     assert "focusFiles: focusContext.files" in script
     assert "focusSource: focusContext.source" in script
     assert "reportType: 'review'" in script
+
+
+def test_media_metadata_cache_write_is_atomic():
+    media = (ROOT / "tool" / "server" / "media.py").read_text(encoding="utf-8")
+
+    assert 'tmp_path = metadata_path.with_name(metadata_path.name + ".tmp")' in media
+    assert "os.fsync(f.fileno())" in media
+    assert "os.replace(tmp_path, metadata_path)" in media

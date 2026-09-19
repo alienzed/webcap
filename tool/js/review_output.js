@@ -39,32 +39,21 @@ function getFocusSetReportLabel(reportType) {
   return '';
 }
 
-function refreshReviewOutputSummary() {
-  var folderEl = document.getElementById('review-output-summary-folder');
-  var visibleEl = document.getElementById('review-output-summary-visible');
-  var scopeEl = document.getElementById('review-output-summary-scope');
-  if (!folderEl || !visibleEl) return;
-
-  var folder = String(state && state.folder || '').trim();
-  var rootLabel = String(ROOT_FOLDER_LABEL || '').trim();
-  var folderLabel = 'No folder selected';
-  if (folder) {
-    folderLabel = rootLabel ? (rootLabel + '/' + folder) : folder;
-  } else if (rootLabel) {
-    folderLabel = rootLabel;
-  }
-
+function getReviewWorkspaceShellContext() {
   var totalCount = Array.isArray(state && state.items) ? state.items.length : 0;
   var visibleCount = typeof getFilteredMediaItems === 'function' ? getFilteredMediaItems(false).length : 0;
   var focusSetCount = state && state.focusSet && state.focusSet.keys ? state.focusSet.keys.length : 0;
-
-  folderEl.textContent = folderLabel;
-  visibleEl.textContent = totalCount ? (visibleCount + ' of ' + totalCount + ' visible') : 'No media loaded';
-  if (scopeEl) {
-    var scopeLabel = focusSetCount ? ('Focus set: ' + focusSetCount + ' item' + (focusSetCount === 1 ? '' : 's')) : (state && state.supersetActive ? 'SuperSet results' : '');
-    scopeEl.textContent = scopeLabel;
-    scopeEl.classList.toggle('hidden', !scopeLabel);
+  var parts = [totalCount ? (visibleCount + ' of ' + totalCount + ' visible') : 'No media loaded'];
+  if (focusSetCount) {
+    parts.push('Focus set: ' + focusSetCount + ' item' + (focusSetCount === 1 ? '' : 's'));
+  } else if (state && state.supersetActive) {
+    parts.push('SuperSet results');
   }
+  return parts.join(' · ');
+}
+
+function refreshReviewOutputSummary() {
+  if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   if (typeof refreshReviewWorkspaceBaseline === 'function') refreshReviewWorkspaceBaseline();
 }
 

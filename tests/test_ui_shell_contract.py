@@ -482,3 +482,26 @@ def test_retired_workflow_mode_does_not_survive_as_parallel_shell_state():
     assert "workspaceUiState" not in shell
     assert "setWorkspaceWorkflowMode" not in shell
     assert "workflowMode" not in grid
+
+
+def test_post_refactor_hygiene_has_one_sidebar_control_and_no_legacy_shell_fossils():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    training = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    constants = (ROOT / "tool" / "js" / "constants.js").read_text(encoding="utf-8")
+    styles = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert html.count('id="sidebar-collapse-toggle-btn"') == 1
+    assert "training-sidebar-collapse-toggle-btn" not in html + training + shell
+    assert 'class="app-header-sidebar-toggle-btn"' in html
+    assert ".utility-bar" not in styles
+    assert "#utility-training-btn" not in styles
+    assert "#utility-test-bench-btn" not in styles
+    assert ".console-toggle-btn" not in styles
+    assert 'id="preview-action-primary-a"' not in html
+    assert 'id="preview-action-primary-b"' not in html
+    assert 'id="preview-action-more"' not in html
+    assert "previewPrimaryActionAEl" not in constants
+    assert "previewPrimaryActionBEl" not in constants
+    assert "previewMoreActionsEl" not in constants
+    assert ">Train Set</button>" in html

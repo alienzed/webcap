@@ -56,8 +56,9 @@ def test_test_workspace_is_first_class_inside_permanent_shell():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
     assert 'id="test-generations-workspace"' in html
-    assert ".app.shell-revamp.workspace-test-open" in css
-    assert 'grid-template-areas: "test";' in css
+    assert ".app-frame.workspace-test-open > .app" in css
+    assert ".app-frame.workspace-test-open > .test-generations-workspace" in css
+    assert "grid-area: workspace;" in css
     assert "test-generations-workspace-open" not in css
     assert "temporarily owns the full workspace" not in css
 

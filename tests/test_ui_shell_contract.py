@@ -14,7 +14,7 @@ def test_outer_shell_wraps_existing_workspace_without_replacing_it():
     assert 'id="app-header-workspace-controls"' in html
     assert 'id="app-header-global"' in html
 
-    assert 'class="app shell-revamp workspace-view-single workflow-annotate workspace-surface-default"' in html
+    assert 'class="app shell-revamp workspace-view-single workspace-surface-default"' in html
     assert 'id="sidebar-panel"' in html
     assert 'class="panel preview-panel"' in html
     assert 'class="panel workbench-panel"' in html
@@ -27,7 +27,7 @@ def test_global_shell_controls_are_owned_by_permanent_shell():
     assert 'class="activity-rail-spacer"' in html
     assert 'id="shell-settings-btn"' in html
     assert 'id="shell-help-btn"' in html
-    assert 'class="status status-bar app-header-status"' in html
+    assert 'id="status" class="status shell-status-toast"' in html
     assert 'id="status-text"' in html
     assert 'id="console-panel"' in html
 
@@ -466,3 +466,19 @@ def test_background_training_activity_is_discovered_on_app_startup():
     assert "if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();" in main
     assert "function scheduleTrainingRunnerPoll()" in runner
     assert "if (!hasActiveJob) return;" in runner
+
+
+def test_retired_workflow_mode_does_not_survive_as_parallel_shell_state():
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    grid = (ROOT / "tool" / "js" / "media_grid_state.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    workbench_css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+
+    for source in (shell, grid, html, shell_css, workbench_css):
+        assert "workflow-annotate" not in source
+        assert "workflow-select" not in source
+        assert "workflow-review" not in source
+    assert "workspaceUiState" not in shell
+    assert "setWorkspaceWorkflowMode" not in shell
+    assert "workflowMode" not in grid

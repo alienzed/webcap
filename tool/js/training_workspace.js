@@ -3,13 +3,11 @@ function normalizeTrainingWorkspaceMode(mode) {
 }
 
 function syncTrainingWorkspaceProfile() {
-  var els = getTrainingWorkspaceEls();
-  if (els.profileSelect) els.profileSelect.value = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
+  trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
 }
 
 function getTrainingWorkspaceSelectedProfile(folder) {
-  var els = getTrainingWorkspaceEls();
-  return normalizeTrainingWorkspaceMode(els.profileSelect ? els.profileSelect.value : trainingWorkspaceState.selectedMode);
+  return normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
 }
 
 function fetchTrainingProfiles() {
@@ -161,7 +159,6 @@ function syncTrainingWorkflowReadiness(manifest, configFiles) {
   var els = getTrainingWorkspaceEls();
   var configsReady = trainingConfigFilesAreReady(configFiles);
   var hasVisibleMedia = getVisibleMediaSelectionForTraining().length > 0;
-  if (els.configStepNumber) els.configStepNumber.classList.toggle('is-waiting', !configsReady);
   if (els.runStepNumber) els.runStepNumber.classList.toggle('is-waiting', !configsReady || !hasVisibleMedia);
   if (els.queueJobBtn) {
     els.queueJobBtn.title = 'Capture the visible media and saved TOMLs, then add this run to the training queue.';
@@ -568,7 +565,6 @@ function switchTrainingSetup(profileId, mode) {
 function wireTrainingWorkspace() {
   var sidebarCollapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
   var modelProfileSelect = getWorkingModelProfileSelect();
-  var modeSelect = document.getElementById('training-workspace-profile-select');
   var stageButtons = document.querySelectorAll('[data-training-stage]');
   var resumeInput = document.getElementById('training-run-resume-input');
   var checkpointSelect = document.getElementById('training-run-checkpoint-select');
@@ -616,7 +612,6 @@ function wireTrainingWorkspace() {
     }
     setWorkingModelProfileId(modelProfileSelect.value, state.folder);
   };
-  if (modeSelect) modeSelect.onchange = function () { switchTrainingSetup('', modeSelect.value); };
   stageButtons.forEach(function (button) {
     button.onclick = function () {
       setManagedTrainingStages(button.getAttribute('data-training-stage'));

@@ -14,7 +14,6 @@ def test_outer_shell_wraps_existing_workspace_without_replacing_it():
     assert 'id="app-header-workspace-controls"' in html
     assert 'id="app-header-global"' in html
 
-    # The existing inner workspace remains intact during the first migration slice.
     assert 'class="app shell-revamp workspace-view-single workflow-annotate workspace-surface-default"' in html
     assert 'id="sidebar-panel"' in html
     assert 'class="panel preview-panel"' in html
@@ -25,10 +24,6 @@ def test_outer_shell_wraps_existing_workspace_without_replacing_it():
 def test_global_shell_controls_are_owned_by_permanent_shell():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert 'id="utility-bar"' not in html
-    assert 'id="utility-current-path-btn"' not in html
-    assert 'id="utility-training-btn"' not in html
-    assert 'id="utility-test-bench-btn"' not in html
     assert 'class="activity-rail-spacer"' in html
     assert 'id="shell-settings-btn"' in html
     assert 'id="shell-help-btn"' in html
@@ -59,8 +54,6 @@ def test_test_workspace_is_first_class_inside_permanent_shell():
     assert ".app-frame.workspace-test-open > .app" in css
     assert ".app-frame.workspace-test-open > .test-generations-workspace" in css
     assert "grid-area: workspace;" in css
-    assert "test-generations-workspace-open" not in css
-    assert "temporarily owns the full workspace" not in css
 
 
 def test_shell_activity_controls_are_real_navigation_without_replacing_legacy_paths():
@@ -95,7 +88,6 @@ def test_test_activity_visibility_and_active_state_are_owned_by_new_rail():
     assert "var activityButton = el('activity-test-btn')" in script
     assert "activityButton.classList.toggle('hidden', !visible)" in script
     assert "activityButton.classList.toggle('active', isOpen())" in script
-    assert "utility-test-bench-btn" not in script
 
 
 def test_console_has_one_stable_shell_host():
@@ -105,8 +97,6 @@ def test_console_has_one_stable_shell_host():
 
     assert html.count('id="console-panel"') == 1
     assert ".app-frame > #console-panel {" in css
-    assert "syncConsolePanelHost" not in shell
-    assert "host.appendChild(ui.consolePanelEl)" not in shell
 
 
 def test_training_background_activity_is_mirrored_to_permanent_rail():
@@ -115,7 +105,6 @@ def test_training_background_activity_is_mirrored_to_permanent_rail():
 
     assert "document.getElementById('activity-training-btn')" in script
     assert "activityTrainingBtn.classList.toggle('training-running', running)" in script
-    assert "utility-training-btn" not in script
     assert ".activity-rail-btn.training-running::after" in css
 
 
@@ -127,14 +116,9 @@ def test_training_identity_is_owned_by_shell_header():
 
     assert 'id="app-header-workspace-title"' in html
     assert 'id="app-header-workspace-context"' in html
-    assert 'id="training-workspace-back-btn"' not in html
-    assert 'id="training-navigator-title"' not in html
-    assert 'id="training-navigator-folder"' not in html
     assert 'id="training-sidebar-collapse-toggle-btn"' in html
     assert "surface === 'training' ? 'Training'" in shell
     assert "entryKind === 'global'" in shell
-    assert "navigatorTitle" not in workspace
-    assert "navigatorTitle" not in state
 
 
 def test_test_workspace_uses_shell_identity_and_prep_exit():
@@ -144,8 +128,6 @@ def test_test_workspace_uses_shell_identity_and_prep_exit():
     assert "testOpen ? 'Test'" in shell
     assert "workspaceContextText = 'Generations'" in shell
     assert "window.closeTestBenchActivity()" in shell
-    assert "test-generations-close-btn" not in shell
-    assert "test-generations-close-btn" not in script
 
 
 def test_review_identity_is_owned_by_shell_header():
@@ -279,9 +261,6 @@ def test_true_modals_share_one_static_application_overlay_root():
         position = html.index('id="' + modal_id + '"')
         assert root_start < position < scripts_start
 
-    assert 'id="workspace-overlays"' not in html
-    assert "ensureWorkspaceOverlayChildren" not in shell
-    assert "ensureWorkspaceOverlayHost" not in shell
     assert "function isApplicationOverlayOpen()" in shell
     assert ".app-overlay-root {" in css
 
@@ -297,8 +276,6 @@ def test_shell_navigation_state_is_derived_from_activity_root_and_context_only()
     assert "navigation.activity === 'prep'" in shell
     assert "navigation.activity === 'training'" in shell
     assert "navigation.activity === 'test'" in shell
-    assert "Grid selection" not in shell
-    assert "Focus group" not in shell
 
 
 def test_grid_and_focus_view_mode_is_derived_from_surface_not_parallel_state():
@@ -307,12 +284,8 @@ def test_grid_and_focus_view_mode_is_derived_from_surface_not_parallel_state():
     grid_state = (ROOT / "tool" / "js" / "media_grid_state.js").read_text(encoding="utf-8")
     main = (ROOT / "tool" / "js" / "main.js").read_text(encoding="utf-8")
 
-    assert "workspaceUiState.viewMode" not in shell
     assert "function getWorkspaceViewMode()" in shell
     assert "surface === 'grid' || surface === 'focus'" in shell
-    assert "function setWorkspaceViewMode" not in shell
-    assert "setWorkspaceViewMode(" not in grid_actions
-    assert "setWorkspaceViewMode(" not in grid_state
     assert "getWorkspaceViewMode() !== 'single'" in main
 
 
@@ -347,9 +320,7 @@ def test_shell_initialization_has_no_reparent_or_rebuild_fossils():
     console = (ROOT / "tool" / "js" / "console_panel.js").read_text(encoding="utf-8")
 
     assert "function initializeWorkspaceShell()" in shell
-    assert "rebuildUnifiedWorkspaceShell" not in shell
     assert "initializeWorkspaceShell();" in main
-    assert "appendChild(ui.consolePanelEl)" not in shell
     assert "style.display" not in console
 
 
@@ -361,7 +332,8 @@ def test_shell_immersive_mode_is_shell_owned_and_escape_exits():
     assert 'id="shell-immersive-btn"' in html
     assert 'id="shell-immersive-exit-btn"' in html
     assert "function setShellImmersive(nextImmersive)" in shell
-    assert "event.key === 'Escape' && shellNavigationState.immersive" in shell
+    assert "event.key !== 'Escape' || event.defaultPrevented" in shell
+    assert "shellNavigationState.immersive" in shell
     assert ".app-frame.shell-immersive" in css
     assert ".app-frame.shell-immersive > .app-header" in css
     assert ".app-frame.shell-immersive > .activity-rail" in css

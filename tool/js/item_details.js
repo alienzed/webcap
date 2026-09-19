@@ -403,9 +403,6 @@ function renderPreviewHeaderMeta() {
     return;
   }
 
-  if (ui.sidebarCollapseToggleBtn) {
-    ui.sidebarCollapseToggleBtn.classList.toggle('hidden', focusOpen || (!hasItem && !sidebarCollapsed));
-  }
   if (ui.previewFocusBtnEl) {
     ui.previewFocusBtnEl.classList.toggle('hidden', !hasItem || focusOpen);
     ui.previewFocusBtnEl.disabled = false;
@@ -414,7 +411,7 @@ function renderPreviewHeaderMeta() {
 
   if (!hasItem) {
     if (previewShellEl) previewShellEl.classList.remove('preview-header-active');
-    ui.previewHeaderEl.classList.toggle('hidden', !sidebarCollapsed);
+    ui.previewHeaderEl.classList.add('hidden');
     clearPreviewHeaderUi();
     return;
   }

@@ -277,7 +277,7 @@ function syncApplicationShellContext() {
       var entryKind = getTrainingWorkspaceEntryKind();
       workspaceContextText = entryKind === 'global'
         ? 'Global'
-        : (entryKind === 'set' ? String(state && state.folder || '') : 'Select a set');
+        : (entryKind === 'set' ? '' : 'Select a set');
     } else if (surface === 'reviewOutput' && typeof getReviewWorkspaceShellContext === 'function') {
       workspaceContextText = getReviewWorkspaceShellContext();
     } else if (surface === 'grid') {

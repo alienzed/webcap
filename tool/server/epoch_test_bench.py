@@ -35,6 +35,7 @@ _lock = threading.Lock()
 _active_threads = {}
 _active_sessions = {}
 _stop_requests = set()
+_recent_sets_cache = {"expires": 0.0, "items": []}
 
 
 def _reserve_gpu_for_test_generations():
@@ -279,6 +280,11 @@ def test_presence(folder_path):
 
 
 def recent_test_sets(limit=8):
+    now = time.monotonic()
+    cached_items = _recent_sets_cache.get("items") if isinstance(_recent_sets_cache.get("items"), list) else []
+    if now < float(_recent_sets_cache.get("expires") or 0):
+        return [dict(item) for item in cached_items[:max(1, int(limit or 8))]]
+
     fs_root = Path(app_config.FS_ROOT).resolve()
     recent = []
     if not fs_root.is_dir():
@@ -312,6 +318,8 @@ def recent_test_sets(limit=8):
         })
 
     recent.sort(key=lambda item: (float(item.get("modified") or 0), str(item.get("latestSession") or "")), reverse=True)
+    _recent_sets_cache["items"] = [dict(item) for item in recent]
+    _recent_sets_cache["expires"] = time.monotonic() + 10.0
     return recent[:max(1, int(limit or 8))]
 
 

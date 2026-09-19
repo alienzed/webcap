@@ -37,15 +37,16 @@ The working model means:
 
 It is **not** the model of whatever historical artifact happens to be open.
 
-Current implementation ownership remains unchanged in Phase 24:
+After Phase 25:
 
-- `trainingWorkspaceState.selectedProfileId` is the current model/profile selection.
-- `getSelectedTrainingModelProfile()` resolves the selected profile.
-- selection is currently persisted per folder with `webcap.trainingProfile.<folder>`.
-- Training mode is separate state persisted with `webcap.trainingMode.<folder>`.
+- `workingContextState.modelProfileId` is the authoritative working model/profile selection.
+- `getWorkingModelProfileId()` and `setWorkingModelProfileId()` own access to that state.
+- selection is still persisted per folder with `webcap.trainingProfile.<folder>`.
+- Training consumes the shared state through `getSelectedTrainingModelProfile()`.
+- Training mode remains separate state persisted with `webcap.trainingMode.<folder>`.
 - the visible selector remains `#training-model-profile-select`.
 
-A later dedicated state-migration phase may give this value shell ownership. Until then, the shell must not create a competing editable copy.
+Phase 25 changes ownership only. The shell still has no competing editable copy, and the visible selector does not move until Phase 26.
 
 ## Artifact identity
 
@@ -107,7 +108,7 @@ Changing the working model must never rewrite or visually relabel historical art
 | Concept | Current owner | Phase 24 target semantics |
 | --- | --- | --- |
 | Current folder/set | `state.folder` | unchanged authoritative folder context |
-| Working model/profile | `trainingWorkspaceState.selectedProfileId` | defined as next-operation model; ownership unchanged for now |
+| Working model/profile | `workingContextState.modelProfileId` | authoritative next-operation model; Training consumes it |
 | Training mode | `trainingWorkspaceState.selectedMode` | separate from model identity |
 | Training artifact model | recorded job/run fields | immutable artifact identity |
 | Test artifact model | recorded Test session/status model | immutable artifact identity |

@@ -314,3 +314,13 @@ def test_grid_and_focus_view_mode_is_derived_from_surface_not_parallel_state():
     assert "setWorkspaceViewMode(" not in grid_actions
     assert "setWorkspaceViewMode(" not in grid_state
     assert "getWorkspaceViewMode() !== 'single'" in main
+
+
+def test_major_workspaces_have_explicit_stable_roots():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+
+    assert 'id="prep-workspace-root"' in html
+    assert 'data-workspace-root="prep"' in html
+    assert 'id="review-output-surface"' in html and 'data-workspace-root="review"' in html
+    assert 'id="training-navigator"' in html and 'data-workspace-root="training"' in html
+    assert 'id="test-generations-workspace"' in html and 'data-workspace-root="test"' in html

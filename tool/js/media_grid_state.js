@@ -113,13 +113,8 @@ function mediaGridRestoreItemWorkspace(previousWorkspaceState) {
 }
 
 function mediaGridEnsureMainWorkbenchVisible() {
-  var checklistPanel = document.getElementById('caption-checklist-panel');
-  if (checklistPanel) {
-    checklistPanel.style.display = 'flex';
-  }
-  var editorPanel = checklistPanel ? checklistPanel.closest('.editor-panel') : null;
-  if (editorPanel) {
-    editorPanel.classList.add('checklist-visible');
+  if (typeof setChecklistPanelVisible === 'function') {
+    setChecklistPanelVisible(true);
   }
 }
 

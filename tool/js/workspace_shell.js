@@ -144,13 +144,19 @@ function syncApplicationShellContext() {
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var workspaceTitle = document.getElementById('app-header-workspace-title');
   var workspaceContext = document.getElementById('app-header-workspace-context');
+  var prepSidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
   var testOpen = document.querySelector('.test-generations-pane:not(.hidden)');
+  if (prepSidebarToggle) {
+    prepSidebarToggle.classList.toggle('hidden', !!testOpen || surface !== 'default');
+  }
   if (workspaceTitle) {
     workspaceTitle.textContent = testOpen
       ? 'Test'
       : (surface === 'training'
         ? 'Training'
-        : (surface === 'reviewOutput' ? 'Review Set' : (surface === 'grid' ? 'Grid' : '')));
+        : (surface === 'reviewOutput'
+          ? 'Review Set'
+          : (surface === 'grid' ? 'Grid' : (surface === 'focus' ? 'Focus' : ''))));
   }
   if (workspaceContext) {
     var workspaceContextText = '';
@@ -192,8 +198,11 @@ function syncApplicationShellContext() {
 
 function openPrepActivity() {
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
-  if (normalizeWorkspaceSurface(workspaceState.surface) === 'grid') {
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  if (surface === 'grid') {
     closeMediaGridSurface();
+  } else if (surface === 'focus') {
+    stopFocusedAnnotation();
   }
   setWorkspaceSurface('default');
 }
@@ -411,6 +420,9 @@ function exitWorkspaceSurface(surfaceOverride) {
 
 function openTrainingSurface(mode) {
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
+  if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
+    stopFocusedAnnotation();
+  }
   var entryMode = mode === 'set' ? 'set' : 'global';
   var configFile = state.currentConfigFile;
   var shouldSaveConfig = isTrainingWorkspaceActive()
@@ -553,6 +565,9 @@ function wireWorkspaceHeaderUi() {
   if (testActivityBtn && !testActivityBtn.__workspaceWired) {
     testActivityBtn.__workspaceWired = true;
     testActivityBtn.onclick = function () {
+      if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
+        stopFocusedAnnotation();
+      }
       if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test Bench activity is not available.');
       window.openTestBenchActivity();
     };

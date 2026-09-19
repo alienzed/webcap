@@ -10,11 +10,12 @@ def test_test_generations_uses_training_pane_and_core_controls():
 
     assert "test-generations-pane" in script
     assert "test-generations-modal" not in script
-    assert "document.querySelector('.editor-surface')" in script
+    assert "el('test-generations-workspace')" in script
     assert "training-tests-actions" in script
     assert ".training-run-setup-actions" not in script
-    assert "test-generations-active" in script
-    assert "test-generations-workspace-open" in script
+    assert "document.querySelector('.editor-surface')" not in script
+    assert "test-generations-active" not in script
+    assert "workspace-test-open" in script
     assert "test-generations-aspect" in script
     assert "test-generations-megapixels" in script
     assert "test-generations-duration" in script
@@ -31,7 +32,7 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert "seed: seed" in script
 
     assert ".test-generations-pane" in css
-    assert ".editor-surface.test-generations-active" in css
+    assert ".test-generations-workspace" in css
     assert ".test-generations-results" in css
     assert ".test-generations-result-card video" in css
     assert ".test-generations-setup-overview" in css
@@ -52,8 +53,9 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert ".test-generations-library-heading" in css
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    assert ".test-generations-workspace-open .sidebar-panel" in shell_css
-    assert ".test-generations-workspace-open .preview-panel" in shell_css
+    assert 'id="test-generations-workspace"' in html
+    assert ".app.shell-revamp.workspace-test-open" in shell_css
+    assert ".test-generations-workspace-open" not in shell_css
     assert 'src="/static/js/test_generations.js"' in html
 
 
@@ -75,16 +77,19 @@ def test_test_generation_previews_keep_stable_width_and_natural_height():
     assert "object-fit:" not in video_rule
 
 
-def test_test_generations_owns_full_workbench_when_open():
+def test_test_generations_uses_explicit_workspace_root():
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert ".test-generations-workspace-open .sidebar-panel" in shell_css
-    assert ".test-generations-workspace-open .preview-panel" in shell_css
-    assert ".test-generations-workspace-open .workbench-main-stack > :not(.workbench-bottom)" in shell_css
-    assert ".test-generations-workspace-open .workbench-side-stack" in shell_css
-    assert 'grid-template-areas: "workbench" !important;' in shell_css
-    assert "grid-template-columns: minmax(0, 1fr) !important;" in shell_css
-    assert "flex: 1 1 auto !important;" in shell_css
+    assert 'id="test-generations-workspace"' in html
+    assert ".app.shell-revamp.workspace-test-open {" in shell_css
+    assert 'grid-template-areas: "test";' in shell_css
+    assert "> .test-generations-workspace" in shell_css
+    assert "> .sidebar-panel" in shell_css
+    assert "> .preview-panel" in shell_css
+    assert "> .workbench-panel" in shell_css
+    assert "test-generations-workspace-open" not in shell_css
+    assert "temporarily owns the full workspace" not in shell_css
 
 
 def test_test_generation_sessions_and_candidate_removal_contract():

@@ -1345,6 +1345,14 @@ Deleting old architecture does not require fallback compatibility code.
 
 Inspect `workspace_shell.js` and equivalent shell code.
 
+**Shell presentation questions to resolve in this phase**
+
+- Move transient global status feedback out of the top-right header; prefer a conventional bottom-left shell-owned presentation, potentially floating/semi-opaque rather than permanently consuming layout.
+- Keep the multiline console as a separate shell surface; consider moving its reveal/toggle control into the activity rail.
+- Reserve persistent header space only for information worth always seeing. A compact global GPU/background-activity indicator may be more useful than transient status text.
+- Re-evaluate the top-left header identity entirely: app name may be unnecessary, and mixed-case workspace/context words should not remain merely because there is space.
+- Do not move workspace-local controls into the shell simply to fill vacated header space.
+
 The shell should know:
 
 - active major workspace/activity;
@@ -1408,6 +1416,15 @@ Archive/supersede old shell descriptions only after code is proven.
 **Retires**
 
 Planning-only status of the new shell.
+
+---
+
+## Post-42 feature polish backlog
+
+These are deliberately outside the shell migration unless Phase 41 exposes them as functional regressions.
+
+- **Test preview media controls:** permanent browser video controls currently obscure roughly the bottom portion of comparison frames. Revisit control visibility/presentation so comparisons can use the full image area without losing playback access.
+- **Recent Test Sets:** consider a lightweight global Test history surface, analogous to Training queue/recent runs, showing recently tested sets with one-click return to their Test sessions.
 
 ---
 

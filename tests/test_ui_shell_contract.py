@@ -435,3 +435,24 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "if (trainingWorkspaceState.runnerStatusPending) return;" in runner
     assert ".shell-status-toast {" in css
     assert ".shell-gpu-status {" in css
+
+
+def test_phase_audit_retires_duplicate_view_state_and_empty_split_bridge():
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    media = (ROOT / "tool" / "js" / "media.js").read_text(encoding="utf-8")
+
+    assert "setWorkspaceViewMode(" not in media
+    assert "updateWorkspaceSplitLayout" not in shell
+
+
+def test_phase_audit_restores_shared_editor_after_training_and_owns_checklist_visibility():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    workbench = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+
+    assert 'id="caption-checklist-panel" class="checklist-panel workbench-card group-tools-card hidden"' in html
+    assert 'style="display:none;"' not in html
+    assert "#caption-checklist-panel.group-tools-card.checklist-panel {\n  display: flex;" in workbench
+    assert "#caption-checklist-panel.group-tools-card.checklist-panel {\n  display: flex !important;" not in workbench
+    assert "ui.appEl.classList.remove('training-config-selected')" in shell
+    assert "editorWrapper.classList.remove('hidden')" in shell

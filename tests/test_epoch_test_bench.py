@@ -50,6 +50,12 @@ def test_lora_files_are_filtered_and_sorted(tmp_path):
     assert [path.name for path in files] == ["Epoch02.safetensors", "epoch10.safetensors"]
 
 
+def test_lora_files_treat_missing_staging_directory_as_empty(tmp_path):
+    missing = tmp_path / "not-created-yet"
+
+    assert bench._lora_files(missing) == []
+
+
 def test_resolve_wildcard_prompt_uses_impact_endpoint_once(monkeypatch):
     calls = []
 

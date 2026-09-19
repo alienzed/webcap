@@ -455,23 +455,18 @@ function refreshTrainingWorkspace() {
   if (els.testsStage) els.testsStage.classList.toggle('hidden', !isSetEntry);
 
   if (isGlobalEntry) {
-    if (els.navigatorTitle) els.navigatorTitle.textContent = 'Training';
-    if (els.folder) els.folder.textContent = 'Global training status';
     refreshTrainingHistory();
     return;
   }
 
   if (isUnavailableSetEntry) {
-    if (els.navigatorTitle) els.navigatorTitle.textContent = 'Training';
-    if (els.folder) els.folder.textContent = 'Select a set folder to configure training.';
-    if (els.readiness) els.readiness.textContent = 'Select a set folder to configure training.';
+      if (els.readiness) els.readiness.textContent = 'Select a set folder to configure training.';
     renderTrainingItemOverview(null, 'Select a set folder to configure training.');
     syncWorkspaceConfigEditorUi();
     return;
   }
 
   if (els.navigatorTitle) els.navigatorTitle.textContent = 'Training';
-  if (els.folder) els.folder.textContent = folder;
   resetTrainingRunSetupForFolder(folder);
   if (els.readiness) els.readiness.textContent = 'Loading training setup...';
   fetchTrainingProfiles()
@@ -560,7 +555,6 @@ function switchTrainingSetup(profileId, mode) {
 }
 
 function wireTrainingWorkspace() {
-  var backBtn = document.getElementById('training-workspace-back-btn');
   var sidebarCollapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
   var modelProfileSelect = document.getElementById('training-model-profile-select');
   var modeSelect = document.getElementById('training-workspace-profile-select');
@@ -592,7 +586,6 @@ function wireTrainingWorkspace() {
   var historySearch = document.getElementById('training-history-search');
   var historyScope = document.getElementById('training-history-scope');
   var historyClearBtn = document.getElementById('training-history-clear-btn');
-  backBtn.onclick = function () { exitWorkspaceSurface(); };
   sidebarCollapseBtn.onclick = function () {
     if (trainingWorkspaceState.entryMode === 'global') {
       workspaceState.sidebarHidden = !workspaceState.sidebarHidden;

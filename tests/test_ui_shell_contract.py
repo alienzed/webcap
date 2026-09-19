@@ -91,13 +91,13 @@ def test_shell_header_tracks_current_folder_without_owning_folder_state():
     assert "window.syncApplicationShellContext()" in ui
 
 
-def test_test_activity_visibility_and_active_state_are_mirrored_to_new_rail():
+def test_test_activity_visibility_and_active_state_are_owned_by_new_rail():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert "var activityButton = el('activity-test-btn')" in script
-    assert "[button, activityButton].forEach" in script
-    assert "target.classList.toggle('hidden', !visible)" in script
-    assert "target.classList.toggle('active', isOpen())" in script
+    assert "activityButton.classList.toggle('hidden', !visible)" in script
+    assert "activityButton.classList.toggle('active', isOpen())" in script
+    assert "utility-test-bench-btn" not in script
 
 
 def test_console_has_one_stable_shell_host():
@@ -116,6 +116,24 @@ def test_training_background_activity_is_mirrored_to_permanent_rail():
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
     assert "document.getElementById('activity-training-btn')" in script
-    assert "[utilityTrainingBtn, activityTrainingBtn].forEach" in script
-    assert "button.classList.toggle('training-running', running)" in script
+    assert "activityTrainingBtn.classList.toggle('training-running', running)" in script
+    assert "utility-training-btn" not in script
     assert ".activity-rail-btn.training-running::after" in css
+
+
+def test_training_identity_is_owned_by_shell_header():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    state = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+
+    assert 'id="app-header-workspace-title"' in html
+    assert 'id="app-header-workspace-context"' in html
+    assert 'id="training-workspace-back-btn"' not in html
+    assert 'id="training-navigator-title"' not in html
+    assert 'id="training-navigator-folder"' not in html
+    assert 'id="training-sidebar-collapse-toggle-btn"' in html
+    assert "surface === 'training' ? 'Training' : ''" in shell
+    assert "entryKind === 'global'" in shell
+    assert "navigatorTitle" not in workspace
+    assert "navigatorTitle" not in state

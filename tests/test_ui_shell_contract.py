@@ -226,4 +226,29 @@ def test_working_model_state_is_shared_and_training_no_longer_owns_it():
     assert "trainingProfileStorageKey" not in training
     assert "getWorkingModelProfileId()" in training
     assert "setWorkingModelProfileId(profileId, state.folder)" in training
-    assert 'id="training-model-profile-select"' in html
+    assert 'id="app-header-model-profile-select"' in html
+
+
+def test_model_selector_is_single_real_control_in_permanent_header():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    training_state = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+    training = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    header_start = html.index('id="app-header-context"')
+    workspace_start = html.index('class="app shell-revamp')
+    model_select = html.index('id="app-header-model-profile-select"')
+
+    assert header_start < model_select < workspace_start
+    assert html.count('id="app-header-model-profile-select"') == 1
+    assert 'id="training-model-profile-select"' not in html
+    assert "modelProfileSelect:" not in training_state
+    assert "getWorkingModelProfileSelect()" in training
+    assert "syncWorkingModelProfileSelect(folder)" in training
+    assert "window.refreshWorkingModelSelector = refreshWorkingModelSelector" in training
+    assert "window.refreshWorkingModelSelector()" in ui
+    assert "app-header-model-profile-select" in test_bench
+    assert "training-model-profile-select" not in test_bench
+    assert ".app-header-model-control select" in css

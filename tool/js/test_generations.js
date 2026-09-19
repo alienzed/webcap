@@ -103,6 +103,8 @@
       activityButton.title = 'Open Test Bench';
     }
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
+    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
   }
 
   function refreshActivityButton() {
@@ -915,6 +917,7 @@
 
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
   window.openTestBenchActivity = openTestBenchActivity;
+  window.openTestBenchForCurrentFolder = openPane;
   window.closeTestBenchActivity = closePane;
   window.refreshTestBenchActivity = refreshActivityButton;
   bindUi();

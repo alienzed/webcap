@@ -249,6 +249,8 @@ def test_model_selector_is_single_real_control_in_permanent_header():
     assert "syncWorkingModelProfileSelect(folder)" in training
     assert "window.refreshWorkingModelSelector = refreshWorkingModelSelector" in training
     assert "window.refreshWorkingModelSelector()" in ui
+    assert "if (isTrainingWorkspaceActive())" in training
+    assert "setWorkingModelProfileId(modelProfileSelect.value, state.folder);" in training
     assert "app-header-model-profile-select" in test_bench
     assert "training-model-profile-select" not in test_bench
     assert ".app-header-model-control select" in css

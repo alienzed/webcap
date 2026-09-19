@@ -669,6 +669,7 @@
     }
     refreshActivityButton();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
+    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
   }
 
   function populateControls(payload) {
@@ -712,6 +713,7 @@
     frame.classList.add('workspace-test-open');
     node.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
+    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     if (summary) summary.textContent = 'Loading H3 Test folder...';
     if (list) list.textContent = '';
     if (errorEl) {

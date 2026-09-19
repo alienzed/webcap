@@ -107,18 +107,6 @@ function syncWorkspaceHeaderUi() {
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
 
-  var workflowButtons = {
-    select: document.getElementById('workspace-workflow-select-btn'),
-    annotate: document.getElementById('workspace-workflow-annotate-btn'),
-    review: document.getElementById('workspace-workflow-review-btn')
-  };
-  Object.keys(workflowButtons).forEach(function (key) {
-    var btn = workflowButtons[key];
-    if (!btn) return;
-    var active = key === workflowMode;
-    btn.classList.toggle('active', active);
-    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
   syncWorkbenchRailUi();
   updateWorkspaceSplitLayout();
 }

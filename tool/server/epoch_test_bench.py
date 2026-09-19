@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import config as app_config
+from .folder_state_store import read_folder_state
 from .training_history import host_path_for_training_path
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
@@ -251,6 +252,41 @@ def _lora_files(test_directory):
         [path for path in test_directory.iterdir() if path.is_file() and path.suffix.lower() == ".safetensors"],
         key=lambda path: path.name.lower(),
     )
+
+
+def _selected_lora_files(test_directory, selected_files=None):
+    available = _lora_files(test_directory)
+    if selected_files is None:
+        return available
+    if not isinstance(selected_files, (list, tuple)):
+        raise ValueError("Selected Test candidates must be a list of staged filenames.")
+
+    requested = []
+    seen = set()
+    for value in selected_files:
+        name = str(value or "").strip()
+        if (
+            not name
+            or name in (".", "..")
+            or "/" in name
+            or "\\" in name
+            or not name.lower().endswith(".safetensors")
+        ):
+            raise ValueError("Selected Test candidates must be staged .safetensors filenames.")
+        if name in seen:
+            continue
+        seen.add(name)
+        requested.append(name)
+
+    if not requested:
+        raise ValueError("Select at least one staged LoRA to test.")
+
+    available_by_name = {path.name: path for path in available}
+    missing = [name for name in requested if name not in available_by_name]
+    if missing:
+        raise FileNotFoundError("Selected staged Test candidate does not exist: " + missing[0])
+    requested_set = set(requested)
+    return [path for path in available if path.name in requested_set]
 
 
 def _relative_set_folder(folder_path):
@@ -741,6 +777,74 @@ def _session_status(session_directory):
     return visible
 
 
+def _session_rating_map(session_directory):
+    state = read_folder_state(Path(session_directory) / ".webcap_state.json")
+    raw = state.get("ratings_by_media") if isinstance(state, dict) else {}
+    if not isinstance(raw, dict):
+        return {}
+    ratings = {}
+    for media_key, value in raw.items():
+        try:
+            rating = int(round(float(value)))
+        except (TypeError, ValueError):
+            continue
+        if 1 <= rating <= 5:
+            ratings[str(media_key)] = rating
+    return ratings
+
+
+def _with_session_ratings(session_directory, payload):
+    if not payload:
+        return payload
+    visible = dict(payload)
+    ratings = _session_rating_map(session_directory)
+    results = visible.get("results") if isinstance(visible.get("results"), list) else []
+    enriched = []
+    for result in results:
+        if not isinstance(result, dict):
+            enriched.append(result)
+            continue
+        item = dict(result)
+        output_name = str(item.get("outputVideo") or "")
+        if output_name in ratings:
+            item["rating"] = ratings[output_name]
+        enriched.append(item)
+    visible["results"] = enriched
+    return visible
+
+
+def _candidate_rating_scores(folder_path):
+    root = _session_root(folder_path)
+    if not root.is_dir():
+        return {}
+    totals = {}
+    for session in root.iterdir():
+        if not session.is_dir() or not (session / "test.json").is_file():
+            continue
+        payload = _read_status(session) or {}
+        results = payload.get("results") if isinstance(payload.get("results"), list) else []
+        ratings = _session_rating_map(session)
+        for result in results:
+            if not isinstance(result, dict) or str(result.get("kind") or "") == "base":
+                continue
+            candidate_name = str(result.get("candidateFile") or result.get("sourceLoRA") or "").strip()
+            output_name = str(result.get("outputVideo") or "").strip()
+            rating = ratings.get(output_name)
+            if not candidate_name or rating is None:
+                continue
+            aggregate = totals.setdefault(candidate_name, {"sum": 0, "count": 0})
+            aggregate["sum"] += rating
+            aggregate["count"] += 1
+    return {
+        name: {
+            "average": round(values["sum"] / values["count"], 2),
+            "count": values["count"],
+        }
+        for name, values in totals.items()
+        if values["count"]
+    }
+
+
 def _mark_session_interrupted(session_directory, message):
     status = _read_status(session_directory) or {}
     if status.get("status") not in ("running", "stopping"):
@@ -795,6 +899,7 @@ def list_sessions(folder_path):
             continue
         sessions.append({
             "session": session.name,
+            "name": str(payload.get("name") or ""),
             "status": str(payload.get("status") or ""),
             "completed": int(payload.get("completed") or 0),
             "failed": int(payload.get("failed") or 0),
@@ -806,7 +911,7 @@ def list_sessions(folder_path):
 
 def open_session(folder_path, session_name):
     session = _session_directory(folder_path, session_name)
-    return _visible_session_status(folder_path, session)
+    return _with_session_ratings(session, _visible_session_status(folder_path, session))
 
 
 def delete_session(folder_path, session_name):
@@ -1083,23 +1188,40 @@ def prepare(folder_path):
         "aspectRatioOptions": aspect_options,
         "count": len(loras),
         "files": [path.name for path in loras],
+        "candidateScores": _candidate_rating_scores(folder_path),
         "sessions": list_sessions(folder_path),
-        "latest": _visible_status(folder_path),
+        "latest": status(folder_path),
     }
 
 
 def status(folder_path):
-    return _visible_status(folder_path)
+    payload = _visible_status(folder_path)
+    session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
+    if not session_name:
+        return payload
+    return _with_session_ratings(_session_directory(folder_path, session_name), payload)
 
 
-def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None, seed=None):
+def start(
+    folder_path,
+    prompt,
+    aspect_ratio=None,
+    megapixels=None,
+    duration=None,
+    seed=None,
+    name=None,
+    selected_files=None,
+):
     prompt = str(prompt or "").strip()
     if not prompt:
         raise ValueError("A test prompt is required.")
     test_directory = _h3_test_directory(folder_path)
-    loras = _lora_files(test_directory)
+    loras = _selected_lora_files(test_directory, selected_files=selected_files)
     if not loras:
         raise ValueError("The H3 Test folder contains no .safetensors files.")
+    session_name = str(name or "").strip()
+    if len(session_name) > 120:
+        raise ValueError("Test session name must be 120 characters or fewer.")
     _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
     resolved_loras = _resolve_comfy_loras(loras)
     template = _resolve_comfy_template_assets(_load_template())
@@ -1130,6 +1252,7 @@ def start(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None
                 "status": "running",
                 "model": "h3",
                 "session": session_directory.name,
+                "name": session_name,
                 "sourcePrompt": prompt,
                 "resolvedPrompt": resolved_prompt,
                 "prompt": resolved_prompt,
@@ -1210,5 +1333,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             megapixels=criteria.get("megapixels"),
             duration=criteria.get("duration"),
             seed=criteria.get("seed"),
+            name=criteria.get("name"),
+            selected_files=criteria.get("selectedFiles"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)

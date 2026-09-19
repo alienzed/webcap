@@ -109,8 +109,7 @@ def test_test_generations_closes_on_training_navigation_and_clears_session_state
     assert "function owningSetFolder(folder)" not in script
     assert "launchFolder = String(state && state.folder || '')" in script
     assert "folder: String(launchFolder || '')" in script
-    assert "['sidebar-open-training-btn', 'utility-training-btn'].forEach" in script
-    assert "if (isOpen()) closePane();" in script
+    assert "window.closeTestBenchActivity = closePane" in script
     assert "test-generations-open-results-btn" not in script
     assert "function openResults(" not in script
     assert "state.folder = targetFolder" not in script
@@ -142,19 +141,19 @@ def test_test_generations_compare_mode_reuses_current_session_results():
 
 
 
-def test_test_bench_utility_and_live_session_contract():
+def test_test_bench_activity_rail_and_live_session_contract():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
     ui_script = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
 
-    assert 'id="utility-test-bench-btn"' in html
-    assert "function refreshUtilityButton()" in script
-    assert "function openUtilityTestBench()" in script
+    assert 'id="activity-test-btn"' in html
+    assert "function refreshActivityButton()" in script
+    assert "function openTestBenchActivity()" in script
     assert "window.testGenerationsFolderLoaded = testGenerationsFolderLoaded" in script
-    assert "window.refreshTestBenchUtility = refreshUtilityButton" in script
-    assert "button.classList.toggle('test-running', !!active)" in script
-    assert ".utility-btn.test-running" in css
+    assert "window.refreshTestBenchActivity = refreshActivityButton" in script
+    assert "activityButton.classList.toggle('test-running', !!active)" in script
+    assert ".activity-rail-btn.test-running::after" in (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
     assert "window.testGenerationsFolderLoaded()" in ui_script
 
     assert "function setRunSettingsDisabled" not in script

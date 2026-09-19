@@ -143,7 +143,7 @@
 
   function syncLaunchVisibility() {
     var button = el('test-generations-open-btn');
-    var select = el('training-model-profile-select');
+    var select = el('app-header-model-profile-select');
     if (!button || !select) return;
     var available = String(select.value || '') === H3_PROFILE_ID && !!(state && state.folder);
     button.classList.toggle('hidden', !available);
@@ -903,7 +903,7 @@
       saveTestBenchState(prompt);
     };
 
-    var select = el('training-model-profile-select');
+    var select = el('app-header-model-profile-select');
     if (select) {
       select.addEventListener('change', syncLaunchVisibility);
       new MutationObserver(syncLaunchVisibility).observe(select, { childList: true, subtree: true });

@@ -207,3 +207,23 @@ def test_focus_uses_shell_identity_but_keeps_local_cleanup_exit():
     assert "prepSidebarToggle.classList.toggle('hidden', !!testOpen || surface !== 'default');" in shell
     assert "stopFocusedAnnotation();" in shell
     assert 'id="focused-annotation-close-btn"' in html
+
+
+def test_working_model_state_is_shared_and_training_no_longer_owns_it():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    context = (ROOT / "tool" / "js" / "working_context.js").read_text(encoding="utf-8")
+    state = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+    training = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+
+    assert html.index('src="/static/js/working_context.js"') < html.index('src="/static/js/training_workspace_state.js"')
+    assert "modelProfileId: 'wan22_t2v'" in context
+    assert "webcap.trainingProfile." in context
+    assert "function getWorkingModelProfileId()" in context
+    assert "function setWorkingModelProfileId(profileId, folder)" in context
+    assert "function syncWorkingModelProfileForFolder(folder, profiles)" in context
+    assert "selectedProfileId" not in state
+    assert "trainingWorkspaceState.selectedProfileId" not in training
+    assert "trainingProfileStorageKey" not in training
+    assert "getWorkingModelProfileId()" in training
+    assert "setWorkingModelProfileId(profileId, state.folder)" in training
+    assert 'id="training-model-profile-select"' in html

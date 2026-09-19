@@ -536,7 +536,7 @@
                                         class="form-control"
                                         placeholder="Add requirement..."
                                     >
-                                    <button id="checklist-add-btn" type="button">+</button>
+                                    <button id="checklist-add-btn" type="button" title="Add requirement" aria-label="Add requirement">+</button>
                                 </div>
                                 <div id="checklist-items"></div>
                                 <details id="primer-template-section" class="caption-helper-drawer caption-helper-template-drawer">
@@ -595,7 +595,7 @@
                                         class="form-control"
                                         placeholder="Add/search tag..."
                                     >
-                                    <button id="tag-term-apply-btn" type="button">+</button>
+                                    <button id="tag-term-apply-btn" type="button" title="Add tag" aria-label="Add tag">+</button>
                                     <div id="tag-term-results" class="caption-term-results hidden"></div>
                                 </div>
                                 <div id="item-tags-list"></div>
@@ -647,7 +647,7 @@
                         </div>
                         <details id="review-options" class="review-options">
                             <summary>Review options <span id="review-options-summary" class="small">Optional phrase, balance, and rule checks</span></summary>
-                            <div id="cation-review" aria-hidden="false"><div class="stats-controls"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"><div class="section-label-inline"><label>Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea><div class="section-label-inline"><label>Rules</label><button id="review-rules-info-btn" type="button" class="mini-info-btn" title="Rules help" aria-label="Rules help">i</button></div><div class="stats-advanced-inline-row"><button id="review-rules-edit-btn" type="button">Edit Rules</button><span id="review-rules-summary" class="small">No review rules configured.</span></div></div></div>
+                            <div id="cation-review" aria-hidden="false"><div class="stats-controls"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"><div class="section-label-inline"><label>Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea><div class="section-label-inline"><label>Rules</label><button id="review-rules-info-btn" type="button" class="mini-info-btn" title="Rules help" aria-label="Rules help">i</button></div><div class="stats-advanced-inline-row"><button id="review-rules-edit-btn" type="button">Edit Rules</button><span id="review-rules-summary" class="small">No review rules configured.</span></div></div></div>
                         </details>
                         <iframe id="review-report" title="Caption review report"></iframe>
                     </section>
@@ -831,9 +831,6 @@
                                 <div id="preview-actions" class="preview-actions hidden" aria-label="Preview actions">
                                     <div id="preview-action-rating" class="preview-action-rating hidden" aria-label="Item rating"></div>
                                     <button id="preview-mutation-indicator" type="button" class="preview-action-btn preview-action-reset-btn hidden" title="Reset to original">Reset</button>
-                                    <button id="preview-action-primary-a" type="button" class="preview-action-btn hidden"></button>
-                                    <button id="preview-action-primary-b" type="button" class="preview-action-btn hidden"></button>
-                                    <button id="preview-action-more" type="button" class="preview-action-btn hidden">More</button>
                                 </div>
                             </div>
                         </div>
@@ -1307,7 +1304,7 @@
                         class="form-control"
                         placeholder="Add/search term..."
                     >
-                    <button id="checklist-group-terms-add-btn" type="button">+</button>
+                    <button id="checklist-group-terms-add-btn" type="button" title="Add requirement term" aria-label="Add requirement term">+</button>
                     <div id="checklist-group-terms-results" class="caption-term-results hidden"></div>
                 </div>
                 <div id="checklist-group-terms-items"></div>

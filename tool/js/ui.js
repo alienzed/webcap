@@ -447,6 +447,9 @@ function refreshCurrentDirectory() {
               ? ('Loaded folder with ' + captionErrors.length + ' unreadable caption' + (captionErrors.length === 1 ? '' : 's') + '. Check the browser and server consoles.')
               : ('Loaded folder: ' + (path || ROOT_FOLDER_LABEL));
             setStatus(folderStatus);
+            window.refreshWorkingModelSelector().catch(function (err) {
+              console.error('[webcap] Could not refresh working model selector:', err);
+            });
             refreshTrainingWorkspace();
             if (typeof window.testGenerationsFolderLoaded === 'function') window.testGenerationsFolderLoaded();
             refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {

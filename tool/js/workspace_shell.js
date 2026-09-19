@@ -484,10 +484,10 @@ function closeTrainingWorkspaceConfigEditor() {
     });
 }
 
-function rebuildUnifiedWorkspaceShell() {
-  if (!ui || !ui.appEl || ui.appEl.__workspaceRevampBuilt) return;
+function initializeWorkspaceShell() {
+  if (!ui || !ui.appEl || ui.appEl.__workspaceShellInitialized) return;
   var appEl = ui.appEl;
-  appEl.__workspaceRevampBuilt = true;
+  appEl.__workspaceShellInitialized = true;
   appEl.classList.add('shell-revamp');
   syncWorkspaceSurfaceUi();
 }

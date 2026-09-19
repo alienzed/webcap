@@ -64,17 +64,20 @@ function syncWorkingModelProfileSelect(folder) {
   var select = getWorkingModelProfileSelect();
   if (!select) return;
   select.disabled = false;
-  var storedMode = '';
-  try { storedMode = localStorage.getItem(trainingModeStorageKey(folder)) || ''; } catch (err) {}
   var profiles = trainingWorkspaceState.profiles || [];
   var selectedProfileId = syncWorkingModelProfileForFolder(folder, profiles);
-  trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(storedMode || trainingWorkspaceState.selectedMode);
   select.innerHTML = profiles.map(function (profile) {
     return '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(profile.label) + '</option>';
   }).join('');
   select.value = selectedProfileId;
-  syncTrainingWorkspaceProfile();
-  setManagedTrainingStages(trainingWorkspaceState.runStages);
+  select.title = '';
+  if (isTrainingWorkspaceActive()) {
+    var storedMode = '';
+    try { storedMode = localStorage.getItem(trainingModeStorageKey(folder)) || ''; } catch (err) {}
+    trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(storedMode || trainingWorkspaceState.selectedMode);
+    syncTrainingWorkspaceProfile();
+    setManagedTrainingStages(trainingWorkspaceState.runStages);
+  }
 }
 
 function setSelectedTrainingModelProfile(profileId) {
@@ -607,7 +610,13 @@ function wireTrainingWorkspace() {
     trainingWorkspaceState.itemOverviewHidden = !trainingWorkspaceState.itemOverviewHidden;
     renderTrainingItemOverview(null);
   };
-  if (modelProfileSelect) modelProfileSelect.onchange = function () { switchTrainingSetup(modelProfileSelect.value, ''); };
+  if (modelProfileSelect) modelProfileSelect.onchange = function () {
+    if (isTrainingWorkspaceActive()) {
+      switchTrainingSetup(modelProfileSelect.value, '');
+      return;
+    }
+    setWorkingModelProfileId(modelProfileSelect.value, state.folder);
+  };
   if (modeSelect) modeSelect.onchange = function () { switchTrainingSetup('', modeSelect.value); };
   stageButtons.forEach(function (button) {
     button.onclick = function () {

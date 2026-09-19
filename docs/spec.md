@@ -1,6 +1,6 @@
 # WebCap Specification (Current Behavior)
 
-Last updated: 2026-08-15
+Last updated: 2026-09-19
 
 ## Scope and architecture
 
@@ -13,6 +13,19 @@ Key set-owned artifacts are:
 - `media_metadata.json`: metadata cache
 - `originals/`: reversible-mutation backing store
 - model/stage-specific training config and dataset TOMLs
+
+## Application shell and navigation
+
+WebCap has a permanent outer shell around the feature workspaces.
+
+- **Activity rail:** Prep, Training, and Test are major activities. Console, Settings, Help, and immersive mode also live in the permanent rail. Review, Grid, Focus, Config, Run Log, Candidate Analysis, Test sessions, and Compare remain workspace-owned views rather than top-level activities.
+- **Header:** current folder/set context and the single editable working-model selector are shell-owned. Workspace identity is reflected in the header without moving workspace-local controls there. Historical Training/Test artifacts retain their own recorded model identity even when the current working model differs.
+- **Status and background work:** transient application feedback is shown in a floating bottom-left shell status. The general multiline console has one stable shell host. Active Training/Test remain reachable from the rail; active Training GPU telemetry may be mirrored into the header without moving GPU polling/state ownership out of Training.
+- **Overlay root:** true modals use the single static `#app-overlay-root`; feature code does not reparent modal nodes at runtime.
+- **Workspace roots:** Prep, Review, Training, and Test have explicit stable roots. Grid and Focus are surface modes within the Prep-owned workspace model.
+- **Reload location:** URL hash routing owns durable folder + major-workspace location. Supported durable routes are Prep, Training, Test, Review, and Grid, with Training global/set scope. Transient UI state is not persisted in the route.
+
+The shell owns navigation/context presentation. Feature-local tabs, selections, queues, sessions, artifact details, and modal state remain feature-owned.
 
 ## Set and training workflow
 

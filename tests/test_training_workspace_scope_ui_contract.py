@@ -25,8 +25,7 @@ function element() {
     attributes: {}, setAttribute(name, value) { this.attributes[name] = value; }, textContent: '', title: '' };
 }
 const nodes = {};
-['sidebar-open-training-btn', 'training-detail-tabs',
- 'training-sidebar-collapse-toggle-btn'].forEach(id => nodes[id] = element());
+['sidebar-open-training-btn', 'training-detail-tabs'].forEach(id => nodes[id] = element());
 const itemTab = element(), configTab = element(), runLogTab = element();
 const context = {
   workspaceState: { surface: 'training', sidebarHidden: true },
@@ -42,7 +41,7 @@ const context = {
 vm.createContext(context);
 vm.runInContext(section(shell, 'function getTrainingWorkspaceEntryKind()', 'function syncWorkspaceConfigEditorUi()'), context);
 context.syncTrainingEntryChrome();
-if (runLogTab.classList.contains('hidden') || !itemTab.classList.contains('hidden') || !context.ui.appEl.classList.contains('sidebar-hidden') || nodes['training-sidebar-collapse-toggle-btn'].classList.contains('hidden')) throw new Error('global chrome');
+if (runLogTab.classList.contains('hidden') || !itemTab.classList.contains('hidden') || !context.ui.appEl.classList.contains('sidebar-hidden')) throw new Error('global chrome');
 context.trainingWorkspaceState.entryMode = 'set';
 context.workspaceState.sidebarHidden = false;
 context.syncTrainingEntryChrome();
@@ -129,7 +128,7 @@ def test_training_scope_source_contracts_remain_explicit():
     assert "data-training-history-scope" in history
     assert "els.globalContext.classList.toggle('hidden', false)" in workspace
     assert "entryKind === 'unavailable'" in shell
-    assert "workspaceState.sidebarHidden = !workspaceState.sidebarHidden;" in workspace
+    assert "training-sidebar-collapse-toggle-btn" not in workspace
     assert "trainingWorkspaceState.launchedJobId = payload.job.id;" in runner
     assert "function renderTrainingLaunchStatus()" in runner
     assert "button.textContent = active ? trainingRunnerStatusLabel(status) : 'Train';" in runner

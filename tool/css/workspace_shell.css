@@ -796,7 +796,7 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   min-height: 140px;
   max-height: calc(100% - 50px);
   padding: 0;
-  display: none;
+  display: flex;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(15, 23, 42, 0.18);

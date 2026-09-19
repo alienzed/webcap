@@ -1021,7 +1021,7 @@
         removeCandidate(remove.dataset.removeCandidate);
         return;
       }
-      if (event.target.closest('video, button')) return;
+      if (event.target.closest('.test-generations-video-transport, video, button')) return;
       var card = event.target.closest('[data-compare-index]');
       if (!card) return;
       compareIndex = Number(card.dataset.compareIndex || 0);

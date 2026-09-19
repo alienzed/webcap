@@ -903,6 +903,8 @@ Only redundant shell/escape controls.
 
 ## Phase 24 — Define authoritative working context model
 
+**Contract:** `docs/working_context_model.md`
+
 **Change**
 
 Before moving Model, explicitly define the shell context data model.

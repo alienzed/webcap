@@ -1,5 +1,4 @@
 var workspaceUiState = {
-  viewMode: 'single',
   workflowMode: 'annotate'
 };
 var workspaceState = {
@@ -26,8 +25,14 @@ function loadWorkbenchRailSessionState() {
   }
 }
 
+function getWorkspaceViewMode() {
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  if (surface === 'grid' || surface === 'focus') return surface;
+  return 'single';
+}
+
 function getWorkbenchRailViewMode() {
-  return normalizeWorkspaceViewMode(workspaceUiState.viewMode);
+  return getWorkspaceViewMode();
 }
 
 function isWorkbenchRailAvailable() {
@@ -84,7 +89,7 @@ function normalizeWorkspaceWorkflowMode(mode) {
 
 function syncWorkspaceHeaderUi() {
   if (!ui || !ui.appEl) return;
-  var viewMode = normalizeWorkspaceViewMode(workspaceUiState.viewMode);
+  var viewMode = getWorkspaceViewMode();
   var workflowMode = normalizeWorkspaceWorkflowMode(workspaceUiState.workflowMode);
   ui.appEl.classList.remove('workspace-view-single', 'workspace-view-grid', 'workspace-view-focus');
   ui.appEl.classList.add('workspace-view-' + viewMode);
@@ -116,11 +121,6 @@ function syncWorkspaceHeaderUi() {
   });
   syncWorkbenchRailUi();
   updateWorkspaceSplitLayout();
-}
-
-function setWorkspaceViewMode(mode) {
-  workspaceUiState.viewMode = normalizeWorkspaceViewMode(mode);
-  syncWorkspaceHeaderUi();
 }
 
 function setWorkspaceWorkflowMode(mode) {
@@ -426,13 +426,6 @@ function setWorkspaceSurface(surface, options) {
   if (nextSurface === 'training' && currentSurface !== 'training' && typeof setTrainingDetailTab === 'function') {
     setTrainingDetailTab(trainingWorkspaceState.entryMode === 'global' ? 'run-log' : 'items');
   }
-  if (nextSurface === 'grid') {
-    setWorkspaceViewMode('grid');
-  } else if (nextSurface === 'focus') {
-    setWorkspaceViewMode('focus');
-  } else {
-    setWorkspaceViewMode('single');
-  }
   syncWorkspaceSurfaceUi();
   refreshWorkspaceWorkbenchSurface();
 }
@@ -508,7 +501,6 @@ function rebuildUnifiedWorkspaceShell() {
   var appEl = ui.appEl;
   appEl.__workspaceRevampBuilt = true;
   appEl.classList.add('shell-revamp');
-  setWorkspaceViewMode('single');
   syncWorkspaceSurfaceUi();
 }
 
@@ -592,7 +584,7 @@ function wireWorkspaceHeaderUi() {
   syncWorkspaceSurfaceUi();
 }
 
-window.setWorkspaceViewMode = setWorkspaceViewMode;
+window.getWorkspaceViewMode = getWorkspaceViewMode;
 window.setWorkspaceWorkflowMode = setWorkspaceWorkflowMode;
 window.setWorkspaceSurface = setWorkspaceSurface;
 window.exitWorkspaceSurface = exitWorkspaceSurface;

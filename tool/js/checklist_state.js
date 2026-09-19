@@ -553,11 +553,10 @@ function moveChecklistSelectedTagForRequirement(mediaKey, requirementLabel, tagT
 function setChecklistPanelVisible(visible) {
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   if (!checklistPanelEl) return;
-  checklistPanelEl.style.display = visible ? 'flex' : 'none';
+  checklistPanelEl.classList.toggle('hidden', !visible);
   var editorPanel = checklistPanelEl.closest('.editor-panel');
   if (editorPanel) {
-    if (visible) editorPanel.classList.add('checklist-visible');
-    else editorPanel.classList.remove('checklist-visible');
+    editorPanel.classList.toggle('checklist-visible', !!visible);
   }
 }
 

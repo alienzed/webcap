@@ -611,6 +611,7 @@
   function renderStatus(status) {
     currentStatus = status || {};
     if (status) currentSession = String(status.session || '');
+    syncActiveRunControls(status || {});
     syncSessionSelection();
     var statusEl = el('test-generations-status');
     var errorEl = el('test-generations-error');

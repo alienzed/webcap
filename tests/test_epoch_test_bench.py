@@ -896,3 +896,81 @@ def test_remove_candidate_refuses_active_batch(tmp_path, monkeypatch):
         bench.remove_candidate(tmp_path, candidate.name)
 
     assert candidate.exists()
+
+def test_selected_lora_files_can_focus_next_run(tmp_path):
+    for name in ("epoch01.safetensors", "epoch02.safetensors", "epoch03.safetensors"):
+        (tmp_path / name).write_bytes(b"weights")
+
+    selected = bench._selected_lora_files(
+        tmp_path,
+        ["epoch03.safetensors", "epoch01.safetensors"],
+    )
+
+    assert [path.name for path in selected] == [
+        "epoch01.safetensors",
+        "epoch03.safetensors",
+    ]
+    with pytest.raises(ValueError, match="Select at least one"):
+        bench._selected_lora_files(tmp_path, [])
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        bench._selected_lora_files(tmp_path, ["epoch99.safetensors"])
+
+
+def test_candidate_scores_reuse_normal_session_folder_ratings(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+
+    first = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-19_1000-h3"
+    second = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-19_1100-h3"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+
+    bench._atomic_write_json(first / "test.json", {
+        "status": "complete",
+        "results": [
+            {"kind": "base", "sourceLoRA": "Base", "outputVideo": "base.mp4"},
+            {
+                "kind": "lora",
+                "candidateFile": "epoch10.safetensors",
+                "sourceLoRA": "epoch10.safetensors",
+                "outputVideo": "epoch10.mp4",
+            },
+            {
+                "kind": "lora",
+                "candidateFile": "epoch20.safetensors",
+                "sourceLoRA": "epoch20.safetensors",
+                "outputVideo": "epoch20.mp4",
+            },
+        ],
+    })
+    (first / ".webcap_state.json").write_text(json.dumps({
+        "ratings_by_media": {
+            "base.mp4": 5,
+            "epoch10.mp4": 4,
+            "epoch20.mp4": 3,
+        }
+    }), encoding="utf-8")
+
+    bench._atomic_write_json(second / "test.json", {
+        "status": "complete",
+        "name": "Red colour test",
+        "results": [
+            {
+                "kind": "lora",
+                "candidateFile": "epoch10.safetensors",
+                "sourceLoRA": "epoch10.safetensors",
+                "outputVideo": "epoch10-second.mp4",
+            }
+        ],
+    })
+    (second / ".webcap_state.json").write_text(json.dumps({
+        "ratings_by_media": {"epoch10-second.mp4": 5}
+    }), encoding="utf-8")
+
+    scores = bench._candidate_rating_scores(tmp_path)
+
+    assert scores["epoch10.safetensors"] == {"average": 4.5, "count": 2}
+    assert scores["epoch20.safetensors"] == {"average": 3.0, "count": 1}
+
+    opened = bench.open_session(tmp_path, second.name)
+    assert opened["name"] == "Red colour test"
+    assert opened["results"][0]["rating"] == 5

@@ -10,7 +10,8 @@ var workspaceState = {
 var shellNavigationState = {
   activity: 'prep',
   workspaceRoot: 'prep',
-  contextKind: 'set'
+  contextKind: 'set',
+  immersive: false
 };
 var WORKBENCH_RAIL_SESSION_KEY = 'webcap.workbenchRailCollapsedByView';
 var workbenchRailCollapsedByView = loadWorkbenchRailSessionState();
@@ -124,6 +125,20 @@ function normalizeWorkspaceSurface(surface) {
   if (value === 'training') return 'training';
   if (value === 'configeditor') return 'configEditor';
   return 'default';
+}
+
+function setShellImmersive(nextImmersive) {
+  shellNavigationState.immersive = !!nextImmersive;
+  var frame = document.getElementById('app-frame');
+  var enterBtn = document.getElementById('shell-immersive-btn');
+  var exitBtn = document.getElementById('shell-immersive-exit-btn');
+  if (frame) frame.classList.toggle('shell-immersive', shellNavigationState.immersive);
+  if (enterBtn) enterBtn.setAttribute('aria-pressed', shellNavigationState.immersive ? 'true' : 'false');
+  if (exitBtn) exitBtn.classList.toggle('hidden', !shellNavigationState.immersive);
+}
+
+function toggleShellImmersive() {
+  setShellImmersive(!shellNavigationState.immersive);
 }
 
 function deriveShellNavigationState() {
@@ -561,6 +576,25 @@ function wireWorkspaceHeaderUi() {
       closeTrainingWorkspaceConfigEditor();
     };
   }
+  var immersiveBtn = document.getElementById('shell-immersive-btn');
+  if (immersiveBtn && !immersiveBtn.__workspaceWired) {
+    immersiveBtn.__workspaceWired = true;
+    immersiveBtn.onclick = toggleShellImmersive;
+  }
+  var immersiveExitBtn = document.getElementById('shell-immersive-exit-btn');
+  if (immersiveExitBtn && !immersiveExitBtn.__workspaceWired) {
+    immersiveExitBtn.__workspaceWired = true;
+    immersiveExitBtn.onclick = function () { setShellImmersive(false); };
+  }
+  if (!window.__webcapImmersiveEscapeBound) {
+    window.__webcapImmersiveEscapeBound = true;
+    document.addEventListener('keydown', function (event) {
+      if (event && event.key === 'Escape' && shellNavigationState.immersive) {
+        setShellImmersive(false);
+      }
+    }, true);
+  }
+
   var configEditorSaveBtn = document.getElementById('config-editor-save-btn');
   if (configEditorSaveBtn && !configEditorSaveBtn.__workspaceWired) {
     configEditorSaveBtn.__workspaceWired = true;
@@ -580,6 +614,8 @@ window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;
 window.syncApplicationShellContext = syncApplicationShellContext;
 window.deriveShellNavigationState = deriveShellNavigationState;
 window.isApplicationOverlayOpen = isApplicationOverlayOpen;
+window.setShellImmersive = setShellImmersive;
+window.toggleShellImmersive = toggleShellImmersive;
 
 function getThemedPreviewPlaceholderHtml(message) {
   var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';

@@ -142,10 +142,24 @@ function syncApplicationShellContext() {
   }
 
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  var workspaceTitle = document.getElementById('app-header-workspace-title');
+  var workspaceContext = document.getElementById('app-header-workspace-context');
+  var testOpen = document.querySelector('.test-generations-pane:not(.hidden)');
+  if (workspaceTitle) workspaceTitle.textContent = testOpen ? 'Test' : (surface === 'training' ? 'Training' : '');
+  if (workspaceContext) {
+    var trainingContext = '';
+    if (!testOpen && surface === 'training') {
+      var entryKind = getTrainingWorkspaceEntryKind();
+      trainingContext = entryKind === 'global'
+        ? 'Global'
+        : (entryKind === 'set' ? String(state && state.folder || '') : 'Select a set');
+    }
+    workspaceContext.textContent = trainingContext;
+  }
+
   var prepBtn = document.getElementById('activity-prep-btn');
   var trainingBtn = document.getElementById('activity-training-btn');
   var testBtn = document.getElementById('activity-test-btn');
-  var testOpen = document.querySelector('.test-generations-pane:not(.hidden)');
 
   if (prepBtn) {
     var prepActive = !testOpen && surface !== 'training';

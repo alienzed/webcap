@@ -105,7 +105,7 @@ Changing the working model must never rewrite or visually relabel historical art
 
 ## Current-to-target ownership
 
-| Concept | Current owner | Phase 24 target semantics |
+| Concept | Current owner | Contract semantics |
 | --- | --- | --- |
 | Current folder/set | `state.folder` | unchanged authoritative folder context |
 | Working model/profile | `workingContextState.modelProfileId` | authoritative next-operation model; Training consumes it |

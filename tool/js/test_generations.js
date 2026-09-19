@@ -191,6 +191,7 @@
   }
 
   function testGenerationsFolderLoaded() {
+    syncLaunchVisibility();
     refreshActivityButton();
     if (!pendingActivityFolder) return;
     if (String(state && state.folder || '') !== String(pendingActivityFolder)) return;

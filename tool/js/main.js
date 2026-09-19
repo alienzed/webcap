@@ -438,6 +438,7 @@ addEventListener('DOMContentLoaded', function () {
   console.log('[webcap] initializing');
   initializeWorkspaceShell();
   wireWorkspaceHeaderUi();
+  if (typeof applyInitialShellLocationRoute === 'function') applyInitialShellLocationRoute();
   refreshCurrentDirectory();
   wireAllUi();
 });

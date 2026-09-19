@@ -3015,6 +3015,45 @@ iframe {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.test-generations-recent-sets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.test-generations-recent-set-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+.test-generations-recent-set-copy {
+  min-width: 0;
+}
+.test-generations-recent-set-copy strong,
+.test-generations-recent-set-copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-recent-set-copy strong {
+  color: var(--text);
+  font-size: 12px;
+}
+.test-generations-recent-set-copy span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.test-generations-recent-set-row .review-captions-btn {
+  width: auto;
+  margin: 0;
+}
 .test-generations-compare {
   display: flex;
   flex: 1 1 0;

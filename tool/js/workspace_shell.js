@@ -608,8 +608,9 @@ function clearEditorAndPreview() {
       doc.close();
     }
   }
-  var checklistPanelEl = document.getElementById('caption-checklist-panel');
-  if (checklistPanelEl) checklistPanelEl.style.display = 'none';
+  if (typeof setChecklistPanelVisible === 'function') {
+    setChecklistPanelVisible(false);
+  }
   state.currentItem = null;
   state.currentConfigFile = null;
   state.configLoadToken = Number(state.configLoadToken || 0) + 1;

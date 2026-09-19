@@ -440,8 +440,8 @@ function refreshCurrentDirectory() {
               currentLabel.textContent = (typeof ROOT_FOLDER_LABEL === 'string' && ROOT_FOLDER_LABEL.length) ? ROOT_FOLDER_LABEL : 'root';
             }
           }
-          if (typeof updateUtilityPathLabel === 'function') {
-            updateUtilityPathLabel(state.folder || '');
+          if (typeof updateShellFolderLabel === 'function') {
+            updateShellFolderLabel(state.folder || '');
           }
             var folderStatus = captionErrors.length
               ? ('Loaded folder with ' + captionErrors.length + ' unreadable caption' + (captionErrors.length === 1 ? '' : 's') + '. Check the browser and server consoles.')

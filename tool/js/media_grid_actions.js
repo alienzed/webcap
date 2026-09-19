@@ -63,9 +63,6 @@ function openMediaGridSurface() {
   mediaGridEnsureMainWorkbenchVisible();
   surfaceEls.surface.classList.remove('hidden');
   surfaceEls.surface.setAttribute('aria-hidden', 'false');
-  if (typeof setWorkspaceViewMode === 'function') {
-    setWorkspaceViewMode('grid');
-  }
   if (typeof setWorkspaceSurface === 'function') {
     setWorkspaceSurface('grid', { sidebarHidden: true });
   }

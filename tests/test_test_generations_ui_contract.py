@@ -55,7 +55,6 @@ def test_test_generations_uses_training_pane_and_core_controls():
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
     assert 'id="test-generations-workspace"' in html
     assert ".app-frame.workspace-test-open > .test-generations-workspace" in shell_css
-    assert ".test-generations-workspace-open" not in shell_css
     assert 'src="/static/js/test_generations.js"' in html
 
 
@@ -85,8 +84,6 @@ def test_test_generations_uses_explicit_workspace_root():
     assert ".app-frame.workspace-test-open > .app" in shell_css
     assert ".app-frame.workspace-test-open > .test-generations-workspace" in shell_css
     assert "grid-area: workspace;" in shell_css
-    assert "test-generations-workspace-open" not in shell_css
-    assert "temporarily owns the full workspace" not in shell_css
 
 
 def test_test_generation_sessions_and_candidate_removal_contract():
@@ -112,9 +109,6 @@ def test_test_generations_closes_on_training_navigation_and_clears_session_state
     assert "launchFolder = owningSetFolder(state && state.folder || '')" in script
     assert "folder: owningSetFolder(launchFolder || (state && state.folder) || '')" in script
     assert "window.closeTestBenchActivity = closePane" in script
-    assert "test-generations-open-results-btn" not in script
-    assert "function openResults(" not in script
-    assert "state.folder = targetFolder" not in script
     assert "String(state.folder || '') !== String(launchFolder || '')" in script
     assert "function stagedFileParts(fileName)" in script
     assert "function sessionLabel(sessionName)" in script

@@ -460,13 +460,12 @@ function refreshTrainingWorkspace() {
   }
 
   if (isUnavailableSetEntry) {
-      if (els.readiness) els.readiness.textContent = 'Select a set folder to configure training.';
+    if (els.readiness) els.readiness.textContent = 'Select a set folder to configure training.';
     renderTrainingItemOverview(null, 'Select a set folder to configure training.');
     syncWorkspaceConfigEditorUi();
     return;
   }
 
-  if (els.navigatorTitle) els.navigatorTitle.textContent = 'Training';
   resetTrainingRunSetupForFolder(folder);
   if (els.readiness) els.readiness.textContent = 'Loading training setup...';
   fetchTrainingProfiles()

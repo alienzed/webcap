@@ -1171,6 +1171,8 @@ Visibility rules used as an informal global layout API.
 
 ## Phase 34 — Remove DOM reparenting and reuse fossils
 
+**Decision:** no active shell/workspace reparenting remains. Static ownership is authoritative; the old `rebuildUnifiedWorkspaceShell()` API is retired in favor of one-time `initializeWorkspaceShell()`.
+
 **Change**
 
 Search for UI that is physically moved between unrelated parents or reused merely because it already exists.
@@ -1197,6 +1199,8 @@ The tired pattern of reusing arbitrary DOM simply because it is already there.
 
 ## Phase 35 — Fullscreen / immersive shell mode
 
+**Decision:** immersive mode is shell-only and does not use the browser fullscreen API. Header/rail hide, the workspace expands, an explicit exit affordance remains, and Escape always exits immersive mode.
+
 **Change**
 
 Only after the normal shell is stable, add optional immersive mode.
@@ -1221,6 +1225,8 @@ Prep, Grid, Focus, Training, Test; enter/leave immersive repeatedly.
 ---
 
 ## Phase 36 — Responsive shell pass
+
+**Decision:** desktop remains primary; <=1180 compresses header/status and stacks workspace regions, while <=880 keeps the permanent activity rail compact and reduces contextual/header chrome before removing core navigation.
 
 **Change**
 

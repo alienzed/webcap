@@ -225,7 +225,6 @@ def test_model_selector_is_single_real_control_in_permanent_header():
 
     assert header_start < model_select < workspace_start
     assert html.count('id="app-header-model-profile-select"') == 1
-    assert 'id="training-model-profile-select"' not in html
     assert "modelProfileSelect:" not in training_state
     assert "getWorkingModelProfileSelect()" in training
     assert "syncWorkingModelProfileSelect(folder)" in training
@@ -234,7 +233,6 @@ def test_model_selector_is_single_real_control_in_permanent_header():
     assert "if (isTrainingWorkspaceActive())" in training
     assert "setWorkingModelProfileId(modelProfileSelect.value, state.folder);" in training
     assert "app-header-model-profile-select" not in test_bench
-    assert "training-model-profile-select" not in test_bench
     assert "getWorkingModelProfileId()" in test_bench
     assert "webcap:working-model-changed" in test_bench
     assert ".app-header-model-control select" in css

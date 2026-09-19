@@ -278,6 +278,43 @@ def test_presence(folder_path):
     }
 
 
+def recent_test_sets(limit=8):
+    fs_root = Path(app_config.FS_ROOT).resolve()
+    recent = []
+    if not fs_root.is_dir():
+        return recent
+
+    for dir_path, dir_names, _file_names in os.walk(fs_root):
+        if TEST_RESULTS_DIR not in dir_names:
+            continue
+        dir_names.remove(TEST_RESULTS_DIR)
+        set_folder = Path(dir_path).resolve()
+        session_root = set_folder / TEST_RESULTS_DIR
+        sessions = list_sessions(set_folder)
+        if not sessions:
+            continue
+        latest = sessions[0]
+        latest_name = str(latest.get("session") or "")
+        latest_status_path = session_root / latest_name / "test.json"
+        try:
+            modified = latest_status_path.stat().st_mtime
+        except OSError:
+            modified = 0
+        recent.append({
+            "folder": _relative_set_folder(set_folder),
+            "sessionCount": len(sessions),
+            "latestSession": latest_name,
+            "status": str(latest.get("status") or ""),
+            "completed": int(latest.get("completed") or 0),
+            "failed": int(latest.get("failed") or 0),
+            "total": int(latest.get("total") or 0),
+            "modified": modified,
+        })
+
+    recent.sort(key=lambda item: (float(item.get("modified") or 0), str(item.get("latestSession") or "")), reverse=True)
+    return recent[:max(1, int(limit or 8))]
+
+
 def activity_snapshot(folder_path=None):
     active = []
     with _lock:
@@ -300,7 +337,7 @@ def activity_snapshot(folder_path=None):
             _active_sessions.pop(folder_key, None)
             _stop_requests.discard(folder_key)
     current = test_presence(folder_path) if folder_path is not None else None
-    return {"active": active, "current": current}
+    return {"active": active, "current": current, "recent": recent_test_sets()}
 
 
 def remove_candidate(folder_path, file_name, session_name=None):

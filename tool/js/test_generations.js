@@ -859,11 +859,6 @@
 
     button.onclick = openPane;
     el('test-generations-close-btn').onclick = closePane;
-    ['sidebar-open-training-btn', 'activity-training-btn'].forEach(function (id) {
-      el(id).addEventListener('click', function () {
-        if (isOpen()) closePane();
-      });
-    });
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-stop-btn').onclick = stopRun;
     el('test-generations-view-grid-btn').onclick = function () {
@@ -958,6 +953,7 @@
 
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
   window.openTestBenchActivity = openTestBenchActivity;
+  window.closeTestBenchActivity = closePane;
   window.refreshTestBenchActivity = refreshActivityButton;
   buildUi();
 })();

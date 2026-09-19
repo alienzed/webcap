@@ -290,3 +290,16 @@ def test_recent_test_sets_are_cached_during_active_test_polling():
 
     assert '_recent_sets_cache = {"expires": 0.0, "items": []}' in backend
     assert 'time.monotonic() + 10.0' in backend
+
+
+def test_saved_test_history_does_not_require_external_staging_folder():
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+
+    prepare_start = backend.index("def prepare(folder_path):")
+    prepare_end = backend.index("\ndef status(", prepare_start)
+    prepare = backend[prepare_start:prepare_end]
+    assert "except ValueError:" in prepare
+    assert "loras = []" in prepare
+    assert '"sessions": list_sessions(folder_path)' in prepare
+    start_start = backend.index("def start(folder_path")
+    assert "_h3_test_directory(folder_path)" in backend[start_start:]

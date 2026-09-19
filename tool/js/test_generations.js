@@ -304,6 +304,92 @@
     return candidateFile;
   }
 
+  function formatTestVideoTime(value) {
+    var seconds = Math.max(0, Number(value) || 0);
+    var minutes = Math.floor(seconds / 60);
+    var wholeSeconds = Math.floor(seconds % 60);
+    return minutes + ':' + String(wholeSeconds).padStart(2, '0');
+  }
+
+  function appendTestPreviewVideo(container, video) {
+    if (!container || !video) return;
+    video.controls = false;
+    video.playsInline = true;
+    video.tabIndex = 0;
+    video.setAttribute('aria-label', 'Test preview video. Click or press Space to play or pause.');
+
+    var transport = document.createElement('div');
+    transport.className = 'test-generations-video-transport';
+
+    var play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'test-generations-video-play';
+    play.textContent = '▶';
+    play.setAttribute('aria-label', 'Play preview');
+
+    var scrubber = document.createElement('input');
+    scrubber.type = 'range';
+    scrubber.className = 'test-generations-video-scrubber';
+    scrubber.min = '0';
+    scrubber.max = '1000';
+    scrubber.step = '1';
+    scrubber.value = '0';
+    scrubber.setAttribute('aria-label', 'Preview position');
+
+    var time = document.createElement('span');
+    time.className = 'test-generations-video-time';
+    time.textContent = '0:00 / 0:00';
+
+    function updateTransport() {
+      var duration = Number(video.duration);
+      var current = Number(video.currentTime);
+      var validDuration = isFinite(duration) && duration > 0;
+      scrubber.disabled = !validDuration;
+      scrubber.value = validDuration ? String(Math.round((Math.max(0, current) / duration) * 1000)) : '0';
+      time.textContent = formatTestVideoTime(current) + ' / ' + formatTestVideoTime(validDuration ? duration : 0);
+      play.textContent = video.paused ? '▶' : '❚❚';
+      play.setAttribute('aria-label', video.paused ? 'Play preview' : 'Pause preview');
+    }
+
+    function togglePlayback() {
+      if (video.paused) {
+        var promise = video.play();
+        if (promise && typeof promise.catch === 'function') promise.catch(showError);
+      } else {
+        video.pause();
+      }
+    }
+
+    play.onclick = function () { togglePlayback(); };
+    scrubber.oninput = function () {
+      var duration = Number(video.duration);
+      if (!isFinite(duration) || duration <= 0) return;
+      video.currentTime = duration * (Number(scrubber.value) / 1000);
+    };
+    video.onclick = function () { togglePlayback(); };
+    video.onkeydown = function (event) {
+      if (!event) return;
+      if (event.key === ' ' || event.key === 'Enter') {
+        event.preventDefault();
+        togglePlayback();
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        var direction = event.key === 'ArrowLeft' ? -1 : 1;
+        video.currentTime = Math.max(0, Math.min(Number(video.duration) || 0, Number(video.currentTime || 0) + direction));
+      }
+    };
+    ['loadedmetadata', 'durationchange', 'timeupdate', 'play', 'pause', 'ended', 'seeked'].forEach(function (eventName) {
+      video.addEventListener(eventName, updateTransport);
+    });
+
+    container.appendChild(video);
+    transport.appendChild(play);
+    transport.appendChild(scrubber);
+    transport.appendChild(time);
+    container.appendChild(transport);
+    updateTransport();
+  }
+
   function setResultsView(mode) {
     resultsView = mode === 'compare' ? 'compare' : 'grid';
     var gridBtn = el('test-generations-view-grid-btn');
@@ -395,11 +481,10 @@
       item.className = 'test-generations-compare-item';
 
       var video = document.createElement('video');
-      video.controls = true;
       video.preload = 'metadata';
       video.muted = true;
       video.src = videoUrl(resultFolder, String(result.outputVideo || ''));
-      item.appendChild(video);
+      appendTestPreviewVideo(item, video);
       videos.push(video);
 
       var footer = document.createElement('div');
@@ -497,10 +582,9 @@
 
       if (resultFolder && outputVideo) {
         var video = document.createElement('video');
-        video.controls = true;
         video.preload = 'metadata';
         video.src = videoUrl(resultFolder, outputVideo);
-        card.appendChild(video);
+        appendTestPreviewVideo(card, video);
       } else {
         var placeholder = document.createElement('div');
         placeholder.className = 'test-generations-preview-placeholder';

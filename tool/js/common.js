@@ -412,31 +412,23 @@ function wireThemeToggleUi() {
 }
 
 function updateSidebarCollapseUi(collapsed) {
-  var toggles = [
-    ui && ui.sidebarCollapseToggleBtn,
-    document.getElementById('training-sidebar-collapse-toggle-btn')
-  ].filter(Boolean);
-  if (!toggles.length) return;
+  var toggle = ui && ui.sidebarCollapseToggleBtn;
+  if (!toggle) return;
   if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen()) {
-    toggles.forEach(function (toggle) {
-      toggle.textContent = '<';
-      toggle.title = 'Return to item view';
-      toggle.setAttribute('aria-label', 'Return to item view');
-      toggle.setAttribute('aria-pressed', 'false');
-    });
+    toggle.textContent = '<';
+    toggle.title = 'Return to item view';
+    toggle.setAttribute('aria-label', 'Return to item view');
+    toggle.setAttribute('aria-pressed', 'false');
     return;
   }
-  toggles.forEach(function (toggle) {
-    var sidebarHidden = toggle.id === 'training-sidebar-collapse-toggle-btn'
-      && typeof workspaceState !== 'undefined'
-      && workspaceState.surface === 'training'
-      && workspaceState.sidebarHidden;
-    var isHidden = collapsed || sidebarHidden;
-    toggle.textContent = isHidden ? '>' : '<';
-    toggle.title = isHidden ? 'Expand sidebar' : 'Collapse sidebar';
-    toggle.setAttribute('aria-label', isHidden ? 'Expand sidebar' : 'Collapse sidebar');
-    toggle.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
-  });
+  var trainingSidebarHidden = typeof workspaceState !== 'undefined'
+    && workspaceState.surface === 'training'
+    && workspaceState.sidebarHidden;
+  var isHidden = collapsed || trainingSidebarHidden;
+  toggle.textContent = isHidden ? '>' : '<';
+  toggle.title = isHidden ? 'Expand sidebar' : 'Collapse sidebar';
+  toggle.setAttribute('aria-label', isHidden ? 'Expand sidebar' : 'Collapse sidebar');
+  toggle.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
 }
 
 function setSidebarCollapsed(collapsed) {
@@ -461,6 +453,14 @@ function wireSidebarCollapseUi() {
     ui.sidebarCollapseToggleBtn.onclick = function () {
       if (typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen() && typeof closeMediaGridSurface === 'function') {
         closeMediaGridSurface();
+        return;
+      }
+      if (typeof workspaceState !== 'undefined'
+          && workspaceState.surface === 'training'
+          && typeof trainingWorkspaceState !== 'undefined'
+          && trainingWorkspaceState.entryMode === 'global') {
+        workspaceState.sidebarHidden = !workspaceState.sidebarHidden;
+        if (typeof syncWorkspaceSurfaceUi === 'function') syncWorkspaceSurfaceUi();
         return;
       }
       toggleSidebarCollapsed();

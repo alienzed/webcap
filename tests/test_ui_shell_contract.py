@@ -137,3 +137,14 @@ def test_training_identity_is_owned_by_shell_header():
     assert "entryKind === 'global'" in shell
     assert "navigatorTitle" not in workspace
     assert "navigatorTitle" not in state
+
+
+def test_test_workspace_uses_shell_identity_and_prep_exit():
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "testOpen ? 'Test'" in shell
+    assert "workspaceContextText = 'Generations'" in shell
+    assert "window.closeTestBenchActivity()" in shell
+    assert "test-generations-close-btn" not in shell
+    assert "test-generations-close-btn" not in script

@@ -61,19 +61,12 @@
   grid-area: header;
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 0 10px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
-}
-
-.app-header-brand {
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
 }
 
 .app-header-context,
@@ -183,14 +176,6 @@
   stroke-linejoin: round;
 }
 
-.app-header-context-label {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 .app-header-folder {
   min-width: 0;
   overflow: hidden;
@@ -233,21 +218,53 @@
   justify-content: flex-end;
 }
 
-.app-header-status {
-  min-height: 0;
-  max-width: min(42vw, 520px);
-  padding: 0;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-}
-
-.app-header-status #status-text {
+.shell-gpu-status {
+  min-width: 0;
+  max-width: 340px;
+  overflow: hidden;
+  color: var(--muted);
   font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.app-header-status .console-toggle-btn {
-  flex: 0 0 auto;
+.shell-gpu-status strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.shell-gpu-status .is-warning {
+  color: var(--warning, #b45309);
+}
+
+.shell-status-toast {
+  position: absolute;
+  left: 50px;
+  bottom: 8px;
+  z-index: 70;
+  max-width: min(620px, calc(100% - 70px));
+  padding: 6px 9px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  color: var(--muted);
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.12);
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: none;
+  backdrop-filter: blur(5px);
+}
+
+.shell-status-toast #status-text:empty {
+  display: none;
+}
+
+.shell-status-toast:has(#status-text:empty) {
+  display: none;
+}
+
+.app-frame.shell-immersive > .shell-status-toast {
+  left: 8px;
 }
 
 .app-frame > .app {
@@ -674,10 +691,6 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     grid-column: 3;
   }
 
-  .app-header-status #status-text {
-    display: none;
-  }
-
   .app-header-model-control select {
     max-width: 145px;
   }
@@ -718,9 +731,6 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .app-header-brand,
-  .app-header-context > .app-header-context-label,
-  .app-header-model-control > .app-header-context-label,
   .app-header-workspace-context {
     display: none;
   }

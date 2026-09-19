@@ -246,8 +246,10 @@ Conceptually:
 └── existing .app.shell-revamp
     ├── #sidebar-panel
     ├── .preview-panel
-    ├── .workbench-panel
-    └── #workspace-overlays
+    └── .workbench-panel
+
+#app-overlay-root
+└── true modal / overlay UI
 ```
 
 This is deliberately conservative.
@@ -1010,6 +1012,8 @@ Test's dependency on Training DOM.
 
 ## Phase 28 — Candidate Analysis placement decision
 
+**Decision:** Candidate Analysis remains a true modal artifact view. Its fullscreen lifecycle, backdrop-close behavior, and return-to-origin semantics are modal rather than workspace navigation.
+
 **Change**
 
 Re-evaluate Candidate Analysis now that the shell exists.
@@ -1035,6 +1039,8 @@ Whichever modal/workspace ambiguity is no longer justified.
 ---
 
 ## Phase 29 — Centralize overlay ownership
+
+**Decision:** `#app-overlay-root` is the single static owner for true modal UI. Shell rebuild code does not reparent modal nodes.
 
 **Change**
 

@@ -135,6 +135,25 @@
   white-space: nowrap;
 }
 
+.app-header-workspace-controls {
+  justify-content: center;
+}
+
+.app-header-workspace-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.app-header-workspace-context {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.app-header-workspace-context:empty {
+  display: none;
+}
+
 .app-header-global {
   justify-content: flex-end;
 }

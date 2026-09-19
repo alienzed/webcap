@@ -84,7 +84,6 @@ function mediaGridCaptureWorkspaceState() {
   if (mediaGridState.previousWorkspaceState) return;
   mediaGridState.previousWorkspaceState = {
     surface: typeof workspaceState !== 'undefined' && workspaceState ? workspaceState.surface : 'default',
-    workflowMode: typeof workspaceUiState !== 'undefined' && workspaceUiState ? workspaceUiState.workflowMode : 'annotate',
     sidebarCollapsed: !!(ui && ui.appEl && ui.appEl.classList.contains('left-rail-collapsed'))
   };
 }
@@ -98,9 +97,6 @@ function mediaGridRestoreItemWorkspace(previousWorkspaceState) {
   }
   if (typeof setSidebarCollapsed === 'function') {
     setSidebarCollapsed(!!restoreState.sidebarCollapsed);
-  }
-  if (typeof setWorkspaceWorkflowMode === 'function') {
-    setWorkspaceWorkflowMode(restoreState.workflowMode || 'annotate');
   }
   if (typeof requestWorkspaceWorkbenchRefresh === 'function') {
     requestWorkspaceWorkbenchRefresh();

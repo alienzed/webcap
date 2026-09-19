@@ -651,11 +651,9 @@
 
   function closePane() {
     var node = pane();
-    var surface = document.querySelector('.editor-surface');
     var app = document.querySelector('.app');
     if (node) node.classList.add('hidden');
-    if (surface) surface.classList.remove('test-generations-active');
-    if (app) app.classList.remove('test-generations-workspace-open');
+    if (app) app.classList.remove('workspace-test-open');
     launchFolder = '';
     if (pollTimer) {
       clearTimeout(pollTimer);
@@ -697,15 +695,13 @@
 
   function openPane() {
     var node = pane();
-    var surface = document.querySelector('.editor-surface');
     var app = document.querySelector('.app');
     var summary = el('test-generations-summary');
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
-    if (!node || !surface || !app) throw new Error('Test Generations requires the app shell, editor surface, and test pane.');
+    if (!node || !app) throw new Error('Test Generations requires the app shell and Test workspace.');
     launchFolder = owningSetFolder(state && state.folder || '');
-    surface.classList.add('test-generations-active');
-    app.classList.add('test-generations-workspace-open');
+    app.classList.add('workspace-test-open');
     node.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (summary) summary.textContent = 'Loading H3 Test folder...';
@@ -819,8 +815,8 @@
   function buildUi() {
     if (el('test-generations-open-btn')) return;
     var actions = el('training-tests-actions');
-    var surface = document.querySelector('.editor-surface');
-    if (!actions || !surface) throw new Error('Test Generations requires the Training Tests stage and editor surface.');
+    var workspace = el('test-generations-workspace');
+    if (!actions || !workspace) throw new Error('Test Generations requires the Training Tests stage and Test workspace root.');
 
     var button = document.createElement('button');
     button.id = 'test-generations-open-btn';
@@ -861,7 +857,7 @@
       '<section class="test-generations-results-section"><div class="test-generations-results-heading"><div class="test-generations-results-title"><strong>Results</strong><span id="test-generations-session-meta" class="test-generations-session-meta hidden"></span><button id="test-generations-session-info-btn" type="button" class="mini-info-btn hidden" title="View frozen session settings and resolved prompt" aria-label="View frozen session settings and resolved prompt">i</button></div><div class="test-generations-view-toggle"><button id="test-generations-view-grid-btn" type="button" class="review-captions-btn active">Grid</button><button id="test-generations-view-compare-btn" type="button" class="review-captions-btn">Compare</button></div></div><div id="test-generations-session-details" class="test-generations-session-details hidden"></div><div id="test-generations-results" class="test-generations-results"></div><div id="test-generations-compare" class="test-generations-compare hidden"></div></section>',
       '</div>'
     ].join('');
-    surface.appendChild(node);
+    workspace.appendChild(node);
 
     button.onclick = openPane;
     el('test-generations-run-btn').onclick = startRun;

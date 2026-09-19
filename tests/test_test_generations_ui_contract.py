@@ -207,3 +207,17 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert "status.seed" in script
     assert ".test-generations-session-details" in css
     assert ".test-generations-session-prompt pre" in css
+
+
+def test_test_identity_is_owned_by_shell_header():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    assert "test-generations-close-btn" not in script
+    assert "test-generations-header" not in script
+    assert ".test-generations-header" not in css
+    assert "test-generations-form-title" in script
+    assert "testOpen ? 'Test'" in shell
+    assert "workspaceContextText = 'Generations'" in shell
+    assert "window.closeTestBenchActivity" in shell

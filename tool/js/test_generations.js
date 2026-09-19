@@ -143,10 +143,15 @@
 
   function syncLaunchVisibility() {
     var button = el('test-generations-open-btn');
-    var select = el('app-header-model-profile-select');
-    if (!button || !select) return;
-    var available = String(select.value || '') === H3_PROFILE_ID && !!(state && state.folder);
-    button.classList.toggle('hidden', !available);
+    if (!button) return;
+    var hasFolder = !!(state && state.folder);
+    var supported = getWorkingModelProfileId() === H3_PROFILE_ID;
+    button.classList.toggle('hidden', !hasFolder);
+    button.disabled = hasFolder && !supported;
+    button.textContent = supported ? 'Open Test Bench' : 'H3 Test Only';
+    button.title = supported
+      ? 'Compare staged H3 LoRAs with frozen generation settings.'
+      : 'Test Bench currently supports MiniMax H3 only. Select MiniMax H3 as the working model to open it.';
   }
 
   function stagedFileParts(fileName) {
@@ -903,11 +908,7 @@
       saveTestBenchState(prompt);
     };
 
-    var select = el('app-header-model-profile-select');
-    if (select) {
-      select.addEventListener('change', syncLaunchVisibility);
-      new MutationObserver(syncLaunchVisibility).observe(select, { childList: true, subtree: true });
-    }
+    window.addEventListener('webcap:working-model-changed', syncLaunchVisibility);
     syncLaunchVisibility();
     refreshActivityButton();
   }

@@ -95,8 +95,6 @@ function mediaGridRestoreItemWorkspace(previousWorkspaceState) {
   if (restoreSurface === 'grid') restoreSurface = 'default';
   if (typeof setWorkspaceSurface === 'function') {
     setWorkspaceSurface(restoreSurface, { skipRemember: true, sidebarHidden: restoreSurface === 'focus' });
-  } else if (typeof setWorkspaceViewMode === 'function') {
-    setWorkspaceViewMode('single');
   }
   if (typeof setSidebarCollapsed === 'function') {
     setSidebarCollapsed(!!restoreState.sidebarCollapsed);

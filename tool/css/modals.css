@@ -950,11 +950,11 @@ html[data-theme="dark"] .app-settings-radio-label {
   color: #cbd5e1;
 }
 
-.app.shell-revamp .workspace-overlays > .modal-overlay {
+.app-overlay-root > .modal-overlay {
   z-index: 7;
 }
 
-.app.shell-revamp .workspace-overlays > .modal {
+.app-overlay-root > .modal {
   z-index: 8;
 }
 

@@ -2661,7 +2661,7 @@ iframe {
 }
 .test-generations-staged-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -2735,9 +2735,12 @@ iframe {
   color: var(--danger, #f87171);
   cursor: pointer;
 }
+.test-generations-session-name input,
 .test-generations-prompt textarea {
   box-sizing: border-box;
   width: 100%;
+}
+.test-generations-prompt textarea {
   min-height: 220px;
   resize: vertical;
 }

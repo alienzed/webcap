@@ -40,10 +40,6 @@ body {
   transition: grid-template-columns 0.16s ease;
 }
 
-.app:not(.shell-revamp).left-rail-collapsed {
-  grid-template-columns: 64px 1fr 1fr;
-}
-
 /* Panels */
 .panel {
   background: var(--panel);
@@ -59,10 +55,6 @@ body {
 
 .stack>* {
   margin-bottom: 10px;
-}
-
-.stack>.status {
-  margin-bottom: 0;
 }
 
 .panel.stack:first-child {
@@ -85,16 +77,6 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
-}
-
-.app:not(.shell-revamp).left-rail-collapsed .sidebar-panel .panel-scrollable {
-  padding: 8px;
-  overflow: hidden;
-}
-
-.app:not(.shell-revamp).left-rail-collapsed .sidebar-panel .sidebar-content,
-.app:not(.shell-revamp).left-rail-collapsed .sidebar-panel .status {
-  display: none;
 }
 
 /* Sidebar */

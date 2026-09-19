@@ -285,6 +285,7 @@ def test_grid_and_focus_view_mode_is_derived_from_surface_not_parallel_state():
 
     assert "function getWorkspaceViewMode()" in shell
     assert "surface === 'grid' || surface === 'focus'" in shell
+    assert "normalizeWorkspaceViewMode" not in shell
     assert "getWorkspaceViewMode() !== 'single'" in main
 
 

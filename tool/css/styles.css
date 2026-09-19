@@ -2637,14 +2637,10 @@ iframe {
 .training-review-modal-footer { justify-content: flex-end; border-top: 1px solid var(--border-color, #3d4452); }
 
 .test-generations-workspace {
-  display: flex;
+  display: none;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-}
-
-.test-generations-workspace.hidden {
-  display: none;
 }
 
 .test-generations-pane {

@@ -456,3 +456,12 @@ def test_phase_audit_restores_shared_editor_after_training_and_owns_checklist_vi
     assert "#caption-checklist-panel.group-tools-card.checklist-panel {\n  display: flex !important;" not in workbench
     assert "ui.appEl.classList.remove('training-config-selected')" in shell
     assert "editorWrapper.classList.remove('hidden')" in shell
+
+
+def test_background_training_activity_is_discovered_on_app_startup():
+    main = (ROOT / "tool" / "js" / "main.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+
+    assert "if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();" in main
+    assert "function scheduleTrainingRunnerPoll()" in runner
+    assert "if (!hasActiveJob) return;" in runner

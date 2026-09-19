@@ -95,7 +95,7 @@ def test_focus_header_hides_entry_and_sidebar_controls_while_active():
     assert 'id="preview-open-focused-btn"' in html
     assert "sidebar-open-focused-btn" not in html + details + ui + shell
     assert "sidebarFocusBtnEl" not in details + ui
-    assert "ui.sidebarCollapseToggleBtn.classList.toggle('hidden', focusOpen ||" in details
+    assert "ui.sidebarCollapseToggleBtn.classList.toggle('hidden', focusOpen ||" not in details
     assert "ui.previewFocusBtnEl.classList.toggle('hidden', !hasItem || focusOpen);" in details
     assert "ui.previewFocusBtnEl.classList.toggle('hidden', !hasCurrentItem || focusOpen);" in ui
     assert focus.count("renderPreviewHeaderMeta();") >= 2
@@ -127,3 +127,19 @@ def test_focus_has_no_duplicate_surface_remnants_and_restores_group_keys_on_undo
     common = _read("tool/js/common.js")
     assert "focusedAnnotationState.groupKey = String(op.requirementLabel || '').trim();" in common
     assert "if (undone && isFocusedAnnotationOpen())" in _read("tool/js/main.js")
+
+
+def test_focus_shell_identity_and_activity_exit_preserve_real_focus_cleanup():
+    html = _read("tool/tool.html")
+    shell = _read("tool/js/workspace_shell.js")
+    focus = _read("tool/js/focused_annotation.js")
+
+    assert "surface === 'focus' ? 'Focus'" in shell
+    assert "prepSidebarToggle.classList.toggle('hidden', !!testOpen || surface !== 'default');" in shell
+    assert "surface === 'focus'" in shell
+    assert "stopFocusedAnnotation();" in shell
+    assert 'id="focused-annotation-close-btn"' in html
+    assert "els.closeBtn.addEventListener('click', stopFocusedAnnotation);" in focus
+    assert "e.key === 'Escape'" in focus
+    assert "focusedAnnotationState.open = false;" in focus
+    assert "exitWorkspaceSurface();" in focus

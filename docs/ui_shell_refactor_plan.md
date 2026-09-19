@@ -1254,6 +1254,8 @@ Old responsive selectors tied to superseded shell ownership.
 
 ## Phase 37 — Accessibility and keyboard pass
 
+**Decision:** activity navigation exposes current-page and controlled-workspace semantics. Escape precedence is: open application modal, Focus/workspace handling, then shell immersive exit.
+
 **Change**
 
 Audit:
@@ -1277,6 +1279,8 @@ Any obsolete key handling that assumed old modal/surface ownership.
 ---
 
 ## Phase 38 — Persistence / reload audit
+
+**Decision:** URL hash routing owns durable navigation location. Routes persist folder plus Prep/Training/Test/Review/Grid and Training global/set scope. Modal state, tabs, Focus cursor/group, console visibility, and immersive mode remain transient.
 
 **Change**
 
@@ -1305,6 +1309,8 @@ Accidental persistence inherited from previous ownership.
 ---
 
 ## Phase 39 — Fossil deletion pass
+
+**Decision:** migration-only negative assertions and stale architecture comments are removed. Older checklist/advanced modal code now relies on the static application overlay root and no longer calls retired reparent helpers.
 
 **Change**
 

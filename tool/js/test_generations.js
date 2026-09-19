@@ -830,10 +830,9 @@
     node.innerHTML = [
       '<div class="test-generations-body">',
       '<aside class="test-generations-rail">',
-      '<header class="test-generations-header"><div class="test-generations-title-row"><h2>Test Generations</h2><button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button></div><button id="test-generations-close-btn" type="button" class="review-captions-btn">Back</button></header>',
       '<div id="test-generations-help" class="test-generations-help hidden"><strong>How Test Generations works</strong><p>Each run uses one frozen prompt, aspect ratio, resolution, duration, and seed across the Base render and every staged LoRA so the results are directly comparable.</p><p>Prompt, aspect ratio, resolution, and duration are remembered for this set. The seed is shared within a batch, then randomized for the next batch.</p><p>Completed videos are stored in this set\'s Test Generations sessions. ComfyUI output is treated as temporary staging and cleaned after WebCap moves each finished render into the session.</p></div>',
       '<section class="test-generations-controls">',
-      '<div class="test-generations-form-heading"><strong>Next run</strong><span id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</span></div>',
+      '<div class="test-generations-form-heading"><div class="test-generations-form-title"><strong>Next run</strong><button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button></div><span id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</span></div>',
       '<label class="training-run-option test-generations-prompt"><span>Prompt</span><textarea id="test-generations-prompt" rows="5"></textarea></label>',
       '<div class="test-generations-setup-options">',
       '<div class="test-generations-settings-grid">',
@@ -858,7 +857,6 @@
     surface.appendChild(node);
 
     button.onclick = openPane;
-    el('test-generations-close-btn').onclick = closePane;
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-stop-btn').onclick = stopRun;
     el('test-generations-view-grid-btn').onclick = function () {

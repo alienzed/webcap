@@ -13,6 +13,9 @@ var shellNavigationState = {
   contextKind: 'set',
   immersive: false
 };
+
+var initialShellLocationRoute = null;
+var initialShellLocationRestored = false;
 var WORKBENCH_RAIL_SESSION_KEY = 'webcap.workbenchRailCollapsedByView';
 var workbenchRailCollapsedByView = loadWorkbenchRailSessionState();
 
@@ -115,6 +118,83 @@ function syncWorkspaceHeaderUi() {
 function setWorkspaceWorkflowMode(mode) {
   workspaceUiState.workflowMode = normalizeWorkspaceWorkflowMode(mode);
   syncWorkspaceHeaderUi();
+}
+
+function normalizeShellRouteWorkspace(value) {
+  var workspace = String(value || '').trim().toLowerCase();
+  if (workspace === 'training') return 'training';
+  if (workspace === 'test') return 'test';
+  if (workspace === 'review') return 'review';
+  if (workspace === 'grid') return 'grid';
+  return 'prep';
+}
+
+function parseShellLocationRoute() {
+  var hash = String(window.location && window.location.hash || '');
+  if (!hash || hash.indexOf('#/') !== 0) return null;
+  var body = hash.slice(2);
+  var queryIndex = body.indexOf('?');
+  var workspace = normalizeShellRouteWorkspace(queryIndex >= 0 ? body.slice(0, queryIndex) : body);
+  var params = new URLSearchParams(queryIndex >= 0 ? body.slice(queryIndex + 1) : '');
+  var folder = String(params.get('folder') || '').replace(/^[/\\]+|[/\\]+$/g, '');
+  var scope = params.get('scope') === 'global' ? 'global' : 'set';
+  return { workspace: workspace, folder: folder, scope: scope };
+}
+
+function currentShellRouteWorkspace() {
+  var navigation = deriveShellNavigationState();
+  if (navigation.activity === 'test') return 'test';
+  if (navigation.workspaceRoot === 'training') return 'training';
+  if (navigation.workspaceRoot === 'review') return 'review';
+  if (navigation.workspaceRoot === 'grid') return 'grid';
+  return 'prep';
+}
+
+function syncShellLocationRoute() {
+  if (!window.history || typeof window.history.replaceState !== 'function') return;
+  var workspace = currentShellRouteWorkspace();
+  var params = new URLSearchParams();
+  var folder = String(state && state.folder || '');
+  if (folder) params.set('folder', folder);
+  if (workspace === 'training' && getTrainingWorkspaceEntryKind() === 'global') params.set('scope', 'global');
+  var nextHash = '#/' + workspace + (params.toString() ? '?' + params.toString() : '');
+  if (window.location.hash === nextHash) return;
+  window.history.replaceState(null, '', window.location.pathname + window.location.search + nextHash);
+}
+
+function applyInitialShellLocationRoute() {
+  initialShellLocationRoute = parseShellLocationRoute();
+  if (!initialShellLocationRoute) return null;
+  if (initialShellLocationRoute.folder) {
+    state.folder = initialShellLocationRoute.folder;
+    state.dirStack = [{ name: '' }].concat(initialShellLocationRoute.folder.split('/').filter(Boolean).map(function (name) {
+      return { name: name };
+    }));
+  }
+  return initialShellLocationRoute;
+}
+
+function restoreInitialShellLocationRoute() {
+  if (initialShellLocationRestored) return;
+  initialShellLocationRestored = true;
+  var route = initialShellLocationRoute;
+  initialShellLocationRoute = null;
+  if (!route) {
+    syncShellLocationRoute();
+    return;
+  }
+  if (route.workspace === 'training') {
+    openTrainingSurface(route.scope === 'global' ? 'global' : 'set');
+  } else if (route.workspace === 'review') {
+    setWorkspaceSurface('reviewOutput');
+  } else if (route.workspace === 'grid' && typeof openMediaGridSurface === 'function') {
+    openMediaGridSurface();
+  } else if (route.workspace === 'test' && typeof window.openTestBenchForCurrentFolder === 'function') {
+    window.openTestBenchForCurrentFolder();
+  } else {
+    setWorkspaceSurface('default', { skipRemember: true });
+  }
+  syncShellLocationRoute();
 }
 
 function normalizeWorkspaceSurface(surface) {
@@ -434,6 +514,7 @@ function setWorkspaceSurface(surface, options) {
   }
   syncWorkspaceSurfaceUi();
   refreshWorkspaceWorkbenchSurface();
+  syncShellLocationRoute();
 }
 
 function exitWorkspaceSurface(surfaceOverride) {
@@ -632,6 +713,10 @@ window.deriveShellNavigationState = deriveShellNavigationState;
 window.isApplicationOverlayOpen = isApplicationOverlayOpen;
 window.setShellImmersive = setShellImmersive;
 window.toggleShellImmersive = toggleShellImmersive;
+window.parseShellLocationRoute = parseShellLocationRoute;
+window.syncShellLocationRoute = syncShellLocationRoute;
+window.applyInitialShellLocationRoute = applyInitialShellLocationRoute;
+window.restoreInitialShellLocationRoute = restoreInitialShellLocationRoute;
 
 function getThemedPreviewPlaceholderHtml(message) {
   var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';

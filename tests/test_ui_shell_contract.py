@@ -164,3 +164,14 @@ def test_review_identity_is_owned_by_shell_header():
     assert ".review-output-context" not in css
     assert ".review-output-surface-title" not in css
     assert 'id="review-output-back-btn"' in html
+
+
+def test_grid_identity_and_prep_exit_are_owned_by_shell_without_removing_local_back():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    assert "surface === 'grid' ? 'Grid'" in shell
+    assert "workspaceContextText = mediaGridGetSourceLabel()" in shell
+    assert "normalizeWorkspaceSurface(workspaceState.surface) === 'grid'" in shell
+    assert "closeMediaGridSurface();" in shell
+    assert 'id="media-grid-surface-close-btn"' in html

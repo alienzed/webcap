@@ -12,6 +12,7 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
     workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
 
     assert 'id="training-candidates-modal"' in html
+    assert html.index('id="app-overlay-root"') < html.index('id="training-candidates-modal"')
     assert 'id="training-candidates-stage"' not in html
     assert 'id="training-candidates-stage-btn"' not in html
     assert 'id="training-candidates-open-run"' in html
@@ -245,3 +246,14 @@ assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipD
         capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_candidate_analysis_remains_a_true_modal_artifact_view():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "training_candidates.js").read_text(encoding="utf-8")
+
+    assert 'role="dialog" aria-modal="true"' in html
+    assert "toggleTrainingCandidatesFullscreen" in script
+    assert "els.modal.onclick = function (event) { if (event.target === els.modal) closeTrainingCandidates(); };" in script
+    assert "candidateModalOpen = true" in script
+    assert "candidateModalOpen = false" in script

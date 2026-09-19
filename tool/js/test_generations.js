@@ -199,11 +199,15 @@
     openPane();
   }
 
+  function isTestModelSupported() {
+    return getWorkingModelProfileId() === H3_PROFILE_ID;
+  }
+
   function syncLaunchVisibility() {
     var button = el('test-generations-open-btn');
     if (!button) return;
     var hasFolder = !!(state && state.folder);
-    var supported = getWorkingModelProfileId() === H3_PROFILE_ID;
+    var supported = isTestModelSupported();
     button.classList.toggle('hidden', !hasFolder);
     button.disabled = hasFolder && !supported;
     button.textContent = supported ? 'Open Test Bench' : 'H3 Test Only';
@@ -707,7 +711,13 @@
     var active = running || stopping;
     var runBtn = el('test-generations-run-btn');
     var stopBtn = el('test-generations-stop-btn');
-    if (runBtn) runBtn.disabled = active || !prepared || !prepared.count;
+    if (runBtn) {
+      var supported = isTestModelSupported();
+      runBtn.disabled = active || !prepared || !prepared.count || !supported;
+      runBtn.title = supported
+        ? 'Run this frozen Test batch.'
+        : 'New Test runs currently require MiniMax H3 as the working model.';
+    }
     if (stopBtn) {
       stopBtn.classList.toggle('hidden', !active);
       stopBtn.disabled = stopping;
@@ -882,6 +892,9 @@
   }
 
   function startRun() {
+    if (!isTestModelSupported()) {
+      return showError(new Error('New Test runs currently require MiniMax H3 as the working model.'));
+    }
     var prompt = String(el('test-generations-prompt') && el('test-generations-prompt').value || '').trim();
     var aspectRatio = String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim();
     var megapixels = String(el('test-generations-megapixels') && el('test-generations-megapixels').value || '').trim();
@@ -1058,7 +1071,10 @@
       saveTestBenchState(prompt);
     };
 
-    window.addEventListener('webcap:working-model-changed', syncLaunchVisibility);
+    window.addEventListener('webcap:working-model-changed', function () {
+      syncLaunchVisibility();
+      syncActiveRunControls(currentStatus);
+    });
     syncLaunchVisibility();
     refreshActivityButton();
   }

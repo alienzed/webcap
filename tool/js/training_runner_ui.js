@@ -31,31 +31,14 @@ function getTrainingRunnerActiveJob() {
 }
 
 function syncUtilityTrainingActivity() {
-  var utilityTrainingBtn = document.getElementById('utility-training-btn');
-  var utilityTrainingProgress = document.getElementById('utility-training-progress');
   var activityTrainingBtn = document.getElementById('activity-training-btn');
-  if (!utilityTrainingBtn || !utilityTrainingProgress || !activityTrainingBtn) return;
+  if (!activityTrainingBtn) return;
   var running = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
     return job.status === 'running';
   });
-  [utilityTrainingBtn, activityTrainingBtn].forEach(function (button) {
-    button.classList.toggle('training-running', running);
-    button.title = running ? 'Open Training (training in progress)' : 'Open Training';
-    button.setAttribute('aria-label', running ? 'Open Training (training in progress)' : 'Open Training');
-  });
-  utilityTrainingProgress.hidden = !running;
-  if (running && !utilityTrainingTurtleTimer) {
-    utilityTrainingTurtleAtLeft = true;
-    utilityTrainingProgress.style.transform = 'translateX(-3px)';
-    utilityTrainingTurtleTimer = window.setInterval(function () {
-      utilityTrainingTurtleAtLeft = !utilityTrainingTurtleAtLeft;
-      utilityTrainingProgress.style.transform = utilityTrainingTurtleAtLeft ? 'translateX(-3px)' : 'translateX(3px)';
-    }, 1000);
-  } else if (!running && utilityTrainingTurtleTimer) {
-    window.clearInterval(utilityTrainingTurtleTimer);
-    utilityTrainingTurtleTimer = 0;
-    utilityTrainingProgress.style.transform = '';
-  }
+  activityTrainingBtn.classList.toggle('training-running', running);
+  activityTrainingBtn.title = running ? 'Open Training (training in progress)' : 'Open Training';
+  activityTrainingBtn.setAttribute('aria-label', running ? 'Open Training (training in progress)' : 'Open Training');
 }
 
 function isTrainingRunnerConsoleVisible() {

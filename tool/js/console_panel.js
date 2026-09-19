@@ -17,7 +17,7 @@ function wireConsolePanelUi() {
 function setConsolePanelVisible(visible) {
   if (!ui.consolePanelEl) return;
   wireConsolePanelUi();
-  ui.consolePanelEl.style.display = visible ? 'flex' : 'none';
+  ui.consolePanelEl.classList.toggle('hidden', !visible);
   ui.consolePanelEl.setAttribute('aria-hidden', visible ? 'false' : 'true');
 }
 
@@ -39,8 +39,8 @@ function appendToConsolePanel(msg) {
 
 function isConsolePanelVisible() {
   if (!ui.consolePanelEl) return false;
-  var display = ui.consolePanelEl.style.display;
-  return !!display && display !== 'none';
+  return !ui.consolePanelEl.classList.contains('hidden') &&
+    ui.consolePanelEl.getAttribute('aria-hidden') !== 'true';
 }
 
 function syncConsoleToggleButton() {
@@ -63,8 +63,7 @@ function showConsolePanel() {
 
 function toggleConsolePanel() {
   if (!ui.consolePanelEl) return;
-  var style = ui.consolePanelEl.style;
-  setConsolePanelVisible(style.display === 'none' || !style.display);
+  setConsolePanelVisible(!isConsolePanelVisible());
   syncConsoleToggleButton();
 }
 

@@ -651,9 +651,9 @@
 
   function closePane() {
     var node = pane();
-    var app = document.querySelector('.app');
+    var frame = el('app-frame');
     if (node) node.classList.add('hidden');
-    if (app) app.classList.remove('workspace-test-open');
+    if (frame) frame.classList.remove('workspace-test-open');
     launchFolder = '';
     if (pollTimer) {
       clearTimeout(pollTimer);
@@ -695,13 +695,13 @@
 
   function openPane() {
     var node = pane();
-    var app = document.querySelector('.app');
+    var frame = el('app-frame');
     var summary = el('test-generations-summary');
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
-    if (!node || !app) throw new Error('Test Generations requires the app shell and Test workspace.');
+    if (!node || !frame) throw new Error('Test Generations requires the app frame and Test workspace.');
     launchFolder = owningSetFolder(state && state.folder || '');
-    app.classList.add('workspace-test-open');
+    frame.classList.add('workspace-test-open');
     node.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (summary) summary.textContent = 'Loading H3 Test folder...';

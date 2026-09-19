@@ -54,7 +54,7 @@ def test_test_generations_uses_training_pane_and_core_controls():
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     assert 'id="test-generations-workspace"' in html
-    assert ".app.shell-revamp.workspace-test-open" in shell_css
+    assert ".app-frame.workspace-test-open > .test-generations-workspace" in shell_css
     assert ".test-generations-workspace-open" not in shell_css
     assert 'src="/static/js/test_generations.js"' in html
 
@@ -82,12 +82,9 @@ def test_test_generations_uses_explicit_workspace_root():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
     assert 'id="test-generations-workspace"' in html
-    assert ".app.shell-revamp.workspace-test-open {" in shell_css
-    assert 'grid-template-areas: "test";' in shell_css
-    assert "> .test-generations-workspace" in shell_css
-    assert "> .sidebar-panel" in shell_css
-    assert "> .preview-panel" in shell_css
-    assert "> .workbench-panel" in shell_css
+    assert ".app-frame.workspace-test-open > .app" in shell_css
+    assert ".app-frame.workspace-test-open > .test-generations-workspace" in shell_css
+    assert "grid-area: workspace;" in shell_css
     assert "test-generations-workspace-open" not in shell_css
     assert "temporarily owns the full workspace" not in shell_css
 

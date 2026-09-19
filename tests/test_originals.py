@@ -100,3 +100,13 @@ def test_ensure_canonical_exists_rejects_non_file_existing_baseline(tmp_path):
         originals_module.ensure_canonical_exists(source, originals_dir)
 
     assert canonical.is_dir()
+
+def test_test_generation_folders_do_not_create_original_backups(tmp_path):
+    session = tmp_path / "set" / "test-generations" / "2026-09-19_1000-h3"
+    session.mkdir(parents=True)
+    (session / "result.mp4").write_bytes(b"generated-video")
+
+    originals_module.copy_media_to_originals(session)
+
+    assert originals_module.is_blacklisted_path(session)
+    assert not (session / "originals").exists()

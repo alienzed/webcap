@@ -411,3 +411,27 @@ def test_generic_application_modals_close_on_escape_without_feature_inventory():
     assert "genericModal.querySelector('[data-close-modal="" in shell
     assert "ensureWorkspaceOverlayChildren" not in checklist
     assert "ensureWorkspaceOverlayChildren" not in advanced
+
+
+def test_phase_40_shell_owns_global_presentation_not_training_internals():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    training = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert 'class="app-header-brand"' not in html
+    assert 'id="status" class="status shell-status-toast"' in html
+    assert 'id="console-toggle-btn"' in html
+    assert html.index('id="console-toggle-btn"') > html.index('id="activity-rail"')
+    assert 'id="shell-gpu-status"' in html
+    assert "training-runner-output-view" not in shell
+    assert "training-runner-empty" not in shell
+    assert "training-editor-empty" not in shell
+    assert "training-config-empty" not in shell
+    assert "function syncTrainingWorkspaceDetailUi()" in training
+    assert "function syncTrainingEntryChrome()" in training
+    assert "function syncShellTrainingGpuStatus()" in runner
+    assert "if (trainingWorkspaceState.runnerStatusPending) return;" in runner
+    assert ".shell-status-toast {" in css
+    assert ".shell-gpu-status {" in css

@@ -152,6 +152,7 @@ function currentShellRouteWorkspace() {
 
 function syncShellLocationRoute() {
   if (!window.history || typeof window.history.replaceState !== 'function') return;
+  if (initialShellLocationRoute && !initialShellLocationRestored) return;
   var workspace = currentShellRouteWorkspace();
   var params = new URLSearchParams();
   var folder = String(state && state.folder || '');

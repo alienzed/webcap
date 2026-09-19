@@ -2645,18 +2645,6 @@ iframe {
   overflow: hidden;
 }
 .test-generations-pane.hidden { display: none; }
-.test-generations-header {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.test-generations-header h2 { margin: 0; font-size: 17px; }
-.test-generations-header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
-.test-generations-header .review-captions-btn { width: auto; }
 .test-generations-body {
   display: grid;
   flex: 1 1 auto;
@@ -2679,6 +2667,11 @@ iframe {
   min-width: 0;
   flex-direction: column;
   padding: 12px;
+}
+.test-generations-form-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .test-generations-setup-overview {
   display: grid;

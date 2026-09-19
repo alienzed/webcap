@@ -726,26 +726,17 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   }
 }
 
-/* Test workspace is a first-class inner workspace. */
-.app.shell-revamp.workspace-test-open {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "test";
-  gap: 0;
-}
-
-.app.shell-revamp.workspace-test-open > .sidebar-panel,
-.app.shell-revamp.workspace-test-open > .preview-panel,
-.app.shell-revamp.workspace-test-open > .workbench-panel {
+/* Test workspace is a first-class application workspace. */
+.app-frame.workspace-test-open > .app {
   display: none;
 }
 
-.app.shell-revamp.workspace-test-open > .test-generations-workspace {
+.app-frame.workspace-test-open > .test-generations-workspace {
   display: flex;
-  grid-area: test;
+  grid-area: workspace;
 }
 
-.app.shell-revamp.workspace-test-open > .workspace-overlays {
-  grid-column: 1;
-  grid-row: 1;
+.app-frame.workspace-test-open > #console-panel {
+  z-index: 20;
 }
 

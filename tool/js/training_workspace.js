@@ -26,18 +26,15 @@ function fetchTrainingProfiles() {
   });
 }
 
-function trainingProfileStorageKey(folder) {
-  return 'webcap.trainingProfile.' + String(folder || '');
-}
-
 function trainingModeStorageKey(folder) {
   return 'webcap.trainingMode.' + String(folder || '');
 }
 
 function getSelectedTrainingModelProfile() {
   var profiles = trainingWorkspaceState.profiles || [];
+  var selectedProfileId = getWorkingModelProfileId();
   for (var i = 0; i < profiles.length; i++) {
-    if (profiles[i].id === trainingWorkspaceState.selectedProfileId) return profiles[i];
+    if (profiles[i].id === selectedProfileId) return profiles[i];
   }
   return profiles[0] || null;
 }
@@ -63,28 +60,21 @@ function syncTrainingModelProfileSelect(folder) {
   var select = getTrainingWorkspaceEls().modelProfileSelect;
   if (!select) return;
   select.disabled = false;
-  var stored = '';
   var storedMode = '';
-  try { stored = localStorage.getItem(trainingProfileStorageKey(folder)) || ''; } catch (err) {}
   try { storedMode = localStorage.getItem(trainingModeStorageKey(folder)) || ''; } catch (err) {}
   var profiles = trainingWorkspaceState.profiles || [];
-  var storedIsAvailable = stored && profiles.some(function (profile) { return profile.id === stored; });
-  var selectedIsAvailable = profiles.some(function (profile) { return profile.id === trainingWorkspaceState.selectedProfileId; });
-  if (storedIsAvailable) trainingWorkspaceState.selectedProfileId = stored;
-  else if (!selectedIsAvailable) trainingWorkspaceState.selectedProfileId = profiles[0].id;
+  var selectedProfileId = syncWorkingModelProfileForFolder(folder, profiles);
   trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(storedMode || trainingWorkspaceState.selectedMode);
   select.innerHTML = profiles.map(function (profile) {
     return '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(profile.label) + '</option>';
   }).join('');
-  select.value = trainingWorkspaceState.selectedProfileId;
-  try { localStorage.setItem(trainingProfileStorageKey(folder), trainingWorkspaceState.selectedProfileId); } catch (err) {}
+  select.value = selectedProfileId;
   syncTrainingWorkspaceProfile();
   setManagedTrainingStages(trainingWorkspaceState.runStages);
 }
 
 function setSelectedTrainingModelProfile(profileId) {
-  trainingWorkspaceState.selectedProfileId = String(profileId || 'wan22_t2v');
-  try { localStorage.setItem(trainingProfileStorageKey(state.folder), trainingWorkspaceState.selectedProfileId); } catch (err) {}
+  setWorkingModelProfileId(profileId, state.folder);
   setManagedTrainingStages(trainingWorkspaceState.runStages);
   renderTrainingModelTrainedStatus();
 }
@@ -106,7 +96,7 @@ function ensureSelectedTrainingSetup(resetFile) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       folder: state.folder,
-      profileId: trainingWorkspaceState.selectedProfileId,
+      profileId: getWorkingModelProfileId(),
       mode: normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode),
       selected_media: selection.selected_media,
       total_media_count: selection.total_media_count,

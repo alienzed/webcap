@@ -358,9 +358,21 @@ def probe_media_metadata(file_path, face_detector=None, selection_pose_analyzers
 
 
 def write_media_metadata_file(metadata_path, metadata):
-    with open(metadata_path, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
-    normalize_path_permissions(metadata_path)
+    metadata_path = Path(metadata_path)
+    tmp_path = metadata_path.with_name(metadata_path.name + ".tmp")
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, metadata_path)
+        normalize_path_permissions(metadata_path)
+    finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
 
 
 def update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None, summary=None):

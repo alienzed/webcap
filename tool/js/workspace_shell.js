@@ -7,6 +7,12 @@ var workspaceState = {
   previousSurface: 'default',
   sidebarHidden: false
 };
+
+var shellNavigationState = {
+  activity: 'prep',
+  workspaceRoot: 'prep',
+  contextKind: 'set'
+};
 var WORKBENCH_RAIL_SESSION_KEY = 'webcap.workbenchRailCollapsedByView';
 var workbenchRailCollapsedByView = loadWorkbenchRailSessionState();
 
@@ -132,7 +138,28 @@ function normalizeWorkspaceSurface(surface) {
   return 'default';
 }
 
+function deriveShellNavigationState() {
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  var testOpen = !!document.querySelector('.test-generations-pane:not(.hidden)');
+  var activity = testOpen ? 'test' : (surface === 'training' ? 'training' : 'prep');
+  var workspaceRoot = testOpen
+    ? 'test'
+    : (surface === 'training'
+      ? 'training'
+      : (surface === 'reviewOutput'
+        ? 'review'
+        : (surface === 'grid' ? 'grid' : (surface === 'focus' ? 'focus' : (surface === 'configEditor' ? 'config' : 'prep')))));
+  var contextKind = activity === 'training' && getTrainingWorkspaceEntryKind() === 'global'
+    ? 'global'
+    : (state && state.folder ? 'set' : 'none');
+  shellNavigationState.activity = activity;
+  shellNavigationState.workspaceRoot = workspaceRoot;
+  shellNavigationState.contextKind = contextKind;
+  return shellNavigationState;
+}
+
 function syncApplicationShellContext() {
+  var navigation = deriveShellNavigationState();
   var folderEl = document.getElementById('app-header-folder');
   if (folderEl) {
     var folder = String(state && state.folder || '');
@@ -145,7 +172,7 @@ function syncApplicationShellContext() {
   var workspaceTitle = document.getElementById('app-header-workspace-title');
   var workspaceContext = document.getElementById('app-header-workspace-context');
   var prepSidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
-  var testOpen = document.querySelector('.test-generations-pane:not(.hidden)');
+  var testOpen = navigation.activity === 'test';
   if (prepSidebarToggle) {
     prepSidebarToggle.classList.toggle('hidden', !!testOpen || surface !== 'default');
   }
@@ -180,17 +207,17 @@ function syncApplicationShellContext() {
   var testBtn = document.getElementById('activity-test-btn');
 
   if (prepBtn) {
-    var prepActive = !testOpen && surface !== 'training';
+    var prepActive = navigation.activity === 'prep';
     prepBtn.classList.toggle('active', prepActive);
     prepBtn.setAttribute('aria-pressed', prepActive ? 'true' : 'false');
   }
   if (trainingBtn) {
-    var trainingActive = !testOpen && surface === 'training';
+    var trainingActive = navigation.activity === 'training';
     trainingBtn.classList.toggle('active', trainingActive);
     trainingBtn.setAttribute('aria-pressed', trainingActive ? 'true' : 'false');
   }
   if (testBtn) {
-    var testActive = !!testOpen;
+    var testActive = navigation.activity === 'test';
     testBtn.classList.toggle('active', testActive);
     testBtn.setAttribute('aria-pressed', testActive ? 'true' : 'false');
   }
@@ -571,6 +598,7 @@ window.setWorkspaceSurface = setWorkspaceSurface;
 window.exitWorkspaceSurface = exitWorkspaceSurface;
 window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;
 window.syncApplicationShellContext = syncApplicationShellContext;
+window.deriveShellNavigationState = deriveShellNavigationState;
 window.isApplicationOverlayOpen = isApplicationOverlayOpen;
 
 function getThemedPreviewPlaceholderHtml(message) {

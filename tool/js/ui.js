@@ -353,6 +353,7 @@ function refreshCurrentDirectory() {
   }
   updateShellFolderLabel(path);
   if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
+  if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
   updateSetFolderScopedUi();
   updateReviewButtonAvailability();
   debugLog('[webcap] refreshCurrentDirectory: called.');
@@ -449,6 +450,8 @@ function refreshCurrentDirectory() {
             setStatus(folderStatus);
             window.refreshWorkingModelSelector().catch(function (err) {
               console.error('[webcap] Could not refresh working model selector:', err);
+            }).then(function () {
+              if (typeof window.restoreInitialShellLocationRoute === 'function') window.restoreInitialShellLocationRoute();
             });
             if (typeof window.testGenerationsFolderLoaded === 'function') window.testGenerationsFolderLoaded();
             refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {

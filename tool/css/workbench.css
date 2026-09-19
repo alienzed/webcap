@@ -489,10 +489,6 @@
   margin: 0;
 }
 
-.app.shell-revamp #review-media-metadata-panel #ar-group-table {
-  min-width: 100%;
-}
-
 .app.shell-revamp #review-media-metadata-panel .metadata-aspect-heading {
   margin: 12px 0 4px;
   color: var(--text);
@@ -842,20 +838,6 @@
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--text);
-}
-
-.app.shell-revamp .training-workspace-actions #training-workspace-prepare-btn {
-  border-left: 3px solid var(--accent);
-}
-
-.app.shell-revamp .training-workspace-actions #training-workspace-train-btn {
-  border-color: var(--accent-dark);
-  background: var(--accent);
-  color: #fff;
-}
-
-.app.shell-revamp .training-workspace-actions #training-workspace-train-btn:hover {
-  background: var(--accent-dark);
 }
 
 .app.shell-revamp .training-workspace-section,

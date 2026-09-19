@@ -299,3 +299,18 @@ def test_shell_navigation_state_is_derived_from_activity_root_and_context_only()
     assert "navigation.activity === 'test'" in shell
     assert "Grid selection" not in shell
     assert "Focus group" not in shell
+
+
+def test_grid_and_focus_view_mode_is_derived_from_surface_not_parallel_state():
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    grid_actions = (ROOT / "tool" / "js" / "media_grid_actions.js").read_text(encoding="utf-8")
+    grid_state = (ROOT / "tool" / "js" / "media_grid_state.js").read_text(encoding="utf-8")
+    main = (ROOT / "tool" / "js" / "main.js").read_text(encoding="utf-8")
+
+    assert "workspaceUiState.viewMode" not in shell
+    assert "function getWorkspaceViewMode()" in shell
+    assert "surface === 'grid' || surface === 'focus'" in shell
+    assert "function setWorkspaceViewMode" not in shell
+    assert "setWorkspaceViewMode(" not in grid_actions
+    assert "setWorkspaceViewMode(" not in grid_state
+    assert "getWorkspaceViewMode() !== 'single'" in main

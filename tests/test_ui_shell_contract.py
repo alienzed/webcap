@@ -131,7 +131,7 @@ def test_training_identity_is_owned_by_shell_header():
     assert 'id="training-navigator-title"' not in html
     assert 'id="training-navigator-folder"' not in html
     assert 'id="training-sidebar-collapse-toggle-btn"' in html
-    assert "surface === 'training' ? 'Training' : ''" in shell
+    assert "surface === 'training' ? 'Training'" in shell
     assert "entryKind === 'global'" in shell
     assert "navigatorTitle" not in workspace
     assert "navigatorTitle" not in state
@@ -146,3 +146,21 @@ def test_test_workspace_uses_shell_identity_and_prep_exit():
     assert "window.closeTestBenchActivity()" in shell
     assert "test-generations-close-btn" not in shell
     assert "test-generations-close-btn" not in script
+
+
+def test_review_identity_is_owned_by_shell_header():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    review = (ROOT / "tool" / "js" / "review_output.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+
+    assert "surface === 'reviewOutput' ? 'Review Set'" in shell
+    assert "getReviewWorkspaceShellContext" in shell
+    assert "function getReviewWorkspaceShellContext()" in review
+    assert 'class="review-output-surface-title"' not in html
+    assert 'id="review-output-summary-folder"' not in html
+    assert 'id="review-output-summary-visible"' not in html
+    assert 'id="review-output-summary-scope"' not in html
+    assert ".review-output-context" not in css
+    assert ".review-output-surface-title" not in css
+    assert 'id="review-output-back-btn"' in html

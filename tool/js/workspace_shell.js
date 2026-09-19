@@ -476,48 +476,23 @@ function closeTrainingWorkspaceConfigEditor() {
     });
 }
 
-function ensureWorkspaceOverlayHost() {
-  if (!ui || !ui.appEl) {
-    throw new Error('Workspace overlay host requested before app UI initialized.');
-  }
-  var overlayHost = document.getElementById('workspace-overlays');
-  if (!overlayHost) {
-    overlayHost = document.createElement('div');
-    overlayHost.id = 'workspace-overlays';
-    overlayHost.className = 'workspace-overlays';
-    ui.appEl.appendChild(overlayHost);
-  }
-  return overlayHost;
-}
-
-function ensureWorkspaceOverlayChildren(ids) {
-  var overlayHost = ensureWorkspaceOverlayHost();
-  (Array.isArray(ids) ? ids : []).forEach(function (id) {
-    var node = document.getElementById(String(id || '').trim());
-    if (!node || node.parentNode === overlayHost) return;
-    overlayHost.appendChild(node);
-  });
-  return overlayHost;
-}
-
 function rebuildUnifiedWorkspaceShell() {
   if (!ui || !ui.appEl || ui.appEl.__workspaceRevampBuilt) return;
   var appEl = ui.appEl;
   appEl.__workspaceRevampBuilt = true;
   appEl.classList.add('shell-revamp');
-
-  ensureWorkspaceOverlayChildren([
-    'media-grid-viewer-modal',
-    'advanced-modal-overlay',
-    'review-rules-modal',
-    'modal-overlay',
-    'checklist-keywords-modal',
-    'checklist-group-terms-modal',
-    'checklist-term-affixes-modal'
-  ]);
-
   setWorkspaceViewMode('single');
   syncWorkspaceSurfaceUi();
+}
+
+function isApplicationOverlayOpen() {
+  var root = document.getElementById('app-overlay-root');
+  if (!root) return false;
+  for (var i = 0; i < root.children.length; i += 1) {
+    var child = root.children[i];
+    if (child && !child.classList.contains('hidden')) return true;
+  }
+  return false;
 }
 
 function wireWorkspaceHeaderUi() {
@@ -594,9 +569,9 @@ window.setWorkspaceViewMode = setWorkspaceViewMode;
 window.setWorkspaceWorkflowMode = setWorkspaceWorkflowMode;
 window.setWorkspaceSurface = setWorkspaceSurface;
 window.exitWorkspaceSurface = exitWorkspaceSurface;
-window.ensureWorkspaceOverlayChildren = ensureWorkspaceOverlayChildren;
 window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;
 window.syncApplicationShellContext = syncApplicationShellContext;
+window.isApplicationOverlayOpen = isApplicationOverlayOpen;
 
 function getThemedPreviewPlaceholderHtml(message) {
   var theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : 'light';

@@ -359,16 +359,24 @@ def probe_media_metadata(file_path, face_detector=None, selection_pose_analyzers
 
 def write_media_metadata_file(metadata_path, metadata):
     metadata_path = Path(metadata_path)
-    tmp_path = metadata_path.with_name(metadata_path.name + ".tmp")
+    tmp_path = None
     try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=metadata_path.parent,
+            prefix=metadata_path.name + ".",
+            suffix=".tmp",
+            delete=False,
+        ) as f:
+            tmp_path = Path(f.name)
             json.dump(metadata, f, indent=2)
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_path, metadata_path)
         normalize_path_permissions(metadata_path)
     finally:
-        if tmp_path.exists():
+        if tmp_path is not None and tmp_path.exists():
             try:
                 tmp_path.unlink()
             except OSError:

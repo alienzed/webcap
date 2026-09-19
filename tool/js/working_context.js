@@ -10,6 +10,16 @@ function getWorkingModelProfileId() {
   return String(workingContextState.modelProfileId || 'wan22_t2v');
 }
 
+function notifyWorkingModelChanged(previousProfileId) {
+  var currentProfileId = getWorkingModelProfileId();
+  if (String(previousProfileId || '') === currentProfileId) return;
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('webcap:working-model-changed', {
+      detail: { profileId: currentProfileId }
+    }));
+  }
+}
+
 function hasWorkingModelProfile(profiles, profileId) {
   var id = String(profileId || '');
   return !!id && (Array.isArray(profiles) ? profiles : []).some(function (profile) {
@@ -29,18 +39,22 @@ function syncWorkingModelProfileForFolder(folder, profiles) {
       ? current
       : (availableProfiles.length ? String(availableProfiles[0].id || '') : current));
 
+  var previousProfileId = getWorkingModelProfileId();
   workingContextState.modelProfileId = next || 'wan22_t2v';
   try {
     localStorage.setItem(workingModelProfileStorageKey(folder), workingContextState.modelProfileId);
   } catch (err) {}
+  notifyWorkingModelChanged(previousProfileId);
   return workingContextState.modelProfileId;
 }
 
 function setWorkingModelProfileId(profileId, folder) {
+  var previousProfileId = getWorkingModelProfileId();
   workingContextState.modelProfileId = String(profileId || 'wan22_t2v');
   try {
     localStorage.setItem(workingModelProfileStorageKey(folder), workingContextState.modelProfileId);
   } catch (err) {}
+  notifyWorkingModelChanged(previousProfileId);
   return workingContextState.modelProfileId;
 }
 

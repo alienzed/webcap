@@ -918,8 +918,16 @@
                     </div>
                 </section>
             </section>
-            <div id="workspace-overlays" class="workspace-overlays">
-                <div id="training-review-modal" class="training-review-modal hidden" aria-hidden="true">
+                        <div id="console-panel" aria-hidden="true">
+                <div class="console-panel-header">
+                    <strong class="console-panel-title">Console</strong>
+                    <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
+                </div>
+                <div id="console-panel-log" class="console-panel-log" aria-live="polite"></div>
+            </div>
+        </div>
+        <div id="app-overlay-root" class="app-overlay-root" aria-label="Application overlays">
+<div id="training-review-modal" class="training-review-modal hidden" aria-hidden="true">
                     <section class="training-review-dialog" role="dialog" aria-modal="true" aria-labelledby="training-review-modal-title">
                         <header class="training-review-modal-header">
                             <div>
@@ -968,15 +976,6 @@
                         <div id="training-candidates-modal-content" class="training-candidates-modal-content"></div>
                     </section>
                 </div>
-            </div>
-            <div id="console-panel" aria-hidden="true">
-                <div class="console-panel-header">
-                    <strong class="console-panel-title">Console</strong>
-                    <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
-                </div>
-                <div id="console-panel-log" class="console-panel-log" aria-live="polite"></div>
-            </div>
-        </div>
         <div id="media-grid-viewer-modal" class="media-grid-viewer-modal hidden" aria-hidden="true">
             <div class="media-grid-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-viewer-title">
                 <div class="media-grid-viewer-header">
@@ -1339,6 +1338,7 @@
                     <button class="btn" id="checklist-term-affixes-save-btn" type="button">Save</button>
                 </div>
             </div>
+        </div>
         </div>
         <!-- JS load order: shared globals first, feature files, then main.js wiring -->
         <script src="/static/js/constants.js"></script>

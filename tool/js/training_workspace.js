@@ -56,8 +56,12 @@ function getTrainingProfileRunForStage(profile, stage) {
   return null;
 }
 
-function syncTrainingModelProfileSelect(folder) {
-  var select = getTrainingWorkspaceEls().modelProfileSelect;
+function getWorkingModelProfileSelect() {
+  return document.getElementById('app-header-model-profile-select');
+}
+
+function syncWorkingModelProfileSelect(folder) {
+  var select = getWorkingModelProfileSelect();
   if (!select) return;
   select.disabled = false;
   var storedMode = '';
@@ -77,6 +81,22 @@ function setSelectedTrainingModelProfile(profileId) {
   setWorkingModelProfileId(profileId, state.folder);
   setManagedTrainingStages(trainingWorkspaceState.runStages);
   renderTrainingModelTrainedStatus();
+}
+
+function refreshWorkingModelSelector() {
+  var folder = String(state && state.folder || '');
+  return fetchTrainingProfiles().then(function () {
+    syncWorkingModelProfileSelect(folder);
+    return getWorkingModelProfileId();
+  }).catch(function (err) {
+    var select = getWorkingModelProfileSelect();
+    if (select) {
+      select.innerHTML = '';
+      select.disabled = true;
+      select.title = String(err && err.message ? err.message : err);
+    }
+    throw err;
+  });
 }
 
 function buildCurrentTrainingSelectionPayload() {
@@ -461,7 +481,7 @@ function refreshTrainingWorkspace() {
   fetchTrainingProfiles()
     .then(function () {
       if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
-      syncTrainingModelProfileSelect(folder);
+      syncWorkingModelProfileSelect(folder);
       trainingWorkspaceState.selectedMode = 'normal';
       syncTrainingWorkspaceProfile();
       if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
@@ -539,13 +559,13 @@ function switchTrainingSetup(profileId, mode) {
     refreshTrainingWorkspace();
   }).catch(function (err) {
     setStatus('Could not save the open TOML before switching setup: ' + String(err && err.message ? err.message : err));
-    syncTrainingModelProfileSelect(state.folder);
+    syncWorkingModelProfileSelect(state.folder);
   });
 }
 
 function wireTrainingWorkspace() {
   var sidebarCollapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
-  var modelProfileSelect = document.getElementById('training-model-profile-select');
+  var modelProfileSelect = getWorkingModelProfileSelect();
   var modeSelect = document.getElementById('training-workspace-profile-select');
   var stageButtons = document.querySelectorAll('[data-training-stage]');
   var resumeInput = document.getElementById('training-run-resume-input');
@@ -833,5 +853,7 @@ function syncTrainingWorkspaceUi() {
   refreshTrainingWorkspace();
   refreshTrainingRunnerStatus();
 }
+
+window.refreshWorkingModelSelector = refreshWorkingModelSelector;
 
 wireTrainingWorkspace();

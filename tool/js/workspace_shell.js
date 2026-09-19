@@ -321,105 +321,27 @@ function openPrepActivity() {
   setWorkspaceSurface('default');
 }
 
-function getTrainingWorkspaceEntryKind() {
-  var mode = trainingWorkspaceState.entryMode === 'set' ? 'set' : 'global';
-  if (mode === 'global') return 'global';
-  return isSetFolderPath(state.folder) ? 'set' : 'unavailable';
-}
-
-function syncTrainingEntryChrome() {
-  var surface = normalizeWorkspaceSurface(workspaceState.surface);
-  var isTraining = surface === 'training';
-  var entryKind = getTrainingWorkspaceEntryKind();
-  var isSetMode = isTraining && trainingWorkspaceState.entryMode === 'set';
-  var isSetEntry = isTraining && entryKind === 'set';
-  var isGlobalEntry = isTraining && trainingWorkspaceState.entryMode === 'global';
-  var trainingBtn = document.getElementById('sidebar-open-training-btn');
-  var detailTabs = document.getElementById('training-detail-tabs');
-  var collapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
-  var itemTab = document.querySelector('[data-training-detail-tab="items"]');
-  var configTab = document.querySelector('[data-training-detail-tab="config"]');
-  var runLogTab = document.querySelector('[data-training-detail-tab="run-log"]');
-
-  if (isTraining && ui && ui.appEl) {
-    ui.appEl.classList.toggle('sidebar-hidden', !!workspaceState.sidebarHidden);
-  }
-  if (trainingBtn) {
-    trainingBtn.classList.toggle('active', isSetMode);
-    trainingBtn.setAttribute('aria-pressed', isSetMode ? 'true' : 'false');
-    trainingBtn.classList.toggle('hidden', !isSetFolderPath(state.folder));
-  }
-  if (detailTabs) detailTabs.classList.toggle('hidden', !isTraining || entryKind === 'unavailable');
-  if (itemTab) itemTab.classList.toggle('hidden', !isSetEntry);
-  if (configTab) configTab.classList.toggle('hidden', !isSetEntry);
-  if (runLogTab) runLogTab.classList.toggle('hidden', !isGlobalEntry);
-  if (collapseBtn) collapseBtn.classList.toggle('hidden', !isTraining || entryKind === 'unavailable');
-}
-
 function syncWorkspaceConfigEditorUi() {
+  var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  if (surface === 'training') {
+    if (typeof syncTrainingWorkspaceDetailUi === 'function') syncTrainingWorkspaceDetailUi();
+    return;
+  }
+
   var toolbar = document.getElementById('config-editor-toolbar');
   var backBtn = document.getElementById('config-editor-back-btn');
   var fileLabel = document.getElementById('config-editor-current-file');
   var saveBtn = document.getElementById('config-editor-save-btn');
-  var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var isConfigEditor = surface === 'configEditor';
-  var isTraining = surface === 'training';
-  var trainingEntryKind = isTraining ? getTrainingWorkspaceEntryKind() : '';
-  var isSetTraining = trainingEntryKind === 'set';
-  var isGlobalTraining = trainingEntryKind === 'global';
-  var isUnavailableSetTraining = trainingEntryKind === 'unavailable';
-  var isConfigWorkspace = isConfigEditor || isTraining;
   var hasConfigFile = !!(state && state.currentConfigFile && state.currentConfigFile.file);
-  var hasTrainingConfigFile = isSetTraining && hasConfigFile && state.currentConfigFile.folder === state.folder;
-  var hasConfigForSurface = isTraining ? hasTrainingConfigFile : hasConfigFile;
-  var trainingOverview = document.getElementById('training-editor-empty');
-  var trainingConfigEmpty = document.getElementById('training-config-empty');
-  var trainingDetailTabs = document.getElementById('training-detail-tabs');
-  var configFileTabs = document.getElementById('config-editor-file-tabs');
-  var trainingOutputView = document.getElementById('training-runner-output-view');
-  var trainingRunnerEmpty = document.getElementById('training-runner-empty');
-  var editorWrapper = ui.appEl.querySelector('.editor-wrapper');
-  var trainingDetailTab = isTraining && typeof getTrainingDetailTab === 'function' ? getTrainingDetailTab() : 'items';
-  if (isGlobalTraining) trainingDetailTab = 'run-log';
-  if (isUnavailableSetTraining) trainingDetailTab = 'items';
-  var trainingOutputVisible = isTraining && !isUnavailableSetTraining && trainingDetailTab === 'run-log';
-  if (toolbar) {
-    toolbar.classList.toggle('hidden', !isConfigWorkspace || (isTraining && (trainingDetailTab !== 'config' || !hasConfigForSurface)) || (!isTraining && !hasConfigForSurface));
-  }
+
+  if (toolbar) toolbar.classList.toggle('hidden', !isConfigEditor || !hasConfigFile);
   if (backBtn) {
-    backBtn.textContent = isTraining && hasConfigForSurface ? 'Close' : 'Back';
-    backBtn.title = isTraining && hasConfigForSurface
-      ? 'Save this config and return to Training Items.'
-      : 'Return to the previous workspace.';
+    backBtn.textContent = 'Back';
+    backBtn.title = 'Return to the previous workspace.';
   }
-  ui.appEl.classList.toggle('training-config-selected', isSetTraining && trainingDetailTab === 'config' && hasConfigForSurface);
-  if (trainingDetailTabs) trainingDetailTabs.classList.toggle('hidden', !isTraining || isUnavailableSetTraining);
-  if (configFileTabs) {
-    configFileTabs.classList.toggle('hidden', !isSetTraining || trainingDetailTab !== 'config' || !hasConfigForSurface);
-  }
-  if (trainingOverview) {
-    trainingOverview.classList.toggle('hidden', !(isSetTraining || isUnavailableSetTraining) || trainingDetailTab !== 'items');
-  }
-  if (trainingConfigEmpty) {
-    trainingConfigEmpty.classList.toggle('hidden', !isSetTraining || trainingDetailTab !== 'config' || hasConfigForSurface);
-  }
-  if (trainingOutputView) {
-    trainingOutputView.classList.toggle('hidden', !trainingOutputVisible);
-  }
-  if (trainingRunnerEmpty) {
-    trainingRunnerEmpty.classList.toggle('hidden', !trainingOutputVisible || isTrainingRunnerConsoleVisible());
-  }
-  if (editorWrapper) {
-    editorWrapper.classList.toggle('hidden', isTraining && (!isSetTraining || trainingDetailTab !== 'config' || !hasConfigForSurface));
-  }
-  if (fileLabel) {
-    fileLabel.textContent = hasConfigFile
-      ? state.currentConfigFile.file
-      : 'No config selected.';
-  }
-  if (saveBtn) {
-    saveBtn.disabled = !isConfigWorkspace || !hasConfigForSurface;
-  }
+  if (fileLabel) fileLabel.textContent = hasConfigFile ? state.currentConfigFile.file : 'No config selected.';
+  if (saveBtn) saveBtn.disabled = !isConfigEditor || !hasConfigFile;
 }
 
 function syncWorkspaceSurfaceUi() {

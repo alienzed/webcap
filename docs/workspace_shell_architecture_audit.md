@@ -1,8 +1,10 @@
 # Workspace Shell Architecture Audit
 
-**Status:** Current-code UX/DOM audit. Discussion and planning only; no implementation is authorized by this document.
+**Status:** Superseded architecture audit. The permanent shell refactor was completed on 2026-09-19; this file is retained as the pre-refactor problem record.
 
 **Audit date:** 2026-09-18
+
+> **Superseded:** The DOM/state descriptions below document the pre-refactor application. Current shell behavior is defined by `README.md`, `docs/spec.md`, and the completed implementation record in `docs/ui_shell_refactor_plan.md`.
 
 ## Purpose
 

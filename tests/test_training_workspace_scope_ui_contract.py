@@ -25,7 +25,7 @@ function element() {
     attributes: {}, setAttribute(name, value) { this.attributes[name] = value; }, textContent: '', title: '' };
 }
 const nodes = {};
-['sidebar-open-training-btn', 'utility-training-btn', 'training-detail-tabs',
+['sidebar-open-training-btn', 'training-detail-tabs',
  'training-sidebar-collapse-toggle-btn'].forEach(id => nodes[id] = element());
 const itemTab = element(), configTab = element(), runLogTab = element();
 const context = {
@@ -50,7 +50,7 @@ if (itemTab.classList.contains('hidden') || configTab.classList.contains('hidden
 
 let globalHistory = 0, profileCalls = 0, modelSync = 0, pendingProfileResolve;
 const refreshContext = Object.assign({}, context, {
-  getTrainingWorkspaceEls: () => ({ navigatorTitle: element(), folder: element(), globalContext: element(), runSetup: element(), testsStage: element(), readiness: element() }),
+  getTrainingWorkspaceEls: () => ({ globalContext: element(), runSetup: element(), testsStage: element(), readiness: element() }),
   isTrainingWorkspaceActive: () => true,
   refreshTrainingHistory: () => { globalHistory++; return Promise.resolve(); },
   fetchTrainingProfiles: () => { profileCalls++; return new Promise(resolve => { pendingProfileResolve = resolve; }); },
@@ -119,7 +119,7 @@ def test_training_scope_source_contracts_remain_explicit():
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
 
     assert 'sidebar-open-training-btn' in shell
-    assert 'utility-training-btn' in shell
+    assert 'utility-training-btn' not in shell
     assert "function openTrainingSurface(mode)" in shell
     assert "workspaceRequestVersion" in workspace
     assert "isTrainingSetRefreshCurrent" in workspace

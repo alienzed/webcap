@@ -1,6 +1,6 @@
 # UI Shell Refactor Plan
 
-**Status:** Approved migration plan; implementation should proceed one independently validatable phase at a time.
+**Status:** Completed implementation record. Phases 0-42 completed on 2026-09-19.
 
 **Created:** 2026-09-18
 
@@ -1341,6 +1341,8 @@ Deleting old architecture does not require fallback compatibility code.
 
 ## Phase 40 — Shell responsibility audit
 
+**Result:** Complete. Transient status is a bottom-left shell toast; Console is rail-owned; the app-name/header-label fossils were removed; background Training/GPU state is mirrored into permanent shell chrome without moving Training state ownership. Training detail/run-log/config visibility was moved out of `workspace_shell.js` and back to Training-owned code.
+
 **Change**
 
 Inspect `workspace_shell.js` and equivalent shell code.
@@ -1380,6 +1382,8 @@ The shell as coordinator of unrelated feature internals.
 
 ## Phase 41 — End-state regression sweep
 
+**Result:** Repository-level static regression sweep completed. Retired helper/state/DOM names were searched, cross-workspace Model/Test dependencies were checked, shell/Training ownership boundaries were spot-checked, explicit roots/overlay ownership/routing were verified, and shell contract coverage was expanded. Direct test execution and browser smoke could not be run from the implementation environment because the repository has no CI workflow and the execution container cannot reach GitHub; browser smoke remains the final local validation step.
+
 **Change**
 
 No architecture work.
@@ -1399,6 +1403,8 @@ Specifically verify:
 ---
 
 ## Phase 42 — Update canonical docs to the new architecture
+
+**Result:** Complete. `README.md`, `docs/spec.md`, `docs/dataset_workflow.md`, `docs/train.md`, `docs/README.md`, the architecture audit, and this implementation record now describe the permanent shell/navigation ownership.
 
 **Change**
 

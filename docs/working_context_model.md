@@ -44,9 +44,10 @@ After Phase 25:
 - selection is still persisted per folder with `webcap.trainingProfile.<folder>`.
 - Training consumes the shared state through `getSelectedTrainingModelProfile()`.
 - Training mode remains separate state persisted with `webcap.trainingMode.<folder>`.
-- the visible selector remains `#training-model-profile-select`.
+- Phase 26 moves the single real editable selector to `#app-header-model-profile-select`.
+- Training continues to consume the same shared working-model state; there is no Training-local duplicate selector.
 
-Phase 25 changes ownership only. The shell still has no competing editable copy, and the visible selector does not move until Phase 26.
+Phase 25 changed state ownership; Phase 26 changes selector placement only.
 
 ## Artifact identity
 
@@ -112,7 +113,7 @@ Changing the working model must never rewrite or visually relabel historical art
 | Training mode | `trainingWorkspaceState.selectedMode` | separate from model identity |
 | Training artifact model | recorded job/run fields | immutable artifact identity |
 | Test artifact model | recorded Test session/status model | immutable artifact identity |
-| Visible model selector | Training workspace | remains in Training until its dedicated migration |
+| Visible model selector | Permanent app header | single editable selector bound to shared working-model state |
 
 ## Decision
 

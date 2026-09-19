@@ -221,3 +221,12 @@ def test_test_identity_is_owned_by_shell_header():
     assert "testOpen ? 'Test'" in shell
     assert "workspaceContextText = 'Generations'" in shell
     assert "window.closeTestBenchActivity" in shell
+
+
+def test_test_generations_canonicalizes_session_paths_to_owning_set():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "function owningSetFolder(folder)" in script
+    assert "var marker = '/test-generations/'" in script
+    assert "folder: owningSetFolder(launchFolder || (state && state.folder) || '')" in script
+    assert "launchFolder = owningSetFolder(state && state.folder || '')" in script

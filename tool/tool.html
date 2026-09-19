@@ -38,6 +38,14 @@
                 </div>
                 <div id="app-header-workspace-controls" class="app-header-workspace-controls">
                     <button
+                        id="sidebar-collapse-toggle-btn"
+                        type="button"
+                        class="utility-btn utility-path-btn utility-collapse-btn"
+                        title="Collapse sidebar"
+                        aria-label="Collapse sidebar"
+                        aria-pressed="false"
+                    >&lt;</button>
+                    <button
                         id="training-sidebar-collapse-toggle-btn"
                         type="button"
                         class="utility-btn utility-path-btn utility-collapse-btn training-sidebar-collapse-btn hidden"
@@ -785,14 +793,6 @@
                     </section>
                     <div id="preview-shell" class="preview-shell">
                         <div id="preview-header" class="preview-header hidden" aria-label="Media preview controls">
-                            <button
-                                id="sidebar-collapse-toggle-btn"
-                                type="button"
-                                class="utility-btn utility-path-btn utility-collapse-btn"
-                                title="Collapse sidebar"
-                                aria-label="Collapse sidebar"
-                                aria-pressed="false"
-                            >&lt;</button>
                             <div id="preview-header-position" class="preview-header-position hidden" aria-label="Item position"></div>
                             <div id="focused-annotation-item-nav" class="focused-annotation-axis-nav hidden" aria-label="Focused item navigation">
                                 <button id="focused-annotation-item-prev-btn" type="button" class="btn focused-annotation-nav-btn focused-annotation-nav-btn-compact" title="Previous item (Up Arrow). At the first item, wraps to the previous group at its last item." aria-label="Previous item">&#9650;</button>

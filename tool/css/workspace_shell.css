@@ -661,15 +661,40 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 }
 
 @media (max-width: 1180px) {
+  .app-header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-inline: 8px;
+  }
+
+  .app-header-workspace-controls {
+    justify-content: flex-end;
+  }
+
+  .app-header-global {
+    grid-column: 3;
+  }
+
+  .app-header-status #status-text {
+    display: none;
+  }
+
+  .app-header-model-control select {
+    max-width: 145px;
+  }
+
   .app.shell-revamp {
-    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(260px, 0.9fr);
     grid-template-areas:
       "sidebar preview"
       "workbench workbench";
   }
 
-  .app.shell-revamp.left-rail-collapsed {
+  .app.shell-revamp.left-rail-collapsed,
+  .app.shell-revamp.sidebar-hidden {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(260px, 0.9fr);
     grid-template-areas:
       "preview"
       "workbench";
@@ -677,11 +702,71 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 }
 
 @media (max-width: 880px) {
+  .app-frame {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .activity-rail {
+    padding-inline: 2px;
+  }
+
+  .activity-rail-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .app-header-brand,
+  .app-header-context > .app-header-context-label,
+  .app-header-model-control > .app-header-context-label,
+  .app-header-workspace-context {
+    display: none;
+  }
+
+  .app-header-context {
+    gap: 4px;
+  }
+
+  .app-header-model-control {
+    margin-left: 4px;
+    padding-left: 6px;
+  }
+
+  .app-header-model-control select {
+    max-width: 125px;
+  }
+
+  .app-header-workspace-controls {
+    display: none;
+  }
+
+  .app-header-global {
+    grid-column: 2;
+  }
+
   .app.shell-revamp,
-  .app.shell-revamp.left-rail-collapsed {
+  .app.shell-revamp.left-rail-collapsed,
+  .app.shell-revamp.sidebar-hidden {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(180px, 0.65fr) minmax(260px, 1fr) minmax(260px, 1fr);
     grid-template-areas:
       "sidebar"
+      "preview"
+      "workbench";
+  }
+
+  .app.shell-revamp.left-rail-collapsed .sidebar-panel,
+  .app.shell-revamp.sidebar-hidden .sidebar-panel {
+    display: none;
+  }
+
+  .app.shell-revamp.left-rail-collapsed,
+  .app.shell-revamp.sidebar-hidden {
+    grid-template-rows: minmax(260px, 1fr) minmax(260px, 1fr);
+    grid-template-areas:
       "preview"
       "workbench";
   }

@@ -9,6 +9,7 @@
   var resultsView = 'grid';
   var compareIndex = 0;
   var pendingActivityFolder = '';
+  var pendingRatingFolder = '';
   var testActivity = {};
   var selectedCandidates = null;
   var debouncedPromptSave = debounceCreate(500);
@@ -194,6 +195,12 @@
   function testGenerationsFolderLoaded() {
     syncLaunchVisibility();
     refreshActivityButton();
+    if (pendingRatingFolder && String(state && state.folder || '') === String(pendingRatingFolder)) {
+      var ratingFolder = pendingRatingFolder;
+      pendingRatingFolder = '';
+      initializeRatingReview(ratingFolder);
+      return;
+    }
     if (!pendingActivityFolder) return;
     if (String(state && state.folder || '') !== String(pendingActivityFolder)) return;
     pendingActivityFolder = '';
@@ -799,10 +806,16 @@
     if (status) currentSession = String(status.session || '');
     syncActiveRunControls(status || {});
     var openFolderBtn = el('test-generations-open-results-btn');
+    var rateItemsBtn = el('test-generations-rate-items-btn');
+    var resultFolder = String(status && status.resultFolder || '');
     if (openFolderBtn) {
-      var resultFolder = String(status && status.resultFolder || '');
       openFolderBtn.dataset.resultFolder = resultFolder;
       openFolderBtn.classList.toggle('hidden', !resultFolder);
+    }
+    if (rateItemsBtn) {
+      var hasResults = !!(status && Array.isArray(status.results) && status.results.length);
+      rateItemsBtn.dataset.resultFolder = resultFolder;
+      rateItemsBtn.classList.toggle('hidden', !resultFolder || !hasResults);
     }
     syncSessionSelection();
     var statusEl = el('test-generations-status');
@@ -842,9 +855,11 @@
     }
   }
 
-  function openResultsFolder(folder) {
+  function openResultsFolder(folder, options) {
     var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
     if (!targetFolder || !state || !state.dirStack || !state.dirStack.length) return;
+    var opts = options || {};
+    pendingRatingFolder = opts.rateItems ? targetFolder : '';
     if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
       clearFocusSet();
     }
@@ -858,6 +873,78 @@
     clearEditorAndPreview();
     clearCaptionFilterInputs();
     refreshCurrentDirectory();
+  }
+
+  function isTestGenerationSessionFolder(folder) {
+    var normalized = String(folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    var marker = '/test-generations/';
+    var markerIndex = normalized.indexOf(marker);
+    return markerIndex > 0 && normalized.slice(markerIndex + marker.length).length > 0;
+  }
+
+  function hasOnlyUnratedFilter() {
+    if (!ui || !ui.advancedFilterStarsEl) return false;
+    if (String((ui.filterEl && ui.filterEl.value) || '').trim()) return false;
+    if (ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked) return false;
+    if (ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked) return false;
+    if (ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked) return false;
+    if (ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked) return false;
+    if (ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked) return false;
+    if (ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked) return false;
+    if (ui.advancedFilterSupersetEl && ui.advancedFilterSupersetEl.checked) return false;
+    if (ui.advancedFilterFlagEl && ui.advancedFilterFlagEl.querySelector('input[type="checkbox"]:checked')) return false;
+    var checkedStars = Array.prototype.slice.call(
+      ui.advancedFilterStarsEl.querySelectorAll('input[type="checkbox"]:checked')
+    );
+    return checkedStars.length === 1 && String(checkedStars[0].value || '') === 'no_star';
+  }
+
+  function finishRatingReview() {
+    var sessionFolder = String(state && state.folder || '');
+    if (!isTestGenerationSessionFolder(sessionFolder)) return false;
+    var setFolder = owningSetFolder(sessionFolder);
+    clearCaptionFilterInputs();
+    var capturedSave = typeof captureCurrentFolderStateSave === 'function'
+      ? captureCurrentFolderStateSave()
+      : null;
+    var returnToTestGenerations = function () {
+      openTestBenchFolder(setFolder);
+    };
+    if (capturedSave && typeof writeCapturedFolderState === 'function') {
+      Promise.resolve(writeCapturedFolderState(capturedSave)).then(returnToTestGenerations, returnToTestGenerations);
+    } else {
+      returnToTestGenerations();
+    }
+    return true;
+  }
+
+  function initializeRatingReview(folder) {
+    if (String(state && state.folder || '') !== String(folder || '')) return;
+    clearCaptionFilterInputs();
+    var noStarInput = ui && ui.advancedFilterStarsEl
+      ? ui.advancedFilterStarsEl.querySelector('input[value="no_star"]')
+      : null;
+    if (!noStarInput) {
+      setStatus('Unrated filter is unavailable.');
+      return;
+    }
+    noStarInput.checked = true;
+    renderFileList();
+    var unratedItems = getFilteredMediaItems(false);
+    if (!unratedItems.length) {
+      finishRatingReview();
+      return;
+    }
+    selectPathMedia(unratedItems[0]).catch(function (err) {
+      setStatus(String(err && err.message ? err.message : err));
+    });
+  }
+
+  function completeRatingReviewIfFinished() {
+    if (!isTestGenerationSessionFolder(state && state.folder)) return false;
+    if (!hasOnlyUnratedFilter()) return false;
+    if (getFilteredMediaItems(false).length) return false;
+    return finishRatingReview();
   }
 
   function closePane() {
@@ -1047,6 +1134,9 @@
     el('test-generations-open-results-btn').onclick = function () {
       openResultsFolder(this.dataset.resultFolder);
     };
+    el('test-generations-rate-items-btn').onclick = function () {
+      openResultsFolder(this.dataset.resultFolder, { rateItems: true });
+    };
     el('test-generations-view-grid-btn').onclick = function () {
       setResultsView('grid');
     };
@@ -1155,5 +1245,6 @@
   window.openTestBenchForCurrentFolder = openPane;
   window.closeTestBenchActivity = closePane;
   window.refreshTestBenchActivity = refreshActivityButton;
+  window.testGenerationsRatingChanged = completeRatingReviewIfFinished;
   bindUi();
 })();

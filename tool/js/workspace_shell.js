@@ -251,10 +251,14 @@ function syncApplicationShellContext() {
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var workspaceTitle = document.getElementById('app-header-workspace-title');
   var workspaceContext = document.getElementById('app-header-workspace-context');
-  var prepSidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
+  var sidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
   var testOpen = navigation.activity === 'test';
-  if (prepSidebarToggle) {
-    prepSidebarToggle.classList.toggle('hidden', !!testOpen || surface !== 'default');
+  if (sidebarToggle) {
+    var sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');
+    sidebarToggle.classList.toggle('hidden', !sidebarToggleVisible);
+    if (typeof updateSidebarCollapseUi === 'function') {
+      updateSidebarCollapseUi(ui && ui.appEl ? ui.appEl.classList.contains('left-rail-collapsed') : false);
+    }
   }
   if (workspaceTitle) {
     workspaceTitle.textContent = testOpen

@@ -1062,6 +1062,8 @@ Overlay retrofit logic and cross-feature modal inventories.
 
 ## Phase 30 — Separate shell navigation state from workspace-local state
 
+**Decision:** shell navigation is represented as derived `activity`, `workspaceRoot`, and `contextKind`; feature-local selection/session/tab state remains feature-owned.
+
 **Change**
 
 With visual migration complete, simplify navigation ownership.
@@ -1094,6 +1096,8 @@ Shell branches that manipulate unrelated feature internals.
 
 ## Phase 31 — Reconcile `workspaceState.surface` and `workspaceUiState.viewMode`
 
+**Decision:** Grid/Focus visual mode is derived from `workspaceState.surface`; the parallel editable `workspaceUiState.viewMode` value is retired.
+
 **Change**
 
 Now that major activity/workspace ownership is explicit, remove duplicated concepts between:
@@ -1117,6 +1121,8 @@ Obsolete duplicated navigation state.
 ---
 
 ## Phase 32 — Give major workspaces explicit roots
+
+**Decision:** existing proven containers become explicit roots rather than adding wrapper/reparent churn: Prep=`#prep-workspace-root`, Review=`#review-output-surface`, Training=`#training-navigator`, Test=`#test-generations-workspace`.
 
 **Change**
 

@@ -324,3 +324,18 @@ def test_major_workspaces_have_explicit_stable_roots():
     assert 'id="review-output-surface"' in html and 'data-workspace-root="review"' in html
     assert 'id="training-navigator"' in html and 'data-workspace-root="training"' in html
     assert 'id="test-generations-workspace"' in html and 'data-workspace-root="test"' in html
+
+
+def test_checklist_visibility_has_one_class_based_owner_without_grid_overrides():
+    checklist_state = (ROOT / "tool" / "js" / "checklist_state.js").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    grid_state = (ROOT / "tool" / "js" / "media_grid_state.js").read_text(encoding="utf-8")
+    annotate = (ROOT / "tool" / "js" / "caption_helpers_annotate.js").read_text(encoding="utf-8")
+    grid_css = (ROOT / "tool" / "css" / "media_grid.css").read_text(encoding="utf-8")
+
+    assert "checklistPanelEl.classList.toggle('hidden', !visible);" in checklist_state
+    assert "checklistPanelEl.style.display" not in checklist_state
+    assert "style.display = 'none'" not in shell
+    assert "style.display = 'flex'" not in grid_state
+    assert "!panelEl.classList.contains('hidden')" in annotate
+    assert "!important" not in grid_css

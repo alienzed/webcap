@@ -436,7 +436,7 @@ function wireAllUi() {
 
 addEventListener('DOMContentLoaded', function () {
   console.log('[webcap] initializing');
-  rebuildUnifiedWorkspaceShell();
+  initializeWorkspaceShell();
   wireWorkspaceHeaderUi();
   refreshCurrentDirectory();
   wireAllUi();

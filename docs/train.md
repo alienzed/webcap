@@ -6,7 +6,7 @@ The runner's ownership and recovery rules are defined in [training_runner_contra
 
 ## Workflow
 
-1. Select a model. The model choice is remembered per set.
+1. Open **Training** from the permanent activity rail and select the working model in the application header. The model choice is remembered per set.
 2. Inspect or edit the setup's config and dataset TOMLs. Selecting the setup creates only missing files.
 3. Use **Reset** only when intentionally restoring one training config or recalculating one dataset TOML from the visible media.
 4. Filter or focus the media grid to the exact items to train.
@@ -14,7 +14,7 @@ The runner's ownership and recovery rules are defined in [training_runner_contra
 
 ## Workspace layout
 
-Training keeps its numbered setup, queue, GPU status, and recent runs in the center workspace. The right-side artifact area has explicit **Items**, **Config**, and **Run Log** tabs:
+Training keeps its numbered setup, queue, GPU status, and recent runs in the center workspace. While a managed run is active, the permanent shell also mirrors background Training activity and the current GPU snapshot so leaving Training does not make the active job visually disappear. The right-side artifact area has explicit **Items**, **Config**, and **Run Log** tabs:
 
 - Items is the default set-level view. Its tiles open the selected media back in Annotation.
 - Config opens the existing editable TOML surface, with compact file tabs for the setup's detected TOMLs. Switching files or away saves through the normal save path.

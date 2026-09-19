@@ -264,7 +264,6 @@ function wireAllUi() {
   checklistPanelEl = document.getElementById('caption-checklist-panel');
   setChecklistPanelVisible(false);
   wireCaptionHelpersUi();
-  wireItemDetailsUi();
   if (typeof wirePreviewActionControls === 'function') {
     wirePreviewActionControls();
   }

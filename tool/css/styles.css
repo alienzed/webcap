@@ -2636,7 +2636,17 @@ iframe {
 .training-review-modal-content .training-review { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .training-review-modal-footer { justify-content: flex-end; border-top: 1px solid var(--border-color, #3d4452); }
 
-.editor-surface.test-generations-active > *:not(#test-generations-pane) { display: none !important; }
+.test-generations-workspace {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.test-generations-workspace.hidden {
+  display: none;
+}
+
 .test-generations-pane {
   display: flex;
   flex: 1 1 auto;

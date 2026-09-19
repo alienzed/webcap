@@ -240,3 +240,15 @@ def test_training_runner_render_does_not_require_run_setup_review():
     assert "else if (trainingWorkspaceState.review)" in launch
     assert "reviewTrainButtonState(trainingWorkspaceState.review);" in launch
     assert "if (trainButton) reviewTrainButtonState(trainingWorkspaceState.review);" not in runner
+
+
+def test_folder_metadata_finishes_before_training_workspace_refresh():
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+
+    metadata_call = "refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus })"
+    training_call = "refreshTrainingWorkspace();"
+    assert metadata_call in ui
+    metadata_index = ui.index(metadata_call)
+    training_index = ui.index(training_call, metadata_index)
+    assert metadata_index < training_index
+    assert "completeFolderLoadPipeline(path, loadSequence, metadataResult);" in ui[metadata_index:training_index]

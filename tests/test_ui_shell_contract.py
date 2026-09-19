@@ -339,3 +339,54 @@ def test_checklist_visibility_has_one_class_based_owner_without_grid_overrides()
     assert "style.display = 'flex'" not in grid_state
     assert "!panelEl.classList.contains('hidden')" in annotate
     assert "!important" not in grid_css
+
+
+def test_shell_initialization_has_no_reparent_or_rebuild_fossils():
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    main = (ROOT / "tool" / "js" / "main.js").read_text(encoding="utf-8")
+    console = (ROOT / "tool" / "js" / "console_panel.js").read_text(encoding="utf-8")
+
+    assert "function initializeWorkspaceShell()" in shell
+    assert "rebuildUnifiedWorkspaceShell" not in shell
+    assert "initializeWorkspaceShell();" in main
+    assert "appendChild(ui.consolePanelEl)" not in shell
+    assert "style.display" not in console
+
+
+def test_shell_immersive_mode_is_shell_owned_and_escape_exits():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert 'id="shell-immersive-btn"' in html
+    assert 'id="shell-immersive-exit-btn"' in html
+    assert "function setShellImmersive(nextImmersive)" in shell
+    assert "event.key === 'Escape' && shellNavigationState.immersive" in shell
+    assert ".app-frame.shell-immersive" in css
+    assert ".app-frame.shell-immersive > .app-header" in css
+    assert ".app-frame.shell-immersive > .activity-rail" in css
+
+
+def test_responsive_shell_compresses_header_without_dropping_permanent_rail():
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    workbench = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+
+    assert "@media (max-width: 1180px)" in css
+    assert "@media (max-width: 880px)" in css
+    assert ".activity-rail-btn {" in css
+    assert "width: 32px;" in css
+    assert ".app-header-workspace-controls {" in css
+    assert "display: none;" in css
+    assert ".app.shell-revamp.workspace-surface-config-editor.left-rail-collapsed" in workbench
+    assert 'grid-template-areas: "workbench";' in workbench
+
+
+def test_console_visibility_is_class_owned_after_shell_cleanup():
+    console = (ROOT / "tool" / "js" / "console_panel.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert "classList.toggle('hidden', !visible)" in console
+    assert "isConsolePanelVisible()" in console
+    assert "style.display" not in console
+    assert ".app-frame > #console-panel {" in css
+    assert "display: flex;" in css

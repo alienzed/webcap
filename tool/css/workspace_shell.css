@@ -190,13 +190,23 @@
   justify-content: center;
 }
 
-.app-header-workspace-controls #sidebar-collapse-toggle-btn,
-.app-header-workspace-controls #training-sidebar-collapse-toggle-btn {
+.app-header-sidebar-toggle-btn {
   width: 28px;
   min-width: 28px;
   min-height: 26px;
   padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-soft);
+  color: var(--muted);
   box-shadow: none;
+  cursor: pointer;
+}
+
+.app-header-sidebar-toggle-btn:hover,
+.app-header-sidebar-toggle-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .app-header-workspace-title {

@@ -270,7 +270,6 @@
 }
 
 /* Workspace shell layout */
-/* Fourth-pass shell simplification: no mode header, three clearer workmodes. */
 .app.shell-revamp {
   --sidebar-width: 292px;
   gap: 10px;

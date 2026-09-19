@@ -232,3 +232,10 @@ def test_test_generations_canonicalizes_session_paths_to_owning_set():
     assert "var marker = '/test-generations/'" in script
     assert "folder: owningSetFolder(launchFolder || (state && state.folder) || '')" in script
     assert "launchFolder = owningSetFolder(state && state.folder || '')" in script
+
+
+def test_rendered_test_status_resynchronizes_run_controls():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    render_block = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
+
+    assert "syncActiveRunControls(status || {});" in render_block

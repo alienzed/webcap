@@ -40,21 +40,7 @@ function isFocusedAnnotationOpen() {
 }
 
 function isFocusedAnnotationNestedModalOpen() {
-  var ids = [
-    'checklist-group-terms-modal',
-    'checklist-term-affixes-modal',
-    'checklist-keywords-modal',
-    'review-rules-modal',
-    'crop-modal',
-    'video-clip-modal'
-  ];
-  for (var i = 0; i < ids.length; i++) {
-    var el = document.getElementById(ids[i]);
-    if (el && !el.classList.contains('hidden')) {
-      return true;
-    }
-  }
-  return false;
+  return typeof isApplicationOverlayOpen === 'function' && isApplicationOverlayOpen();
 }
 
 function findFocusedAnnotationMediaItemByKey(mediaKey) {

@@ -304,6 +304,28 @@ def test_saved_test_history_does_not_require_external_staging_folder():
     start_start = backend.index("def start(folder_path")
     assert "_h3_test_directory(folder_path)" in backend[start_start:]
 
+def test_test_generations_rate_items_reuses_unrated_single_item_review():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    item_details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-rate-items-btn"' in html
+    assert "openResultsFolder(this.dataset.resultFolder, { rateItems: true });" in script
+    assert "function initializeRatingReview(folder)" in script
+    assert "clearCaptionFilterInputs();" in script
+    assert "querySelector('input[value=\"no_star\"]')" in script
+    assert "noStarInput.checked = true;" in script
+    assert "var unratedItems = getFilteredMediaItems(false);" in script
+    assert "selectPathMedia(unratedItems[0])" in script
+    assert "function completeRatingReviewIfFinished()" in script
+    assert "if (!hasOnlyUnratedFilter()) return false;" in script
+    assert "if (getFilteredMediaItems(false).length) return false;" in script
+    assert "clearCaptionFilterInputs();" in script
+    assert "openTestBenchFolder(setFolder);" in script
+    assert "window.testGenerationsRatingChanged = completeRatingReviewIfFinished;" in script
+    assert "window.testGenerationsRatingChanged();" in item_details
+
+
 def test_test_generations_reuses_normal_folder_review_for_assessment():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

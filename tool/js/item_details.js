@@ -614,6 +614,9 @@ function setRatingForMediaKey(mediaKey, rating) {
   renderPreviewHeaderMeta();
   renderItemMetadataPanel();
   renderFileList();
+  if (typeof window.testGenerationsRatingChanged === 'function') {
+    window.testGenerationsRatingChanged();
+  }
   if (isFocusedAnnotationOpen()) {
     syncFocusedAnnotationQueue({ anchorMediaKey: mediaKey });
   }

@@ -685,6 +685,15 @@ function wireWorkspaceHeaderUi() {
           return;
         }
       }
+      var genericModal = document.querySelector('#app-overlay-root > .modal:not(.hidden)');
+      if (genericModal && genericModal.id) {
+        var genericClose = genericModal.querySelector('[data-close-modal="' + genericModal.id + '"]');
+        if (genericClose) {
+          event.preventDefault();
+          genericClose.click();
+          return;
+        }
+      }
       if (typeof isFocusedAnnotationOpen === 'function' && isFocusedAnnotationOpen()) return;
       if (shellNavigationState.immersive) {
         event.preventDefault();

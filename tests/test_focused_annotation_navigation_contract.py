@@ -34,7 +34,7 @@ def test_focus_uses_the_single_item_preview_and_replaces_only_the_groups_pane():
     assert '.workspace-surface-focus .groups-card' in css
     assert '.workspace-surface-focus .workbench-side-stack' in css
     assert '.workspace-surface-focus .workbench-rail-toggle-btn' in css
-    assert '.workspace-surface-focus.workflow-annotate .workbench-top' in css
+    assert '.workspace-surface-focus .workbench-top' in css
     assert '#focused-annotation-workbench' in css
 
     focus_css = _read("tool/css/modals.css")

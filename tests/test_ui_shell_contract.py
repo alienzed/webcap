@@ -175,3 +175,25 @@ def test_grid_identity_and_prep_exit_are_owned_by_shell_without_removing_local_b
     assert "normalizeWorkspaceSurface(workspaceState.surface) === 'grid'" in shell
     assert "closeMediaGridSurface();" in shell
     assert 'id="media-grid-surface-close-btn"' in html
+
+
+def test_single_item_preview_header_keeps_item_controls_local_and_moves_shell_toggle_up():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    item_details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    header_start = html.index('id="app-header-workspace-controls"')
+    preview_start = html.index('id="preview-header"')
+    sidebar_toggle = html.index('id="sidebar-collapse-toggle-btn"')
+
+    assert header_start < sidebar_toggle < preview_start
+    assert html.count('id="sidebar-collapse-toggle-btn"') == 1
+    assert 'id="preview-header-position"' in html
+    assert 'id="preview-header-meta"' in html
+    assert 'id="preview-action-rating"' in html
+    assert 'id="preview-mutation-indicator"' in html
+    assert 'id="preview-open-focused-btn"' in html
+    assert "ui.previewHeaderEl.classList.add('hidden');" in item_details
+    assert "ui.sidebarCollapseToggleBtn.classList.toggle('hidden'" not in item_details
+    assert ".app-header-workspace-controls #sidebar-collapse-toggle-btn" in css
+    assert ".app.shell-revamp #sidebar-collapse-toggle-btn {" not in css

@@ -850,6 +850,40 @@ function syncTrainingConsoleUi() {
   syncWorkspaceConfigEditorUi();
 }
 
+function getTrainingWorkspaceEntryKind() {
+  var mode = trainingWorkspaceState.entryMode === 'set' ? 'set' : 'global';
+  if (mode === 'global') return 'global';
+  return isSetFolderPath(state.folder) ? 'set' : 'unavailable';
+}
+
+function syncTrainingEntryChrome() {
+  var isTraining = typeof isTrainingWorkspaceActive === 'function' && isTrainingWorkspaceActive();
+  var entryKind = getTrainingWorkspaceEntryKind();
+  var isSetMode = isTraining && trainingWorkspaceState.entryMode === 'set';
+  var isSetEntry = isTraining && entryKind === 'set';
+  var isGlobalEntry = isTraining && entryKind === 'global';
+  var trainingBtn = document.getElementById('sidebar-open-training-btn');
+  var detailTabs = document.getElementById('training-detail-tabs');
+  var collapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
+  var itemTab = document.querySelector('[data-training-detail-tab="items"]');
+  var configTab = document.querySelector('[data-training-detail-tab="config"]');
+  var runLogTab = document.querySelector('[data-training-detail-tab="run-log"]');
+
+  if (isTraining && ui && ui.appEl) {
+    ui.appEl.classList.toggle('sidebar-hidden', !!workspaceState.sidebarHidden);
+  }
+  if (trainingBtn) {
+    trainingBtn.classList.toggle('active', isSetMode);
+    trainingBtn.setAttribute('aria-pressed', isSetMode ? 'true' : 'false');
+    trainingBtn.classList.toggle('hidden', !isSetFolderPath(state.folder));
+  }
+  if (detailTabs) detailTabs.classList.toggle('hidden', !isTraining || entryKind === 'unavailable');
+  if (itemTab) itemTab.classList.toggle('hidden', !isSetEntry);
+  if (configTab) configTab.classList.toggle('hidden', !isSetEntry);
+  if (runLogTab) runLogTab.classList.toggle('hidden', !isGlobalEntry);
+  if (collapseBtn) collapseBtn.classList.toggle('hidden', !isTraining || entryKind === 'unavailable');
+}
+
 function syncTrainingWorkspaceDetailUi() {
   var active = isTrainingWorkspaceActive();
   var entryKind = active ? getTrainingWorkspaceEntryKind() : '';
@@ -904,6 +938,8 @@ function syncTrainingWorkspaceUi() {
   refreshTrainingRunnerStatus();
 }
 
+window.getTrainingWorkspaceEntryKind = getTrainingWorkspaceEntryKind;
+window.syncTrainingEntryChrome = syncTrainingEntryChrome;
 window.syncTrainingWorkspaceDetailUi = syncTrainingWorkspaceDetailUi;
 
 window.refreshWorkingModelSelector = refreshWorkingModelSelector;

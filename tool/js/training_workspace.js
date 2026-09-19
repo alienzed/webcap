@@ -563,7 +563,6 @@ function switchTrainingSetup(profileId, mode) {
 }
 
 function wireTrainingWorkspace() {
-  var sidebarCollapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
   var modelProfileSelect = getWorkingModelProfileSelect();
   var stageButtons = document.querySelectorAll('[data-training-stage]');
   var resumeInput = document.getElementById('training-run-resume-input');
@@ -593,14 +592,6 @@ function wireTrainingWorkspace() {
   var historySearch = document.getElementById('training-history-search');
   var historyScope = document.getElementById('training-history-scope');
   var historyClearBtn = document.getElementById('training-history-clear-btn');
-  sidebarCollapseBtn.onclick = function () {
-    if (trainingWorkspaceState.entryMode === 'global') {
-      workspaceState.sidebarHidden = !workspaceState.sidebarHidden;
-      syncWorkspaceSurfaceUi();
-      return;
-    }
-    toggleSidebarCollapsed();
-  };
   itemOverviewToggleBtn.onclick = function () {
     trainingWorkspaceState.itemOverviewHidden = !trainingWorkspaceState.itemOverviewHidden;
     renderTrainingItemOverview(null);
@@ -864,7 +855,6 @@ function syncTrainingEntryChrome() {
   var isGlobalEntry = isTraining && entryKind === 'global';
   var trainingBtn = document.getElementById('sidebar-open-training-btn');
   var detailTabs = document.getElementById('training-detail-tabs');
-  var collapseBtn = document.getElementById('training-sidebar-collapse-toggle-btn');
   var itemTab = document.querySelector('[data-training-detail-tab="items"]');
   var configTab = document.querySelector('[data-training-detail-tab="config"]');
   var runLogTab = document.querySelector('[data-training-detail-tab="run-log"]');
@@ -881,7 +871,6 @@ function syncTrainingEntryChrome() {
   if (itemTab) itemTab.classList.toggle('hidden', !isSetEntry);
   if (configTab) configTab.classList.toggle('hidden', !isSetEntry);
   if (runLogTab) runLogTab.classList.toggle('hidden', !isGlobalEntry);
-  if (collapseBtn) collapseBtn.classList.toggle('hidden', !isTraining || entryKind === 'unavailable');
 }
 
 function syncTrainingWorkspaceDetailUi() {

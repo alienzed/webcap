@@ -1,6 +1,3 @@
-var workspaceUiState = {
-  workflowMode: 'annotate'
-};
 var workspaceState = {
   surface: 'default',
   previousSurface: 'default',
@@ -82,21 +79,11 @@ function normalizeWorkspaceViewMode(mode) {
   return 'single';
 }
 
-function normalizeWorkspaceWorkflowMode(mode) {
-  var value = String(mode || '').trim().toLowerCase();
-  if (value === 'select' || value === 'review') return value;
-  return 'annotate';
-}
-
 function syncWorkspaceHeaderUi() {
   if (!ui || !ui.appEl) return;
   var viewMode = getWorkspaceViewMode();
-  var workflowMode = normalizeWorkspaceWorkflowMode(workspaceUiState.workflowMode);
   ui.appEl.classList.remove('workspace-view-single', 'workspace-view-grid', 'workspace-view-focus');
   ui.appEl.classList.add('workspace-view-' + viewMode);
-  ui.appEl.classList.remove('workflow-select', 'workflow-annotate', 'workflow-review');
-  ui.appEl.classList.add('workflow-' + workflowMode);
-
   var viewButtons = {
     focus: document.getElementById('preview-open-focused-btn')
   };
@@ -109,11 +96,6 @@ function syncWorkspaceHeaderUi() {
   });
 
   syncWorkbenchRailUi();
-}
-
-function setWorkspaceWorkflowMode(mode) {
-  workspaceUiState.workflowMode = normalizeWorkspaceWorkflowMode(mode);
-  syncWorkspaceHeaderUi();
 }
 
 function normalizeShellRouteWorkspace(value) {
@@ -639,7 +621,6 @@ function wireWorkspaceHeaderUi() {
 }
 
 window.getWorkspaceViewMode = getWorkspaceViewMode;
-window.setWorkspaceWorkflowMode = setWorkspaceWorkflowMode;
 window.setWorkspaceSurface = setWorkspaceSurface;
 window.exitWorkspaceSurface = exitWorkspaceSurface;
 window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;

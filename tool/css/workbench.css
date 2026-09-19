@@ -1759,7 +1759,6 @@ html[data-theme="dark"] .training-readiness-metrics {
   color: rgba(226, 232, 240, 0.64);
 }
 
-html[data-theme="dark"] .training-navigator-title,
 html[data-theme="dark"] .training-readiness-state strong,
 html[data-theme="dark"] .training-workspace-section-title {
   color: #f8fafc;

@@ -91,8 +91,6 @@ function setTrainingWorkspaceEntryMode(mode, options) {
 function getTrainingWorkspaceEls() {
   return {
     navigator: document.getElementById('training-navigator'),
-    navigatorTitle: document.getElementById('training-navigator-title'),
-    folder: document.getElementById('training-navigator-folder'),
     globalContext: document.getElementById('training-global-context'),
     runSetup: document.getElementById('training-run-setup'),
     testsStage: document.getElementById('training-tests-stage'),

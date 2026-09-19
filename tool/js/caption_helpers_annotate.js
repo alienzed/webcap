@@ -336,7 +336,7 @@ function renderAnnotateStrip() {
     if (editorPanelEl) editorPanelEl.classList.remove('annotate-strip-visible');
     return;
   }
-  var panelVisible = !!(panelEl && panelEl.style.display !== 'none');
+  var panelVisible = !!(panelEl && !panelEl.classList.contains('hidden'));
   var canShow = !!(annotateStripVisible && panelVisible && state.currentItem && state.currentItem.key);
 
   if (!canShow) {

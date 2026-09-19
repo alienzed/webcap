@@ -143,3 +143,20 @@ def test_focus_shell_identity_and_activity_exit_preserve_real_focus_cleanup():
     assert "e.key === 'Escape'" in focus
     assert "focusedAnnotationState.open = false;" in focus
     assert "exitWorkspaceSurface();" in focus
+
+
+def test_focus_modal_suppression_uses_central_overlay_state_not_feature_inventory():
+    focus = _read("tool/js/focused_annotation.js")
+    shell = _read("tool/js/workspace_shell.js")
+
+    assert "return typeof isApplicationOverlayOpen === 'function' && isApplicationOverlayOpen();" in focus
+    for modal_id in (
+        "checklist-group-terms-modal",
+        "checklist-term-affixes-modal",
+        "checklist-keywords-modal",
+        "review-rules-modal",
+        "crop-modal",
+        "video-clip-modal",
+    ):
+        assert modal_id not in focus
+    assert "function isApplicationOverlayOpen()" in shell

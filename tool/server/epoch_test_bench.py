@@ -126,6 +126,21 @@ def _read_json_response(url, method="GET", payload=None, timeout=10):
         raise RuntimeError("ComfyUI returned invalid JSON.") from exc
 
 
+def _read_bytes(url, timeout=30):
+    curl_path = _windows_curl_path()
+    if curl_path:
+        try:
+            return _windows_curl_request(curl_path, url, timeout=timeout)
+        except (ConnectionError, RuntimeError) as exc:
+            raise RuntimeError("Could not retrieve the ComfyUI output.") from exc
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return response.read()
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
+        raise RuntimeError("Could not retrieve the ComfyUI output.") from exc
+
+
 def _interrupt_comfy():
     url = COMFY_BASE_URL + "/interrupt"
     curl_path = _windows_curl_path()
@@ -575,12 +590,31 @@ def _cleanup_owned_comfy_directory(directory, filename_prefix):
             break
 
 
+def _download_video(video_ref):
+    query = urllib.parse.urlencode({
+        "filename": video_ref["filename"],
+        "subfolder": video_ref.get("subfolder") or "",
+        "type": video_ref.get("type") or "output",
+    })
+    return _read_bytes(COMFY_BASE_URL + "/view?" + query)
+
+
 def _move_saved_video(video_ref, destination, filename_prefix=None):
-    source = _comfy_saved_output_path(video_ref)
-    source_directory = source.parent
+    if str(video_ref.get("type") or "") != "output":
+        raise RuntimeError("ComfyUI Test output was not saved to the output directory.")
     target = Path(destination)
     if target.exists():
         raise FileExistsError("Test result already exists: " + str(target))
+
+    raw_path = str(video_ref.get("fullpath") or "").strip()
+    if not raw_path:
+        target.write_bytes(_download_video(video_ref))
+        if not target.is_file():
+            raise RuntimeError("Saved ComfyUI Test video was not copied into the Test session.")
+        return target
+
+    source = _comfy_saved_output_path(video_ref)
+    source_directory = source.parent
     shutil.move(str(source), str(target))
     if not target.is_file():
         raise RuntimeError("Saved ComfyUI Test video was not moved into the Test session.")

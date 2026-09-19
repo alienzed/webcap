@@ -400,3 +400,14 @@ def test_reload_location_uses_hash_route_not_transient_ui_persistence():
     assert "localStorage" not in shell
     assert "shellNavigationState.immersive" in shell
     assert "immersive" not in shell[shell.index("function syncShellLocationRoute()"):shell.index("function applyInitialShellLocationRoute()")]
+
+
+def test_generic_application_modals_close_on_escape_without_feature_inventory():
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    checklist = (ROOT / "tool" / "js" / "checklist_modals.js").read_text(encoding="utf-8")
+    advanced = (ROOT / "tool" / "js" / "advanced_mappings_rules.js").read_text(encoding="utf-8")
+
+    assert "#app-overlay-root > .modal:not(.hidden)" in shell
+    assert "genericModal.querySelector('[data-close-modal="" in shell
+    assert "ensureWorkspaceOverlayChildren" not in checklist
+    assert "ensureWorkspaceOverlayChildren" not in advanced

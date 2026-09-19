@@ -22,20 +22,16 @@ def test_outer_shell_wraps_existing_workspace_without_replacing_it():
     assert 'id="workspace-overlays"' in html
 
 
-def test_global_shell_controls_have_permanent_nodes_during_migration():
+def test_global_shell_controls_are_owned_by_permanent_shell():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    # Legacy activity entry points remain while permanent shell controls take ownership.
-    assert 'id="utility-bar"' in html
-    assert 'id="utility-current-path-btn"' in html
-    assert 'id="utility-training-btn"' in html
-    assert 'id="utility-test-bench-btn"' in html
-
-    # Settings, Help, status, and console keep their established IDs after moving.
-    assert 'id="activity-rail-spacer"' not in html
+    assert 'id="utility-bar"' not in html
+    assert 'id="utility-current-path-btn"' not in html
+    assert 'id="utility-training-btn"' not in html
+    assert 'id="utility-test-bench-btn"' not in html
     assert 'class="activity-rail-spacer"' in html
-    assert 'id="utility-settings-btn"' in html
-    assert 'id="utility-help-btn"' in html
+    assert 'id="shell-settings-btn"' in html
+    assert 'id="shell-help-btn"' in html
     assert 'class="status status-bar app-header-status"' in html
     assert 'id="status-text"' in html
     assert 'id="console-panel"' in html
@@ -79,11 +75,8 @@ def test_shell_activity_controls_are_real_navigation_without_replacing_legacy_pa
     assert "prepActivityBtn.onclick = openPrepActivity" in script
     assert "trainingActivityBtn.onclick" in script
     assert "openTrainingSurface('global')" in script
-    assert "legacyTestBtn.click()" in script
-
-    # Old paths stay available during migration.
-    assert 'id="utility-training-btn"' in html
-    assert 'id="utility-test-bench-btn"' in html
+    assert "window.openTestBenchActivity()" in script
+    assert "window.closeTestBenchActivity()" in script
 
 
 def test_shell_header_tracks_current_folder_without_owning_folder_state():

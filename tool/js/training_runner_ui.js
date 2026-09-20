@@ -34,11 +34,12 @@ function syncUtilityTrainingActivity() {
   var activityTrainingBtn = document.getElementById('activity-training-btn');
   if (!activityTrainingBtn) return;
   var running = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
-    return job.status === 'running';
+    return job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
   });
   activityTrainingBtn.classList.toggle('training-running', running);
   activityTrainingBtn.title = running ? 'Open Training (training in progress)' : 'Open Training';
   activityTrainingBtn.setAttribute('aria-label', running ? 'Open Training (training in progress)' : 'Open Training');
+  if (typeof window.renderShellSystemStatus === 'function') window.renderShellSystemStatus();
 }
 
 function isTrainingRunnerConsoleVisible() {

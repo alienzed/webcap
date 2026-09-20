@@ -235,11 +235,29 @@ function formatShellDiskSpace(value) {
   return (bytes / (1024 * 1024 * 1024)).toFixed(bytes >= 100 * 1024 * 1024 * 1024 ? 0 : 1) + ' GiB';
 }
 
+function getShellWorkloadStatus() {
+  var trainingBtn = document.getElementById('activity-training-btn');
+  var testBtn = document.getElementById('activity-test-btn');
+  if (trainingBtn && trainingBtn.classList.contains('training-running')) {
+    return { key: 'training', label: 'Training' };
+  }
+  if (testBtn && testBtn.classList.contains('test-running')) {
+    return { key: 'testing', label: 'Testing' };
+  }
+  return { key: 'idle', label: 'Idle' };
+}
+
 function renderShellSystemStatus() {
   var host = document.getElementById('shell-gpu-status');
   if (!host) return;
 
   var parts = [];
+  var workload = getShellWorkloadStatus();
+  parts.push(
+    '<span class="shell-workload-status is-' + workload.key + '" title="Current GPU workload state.">' +
+    escapeHtml(workload.label) +
+    '</span>'
+  );
   var gpu = shellSystemStatusState.gpu;
   if (gpu && gpu.available) {
     var gpus = Array.isArray(gpu.gpus) ? gpu.gpus : [];
@@ -301,10 +319,11 @@ function refreshShellSystemStatus() {
     .catch(function (err) {
       shellSystemStatusState.error = String(err && err.message ? err.message : err);
       if (!shellSystemStatusState.gpu && !shellSystemStatusState.disk) {
+        renderShellSystemStatus();
         var host = document.getElementById('shell-gpu-status');
         if (host) {
-          host.innerHTML = '<span class="is-warning" title="' + escapeHtml(shellSystemStatusState.error) + '">System status unavailable</span>';
-          host.classList.remove('hidden');
+          host.innerHTML += '<span class="shell-system-divider" aria-hidden="true">·</span>' +
+            '<span class="is-warning" title="' + escapeHtml(shellSystemStatusState.error) + '">System status unavailable</span>';
         }
       }
     })
@@ -795,3 +814,5 @@ function clearEditorAndPreview() {
   updateBalanceDistributionWheel();
 }
 
+
+window.renderShellSystemStatus = renderShellSystemStatus;
